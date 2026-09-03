@@ -1,5 +1,6 @@
 (ns clj-surgeon.extract-test
   (:require
+   [clj-surgeon.core :as core]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clojure.java.io :as io]
@@ -2011,6 +2012,98 @@
               (str "a declared build-tree exclusion is not an unread source; "
                    ":complete must stay usable: "
                    (pr-str (:callers-unresolved result)))))
+        (finally (delete-recursive! root))))))
+
+(defn- cli!
+  "Drive one invocation through the REAL CLI path: the argv strings the shell
+  hands over, `parse-args`, and `run`'s registry dispatch -- unknown-argument
+  refusal, string values and all. A witness that calls the handler with a Long
+  cannot see either defect the CLI has."
+  [argv]
+  (let [captured (atom nil)]
+    (with-out-str (reset! captured (core/run (core/parse-args (vec argv)))))
+    @captured))
+
+;; @spec MCP-OP-EXTRACT-034
+(deftest the-workspace-caps-are-reachable-and-typed-from-the-command-line
+  (let [root (create-caller-project!)
+        source (.getPath (io/file root "src" "app" "core.clj"))
+        bulk (io/file root "src" "bulk")]
+    (try
+      (.mkdirs bulk)
+      (dotimes [i 2100]
+        (spit (io/file bulk (str "f" i ".clj")) (str "(ns bulk.f" i ")\n")))
+
+      (testing "the remedy the refusal prints works on the DRY RUN too"
+        (let [refused (cli! [":op" ":extract" ":file" source
+                             ":forms" "[moved-one moved-two]"
+                             ":to" (.getPath (io/file root "src" "app" "m1.clj"))
+                             ":alias" "moved"])]
+          (is (= :workspace-file-cap-exceeded (:error-type refused))
+              (pr-str (select-keys refused [:error-type :error])))
+          (is (str/includes? (str (:remedy refused)) "max-workspace-files")))
+        (let [raised (cli! [":op" ":extract" ":file" source
+                            ":forms" "[moved-one moved-two]"
+                            ":to" (.getPath (io/file root "src" "app" "m1.clj"))
+                            ":alias" "moved"
+                            ":max-workspace-files" "3000"])]
+          (is (not= :unknown-arguments (:error-type raised))
+              (str ":extract must accept the remedy its own refusal prints: "
+                   (pr-str (select-keys raised [:error-type :error]))))
+          (is (nil? (:error-type raised))
+              (str "a CLI cap is a STRING; (long \"3000\") throws: "
+                   (pr-str (select-keys raised [:error-type :error]))))
+          (is (false? (:applied raised)))))
+
+      (testing "and on the apply, from the command line, as a string"
+        (let [applied (cli! [":op" ":extract!" ":file" source
+                             ":forms" "[moved-one moved-two]"
+                             ":to" (.getPath (io/file root "src" "app" "m2.clj"))
+                             ":alias" "moved"
+                             ":compile-check" "false"
+                             ":max-workspace-files" "3000"])]
+          (is (true? (:applied applied))
+              (pr-str (select-keys applied [:error-type :error])))))
+
+      (testing "garbage is a typed refusal that names the argument, never a
+                snapshot failure that names an interop message"
+        (doseq [bad ["three-thousand" "3000.5" "0" "-1" ""]]
+          (let [refused (cli! [":op" ":extract" ":file" source
+                               ":forms" "[moved-one moved-two]"
+                               ":to" (.getPath (io/file root "src" "app" "m3.clj"))
+                               ":alias" "moved"
+                               ":max-workspace-files" bad])]
+            (is (= :invalid-workspace-cap (:error-type refused))
+                (str "cap " (pr-str bad) " -> "
+                     (pr-str (select-keys refused [:error-type :error]))))
+            (is (= :max-workspace-files (:argument refused))))))
+      (finally (delete-recursive! root))))
+
+  (testing "the byte ceiling has an override, so the incomplete-scan remedy
+            is executable rather than advice with no lever"
+    (let [root (create-caller-project!)
+          source (.getPath (io/file root "src" "app" "core.clj"))
+          huge (io/file root "src" "app" "huge_caller.clj")]
+      (try
+        (spit huge (str "(ns app.huge-caller\n"
+                        "  (:require\n"
+                        "   [app.core :as core]))\n\n"
+                        ";; " (apply str (repeat (* 700 1024) \x)) "\n"
+                        "(defn go [x] (core/moved-two x))\n"))
+        (let [result (cli! [":op" ":extract!" ":file" source
+                            ":forms" "[moved-one moved-two]"
+                            ":to" (.getPath (io/file root "src" "app" "moved.clj"))
+                            ":alias" "moved"
+                            ":compile-check" "false"
+                            ":max-workspace-file-bytes" "1048576"])]
+          (is (true? (:applied result))
+              (pr-str (select-keys result [:error-type :error])))
+          (is (empty? (get-in result [:discovery :skipped-large]))
+              "raising the ceiling reads the file the default skipped")
+          (is (true? (:complete result))
+              "so the scan is complete and the receipt may say so")
+          (is (str/includes? (slurp huge) "[app.moved :as moved]")
+              "and the 700 KB caller is actually rewired"))
         (finally (delete-recursive! root))))))
 
 ;; @spec MCP-OP-EXTRACT-030

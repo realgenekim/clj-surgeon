@@ -165,11 +165,56 @@
   a repository is by running out of heap is not."
   2000)
 
-(def ^:private max-workspace-file-bytes
+(def ^:private default-max-workspace-file-bytes
   "The largest source discovery will slurp. Larger files are skipped and named
   in the receipt rather than read: a caller nobody can hand-edit is not the
-  caller this verb is for, and reading it costs the whole file."
+  caller this verb is for, and reading it costs the whole file.
+
+  Overridable with `:max-workspace-file-bytes`, because a skipped source makes
+  the receipt say the rewire is incomplete, and a remedy with no lever is
+  advice."
   (* 512 1024))
+
+;; @spec MCP-OP-EXTRACT-034
+(defn workspace-cap
+  "Pure: one positive whole-number cap, or a typed refusal naming the argument.
+
+  The CLI hands every unrecognised value over as a STRING, so the cap an
+  operator raises by pasting the refusal's own remedy arrives as \"3000\".
+  Coercing it with `(long \"3000\")` threw a ClassCastException that surfaced
+  as `extraction-snapshot-failed` reporting `java.lang.String cannot be cast to
+  java.lang.Number` -- a refusal that blames the snapshot for an argument, and
+  tells the reader nothing about which argument or what it should have been."
+  [argument value default]
+  (cond
+    (nil? value) default
+
+    (integer? value)
+    (if (pos? (long value))
+      (long value)
+      {:ok false
+       :error (str "The " argument " cap must be a positive whole number; got "
+                   (pr-str value))
+       :error-type :invalid-workspace-cap
+       :argument argument
+       :value value
+       :source-unchanged true
+       :target-unchanged true})
+
+    :else
+    (let [parsed (when (string? value)
+                   (try (Long/parseLong (str/trim value))
+                        (catch Exception _ nil)))]
+      (if (and parsed (pos? parsed))
+        parsed
+        {:ok false
+         :error (str "The " argument " cap must be a positive whole number; got "
+                     (pr-str value))
+         :error-type :invalid-workspace-cap
+         :argument argument
+         :value value
+         :source-unchanged true
+         :target-unchanged true}))))
 
 ;; @spec MCP-OP-EXTRACT-029
 (defn- walk-workspace-sources
@@ -193,7 +238,7 @@
   Returns one of
   `{:files [...] :skipped-large [...] :skipped-directories [...]}`,
   `{:escape <path>}`, or `{:over-cap <count>}`."
-  [^java.io.File root real-root cap]
+  [^java.io.File root real-root cap byte-cap]
   (let [no-follow (make-array java.nio.file.LinkOption 0)]
     (loop [stack (mapv (fn [entry] [entry true]) (or (.listFiles root) []))
            files (transient [])
@@ -245,7 +290,7 @@
             (> (inc seen) (long cap))
             {:over-cap (inc seen)}
 
-            (> (.length entry) (long max-workspace-file-bytes))
+            (> (.length entry) (long byte-cap))
             (recur stack files
                    (conj! skipped {:file (.getPath entry)
                                    :bytes (.length entry)})
@@ -1502,95 +1547,107 @@
   Returns the compiled plan unreshaped, for the executor; `plan` is the
   reader-facing dry run built on top of it."
   [{:keys [file forms to source-paths require-policy public public-forms doc
-           alias rewire-callers compile-alias max-workspace-files]
+           alias rewire-callers compile-alias max-workspace-files
+           max-workspace-file-bytes]
     :as opts
     :or {require-policy :minimal rewire-callers true}}]
-  (try
-    (let [source (slurp file)
-          target-ns (file-path->ns-name to source-paths)
-          project-root (project-root-for-source file source-paths)
-          source-canonical-path (.getCanonicalPath (io/file file))
-          cap (or max-workspace-files default-max-workspace-files)
+  ;; @spec MCP-OP-EXTRACT-034
+  ;; Coerce the caps BEFORE the snapshot: a bad argument is an argument
+  ;; refusal, not a snapshot failure reporting an interop message.
+  (let [cap (workspace-cap :max-workspace-files max-workspace-files
+                           default-max-workspace-files)
+        byte-cap (workspace-cap :max-workspace-file-bytes
+                                max-workspace-file-bytes
+                                default-max-workspace-file-bytes)]
+   (cond
+     (map? cap) cap
+     (map? byte-cap) byte-cap
+     :else
+     (try
+      (let [source (slurp file)
+            target-ns (file-path->ns-name to source-paths)
+            project-root (project-root-for-source file source-paths)
+            source-canonical-path (.getCanonicalPath (io/file file))
+            ;; @spec MCP-OP-EXTRACT-029
+            walked (walk-workspace-sources (io/file project-root)
+                                           (mcp-paths/real-root project-root)
+                                           cap byte-cap)
+            discovered
+            (->> (:files walked)
+                 (remove #(= source-canonical-path
+                             (.getCanonicalPath (io/file %))))
+                 vec)
+            ;; @spec MCP-OP-EXTRACT-024
+            ;; Confine the read set at the moment the walk produces it: this is
+            ;; where a directory symlink turns a path that LOOKS like it is under
+            ;; the root into one that is not.
+            escape (or (when-let [escaped (:escape walked)]
+                         (confine-workspace-paths project-root [escaped]))
+                       (confine-workspace-paths project-root discovered))
+            over-cap (:over-cap walked)
+            explicit-compile-aliases (not-empty (normalize-aliases compile-alias))
+            declared-compile (declared-compile-config project-root)
+            workspace-sources
+            (when-not (or escape over-cap)
+              (into (sorted-map)
+                    (map (fn [path] [path (slurp path)]) discovered)))]
+        (cond
           ;; @spec MCP-OP-EXTRACT-029
-          walked (walk-workspace-sources (io/file project-root)
-                                         (mcp-paths/real-root project-root)
-                                         cap)
-          discovered
-          (->> (:files walked)
-               (remove #(= source-canonical-path
-                           (.getCanonicalPath (io/file %))))
-               vec)
-          ;; @spec MCP-OP-EXTRACT-024
-          ;; Confine the read set at the moment the walk produces it: this is
-          ;; where a directory symlink turns a path that LOOKS like it is under
-          ;; the root into one that is not.
-          escape (or (when-let [escaped (:escape walked)]
-                       (confine-workspace-paths project-root [escaped]))
-                     (confine-workspace-paths project-root discovered))
-          over-cap (:over-cap walked)
-          explicit-compile-aliases (not-empty (normalize-aliases compile-alias))
-          declared-compile (declared-compile-config project-root)
-          workspace-sources
-          (when-not (or escape over-cap)
-            (into (sorted-map)
-                  (map (fn [path] [path (slurp path)]) discovered)))]
-      (cond
-        ;; @spec MCP-OP-EXTRACT-029
-        over-cap
-        {:ok false
-         :error (str "This workspace holds more than " cap
-                     " Clojure sources; discovery reads every one of them.")
-         :error-type :workspace-file-cap-exceeded
-         :cap cap
-         :seen over-cap
-         :remedy (str "extract from a smaller root, or raise the cap with "
-                      ":max-workspace-files <n>")
-         :source-unchanged true
-         :target-unchanged true}
+          over-cap
+          {:ok false
+           :error (str "This workspace holds more than " cap
+                       " Clojure sources; discovery reads every one of them.")
+           :error-type :workspace-file-cap-exceeded
+           :cap cap
+           :seen over-cap
+           :remedy (str "extract from a smaller root, or raise the cap with "
+                        ":max-workspace-files <n>")
+           :source-unchanged true
+           :target-unchanged true}
 
-        escape escape
+          escape escape
 
-        :else
-        (compile-plan
-          {:file file
-           :source source
-           :forms forms
-           :to to
-           :target-ns target-ns
-           :workspace-sources workspace-sources
-           :require-policy require-policy
-           :project-root (str project-root)
-           :compile-aliases (or explicit-compile-aliases
-                                (:aliases declared-compile))
-           ;; @spec MCP-OP-EXTRACT-027
-           :compile-config-file (when-not explicit-compile-aliases
-                                  (:config-file declared-compile))
-           :public-forms (or public public-forms [])
-           ;; @spec MCP-OP-EXTRACT-011
-           ;; When the caller does not name the promotions, DERIVE them. The
-           ;; planner already computes exactly which moved private forms a
-           ;; remaining owner must call; shipping one of them still private, as
-           ;; rf1 did twice, is a success receipt for a namespace that will not
-           ;; compile. Deriving is only a default: a supplied :public stays
-           ;; authoritative, and a wrong one still refuses.
-           :derive-required-public-forms
-           (not (or (contains? opts :public) (contains? opts :public-forms)))
-           :doc doc
-           :alias alias
-           :rewire-callers rewire-callers
-           ;; @spec MCP-OP-EXTRACT-029
-           ;; @spec MCP-OP-EXTRACT-032
-           :discovery (let [large (:skipped-large walked)
-                            dirs (:skipped-directories walked)]
-                        (cond-> {:files (count (:files walked))}
-                          (seq large) (assoc :skipped-large (vec large))
-                          (seq dirs) (assoc :skipped-directories (vec dirs))))})))
-    (catch Exception error
-      {:ok false
-       :error-type :extraction-snapshot-failed
-       :error (.getMessage error)
-       :source-unchanged true
-       :target-unchanged true})))
+          :else
+          (compile-plan
+            {:file file
+             :source source
+             :forms forms
+             :to to
+             :target-ns target-ns
+             :workspace-sources workspace-sources
+             :require-policy require-policy
+             :project-root (str project-root)
+             :compile-aliases (or explicit-compile-aliases
+                                  (:aliases declared-compile))
+             ;; @spec MCP-OP-EXTRACT-027
+             :compile-config-file (when-not explicit-compile-aliases
+                                    (:config-file declared-compile))
+             :public-forms (or public public-forms [])
+             ;; @spec MCP-OP-EXTRACT-011
+             ;; When the caller does not name the promotions, DERIVE them. The
+             ;; planner already computes exactly which moved private forms a
+             ;; remaining owner must call; shipping one of them still private, as
+             ;; rf1 did twice, is a success receipt for a namespace that will not
+             ;; compile. Deriving is only a default: a supplied :public stays
+             ;; authoritative, and a wrong one still refuses.
+             :derive-required-public-forms
+             (not (or (contains? opts :public) (contains? opts :public-forms)))
+             :doc doc
+             :alias alias
+             :rewire-callers rewire-callers
+             ;; @spec MCP-OP-EXTRACT-029
+             ;; @spec MCP-OP-EXTRACT-032
+             :discovery (let [large (:skipped-large walked)
+                              dirs (:skipped-directories walked)]
+                          (cond-> {:files (count (:files walked))}
+                            (seq large) (assoc :skipped-large (vec large))
+                            (seq dirs) (assoc :skipped-directories (vec dirs))))})))
+        (catch Exception error
+          {:ok false
+           :error-type :extraction-snapshot-failed
+           :error (.getMessage error)
+           :source-unchanged true
+           :target-unchanged true})))))
 
 ;; @spec MCP-OP-EXTRACT-009
 ;; @spec MCP-OP-EXTRACT-016
