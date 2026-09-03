@@ -166,8 +166,15 @@ MCP-OP-MEM-011:
   admission exists and parsing never starts.
 - The corpus is verified, not asserted: every promised file's existence, byte
   count and content digest are checked against the deterministic generator, and
-  unlisted files under the tree are a refusal, before any cell is measured. A
-  cell's reported file and byte counts are therefore the corpus, not a manifest's
+  unlisted files under the tree are a refusal, before any cell is measured.
+  "Existence" is checked with `NOFOLLOW_LINKS`: a symlink standing at an
+  expected path is a refusal (`:symlink-at-expected-path`), even when its
+  target holds byte-identical content, because `.isFile`/`.length`/a plain
+  read all follow the link and would otherwise verify a substituted file as
+  clean. A directory standing at an expected path is the same kind of refusal
+  (`:directory-at-expected-path`), typed and raised before any write, not an
+  untyped I/O exception raised mid-regeneration. A cell's reported file and
+  byte counts are therefore the corpus, not a manifest's
   claim about it.
 - An arm measures one operation under one query shape. An operation whose result
   is small under the battery's query is not thereby bounded: `rename/plan` under

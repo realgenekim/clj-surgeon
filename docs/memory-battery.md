@@ -336,7 +336,12 @@ manifest's own digest (which covers file *contents*, not just paths and sizes)
 against the bytes on disk. Bad or missing bytes regenerate the tree; unexpected
 files **refuse** with exit 2, because regeneration would not remove them and
 deleting files under `MEMBAT_ROOT` on the corpus's own say-so is worse than
-stopping.
+stopping. So do two other substitutions at an expected path: a **symlink**
+(`:symlink-at-expected-path`) — existence is checked with `NOFOLLOW_LINKS`, so
+a symlink to an out-of-tree copy with byte-identical content is refused rather
+than reported verified — and a **directory** (`:directory-at-expected-path`),
+typed and refused before any write instead of throwing an untyped I/O
+exception mid-regeneration.
 
 Verification costs about 3 s for all three trees. That is the price of a table
 that cannot print `N=10,000` over a corpus of 9,999 files: the previous no-op

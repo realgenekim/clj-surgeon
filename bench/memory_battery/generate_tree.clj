@@ -26,7 +26,9 @@
 (ns generate-tree
   (:require
    [clojure.java.io :as io]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  (:import
+   [java.nio.file Files LinkOption]))
 
 (def generator-version "membat-gen-1")
 
@@ -352,7 +354,20 @@
               (fn [_ [rel size sha]]
                 (let [f (io/file dir rel)]
                   (cond
-                    (not (.isFile f))
+                    ;; A symlink at an expected path is refused outright, never
+                    ;; regenerated: `.isFile`/`.length`/reading through it all
+                    ;; follow the link, so a symlink to an out-of-tree copy with
+                    ;; identical bytes would otherwise verify clean.
+                    (Files/isSymbolicLink (.toPath f))
+                    (reduced {:status :refuse :reason :symlink-at-expected-path
+                              :detail rel})
+
+                    ;; `Files/isRegularFile` with NOFOLLOW_LINKS, not `.isFile`
+                    ;; (which follows symlinks) — the symlink case above is
+                    ;; already handled, so anything left that isn't a real
+                    ;; regular file is either missing or some other node type.
+                    (not (Files/isRegularFile (.toPath f)
+                                              (into-array LinkOption [LinkOption/NOFOLLOW_LINKS])))
                     (reduced {:status :regenerate :reason :missing-file :detail rel})
 
                     (not= (long size) (.length f))
@@ -482,6 +497,24 @@
               "an unlisted file in the corpus is a refusal")
       (assert (= :unexpected-files (:reason (verify-tree root 3))))
       (.delete (io/file dir "src/membat/pkg000/intruder.clj"))
+
+      ;; A SYMLINK at an expected path, even pointing at bytes identical to
+      ;; the promised content, must never be reported as present: `.isFile`
+      ;; follows symlinks, so a symlink to an out-of-tree copy of the same
+      ;; file used to verify clean.
+      (let [victim2 (io/file dir (rel-path-for 2))
+            outside (io/file root "outside-target.clj")]
+        (spit outside (slurp victim2))
+        (.delete victim2)
+        (Files/createSymbolicLink (.toPath victim2) (.toPath outside)
+                                  (make-array java.nio.file.attribute.FileAttribute 0))
+        (assert (= :refuse (:status (verify-tree root 3)))
+                "a symlink at an expected path is refused, not verified")
+        (assert (= :symlink-at-expected-path (:reason (verify-tree root 3))))
+        (Files/delete (.toPath victim2))
+        (generate-tree! root 3)
+        (assert (= :ok (:status (verify-tree root 3)))
+                "regeneration restores a plain file after the symlink is removed"))
 
       ;; A TAMPERED manifest digest is not authority over the bytes.
       (let [mf (io/file dir "manifest.edn")]
