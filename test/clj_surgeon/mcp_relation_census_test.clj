@@ -668,6 +668,18 @@
       (is (false? (mentions? ":parse"))
           "the design still lists a :parse timing"))
 
+    (testing "the design names one discovery kernel, not two walks"
+      (is (false? (mentions? "`fs/walk-file-tree` in the CLI"))
+          "the design still describes a second walk the CLI no longer has")
+      (is (true? (mentions? "census-discovery"))
+          "the design never names the kernel both entrances call")
+      (is (true? (mentions? "canonical"))
+          "the design never says the root is canonicalised before the walk")
+      (is (true? (mentions? "duplicates_collapsed"))
+          "the design never says two paths onto one source collapse")
+      (is (true? (mentions? "oversized_skipped_omitted"))
+          "the design never says a truncated skip list names its omission"))
+
     (testing "the design states which pool each entrance actually uses"
       (is (false? (mentions? "only the MCP route carries the claypoole pool"))
           "the design still says the CLI has no pool")
