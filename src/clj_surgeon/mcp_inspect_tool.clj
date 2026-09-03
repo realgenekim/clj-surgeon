@@ -55,7 +55,13 @@
     "ordering, transitive-dependency, and minimal-extractable-closure "
     "questions for one file (ls-deps and ls-extract need an exact form), and "
     "top-level mode=ls-tree returns the directory-wide namespace map for an "
-    "optional project-relative dir with optional grep and format=text|edn. "
+    "optional project-relative dir. format=names (default when grep is "
+    "absent) is a compact {file, ns, form_count, line_count} table of "
+    "contents sized to fit a whole tree in one receipt; format=text "
+    "(default when grep is present) or format=edn give the fuller per-form "
+    "view. grep filters by file CONTENTS (ripgrep, can match comments and "
+    "strings); ns_grep filters by each file's PATH/namespace instead and "
+    "answers 'table of contents filtered to namespaces matching X'. "
     "Every study receipt is bounded to 4096 payload characters by default; a "
     "larger result sets truncated=true and read_complete=false and returns an "
     "executable next_call, so raise limit up to 16384 or narrow the scope "
@@ -357,9 +363,11 @@
     "dir" {:type "string" :minLength 1
            :description "Project-relative directory to scan. Omit or use \".\" for the workspace root. Absolute paths and parent traversal refuse."}
     "grep" {:type "string" :minLength 1
-            :description "Optional ripgrep pattern; only matching projects and files are outlined."}
-    "format" {:type "string" :enum ["text" "edn"] :default "text"
-              :description "text is the compact scanning view; edn is one row per file."}
+            :description "Optional ripgrep pattern matched against file CONTENTS; only projects and files with a matching line are outlined. Can match comments, strings, and unrelated substrings — for a namespace/path filter use ns_grep instead."}
+    "ns_grep" {:type "string" :minLength 1
+               :description "Optional pattern matched against each file's PATH, which the Clojure require convention keeps in lockstep with its declared namespace ('_' and '-' are treated as equivalent). Narrower than grep: answers 'table of contents filtered to namespaces matching X' without matching mentions in comments or strings. Composes with grep, narrowing further."}
+    "format" {:type "string" :enum ["names" "text" "edn"]
+              :description "names (the default when grep is absent) is a compact table of contents — one {file, ns, form_count, line_count} row per file, sized to fit a whole tree in one bounded receipt. text (the default when grep is present) is the fuller compact per-form scanning view. edn is one fully detailed row per file. All three share the same bound/truncation contract."}
     "limit" {:type "integer" :minimum 1 :maximum 16384 :default 4096
              :description "Maximum receipt payload characters. A larger tree returns truncated=true with an executable next_call."}}
    :required ["mode"]})
@@ -387,13 +395,14 @@
 
 (defn- ls-tree-render
   [projects dir output-format]
-  (if (= "edn" output-format)
-    (inspect/json-data (study/format-ls-tree-edn projects dir))
+  (case output-format
+    "edn"   (inspect/json-data (study/format-ls-tree-edn projects dir))
+    "names" (inspect/json-data (study/format-ls-tree-names projects dir))
     (study/format-ls-tree-text projects dir)))
 
 (defn- ls-tree-payload-size
   [payload output-format]
-  (if (= "edn" output-format)
+  (if (contains? #{"edn" "names"} output-format)
     (inspect/json-character-count payload)
     (count payload)))
 
@@ -424,6 +433,7 @@
    :arguments (merge (cond-> {:mode "ls-tree"}
                        (:dir params) (assoc :dir (:dir params))
                        (:grep params) (assoc :grep (:grep params))
+                       (:ns_grep params) (assoc :ns_grep (:ns_grep params))
                        (:format params) (assoc :format (:format params)))
                      overrides)})
 
@@ -448,7 +458,10 @@
   "Run the one study kernel over a workspace-confined directory."
   [{:keys [project-root]} params]
   (let [dir (or (:dir params) ".")
-        output-format (or (:format params) "text")
+        ;; names is the default when the caller has not already narrowed the
+        ;; scan with grep; grep already trims the file set, so text (the
+        ;; fuller per-form view) stays the default once grep is present.
+        output-format (or (:format params) (if (:grep params) "text" "names"))
         limit (or (:limit params) ls-tree-default-limit)
         root (mcp-paths/real-root project-root)
         resolved (mcp-paths/resolve-directory-path root dir)]
@@ -469,16 +482,18 @@
 
       :else
       (let [scan (study/ls-tree (cond-> {:dir (:path resolved)}
-                                  (:grep params) (assoc :grep (:grep params))))]
+                                  (:grep params) (assoc :grep (:grep params))
+                                  (:ns_grep params) (assoc :ns-grep (:ns_grep params))))]
         (if-not (:ok scan)
           (ls-tree-refusal params
                            (:error-type scan)
                            (:error scan)
                            (cond-> {:dir dir
-                                    :remedy (if (:grep params)
-                                              "Widen or drop grep, or scan a parent directory."
+                                    :remedy (if (or (:grep params) (:ns_grep params))
+                                              "Widen or drop grep/ns_grep, or scan a parent directory."
                                               "Scan a directory that contains Clojure sources.")}
-                             (:grep params) (assoc :grep (:grep params))))
+                             (:grep params) (assoc :grep (:grep params))
+                             (:ns_grep params) (assoc :ns_grep (:ns_grep params))))
           (let [projects (:projects scan)
                 total (ls-tree-total-outlines projects)
                 bounded (ls-tree-bounded projects (:path resolved)
@@ -490,6 +505,7 @@
                :read_complete (not (:truncated bounded))
                :dir dir
                :grep (:grep params)
+               :ns_grep (:ns_grep params)
                :format output-format
                :limit limit
                :project_count (count projects)
@@ -502,8 +518,8 @@
                               (< limit ls-tree-max-limit)
                               "raise_limit_or_narrow_scope"
                               :else "narrow_scope")}
-              (= "edn" output-format) (assoc :files (:payload bounded))
-              (not= "edn" output-format) (assoc :tree (:payload bounded))
+              (contains? #{"edn" "names"} output-format) (assoc :files (:payload bounded))
+              (= "text" output-format) (assoc :tree (:payload bounded))
               ;; An executable continuation only while raising the limit can
               ;; still advance; a narrower dir or grep is a caller judgment.
               (and (:truncated bounded) (< limit ls-tree-max-limit))

@@ -4,8 +4,9 @@
    @spec MCP-OP-STUDY-001 MCP-OP-STUDY-002 MCP-OP-STUDY-003
    @spec MCP-OP-STUDY-004 MCP-OP-STUDY-005 MCP-OP-STUDY-006
    @spec MCP-OP-STUDY-007 MCP-OP-STUDY-008 MCP-OP-STUDY-009
-   @spec MCP-OP-STUDY-010"
+   @spec MCP-OP-STUDY-010 MCP-OP-STUDY-011 MCP-OP-STUDY-012"
   (:require
+   [babashka.fs :as fs]
    [clj-surgeon.core :as core]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
@@ -80,7 +81,8 @@
 
 ;; @spec MCP-OP-STUDY-001
 (deftest ls-tree-mode-returns-a-bounded-tree
-  (let [response (run {"mode" "ls-tree" "dir" fixture-dir "limit" 16384})]
+  (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
+                       "limit" 16384})]
     (is (true? (:ok response)))
     (is (= "ls-tree" (:mode response)))
     (is (= fixture-dir (:dir response)))
@@ -97,6 +99,135 @@
       (is (vector? (:files response)))
       (is (= 7 (count (:files response))))
       (is (nil? (:tree response))))))
+
+;; @spec MCP-OP-STUDY-011
+(deftest ls-tree-names-format-is-a-compact-table-of-contents
+  (let [response (run {"mode" "ls-tree" "dir" fixture-dir "limit" 16384})]
+    (testing "names is the default rendering when grep is absent"
+      (is (= "names" (:format response))))
+    (is (true? (:ok response)))
+    (is (true? (:read_complete response)))
+    (is (= 7 (:file_count response)))
+    (is (vector? (:files response)))
+    (is (nil? (:tree response)))
+    (is (= 7 (count (:files response))))
+    (doseq [entry (:files response)]
+      (is (= #{:file :ns :form_count :line_count} (set (keys entry)))
+          "a names entry must be exactly {file, ns, form_count, line_count}")))
+  (testing "grep flips the default back to text"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "grep" "ns"
+                         "limit" 16384})]
+      (is (= "text" (:format response)))
+      (is (string? (:tree response)))
+      (is (nil? (:files response)))))
+  (testing "text and edn remain reachable on explicit request regardless of grep"
+    (is (= "text" (:format (run {"mode" "ls-tree" "dir" fixture-dir
+                                 "format" "text" "limit" 16384}))))
+    (is (= "edn" (:format (run {"mode" "ls-tree" "dir" fixture-dir
+                                "format" "edn" "limit" 16384}))))))
+
+;; ============================================================
+;; A many-file scratch fixture, created and torn down per test, so the
+;; default-limit/names fit and the grep-vs-ns_grep witnesses run against a
+;; real-shaped tree without committing hundreds of fixture files.
+;; ============================================================
+
+(defn- write-clj-file!
+  [path ns-form & body-lines]
+  (fs/create-dirs (fs/parent path))
+  (spit (str path)
+       (str/join "\n" (concat [ns-form] body-lines))))
+
+(defn- with-scratch-project
+  "Populate dir (project-relative to project-root) via build!, run thunk,
+   then always delete it — even if the assertions throw."
+  [rel-path build! thunk]
+  (let [dir (str (fs/path project-root rel-path))]
+    (try
+      (build! dir)
+      (thunk)
+      (finally
+        (fs/delete-tree dir)))))
+
+;; @spec MCP-OP-STUDY-011
+;; @spec MCP-OP-STUDY-007
+(deftest ls-tree-names-default-fits-a-many-file-tree-well-inside-the-ceiling
+  ;; The field evidence this fixes: over a 116-file directory, the old
+  ;; text-only rendering stayed truncated (`read_complete=false`) even at the
+  ;; 16384-character ceiling, returning only 13 of 116 files with
+  ;; `next_action=narrow_scope` and no executable continuation — permanently
+  ;; out of reach. `names` must make a LARGER (190-file) tree fully reachable
+  ;; at that same ceiling, via the normal bounded-receipt continuation.
+  (with-scratch-project
+    "test-fixtures/study/scratch-190"
+    (fn [dir]
+      (dotimes [i 190]
+        (write-clj-file!
+          (str dir "/src/scratch/ns" i ".clj")
+          (format "(ns scratch.ns%d)" i)
+          (format "(defn f%d [] :ok)" i))))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-190"
+            at-default (run {"mode" "ls-tree" "dir" rel-dir})]
+        (testing "names is the default rendering, and the default limit alone bounds it"
+          (is (true? (:ok at-default)))
+          (is (= "names" (:format at-default)))
+          (is (= 190 (:file_count at-default)))
+          (is (= 4096 (:limit at-default)))
+          (when (:truncated at-default)
+            (is (= "raise_limit_or_narrow_scope" (:next_action at-default)))
+            (is (= "inspect_clojure" (get-in at-default [:next_call :tool])))))
+        (testing "raising to the ceiling completes the whole 190-file tree"
+          (let [response (run {"mode" "ls-tree" "dir" rel-dir "limit" 16384})]
+            (is (true? (:ok response)))
+            (is (= "names" (:format response)))
+            (is (true? (:read_complete response))
+                "190 names-format entries must fit well inside the 16384 ceiling")
+            (is (false? (:truncated response)))
+            (is (= 190 (:file_count response)))
+            (is (= 190 (:returned response)))
+            (is (= 190 (count (:files response))))
+            (is (<= (inspect/json-character-count (:files response)) 16384))
+            (doseq [entry (:files response)]
+              (is (= #{:file :ns :form_count :line_count} (set (keys entry)))))))))))
+
+;; @spec MCP-OP-STUDY-012
+(deftest ls-tree-ns-grep-filters-by-path-not-content
+  (with-scratch-project
+    "test-fixtures/study/scratch-ns-grep"
+    (fn [dir]
+      ;; Two real matches: path/namespace names folds or store.
+      (write-clj-file! (str dir "/src/cfp_scheduler_killer/folds.clj")
+                       "(ns cfp-scheduler-killer.folds)"
+                       "(defn fold-matches [] :ok)")
+      (write-clj-file! (str dir "/src/cfp_scheduler_killer/store.clj")
+                       "(ns cfp-scheduler-killer.store)"
+                       "(defn save! [] :ok)")
+      ;; Decoys: content mentions folds/store, but the path/namespace does not.
+      (write-clj-file! (str dir "/src/cfp_scheduler_killer/scheduler.clj")
+                       "(ns cfp-scheduler-killer.scheduler)"
+                       ";; restore the schedule store on boot"
+                       "(defn boot [] :ok)")
+      (write-clj-file! (str dir "/src/cfp_scheduler_killer/api.clj")
+                       "(ns cfp-scheduler-killer.api)"
+                       ";; handles folds of matching requests"
+                       "(defn handler [] :ok)"))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-ns-grep"]
+        (testing "ns_grep narrows to the two path/namespace matches only"
+          (let [response (run {"mode" "ls-tree" "dir" rel-dir
+                               "ns_grep" "folds|store" "format" "edn"})]
+            (is (true? (:ok response)))
+            (is (= 2 (:file_count response)))
+            (is (= #{"src/cfp_scheduler_killer/folds.clj"
+                     "src/cfp_scheduler_killer/store.clj"}
+                   (set (map :file (:files response)))))))
+        (testing "content grep over-matches the same pattern, including the decoys"
+          (let [response (run {"mode" "ls-tree" "dir" rel-dir
+                               "grep" "folds|store" "format" "edn"})]
+            (is (true? (:ok response)))
+            (is (= 4 (:file_count response))
+                "grep matches file bodies, so both decoy comments count too")))))))
 
 ;; ============================================================
 ;; Confinement
@@ -129,6 +260,23 @@
     (is (str/starts-with? (:error response) "No Clojure files found under "))
     (is (some? (:next_call response)))))
 
+;; @spec MCP-OP-STUDY-006
+(deftest ls-tree-refuses-a-flag-shaped-grep-or-ns-grep-over-the-wire
+  ;; A pattern beginning with '-' (e.g. "--pre=/bin/sh") would otherwise
+  ;; reach ripgrep looking like a flag; must refuse before any scan runs.
+  (testing "grep"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir
+                         "grep" "--pre=/bin/sh"})]
+      (is (false? (:ok response)))
+      (is (= "invalid-grep-pattern" (:error_type response)))
+      (is (false? (:read_complete response)))
+      (is (some? (:next_call response)))))
+  (testing "ns_grep"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "ns_grep" "-x"})]
+      (is (false? (:ok response)))
+      (is (= "invalid-ns-grep-pattern" (:error_type response)))
+      (is (false? (:read_complete response))))))
+
 ;; ============================================================
 ;; Bounding
 ;; ============================================================
@@ -158,7 +306,8 @@
       (is (= "inspect_clojure" (get-in response [:next_call :tool])))))
 
   (testing "ls-tree truncates whole files and stays a valid tree"
-    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "limit" 700})]
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
+                         "limit" 700})]
       (is (true? (:truncated response)))
       (is (false? (:read_complete response)))
       (is (< (:returned response) (:file_count response)))
@@ -167,7 +316,8 @@
       (is (= 16384 (get-in response [:next_call :arguments :limit])))))
 
   (testing "at the maximum limit no continuation is served that cannot advance"
-    (let [response (run {"mode" "ls-tree" "dir" "src" "limit" 16384})]
+    (let [response (run {"mode" "ls-tree" "dir" "src" "format" "text"
+                         "limit" 16384})]
       (is (true? (:truncated response)))
       (is (nil? (:next_call response))
           "an executable call identical to the one just made is a loop")
@@ -268,14 +418,20 @@
 
     (testing "ls-tree renders through the one formatter"
       (let [scan (study/ls-tree {:dir fixture-dir})
-            response (run {"mode" "ls-tree" "dir" fixture-dir "limit" 16384})]
+            response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
+                           "limit" 16384})]
         (is (true? (:ok scan)))
         (is (= (study/format-ls-tree-text (:projects scan) (:dir scan))
                (:tree response)))
         (is (= (inspect/json-data
                  (study/format-ls-tree-edn (:projects scan) (:dir scan)))
                (:files (run {"mode" "ls-tree" "dir" fixture-dir
-                             "format" "edn" "limit" 16384}))))))))
+                             "format" "edn" "limit" 16384}))))
+        (is (= (inspect/json-data
+                 (study/format-ls-tree-names (:projects scan) (:dir scan)))
+               (:files (run {"mode" "ls-tree" "dir" fixture-dir
+                             "limit" 16384})))
+            "names is the default rendering with no grep, and is the same one formatter")))))
 
 ;; ============================================================
 ;; No write authority

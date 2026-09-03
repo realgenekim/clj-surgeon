@@ -188,13 +188,17 @@
       (println "WARNING: ripgrep (rg) not found. Falling back to grep (much slower).")
       (println "Install: brew install ripgrep  OR  apt install ripgrep")))
   (try
-    (let [args (if (rg-available?)
+    (let [;; "--" ends option parsing for both rg and grep, so a caller-
+          ;; supplied pattern (e.g. "--pre=/bin/sh", which rg would run as a
+          ;; per-file preprocessor command) is always taken as a plain
+          ;; positional pattern, never as a flag.
+          args (if (rg-available?)
                  ;; ripgrep: fast, respects .gitignore automatically
                  ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
                  ["rg" "-li"
                   "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
                   "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
-                  pattern (str dir)]
+                  "--" pattern (str dir)]
                  ;; fallback: system grep
                  (let [exclude-args (mapcat #(vector "--exclude-dir" %)
                                             [".git" ".cpcache" ".gitlibs" "target"
@@ -203,7 +207,7 @@
                             "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
                             "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
                            exclude-args
-                           [pattern (str dir)])))
+                           ["--" pattern (str dir)])))
           result (apply babashka.process/shell
                         {:out :string :err :string :continue true}
                         args)]
@@ -211,6 +215,40 @@
         (set (str/split-lines (str/trim (:out result))))
         #{}))
     (catch Exception _e #{})))
+
+;; @spec MCP-OP-STUDY-012
+(defn- ns-grep-hit?
+  "Pure: true if a source file's SCAN-RELATIVE path plausibly names a
+   namespace matching pattern. Tests the relative path as given and again
+   with '_' turned into '-', because the Clojure require convention keeps a
+   file's path in lockstep with its declared namespace (path segment <-> ns
+   segment, '_' <-> '-'). Takes the path already relativized to the scanned
+   dir — never the absolute filesystem path, whose ancestor directories
+   (e.g. a checkout named `…-store` or `…-study`) could spuriously match.
+   Never opens or parses the file — this is a path/namespace filter, never a
+   file-contents filter (that is `grep`, via `filter-projects-by-hits`)."
+  [pattern rel-path]
+  (let [re (re-pattern pattern)]
+    (boolean (or (re-find re rel-path)
+                 (re-find re (str/replace rel-path "_" "-"))))))
+
+;; @spec MCP-OP-STUDY-012
+(defn filter-projects-by-ns-grep
+  "Pure: keep only files whose path/namespace — relative to dir, never the
+   absolute filesystem path — matches pattern. Narrower than
+   `filter-projects-by-hits`/`grep`, which searches file bodies and matches
+   any line containing the pattern — comments, strings, and unrelated
+   substrings included. Drops projects left with no files."
+  [projects dir pattern]
+  (let [dir-path (fs/path dir)
+        rel (fn [f] (str (fs/relativize dir-path (fs/path f))))]
+    (->> projects
+         (map (fn [project]
+                (update project :files
+                        (fn [files]
+                          (filterv #(ns-grep-hit? pattern (rel %)) files)))))
+         (remove #(empty? (:files %)))
+         vec)))
 
 (defn filter-projects-by-hits
   "Pure: given a set of matching file paths and a list of projects, filter
@@ -321,6 +359,23 @@
           (assoc :file rel-path)
           (dissoc :forward-refs)))))
 
+;; @spec MCP-OP-STUDY-011
+(defn format-ls-tree-names
+  "Pure: format ls-tree results as a compact table of contents — exactly
+   {:file :ns :form-count :line-count} per file and nothing else, so a whole
+   tree's names fit well inside a bounded receipt where the fuller `text`/
+   `edn` per-form rows would truncate. Expects projects with :outlines
+   already computed."
+  [projects dir]
+  (vec
+    (for [{:keys [outlines]} projects
+          [f result] outlines
+          :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
+      {:file rel-path
+       :ns (:ns result)
+       :form-count (or (:form-count result) 0)
+       :line-count (or (:lines result) 0)})))
+
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
   [file-path stop-at]
@@ -386,34 +441,70 @@
 ;; ============================================================
 
 ;; @spec MCP-OP-STUDY-001
+;; @spec MCP-OP-STUDY-012
 (defn ls-tree
   "Scan one absolute-or-relative directory and return outlined projects.
 
+   `grep` filters by file CONTENTS (ripgrep over file bodies — matches
+   comments, strings, and unrelated substrings). `ns-grep` filters by each
+   file's PATH/namespace instead (see `filter-projects-by-ns-grep`) and is
+   the narrower, structural answer to 'table of contents filtered to
+   namespaces matching X'. Both may be given; ns-grep narrows whatever grep
+   (or the full scan) already found.
+
    Returns {:ok true :dir <absolutized> :projects [...]} or a typed refusal.
    Printing, exit codes, and receipts belong to the entrances, not here."
-  [{:keys [dir grep] :as _opts}]
-  (if-not dir
+  [{:keys [dir grep ns-grep] :as _opts}]
+  (cond
+    (not dir)
     {:ok false
      :error-type :missing-dir
      :error "Error: :dir is required for :ls-tree"}
+
+    ;; Defense in depth alongside grep-tree's "--" argv separator: a pattern
+    ;; that starts with '-' would otherwise look like a flag to rg/grep (or
+    ;; to a future caller of the pattern in another context). Refused before
+    ;; any subprocess or scan runs.
+    (and grep (str/starts-with? grep "-"))
+    {:ok false
+     :error-type :invalid-grep-pattern
+     :dir dir
+     :grep grep
+     :error "Error: :grep must not start with '-'"}
+
+    (and ns-grep (str/starts-with? ns-grep "-"))
+    {:ok false
+     :error-type :invalid-ns-grep-pattern
+     :dir dir
+     :ns-grep ns-grep
+     :error "Error: :ns-grep must not start with '-'"}
+
+    :else
     (let [dir (str (fs/absolutize dir))
-          projects (if grep
-                     ;; Fast path: rg first, skip expensive directory globbing
-                     (let [hits (grep-tree grep dir)]
-                       (discover-projects-grep hits dir))
-                     ;; Full scan: discover all projects
-                     (discover-projects dir))]
+          discovered (if grep
+                       ;; Fast path: rg first, skip expensive directory globbing
+                       (let [hits (grep-tree grep dir)]
+                         (discover-projects-grep hits dir))
+                       ;; Full scan: discover all projects
+                       (discover-projects dir))
+          projects (if ns-grep
+                     (filter-projects-by-ns-grep discovered dir ns-grep)
+                     discovered)]
       (if (empty? projects)
         {:ok false
          :error-type :no-clojure-files
          :dir dir
          :grep grep
+         :ns-grep ns-grep
          ;; `(when grep ...)` here would render the literal string "null" into
          ;; the message; this branch was unreachable before the format shadow
          ;; was removed, so no caller depended on that spelling.
-         :error (format "No Clojure files found under %s%s"
-                        dir (if grep (str " matching '" grep "'") ""))}
+         :error (format "No Clojure files found under %s%s%s"
+                        dir
+                        (if grep (str " matching '" grep "'") "")
+                        (if ns-grep (str " with ns/path matching '" ns-grep "'") ""))}
         {:ok true
          :dir dir
          :grep grep
+         :ns-grep ns-grep
          :projects (outline-all-files projects)}))))

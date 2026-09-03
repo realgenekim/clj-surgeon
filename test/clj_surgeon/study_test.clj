@@ -70,6 +70,46 @@
       (is (true? (:ok result)))
       (is (= 7 (reduce + 0 (map #(count (:outlines %)) (:projects result))))))))
 
+;; @spec MCP-OP-STUDY-001
+(deftest ls-tree-refuses-a-flag-shaped-grep-or-ns-grep-pattern
+  ;; A pattern beginning with '-' would otherwise reach rg/grep looking like
+  ;; a flag (e.g. "--pre=/bin/sh" runs an arbitrary preprocessor command).
+  ;; Refused before any subprocess runs, never silently reinterpreted.
+  (testing "grep"
+    (let [result (study/ls-tree {:dir fixture-dir :grep "--pre=/bin/sh"})]
+      (is (false? (:ok result)))
+      (is (= :invalid-grep-pattern (:error-type result)))
+      (is (str/includes? (:error result) "must not start with"))))
+  (testing "ns-grep"
+    (let [result (study/ls-tree {:dir fixture-dir :ns-grep "-x"})]
+      (is (false? (:ok result)))
+      (is (= :invalid-ns-grep-pattern (:error-type result)))
+      (is (str/includes? (:error result) "must not start with")))))
+
+;; @spec MCP-OP-STUDY-001
+(deftest grep-tree-argv-always-separates-the-pattern-with-double-dash
+  ;; Defense in depth alongside the leading-dash refusal above: even a
+  ;; pattern that is not flag-shaped must never be adjacent to an
+  ;; unseparated argv, so a caller cannot smuggle an rg/grep flag by any
+  ;; other means. Captures the real subprocess argv via with-redefs rather
+  ;; than asserting on live rg/grep output.
+  (let [captured (atom nil)
+        grep-tree #'study/grep-tree]
+    (with-redefs [babashka.process/shell
+                  (fn [_opts & args]
+                    (if (= ["rg" "--version"] (vec args))
+                      {:exit 0 :out "ripgrep 14.0.0" :err ""}
+                      (do (reset! captured (vec args))
+                          {:exit 1 :out "" :err ""})))]
+      (grep-tree "some-pattern" "/tmp/somewhere"))
+    (is (some? @captured) "the real rg invocation must have been captured")
+    (let [args @captured
+          dash-dash-idx (.indexOf ^java.util.List args "--")
+          pattern-idx (.indexOf ^java.util.List args "some-pattern")]
+      (is (not= -1 dash-dash-idx))
+      (is (= (inc dash-dash-idx) pattern-idx)
+          "the pattern must immediately follow the -- argv separator"))))
+
 ;; ============================================================
 ;; One kernel: the CLI handler adds print, never a second answer
 ;; ============================================================

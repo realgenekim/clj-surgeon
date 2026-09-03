@@ -232,6 +232,81 @@
     (is (str/includes? result "total: 2 files, 3 forms"))))
 
 ;; ============================================================
+;; Pure tests: filter-projects-by-ns-grep (data in, data out)
+;;
+;; @spec MCP-OP-STUDY-012
+;; ============================================================
+
+(deftest test-ns-grep-matches-path-not-content
+  (testing "ns_grep filters by the file's path (namespace), not its body"
+    (let [projects [{:name "cfp_scheduler_killer"
+                     :root "/r/cfp_scheduler_killer"
+                     :files ["/r/cfp_scheduler_killer/src/folds.clj"
+                             "/r/cfp_scheduler_killer/src/store.clj"
+                             ;; decoy: content-only match, path does not
+                             ;; mention folds/store — must NOT be kept.
+                             "/r/cfp_scheduler_killer/src/scheduler.clj"]}]
+          result (study/filter-projects-by-ns-grep projects "/r" "folds|store")]
+      (is (= 1 (count result)))
+      (is (= ["/r/cfp_scheduler_killer/src/folds.clj"
+              "/r/cfp_scheduler_killer/src/store.clj"]
+             (:files (first result)))))))
+
+(deftest test-ns-grep-underscore-hyphen-equivalence
+  (testing "an ns-style hyphenated pattern still matches an underscored path"
+    (let [projects [{:name "app"
+                     :root "/r/app"
+                     :files ["/r/app/src/cfp_scheduler_killer/folds.clj"
+                             "/r/app/src/other_thing/core.clj"]}]
+          result (study/filter-projects-by-ns-grep projects "/r" "scheduler-killer")]
+      (is (= ["/r/app/src/cfp_scheduler_killer/folds.clj"]
+             (:files (first result)))))))
+
+(deftest test-ns-grep-no-match-drops-project
+  (let [projects [{:name "unrelated" :root "/r/u" :files ["/r/u/src/core.clj"]}]]
+    (is (empty? (study/filter-projects-by-ns-grep projects "/r" "folds|store")))))
+
+(deftest test-ns-grep-ignores-ancestor-directories-outside-the-scan
+  (testing "a pattern that only matches an ancestor of dir (never the scanned
+            tree) must not spuriously match every file"
+    (let [;; dir itself is named "...-store", like a checkout directory; a
+          ;; naive match against the ABSOLUTE path would hit every file here.
+          projects [{:name "app"
+                     :root "/home/x/my-app-store/src"
+                     :files ["/home/x/my-app-store/src/core.clj"
+                             "/home/x/my-app-store/src/store.clj"]}]
+          result (study/filter-projects-by-ns-grep
+                   projects "/home/x/my-app-store" "store")]
+      (is (= 1 (count result)))
+      (is (= ["/home/x/my-app-store/src/store.clj"]
+             (:files (first result)))))))
+
+;; ============================================================
+;; Pure tests: format-ls-tree-names (data in, data out)
+;;
+;; @spec MCP-OP-STUDY-011
+;; ============================================================
+
+(deftest test-format-ls-tree-names-exact-four-keys
+  (let [projects [{:name "proj"
+                   :root "/tmp/proj"
+                   :outlines [["/tmp/proj/src/core.clj"
+                               {:ns 'proj.core :lines 20 :form-count 3
+                                :requires ["[clojure.string :as str]"]
+                                :forms [{:type 'defn :name 'f :line 3 :end-line 5}]
+                                :forward-refs []}]]}]
+        result (study/format-ls-tree-names projects "/tmp")]
+    (is (vector? result))
+    (is (= 1 (count result)))
+    (let [entry (first result)]
+      (is (= #{:file :ns :form-count :line-count} (set (keys entry)))
+          "per-file entry must be exactly {file, ns, form_count, line_count}")
+      (is (= 'proj.core (:ns entry)))
+      (is (str/includes? (:file entry) "core.clj"))
+      (is (= 3 (:form-count entry)))
+      (is (= 20 (:line-count entry))))))
+
+;; ============================================================
 ;; Pure tests: format-ls-tree-edn (data in, data out)
 ;; ============================================================
 

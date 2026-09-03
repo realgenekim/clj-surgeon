@@ -37,6 +37,11 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-STUDY-010**: If a `deps`, `ls-deps`, or `ls-extract` request names a `form` that is not a top-level owner of the file, clj-surgeon shall refuse that request with `error_type="study-form-not-found"`, the bounded factual owner vocabulary, and an executable `next_call` whose `form` hole must be replaced; the owner list shall carry no selection authority. If the requested file cannot be parsed, clj-surgeon shall refuse with the kernel's typed parse error rather than an empty result.
 
+## Table-of-contents rendering
+
+- [x] **MCP-OP-STUDY-011**: `ls-tree` shall support `format="names"`, whose per-file entry shall be exactly `{file, ns, form_count, line_count}` and no other key; when an `ls-tree` request declares no `format`, clj-surgeon shall render `format="names"` by default when `grep` is absent from the request, and `format="text"` by default when `grep` is present; `format="text"` and `format="edn"` shall remain available on explicit request regardless of `grep`.
+- [x] **MCP-OP-STUDY-012**: `ls-tree` shall support an `ns_grep` parameter that filters files by each file's project-relative path (which the Clojure require convention keeps in lockstep with its declared namespace — path segment vs. ns segment, `_` vs. `-`), never by file contents; it shall compose with `grep` (an existing content match) to narrow further, and shall be documented as distinct from `grep`, which matches file bodies via ripgrep and can match comments, strings, and unrelated substrings.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |
@@ -48,3 +53,5 @@ IDs are stable and must not be reused if a requirement is deleted.
 | `MCP-OP-STUDY-008` | Byte-identical CLI output proves one kernel. | Kernel/MCP/CLI three-way equality per operation, plus the ten-invocation CLI golden. |
 | `MCP-OP-STUDY-009` | A read tool may expose a dry-run of a write. | The operation vocabulary; the mode vocabulary; the read-only annotation. |
 | `MCP-OP-STUDY-010` | A missing owner may return an empty result. | Unknown form on each of the three form-taking operations; unparseable source. |
+| `MCP-OP-STUDY-011` | A whole tree can be rendered without a compact per-file rendering; the default format may stay `text` regardless of `grep`. | `names` rendering of a many-file fixture fits the default limit with `read_complete=true`; a `names` entry has exactly the four keys `file`/`ns`/`form_count`/`line_count`; the default is `names` with no `grep` and `text` with `grep`; `text`/`edn` remain reachable on explicit request. |
+| `MCP-OP-STUDY-012` | `grep`'s content match already answers a namespace/path question; a new parameter is unneeded. | `ns_grep` on a fixture whose file bodies mention the pattern outside the matching namespaces returns only the path/namespace-matching files, not the content-matching decoys; `ns_grep` composes with `grep`. |
