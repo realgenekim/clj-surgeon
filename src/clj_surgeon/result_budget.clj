@@ -165,7 +165,14 @@
 
    `:offset` is where this page started, `:returned` how many records it
    encoded, `:total` the candidate count, `:remaining` what a later page would
-   still hold."
+   still hold.
+
+   `:returned` is MEASURED by the encoder that produced the page, never
+   computed from the manifest: the caller of this fn is handed the count
+   rather than deriving one. A number derived separately can drift from the
+   records beside it, and it did — `(min ceiling remaining)` printed
+   `:returned 5` over a page of two, with a next cursor, which reads as a
+   complete-looking page that holds nothing."
   [{:keys [ceiling offset returned total digest] :as request}]
   {:result_ceiling {:limit ceiling
                     :server_max max-result-records

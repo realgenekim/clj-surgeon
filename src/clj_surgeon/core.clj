@@ -751,15 +751,30 @@
 
 (defn- encode-page
   "Outline `candidates` through the streaming encoder and return the encoded
-   page. `projects` supplies the text encoder's per-project headers; `receipt`
-   is the trailing ceiling receipt, or nil for a complete result."
+   page. `projects` supplies the text encoder's per-project headers.
+
+   `receipt-fn` is called with the number of records the encoder ACTUALLY
+   emitted and returns the trailing receipt — or is `(constantly nil)` for a
+   complete result. The count comes from the encoder's own emissions, on the
+   consuming thread, in submission order, so a receipt cannot claim more
+   records than the page beside it holds: the number and the records are
+   produced by one act. It used to be `(min ceiling remaining)` — arithmetic
+   about the manifest — which printed `:returned 5` over a page of two.
+
+   Counting here rather than at the call sites is the point. A caller that
+   computes the number separately can always drift from the encoder; a caller
+   that is HANDED it cannot."
   ;; @spec MCP-OP-MEM-003
-  [abs projects candidates output-format receipt]
+  [abs projects candidates output-format receipt-fn]
   (let [encoder (if (= :edn output-format)
                   (edn-encoder (fs/path abs))
-                  (text-encoder (fs/path abs) projects (> (count projects) 1)))]
-    (stream-outlines! candidates (:emit! encoder))
-    ((:finish! encoder) receipt)))
+                  (text-encoder (fs/path abs) projects (> (count projects) 1)))
+        emit! (:emit! encoder)
+        encoded (volatile! 0)]
+    (stream-outlines! candidates (fn [record]
+                                   (vswap! encoded inc)
+                                   (emit! record)))
+    ((:finish! encoder) (receipt-fn @encoded))))
 
 (defn- run-fresh-scan
   "A scan with no cursor: discover, count, and either encode the whole result
@@ -779,7 +794,8 @@
           (System/exit 1))
       (let [total (candidate-total projects)]
         (if-not (> total ceiling)
-          (encode-page abs projects (candidate-seq projects) output-format nil)
+          (encode-page abs projects (candidate-seq projects) output-format
+                       (constantly nil))
           (let [{:keys [cursor-id digest secret]}
                 (snapshot/write-snapshot!
                   {:root abs
@@ -793,11 +809,16 @@
               (let [rows (snapshot/read-rows abs cursor-id 0 ceiling)]
                 (encode-page abs projects (pinned-candidates abs rows)
                              output-format
-                             (budget/continuation
-                               (assoc request
-                                      :returned ceiling
-                                      :next-cursor (page-cursor cursor-id secret
-                                                                ceiling))))))))))))
+                             ;; MEASURED, not asserted: the next page starts
+                             ;; exactly where this one stopped, so no record
+                             ;; can be skipped by a receipt that overclaims.
+                             (fn [encoded]
+                               (budget/continuation
+                                 (assoc request
+                                        :returned encoded
+                                        :next-cursor (page-cursor
+                                                       cursor-id secret
+                                                       encoded)))))))))))))
 
 (defn- run-pinned-page
   "A page served from a pinned manifest snapshot.
@@ -805,8 +826,9 @@
    Four typed refusals guard it, and each names a DIFFERENT fact about the
    caller's cursor: `:invalid-result-cursor` — this server did not mint that
    token; `:unknown-result-cursor` — it did, but not for this root, the
-   snapshot is gone, or the bytes filed under it no longer PROVE the manifest
-   they are filed as; `:result-cursor-out-of-range` — it did, and the position
+   snapshot is gone, the bytes filed under it no longer PROVE the manifest
+   they are filed as, or the manifest cannot supply the slice it promised;
+   `:result-cursor-out-of-range` — it did, and the position
    is not in the manifest; `:stale-result-cursor` — it did, and a file this
    page must serve no longer holds its pinned content.
 
@@ -840,12 +862,19 @@
         (let [total (:total snap)
               remaining (- total offset)
               over? (> remaining ceiling)
-              returned (min ceiling remaining)
-              rows (snapshot/read-rows abs cursor-id offset returned)
+              slice (min ceiling remaining)
+              rows (snapshot/read-rows abs cursor-id offset slice)
               stale (snapshot/stale-row abs rows)
               request (assoc base :digest (:digest snap) :total total
                              :offset offset)]
           (cond
+            ;; The manifest verified, then could not supply the slice it
+            ;; promised — the rows changed between the verifying fold and this
+            ;; read. A short page under a full receipt is the lying shape this
+            ;; whole budget exists to refuse, so it refuses instead.
+            (not= slice (count rows))
+            (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
+
             stale
             (render (budget/stale-cursor-refusal (merge base stale)))
 
@@ -857,13 +886,14 @@
             :else
             (encode-page abs (:projects snap) (pinned-candidates abs rows)
                          output-format
-                         (when over?
-                           (budget/continuation
-                             (assoc request
-                                    :returned returned
-                                    :next-cursor
-                                    (page-cursor cursor-id (:secret snap)
-                                                 (+ offset returned)))))))))) 
+                         (fn [encoded]
+                           (when over?
+                             (budget/continuation
+                               (assoc request
+                                      :returned encoded
+                                      :next-cursor
+                                      (page-cursor cursor-id (:secret snap)
+                                                   (+ offset encoded))))))))))) 
     (render (budget/invalid-cursor-refusal (assoc base :token cursor)))))
 
 (defn run-ls-tree
