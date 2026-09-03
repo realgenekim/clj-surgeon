@@ -168,8 +168,17 @@
 
    Read with `NOFOLLOW_LINKS`, so a symbolic link reports ITSELF rather than
    what it points at, and `fileKey` is the (device, inode) pair on every
-   filesystem that has one. Two files can hold identical bytes and still not be
-   the same file; a content digest cannot tell them apart and this can."
+   filesystem that has one.
+
+   What this catches, and a content digest cannot: a TYPE change - a regular
+   file replaced by a symbolic link to byte-identical content. What it does NOT
+   catch, measured on ext4 2026-09-03: a file's own recreation. `fileKey`
+   carries no generation counter, so deleting a pinned regular file and
+   recreating it with identical bytes can be handed the SAME (device, inode),
+   and the commit succeeds with no conflict. The instrument distinguishes types
+   and the inode changes the OS happens to expose; it does not distinguish two
+   files that hold the same bytes in general, and the earlier form of this
+   docstring said it did."
   [path]
   (try
     (let [attrs (Files/readAttributes

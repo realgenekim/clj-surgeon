@@ -339,7 +339,7 @@ what makes "the defaults admit it" a claim rather than a hope:
 | aggregate bytes | 536,870,912 | 314,772,270 | admits |
 | walk entries | 200,000 | 604 | admits |
 | depth | 40 | 4 | admits |
-| work budget | 201,326,592 | 29,442,376 | admits |
+| work budget | 201,326,592 | 29,446,956 | admits |
 | read-set files | 20,000 | 600 | admits |
 | staged files | 2,000 | 600 | admits |
 | journal bytes | 1,073,741,824 | 629,544,540 | admits — **and did not before the quota was derived** |
@@ -350,16 +350,41 @@ this arm refused its own workload and had to be handed a 2 GiB override.
 | arm | Xmx | result | wall | retained peak |
 |---|---|---|---:|---:|
 | frozen read | 256m | `OutOfMemoryError`, exit 3 | - | - |
-| frozen read (reference) | 2g | completed, peaked at 2046.8 MB used | 150,949 ms | - |
-| journal + scope-stream | 256m | committed 600 files | 157,679 ms | 14.0 MB |
+| frozen read (reference) | 2g | completed, peaked at 2046.9 MB used | 165,787 ms | - |
+| journal + scope-stream | 256m | committed 600 files | 176,403 ms | 14.87 MB |
+
+Re-measured 2026-09-03 after the reader override was removed, under the
+exclusive suite lock but on a box at load ~12, which is why the walls are ~10%
+longer than the first run's 150,949 / 157,679 ms. The arm's own receipt now
+reads `:aggregate-bytes-max 536870912` beside `:journal-bytes-max 1073741824` -
+exactly `quota = 2 x aggregate` - so it witnesses the derivation instead of
+contradicting it.
 
 Output parity is three-way and exact: the reference's digest over its 600 result
 hashes, the journal arm's streamed digest, and a digest recomputed by the test
 parent from the tree on disk after the commit all equal
 `55423110f805a112cd6b353252ccd5183e035dfb8fe4b50da52e5f310a762440`.
 
-Retention is flat: 13.93 MB at 60 files, 14.34 MB at 600. Ten times the files
-cost 0.41 MB. The attributable reserved peak was 29,378,776 B, inside the
-192 MiB work budget. Sampled used-heap peak was 251.7 MB for the journal arm and
-252.5 MB for the eight-file control that retains 12 MB, which is why it is a
-trend line and not a gate.
+Retention is flat: 12.08 MB at 60 files, 14.56 MB at 600. Ten times the files
+cost 2.48 MB, and the earlier run measured 13.93 / 14.34 for the same two
+points - the spread between the two runs is larger than the spread across a 10x
+change in file count, which is exactly why retention is read as a trend and
+never as a gate. The attributable reserved peak was 29,446,956 B - the
+per-file parser reservation of 29,378,776 B plus the retained path list's
+68,180 B, an identity that reproduces to the byte - inside the 192 MiB work
+budget. Sampled used-heap peak was 254.1 MB for the journal arm and 249.7 MB
+for the eight-file control that retains 12 MB, which is the other reason it is
+a trend line.
+
+**The residual commit window, measured before and after the digest moved out of
+the lock** (this box, 9 commits per cell, median `:max-ns` from the receipt):
+
+| target | before | after | size term |
+|---|---:|---:|---:|
+| 1 KB | 789,665 ns | 623,386 ns | |
+| 2 MiB | 2,671,197 ns | 1,124,137 ns | |
+| 2 MiB minus 1 KB | 1,881,532 ns | 500,751 ns | **-73%** |
+
+The size term is not zero after the change and is no longer a read of the
+target: what remains is the writeback pressure the 2 MiB pre-lock copy leaves
+for the in-lock journal fsync.
