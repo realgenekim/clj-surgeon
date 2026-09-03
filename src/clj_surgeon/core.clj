@@ -813,7 +813,11 @@
               (render (budget/ceiling-refusal
                         (assoc request :next-cursor
                                (page-cursor cursor-id secret 0))))
-              (let [rows (snapshot/read-rows abs cursor-id 0 ceiling)]
+              ;; Read back through the SAME verified fold the serve path
+              ;; uses: this scan wrote those bytes, but a snapshot is a file,
+              ;; and a file read without proving its address is a filename.
+              (if-let [rows (:rows (snapshot/verified-page abs cursor-id 0
+                                                           ceiling))]
                 (encode-page abs projects (pinned-candidates abs rows)
                              output-format
                              ;; MEASURED, not asserted: the next page starts
@@ -825,7 +829,10 @@
                                         :returned encoded
                                         :next-cursor (page-cursor
                                                        cursor-id secret
-                                                       encoded)))))))))))))
+                                                       encoded)))))
+                (render (budget/unknown-cursor-refusal
+                          (assoc base :token (page-cursor cursor-id secret
+                                                          0))))))))))))
 
 (defn- run-pinned-page
   "A page served from a pinned manifest snapshot.
@@ -858,7 +865,10 @@
     ;; VERIFIED, never merely read: a snapshot file is a CLAIM about its
     ;; content, and the claim is re-checked on the path that SERVES it, not
     ;; only on the path that reuses it.
-    (let [snap (snapshot/verified-snapshot abs cursor-id)]
+    ;; ONE OPEN of the rows file: the fold that proves the address and the
+    ;; slice this page serves come out of the same reading of the same bytes.
+    (let [page (snapshot/verified-page abs cursor-id offset ceiling)
+          snap (:meta page)]
       (cond
         (nil? snap)
         (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
@@ -875,7 +885,7 @@
               remaining (- total offset)
               over? (> remaining ceiling)
               slice (min ceiling remaining)
-              rows (snapshot/read-rows abs cursor-id offset slice)
+              rows (:rows page)
               unconfined (snapshot/unconfined-row abs rows)
               stale (snapshot/stale-row abs rows)
               request (assoc base :digest (:digest snap) :total total

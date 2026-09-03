@@ -295,6 +295,56 @@
 
 (declare read-meta)
 
+(defn- fold-slice
+  "ONE open of a pinned rows file: fold EVERY row into the manifest digest,
+   count the rows, and capture `[offset, offset+limit)` from the SAME BYTES.
+   Returns `[slice digest count]`, or `nil` when the file cannot be read, a
+   line is not a row, or the rows are out of order.
+
+   ONE function rather than two on purpose, and this is the round-four
+   finding. Folding the file to check its address and then REOPENING it to
+   take the slice are two observations of one mutable object: verification
+   proves the bytes of the first observation and the caller is served the
+   bytes of the second. The window is not a hairline — it is the whole fold,
+   which is O(N) in the manifest, so it GROWS with the corpus. Measured on a
+   real filesystem with no interposition at all: 400 page-2 reads under a live
+   rows-file swap served 92 substituted pages, each under a valid cursor with
+   a full receipt, each carrying a self-consistent (path, content-digest) pair
+   that neither a row COUNT nor a staleness check can see.
+
+   Folding while slicing closes it by construction. The digest is taken over
+   exactly the bytes the slice was cut from, so a slice is served only when
+   those same bytes prove the id, and there is no second observation left to
+   disagree with the first. This is not an atomic snapshot of a file — no such
+   thing exists — it is the strictly stronger property that the receipt
+   describes the bytes actually read.
+
+   Streaming still: rows before the slice are folded and dropped, rows after
+   it are folded and dropped, and only the slice is retained. The heap cost is
+   the page, whatever N is."
+  [root ^File f offset limit]
+  (when (.isFile f)
+    (try
+      (let [md (doto (MessageDigest/getInstance "SHA-256")
+                 (.update (.getBytes ^String (digest-header root) "UTF-8")))
+            from (max 0 (long offset))
+            to (+ from (max 0 (long limit)))
+            slice (volatile! (transient []))]
+        (with-open [r (io/reader f)]
+          (let [n (reduce
+                    (fn [n line]
+                      (let [row (edn/read-string line)]
+                        (when-not (and (map? row) (= n (:i row)) (string? (:p row)))
+                          (throw (ex-info "not a manifest row" {:at n})))
+                        (.update md (.getBytes (row-identity row) "UTF-8"))
+                        (when (and (>= n from) (< n to))
+                          (vswap! slice conj! row))
+                        (inc n)))
+                    0
+                    (line-seq r))]
+            [(persistent! @slice) (hex (.digest md)) n])))
+      (catch Exception _ nil))))
+
 (defn rows-digest
   "Re-fold `[digest row-count]` from a pinned rows file on disk, or `nil` when
    it cannot be read, a line is not a row, or the rows are out of order.
@@ -308,44 +358,43 @@
    PUBLIC as the one place the manifest address is computed from bytes on
    disk. A witness that needs a snapshot which PASSES verification must fold
    its address the way the implementation does, not the way a test author
-   remembers it doing."
-  [root ^File f]
-  (when (.isFile f)
-    (try
-      (let [md (MessageDigest/getInstance "SHA-256")]
-        (.update md (.getBytes ^String (digest-header root) "UTF-8"))
-        (with-open [r (io/reader f)]
-          (let [n (reduce
-                    (fn [n line]
-                      (let [row (edn/read-string line)]
-                        (when-not (and (map? row) (= n (:i row)) (string? (:p row)))
-                          (throw (ex-info "not a manifest row" {:at n})))
-                        (.update md (.getBytes (row-identity row) "UTF-8"))
-                        (inc n)))
-                    0
-                    (line-seq r))]
-            [(hex (.digest md)) n])))
-      (catch Exception _ nil))))
+   remembers it doing.
 
-(defn verified-snapshot
-  "The snapshot filed under `cursor-id` for `root` — but ONLY when its own
-   bytes still prove it: this projection version, this root, this id, a secret
-   present, and rows on disk that re-fold to exactly the id they are filed
-   under with the row count the meta claims.
+   It takes NO slice, so it is the write path's form of `fold-slice`: reuse
+   asks only whether these bytes are this manifest."
+  [root ^File f]
+  (when-let [[_ d n] (fold-slice root f 0 0)]
+    [d n]))
+
+(defn verified-page
+  "The snapshot filed under `cursor-id` for `root` TOGETHER WITH the rows
+   `[offset, offset+limit)` it holds — `{:meta m :rows slice}` — but ONLY when
+   its own bytes still prove it: this projection version, this root, this id,
+   a secret present, and rows on disk that re-fold to exactly the id they are
+   filed under with the row count the meta claims.
+
+   ONE OPEN. The meta and the rows are the two files a page reads, and the
+   rows file is read exactly once: `fold-slice` computes the digest, counts
+   the rows and cuts the slice from the same byte stream, so the address is
+   proved OF THE BYTES THE CALLER IS SERVED rather than of an earlier reading
+   of the same path. Round four measured what the two-open shape costs — 92 of
+   400 page-2 reads served a substituted candidate under a valid cursor while
+   a swapper renamed rows files into place — and the window it exploited was
+   the verifying fold itself, which grows with N.
 
    Anything else is a MISS. On the WRITE path a miss rebuilds from the tree;
    on the SERVE path a miss is `:unknown-result-cursor`, because a manifest
    that no longer proves its own address is not a manifest this root holds.
 
-   PUBLIC because SERVE needs it as much as REUSE does. The round-three review
-   found `run-pinned-page` resolving the snapshot with `read-meta`, so a rows
-   file tampered to substitute one candidate for another was served under an
-   unchanged cursor with no signal: `[m06 m01 m08 m09 m10]`, m01 standing in
-   for m07. Verifying on reuse and trusting on serve makes the address a
-   filename again on exactly the path a caller reads."
-  [root cursor-id]
+   `limit` is the page ceiling rather than the exact slice length: the file
+   ends where it ends, and the caller compares the rows it receives against
+   the length its own arithmetic promised. A short file therefore cannot
+   masquerade as a full page — but it also cannot get that far, because a
+   short file folds to a different digest."
+  [root cursor-id offset limit]
   (when-let [m (read-meta root cursor-id)]
-    (let [[d n] (rows-digest root (rows-file root cursor-id))]
+    (when-let [[slice d n] (fold-slice root (rows-file root cursor-id)
+                                       offset limit)]
       (when (and (= manifest-version (:v m))
                  (= cursor-id (:cursor-id m))
                  (= cursor-id (:digest m))
@@ -353,7 +402,24 @@
                  (string? (:secret m))
                  (= cursor-id d)
                  (= (:total m) n))
-        m))))
+        {:meta m :rows slice}))))
+
+(defn verified-snapshot
+  "The snapshot filed under `cursor-id` for `root`, verified and with no slice
+   taken — `verified-page` asking only `are these bytes this manifest?`.
+
+   PUBLIC because SERVE needs it as much as REUSE does. The round-three review
+   found `run-pinned-page` resolving the snapshot with `read-meta`, so a rows
+   file tampered to substitute one candidate for another was served under an
+   unchanged cursor with no signal: `[m06 m01 m08 m09 m10]`, m01 standing in
+   for m07. Verifying on reuse and trusting on serve makes the address a
+   filename again on exactly the path a caller reads.
+
+   The SERVE path no longer calls this — it calls `verified-page`, so that the
+   bytes it verifies and the bytes it serves are one reading. This is the
+   REUSE path's form, where there is no slice to keep."
+  [root cursor-id]
+  (:meta (verified-page root cursor-id 0 0)))
 
 (defn write-snapshot!
   "Pin `rows` — a LAZY seq of `{:pidx :path :abs}` in result order — and return
@@ -445,19 +511,6 @@
     (let [f (meta-file root cursor-id)]
       (when (.isFile f)
         (try (edn/read-string (slurp f)) (catch Exception _ nil))))))
-
-(defn read-rows
-  "Rows `[offset, offset+limit)` of a pinned manifest, in result order.
-
-   A transducer over `line-seq`: the lines before the slice are read and
-   dropped one at a time and the lines after it are never read, so a page's
-   retained cost is the page and not the manifest."
-  [root cursor-id offset limit]
-  (let [f (rows-file root cursor-id)]
-    (when (.isFile f)
-      (with-open [r (io/reader f)]
-        (into [] (comp (drop offset) (take limit) (map edn/read-string))
-              (line-seq r))))))
 
 (defn row-file
   "The file a manifest row's path names, or `nil` when that row is not

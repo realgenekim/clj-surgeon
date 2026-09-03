@@ -1008,16 +1008,22 @@
           (is (= (count (entry-files p2)) (:returned rc))
               "the number in the receipt is the number of records beside it")))
       (testing "a manifest that cannot supply the slice it promised REFUSES"
-        ;; The reviewer's item 2 through the one door verification cannot
-        ;; close: the rows file changes BETWEEN the verifying fold and the
-        ;; slice read. Interposing on `read-rows` reproduces that race
-        ;; deterministically — it is the only way a verified snapshot can
-        ;; hand the encoder fewer rows than the page promised.
-        (let [v (var snapshot/read-rows)
+        ;; FEWER rows than the page promised. This is the SAFE direction of
+        ;; the fold/read disagreement — a short page under a full receipt is a
+        ;; lie about how much was shown, but never about WHAT was shown. The
+        ;; dangerous direction is DIFFERENT rows of the right length, and no
+        ;; count guard can see it; that one is closed structurally by the
+        ;; single open in `snapshot/verified-page` and witnessed by
+        ;; `a-substituted-slice-is-never-served-under-a-live-rows-swap`.
+        ;; Interposing on `verified-page` reproduces the count direction
+        ;; deterministically: the fold still proves the address, and the rows
+        ;; handed to the encoder are short anyway.
+        (let [v (var snapshot/verified-page)
               real @v]
           (alter-var-root v (constantly
                               (fn [root id off lim]
-                                (vec (take 2 (real root id off lim))))))
+                                (when-let [p (real root id off lim)]
+                                  (update p :rows #(vec (take 2 %)))))))
           (try
             (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
                                        :cursor cursor})
