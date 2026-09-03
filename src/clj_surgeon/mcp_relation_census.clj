@@ -170,15 +170,53 @@
    `doors` into its next_call unchanged and would otherwise hand back a
    continuation the tool's own schema rejects.
 
-   The `next_call` this pass computes never carries `workspace_root`: no
-   canonical value exists yet at this point, and the caller's own raw value
-   is not carried through either, because a value this pass has not itself
-   validated is not a smaller promise than a real one."
+   The `next_call` this pass computes CARRIES the caller's `workspace_root`
+   verbatim whenever the caller supplied one. No canonical value exists at
+   this point — canonicalising is the filesystem work this pass runs before —
+   so the caller's own string is what there is, and it is what must travel:
+   a continuation may narrow WHAT is censused, it may never change WHERE.
+   Sol's round-nine finding was this exact defect, introduced by round nine's
+   own fix: a refusal targeting a fixture workspace handed back
+   `{tool, pool_size: 8}`, and replaying that verbatim censused the SERVER's
+   default root and reported success. Carrying an unvalidated value through
+   is not a promise about the value; it either routes to the workspace the
+   caller meant or refuses on that same value, and both are honest. Silently
+   censusing a different tree is neither.
+
+   When `workspace_root` is present but is NOT a string, there is no
+   continuation to compute: the value cannot be carried into a `next_call`
+   the published schema would accept, and a `next_call` without it targets a
+   different tree. So this pass publishes no `next_call` at all and a
+   `remedy` saying why, which is what MCP-OP-CENSUS-014 already requires of
+   every refusal that can compute no narrower call."
   [params]
-  (let [next-call {:tool "relation_census" :pool_size 8}
+  (let [asked-root (:workspace_root params)
+        ;; A routing field this pass deliberately does not validate — but it
+        ;; must be CARRIABLE, and a non-string is not: the schema this tool
+        ;; publishes declares workspace_root a string, so copying a number or
+        ;; an object into the continuation would hand back a call the tool's
+        ;; own schema rejects.
+        carriable? (or (not (contains? params :workspace_root))
+                       (string? asked-root))
+        next-call (when carriable?
+                    (cond-> {:tool "relation_census" :pool_size 8}
+                      (string? asked-root) (assoc :workspace_root asked-root)))
         refuse (fn [reason message data]
                  (refusal :invalid-mcp-request message next-call
-                          (merge {:reason (name reason)} data)))
+                          (merge {:reason (name reason)}
+                                 (when-not carriable?
+                                   {:remedy
+                                    (str "workspace_root must be a JSON "
+                                         "string; the value this request "
+                                         "supplied cannot be carried into a "
+                                         "continuation, and a continuation "
+                                         "without it would census a "
+                                         "different tree, so none is "
+                                         "offered: retry with workspace_root "
+                                         "naming an existing absolute "
+                                         "directory, or omit it to census "
+                                         "the server's workspace.")})
+                                 data)))
         unknown (vec (sort (map name (remove (into census-fields routing-fields)
                                               (keys params)))))
         files (:files params)
