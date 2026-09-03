@@ -116,3 +116,34 @@ the receipt names declaring the alias as the durable fix.
 This repository ships its own `.clj-surgeon.edn` declaring
 `clj-surgeon/mcp-test`. It is the repository's configuration, not test
 apparatus: any agent extracting inside this tree needs it.
+
+## Filed, not fixed
+
+Two findings from the 2026-09-03 re-review are recorded here deliberately
+rather than repaired, because each is a bounded, low-consequence gap and the
+fix belongs with the surface it touches, not with this pass.
+
+**`forms/load-project-aliases` walks up without a stop.** `forms/project-config`
+takes an optional `stop-root` and MCP-OP-EXTRACT-027 uses it, so extraction's
+compile-alias lookup already stops at the resolved project root and can never
+read a configuration above it. `load-project-aliases` — the one-arity entrance
+the CLI's `init-from-file!` and the two `mcp-inspect-tool` call sites use — has
+no such bound and will keep climbing to `/` looking for `.clj-surgeon.edn`.
+That is deliberate for a caller resolving aliases for an operator-named path,
+which may legitimately sit outside any workspace, and it is the documented
+behaviour of that arity. It is nonetheless a walk with no ceiling, on a path an
+operator supplies. The fix is a `stop-root` on those callers, decided against
+their own boundary; it is not extraction's boundary to choose.
+
+**MCP-OP-EXTRACT-025's argv discipline has not reached two remaining printed
+commands.** The compile check publishes `command` as argv vectors and
+`command_shell` as a `shell-quote-token`-quoted rendering, and says which is
+which. Two other printed commands are still bare interpolated strings:
+`apply-command-for`, the `would` field of a dry run, which interpolates
+`:file`, `:to` and `:alias`; and the `command` a failed compile publishes
+alongside `undo`, which interpolates the receipt path. Neither is executed by
+this process — they are text a reader pastes — so no injection reaches the
+tool. But EXTRACT-025's rule is that a receipt never publishes a shell string
+under a key named `command`, precisely so a reader is never invited to paste
+one, and these two still do. The fix is the same one that landed for the
+compile check: argv under `command`, a quoted rendering under `command_shell`.

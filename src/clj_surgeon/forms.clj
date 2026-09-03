@@ -249,7 +249,15 @@
 
 (defn load-project-aliases
   "Find `.clj-surgeon.edn` by walking up from `start` (a file or dir path).
-   Return the compiled aliases map, or `{}` if no config found."
+   Return the compiled aliases map, or `{}` if no config found.
+
+   UNBOUNDED BY DESIGN, and documented as such: this arity keeps climbing to
+   the filesystem root. It is the entrance for a caller resolving aliases for
+   an operator-named path, which may legitimately sit outside any workspace.
+   A caller that HAS a workspace boundary must not use it -- see
+   MCP-OP-EXTRACT-027, where extraction's compile-alias lookup passes
+   `project-config`'s `stop-root` so it can never read a configuration above
+   the resolved project root."
   [start]
   (if-let [f (find-config-file start)]
     (read-config f)
