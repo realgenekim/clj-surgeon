@@ -2235,7 +2235,18 @@
              ;; that one hands back.
              :non-string-workspace-root [run {:workspace_root 42 :doors [1]}]
              :non-string-workspace-root-remedied
-             [run {:workspace_root (.getCanonicalPath root) :doors [1]}]}
+             [run {:workspace_root (.getCanonicalPath root) :doors [1]}]
+             ;; Sol's round-thirteen item 2, blocking: U+FFFD ALONE refused
+             ;; correctly and carried no continuation; U+FFFD BESIDE an
+             ;; unknown field did not. The unknown-field row sat first in the
+             ;; shared table, so this request was refused as `unknown-fields`
+             ;; — a refusal that computes a continuation — and that
+             ;; continuation carried the corrupt path. A continuation is a
+             ;; NARROWING of the request; a request whose path did not decode
+             ;; has no faithful narrowing, so the decodability row is asked
+             ;; FIRST OVERALL rather than fourth.
+             :not-decodable-with-unknown-field
+             [run {:workspace_root undecodable-probe-path :bogus 1}]}
             mcp-refusals (into {}
                                (map (fn [[label [entrance params]]]
                                       [label (entrance params)]))
@@ -2257,7 +2268,12 @@
                                       ":dir" (.getPath root)
                                       ":doors" "made-up-door")
              :bb-pool (bb-cli ":op" "relation-census"
-                              ":dir" (.getPath empty-root) ":threads" "0")}]
+                              ":dir" (.getPath empty-root) ":threads" "0")
+             ;; The CLI half of Sol's round-thirteen item 2: an unknown
+             ;; ARGUMENT beside a `:dir` that did not decode.
+             :jvm-not-decodable-with-unknown-argument
+             (core/run-relation-census {:dir undecodable-probe-path
+                                        :format :edn})}]
 
         (testing "no MCP refusal serialises a placeholder"
           (doseq [[label result] mcp-refusals]
@@ -2403,6 +2419,32 @@
               (is (= 1 (:files replayed))
                   (str "the replay scanned " (:files replayed)
                        " arm-bearing file(s); the remedied workspace holds 1")))))
+
+        (testing "a corrupt path outranks every other shape question, both entrances"
+          ;; The refusal a corrupt path earns is the one refusal that can
+          ;; offer no continuation of ANY kind, so it has to be reached
+          ;; FIRST: every row after it builds its continuation out of a path
+          ;; whose bytes are gone.
+          (let [tool (:not-decodable-with-unknown-field mcp-refusals)
+                cli (:jvm-not-decodable-with-unknown-argument cli-refusals)]
+            (is (= "workspace-root-not-decodable"
+                   (or (:reason tool) (:error_type tool)))
+                (str "an unknown field won the order over a path that did "
+                     "not decode: " (pr-str tool)))
+            (is (not (contains? tool :next_call))
+                (str "the continuation carries the corrupt path: "
+                     (pr-str (:next_call tool))))
+            (is (string? (:remedy tool)))
+            (is (= "workspace_root" (:argument tool)))
+            (is (= :dir-not-decodable (:error-type cli))
+                (str "an unknown argument won the order over a path that did "
+                     "not decode: " (pr-str cli)))
+            (is (not (contains? cli :next-command))
+                (str "the continuation carries the corrupt path: "
+                     (pr-str (:next-command cli))))
+            (is (not (contains? cli :next-command-argv)))
+            (is (string? (:remedy cli)))
+            (is (= ":dir" (:argument cli)))))
 
         (testing "every next_call this battery emits validates against the published schema"
           ;; The published schema, not a hand read, is the authority on
@@ -3446,6 +3488,119 @@
         ;; decoded U+FFFD back out yields three different bytes — so the
         ;; cleanup goes through the shell that created it.
         (proc/shell {:continue true} "rm" "-rf" (.getCanonicalPath parent))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-thirteen review, item 2, blocking: the decodability row was
+;; FOURTH in the shared table, behind unknown-fields, `:dir`-type and nothing
+;; else. So U+FFFD ALONE was refused as `dir-not-decodable` with no
+;; continuation — the round-twelve fix, working — and U+FFFD BESIDE a `bogus`
+;; field was refused as `unknown-arguments`/`unknown-fields`, a refusal that
+;; DOES compute a continuation, and the continuation carried the corrupt path
+;; straight back to the caller to replay.
+;;
+;; The invariant, stated once: a continuation is a NARROWING of the request it
+;; answers, and a request whose path did not decode HAS no faithful narrowing
+;; — the bytes are gone, the replacement is lossy, and anything carried names
+;; a different directory or none. So the question "did this path survive the
+;; trip into the process at all?" is asked FIRST OVERALL, ahead of every other
+;; shape question, on both entrances. Not because it is the most severe
+;; violation, but because every row after it computes a continuation out of a
+;; value that no longer denotes anything.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
+(deftest a-path-that-did-not-decode-outranks-every-other-shape-question
+  (let [corrupt (str (System/getProperty "java.io.tmpdir")
+                     "/clj-surgeon-census-corrupt/root\ufffd")]
+
+    (testing "the shared table asks decodability first, and nothing before it"
+      (is (= [:paths :not-decodable]
+             ((juxt :field :violation) (first census/request-shape-rules)))
+          (str "a shape row was placed ahead of the decodability check, so "
+               "its refusal computes a continuation out of a corrupt path: "
+               (pr-str (mapv (juxt :field :violation)
+                             census/request-shape-rules)))))
+
+    (testing "an unknown ARGUMENT does not outrank a corrupt :dir"
+      (let [result (binding [*out* (java.io.StringWriter.)]
+                     (core/run {:op :relation-census
+                                :dir corrupt
+                                :format :edn}))]
+        (is (= :dir-not-decodable (:error-type result))
+            (str "the unknown argument won the order: " (pr-str result)))
+        (is (not (contains? result :next-command))
+            (str "the refusal handed back a continuation carrying the "
+                 "corrupt path: " (pr-str (:next-command result))))
+        (is (not (contains? result :next-command-argv)))
+        (is (string? (:remedy result))
+            "the refusal offers neither a continuation nor a remedy")
+        (is (= ":dir" (:argument result)))))
+
+    (testing "an unknown ARGUMENT does not outrank a corrupt :file either"
+      (let [result (census/validate-cli-request-shape
+                     {:file (str corrupt "/only.clj") :format :edn})]
+        (is (= :dir-not-decodable (:error-type result))
+            (str "the unknown argument won the order: " (pr-str result)))
+        (is (= ":file" (:argument result)))
+        (is (not (contains? result :next-command)))
+        (is (string? (:remedy result)))))
+
+    (testing "an unknown FIELD does not outrank a corrupt workspace_root"
+      (let [result (run {:workspace_root corrupt :bogus 1})]
+        (is (false? (:ok result)))
+        (is (= "workspace-root-not-decodable"
+               (or (:reason result) (:error_type result)))
+            (str "the unknown field won the order: " (pr-str result)))
+        (is (not (contains? result :next_call))
+            (str "the refusal handed back a continuation carrying the "
+                 "corrupt path: " (pr-str (:next_call result))))
+        (is (string? (:remedy result)))
+        (is (= "workspace_root" (:argument result)))))
+
+    (testing "a corrupt path beats EVERY other row the entrance can express"
+      ;; One request per remaining row, each carrying the corrupt path too.
+      ;; The ordering fix is only worth anything if it holds against the whole
+      ;; table rather than against the one row Sol happened to combine it with.
+      (doseq [[label extra] [[:unknown-field {:bogus 1}]
+                             [:doors-container {:doors "conj-once"}]
+                             [:doors-entry {:doors [1]}]
+                             [:doors-vocabulary {:doors ["conj"]}]
+                             [:files-container {:files fixture}]
+                             [:files-empty {:files []}]
+                             [:files-entry {:files [""]}]
+                             [:pool-size-type {:pool_size "8"}]
+                             [:pool-size-range {:pool_size 0}]]]
+        (let [result (run (merge {:workspace_root corrupt} extra))]
+          (is (= "workspace-root-not-decodable"
+                 (or (:reason result) (:error_type result)))
+              (str label " won the order over a path that did not decode: "
+                   (pr-str result)))
+          (is (not (contains? result :next_call))
+              (str label " left a continuation carrying the corrupt path: "
+                   (pr-str (:next_call result)))))))
+
+    (testing "the CLI agrees, row for row"
+      (doseq [[label extra] [[:unknown-argument {:format :edn}]
+                             [:dir-type {:dir ""}]
+                             [:doors-container {:doors [1]}]
+                             [:doors-vocabulary {:doors "conj"}]
+                             [:file-entry {:file ""}]
+                             [:pool-size {:threads "not-a-number"}]]]
+        ;; `:dir ""` and `:file ""` REPLACE the corrupt argument they would
+        ;; otherwise sit beside, so those two rows carry the corrupt path in
+        ;; the OTHER path argument.
+        (let [base (if (contains? extra :dir)
+                     {:file (str corrupt "/only.clj")}
+                     {:dir corrupt})
+              result (census/validate-cli-request-shape (merge base extra))]
+          (is (= :dir-not-decodable (:error-type result))
+              (str label " won the order over a path that did not decode: "
+                   (pr-str result)))
+          (is (not (contains? result :next-command))
+              (str label " left a continuation carrying the corrupt path: "
+                   (pr-str (:next-command result)))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
