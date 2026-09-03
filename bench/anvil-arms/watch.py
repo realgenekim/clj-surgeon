@@ -477,6 +477,33 @@ def proc_stat(pid: int) -> dict | None:
         return None
 
 
+PR_SET_CHILD_SUBREAPER = 36     # <linux/prctl.h>; no privilege required
+
+
+def set_child_subreaper() -> str:
+    """Make THIS process the reaper for its orphaned descendants.  Linux, no sudo.
+
+    Sol round three, finding (b): a child that forks a grandchild and exits between
+    two /proc scans loses the race by construction -- the grandchild re-parents to
+    init and the walk from the driver's pid can never reach it again.  No polling
+    interval fixes that; the walk is sampling a tree that has already been rewritten.
+
+    `prctl(PR_SET_CHILD_SUBREAPER, 1)` rewrites it in our favour instead: an orphan
+    below this process re-parents to the WATCHER, not to init, so it stays inside the
+    subtree the final scan walks and inside the set the reap may signal.  It is
+    inherited by the driver, applies to every descendant forked after this call, and
+    needs no privileges.  The per-poll walk stays as belt and braces.
+    """
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        if libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0:
+            return f"prctl-failed:errno={ctypes.get_errno()}"
+        return "ok"
+    except Exception as exc:                        # not Linux, or no libc
+        return f"prctl-unavailable:{type(exc).__name__}"
+
+
 def descendants_of(root_pid: int) -> dict[int, str]:
     """Every live descendant of `root_pid` right now -> its start time.
 
@@ -754,6 +781,10 @@ def main() -> int:
             return None
         return match.group(1), BANNER_SCAN_BYTES + match.start(1)
 
+    # BEFORE the driver exists: a subreaper set afterwards would not adopt orphans of
+    # children forked in between.
+    child_subreaper = set_child_subreaper()
+
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                             stdout=(subprocess.PIPE if args.capture_stdout
                                     else (driver_out or None)),
@@ -766,7 +797,14 @@ def main() -> int:
         driver_pgid = proc.pid
 
     def group_members() -> list[int]:
-        """Every live pid still in the driver's process group (never this watcher's)."""
+        """Every LIVE pid still in the driver's process group (never this watcher's).
+
+        A zombie is not a survivor, and since this watcher became a child subreaper it
+        SEES zombies it did not use to see: an orphan that once re-parented to init and
+        vanished the same instant now re-parents here and stays in /proc, in the
+        driver's group, until this process waits on it.  Counting those as orphans
+        reported a survivor of a reap that had in fact worked.
+        """
         if driver_pgid == os.getpgrp():
             return []                   # refuse to enumerate -- or signal -- our own group
         found = []
@@ -774,10 +812,14 @@ def main() -> int:
             if not entry.isdigit():
                 continue
             try:
-                if os.getpgid(int(entry)) == driver_pgid:
-                    found.append(int(entry))
+                if os.getpgid(int(entry)) != driver_pgid:
+                    continue
             except Exception:
                 continue
+            info = proc_stat(int(entry))
+            if info is None or info["state"] == "Z":
+                continue
+            found.append(int(entry))
         return found
 
     # Every descendant this watcher has EVER seen alive, pid -> start time.  A group
@@ -786,10 +828,26 @@ def main() -> int:
     recorded: dict[int, str] = {}
 
     def record_descendants() -> None:
-        for pid, start in descendants_of(proc.pid).items():
+        # From the WATCHER's own pid, not the driver's: with PR_SET_CHILD_SUBREAPER an
+        # orphaned grandchild re-parents HERE, so it is a descendant of this process
+        # even after the driver and its child are both gone.  The driver's subtree is
+        # inside this walk, so nothing that was visible before is lost.
+        for pid, start in descendants_of(os.getpid()).items():
             if pid in (os.getpid(), os.getppid(), 1):
                 continue
             recorded.setdefault(pid, start)
+
+    def reap_adopted() -> None:
+        """Wait on every zombie this watcher has adopted, so none is left behind."""
+        while True:
+            try:
+                pid, _ = os.waitpid(-1, os.WNOHANG)
+            except ChildProcessError:
+                return
+            except OSError:
+                return
+            if pid == 0:
+                return
 
     def still_alive(pid: int, start: str) -> bool:
         info = proc_stat(pid)
@@ -873,7 +931,7 @@ def main() -> int:
 
             done = proc.poll() is not None
             now = time.time()
-            if now - state["last_scan"] >= 1.0:
+            if now - state["last_scan"] >= 0.25:
                 state["last_scan"] = now
                 record_descendants()
             if (codex_home is not None and tailer is None
@@ -917,6 +975,10 @@ def main() -> int:
             kill_group(signal.SIGKILL)
             signal_recorded(signal.SIGKILL)
         driver_rc = proc.wait()
+        # AFTER the driver is gone: this is exactly when an adopted orphan becomes
+        # visible as a child of the watcher rather than a descendant of the driver.
+        record_descendants()
+        reap_adopted()
         driver_group_orphans = len(group_members()) if abort_reason else 0
         if driver_group_orphans:
             time.sleep(1)
@@ -930,7 +992,10 @@ def main() -> int:
             kill_group(signal.SIGKILL)
             signal_recorded(signal.SIGKILL)
             time.sleep(1)
+            record_descendants()
+            reap_adopted()
             orphan_pids = live_recorded()
+        reap_adopted()
         if tailer is not None:
             retained = tailer.snapshot()
             rotation_detail = tailer.rotation
@@ -983,7 +1048,9 @@ def main() -> int:
         "driver_pid": proc.pid,
         "driver_pgid": driver_pgid,
         "driver_group_orphans": driver_group_orphans,
+        "child_subreaper": child_subreaper,
         "descendants_recorded": len(recorded),
+        "descendant_pids": sorted(recorded),
         "orphans_after_reap": len(orphan_pids),
         "orphan_pids": orphan_pids,
         "rollout_path": str(rollout_path),
