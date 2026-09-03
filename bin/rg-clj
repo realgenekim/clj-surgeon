@@ -20,6 +20,10 @@
 ;; HTTP, subprocess and logging.
 ;;
 ;; Specifications: docs/intent/read-hook/read-hook-specs.md
+;;
+;; clj-surgeon-read-hook-marker — this file IS the hook. Any executable named
+;; `rg` whose first bytes carry this marker is a copy of the hook, and execing
+;; it would fork this process forever. `hook-copy?` below reads for it.
 
 (require '[babashka.classpath :as cp]
          '[clojure.java.io :as io])
@@ -57,6 +61,21 @@
   itself from PATH and execs forever."
   #{(.getCanonicalPath script-file)})
 
+(def ^:private hook-marker
+  (str "clj-surgeon-read-hook" "-marker"))
+
+(defn- hook-copy?
+  "Does this candidate's own content say it is the hook? A copy of the hook
+  has a different canonical path from ours and is still the hook."
+  [path]
+  (try
+    (with-open [in (java.io.FileInputStream. (str path))]
+      (let [buf (byte-array 4096)
+            n (.read in buf)]
+        (and (pos? n)
+             (str/includes? (String. buf 0 n "ISO-8859-1") hook-marker))))
+    (catch Exception _ false)))
+
 ;; @spec MCP-OP-READ-HOOK-005
 (def real-rg
   (or (env "SURGEON_RG_REAL")
@@ -65,7 +84,8 @@
                                (str/split (or (System/getenv "PATH") "") #":"))
          :self-paths self-paths
          :canonical canonical
-         :exists? #(let [f (io/file %)] (and (.isFile f) (.canExecute f)))})))
+         :exists? #(let [f (io/file %)] (and (.isFile f) (.canExecute f)))
+         :hook? hook-copy?})))
 
 (defn- workspace-root
   []

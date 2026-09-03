@@ -66,7 +66,7 @@ this rung routes discovery and leaves matching where it is.
 | 002 | A non-Clojure candidate file under the path argument; an unsupported flag; a file path argument; an unreachable read path; a truncated receipt | ripgrep's own answer, unchanged, in every case | `unservable-invocations-fall-back-to-real-ripgrep`, `unsupported-flags-fall-back`, `unreachable-read-path-falls-back` |
 | 003 | Run one served and one fallen-back invocation with a route log configured | exactly two records, carrying paths, flags, `served_by`, `ms`, `bytes` | `every-invocation-appends-exactly-one-route-record` |
 | 004 | A pattern that matches, one that does not, and an argument vector ripgrep rejects | 0, 1, 2 — the same as ripgrep | `exit-status-is-ripgreps-own` |
-| 005 | Put the shim first on `PATH` under the name `rg` and invoke it | terminates, with ripgrep's answer, never an exec loop | `real-ripgrep-is-never-the-hook-itself` |
+| 005 | Put the shim first on `PATH` under the name `rg` and invoke it; then a second symlink to it earlier still; then a **copy** of it earlier still (pure, never run as a subprocess) | terminates, with ripgrep's answer, never an exec loop | `real-ripgrep-is-never-the-hook-itself` |
 | 006 | Serve an invocation whose single path argument is a directory | every line carries its filename prefix | `filename-prefix-survives-the-substitution` |
 | 007 | Hand the hook a read-path file set with one file removed, and one with a file added | refuses to serve; falls back; the route record says so | `a-read-path-set-that-disagrees-with-ripgrep-is-refused` |
 | 001, 002 | Two path arguments that overlap (`src` and `src/app`), so ripgrep prints each file once per argument | refuses to serve; ripgrep's own answer | `overlapping-path-arguments-are-refused` |

@@ -364,11 +364,17 @@
   The hook IS `rg` on that PATH, so the obvious implementation is an infinite
   exec loop. `self-paths` is the set of canonical paths that are this hook —
   the script, and every symlink the caller may have reached it through — and
-  `canonical` resolves one candidate to its canonical path."
-  [{:keys [path-entries self-paths canonical exists?]}]
+  `canonical` resolves one candidate to its canonical path.
+
+  Canonical paths are not enough. A COPY of the hook installed earlier on the
+  PATH has a different canonical path and is still the hook, and resolving it
+  forks this process forever. `hook?` answers the question canonical paths
+  cannot: does this candidate's own content say it is the hook."
+  [{:keys [path-entries self-paths canonical exists? hook?]}]
   (some (fn [entry]
           (let [candidate (str entry "/rg")]
             (when (and (exists? candidate)
-                       (not (contains? self-paths (canonical candidate))))
+                       (not (contains? self-paths (canonical candidate)))
+                       (not (and hook? (hook? candidate))))
               candidate)))
         path-entries))

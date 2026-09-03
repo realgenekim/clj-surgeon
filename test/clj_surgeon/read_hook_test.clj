@@ -450,6 +450,26 @@
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
         (is (= 0 (:exit hooked)))
         (is (str/includes? (:out hooked) "System/currentTimeMillis"))))
+    (testing "a COPY of the hook earlier on PATH is skipped by content"
+      ;; Deliberately a pure test. A hook that resolved a copy of itself would
+      ;; fork itself forever, so this falsifier must never be run as a
+      ;; subprocess on a shared machine.
+      (let [decoy (str (fs/create-temp-dir {:prefix "read-hook-copy-"}))]
+        (try
+          (fs/copy (fs/path repo-root "bin" "rg-clj") (fs/path decoy "rg"))
+          (let [hook-marker? (fn [path]
+                               (str/includes? (slurp (str path))
+                                              "clj-surgeon-read-hook-marker"))]
+            (is (= "/usr/bin/rg"
+                   ((requiring-resolve 'clj-surgeon.read-hook/real-ripgrep)
+                    {:path-entries [decoy "/usr/bin"]
+                     :self-paths #{(str (fs/path repo-root "bin" "rg-clj"))}
+                     :canonical #(.getCanonicalPath (io/file %))
+                     :exists? #(fs/exists? %)
+                     :hook? hook-marker?}))
+                (str "a copy is not the same canonical path, so only its "
+                     "CONTENT can say it is the hook")))
+          (finally (fs/delete-tree decoy {:force true})))))
     (testing "a second copy of the hook earlier on PATH is skipped too"
       (let [decoy (install-shim!)]
         (try

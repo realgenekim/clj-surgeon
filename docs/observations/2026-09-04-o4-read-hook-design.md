@@ -94,6 +94,14 @@ after it.
 The general form is worth carrying: **a hook that reconciles by set equality is
 blind to any property of a search that is not a property of its file set.**
 
+A second red-team round found the sibling hole in `MCP-OP-READ-HOOK-005`:
+skipping "myself" by canonical path is not enough, because a **copy** of the
+hook earlier on the `PATH` has a different canonical path, is still the hook,
+and forks the process without bound. The hook now carries a marker in its own
+first bytes and reads candidates for it. That witness is deliberately a **pure**
+test: running the unfixed case as a subprocess on a shared machine is exactly
+the outage it exists to prevent.
+
 ## What this build does NOT claim
 
 - **No wall claim, and the overhead is stated rather than hidden.** Per

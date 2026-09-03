@@ -60,6 +60,12 @@ required), `[x]` implemented (implementation and test witnesses required),
   004 forbids inventing a status.
 - "Resolving `rg` from `PATH` is enough." The hook *is* `rg` on that `PATH`.
   005 exists because the obvious implementation is an infinite exec loop.
+- "Comparing canonical paths settles it." It does not. A **copy** of the hook
+  installed earlier on the `PATH` has a different canonical path and is still
+  the hook; resolving it forks the process forever. 005 is witnessed against a
+  copy as well as a symlink, and that witness is deliberately a pure test —
+  running the unfixed case as a subprocess would fork without bound on a shared
+  machine.
 
 ## Falsifiers
 
