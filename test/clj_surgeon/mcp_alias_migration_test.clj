@@ -859,6 +859,47 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-050
+(deftest the-walk-stops-at-the-ceiling-when-the-entries-past-it-are-unreadable
+  ;; Every visitor callback but one already terminates over-bound.
+  ;; `visitFileFailed` counted the entry and continued, so a tree whose entries
+  ;; are unreadable walked straight through the ceiling that exists to stop it.
+  (let [outside (temp-dir)
+        receipt-dir (io/file outside "receipts")
+        workspace (bare-workspace!)
+        source (io/file workspace "src")
+        locked (mapv (fn [index]
+                       (let [directory (io/file source (str "locked" index))]
+                         (.mkdirs directory)
+                         (spit (io/file directory "hidden.clj")
+                               (requiring-source (str "locked" index ".one")))
+                         directory))
+                     (range 30))]
+    (.mkdirs receipt-dir)
+    (try
+      (doseq [directory locked] (chmod! "000" directory))
+      (if (some #(seq (.listFiles ^java.io.File %)) locked)
+        ;; a privileged process cannot be denied, so it cannot witness denial
+        (is true "this process reads a 000 directory; denial is unobservable here")
+        (with-redefs [alias-migration/max-walk-entries 5]
+          ;; the walk sees the root, then src, then thirty unreadable entries:
+          ;; the entry that crosses the ceiling is a read failure by
+          ;; construction, which is the callback under test
+          (let [result (alias-migration/execute!
+                         {:project-root (.getPath workspace)
+                          :receipt-dir (.getPath receipt-dir)}
+                         (cap-request workspace {}))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-walk-too-large" (:error_type result)))
+            (is (= 6 (:visited_entries result))
+                "the walk counted unreadable entries past the ceiling instead
+                 of stopping on the first one")
+            (is (= 5 (:max_entries result))))))
+      (finally
+        (doseq [directory locked] (chmod! "755" directory))
+        (delete-tree! workspace)
+        (delete-tree! outside)))))
+
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
 
