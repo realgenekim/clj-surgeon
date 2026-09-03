@@ -1247,6 +1247,41 @@
                    (pr-str (:limit r)))))))))
 
 ;; @spec MCP-OP-MEM-003
+(deftest an-unconfined-row-refusal-really-costs-no-read
+  ;; `unconfined-row`'s docstring claims the refusal "costs no read at all".
+  ;; The OFFENDING row is indeed never opened — `row-file` returns nil before
+  ;; any `content-digest` — but round four's nit: `stale` was a sibling `let`
+  ;; binding, evaluated whether or not the confinement check refused, so every
+  ;; confined row BEFORE the offending one was digested anyway. The security
+  ;; claim was right and the cost claim was wrong. Counting the reads is the
+  ;; only way to tell those apart, so the witness counts them.
+  (with-outside-file [outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-confine-no-read"]
+      (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+            cursor-id (:cursor-id (budget/parse-cursor (cursor-of page-1)))
+            escape (str "../" (fs/file-name outside) "/secret.clj")
+            ;; position 6 is the SECOND row of page 2, so a `stale` pass that
+            ;; runs regardless digests mod005 before it reaches the escape
+            cursor (repin-row! dir cursor-id 6
+                               {:p escape :h (snapshot/content-digest secret)}
+                               5)
+            v (var snapshot/content-digest)
+            real @v
+            reads (atom 0)]
+        (alter-var-root v (constantly (fn [path] (swap! reads inc) (real path))))
+        (try
+          (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor cursor})]
+            (is (= :unconfined-manifest-row (:error-type r))
+                (str "expected the confinement refusal, got "
+                     (pr-str (:error-type r))))
+            (is (zero? @reads)
+                (str "the refusal must cost NO read: not the offending row, "
+                     "and not the confined rows before it; "
+                     @reads " file(s) were digested")))
+          (finally (alter-var-root v (constantly real))))))))
+
+;; @spec MCP-OP-MEM-003
 (deftest a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered
   ;; The confinement boundary is LEXICAL and deliberately does NOT resolve
   ;; symlinks. Measured on this branch: `discover-projects` follows a
