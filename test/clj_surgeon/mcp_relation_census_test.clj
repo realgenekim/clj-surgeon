@@ -257,6 +257,38 @@
         (is (nil? (:pool_size_requested result)))))))
 
 ;; @spec MCP-OP-CENSUS-029
+(deftest doors-accepts-only-the-json-strings-the-schema-advertises
+  (testing "the advertised schema is the one being enforced"
+    (is (= {:type "array" :items {:type "string"} :maxItems 32}
+           (get-in census-tool/census-tool-schema [:properties "doors"]))))
+
+  (doseq [value [1 1.5 true nil {} []]]
+    (testing (str "doors entry " (pr-str value) " is not a JSON string")
+      (let [result (run {:files [fixture] :doors [value]})]
+        (is (false? (:ok result))
+            (str "the wire accepted a doors entry " (pr-str value)
+                 " though the advertised schema requires a string"))
+        (is (= "invalid-mcp-request" (:error_type result)))
+        (is (= "doors-not-strings" (:reason result)))
+        (is (= 0 (:index result)))
+        (is (= value (:value result)))
+        (is (nil? (:counts result)))
+        (is (= "relation_census" (get-in result [:next_call :tool])))
+        (is (not (contains? (:next_call result) :doors))
+            (str "the offending doors list must not be copied into the "
+                 "continuation: " (pr-str (:next_call result)))))))
+
+  (testing "a later offending entry is named by its own index"
+    (let [result (run {:files [fixture] :doors ["upsert-by" 2]})]
+      (is (= "doors-not-strings" (:reason result)))
+      (is (= 1 (:index result)))
+      (is (= 2 (:value result)))))
+
+  (testing "a JSON string door still censuses"
+    (let [result (run {:files [fixture] :doors ["upsert-by"]})]
+      (is (true? (:ok result))))))
+
+;; @spec MCP-OP-CENSUS-029
 (deftest pool-size-accepts-only-the-json-integer-the-schema-advertises
   (testing "the advertised schema is the one being enforced"
     (is (= {:type "integer" :minimum 1 :maximum 64}
@@ -1322,6 +1354,75 @@
           (str "the exhaustion receipt carries a placeholder: " wire)))))
 
 ;; ---------------------------------------------------------------------------
+;; A minimal JSON-Schema-subset checker, covering exactly the shapes
+;; census-tool-schema uses: object/array/string/integer/number/boolean,
+;; properties, additionalProperties, items, minItems/maxItems,
+;; minimum/maximum. This is not a general validator; it exists to answer one
+;; question a hand read cannot answer reliably at scale — does an emitted
+;; `next_call`, MINUS the `:tool` routing key the schema itself never
+;; declares, validate against the tool's own published input schema. A
+;; continuation that fails this is not a smaller promise than a call, it is
+;; one the advertised contract itself would reject.
+;; ---------------------------------------------------------------------------
+
+(defn- schema-violations
+  [schema value]
+  (let [t (:type schema)]
+    (cond
+      (nil? schema) []
+
+      (= "integer" t)
+      (cond
+        (not (integer? value)) [(str (pr-str value) " is not a JSON integer")]
+        (and (:minimum schema) (< value (:minimum schema)))
+        [(str value " is below minimum " (:minimum schema))]
+        (and (:maximum schema) (> value (:maximum schema)))
+        [(str value " is above maximum " (:maximum schema))]
+        :else [])
+
+      (= "number" t)
+      (if (number? value) [] [(str (pr-str value) " is not a JSON number")])
+
+      (= "boolean" t)
+      (if (boolean? value) [] [(str (pr-str value) " is not a JSON boolean")])
+
+      (= "string" t)
+      (if (string? value) [] [(str (pr-str value) " is not a JSON string")])
+
+      (= "array" t)
+      (if (and (sequential? value) (not (map? value)))
+        (concat
+          (when (and (:minItems schema) (< (count value) (:minItems schema)))
+            [(str "array has " (count value) " item(s), fewer than minItems "
+                  (:minItems schema))])
+          (when (and (:maxItems schema) (> (count value) (:maxItems schema)))
+            [(str "array has " (count value) " item(s), more than maxItems "
+                  (:maxItems schema))])
+          (mapcat #(schema-violations (:items schema) %) value))
+        [(str (pr-str value) " is not a JSON array")])
+
+      (= "object" t)
+      (if (map? value)
+        (let [props (:properties schema)
+              entries (map (fn [[k v]] [(if (keyword? k) (name k) (str k)) v])
+                           value)
+              unknown (remove #(contains? props (first %)) entries)]
+          (concat
+            (when (false? (:additionalProperties schema))
+              (map (fn [[k _]] (str "unknown property " k)) unknown))
+            (mapcat (fn [[k v]]
+                      (when (contains? props k)
+                        (schema-violations (get props k) v)))
+                    entries)))
+        [(str (pr-str value) " is not a JSON object")])
+
+      :else [])))
+
+(defn- schema-conformant?
+  [schema value]
+  (empty? (schema-violations schema value)))
+
+;; ---------------------------------------------------------------------------
 ;; MCP-OP-CENSUS-014, stated globally: a caption in an argument position is
 ;; not a smaller promise than a call, it is an unexecutable one. Every refusal
 ;; shape either carries a continuation a caller may replay verbatim, or no
@@ -1353,6 +1454,14 @@
              :source-too-large-mixed (here {:files [big small]})
              :source-too-large-mixed-with-options
              (here {:files [big small] :doors ["upsert-by"] :pool_size 1})
+             :doors-not-a-string (run {:files [fixture] :doors [1]})
+             ;; Sol's round-seven finding: a malformed doors item passed
+             ;; server validation and was copied unchanged into the
+             ;; oversized-file next_call, because that branch is reached
+             ;; before parse-doors ever runs. This exact shape must now be
+             ;; refused before any filesystem work, with no doors leak.
+             :source-too-large-mixed-with-bad-door
+             (here {:files [big small] :doors [1] :pool_size 1})
              :no-arms-scanned (run {:files [helpers]})
              :no-arms-empty (census-tool/execute-request!
                               {:project-root (.getPath empty-root)} {})}
@@ -1466,7 +1575,33 @@
               (is (= :source-too-large (:error-type result)))
               (is (not (contains? result :next-command))
                   (str label " hands back a call it cannot compute"))
-              (is (string? (:remedy result)))))))
+              (is (string? (:remedy result))))))
+
+        (testing "a malformed doors item refuses before any filesystem work"
+          (let [only (:doors-not-a-string mcp-refusals)
+                mixed (:source-too-large-mixed-with-bad-door mcp-refusals)]
+            (is (= "doors-not-strings" (:reason only)))
+            (is (= 0 (:index only)))
+            (is (= 1 (:value only)))
+            (is (= "doors-not-strings" (:reason mixed))
+                "the oversized-file check ran before doors was validated")
+            (is (not (contains? (:next_call mixed) :doors))
+                "a malformed door reached the oversized-file continuation")))
+
+        (testing "every next_call this battery emits validates against the published schema"
+          ;; The published schema, not a hand read, is the authority on
+          ;; whether a continuation is executable. Sol's round-seven finding
+          ;; was exactly this: doors=[1] passed server validation and was
+          ;; copied into a next_call the schema rejects (items must be
+          ;; strings). Any failure here is the same class of bug.
+          (doseq [[label result] mcp-refusals]
+            (when-let [next-call (:next_call result)]
+              (let [violations (schema-violations census-tool/census-tool-schema
+                                                   (dissoc next-call :tool))]
+                (is (empty? violations)
+                    (str label " next_call is not executable through the "
+                         "published input schema: " violations " — "
+                         (pr-str next-call))))))))
       (finally (delete-tree! root) (delete-tree! empty-root)))))
 
 ;; @spec MCP-OP-CENSUS-033

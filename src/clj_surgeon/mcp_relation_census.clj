@@ -143,7 +143,12 @@
    TYPES are re-checked too, not only ranges. `coerce-pool-size` reads decimal
    digits because the CLI hands every value over as a string; the wire does not,
    so a JSON string, float, boolean, null or array for `pool_size` is refused
-   here rather than quietly coerced into a pool the schema never advertised."
+   here rather than quietly coerced into a pool the schema never advertised.
+   Every `doors` entry must likewise be the JSON string the schema declares:
+   a non-string entry is refused here, by index and value, before it can
+   reach the oversized-source branch of execute-in-context!, which copies
+   `doors` into its next_call unchanged and would otherwise hand back a
+   continuation the tool's own schema rejects."
   [params workspace-root]
   (let [next-call (cond-> {:tool "relation_census" :pool_size 8}
                     workspace-root (assoc :workspace_root workspace-root))
@@ -183,6 +188,20 @@
       (and (some? doors) (> (count doors) census/max-doors))
       (refuse :too-many-doors "doors exceeds the maximum door count"
               {:maximum census/max-doors :actual (count doors)})
+
+      ;; Every doors entry must be the JSON string the advertised schema
+      ;; states, checked here — before any filesystem work, and before the
+      ;; oversized-source branch of execute-in-context! can copy `doors`
+      ;; UNCHANGED into a next_call. A non-string entry that survived to that
+      ;; branch produced an unexecutable continuation: the schema rejects it,
+      ;; even though this validator had not yet refused it.
+      (and (some? doors) (not (every? string? doors)))
+      (let [bad-index (first (keep-indexed (fn [i d] (when-not (string? d) i))
+                                            doors))
+            bad-value (nth doors bad-index)]
+        (refuse :doors-not-strings
+                "every entry in doors must be a JSON string"
+                {:index bad-index :value bad-value}))
 
       ;; Present but not an integer — including an explicit null, which the
       ;; range check below would read as "absent" and never look at.

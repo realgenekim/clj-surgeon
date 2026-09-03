@@ -147,6 +147,19 @@ smaller promise than a real continuation, it is an unexecutable one, and
 MCP-OP-CENSUS-014 forbids it in every argument position of every refusal on
 every entrance.
 
+RULING (Sol's round-seven review, item 5, non-blocking): a `no-fold-arms-found`
+continuation from a DISCOVERED (unnamed) file list names at most
+`max-listed-files` of the sources the walk found, never the full
+`max-scanned-files` the walk may have scanned. A tree of, say, 20 arm-less
+files plus one oversized file therefore pins exactly the listed handful, not
+every scanned path. This is spec-consistent — `max-listed-files` is a stated
+receipt-listing bound, not a promise that the continuation is exhaustive — and
+replay still deterministically reaches the same explicit no-arms refusal
+naming those files, so the continuation remains executable. It is
+operationally weak in the sense that a caller cannot recover the FULL scanned
+set from the refusal alone, but that is a receipt-size tradeoff already
+governed by MCP-OP-CENSUS-013's 4 KB budget, not a new defect. Left as is.
+
 ## Versioning
 
 The receipt carries `census_version`. A change to the recognised vocabulary,
