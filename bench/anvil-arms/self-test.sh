@@ -997,6 +997,45 @@ want "case23 score rc" 3 "$?"
 [ -e "$A23/receipt.json" ] && bad "case23 the scorer wrote a receipt over an aborted watch" \
   || ok "case23 the scorer refuses an aborted watch and writes no receipt"
 
+echo "== case 26: a descendant that leaves the PGID via setsid is still reaped, and COUNTED =="
+# Sol round two, item 5: cleanup signals the driver's process GROUP, so a descendant
+# that calls setsid is invisible to it.  Sol's probe left pid 3289785 alive after the
+# abort while run.json reported driver_group_orphans=0 -- a number that was not measured
+# but assumed, over a process still working inside a run nobody was metering any more.
+A26="$WORK/st-P-N-26"; mkdir -p "$A26"
+git clone -q --no-hardlinks "$BASE_REPO" "$A26/worktree"
+printf '%s\n' "$BASE_SHA" > "$A26/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A26/prompt.md"
+EXP=st RUNG=P SLOT=26 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A26" N - "" > /dev/null 2>&1
+python3 "$HERE/watch.py" --arm "$A26" --zero-return-window 3 --poll 0.2 \
+  -- bash "$HERE/fake-driver.sh" "$A26" setsidhang > "$WORK/case26.out" 2>&1
+want "case26 watch rc" 4 "$?"
+esc=$(cat "$A26/fake-driver-setsid.pid" 2>/dev/null)
+if [ -z "$esc" ]; then
+  bad "case26 the fixture never recorded its setsid pid — the test proves nothing"
+else
+  ok "case26 the fixture recorded the escaping pid $esc"
+  sleep 1
+  if kill -0 "$esc" 2>/dev/null; then
+    bad "case26 ORPHAN: the setsid descendant $esc outlived the abort"
+    kill -9 "$esc" 2>/dev/null          # a process this self-test started; clean it up
+  else
+    ok "case26 the setsid descendant $esc was reaped by the abort"
+  fi
+fi
+child=$(cat "$A26/fake-driver-child.pid" 2>/dev/null)
+[ -n "$child" ] && kill -0 "$child" 2>/dev/null \
+  && { bad "case26 the in-group child $child outlived the abort"; kill -9 "$child" 2>/dev/null; } \
+  || ok "case26 the in-group child (${child:-none}) was reaped too"
+# the count must be MEASURED from a final /proc scan of the pids actually recorded,
+# never the zero a group walk returns because it cannot see outside its own group
+dr=$(jqf "$A26/run.json" descendants_recorded)
+case "$dr" in ''|MISSING|null|0|*[!0-9]*) bad "case26 run.json recorded no descendants: $dr";;
+  *) ok "case26 run.json recorded $dr descendant pid(s) while the driver lived";; esac
+want "case26 run.json orphans_after_reap" 0 "$(jqf "$A26/run.json" orphans_after_reap)"
+want "case26 run.json names the surviving pids" "[]" "$(jqf "$A26/run.json" orphan_pids)"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
