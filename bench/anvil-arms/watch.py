@@ -510,10 +510,45 @@ def main() -> int:
         state["open"].clear()
         return len(pending)
 
+    # start_new_session puts the driver in its OWN session and process group, so the
+    # group id equals its pid and every descendant it forks lands in that group.  Sol,
+    # item 5: without this the timeout signalled one pid and the executed probe left
+    # `sleep 60` running under PPID 1 -- an orphan of an aborted arm that keeps working
+    # inside a run nobody is metering any more.
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE if args.capture_stdout else None,
                             stderr=None,
-                            text=True if args.capture_stdout else None)
+                            text=True if args.capture_stdout else None,
+                            start_new_session=True)
+    try:
+        driver_pgid = os.getpgid(proc.pid)
+    except Exception:
+        driver_pgid = proc.pid
+
+    def group_members() -> list[int]:
+        """Every live pid still in the driver's process group (never this watcher's)."""
+        if driver_pgid == os.getpgrp():
+            return []                   # refuse to enumerate -- or signal -- our own group
+        found = []
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                if os.getpgid(int(entry)) == driver_pgid:
+                    found.append(int(entry))
+            except Exception:
+                continue
+        return found
+
+    def kill_group(sig: int) -> None:
+        if driver_pgid == os.getpgrp():
+            return                      # never signal the group this watcher lives in
+        try:
+            os.killpg(driver_pgid, sig)
+        except ProcessLookupError:
+            pass
+        except Exception:
+            pass
 
     tailer: Tailer | None = None
     if not args.capture_stdout:
@@ -578,15 +613,17 @@ def main() -> int:
                 break
             time.sleep(args.poll)
     finally:
-        if abort_reason and proc.poll() is None:
-            try:
-                proc.send_signal(signal.SIGTERM)
-                time.sleep(2)
-                if proc.poll() is None:
-                    proc.kill()
-            except Exception:
-                pass
+        if abort_reason:
+            # signal the GROUP, not the pid: the driver's children are the orphans
+            kill_group(signal.SIGTERM)
+            time.sleep(2)
+            kill_group(signal.SIGKILL)
         driver_rc = proc.wait()
+        driver_group_orphans = len(group_members()) if abort_reason else 0
+        if driver_group_orphans:
+            time.sleep(1)
+            kill_group(signal.SIGKILL)
+            driver_group_orphans = len(group_members())
         if tailer is not None:
             tailer.close()
         if stdout_sink is not None:
@@ -608,6 +645,9 @@ def main() -> int:
         "arm_dir": str(arm),
         "driver_cmd": cmd,
         "driver_rc": driver_rc,
+        "driver_pid": proc.pid,
+        "driver_pgid": driver_pgid,
+        "driver_group_orphans": driver_group_orphans,
         "rollout_path": str(rollout_path),
         "start_utc": attest["start_utc"],
         "end_utc": end_utc,
