@@ -16,6 +16,7 @@
    [clj-surgeon.parallel :as parallel]
    [clj-surgeon.study :as study]
    [clojure.string :as str]
+   [clojure.walk :as walk]
    [clojure.test :refer [deftest is testing]]))
 
 (def ^:private project-root (System/getProperty "user.dir"))
@@ -1555,3 +1556,79 @@
                 "and the message says so too")
             (is (str/includes? (:error response) "11"))
             (is (empty? (output-schema-violations response)))))))))
+
+(defn- verbatim-args-characters
+  "Hand-written oracle: every `:args` string anywhere in a receipt. `outline`
+   emits each form's arglist VERBATIM from the file, so these characters are
+   file source that crossed the wire, whatever key they arrived under."
+  [result]
+  (let [total (atom 0)]
+    (walk/postwalk
+      (fn [node]
+        (when (and (map-entry? node)
+                   (contains? #{:args "args"} (key node))
+                   (string? (val node)))
+          (swap! total + (count (val node))))
+        node)
+      result)
+    @total))
+
+;; @spec MCP-OP-STUDY-034
+;; @spec MCP-OP-STUDY-020
+(deftest an-outline-charges-the-verbatim-arglists-it-returns
+  ;; MCP-OP-STUDY-020 moved the source budget onto the source a result
+  ;; RETURNS, and `returned-source-character-count` counts `:source` — the
+  ;; only key it knew about. `outline` never emits `:source`; it emits each
+  ;; form's `:args`, lifted verbatim out of the file. On
+  ;; `src/clj_surgeon/intent_transaction.clj` that is 2,696 characters of file
+  ;; text crossing the wire while the source budget scored the request 0. The
+  ;; mechanism was right and its coverage was a naming convention.
+  (let [file "src/clj_surgeon/intent_transaction.clj"
+        result (result-of (one "outline" {"file" file}))
+        args (verbatim-args-characters result)]
+    (is (< 2000 args) (str "the outline returns verbatim arglists: " args))
+    (is (= args (inspect/returned-source-character-count result))
+        "and every one of those characters is charged as returned source")
+    (testing "the charge is a bound, asserted at the bound"
+      (let [wide {:per-request-result 1000000 :aggregate-result 1000000}]
+        (is (true? (:ok (inspect/enforce-output-budget
+                          [result] (assoc wide :per-request-source args))))
+            "a result whose returned source costs exactly the budget passes")
+        (let [refusal (inspect/enforce-output-budget
+                        [result] (assoc wide :per-request-source (dec args)))]
+          (is (false? (:ok refusal)) "one character more refuses")
+          (is (= "inspect-output-limit" (:error_type refusal)))
+          (is (= "request_source" (:scope refusal))))))))
+
+;; @spec MCP-OP-STUDY-034
+(deftest arglists-alone-can-exhaust-the-source-budget-and-refuse-typed
+  ;; The production shape of the same hole: a file whose ARGLISTS alone exceed
+  ;; the per-request source budget must refuse typed rather than be returned,
+  ;; and must refuse as a SOURCE overrun — which is what names the remedy
+  ;; correctly for a caller who cannot make an outline any smaller.
+  (with-scratch-project
+    "test-fixtures/study/scratch-wide-args"
+    (fn [dir]
+      (fs/create-dirs dir)
+      (spit (str dir "/wide.clj")
+            (str "(ns wide)\n"
+                 (str/join
+                   "\n"
+                   (for [i (range 700)]
+                     (format "(defn f%d [%s] :ok)"
+                             i
+                             (str/join " " (map #(str "arg" i "-" %)
+                                                (range 12)))))))))
+    (fn []
+      (let [file "test-fixtures/study/scratch-wide-args/wide.clj"
+            response (one "outline" {"file" file})]
+        (is (false? (:ok response)))
+        (is (= "inspect-output-limit" (:error_type response)))
+        (is (= "request_source" (:scope response))
+            "arglists are returned SOURCE, so this is a source overrun")
+        (is (> (:actual response) 65536))
+        (is (= 65536 (:limit response)))
+        (is (false? (:read_complete response)))
+        (is (true? (:source_unchanged response)))
+        (is (nil? (:results response))
+            "no partial result is returned; a truncated outline is not an option")))))
