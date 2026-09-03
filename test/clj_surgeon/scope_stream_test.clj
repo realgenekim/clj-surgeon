@@ -276,12 +276,21 @@
       (try
         (write-file! root "src/a.clj" (padded 3000))
         (let [receipt (scope/stream-scope! root (constantly nil) {:parse-factor 56})
-              observed (battery/reserved-peak-mb receipt)]
+              observed (battery/reserved-peak-mb receipt)
+              reserved (:reserved receipt)
+              path-list (:path-list-bytes reserved)]
           (is (:ok receipt))
           (is (some? observed)
               "the battery must find an attributable reserved peak in this receipt")
-          (is (= (battery/bytes->mb (* 3000 56)) observed)
-              "and it must be the accountant's number, not the sampled peak"))
+          (is (pos? path-list)
+              "the retained discovered-path list is charged; if that accounting
+               were removed this is the assertion that notices")
+          (is (= (+ path-list (* 3000 56)) (:heap-reserved-peak-bytes reserved))
+              "the accountant's arithmetic, asserted at BYTE granularity - the
+               old form asserted (* 3000 56) alone and passed only because
+               both numbers round to the same tenth of a MiB")
+          (is (= (battery/bytes->mb (+ path-list (* 3000 56))) observed)
+              "and the battery reads that number, not the sampled peak"))
         (finally (delete-tree! root))))))
 
 ;; @spec MCP-OP-MEM-020

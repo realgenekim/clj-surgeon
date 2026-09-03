@@ -190,8 +190,13 @@ receipt refcount, and whether the row may be evicted.
 `recover!` reads only the journal. The `pin` lines say which pre-image bytes are
 durable; the `write-begin` lines say which paths were begun. Each begun path is
 republished from its pinned object in reverse order and verified against the
-digest that was pinned before the first write; staging temporaries the dead
-process left in the tree are removed; the lock is released. A transaction whose
+digest that was pinned before the first write; the publication temporaries the
+dead process left in the tree are removed — only those THIS journal's own
+`write-begin` lines named, never every `.clj-surgeon-publish-*` sibling, because
+two state homes on one workspace root do not exclude each other and a prefix
+sweep can delete another transaction's prepared temporary; the lock is released
+whenever it has no live holder, including when there was nothing to recover.
+A transaction whose
 `state.edn` says `:committed` or `:rolled-back` is not a candidate. A recovery whose
 restoration verified deletes its journal; one that did not verify records
 `:restore-failed` and keeps everything.
@@ -199,6 +204,22 @@ restoration verified deletes its journal; one that did not verify records
 Two crash points are witnessed: killed between pin and rename (nothing was
 written, so nothing is restored, and the lock is freed) and killed between
 rename N and N+1 (exactly the begun paths are restored and verified).
+
+**The project `LOCK` records a checkable holder.** Pid alone is not an
+identity — it is reused within a boot and repeated across boots — so the lock
+carries pid, the holder process's start ticks and the boot id. `begin!` breaks
+a lock exactly once when that triple PROVES the holder is gone, leaving
+`:lock-broken {:reason :stale-holder :cause … :pid …}` on the transaction and a
+`lock-broken` journal line. It never breaks a lock whose holder is live, and it
+never breaks one it cannot read: an unparsable LOCK is an unknown, refused
+fail-closed, and `recover!` is the remedy that clears it.
+
+**`undo!` is a write, and behaves like one.** It takes the same publish lock as
+the commit path and rechecks every begun path's digest and NOFOLLOW identity
+against H1 — what the commit LEFT BEHIND, recorded in the `write-done` lines.
+If any path moved since the commit, the whole undo refuses with
+`:txn-undo-conflict`, names the path, and writes nothing. Crash recovery makes
+no such check: a killed transaction left the tree part-written on purpose.
 
 ## Ceilings
 

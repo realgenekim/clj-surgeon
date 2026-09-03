@@ -54,9 +54,15 @@
               (when (zero? (mod @planned checkpoint-every))
                 (heap/sample-retention!))
               nil))
-          {:max-file-bytes (* 2 1024 1024)
-           :max-aggregate-bytes (* 1024 1024 1024)
-           :work-budget-bytes (* 192 1024 1024)})
+          ;; No ceiling override on the READ path either. The three values this
+          ;; used to pass were the shipped defaults except one: it raised the
+          ;; reader's aggregate ceiling to 1 GiB, which reproduces exactly the
+          ;; `quota = aggregate` configuration the journal's own derivation
+          ;; forbids (it demands quota >= 2 x aggregate). The 314 MB scope fits
+          ;; the DEFAULT 512 MiB ceiling, so the override bought nothing and
+          ;; made the arm's receipt a counterexample to the rule it is meant to
+          ;; witness.
+          {})
         _ (journal/seal-read-set! txn)
         commit (journal/commit! txn)]
     (heap/sample-retention!)

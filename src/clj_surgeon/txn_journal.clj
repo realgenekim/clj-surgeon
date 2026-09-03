@@ -1108,7 +1108,11 @@
                   :else
                   (do
                     (when in-commit-window (in-commit-window path))
-                    (append-journal! txn (str "write-begin\t" path "\t" h0))
+                    ;; the temp's NAME goes in the line, so recovery's orphan
+                    ;; sweep can delete this transaction's own leftovers and
+                    ;; nobody else's
+                    (append-journal! txn (str "write-begin\t" path "\t" h0
+                                              "\t" (.getName tmp)))
                     (try
                       (publish-fn path tmp)
                       {:ok true
@@ -1245,8 +1249,17 @@
       [])))
 
 (defn- restore-begun!
-  "Republish every begun path from its pinned object and verify each."
-  [dir pins begun]
+  "Republish every begun path from its pinned object and verify each.
+
+   The orphan sweep is scoped to the temporaries THIS journal recorded. It used
+   to delete every `.clj-surgeon-publish-*` sibling of every begun path, which
+   - with two state homes on one workspace root, which do not exclude each
+   other - let one workspace's recovery delete another in-flight transaction's
+   PREPARED temp between its prepare and its rename. The narrow case the
+   scoping gives up: a process killed between `prepare-publish!` and the
+   `write-begin` line leaves a temp no journal names. That is litter beside the
+   target, never a lost or corrupted byte."
+  [dir pins begun temps]
   (let [restored
         (mapv (fn [path]
                 (let [digest (get pins path)
@@ -1263,11 +1276,11 @@
                     (catch Exception e
                       {:path path :status :restore-failed :error (.getMessage e)}))))
               (reverse begun))]
-    ;; remove any staging temporary a dead process left inside the tree
-    (doseq [path begun]
-      (doseq [^File sibling (.listFiles (.getParentFile (io/file path)))]
-        (when (str/starts-with? (.getName sibling) ".clj-surgeon-publish-")
-          (Files/deleteIfExists (.toPath sibling)))))
+    ;; remove the staging temporaries THIS journal recorded and no others
+    (doseq [path begun
+            tmp-name (get temps path)]
+      (Files/deleteIfExists
+        (.toPath (io/file (.getParentFile (io/file path)) tmp-name))))
     {:txid (.getName (io/file dir))
      :paths restored
      :ok (every? #(= :verified (:status %)) restored)}))
@@ -1340,6 +1353,13 @@
                              (let [[op path] (str/split line #"\t")]
                                (when (= "write-begin" op) path)))
                            lines)))
+        temps (reduce (fn [acc line]
+                        (let [[op path _ tmp] (str/split line #"\t")]
+                          (if (and (= "write-begin" op) tmp)
+                            (update acc path (fnil conj #{}) tmp)
+                            acc)))
+                      {}
+                      lines)
         restore!
         (fn []
           (let [conflicts (when expect-post-commit?
@@ -1347,7 +1367,7 @@
             (if conflicts
               {:txid (.getName (io/file dir)) :conflicts (vec conflicts)
                :paths [] :ok false}
-              (restore-begun! dir pins begun))))]
+              (restore-begun! dir pins begun temps))))]
      (if transactions-dir
        (file-ops/with-publish-lock* transactions-dir restore!)
        (restore!)))))

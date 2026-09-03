@@ -1215,11 +1215,47 @@
               "recovery restores exactly the paths the journal recorded as begun,
                and an empty restoration list is not a pass")
           (is (every? #(= :verified (:status %)) (:paths recovery)))
-          (is (empty? (filter #(str/includes? (.getName ^java.io.File %)
-                                              ".clj-surgeon-txn-")
+          (is (empty? (filter #(str/starts-with? (.getName ^java.io.File %)
+                                                 ".clj-surgeon-publish-")
                               (file-seq (io/file (:root ws)))))
-              "recovery removes the staging temporaries it left in the tree")))
+              "recovery removes the staging temporaries it left in the tree.
+               The old form looked for `.clj-surgeon-txn-`, a prefix no publish
+               temporary has ever carried, so it could not have failed.")))
       (finally (cleanup! ws)))))
+
+;; @spec MCP-OP-MEM-013
+(deftest recovery-sweeps-only-the-publish-temporaries-its-own-journal-recorded
+  (testing "Opus round 2, finding 8: the sweep walked the parent directory of
+            every begun path and deleted EVERY `.clj-surgeon-publish-*` sibling.
+            Combined with state-home-scoped locking - two state homes on one
+            workspace root do not exclude each other - one workspace's recovery
+            could delete another in-flight transaction's PREPARED temporary
+            between its prepare and its rename. The sweep is now scoped to the
+            temp names this journal's own `write-begin` lines recorded."
+    (let [ws (workspace! "sweep-scope" 4)
+          paths (sort (:paths ws))
+          stranger (io/file (.getParentFile (io/file (first paths)))
+                            ".clj-surgeon-publish-STRANGER.tmp")]
+      (try
+        (let [arm (crash-arm ws :between-renames)]
+          (is (not= 0 (:exit arm)) (str "the child must die: " (:out arm)))
+          (spit stranger "another transaction's prepared bytes\n")
+          (let [recovery (journal/recover! (:root ws) {:state-home (:state-home ws)})]
+            (is (:ok recovery))
+            (is (.isFile stranger)
+                "a temporary this journal never recorded is not this recovery's
+                 to delete")
+            (is (= "another transaction's prepared bytes\n" (slurp stranger))
+                "and it is untouched, not merely present")
+            (is (empty? (filter #(and (str/starts-with? (.getName ^java.io.File %)
+                                                        ".clj-surgeon-publish-")
+                                      (not= (.getName ^java.io.File %)
+                                            (.getName stranger)))
+                                (file-seq (io/file (:root ws)))))
+                "while its OWN leftovers are gone")))
+        (finally
+          (Files/deleteIfExists (.toPath stranger))
+          (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
 (deftest recovery-is-a-no-op-when-no-transaction-is-unfinished
