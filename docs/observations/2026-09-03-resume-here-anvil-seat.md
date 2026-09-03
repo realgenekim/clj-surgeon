@@ -152,3 +152,8 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - Session restart (binds MCP tools to 7906): `cd ~/src/marvin-voice-remote/channel-connector && claude --resume
   b623492c-458d-4156-a14d-a041f5a37e7c` — do it at a safe point (no live builders).
 - Inbox current as of 03:38Z; S9 = inb-0817fe.
+
+## RESUME DELTA 2026-09-03T03:43Z
+
+- q5z pushed 23ea871 (full mcp-test incl. oracle PASS); re-review acb7e66e0b6224894 running. Study security round complete at 212b045 (unpushed); my suites waiter buh7b1v0k (`~/tmp/study2-*.log`); push when only the baseline six fail and the oracle passes; then an Opus re-review (flag: host-absolute dir in refusals; grep continuation carries the rejected pattern; 65,536-char study limit; find-config-file walk).
+- Running: rf2 round three a59ea3ce2a6b2a7fc, census a4fe4601c68f5db01, fold-diff aa14abf5d75ba48e8, template-upsert abd7fc65de9301f76, ratchets a90f9ebd74d4100af.
