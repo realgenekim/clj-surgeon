@@ -959,10 +959,22 @@
               ;; `rows remain, nothing encoded`, the continuation would carry a
               ;; cursor at this page's OWN offset and a caller would follow it
               ;; forever. See `budget/empty-page-refusal`.
-              (if (and over? (zero? @advanced))
+              ;;
+              ;; UNCONDITIONAL on `over?`, matching `run-fresh-scan`'s copy of
+              ;; this same guard (core.clj:840). `over?` is false BY
+              ;; DEFINITION on every final page, so gating on it made the
+              ;; guard structurally unable to fire there: a forced zero-encode
+              ;; on the last page returned a bare `[]` — no records, no
+              ;; receipt, no refusal — which a caller reads as a complete
+              ;; result. `rows` is never empty here (the `(not= slice (count
+              ;; rows))` clause above already refused that), so a zero
+              ;; `@advanced` on ANY page — mid or final — is the same "rows
+              ;; remained, nothing advanced" hazard, and gets the same
+              ;; refusal.
+              (if (zero? @advanced)
                 (render (budget/empty-page-refusal
                           (assoc request :slice (count rows))))
-                page)))))) 
+                page))))))
     (render (budget/invalid-cursor-refusal (assoc base :token cursor)))))
 
 (defn run-ls-tree
