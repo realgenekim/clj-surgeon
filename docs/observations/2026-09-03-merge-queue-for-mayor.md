@@ -4,7 +4,7 @@
 |---|---|---|---|---|
 | 1 | clj-surgeon bridge/kondo-path-test | f8a9ef9 | **MERGED** (acda1b3, surgeon1, 2026-09-03 04:47Z) | main baseline: exact-profile failure gone |
 | 2 | clj-surgeon bridge/receipt-ratchets | 49f6e12 | Sol GO-WITH-FIX (7 of 8 closed); round 3 building: multiline dispatch presentation, candidate-catalog schema/handler mismatch | GO note follows round 3 |
-| 3 | clj-surgeon bridge/census-verb | ef545c5 | pushed, Sol re-review running | suites baseline-only, oracle pass |
+| 3 | clj-surgeon bridge/census-verb | ef545c5 | Sol NO-GO (6 items); round 3 building | discovery silently truncates at 4,000 and drops an over-ceiling file while claiming completion; CLI glob-then-take; "8" accepted as pool_size; duplicate paths inflate counts 512×; LLD stale. Classifier byte-identical to reference. |
 | 4 | clj-surgeon bridge/rf2-extract-rewire | 465c956 | pushed; Sol refused by content filter → Opus re-check running | ruling (no writes into pruned trees via links) landed fails-first |
 | 5 | clj-surgeon bridge/q5z-alias-migration | ca677bc | pushed, Sol round-3 re-check running | seven fails-first witnesses (ALIAS-046..053); aggregate-bytes ceiling refuses 450 × 1.9 MB before any read = MEM-002 host |
 | 6 | clj-surgeon bridge/study-ops-mcp | round 3 building | — | E6 cohort gated on it |
