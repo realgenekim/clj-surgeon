@@ -96,7 +96,8 @@
     (is (= false (get-in tools [1 :schema :additionalProperties])))
     (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits"
              "programs" "delete_owners" "create_files" "extraction"
-             "workspace_root" "symbol_migration" "require_change"}
+             "workspace_root" "symbol_migration" "require_change"
+             "expect_matched"}
            (set (keys (get-in tools [1 :schema :properties])))))
     (is (= 4 (count (get-in tools [1 :schema :oneOf]))))
     (testing "the direct route accepts the same verify field it publishes"

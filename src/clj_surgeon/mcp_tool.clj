@@ -74,6 +74,11 @@
     "find with assoc_entry: {key: :status, value: :ready}. "
     "Top-level aggregate expect is optional redundant bookkeeping: Surgeon derives changes, edits, and files "
     "from the exact per-change guards and reports a supplied mismatch as ignored normalization. "
+    "When a prior inspect_clojure match on the same snapshot found the sites, copy its file, "
+    "file_hash, pattern, and match_count into the optional expect_matched object; the receipt then "
+    "reports matched_count, addressed_matches, and every matched site this transaction did not "
+    "address as unaddressed_matches [{line, hash}]. A file, hash, or count disagreement refuses "
+    "expect-matched-stale before any write. "
     "Omit verify unless the user or repository explicitly requests a configured transaction profile. "
     "When requested, verify is fast, full, or the project-owned exact profile. Staged formatting, "
     "commands, and hot laws roll back on failure. A configured cold job returns "
@@ -213,6 +218,28 @@
                         :directories (mapv str
                                            (:missing-parent-directories target))}))))
       {:ok true :create-files resolved})))
+
+;; @spec MCP-OP-MATCHED-001
+;; @spec MCP-OP-MATCHED-002
+(defn- resolve-expect-matched
+  "Bind the optional prior-match basis to the same confined absolute path the
+   transaction reads, keeping the caller's project-relative names for the
+   receipt and every refusal."
+  [project-root basis resolved]
+  (when basis
+    (let [resolution (resolve-source-path project-root (:file basis))]
+      (if-not (:ok resolution)
+        (assoc resolution :raw-path (:file basis))
+        {:ok true
+         :expect-matched
+         (assoc basis
+                :file (:path resolution)
+                :public {:file (:file basis)
+                         :files (->> (:path-facts resolved)
+                                     (map :raw)
+                                     distinct
+                                     sort
+                                     vec)})}))))
 
 (defn- resolve-transaction-paths
   [project-root spec]
@@ -639,6 +666,10 @@
                               :write-refusal-context
                               {:operation public-operation
                                :project-root project-root}}
+                       ;; @spec MCP-OP-MATCHED-001
+                       (:expect-matched resolved)
+                       (assoc :expect-matched (:expect-matched resolved))
+
                        prepare-compiled!
                        (assoc :prepare-compiled!
                               #(prepare-compiled! project-root %))
@@ -789,6 +820,19 @@
                            (compact-relations/validate-path-resolution
                              relation-plan resolved)
                            resolved)
+                         ;; @spec MCP-OP-MATCHED-001
+                         matched-basis
+                         (when (:ok resolved)
+                           (resolve-expect-matched
+                             root
+                             (get-in validated [:params :expect-matched])
+                             resolved))
+                         resolved (cond
+                                    (nil? matched-basis) resolved
+                                    (not (:ok matched-basis)) matched-basis
+                                    :else (assoc resolved :expect-matched
+                                                 (:expect-matched
+                                                   matched-basis)))
                          programs (get-in validated [:params :programs])]
                      {:root root
                       :resolved
@@ -893,6 +937,34 @@
             "\n⚠ caller proof unavailable · absence cannot authorize deletion"
 
             "")
+          ;; @spec MCP-OP-MATCHED-001
+          matched-line
+          (when-let [total (:matched_count result)]
+            (let [unaddressed (:unaddressed_matches result)
+                  lines (str/join ", " (map :line unaddressed))]
+              (cond
+                (zero? (long total))
+                (str "\n✓ prior match basis · the pattern matched no site "
+                     "in this snapshot")
+
+                (zero? (long (or (:unaddressed_match_count result) 0)))
+                (format "\n✓ prior match basis · %s addressed"
+                        (if (= 1 (long total))
+                          "the 1 matched site"
+                          (str "all " (long total) " matched sites")))
+
+                :else
+                (format (str "\n⚠ prior match basis · %d of %d matched site%s "
+                             "not addressed by this transaction (pre-image "
+                             "line%s %s%s)")
+                        (long (:unaddressed_match_count result))
+                        (long total)
+                        (if (= 1 (long total)) "" "s")
+                        (if (= 1 (count unaddressed)) "" "s")
+                        lines
+                        (if (:unaddressed_matches_truncated result)
+                          "; truncated"
+                          "")))))
           terminal-response-line
           (when (string? (:terminal_response result))
             (str "\n→ If this mutation completes all remaining work, return exactly: "
@@ -912,7 +984,7 @@
                        "  %s edits · %s files · %s\n\n"
                        "✓ atomic commit complete\n"
                        "✓ written bytes read back and verified"
-                       caller-proof-line "\n"
+                       caller-proof-line matched-line "\n"
                        "✓ terminal evidence · verification_complete=true · next action none"
                        terminal-response-line)
                   (or (:edits result) (:match-count result) 0)
@@ -922,7 +994,7 @@
                        "  %s edits · %s files · %s\n\n"
                        "✓ atomic commit complete\n"
                        "✓ written bytes read back and hot proof complete"
-                       caller-proof-line "\n"
+                       caller-proof-line matched-line "\n"
                        "… cold verification running · edit remains committed\n"
                        "→ copy next_call to inspect_clojure after doing other useful work")
                   (or (:edits result) (:match-count result) 0)
@@ -941,18 +1013,28 @@
                                 (if (some? change-index) change-index "unknown")
                                 (if change-id (str " · " change-id) "")
                                 (if field (str " · field " field) "")))
+          ;; @spec MCP-OP-FIELD-002
+          named-field-line (when (and field (seq (:accepted result)))
+                             (format "  field %s accepts: %s%s\n"
+                                     field
+                                     (str/join ", " (:accepted result))
+                                     (if (contains? result :actual)
+                                       (str " · received "
+                                            (pr-str (:actual result)))
+                                       "")))
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
                            (:rolled-back result))]
       (format (str operation "\n"
                    "  refused · %s%s · %s\n"
-                   "%s\n"
+                   "%s%s\n"
                    "%s\n"
                    "→ %s")
               reason
               (if path (str " at " (pr-str path)) "")
               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
               (or change-line "")
+              (or named-field-line "")
               (if source-safe?
                 "✓ source unchanged"
                 "⚠ source state requires structured receipt review")
@@ -1110,6 +1192,22 @@
     "edit_clojure"
     "apply_clojure_changes"))
 
+(def ^:private editor-tool-fields
+  (set (keys (:properties mcp-schema/editor-tool-schema))))
+
+;; @spec MCP-OP-MATCHED-005
+(defn- undeclared-editor-fields
+  "Request fields `edit_clojure`'s published schema does not declare.
+
+   Both public entrances share one handler, so without this the handler accepts
+   `changes` and `expect_matched` on a tool whose schema denies them."
+  [params]
+  (->> (keys (or params {}))
+       (map #(if (keyword? %) (name %) (str %)))
+       (remove editor-tool-fields)
+       sort
+       vec))
+
 (defn- handle-operation
   [operation exchange params callback]
   (mcp-operation/invoke!
@@ -1135,6 +1233,20 @@
                     :mutation_attempted false
                     :write_authority false
                     :remedy "Use apply_clojure_changes when verification must share rollback authority."}
+
+                   ;; @spec MCP-OP-MATCHED-005
+                   (and (= "edit_clojure" operation)
+                        (seq (undeclared-editor-fields params)))
+                   {:ok false
+                    :error_type "invalid-mcp-request"
+                    :error "edit_clojure does not authorize fields its published schema omits"
+                    :unexpected_fields (undeclared-editor-fields params)
+                    :source_unchanged true
+                    :mutation_attempted false
+                    :write_authority false
+                    :remedy (str "edit_clojure accepts only the fields its schema "
+                                 "declares. Send changes, expect, and expect_matched "
+                                 "to apply_clojure_changes instead.")}
 
                    @runtime-config
                    (execute-request!
