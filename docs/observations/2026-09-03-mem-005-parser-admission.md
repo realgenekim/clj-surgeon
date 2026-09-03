@@ -102,18 +102,20 @@ is the witness that the string/regex/char/comment handling is right.
 | cell | -Xmx | before | after |
 |---|---|---|---|
 | nested cold | 512m | StackOverflowError, 42 ms, **the whole scan dies** | refused `max_parse_depth` (limit 150, observed 601), 19 ms, peak 44.6 MB |
-| nested warm | 512m | completed, peak **312.4 MB**, 827 ms | refused, 4 ms, peak **52.5–134.8 MB** |
+| nested warm | 512m | completed, peak **312.4 MB**, 827 ms | refused, 4–16 ms, peak **52.5–134.8 MB** |
 | giant | 128m | **OutOfMemoryError** | refused `max_parse_nodes`, 65 ms, peak 52.6 MB |
 | giant | 512m | completed, peak **339.9 MB**, 1,364 ms | refused, 76 ms, peak 65.9 MB |
 
 The nested-warm peak is stated as a RANGE because the single figure did not
-reproduce. This run measured 52.5 MB; Opus's independent green re-run on
-2026-09-03, on a box under load 6–9, measured **134.8 MB** for the same cell
-with the same -Xmx, while the other three cells landed within noise (45.9 /
-60.1 / 59.8 MB against 44.6 / 52.6 / 65.9). The verdict is identical either
-way — 2.3x under the 247.8 MB budget and 2.3x below the 312.4 MB pre-fix
-figure — but a published cell that does not reproduce on a loaded box is a
-figure, not a receipt, and it is restated as the range that does.
+reproduce. Three independent green runs of the same cell at the same -Xmx on
+this box have now measured **52.5, 107.3 and 134.8 MB**: this receipt's
+original run, the post-review re-run of 2026-09-03 at load ~7, and Opus's
+independent review run at load 6–9. The other three cells stay within noise
+across all three (44.6 / 52.6 / 65.9 originally, against 62.3 / 51.5 / 68.5
+and 45.9 / 60.1 / 59.8). The verdict is identical at every point in the range —
+the worst of them is 1.8x under the 247.8 MB budget and 2.9x below the 312.4 MB
+pre-fix figure — but a published cell that does not reproduce on a shared box
+is a figure, not a receipt, and it is restated as the range that does.
 
 After the fix the peaks are the JVM's own baseline (44–66 MB), not the file's
 shape. Refusal latency on the two 111 KB cells is **19 ms and 4 ms**, both under
