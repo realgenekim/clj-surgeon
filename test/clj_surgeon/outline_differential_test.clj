@@ -2,26 +2,149 @@
   "Acceptance artifact for MCP-OP-MEM-015: the single-parse outline is
    byte-identical to the two-parse outline it replaced.
 
-   `legacy-outline-source` below is an independent reconstruction of the path
-   as it stood at commit a845215, written only from public functions:
-   `top-level-form-records` (which still parses on its own and still returns
-   `:source`), a second `z/of-string` for the `ns` lookup, and
-   `extract-ns-requires`. It is deliberately NOT a call into the new code, so
-   the comparison cannot go tautological.
+   `legacy-outline-source` and `legacy-top-level-form-records` below are
+   copied verbatim (functions renamed with a `legacy-` prefix only; bodies
+   unchanged) from `src/clj_surgeon/outline.clj` at commit 9f48694 on
+   `origin/main` — the tip of that file's history before MEM-015 (found via
+   `git log --oneline origin/main -- src/clj_surgeon/outline.clj | head -1`).
+   That is the two-parse `top-level-form-records`: it parses on its own via
+   `cwalk/top-level-forms` and builds each record inline, unconditionally
+   including `:source`. It is deliberately NOT the current
+   `top-level-form-records`, which now delegates to the refactored, shared
+   `parse-and-build-records` / `form-records-from-walked` that
+   `outline-source` also uses — comparing against that shared builder would
+   let a bug in it hide from this differential, since both sides would
+   reflect the same bug identically. `extract-ns-requires` is referenced from
+   the live `outline` namespace because it is unchanged since 9f48694 and is
+   not part of the record-building path in question.
 
    Both sides are compared as `pr-str`, which captures small-map insertion
    order as well as values."
   (:require
+   [clj-surgeon.cljc.walk :as cwalk]
+   [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
+   [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
 
-(defn- legacy-outline-source
-  "The two-parse outline path, reconstructed from public functions."
+;; The private helpers below are copied verbatim (as of `origin/main`
+;; 9f48694, pre-MEM-015) from `src/clj_surgeon/outline.clj`, renamed with a
+;; `legacy-` prefix because the originals are private there.
+
+(defn- legacy-file-extension [file]
+  (let [s (str file)
+        i (.lastIndexOf s ".")]
+    (when (pos? i) (subs s (inc i)))))
+
+(defn- legacy-resolve-user-fields
+  [user-fields zloc type-str line]
+  (into {} (for [[k f] user-fields
+                 :let [v (try (f zloc)
+                              (catch Exception e
+                                (throw (ex-info
+                                         (str ".clj-surgeon.edn: extractor for "
+                                              type-str " :fields " k
+                                              " threw at line " line ": "
+                                              (.getMessage e))
+                                         {:macro type-str
+                                          :field k
+                                          :line line}
+                                         e))))]
+                 :when (some? v)]
+             [k v])))
+
+(defn- legacy-extract-name
+  [zloc]
+  (loop [child (some-> zloc z/down z/right)]
+    (when child
+      (let [s (z/string child)
+            tag (n/tag (z/node child))]
+        (if (= :meta tag)
+          (let [inner (some-> child z/down z/rightmost z/string)]
+            (or inner s))
+          (if (or (= :token tag) (= :symbol tag))
+            s
+            (recur (z/right child))))))))
+
+(defn- legacy-extract-arglist
+  [zloc]
+  (let [type-str (some-> zloc z/down z/string)]
+    (when (forms/has-arglists? type-str)
+      (loop [child (some-> zloc z/down)]
+        (when child
+          (let [tag (n/tag (z/node child))]
+            (cond
+              (= :vector tag) (z/string child)
+              (= :meta tag)   (let [inner (some-> child z/down z/rightmost)]
+                                (if (and inner (= :vector (n/tag (z/node inner))))
+                                  (z/string inner)
+                                  (recur (z/right child))))
+              :else           (recur (z/right child)))))))))
+
+(defn- legacy-attached-comment-start
+  [lines form-line]
+  (let [idx (dec form-line)]
+    (loop [i (dec idx), comment-start form-line]
+      (if (neg? i)
+        comment-start
+        (let [line (str/trim (nth lines i ""))]
+          (if (str/starts-with? line ";")
+            (recur (dec i) (inc i))
+            comment-start))))))
+
+(defn- legacy-top-level-form-records
+  "The two-parse `top-level-form-records`, frozen: parses via
+   `cwalk/top-level-forms` and builds every record inline, always including
+   `:source`. Does not touch the current `form-records-from-walked`."
   [file source project-aliases]
-  (let [records (outline/top-level-form-records file source project-aliases)
+  (let [lines (str/split-lines source)
+        defaults (cwalk/platforms-for-extension (legacy-file-extension file))
+        walked (cwalk/top-level-forms source defaults)]
+    (mapv (fn [{:keys [zloc platforms]}]
+            (let [node (z/node zloc)
+                  m (meta node)
+                  type-str (some-> zloc z/down z/string)
+                  form-spec (forms/spec-with-project-aliases
+                              project-aliases type-str)
+                  user-fields (:fields form-spec)
+                  extracted (when user-fields
+                              (legacy-resolve-user-fields user-fields zloc
+                                                          type-str (:row m)))
+                  name-val (cond
+                             user-fields (:name extracted)
+                             (some? form-spec) (legacy-extract-name zloc))
+                  arglist (cond
+                            user-fields (:arglist extracted)
+                            name-val (legacy-extract-arglist zloc))
+                  form-line (:row m)
+                  comment-start (when form-line
+                                  (legacy-attached-comment-start lines form-line))
+                  extras (when extracted
+                           (dissoc extracted :name :arglist))]
+              (cond-> {:type (symbol (or type-str "?"))
+                       :platforms (vec (sort platforms))
+                       :source (z/string zloc)}
+                form-line (assoc :line form-line)
+                (:end-row m) (assoc :end-line (:end-row m))
+                name-val (assoc :name (if (symbol? name-val)
+                                        name-val
+                                        (symbol (str name-val))))
+                arglist (assoc :args arglist)
+                (seq extras) (merge extras)
+                (and form-line comment-start (< comment-start form-line))
+                (assoc :comment-start comment-start))))
+          walked)))
+
+(defn- legacy-outline-source
+  "The two-parse outline path, frozen from `origin/main` 9f48694: a separate
+   `z/of-string` parses the source a second time for the `ns` lookup, and
+   every record from `legacy-top-level-form-records` carries `:source` that
+   this function then discards via `dissoc`."
+  [file source project-aliases]
+  (let [records (legacy-top-level-form-records file source project-aliases)
         zloc (z/of-string source {:track-position? true})
         ns-zloc (some-> zloc
                         (z/find-value z/next 'ns)
@@ -98,6 +221,27 @@
       (is (= (pr-str (legacy-outline-source file source {}))
              (pr-str (outline/outline-source file source {})))
           (str "outline differs for " label)))))
+
+;; @spec MCP-OP-MEM-015
+(deftest single-parse-outline-has-reader-error-parity-on-malformed-source
+  (testing (str "malformed reader input: the frozen two-parse path and the "
+                "live single-parse path either both refuse the same way or "
+                "both produce the same partial outline")
+    (doseq [[label file source]
+            [["unmatched delimiter" "unmatched.clj" "(defn a [] 1\n(def b 2)\n"]
+             ["unterminated string" "unterminated.clj"
+              "(def a \"unterminated\n(def b 2)\n"]
+             ["bad dispatch macro" "bad_dispatch.clj" "#z(1 2 3)\n(def b 2)\n"]]]
+      (let [outcome (fn [f]
+                      (try {:ok (pr-str (f file source {}))}
+                           (catch Throwable t
+                             {:threw (.getName (class t))
+                              :message (.getMessage t)})))
+            legacy (outcome legacy-outline-source)
+            live (outcome outline/outline-source)]
+        (is (= legacy live)
+            (str "old/new outcome diverged for " label
+                 " — legacy=" (pr-str legacy) " live=" (pr-str live)))))))
 
 ;; @spec MCP-OP-MEM-015
 (deftest string-symbol-outlines-still-see-form-source
