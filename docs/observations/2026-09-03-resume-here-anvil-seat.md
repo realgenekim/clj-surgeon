@@ -375,3 +375,24 @@ Ten GOs unmerged; no merges observed from the mayor all night. Gene report at 2f
 | apparatus | **77e6237 GO** | CLOSED | — |
 
 GOs for the mayor now: the ten from the night + MEM-003 95b0881 + apparatus 77e6237 + kernel 5a2d254 (latent). No merges observed from the mayor yet. Weekly Claude limit resets 19:00Z (hit once today, 13:03–19:03Z outage). Usage watch unchanged 96/49/47. Follow-ups filed today: inb-ef6dd6 (MEM-005 absolute path in :error), inb-eca3b1 (System/exit in ls-tree op), inb-1f9a27, inb-00d296, inb-75aaf7.
+
+## RESUME DELTA 23:02Z — evening, after Gene's rulings
+
+Gene's rulings tonight (verbatim in the log): Gene reports = vs-native perf first, wins/losses, learnings, what's next, ALWAYS pasted to chat; "target 50% functional work (overall). But your call."; delegated approvals ("If you can approve responsibly, go for it!!!"); "Tell mayor to review CC merge with sol, and merge into main". ANDON inb-d27b79 CLOSED (merged a6df86ee, freeze lifted). Folder-trust dialog was the approval on Gene's phone → 112 dirs trusted, `~/bin/trust-dir` + `~/bin/worktree-add`.
+
+| lane | state | running now |
+|---|---|---|
+| integration branch bridge/integration-2026-09-03 | composing the GOs onto main (mayor's ask); registry ratchet first; merge points: kernel 2df05b3, study-ops NEWER tip when O2 lands, apparatus 89295d8 | Opus integrator in ~/src/clj-surgeon-integ |
+| E6-Lb | DONE: adoption 0/3 (0/13 program), no wall claim — docs/observations/2026-09-04-e6-lb-cohort.md | — |
+| E3-P | DONE: T 49.3 s vs N 137.0 s (0.36× direction, inside the 172 s floor), 3/3 both, pass line fails on refusals; RECORD CORRECTED (next_call existed in structuredContent) — docs/observations/2026-09-04-e3-p-cohort.md | — |
+| E6-Q (square 3 read-only, N/M/F) | running, port 7909 | Opus runner, /home/forge/tmp/arms/e6q |
+| E6-C (WHEN plate vs bare) | running, ports 7909/7910 | Opus runner, /home/forge/tmp/arms/e6c |
+| O2 ls-tree text rows + payload bound | building on bridge/study-ops-mcp | Opus, ~/src/clj-surgeon-study |
+| q5z fix (bare dir scope; text ⊇ structured for refusals; quoted symbols) | building on bridge/q5z-alias-migration | Opus, ~/src/clj-surgeon-q5z |
+| --k irregularity knob | building on bridge/fanout-fixtures-in-git | Sonnet, ~/src/clj-surgeon-fanout |
+| E-REG (k sweep) + E-SLOPE80 | QUEUED behind the q5z fix and the knob; brief in brainfleet §16 | — |
+| census | HELD e2d70d0; round 16 (one fence for every path) building | Opus, ~/src/clj-surgeon-census |
+| fold-diff (curtain-call) | GO 3d344432, pin may move; approved order to the mayor with Sol review | mayor |
+| kernel | GO 2df05b3 (merge point) | in the integration branch |
+
+Mayor: draining via the integration branch; owns curtain-call merges (Sol-reviewed per Gene). Weekly Claude limit resets 19:00Z. Usage watch 96/49/47 flat by construction (cohort servers log elsewhere).
