@@ -1,3 +1,7 @@
+## First action after compaction (the Memento rule)
+
+Read, in this order: `docs/observations/2026-09-03-resume-here-anvil-seat.md` (host facts for the seat on forge@anvil since 2026-09-03: no reply tool, no sudo, never ports 7888/7894/7895, never `~/acid/GO-*` or the cohort lock, nothing merges from here) and `docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state). Keep both current when state changes materially.
+
 # clj-surgeon
 
 Babashka CLI tool for structural operations on Clojure namespaces.
@@ -491,3 +495,17 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
 - `make mcp-status` verifies both loopback services, the launchd job, and the
   Codex registration.
 - Run `make mcp-test` after each live patch. Run `make test` before completion.
+
+## Fence review scope (amended 02:20Z 2026-09-03, after the study-ops NO-GO)
+
+The standing rule — anything touching the SCI allowlist, the evaluation fence, or path/workspace
+confinement gets adversarial review BEFORE merge — was too narrow: a READ verb got two code-execution
+holes without touching any of those files. The scope now includes, for every new or changed MCP or CLI
+surface: (1) every subprocess reachable from a request — argv only, `--` before any pattern, no request
+field or repo-controlled value (`.clj-surgeon.edn`, deps.edn aliases, file names) interpolated without
+validation; (2) every reader on repo bytes — `clojure.edn/read-string` only, never `clojure.core/
+read-string` with read-eval; (3) every path a walk produces — realpath inside the root, symlinks and
+`:paths` relocations dropped, not only the top directory; (4) bounds applied BEFORE parsing — a file cap
+and lazy outlining, so a monorepo cannot OOM the server; (5) `next_call` never equals the call just
+made. The review is executed (probes, not reading), Sol when authenticated, Opus otherwise, and its
+verdict is filed under docs/observations before the branch enters the merge queue.
