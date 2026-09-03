@@ -2847,3 +2847,213 @@
     (testing "the real table is restored outside the binding"
       (is (= "doors-not-an-array" (published-mcp-name (run mcp-probe))))
       (is (= :doors-not-a-string (:error-type (cli-refusal)))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eleven review, item 2 (blocking): the anchor fix reached the
+;; SHAPE refusals and stopped there.
+;;
+;; Round ten routed every refusal from the pure pass through `cli-anchor` and
+;; `cli-next-command`, and Sol confirmed it. But the refusals computed AFTER
+;; the scan still spelled their own command, and one of them —
+;; `unknown-door-symbol`, raised when a door parses as a symbol but is
+;; DEFINED in no scanned file, which can only be known after the scan — still
+;; handed back the literal `:dir . :doors …`. Sol refused a request naming an
+;; absolute workspace, replayed the continuation from the client fixture, and
+;; the census answered about `client.clj`: a continuation that validates,
+;; runs, reports success, and describes a tree the caller never named. The
+;; same silent retarget MCP-OP-CENSUS-014 forbids, from a site the fix never
+;; reached.
+;;
+;; A rule that lives in one branch is a rule the other branches break. So
+;; this witness does not check the branch Sol found; it ENUMERATES every
+;; typed refusal the op can emit, drives each one through the entrance, and
+;; asserts three things of all of them: the refusal names the workspace the
+;; caller named; any continuation it carries was BUILT BY
+;; `census/cli-next-command` (counted, not grepped); and that continuation's
+;; anchor argument is an absolute path and never `.`. The enumeration is
+;; pinned to `census/cli-refusal-types`, so a refusal added to the op without
+;; a probe here fails this witness rather than shipping unexercised.
+;; ---------------------------------------------------------------------------
+
+(def ^:private malformed-arm-source
+  "A source that DEFINES an arm and cannot be parsed: the census worker's
+   per-file failure, which is otherwise unreachable from a well-formed tree."
+  "(defmethod fold-event :x [state event] (update state :xs conj")
+
+(defn- anchor-argument
+  "The value in the `:dir`/`:file` argument position of a CLI continuation."
+  [command]
+  (let [tokens (vec (str/split (str command) #"\s+"))
+        index (first (keep-indexed (fn [i t] (when (#{":dir" ":file"} t) i))
+                                   tokens))]
+    (when index (get tokens (inc index)))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-033
+(deftest every-cli-refusal-anchors-its-continuation-on-the-named-workspace
+  (let [parent (temp-dir)
+        workspace (io/file parent "workspace")
+        empty-ws (io/file parent "empty")
+        broken (io/file parent "broken")
+        named #(.getCanonicalPath ^java.io.File %)]
+    (try
+      (spit-file! (io/file workspace "src/a/one.clj") arm-source)
+      (spit-file! (io/file workspace "src/b/two.clj") arm-source)
+      (spit-file! (io/file workspace "src/b/three.clj") arm-source)
+      (.mkdirs (io/file empty-ws "src"))
+      (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
+      (let [drives
+            (concat
+              ;; Every row of the shared table the CLI can express, driven
+              ;; from the table itself rather than a hand-kept list.
+              (for [rule census/request-shape-rules
+                    :when (keyword? (:cli rule))
+                    :let [probe (get shape-rule-probes
+                                     [(:field rule) (:violation rule)])]]
+                {:label [(:field rule) (:violation rule)]
+                 :error-type (:cli rule)
+                 :root workspace
+                 ;; The :dir row's own probe REPLACES the anchor with the
+                 ;; blank value it is refusing, so its refusal names what a
+                 ;; blank :dir would have meant — the cwd — which is the
+                 ;; point of that refusal rather than an exception to this
+                 ;; rule.
+                 :expect-anchor (when (= :dir (:field rule))
+                                  (System/getProperty "user.dir"))
+                 :opts (merge {:dir (named workspace)} (:cli probe))})
+              [{:label :unknown-door-symbol-after-the-scan
+                :error-type :unknown-door-symbol
+                :root workspace
+                :opts {:dir (named workspace) :doors "no-such-door"}}
+               {:label :source-too-large
+                :error-type :source-too-large
+                :root workspace
+                :opts {:file (str (named workspace) "/src/a/one.clj")}
+                :around (fn [f]
+                          (with-redefs [census/max-source-bytes 4] (f)))}
+               {:label :no-fold-arms-found
+                :error-type :no-fold-arms-found
+                :root empty-ws
+                :opts {:dir (named empty-ws)}}
+               {:label :unparseable-file
+                :error-type :unparseable-file
+                :root broken
+                :opts {:dir (named broken)}}
+               {:label :census-worker-failure
+                :error-type :census-worker-failure
+                :root workspace
+                :opts {:dir (named workspace)}
+                :around (fn [f]
+                          (with-redefs [census/census-file
+                                        (fn [& _]
+                                          (throw (ex-info "boom" {})))]
+                            (f)))}
+               {:label :too-many-candidate-files
+                :error-type :too-many-candidate-files
+                :root workspace
+                :opts {:dir (named workspace)}
+                :around (fn [f]
+                          (with-redefs [census/max-scanned-files 2] (f)))}
+               {:label :too-many-walk-entries
+                :error-type :too-many-walk-entries
+                :root workspace
+                :opts {:dir (named workspace)}
+                :around (fn [f]
+                          (with-redefs [census/max-walk-entries 3] (f)))}])
+            results
+            (doall
+              (for [{:keys [label error-type root opts around expect-anchor]}
+                    drives]
+                (let [built (atom 0)
+                      thunk (fn []
+                              (with-redefs [census/cli-next-command
+                                            (counting
+                                              built census/cli-next-command)]
+                                (binding [*out* (java.io.StringWriter.)]
+                                  (core/run (assoc opts
+                                                   :op :relation-census)))))
+                      result ((or around (fn [f] (f))) thunk)]
+                  {:label label :error-type error-type :root root
+                   :expect-anchor (or expect-anchor
+                                      (.getCanonicalPath ^java.io.File root))
+                   :built @built :result result})))]
+
+        (testing "the probes cover every refusal the op declares it can emit"
+          (is (= census/cli-refusal-types
+                 (set (map (comp :error-type :result) results)))
+              (str "declared: " (pr-str census/cli-refusal-types)
+                   "; driven: "
+                   (pr-str (set (map (comp :error-type :result) results))))))
+
+        (doseq [{:keys [label error-type expect-anchor built result]} results]
+          (testing (str label " refuses as declared")
+            (is (false? (:ok result))
+                (str label " was accepted: " (pr-str result)))
+            (is (= error-type (:error-type result))
+                (str label " refused as " (pr-str (:error-type result)))))
+
+          (testing (str label " names the workspace the caller named")
+            (is (= expect-anchor (:absolute (:anchor result)))
+                (str label " lost the workspace: "
+                     (pr-str (:anchor result)))))
+
+          (testing (str label " offers exactly one of a continuation and a remedy")
+            (is (not= (contains? result :next-command)
+                      (contains? result :remedy))
+                (str label " offers "
+                     (pr-str (select-keys result [:next-command :remedy])))))
+
+          (when-let [command (:next-command result)]
+            (testing (str label " builds its continuation through the anchor")
+              (is (pos? built)
+                  (str label " spelled its own continuation instead of "
+                       "calling cli-next-command: " command))
+              (is (some? (anchor-argument command))
+                  (str label " continuation names no anchor at all: "
+                       command))
+              (is (not= "." (anchor-argument command))
+                  (str label " hands back a bare dot, which names whatever "
+                       "directory the next shell is standing in: " command))
+              (is (str/starts-with? (str (anchor-argument command)) "/")
+                  (str label " continuation anchor is not absolute: "
+                       command))))))
+      (finally (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest a-post-scan-door-refusal-censuses-the-workspace-the-caller-named
+  ;; Sol's exact round-eleven scenario, replayed: refuse from the CLIENT
+  ;; fixture while naming the workspace, then replay the continuation from
+  ;; that same client fixture. The client holds two arm-bearing sources and
+  ;; the workspace holds one, so a retarget shows as a count and not only as
+  ;; a path.
+  (let [parent (temp-dir)
+        workspace (io/file parent "workspace")
+        client (io/file parent "client-cwd")]
+    (try
+      (spit-file! (io/file workspace "src/app/folds.clj") arm-source)
+      (spit-file! (io/file client "src/app/one.clj") arm-source)
+      (spit-file! (io/file client "src/app/two.clj") arm-source)
+      (let [named (.getCanonicalPath workspace)
+            elsewhere (.getCanonicalPath client)
+            refusal (bb-cli-in elsewhere ":op" "relation-census"
+                               ":dir" named ":doors" "no-such-door")]
+        (is (= :unknown-door-symbol (:error-type refusal))
+            (str "the post-scan door refusal did not fire: "
+                 (pr-str refusal)))
+        (is (= named (:absolute (:anchor refusal)))
+            (str "the refusal does not name the workspace it was given: "
+                 (pr-str (:anchor refusal))))
+        (is (str/includes? (str (:next-command refusal)) named)
+            (str "the continuation retargets the census: "
+                 (pr-str (:next-command refusal))))
+        (let [replay (replay-next-command elsewhere (:next-command refusal))]
+          (is (true? (:ok replay))
+              (str "the continuation refused: " (pr-str replay)))
+          (is (= 1 (:files replay))
+              (str "the replay censused " (:files replay)
+                   " arm-bearing file(s) from " elsewhere
+                   "; the workspace the caller named holds 1 and the replay "
+                   "cwd holds 2"))))
+      (finally (delete-tree! parent)))))

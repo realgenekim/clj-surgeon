@@ -599,6 +599,41 @@
     :cli-data (fn [_req] {})
     :cli-fix :threads}])
 
+;; @spec MCP-OP-CENSUS-014
+(def cli-refusal-types
+  "Every typed refusal the `:relation-census` CLI op can return once its
+   arguments have been parsed into an opts map.
+
+   Sol's round-eleven item 2, blocking: round ten routed the SHAPE refusals
+   through `cli-anchor`/`cli-next-command` and left the POST-SCAN ones
+   spelling their own command, so a door that parses as a symbol but is
+   defined in no scanned file — a question only the scan can answer — still
+   handed back the literal `:dir .`, and replaying it censused the replay's
+   cwd. A rule that lives in one branch is a rule the other branches break.
+
+   This set is the CLI's half of the anchor contract, written down so a
+   witness can ENUMERATE it: every name here is driven through the entrance
+   and asserted to name the workspace the caller named and to build any
+   continuation it carries through `cli-next-command`. A refusal added to the
+   op without a probe fails that witness rather than shipping unexercised.
+
+   `:duplicate-argument` is NOT here: it is raised by `parse-args`, before
+   dispatch knows which op it is building, so there is no request and no
+   anchor to name."
+  #{:unknown-arguments
+    :dir-not-a-string
+    :doors-not-a-string
+    :too-many-doors
+    :unknown-door-symbol
+    :file-not-a-string
+    :invalid-pool-size
+    :source-too-large
+    :too-many-walk-entries
+    :too-many-candidate-files
+    :no-fold-arms-found
+    :unparseable-file
+    :census-worker-failure})
+
 (def ^:dynamic *shape-rules*
   "An override for the shared refusal table, or nil for the real one.
 
