@@ -487,8 +487,30 @@
                                   :source (slurp p)}))
                     (filterv #(relation-census/defines-arms? (:source %))))})))
 
+;; @spec MCP-OP-CENSUS-021
+(defn census-plan-pool
+  "The plan-phase map-fn and the pool that will actually run it.
+
+   The CLI is a babashka tool and claypoole is a JVM dependency, so the bounded
+   pool is resolved at run time: on the JVM the plan phase runs on census_pool's
+   shutdown-bound pool, and under babashka, where that namespace cannot load,
+   it runs serially. Either way the receipt reports the pool that ran, never the
+   pool that was asked for."
+  [requested]
+  (let [size (if requested (relation-census/effective-pool-size requested) 1)
+        pooled (when (> size 1)
+                 (try
+                   (when-let [pooled-map (requiring-resolve
+                                           'clj-surgeon.census-pool/pooled-map)]
+                     (pooled-map size))
+                   (catch Throwable _ nil)))]
+    (if pooled
+      {:map-fn pooled :pool-size size}
+      {:map-fn map :pool-size 1})))
+
 ;; @spec MCP-OP-CENSUS-015
 ;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-021
 (defn run-relation-census
   "Census collection writes inside fold arms. Reads only; writes nothing."
   [{:keys [dir file doors threads]}]
@@ -536,15 +558,18 @@
            :dir (str (fs/absolutize (or dir ".")))
            :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
           (let [threads (when pool (:size pool))
+                {:keys [map-fn pool-size]} (census-plan-pool threads)
                 result (relation-census/plan
                          {:inputs inputs
                           :doors doors
-                          :map-fn (if (and threads (> threads 1)) pmap map)})]
+                          :map-fn map-fn})]
         (if-not (:ok result)
           result
           (-> result
               (dissoc :all-sites :declared)
-              (assoc :pool-size (or threads 1)
+              (assoc :pool-size pool-size
+                     :pool-size-requested (when (and threads (> threads pool-size))
+                                            threads)
                      :raw (filterv #(= :raw (:class %)) (:all-sites result))
                      :guarded (filterv #(= :guarded (:class %)) (:all-sites result))
                      :unknown (filterv #(= :unknown (:class %)) (:all-sites result))

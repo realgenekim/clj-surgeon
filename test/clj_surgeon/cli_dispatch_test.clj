@@ -367,3 +367,23 @@
           result (edn/read-string out)]
       (is (zero? exit))
       (is (true? (:ok result))))))
+
+;; @spec MCP-OP-CENSUS-021
+(deftest cli-relation-census-reports-the-pool-that-ran
+  (testing "under babashka there is no claypoole, so the receipt says so"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":threads" "8")
+          result (edn/read-string out)]
+      (is (zero? exit))
+      (is (= 1 (:pool-size result))
+          "the CLI echoed a pool size it never used")
+      (is (= 8 (:pool-size-requested result))
+          "the request the census could not honour is named")))
+
+  (testing "no :threads means no pool and no request to report"
+    (let [{:keys [out]} (run-cli ":op" "relation-census"
+                                 ":dir" census-fixture-dir)
+          result (edn/read-string out)]
+      (is (= 1 (:pool-size result)))
+      (is (nil? (:pool-size-requested result))))))

@@ -47,6 +47,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-020**: When clj-surgeon witnesses that the census answer is pool-size independent, it shall run at least two arm-defining files through the plan phase, and the plan-phase pool shall map every input exactly once, shall use no more threads than the pool size it was given, and shall leave no worker thread alive after the call returns.
 
+- [x] **MCP-OP-CENSUS-021**: When clj-surgeon runs the plan phase from either entrance, it shall run it on the bounded `census_pool` pool whenever a pool larger than one is both requested and available, and the receipt's pool size shall be the pool that actually ran; when the pool that ran is smaller than the pool requested, clj-surgeon shall publish the requested size alongside it.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |

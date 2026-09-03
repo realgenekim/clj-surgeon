@@ -7,6 +7,7 @@
    963875358a37c48ab6175ea1bea22633e4fd0306."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.core :as core]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-relation-census :as census-tool]
    [clj-surgeon.relation-census :as census]
@@ -325,3 +326,24 @@
             "the escaping path is counted, not fatal")
         (is (= 1 (get-in result [:counts :raw]))))
       (finally (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-021
+(deftest the-cli-plan-pool-is-the-bounded-pool-on-the-jvm
+  (testing "a threads request above one runs on census_pool, not core pmap"
+    (let [{:keys [map-fn pool-size]} (core/census-plan-pool 4)
+          threads (atom #{})]
+      (is (= 4 pool-size))
+      (is (not= map map-fn) "the CLI selected the serial map for a pooled run")
+      (map-fn (fn [x] (swap! threads conj (Thread/currentThread)) x) (range 40))
+      (is (<= (count @threads) 4))
+      (is (> (count @threads) 1) "nothing actually ran on the pool")))
+
+  (testing "no request means no pool"
+    (let [{:keys [map-fn pool-size]} (core/census-plan-pool nil)]
+      (is (= 1 pool-size))
+      (is (= map map-fn))))
+
+  (testing "a request above the box is capped to the pool that ran"
+    (let [{:keys [pool-size]} (core/census-plan-pool 64)]
+      (is (= (census/effective-pool-size 64) pool-size))
+      (is (<= pool-size (.availableProcessors (Runtime/getRuntime)))))))
