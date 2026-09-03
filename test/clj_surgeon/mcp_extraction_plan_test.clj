@@ -235,7 +235,7 @@
       (spit source-file source)
       (spit caller-file caller)
       (spit ignored-data "{:moved true}\n")
-      (let [sources (workspace-sources/read-all (.toPath root))
+      (let [sources (:sources (workspace-sources/read-all (.toPath root)))
             result (extraction-plan/plan!
                      {:project-root (.getPath root)}
                      {:mode "plan-extraction"

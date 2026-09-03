@@ -320,7 +320,12 @@
                         (change-buffer/compile-exact-profile
                           verify (:verification-profiles config)
                           (:verification-profile-source config)))
-        sources (workspace-sources/read-all root)
+        ;; @spec MCP-OP-EXTRACT-037
+        ;; The shared discovery kernel, and its refusals, before the universe
+        ;; exists: a source whose canonical real file lives in a tree the walk
+        ;; pruned never enters the map this transaction writes from.
+        found (workspace-sources/read-all root)
+        sources (:sources found)
         request (assoc request
                        :source (get sources (:file request))
                        ;; @spec MCP-OP-EXTRACT-014
@@ -328,9 +333,11 @@
                        :target-ns (extract/workspace-target-ns
                                     root (:to request))
                        :workspace-sources sources)
-        compiled (->> (extraction/compile-extraction request)
-                      (publicize-extraction-decision-refusal
-                        root sources request))
+        compiled (if-not (:ok found)
+                   found
+                   (->> (extraction/compile-extraction request)
+                        (publicize-extraction-decision-refusal
+                          root sources request)))
         compiled
         (if (and (:ok compiled) (:formatter config))
           (let [format! (or (:format-candidates! config)

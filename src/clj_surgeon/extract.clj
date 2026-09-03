@@ -623,6 +623,78 @@
                      paths)]
         (if (:paths result) {:paths (:paths result)} result)))))
 
+;; @spec MCP-OP-EXTRACT-029
+;; @spec MCP-OP-EXTRACT-032
+;; @spec MCP-OP-EXTRACT-035
+;; @spec MCP-OP-EXTRACT-037
+(defn discover-workspace-sources
+  "ONE discovery kernel. Every entrance that turns a workspace ROOT into a set
+  of Clojure sources goes through this walk, this prune, this canonicalisation
+  and these refusals -- `:extract`/`:extract!` and the MCP extraction routes
+  alike.
+
+  It exists because there were three walks and one gate. `:extract!` walked
+  with `walk-workspace-sources` (NOFOLLOW, root build trees pruned, paths
+  collapsed onto their canonical real file, a caller inside a pruned tree
+  REFUSED), while the MCP extraction plan and apply built their universe with
+  a `file-seq` that follows directory links, excluded `.git` by a LEXICAL test
+  on the walk path, and then keyed the result by canonical path -- so
+  `src/app/alias_caller.clj -> ../../.git/hooks/caller.clj` defeated the filter
+  and the apply wrote the repository's own metadata. A gate that exists on one
+  entrance is not a gate; it is a habit of one code path.
+
+  Returns `{:ok true :paths [...] :discovery {...}}`, where `:paths` are
+  canonical real paths with two names for one file collapsed onto one, or one
+  typed refusal (`:workspace-file-cap-exceeded`, `:caller-path-outside-root`,
+  `:caller-path-in-skipped-tree`, `:invalid-workspace-cap`)."
+  ([root] (discover-workspace-sources root nil nil))
+  ([root max-files max-file-bytes]
+   (let [cap (workspace-cap :max-workspace-files max-files
+                            default-max-workspace-files)
+         byte-cap (workspace-cap :max-workspace-file-bytes max-file-bytes
+                                 default-max-workspace-file-bytes)]
+     (cond
+       (map? cap) cap
+       (map? byte-cap) byte-cap
+       :else
+       (let [root-file (io/file (str root))
+             walked (walk-workspace-sources root-file
+                                            (mcp-paths/real-root root-file)
+                                            cap byte-cap)
+             discovery (let [large (:skipped-large walked)
+                             dirs (:skipped-directories walked)]
+                         (cond-> {:files (count (:files walked))}
+                           (seq large) (assoc :skipped-large (vec large))
+                           (seq dirs) (assoc :skipped-directories (vec dirs))))]
+         (cond
+           ;; @spec MCP-OP-EXTRACT-029
+           (:over-cap walked)
+           {:ok false
+            :error (str "This workspace holds more than " cap
+                        " Clojure sources; discovery reads every one of them.")
+            :error-type :workspace-file-cap-exceeded
+            :cap cap
+            :seen (:over-cap walked)
+            :remedy (str "extract from a smaller root, or raise the cap with "
+                         ":max-workspace-files <n>")
+            :source-unchanged true
+            :target-unchanged true}
+
+           ;; @spec MCP-OP-EXTRACT-035
+           (:escape walked)
+           (link-escape-refusal root-file (:escape walked)
+                                (:escape-real walked))
+
+           :else
+           (let [confined (canonical-workspace-paths
+                            root-file (:files walked)
+                            (:skipped-directories walked))]
+             (if-not (:paths confined)
+               confined
+               {:ok true
+                :paths (:paths confined)
+                :discovery discovery}))))))))
+
 (defn- project-root-for-source
   [file source-paths]
   (let [path (-> file io/file .getCanonicalFile .toPath)
@@ -1928,35 +2000,27 @@
             target-refusal (target-destination-refusal project-root to
                                                        target-ns)
             ;; @spec MCP-OP-EXTRACT-029
-            walked (when-not target-refusal
-                     (walk-workspace-sources (io/file project-root)
-                                             (mcp-paths/real-root project-root)
-                                             cap byte-cap))
             ;; @spec MCP-OP-EXTRACT-024
-            ;; @spec MCP-OP-EXTRACT-037
-            ;; Confine the read set at the moment the walk produces it -- this
-            ;; is where a directory symlink turns a path that LOOKS like it is
-            ;; under the root into one that is not -- and collapse the paths
-            ;; that name one file to that file's canonical real path.
-            confined (when-not (:escape walked)
-                       (canonical-workspace-paths
-                         project-root (:files walked)
-                         (:skipped-directories walked)))
             ;; @spec MCP-OP-EXTRACT-035
-            escape (or (when-let [escaped (:escape walked)]
-                         (link-escape-refusal project-root escaped
-                                              (:escape-real walked)))
-                       (when-not (:paths confined) confined))
+            ;; @spec MCP-OP-EXTRACT-037
+            ;; ONE discovery kernel, shared with the MCP extraction entrances:
+            ;; the walk, the root build-tree prune, the confinement of the read
+            ;; set at the moment the walk produces it -- this is where a
+            ;; directory symlink turns a path that LOOKS like it is under the
+            ;; root into one that is not -- and the collapse of two names for
+            ;; one file onto that file's canonical real path.
+            found (when-not target-refusal
+                    (discover-workspace-sources project-root cap byte-cap))
+            escape (when-not (:ok found) found)
             discovered
-            (->> (:paths confined)
+            (->> (:paths found)
                  (remove #(= source-canonical-path
                              (.getCanonicalPath (io/file %))))
                  vec)
-            over-cap (:over-cap walked)
             explicit-compile-aliases (not-empty (normalize-aliases compile-alias))
             declared-compile (declared-compile-config project-root)
             workspace-sources
-            (when-not (or escape over-cap)
+            (when-not escape
               (into (sorted-map)
                     (map (fn [path] [path (slurp path)]) discovered)))]
         (cond
@@ -1964,18 +2028,8 @@
           target-refusal target-refusal
 
           ;; @spec MCP-OP-EXTRACT-029
-          over-cap
-          {:ok false
-           :error (str "This workspace holds more than " cap
-                       " Clojure sources; discovery reads every one of them.")
-           :error-type :workspace-file-cap-exceeded
-           :cap cap
-           :seen over-cap
-           :remedy (str "extract from a smaller root, or raise the cap with "
-                        ":max-workspace-files <n>")
-           :source-unchanged true
-           :target-unchanged true}
-
+          ;; @spec MCP-OP-EXTRACT-035
+          ;; @spec MCP-OP-EXTRACT-037
           escape escape
 
           :else
@@ -2008,11 +2062,7 @@
              :rewire-callers rewire-callers
              ;; @spec MCP-OP-EXTRACT-029
              ;; @spec MCP-OP-EXTRACT-032
-             :discovery (let [large (:skipped-large walked)
-                              dirs (:skipped-directories walked)]
-                          (cond-> {:files (count (:files walked))}
-                            (seq large) (assoc :skipped-large (vec large))
-                            (seq dirs) (assoc :skipped-directories (vec dirs))))})))
+             :discovery (:discovery found)})))
         (catch Exception error
           {:ok false
            :error-type :extraction-snapshot-failed

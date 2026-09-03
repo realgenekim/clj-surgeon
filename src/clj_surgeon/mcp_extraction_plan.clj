@@ -146,23 +146,33 @@
                   :read_complete false
                   :source_unchanged true
                   :next_action "correct_request"})
-          (let [sources (workspace-sources/read-all root)
+          ;; @spec MCP-OP-EXTRACT-037
+          ;; The shared discovery kernel decides the universe, and refuses the
+          ;; same shapes here that it refuses on apply: a plan compiled over a
+          ;; universe the apply would refuse is a preview of nothing.
+          (let [found (workspace-sources/read-all root)
+                sources (:sources found)
                 source-path (str (:path source-result))
                 target-path (str (:path target-result))]
-            (compile-plan-response
-              {:workspace-root (str root)
-               :file (:file params)
-               :to (:to params)
-               :source-path source-path
-               :target-path target-path
-               :source (get sources source-path)
-               :forms (:forms params)
-               ;; @spec MCP-OP-EXTRACT-014
-               ;; @spec MCP-OP-EXTRACT-023
-               ;; Read against the WORKSPACE root, never the server's own
-               ;; project: a server answering for another checkout derived
-               ;; namespace names from its own layout.
-               :target-ns (extract/workspace-target-ns root target-path)
-               :workspace-sources sources
-               :relative-paths (workspace-sources/relative-paths root sources)
-               :require-policy (keyword (:require_policy params))})))))))
+            (if-not (:ok found)
+              (merge (refusal (or (:error-type found) :extraction-plan-refused)
+                              (:error found))
+                     (select-keys found [:path :resolves-to :tree :root
+                                         :remedy :discovery]))
+              (compile-plan-response
+                {:workspace-root (str root)
+                 :file (:file params)
+                 :to (:to params)
+                 :source-path source-path
+                 :target-path target-path
+                 :source (get sources source-path)
+                 :forms (:forms params)
+                 ;; @spec MCP-OP-EXTRACT-014
+                 ;; @spec MCP-OP-EXTRACT-023
+                 ;; Read against the WORKSPACE root, never the server's own
+                 ;; project: a server answering for another checkout derived
+                 ;; namespace names from its own layout.
+                 :target-ns (extract/workspace-target-ns root target-path)
+                 :workspace-sources sources
+                 :relative-paths (workspace-sources/relative-paths root sources)
+                 :require-policy (keyword (:require_policy params))}))))))))
