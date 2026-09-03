@@ -691,6 +691,18 @@
                      (max 0 (- declared (count fresh)))
                      declared))))))
 
+;; @spec MCP-OP-ALIAS-058
+(defn rescoping-call
+  "The same request with `scope.paths` replaced outright, or nil if it would not fit.
+
+  The executable remedy for a scope that matched NOTHING, where no exclusion and
+  no narrowing prefix can help: the caller's spelling selected no file, so the
+  only correction is a different spelling. `expect.files` is left exactly as
+  declared, because not one file of the new scope has been read."
+  [request paths]
+  (let [call (assoc-in (base-call request) ["scope" "paths"] (vec paths))]
+    (when (and (seq paths) (within-next-call-bound? call)) call)))
+
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-055
 (defn narrowing-call

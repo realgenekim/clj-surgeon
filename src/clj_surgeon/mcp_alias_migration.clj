@@ -390,6 +390,42 @@
       :else {:ok true :files (vec (sort found))})))
 
 ;; @spec MCP-OP-ALIAS-004
+;; @spec MCP-OP-ALIAS-058
+(def max-suggested-scope-paths
+  "How many source roots one `scope-matches-nothing` remedy names.
+
+  The remedy is a next_call and a next_call is constant-size or it is not
+  publishable; a tree with many top-level source directories is narrowed to the
+  first few rather than allowed to grow the refusal."
+  6)
+
+;; @spec MCP-OP-ALIAS-058
+(defn suggested-scope-paths
+  "Glob patterns that select the Clojure sources this tree actually holds.
+
+  Derived from the walk's own answers rather than hardcoded, so the remedy
+  follows the tree it was refused over: a top-level directory holding sources
+  becomes `<dir>/**`, and a source file sitting directly at the root becomes
+  `*`. Both spellings were measured against `java.nio.file.PathMatcher` on this
+  corpus before being published as a remedy — `src/**/*.clj` is NOT used,
+  because it matches neither `src/a.clj` nor any `.cljc` or `.cljs` file, and a
+  remedy that silently drops a file class is the defect this refusal exists to
+  end.
+
+  Returns a sorted, bounded vector; empty when the tree holds no Clojure source
+  at all, which is itself the honest answer and is reported as such."
+  [^Path root]
+  (let [relatives (:files (scan-scope root {:paths ["**"] :exclude []}))
+        roots (reduce (fn [acc ^String relative]
+                        (let [cut (.indexOf relative "/")]
+                          (conj acc (if (neg? cut)
+                                      "*"
+                                      (str (subs relative 0 cut) "/**")))))
+                      (sorted-set)
+                      relatives)]
+    {:source-files (count relatives)
+     :paths (vec (take max-suggested-scope-paths roots))}))
+
 (defn expand-scope
   "The sources one scope selects, when the bounded scan admits it.
 
@@ -557,6 +593,41 @@
                              "through scope.paths, and resend. Continuing past "
                              "them would silently shrink the scope and hand "
                              "back a found count that omits whatever they hold.")})
+
+      ;; @spec MCP-OP-ALIAS-058
+      ;; The scope selected NO file. That is a fact about the caller's spelling,
+      ;; not about the tree, and the domain refusal below — "no namespace under
+      ;; scope requires from.lib" — is a claim discovery never got to make.
+      ;; Four of four E3-P tool arms were refused here and told the wrong cause.
+      (zero? scanned)
+      (let [given (vec (get-in request [:scope :paths]))
+            {:keys [source-files paths]} (suggested-scope-paths root)]
+        (refusal :alias-migration-scope-matches-nothing
+                 (str "scope.paths " (pr-str given) " matched 0 files. "
+                      "scope.paths are globs: an entry selects a file only when "
+                      "the glob matches that file's whole project-relative path, "
+                      "and a directory name selects its subtree only when that "
+                      "directory exists under the project root. Whether any "
+                      "namespace here requires "
+                      (get-in request [:from :lib])
+                      " is not known, because no file was read.")
+                 {:paths given
+                  :files_matched 0
+                  :source_files_under_root source-files
+                  :suggested_paths paths
+                  :expected_files expected
+                  :next_call (planner/rescoping-call request paths)
+                  :expect_files_unchanged_reason
+                  planner/expect-files-unchanged-reason
+                  :remedy
+                  (if (seq paths)
+                    (str "Resend the next_call: it replaces scope.paths with "
+                         (pr-str paths) ", the source roots this tree actually "
+                         "holds. expect.files declared " expected
+                         " and is left as declared, because no file was read.")
+                    (str "This project root holds no .clj, .cljs or .cljc file "
+                         "at all, so no spelling of scope.paths can select one. "
+                         "Check workspace_root before correcting scope.paths."))}))
 
       (> scanned max-scope-files)
       ;; @spec MCP-OP-ALIAS-055

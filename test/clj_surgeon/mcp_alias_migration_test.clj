@@ -388,8 +388,17 @@
         (is (= ["srk/**"] (:paths result))
             "the refusal does not name the paths as the caller gave them")
         (is (= 0 (:files_matched result)))
-        (is (not (str/includes? (str (:error result)) "requires"))
-            "a spelling cause was announced as a domain cause")
+        ;; the proxy "the word `requires` is absent" is too crude: the refusal
+        ;; must not ASSERT the domain cause, and saying that the domain fact is
+        ;; NOT KNOWN is the honest thing to publish, not a violation
+        (is (not (str/includes? (str (:error result))
+                                (str "No namespace under scope requires "
+                                     fixture/from-lib)))
+            "a spelling cause was announced as the domain cause")
+        (is (str/includes? (str (:error result)) "matched 0 files")
+            "the refusal does not state what the caller's own paths matched")
+        (is (str/includes? (str (:error result)) "is not known")
+            "the refusal leaves the unread domain fact looking settled")
         (is (string? (:remedy result)))
         (is (true? (:source_unchanged result)))
         (testing "the corrected spelling is executable, not merely described"
