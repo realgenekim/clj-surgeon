@@ -8,6 +8,7 @@
   (:require
    [babashka.process :as proc]
    [cheshire.core :as json]
+   [clj-surgeon.census-discovery :as census-discovery]
    [clj-surgeon.core :as core]
    [clj-surgeon.forms :as forms]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -4470,6 +4471,82 @@
                              (pr-str (:next_call result)))))))))))
       (finally
         (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-fifteen item 6, second half, and the NO-GO list's item 3:
+;; `:error-type :invalid-arguments` is in NEITHER `cli-refusal-types` NOR
+;; `mcp-refusal-types`, so both enumeration witnesses are blind to every
+;; refusal that reaches the launcher's catch-all at the bottom of `-main`.
+;;
+;; That is the general form of the `:dir` defect rather than the defect
+;; itself: while ANY throw from the census path can leave the op untyped, the
+;; declared sets describe a subset of what the op can emit, every witness
+;; pinned to them is green over the rest, and the next round's escape has the
+;; same signature — a bare `{:error "<a message>", :error-type
+;; :invalid-arguments}` with no anchor, no remedy and no continuation.
+;;
+;; So the enumeration is made TOTAL: the op catches what escapes it, names it
+;; from the declared set, and this witness drives that catch site directly
+;; with an exception the op has never heard of. `:census-adapter-failure` and
+;; `:census-resource-exhausted` are the names the MCP entrance already
+;; publishes for exactly these two cases, which is the point — a throw is not
+;; a different KIND of event at the two entrances.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(deftest nothing-thrown-on-the-census-path-escapes-the-op-untyped
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      (let [named (.getCanonicalPath root)]
+        (doseq [[label thrower expected]
+                [[:an-exception-the-op-has-never-heard-of
+                  #(throw (ex-info "injected" {:sol :round-fifteen}))
+                  :census-adapter-failure]
+                 [:a-runtime-resource-exhaustion
+                  #(throw (OutOfMemoryError. "injected"))
+                  :census-resource-exhausted]]]
+          (testing (str label " is refused as a declared type")
+            (let [result (refusal-or-throw
+                           #(with-redefs [census-discovery/discover
+                                          (fn [& _] (thrower))]
+                              (core/run-relation-census {:dir named})))]
+              (is (nil? (:threw result))
+                  (str label " escaped the op as a throw: " (pr-str result)))
+              (is (not= :invalid-arguments (:error-type result))
+                  (str label " reached the launcher's catch-all: "
+                       (pr-str result)))
+              (is (contains? census/cli-refusal-types (:error-type result))
+                  (str label " refused " (pr-str (:error-type result))
+                       ", which `cli-refusal-types` does not declare, so no "
+                       "enumeration witness can see it"))
+              (is (= expected (:error-type result))
+                  (str label " refused " (pr-str (:error-type result))))
+              (is (= named (:absolute (:anchor result)))
+                  (str label " lost the workspace the caller named: "
+                       (pr-str (:anchor result))))
+              (is (string? (:remedy result))
+                  (str label " offers neither a continuation nor a remedy: "
+                       (pr-str result)))
+              (is (not (contains? result :next-command))
+                  (str label " handed back a continuation computed from a "
+                       "walk whose aggregates were lost with it: "
+                       (pr-str (:next-command result)))))))
+
+        (testing "the dispatch entrance answers the same way"
+          (let [result (refusal-or-throw
+                         #(with-redefs [census-discovery/discover
+                                        (fn [& _]
+                                          (throw (ex-info "injected" {})))]
+                            (binding [*out* (java.io.StringWriter.)]
+                              (core/run {:op :relation-census :dir named}))))]
+            (is (nil? (:threw result))
+                (str "the dispatch entrance threw: " (pr-str result)))
+            (is (= :census-adapter-failure (:error-type result))
+                (str "the dispatch entrance answered " (pr-str result))))))
+      (finally
+        (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
