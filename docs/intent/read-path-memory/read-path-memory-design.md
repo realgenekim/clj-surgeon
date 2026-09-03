@@ -296,7 +296,7 @@ names a DIFFERENT one:
 | this server did not mint that token — the MAC does not verify | `:invalid-result-cursor` |
 | it did, but this root holds no such snapshot (another root — twins included — pruned, expired), or the rows filed under it no longer PROVE that address, or they cannot supply the slice they promised | `:unknown-result-cursor` |
 | it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
-| it did, the snapshot verified, and a row this page would serve names a path outside the scanned root | `:unconfined-manifest-row`, NAMING the path |
+| it did, the snapshot verified, and a row this page would serve names a path whose PARENT DIRECTORY resolves outside the scanned root (the final component is taken lexically) | `:unconfined-manifest-row`, NAMING the path |
 | it did, and a file this page must serve no longer holds its pinned content | `:stale-result-cursor`, NAMING the path |
 
 **Verifying on reuse and trusting on serve makes the address a filename again
@@ -319,10 +319,27 @@ staleness check and the read. Two resolvers were a boundary in name only:
 `io/file` refused an absolute child while `fs/path` accepted it, so the file
 that was verified and the file that was read could differ, and an absolute row
 threw `IllegalArgumentException` out of the operation from the read side.
-Confinement is LEXICAL — relative, and normalized under the normalized root —
-and deliberately does not resolve symlinks, because `discover-projects` follows
-a symlinked `.clj` out of the root on a fresh scan and a realpath check here
-would refuse a page for a tree the fresh scan encodes whole.
+Confinement resolves the PARENT and leaves the LEAF lexical: the row path must
+be relative and normalize under the normalized root, and then its parent
+directory — or, when that directory is gone, its deepest existing ancestor —
+must really be inside the real root, symlinks followed. The final component is
+never resolved.
+
+Both halves are measured facts about discovery rather than a compromise.
+`find-clj-files` shells to plain `find` with no `-L`, which LISTS a symlinked
+`.clj` file whose target is outside the root and NEVER DESCENDS a symlinked
+directory. Resolving the leaf would refuse on page 2 what page 1 encoded — a
+page-1/page-2 divergence introduced by the guard itself, which is what
+`a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered` pins.
+Leaving the parent lexical admitted a row no scan can produce: round four's
+review served `[m06 leaked.secret m08 m09 m10]` for `src/linkdir/secret.clj`
+with `src/linkdir -> OUTSIDE`, inside a snapshot re-folded so that it PASSED
+verification — round three's `..`-row outcome through a different spelling.
+The rule the two halves share: refuse what discovery can NEVER produce (an
+absolute path, a `..` escape, a symlinked DIRECTORY component) and defer to
+discovery on what it can. A row whose directory has been DELETED is not an
+escape and is not accused of one; it resolves lexically and refuses
+`:stale-result-cursor`, naming the file.
 
 The MAC is `sha256(cursor-id ‖ offset ‖ snapshot-secret)`, keyed on a
 per-snapshot secret that is written into the snapshot and NEVER returned to a

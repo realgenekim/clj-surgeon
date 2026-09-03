@@ -97,7 +97,7 @@
    [clojure.string :as str])
   (:import
    (java.io File)
-   (java.nio.file Paths)
+   (java.nio.file LinkOption Path Paths)
    (java.security MessageDigest)))
 
 ;; ============================================================
@@ -512,6 +512,26 @@
       (when (.isFile f)
         (try (edn/read-string (slurp f)) (catch Exception _ nil))))))
 
+(defn- real-path
+  "The fully symlink-resolved form of `p`, or `nil` when it cannot be taken."
+  ^Path [^Path p]
+  (try (.toRealPath p (into-array LinkOption [])) (catch Exception _ nil)))
+
+(defn- deepest-existing
+  "The deepest ancestor of `p`, `p` itself included, that exists on disk — or
+   `nil` when none of them does.
+
+   Walking up matters for a row whose directory has been DELETED since the
+   snapshot. Refusing that as unconfined would be a false accusation: nothing
+   escaped, a directory went away, and the honest receipt is
+   `:stale-result-cursor` naming the file. A path that does not exist cannot
+   be a symlink to anywhere, so resolving its nearest existing ancestor is
+   both sufficient and true."
+  ^Path [^Path p]
+  (loop [q p]
+    (when q
+      (if (.exists (.toFile q)) q (recur (.getParent q))))))
+
 (defn row-file
   "The file a manifest row's path names, or `nil` when that row is not
    CONFINED to `root`.
@@ -524,16 +544,32 @@
    `IllegalArgumentException: ... is not a relative path` out of the operation
    from the read side. A boundary enforced by two resolvers is not a boundary.
 
-   Confinement is LEXICAL: the row path must be relative, and `root/p`
-   normalized must still lie under `root` normalized. It deliberately does NOT
-   resolve symlinks. Measured on this branch: `discover-projects` FOLLOWS a
-   symlinked `.clj` whose target is outside the root and encodes it on a fresh
-   scan, so a realpath check here would refuse a page for a tree the fresh
-   scan encodes whole — a page-1/page-2 divergence introduced by the guard
-   itself. The guard therefore refuses what discovery can NEVER produce (an
-   absolute path, a `..` escape) and defers to discovery on what it can.
-   `a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered` pins
-   that choice so it cannot be changed by accident."
+   THE PARENT IS RESOLVED; THE LEAF IS LEXICAL. The row path must be relative
+   and `root/p` normalized must still lie under `root` normalized — and then
+   the row's PARENT DIRECTORY (or, when that directory no longer exists, its
+   deepest existing ancestor) must really be inside the real root, symlinks
+   followed. The final component is never resolved.
+
+   That split is not a compromise; it is the exact shape of what DISCOVERY can
+   produce, measured on this branch both ways. `find-clj-files` shells to plain
+   `find` with no `-L`, which LISTS a symlinked `.clj` file whose target is
+   outside the root and NEVER DESCENDS a symlinked directory. So:
+
+   - resolving the LEAF would refuse on page 2 what page 1 encoded — a
+     page-1/page-2 divergence introduced by the guard itself. That is why
+     `a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered`
+     exists, and it stays green.
+   - leaving the PARENT lexical admitted a row no scan can ever produce.
+     Round four served `[m06 leaked.secret m08 m09 m10]` for the row
+     `src/linkdir/secret.clj` with `src/linkdir -> /tmp/.../OUTSIDE`, inside a
+     snapshot re-folded so that it PASSED verification — round three's item-3
+     outcome through a different spelling, and a row the EARS requirement said
+     must refuse. `a-manifest-row-through-a-symlinked-DIRECTORY-is-refused-
+     not-read` pins that.
+
+   The rule the two bullets share: the guard refuses what discovery can NEVER
+   produce (an absolute path, a `..` escape, a symlinked DIRECTORY component)
+   and defers to discovery on what it can (a symlinked FILE)."
   ^File [root p]
   (when (string? p)
     (try
@@ -542,7 +578,11 @@
         (when-not (.isAbsolute child)
           (let [resolved (.normalize (.resolve base child))]
             (when (and (.startsWith resolved base) (not= resolved base))
-              (.toFile resolved)))))
+              (let [real-base (or (real-path base) base)
+                    anchor (deepest-existing (.getParent resolved))
+                    real-anchor (when anchor (real-path anchor))]
+                (when (and real-anchor (.startsWith real-anchor real-base))
+                  (.toFile resolved)))))))
       (catch Exception _ nil))))
 
 (defn unconfined-row
