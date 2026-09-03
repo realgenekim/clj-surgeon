@@ -292,7 +292,15 @@
           (is (= "src/app/huge.clj" (:file result)))
           (is (= census/max-source-bytes (:maximum result)))
           (is (nil? (:counts result)))
-          (is (= "relation_census" (get-in result [:next_call :tool]))))
+          ;; This assertion used to require a next_call, which the refusal
+          ;; satisfied with `files ["<a source under the byte cap>"]` — a
+          ;; caption in an argument position. The only source this request
+          ;; named is the oversized one, so the request minus it is not a
+          ;; request: MCP-OP-CENSUS-014 requires no next_call and a remedy.
+          (is (not (contains? result :next_call))
+              "the refusal still hands back a call it cannot compute")
+          (is (string? (:remedy result)))
+          (is (= ["src/app/huge.clj"] (:files_removed result))))
         (finally (delete-tree! root)))))
 
   (testing "a scanned source that defines no arms is read and then dropped"
@@ -1307,6 +1315,127 @@
           "no continuation and no remedy: the caller is told nothing")
       (is (not (str/includes? wire "<"))
           (str "the exhaustion receipt carries a placeholder: " wire)))))
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-CENSUS-014, stated globally: a caption in an argument position is
+;; not a smaller promise than a call, it is an unexecutable one. Every refusal
+;; shape either carries a continuation a caller may replay verbatim, or no
+;; continuation at all and a remedy saying why none could be computed.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-027
+(deftest no-refusal-anywhere-puts-a-caption-in-an-argument-position
+  (let [root (temp-dir)
+        empty-root (temp-dir)
+        big "src/app/huge.clj"
+        small "src/app/small.clj"]
+    (try
+      (spit-file! (io/file root big)
+                  (str "(defmethod fold-event \"a\" [state event] state)\n"
+                       (apply str (repeat (inc census/max-source-bytes) \;))))
+      (spit-file! (io/file root small) arm-source)
+      (.mkdirs (io/file empty-root "src"))
+      (let [here (fn [params]
+                   (census-tool/execute-request!
+                     {:project-root (.getPath root)} params))
+            mcp-refusals
+            {:invalid-workspace (run {:workspace_root "relative/nope"})
+             :unknown-field (run {:files [fixture] :nope 1})
+             :pool-size (run {:files [fixture] :pool_size 0})
+             :unknown-door (run {:files [fixture] :doors ["made-up-door"]})
+             :source-too-large-only (here {:files [big]})
+             :source-too-large-mixed (here {:files [big small]})
+             :no-arms-scanned (run {:files [helpers]})
+             :no-arms-empty (census-tool/execute-request!
+                              {:project-root (.getPath empty-root)} {})}
+            cli-refusals
+            {:jvm-source-too-large (core/run-relation-census
+                                     {:file (str (.getPath root) "/" big)})
+             :jvm-no-arms (core/run-relation-census
+                            {:dir (.getPath empty-root)})
+             :jvm-unknown-door (core/run-relation-census
+                                 {:dir (.getPath root) :doors "made-up-door"})
+             :jvm-pool (core/run-relation-census
+                         {:dir (.getPath empty-root) :threads 0})
+             :bb-source-too-large (bb-cli ":op" "relation-census"
+                                          ":file" (str (.getPath root) "/" big))
+             :bb-no-arms (bb-cli ":op" "relation-census"
+                                 ":dir" (.getPath empty-root))
+             :bb-unknown-door (bb-cli ":op" "relation-census"
+                                      ":dir" (.getPath root)
+                                      ":doors" "made-up-door")
+             :bb-pool (bb-cli ":op" "relation-census"
+                              ":dir" (.getPath empty-root) ":threads" "0")}]
+
+        (testing "no MCP refusal serialises a placeholder"
+          (doseq [[label result] mcp-refusals]
+            (let [wire (json/generate-string result)]
+              (is (false? (:ok result)) (str label " did not refuse"))
+              (is (not (str/includes? wire "<"))
+                  (str label " carries a placeholder: " wire)))))
+
+        (testing "no CLI refusal, on either runtime, serialises a placeholder"
+          (doseq [[label result] cli-refusals]
+            (let [wire (pr-str result)]
+              (is (false? (:ok result)) (str label " did not refuse: " wire))
+              (is (not (str/includes? wire "<"))
+                  (str label " carries a placeholder: " wire)))))
+
+        (testing "the oversized refusal is the same request minus the file"
+          (let [mixed (:source-too-large-mixed mcp-refusals)]
+            (is (= "source-too-large" (:error_type mixed)))
+            (is (= [small] (get-in mixed [:next_call :files]))
+                "the continuation is not the request minus the oversized file")
+            (is (= [big] (:files_removed mixed)))
+            (is (= 0 (:files_removed_omitted mixed)))))
+
+        (testing "every named source oversized leaves no request to make"
+          (let [only (:source-too-large-only mcp-refusals)]
+            (is (= "source-too-large" (:error_type only)))
+            (is (not (contains? only :next_call))
+                "the refusal hands back a call it cannot compute")
+            (is (string? (:remedy only)))
+            (is (= [big] (:files_removed only)))))
+
+        (testing "an invalid workspace root gets a remedy, not a caption"
+          (let [result (:invalid-workspace mcp-refusals)]
+            (is (= "invalid-workspace-root" (:error_type result)))
+            (is (not (contains? result :next_call)))
+            (is (string? (:remedy result)))))
+
+        (testing "an arm-less tree never hands back the call it just refused"
+          (let [result (:no-arms-empty mcp-refusals)]
+            (is (= "no-fold-arms-found" (:error_type result)))
+            (is (not (contains? result :next_call))
+                "the continuation is the workspace call that just refused")
+            (is (string? (:remedy result)))))
+
+        (testing "a scanned file list is still a continuation worth handing back"
+          (let [result (:no-arms-scanned mcp-refusals)]
+            (is (= [helpers] (get-in result [:next_call :files])))))
+
+        (testing "both CLI runtimes answer the arm-less tree with a remedy"
+          (doseq [label [:jvm-no-arms :bb-no-arms]]
+            (let [result (label cli-refusals)]
+              (is (= :no-fold-arms-found (:error-type result)))
+              (is (not (contains? result :next-command))
+                  (str label " hands back a call it cannot compute"))
+              (is (string? (:remedy result)))
+              (is (str/includes? (str (:remedy result))
+                                 (.getCanonicalPath empty-root))
+                  (str label " remedy does not name the directory it scanned"))
+              (is (str/includes? (str (:remedy result)) "0 file(s) scanned")
+                  (str label " remedy does not say what it scanned")))))
+
+        (testing "both CLI runtimes answer an oversized :file with a remedy"
+          (doseq [label [:jvm-source-too-large :bb-source-too-large]]
+            (let [result (label cli-refusals)]
+              (is (= :source-too-large (:error-type result)))
+              (is (not (contains? result :next-command))
+                  (str label " hands back a call it cannot compute"))
+              (is (string? (:remedy result)))))))
+      (finally (delete-tree! root) (delete-tree! empty-root)))))
 
 ;; @spec MCP-OP-CENSUS-033
 (deftest the-entry-narrowing-fits-under-both-bounds

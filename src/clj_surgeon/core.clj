@@ -619,7 +619,15 @@
                    relation-census/max-source-bytes " bytes")
        :file (:oversized @scan)
        :maximum relation-census/max-source-bytes
-       :next-command "clj-surgeon :op :relation-census :file <a source under the byte cap>"}
+       ;; The op was given ONE named :file. The request minus it is not a
+       ;; request, so no narrower command can be computed and the refusal says
+       ;; so rather than captioning the argument the caller must supply.
+       :remedy (str (:oversized @scan) " is the one source this op was given "
+                    "and it is larger than " relation-census/max-source-bytes
+                    " bytes, so no narrower command can be computed: name a "
+                    "source under the byte cap with :file, or point :dir at a "
+                    "directory, where an oversized source is skipped and "
+                    "counted instead of refused.")}
 
       ;; The entry bound: the ceiling bounds what the census READS, this one
       ;; bounds what the walk COSTS, and a tree of non-sources trips only this.
@@ -710,7 +718,15 @@
              :error-type :no-fold-arms-found
              :error "No file defines defmethod fold-event arms"
              :dir (census-root dir)
-             :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
+             ;; Nothing was found, so there is no subtree to narrow to and no
+             ;; command to compute: the refusal names what it scanned instead
+             ;; of captioning the directory the caller was supposed to pick.
+             :remedy (str "Nothing under " (census-root dir)
+                          " defines defmethod fold-event arms ("
+                          (:scanned @scan) " file(s) scanned), so no narrower "
+                          "command can be computed: point :dir at a directory "
+                          "whose sources define fold arms, or name one with "
+                          ":file.")}
             (facts))
           (let [threads (when pool (:size pool))
                 {:keys [map-fn pool-size]} (census-plan-pool threads)

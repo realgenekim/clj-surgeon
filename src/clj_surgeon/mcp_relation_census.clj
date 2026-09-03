@@ -230,6 +230,28 @@
   [^Path root]
   (discovery/discover root))
 
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn- oversized-among
+  "The named sources above the byte cap, in the order they were named.
+
+   `collect-inputs` stops at the FIRST oversized source, which is right when
+   reading: nothing after it needs to be read. It is wrong when COMPUTING a
+   continuation, because a request that removes only the source the reader
+   tripped on refuses again on the next one. This stats the named list and
+   reads nothing, and it runs only when a refusal is already being built."
+  [root relatives]
+  (into []
+        (filter (fn [relative]
+                  (let [resolved (mcp-paths/resolve-source-path root relative)]
+                    (boolean
+                      (and (:ok resolved)
+                           (try
+                             (> (Files/size ^Path (:canonical resolved))
+                                census/max-source-bytes)
+                             (catch Throwable _ false)))))))
+        relatives))
+
 ;; @spec MCP-OP-CENSUS-017
 ;; @spec MCP-OP-CENSUS-030
 (defn collect-inputs
@@ -592,33 +614,67 @@
                (merge {:file (:file loaded)} facts))
 
       (:oversized loaded)
-      (refusal :source-too-large
-               (str (:oversized loaded) " is " (:bytes loaded)
-                    " bytes; the census reads at most " census/max-source-bytes)
-               {:tool "relation_census"
-                :workspace_root canonical
-                :files ["<a source under the byte cap>"]}
-               (merge {:file (:oversized loaded)
-                       :bytes (:bytes loaded)
-                       :maximum census/max-source-bytes}
-                      facts))
+      ;; The continuation is the request the caller made, MINUS the sources it
+      ;; cannot read — a call the caller may replay verbatim. It is computable
+      ;; because the caller named them. When removing them leaves no request,
+      ;; there is no call to hand back and the refusal says so.
+      (let [over (oversized-among root scanned)
+            removed (set over)
+            remaining (when requested
+                        (vec (remove removed (distinct requested))))]
+        (refusal :source-too-large
+                 (str (:oversized loaded) " is " (:bytes loaded)
+                      " bytes; the census reads at most " census/max-source-bytes)
+                 (when (seq remaining)
+                   {:tool "relation_census"
+                    :workspace_root canonical
+                    :files remaining})
+                 (cond-> (merge {:file (:oversized loaded)
+                                 :bytes (:bytes loaded)
+                                 :maximum census/max-source-bytes
+                                 :files_removed (vec (take max-listed-files over))
+                                 :files_removed_omitted
+                                 (max 0 (- (count over) max-listed-files))}
+                                facts)
+                   (empty? remaining)
+                   (assoc :remedy
+                          (str "Every source this request named is larger than "
+                               census/max-source-bytes
+                               " bytes, so the request minus them is not a "
+                               "request and no narrower call can be computed: "
+                               "name a source under the byte cap with files, "
+                               "or omit files to census the tree, where an "
+                               "oversized source is skipped and counted "
+                               "instead of refused.")))))
 
       :else
       (let [candidates (:inputs loaded)]
         (if (empty? candidates)
-          (refusal :no-fold-arms-found
-                   (str "No file defines defmethod fold-event arms. Scanned "
-                        scanned-count " file(s).")
-                   (cond-> {:tool "relation_census"
-                            :workspace_root canonical}
+          (let [named (vec (take max-listed-files (distinct scanned)))]
+            (refusal :no-fold-arms-found
+                     (str "No file defines defmethod fold-event arms. Scanned "
+                          scanned-count " file(s).")
                      ;; An empty array is not a narrower call, and the schema
-                     ;; this tool advertises does not accept one.
-                     (seq scanned)
-                     (assoc :files (vec (take max-listed-files
-                                              (distinct scanned)))))
-                   (merge {:scanned (vec (take max-listed-files
-                                               (distinct scanned)))}
-                          facts))
+                     ;; this tool advertises does not accept one. Neither is
+                     ;; the bare workspace call this refusal just answered: a
+                     ;; tree whose only sources were skipped for size scans
+                     ;; nothing, and handing the same root back is a call that
+                     ;; refuses identically. The tool offers a call only when
+                     ;; it can name the sources to look at.
+                     (when (seq named)
+                       {:tool "relation_census"
+                        :workspace_root canonical
+                        :files named})
+                     (cond-> (merge {:scanned named} facts)
+                       (empty? named)
+                       (assoc :remedy
+                              (str "Nothing under " canonical
+                                   " defines defmethod fold-event arms ("
+                                   scanned-count " file(s) scanned), so no "
+                                   "narrower call can be computed: point "
+                                   "workspace_root at a directory whose "
+                                   "sources define fold arms, or name the "
+                                   "sources to census with files.")))))
           ;; The door symbols themselves are checked before any census runs;
           ;; whether a door is DEFINED anywhere can only be answered once the
           ;; scan has been parsed, so that half waits for the plan's own
@@ -704,13 +760,19 @@
         router (or (:workspace-router config) (workspace/router config))
         routed (workspace/resolve-request router normalized)]
     (if-not (:ok routed)
-      (assoc routed
-             :ok false
-             :operation "relation-census"
-             :error_type (or (:error_type routed) "invalid-workspace-root")
-             :read_complete false
-             :next_call {:tool "relation_census"
-                         :workspace_root "<an existing absolute directory>"})
+      ;; No root resolved, so there is no root from which a narrower call
+      ;; could be computed, and a caption describing the argument the caller
+      ;; got wrong is not a call. MCP-OP-CENSUS-014: a remedy instead.
+      (-> routed
+          (assoc :ok false
+                 :operation "relation-census"
+                 :error_type (or (:error_type routed) "invalid-workspace-root")
+                 :read_complete false
+                 :remedy (str "The workspace root this request resolved to is "
+                              "not an existing absolute directory, so nothing "
+                              "about it can be narrowed: retry with "
+                              "workspace_root naming a directory that exists."))
+          (dissoc :next_call))
       (let [validated (validate-census-params (:params routed)
                                               (:workspace-root routed))]
         (if-not (:ok validated)
