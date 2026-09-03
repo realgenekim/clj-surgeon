@@ -54,6 +54,13 @@
    the same twelve."
   12)
 
+(def max-next-call-bytes
+  "The largest continuation either entrance hands back with a refusal.
+
+   A continuation is only useful if the caller can read it and run it; one
+   that grows with the tree it is refusing is neither."
+  512)
+
 (def source-name-pattern
   "The file names both entrances treat as candidate Clojure sources."
   #"\.clj[cs]?$")

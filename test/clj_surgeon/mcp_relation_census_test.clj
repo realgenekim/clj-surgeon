@@ -895,3 +895,101 @@
                  (get-in jvm-cli [:oversized-skipped :files])
                  (get-in bb-cli [:oversized-skipped :files])))))
       (finally (delete-tree! root)))))
+
+(defn- build-split-candidate-tree!
+  "A workspace whose candidates are split across two subtrees: `src/a` holds
+   the arm file and fits under the ceiling on its own; `src/b` pushes the
+   total past it, so the walk terminates inside `src/b` and only `src/a` has
+   an EXACT observed count."
+  [root a-count b-count]
+  (spit-file! (io/file root "src/a/folds.clj") arm-source)
+  (doseq [i (range (dec a-count))]
+    (spit-file! (io/file root (format "src/a/f%04d.clj" i)) filler-source))
+  (doseq [i (range b-count)]
+    (spit-file! (io/file root (format "src/b/f%04d.clj" i)) filler-source)))
+
+;; @spec MCP-OP-CENSUS-027
+(deftest the-ceiling-continuation-is-a-narrowing-that-actually-replays
+  (let [root (temp-dir)
+        fits (- census/max-scanned-files 1500)]
+    (try
+      (build-split-candidate-tree! root fits (- (inc census/max-scanned-files) fits))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))
+            next-call (:next_call mcp)
+            narrowed (:workspace_root next-call)]
+        (testing "the tool refuses the over-ceiling tree"
+          (is (false? (:ok mcp)))
+          (is (= "too-many-candidate-files" (:error_type mcp)))
+          (is (= (inc census/max-scanned-files) (:observed mcp)))
+          (is (true? (:observed_at_least mcp))))
+
+        (testing "the continuation narrows the root instead of repeating it"
+          (is (some? next-call) "the ceiling refusal carried no continuation")
+          (is (not= (:workspace_root mcp) narrowed)
+              "the continuation hands back the root that was just refused")
+          (is (str/ends-with? (str narrowed) "/src/a")
+              (str "the largest fully-walked subtree that fits is src/a, got "
+                   narrowed))
+          (is (not-any? #(str/includes? (str %) "<")
+                        (vals (dissoc next-call :tool)))
+              "the continuation still carries a placeholder, not a call")
+          (is (<= (count (json/generate-string next-call))
+                  census/max-next-call-bytes)
+              "the continuation is not bounded"))
+
+        (testing "replaying the continuation verbatim completes a census"
+          (let [replay (census-tool/execute-request!
+                         {:project-root narrowed}
+                         (dissoc next-call :tool :workspace_root))]
+            (is (true? (:ok replay))
+                (str "the continuation the refusal handed back refused: "
+                     (:error_type replay) " " (:error replay)))
+            (is (= 1 (:files replay)))
+            (is (= fits (:files_scanned replay)))))
+
+        (testing "the JVM CLI hands back a narrowing that replays too"
+          (is (= :too-many-candidate-files (:error-type jvm-cli)))
+          (is (str/includes? (str (:next-command jvm-cli)) "/src/a")
+              (str "no narrower subtree in the CLI continuation: "
+                   (:next-command jvm-cli)))
+          (let [replay (core/run-relation-census
+                         {:dir (str (io/file root "src/a"))})]
+            (is (true? (:ok replay)) (str "refused: " (:error replay)))
+            (is (= fits (:files-scanned replay)))))
+
+        (testing "the babashka CLI hands back the same narrowing"
+          (is (= :too-many-candidate-files (:error-type bb-cli)))
+          (is (str/includes? (str (:next-command bb-cli)) "/src/a")
+              (str "no narrower subtree in the CLI continuation: "
+                   (:next-command bb-cli)))
+          (is (= (:next-command jvm-cli) (:next-command bb-cli)))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-027
+(deftest the-narrowing-rule-is-largest-then-deepest-then-lexicographic
+  (let [choose (requiring-resolve 'clj-surgeon.census-discovery/narrowing-subtree)]
+    (is (some? choose) "the discovery kernel exposes no narrowing rule")
+    (when choose
+      (testing "the largest subtree that fits under the ceiling wins"
+        (is (= "src/b"
+               (choose {:subtree-counts {"" 4001 "src" 4001 "src/a" 10 "src/b" 40}
+                        :partial-dirs #{"" "src"}}))))
+
+      (testing "a tie is broken by depth, then by name"
+        (is (= "src/a/deep"
+               (choose {:subtree-counts {"" 4001 "src" 4001
+                                         "src/a" 40 "src/a/deep" 40 "src/b" 40}
+                        :partial-dirs #{"" "src"}})))
+        (is (= "src/a"
+               (choose {:subtree-counts {"" 4001 "src" 4001 "src/b" 40 "src/a" 40}
+                        :partial-dirs #{"" "src"}}))))
+
+      (testing "a subtree the walk did not finish is never offered"
+        (is (nil? (choose {:subtree-counts {"" 4001 "src" 4001 "src/b" 4000}
+                           :partial-dirs #{"" "src" "src/b"}}))
+            "a partially walked count is a lower bound, not a fit"))
+
+      (testing "a subtree at the ceiling does not fit under it"
+        (is (nil? (choose {:subtree-counts {"" 4001 "src" 4001
+                                            "src/a" 4001}
+                           :partial-dirs #{"" "src"}})))))))
