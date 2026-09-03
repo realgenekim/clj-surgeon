@@ -151,15 +151,21 @@
       (catch Exception _e ["src"]))))
 
 ;; @spec MCP-OP-STUDY-014
-(defn- find-clj-files
+;; @spec MCP-OP-STUDY-021
+(defn- walk-clj-files
   "Find all .clj/.cljs/.cljc files under a directory using system find.
+   Returns `[[walk-path canonical-path] ...]`.
 
    Every hit is re-resolved against the canonical scan root and dropped when
    its realpath lands outside: `find` reports a symlink by the LINK's own
    name, so `src/leak.clj -> /etc/passwd` matches `-name '*.clj'` and would
    otherwise be outlined — that is, slurped — even though its bytes are
-   outside the root. The path RETURNED is the one the walk produced, so the
-   scan-relative rendering is unchanged; only escapes are removed."
+   outside the root. The path RETURNED first is the one the walk produced, so
+   the scan-relative rendering is unchanged; only escapes are removed.
+
+   The canonical path travels alongside it because it is the identity a file
+   is deduplicated by: two projects whose declared `:paths` overlap reach the
+   same bytes, and the same bytes must be counted and printed once."
   [root dir]
   (when (fs/directory? dir)
     (try
@@ -178,8 +184,26 @@
         (when (zero? (:exit result))
           (->> (str/split-lines (str/trim (:out result)))
                (remove str/blank?)
-               (filter #(some? (mcp-paths/real-path-within root %))))))
+               (keep (fn [path]
+                       (when-let [canonical (mcp-paths/real-path-within root path)]
+                         [path (str canonical)])))
+               vec)))
       (catch Exception _e nil))))
+
+;; @spec MCP-OP-STUDY-021
+(defn- source-dir-files
+  "One walk per source DIRECTORY per scan, memoized in `cache`.
+
+   500 sibling `deps.edn` files each declaring `:paths [\"..\"]` all resolve
+   to the same directory. Walking it once per project cost 500 walks of the
+   same 500 files — 8.4 s — and reported `file_count` 250,500."
+  [cache root dir]
+  (let [key (str dir)]
+    (if (contains? @cache key)
+      (get @cache key)
+      (let [found (vec (walk-clj-files root dir))]
+        (swap! cache assoc key found)
+        found))))
 
 ;; @spec MCP-OP-STUDY-014
 (defn- confined-source-dirs
@@ -192,43 +216,112 @@
   [root project-root src-paths]
   (keep #(mcp-paths/normalized-path-within root project-root %) src-paths))
 
+(def ^:private empty-accumulation
+  {:seen #{} :projects []})
+
+;; @spec MCP-OP-STUDY-021
+(defn- accumulate-projects
+  "Fold project candidates into a DEDUPLICATED, capped file set.
+
+   `candidates` is a seq of THUNKS, each returning
+   `{:name :root :files [[walk-path canonical-path] ...]}`. They are thunks so
+   that `cap` stops the WALK and not merely the count: once the distinct file
+   count passes the cap, no later candidate is ever listed. The cap used to be
+   compared against a count that `discover-projects` had already materialised
+   in full, which is the opposite of a bound on work.
+
+   A file belongs to exactly one project — the first candidate to reach it —
+   keyed by its CANONICAL path. Overlapping declarations (a root project
+   declaring `:paths [\".\"]` beside a nested project, or 500 siblings each
+   declaring `:paths [\"..\"]`) therefore count and print each file once,
+   where before a two-file tree reported five files and printed them twice
+   over.
+
+   Candidates sharing a project root are merged rather than listed twice."
+  [cap candidates state]
+  (loop [remaining (seq candidates)
+         seen (:seen state)
+         projects (:projects state)]
+    (if-not remaining
+      {:ok true :seen seen :projects projects :file-count (count seen)}
+      (let [{:keys [name root files]} ((first remaining))
+            [seen-after kept]
+            (reduce (fn [[seen kept] [walk-path canonical]]
+                      (if (contains? seen canonical)
+                        [seen kept]
+                        [(conj seen canonical) (conj kept walk-path)]))
+                    [seen []]
+                    files)
+            index (when (seq kept)
+                    (first (keep-indexed (fn [i p] (when (= root (:root p)) i))
+                                         projects)))
+            projects-after (cond
+                             (empty? kept) projects
+                             index (update-in projects [index :files]
+                                              #(vec (sort (concat % kept))))
+                             :else (conj projects {:name name
+                                                   :root root
+                                                   :files (vec (sort kept))}))]
+        (if (> (count seen-after) cap)
+          {:ok false
+           :seen seen-after
+           :projects projects-after
+           :file-count (count seen-after)
+           :halted-early (boolean (next remaining))}
+          (recur (next remaining) seen-after projects-after))))))
+
+(defn- by-name
+  "Discovery's display order: projects sorted by name, files already sorted."
+  [accumulation]
+  (update accumulation :projects #(vec (sort-by :name %))))
+
+;; @spec MCP-OP-STUDY-021
+(defn- build-project-candidates
+  "One thunk per project root, DEEPEST root first, so the most specific
+   project owns its own files and an outer project that declares `:paths
+   [\".\"]` takes only what is left."
+  [cache root by-root]
+  (map (fn [[project-root files]]
+         (fn []
+           (let [build-file (first files)
+                 src-paths (extract-source-paths build-file)
+                 root-path (fs/path project-root)]
+             {:name (str (fs/file-name root-path))
+              :root (str root-path)
+              :files (mapcat #(source-dir-files cache root %)
+                             (confined-source-dirs root root-path src-paths))})))
+       (sort-by (fn [[project-root _]] [(- (count project-root)) project-root])
+                by-root)))
+
+;; @spec MCP-OP-STUDY-021
 (defn- discover-projects
-  "Find projects under dir via build files. Returns [{:name :root :files}].
-   Falls back to recursive scan if no build files found.
+  "Find projects under dir via build files, deduplicated and capped as it goes.
+
+   Returns `{:ok true :projects [{:name :root :files}] :file-count n}` or
+   `{:ok false :file-count n}` when discovery passed `cap`.
+   Falls back to a recursive scan if no build files are found.
 
    `root` is the canonical scan root: nothing outside it is discovered."
-  [root dir]
+  [root dir cap]
   (let [dir (fs/path dir)
+        cache (atom {})
         build-files (find-build-files root dir)
         ;; Group by project root, keep first build file per root
         by-root (group-by #(str (fs/parent %)) build-files)]
-    (if (seq by-root)
-      (->> by-root
-           (map (fn [[project-root files]]
-                  (let [build-file (first files)
-                        src-paths (extract-source-paths build-file)
-                        root-path (fs/path project-root)
-                        clj-files (->> (confined-source-dirs root root-path src-paths)
-                                       (mapcat #(find-clj-files root %))
-                                       (map str)
-                                       sort
-                                       vec)]
-                    {:name (str (fs/file-name root-path))
-                     :root (str root-path)
-                     :files clj-files})))
-           (remove #(empty? (:files %)))
-           (sort-by :name)
-           vec)
-      ;; No build files — fallback to recursive scan
-      (let [clj-files (->> (find-clj-files root dir)
-                           (remove #(in-skip-dir? % dir))
-                           (map str)
-                           sort
-                           vec)]
-        (when (seq clj-files)
-          [{:name (str (fs/file-name dir))
-            :root (str dir)
-            :files clj-files}])))))
+    (by-name
+      (if (seq by-root)
+        (accumulate-projects cap
+                             (build-project-candidates cache root by-root)
+                             empty-accumulation)
+        ;; No build files — fallback to recursive scan
+        (accumulate-projects
+          cap
+          [(fn []
+             {:name (str (fs/file-name dir))
+              :root (str dir)
+              :files (remove (fn [[walk-path _]] (in-skip-dir? walk-path dir))
+                             (source-dir-files cache root dir))})]
+          empty-accumulation)))))
 
 (defn- rg-available?
   "Check if ripgrep (rg) is on the PATH."
@@ -341,10 +434,16 @@
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
 
+;; @spec MCP-OP-STUDY-021
 (defn total-file-count
-  "How many source files discovery found across projects."
+  "How many DISTINCT source files discovery found across projects.
+
+   Summing the per-project counts double-counted every file two overlapping
+   projects both claimed; discovery now hands each file to exactly one project,
+   and this counts distinctly so that it stays true even if a caller assembles
+   the project list some other way."
   [projects]
-  (reduce + 0 (map #(count (:files %)) projects)))
+  (count (into #{} (mapcat :files) projects)))
 
 (defn- files-in-scan-order
   [projects]
@@ -505,57 +604,74 @@
           (recur (fs/parent dir)))))))
 
 ;; @spec MCP-OP-STUDY-014
+;; @spec MCP-OP-STUDY-021
 (defn- discover-projects-grep
   "Fast path: use rg/grep results to build project list without globbing.
    For projects with matching deps.edn: find all their source files.
    For individual matching source files: group by nearest project root.
 
-   `root` is the canonical scan root; `grep-hits` are already confined to it."
-  [root grep-hits dir]
-  (let [build-files #{"deps.edn" "project.clj" "bb.edn"}
+   `root` is the canonical scan root; `grep-hits` are already confined to it.
+
+   Two accumulation phases, sharing one deduplicated file set and one cap.
+   The build phase runs first and lazily, so the cap stops the walk; only then
+   are the source hits it did NOT claim grouped into their own projects, which
+   is what keeps a build project that yielded no files from swallowing a hit
+   underneath it."
+  [root grep-hits dir cap]
+  (let [cache (atom {})
+        build-files #{"deps.edn" "project.clj" "bb.edn"}
         {build-hits true src-hits false}
         (group-by #(contains? build-files (str (fs/file-name %))) grep-hits)
 
         ;; Projects with matching build files → find all their source files
-        build-projects
-        (->> (or build-hits [])
-             (map (fn [bf]
-                    (let [project-root (str (fs/parent (fs/path bf)))
-                          src-paths (extract-source-paths bf)
-                          clj-files (->> (confined-source-dirs
-                                           root (fs/path project-root) src-paths)
-                                         (mapcat #(find-clj-files root %))
-                                         (remove nil?)
-                                         sort
-                                         vec)]
-                      {:name (str (fs/file-name (fs/path project-root)))
-                       :root project-root
-                       :files clj-files})))
-             (remove #(empty? (:files %))))
-
-        build-roots (set (map :root build-projects))
-
-        ;; Source file hits not in a build-matched project → group by nearest project root
-        orphan-src-hits (remove #(some (fn [r] (str/starts-with? (str %) (str r "/")))
-                                       build-roots)
-                                (or src-hits []))
-        src-projects
-        (->> orphan-src-hits
-             (map (fn [f]
-                    (let [info (find-nearest-build-file f dir)]
-                      (if info
-                        (assoc info :file (str f))
-                        ;; Loose file — no build file found; use parent dir as root
-                        {:root (str (fs/parent (fs/path f)))
-                         :file (str f)}))))
-             (group-by :root)
-             (map (fn [[root entries]]
-                    {:name (str (fs/file-name (fs/path root)))
-                     :root root
-                     :files (vec (sort (map :file entries)))})))]
-    (->> (concat build-projects src-projects)
-         (sort-by :name)
-         vec)))
+        built (accumulate-projects
+                cap
+                (map (fn [build-file]
+                       (fn []
+                         (let [project-root (str (fs/parent (fs/path build-file)))]
+                           {:name (str (fs/file-name (fs/path project-root)))
+                            :root project-root
+                            :files (mapcat
+                                     #(source-dir-files cache root %)
+                                     (confined-source-dirs
+                                       root (fs/path project-root)
+                                       (extract-source-paths build-file)))})))
+                     (sort-by #(vector (- (count (str %))) (str %))
+                              (or build-hits [])))
+                empty-accumulation)]
+    (if-not (:ok built)
+      built
+      (let [build-roots (set (map :root (:projects built)))
+            ;; Source file hits not in a build-matched project → group by
+            ;; nearest project root
+            orphan-src-hits (remove #(some (fn [r]
+                                             (str/starts-with? (str %) (str r "/")))
+                                           build-roots)
+                                    (or src-hits []))]
+        (by-name
+          (accumulate-projects
+            cap
+            (->> orphan-src-hits
+                 (map (fn [file]
+                        (let [info (find-nearest-build-file file dir)]
+                          (if info
+                            (assoc info :file (str file))
+                            ;; Loose file — no build file found; use parent dir
+                            ;; as root
+                            {:root (str (fs/parent (fs/path file)))
+                             :file (str file)}))))
+                 (group-by :root)
+                 (map (fn [[project-root entries]]
+                        (fn []
+                          {:name (str (fs/file-name (fs/path project-root)))
+                           :root project-root
+                           :files (keep (fn [{:keys [file]}]
+                                          (when-let [canonical
+                                                     (mcp-paths/real-path-within
+                                                       root file)]
+                                            [file (str canonical)]))
+                                        entries)}))))
+            (select-keys built [:seen :projects])))))))
 
 
 ;; ============================================================
@@ -642,20 +758,38 @@
     ;; could not be made at all.
     (let [root (canonical-scan-root dir)
           dir (str root)
-          discovered (if grep
-                       ;; Fast path: rg first, skip expensive directory globbing
-                       (let [hits (->> (grep-tree grep dir)
-                                       (filter #(some? (mcp-paths/real-path-within
-                                                         root %))))]
-                         (discover-projects-grep root hits dir))
-                       ;; Full scan: discover all projects
-                       (discover-projects root dir))
-          projects (if ns-grep
-                     (filter-projects-by-ns-grep discovered dir ns-grep)
-                     discovered)
-          file-count (total-file-count projects)
-          cap (min (or max-files default-max-scan-files) max-scan-files-ceiling)]
+          cap (min (or max-files default-max-scan-files) max-scan-files-ceiling)
+          discovery (if grep
+                      ;; Fast path: rg first, skip expensive directory globbing
+                      (let [hits (->> (grep-tree grep dir)
+                                      (filter #(some? (mcp-paths/real-path-within
+                                                        root %))))]
+                        (discover-projects-grep root hits dir cap))
+                      ;; Full scan: discover all projects
+                      (discover-projects root dir cap))
+          projects (if (and (:ok discovery) ns-grep)
+                     (filter-projects-by-ns-grep (:projects discovery) dir ns-grep)
+                     (:projects discovery))
+          file-count (total-file-count projects)]
       (cond
+        ;; Refused DURING discovery — which only lists names — and before any
+        ;; file is opened. The count and the cap are both named so the caller
+        ;; can choose a remedy instead of guessing one.
+        (not (:ok discovery))
+        {:ok false
+         :error-type :study-tree-too-large
+         :dir dir
+         :grep grep
+         :ns-grep ns-grep
+         :file-count (:file-count discovery)
+         :max-files cap
+         :error (format "Discovery found %s%d Clojure files under %s, above the %d-file scan cap"
+                        (if (:halted-early discovery) "at least " "")
+                        (:file-count discovery) dir cap)
+         :remedy (format (str "Scan a subdirectory, add a grep or ns_grep "
+                              "pattern, or raise max_files (ceiling %d).")
+                         max-scan-files-ceiling)}
+
         (empty? projects)
         {:ok false
          :error-type :no-clojure-files
@@ -669,23 +803,6 @@
                         dir
                         (if grep (str " matching '" grep "'") "")
                         (if ns-grep (str " with ns/path matching '" ns-grep "'") ""))}
-
-        ;; Refused after discovery (which only lists names) and BEFORE any
-        ;; file is opened. The count and the cap are both named so the caller
-        ;; can choose a remedy instead of guessing one.
-        (> file-count cap)
-        {:ok false
-         :error-type :study-tree-too-large
-         :dir dir
-         :grep grep
-         :ns-grep ns-grep
-         :file-count file-count
-         :max-files cap
-         :error (format "Discovery found %d Clojure files under %s, above the %d-file scan cap"
-                        file-count dir cap)
-         :remedy (format (str "Scan a subdirectory, add a grep or ns_grep "
-                              "pattern, or raise max_files (ceiling %d).")
-                         max-scan-files-ceiling)}
 
         :else
         {:ok true

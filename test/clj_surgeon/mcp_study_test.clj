@@ -363,6 +363,101 @@
             "and the refusal must not cost a whole-tree parse")))))
 
 ;; @spec MCP-OP-STUDY-015
+;; @spec MCP-OP-STUDY-021
+(deftest discovery-counts-and-walks-each-file-once
+  ;; MCP-OP-STUDY-015 claimed discovery bounds its work before any receipt
+  ;; bound applies. It did not: `max_files` was compared against a count
+  ;; `discover-projects` had already materialised in full, and nothing
+  ;; deduplicated files across projects. 500 sibling `deps.edn` files each
+  ;; declaring `:paths [".."]` all resolve to the SAME directory, so the same
+  ;; 500 files were walked 500 times and counted 250,500 times, in 8.4 s.
+  (with-scratch-project
+    "test-fixtures/study/scratch-overlap-500"
+    (fn [dir]
+      (fs/create-dirs (str dir "/src"))
+      (dotimes [i 500]
+        (write-clj-file! (str dir "/src/ns" i ".clj")
+                         (format "(ns ns%d)" i)
+                         (format "(defn f%d [] :ok)" i)))
+      (dotimes [i 500]
+        (fs/create-dirs (str dir "/p" i))
+        (spit (str dir "/p" i "/deps.edn") "{:paths [\"..\"]}")))
+    (fn []
+      (let [started (System/nanoTime)
+            response (run {"mode" "ls-tree"
+                           "dir" "test-fixtures/study/scratch-overlap-500"})
+            elapsed-ms (/ (- (System/nanoTime) started) 1e6)]
+        (is (true? (:ok response))
+            "500 distinct files are far under the 2000-file cap")
+        (is (= 500 (:file_count response))
+            "the same file reached through 500 projects is still one file")
+        (is (< elapsed-ms 1000)
+            (str "one walk per source DIRECTORY, not per project; took "
+                 elapsed-ms " ms")))))
+  (testing "a root project declaring [\".\"] beside a nested project"
+    (with-scratch-project
+      "test-fixtures/study/scratch-overlap-nested"
+      (fn [dir]
+        (fs/create-dirs (str dir "/nested/src"))
+        (spit (str dir "/deps.edn") "{:paths [\".\"]}")
+        (spit (str dir "/nested/deps.edn") "{:paths [\"src\"]}")
+        (write-clj-file! (str dir "/nested/src/a.clj") "(ns a)" "(defn a-fn [] :ok)")
+        (write-clj-file! (str dir "/top.clj") "(ns top)" "(defn top-fn [] :ok)"))
+      (fn []
+        (let [response (run {"mode" "ls-tree"
+                             "dir" "test-fixtures/study/scratch-overlap-nested"
+                             "format" "edn" "limit" 16384})
+              listed (map :file (:files response))]
+          (is (true? (:ok response)))
+          (is (= 2 (:file_count response))
+              "a two-file tree reported five files before deduplication")
+          (is (= ["nested/src/a.clj" "top.clj"] (sort listed)))
+          (is (= (count listed) (count (distinct listed)))
+              "and printed each of them two and three times over"))))))
+
+;; @spec MCP-OP-STUDY-021
+(deftest a-capped-discovery-stops-walking-rather-than-counting-afterwards
+  ;; The cap has to stop the WALK. With 40 sibling projects over one 60-file
+  ;; source tree and a cap of 10, only the directories reached before the cap
+  ;; was passed may be listed at all.
+  (with-scratch-project
+    "test-fixtures/study/scratch-cap-walk"
+    (fn [dir]
+      (dotimes [i 40]
+        (fs/create-dirs (str dir "/p" i "/src"))
+        (spit (str dir "/p" i "/deps.edn") "{:paths [\"src\"]}")
+        (dotimes [j 3]
+          (write-clj-file! (str dir "/p" i "/src/ns" i "_" j ".clj")
+                           (format "(ns p%d.ns%d)" i j)
+                           "(defn f [] :ok)"))))
+    (fn []
+      (let [response (run {"mode" "ls-tree"
+                           "dir" "test-fixtures/study/scratch-cap-walk"
+                           "max_files" 10})]
+        (is (false? (:ok response)))
+        (is (= "study-tree-too-large" (:error_type response)))
+        (is (= 10 (:max_files response)))
+        (is (<= (:file_count response) 12)
+            (str "discovery must stop at the cap, not walk all 120 files: "
+                 (:file_count response)))
+        (is (str/includes? (:error response) "at least")
+            "a halted discovery says its count is a floor, not a total")
+        (is (nil? (:tree response)))
+        (is (nil? (:files response))))))
+  (testing "a single oversized project still names its exact count"
+    (with-scratch-project
+      "test-fixtures/study/scratch-cap-one"
+      (fn [dir] (write-scratch-project! dir 60))
+      (fn []
+        (let [response (run {"mode" "ls-tree"
+                             "dir" "test-fixtures/study/scratch-cap-one"
+                             "max_files" 10})]
+          (is (false? (:ok response)))
+          (is (= 60 (:file_count response)))
+          (is (not (str/includes? (:error response) "at least"))
+              "nothing was left unwalked, so the count is exact"))))))
+
+;; @spec MCP-OP-STUDY-015
 (deftest ls-tree-outlines-only-the-files-the-receipt-can-carry
   ;; The other half of the same defect: even under the cap, a receipt that
   ;; returns a few dozen files must not parse hundreds.
