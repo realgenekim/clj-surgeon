@@ -104,3 +104,9 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 ## RESUME DELTA 2026-09-03T02:29Z
 
 - Census GO-WITH-FIX filed (docs/observations/2026-09-03-census-redteam-GO-WITH-FIX.md); fix round a4fe4601c68f5db01 running in `~/src/clj-surgeon-census` (items 1–11). After: my suites → push → re-review → queue. Lens follow-ups pushed 7359b8f9. Still running: ratchets a02f87b29b2d27eff, study security round aab6a773af84935ee, rf2+q5z red-team af2fbde760adead45.
+
+## RESUME DELTA 2026-09-03T02:31Z — six lanes
+
+- rf2 fix round abd835410547b9851 (`~/src/clj-surgeon-rf2`, NO-GO items 1–8); q5z fix round aaa35fb0f121fdb9a (`~/src/clj-surgeon-q5z`, items 1–7); census fix round a4fe4601c68f5db01 (`~/src/clj-surgeon-census`); ratchets a02f87b29b2d27eff (`~/src/clj-surgeon-ratchets`); study security round aab6a773af84935ee (`~/src/clj-surgeon-study`); fold-diff + lens red-team aceddb474ac916ded (read-only).
+- Each fix round → my suites under the lock → push → an independent Opus re-review → only then back in the mayor's queue. Verdict docs: study-ops NO-GO, census GO-WITH-FIX, rf2-q5z-redteam.
+- Standing fact for the mayor: of the three "ready" clj-surgeon branches red-teamed tonight, none was mergeable as it stood (study NO-GO, rf2 NO-GO, census/q5z GO-WITH-FIX). The queue is frozen until the rounds land.
