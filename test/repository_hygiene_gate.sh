@@ -18,7 +18,18 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
-tracked=$(git ls-files | grep -E '(^|/)\.cpcache/') || tracked=""
+# git's exit status is checked on its OWN, never through a pipeline: the status
+# of `git ls-files | grep` is grep's, so a git that cannot produce the
+# inventory is indistinguishable from an inventory with no cache in it — the
+# gate would report green precisely when it can see nothing.
+if ! inventory=$(git ls-files 2>/dev/null); then
+  echo "ERROR: git cannot produce the file inventory for $repository, so"
+  echo "       repository hygiene cannot be observed; this gate fails closed"
+  echo "       rather than passing on an empty view."
+  exit 1
+fi
+
+tracked=$(printf '%s\n' "$inventory" | grep -E '(^|/)\.cpcache/') || tracked=""
 if [ -n "$tracked" ]; then
   echo "ERROR: machine-local .cpcache files are tracked:"
   echo "$tracked"
