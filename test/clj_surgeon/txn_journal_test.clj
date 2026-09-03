@@ -1634,22 +1634,33 @@
 
 ;; @spec MCP-OP-MEM-013
 (defn- receipt-file-names
-  "Every value in a receipt that NAMES a file in the transactions directory.
+  "Every place a receipt NAMES a file in the transactions directory, with the
+   `:evidence` word its own map carries about that file, if any.
 
    Walked rather than enumerated, so a key added later is covered by the
    invariant on the day it appears rather than on the day someone remembers
-   this witness."
+   this witness. The enclosing map is what is collected, not the bare string,
+   because the question the invariant asks is not `does this file exist` but
+   `does this receipt account for the file it names`."
   [receipt]
-  (let [names (atom [])]
+  (let [named (atom [])]
     (walk/postwalk
       (fn [x]
-        (when (and (map-entry? x)
-                   (contains? #{:tombstone} (key x))
-                   (string? (val x)))
-          (swap! names conj (val x)))
+        (when (and (map? x) (string? (:tombstone x)))
+          (swap! named conj {:name (:tombstone x)
+                             :evidence (:evidence x)
+                             :in x}))
         x)
       receipt)
-    @names))
+    @named))
+
+(defn- unaccounted-names
+  "The names a receipt carries that neither exist nor say what became of them."
+  [dir receipt]
+  (remove (fn [entry]
+            (or (.isFile (io/file dir ^String (:name entry)))
+                (some? (:evidence entry))))
+          (receipt-file-names receipt)))
 
 ;; @spec MCP-OP-MEM-013
 (deftest a-break-does-not-retire-the-evidence-it-just-created
@@ -1696,33 +1707,103 @@
   (testing "house rule 20 as a standing witness over `recover!`'s own value.
             A receipt must name its subject; a name whose file the same call
             destroyed is worse than no name at all, because it terminates the
-            investigation it exists to start. Every path-naming key in the
-            receipt, and every tombstone row the sweep lists beside it, must
-            resolve to a file that exists when the call returns."
-    (let [ws (workspace! "receipt-names-exist" 2)
-          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
-          lock (io/file dir "LOCK")
-          opts {:state-home (:state-home ws)}]
-      (try
-        (plant-lock! ws {:txid "CRASHED-HOLDER"
-                         :pid (reaped-pid)
-                         :boot-id (boot-id-now)})
-        (.setLastModified lock (- (System/currentTimeMillis) (* 2 24 60 60 1000)))
-        (let [result (journal/recover! (:root ws) opts)
-              named (receipt-file-names result)
-              missing (remove #(.isFile (io/file dir ^String %)) named)]
-          (is (seq named)
-              (str "the receipt names at least one file: " (pr-str result)))
-          (is (empty? missing)
-              (str "and every name it carries exists at return; missing: "
-                   (pr-str missing) " in " (pr-str result))))
-        (let [rows (filter #(contains? #{:broken-lock :interrupted-break} (:kind %))
-                           (journal/retained-transactions (:root ws) opts))
-              missing (remove #(.isFile (io/file dir ^String (:txid %))) rows)]
-          (is (empty? missing)
-              (str "and the sweep lists no row for a file that is not there: "
-                   (pr-str missing))))
-        (finally (cleanup! ws))))))
+            investigation it exists to start.
+
+            Opus round 7, finding 3, probe C. As written this ran ONE
+            scenario - a dead holder and a break - so it never reached a
+            revert, and was silent on the entire path round seven added a
+            DELETION to: `recover!` unlinking a tombstone it names in the same
+            receipt. Driven through a revert it failed outright. The invariant
+            it should have carried is not `every named file exists` - a revert
+            that names the tombstone it deleted and says `:evidence :removed`
+            satisfies house rule 20 and is strictly better than silence - but
+            EVERY NAME EITHER EXISTS AT RETURN OR ITS OWN MAP SAYS WHAT BECAME
+            OF IT. In that form it also constrains finding 1's fix, because an
+            `:evidence :retained` resolution has to leave the file there.
+
+            Driven through all three resolutions: a break, a revert, and a
+            finish."
+    (let [check!
+          (fn [label dir result]
+            (let [named (receipt-file-names result)
+                  unaccounted (unaccounted-names dir result)]
+              (is (seq named)
+                  (str label ": the receipt names at least one file: "
+                       (pr-str result)))
+              (is (empty? unaccounted)
+                  (str label ": and every name it carries EXISTS at return or "
+                       "carries an explicit :evidence key saying what became "
+                       "of it; unaccounted: "
+                       (pr-str (map :name unaccounted)) " in "
+                       (pr-str result)))
+              ;; and the two words are not interchangeable: a resolution that
+              ;; says the file is retained has to have left it there
+              (doseq [entry named]
+                (when (= :retained (:evidence entry))
+                  (is (.isFile (io/file dir ^String (:name entry)))
+                      (str label ": :evidence :retained must mean the file is "
+                           "on disk: " (pr-str (:in entry))))))))]
+
+      ;; (a) a break: the evidence it minted is on disk
+      (let [ws (workspace! "receipt-names-exist" 2)
+            dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+            lock (io/file dir "LOCK")
+            opts {:state-home (:state-home ws)}]
+        (try
+          (plant-lock! ws {:txid "CRASHED-HOLDER"
+                           :pid (reaped-pid)
+                           :boot-id (boot-id-now)})
+          (.setLastModified lock (- (System/currentTimeMillis)
+                                    (* 2 24 60 60 1000)))
+          (check! "break" dir (journal/recover! (:root ws) opts))
+          (let [rows (filter #(contains? #{:broken-lock :interrupted-break}
+                                         (:kind %))
+                             (journal/retained-transactions (:root ws) opts))
+                missing (remove #(.isFile (io/file dir ^String (:txid %))) rows)]
+            (is (empty? missing)
+                (str "and the sweep lists no row for a file that is not there: "
+                     (pr-str missing))))
+          (finally (cleanup! ws))))
+
+      ;; (b) a REVERT: the one path that deletes a file it names
+      (let [ws (workspace! "receipt-names-revert" 2)
+            child (.start (ProcessBuilder. ["sleep" "30"]))
+            dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+            opts {:state-home (:state-home ws)}
+            lock (io/file dir "LOCK")
+            tomb (io/file dir "LOCK.broken.REVERT-ME")]
+        (try
+          (plant-lock! ws {:txid "A-LIVE" :pid (.pid child)
+                           :boot-id (boot-id-now)})
+          (Files/createLink (.toPath tomb) (.toPath lock))
+          (let [result (journal/recover! (:root ws) opts)]
+            (is (= :interrupted-break-reverted
+                   (:resolution (first (:interrupted-breaks result))))
+                (str "the scenario really is a revert: " (pr-str result)))
+            (check! "revert" dir result))
+          (finally
+            (.destroyForcibly child)
+            (.waitFor child)
+            (cleanup! ws))))
+
+      ;; (c) a FINISH: the resolution that must LEAVE the file there
+      (let [ws (workspace! "receipt-names-finish" 2)
+            dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+            opts {:state-home (:state-home ws)}
+            lock (io/file dir "LOCK")]
+        (try
+          (plant-lock! ws {:txid "ghost-r3" :pid (reaped-pid)
+                           :boot-id (boot-id-now)})
+          (let [claim (@#'journal/read-lock-claim lock)]
+            (@#'journal/break-lock!
+              dir claim "FINISH-ME"
+              {:before-unlink (fn [_] (throw (java.io.IOException. "crash")))}))
+          (let [result (journal/recover! (:root ws) opts)]
+            (is (= :interrupted-break-finished
+                   (:resolution (first (:interrupted-breaks result))))
+                (str "the scenario really is a finish: " (pr-str result)))
+            (check! "finish" dir result))
+          (finally (cleanup! ws)))))))
 
 ;; @spec MCP-OP-MEM-013
 (deftest a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break
