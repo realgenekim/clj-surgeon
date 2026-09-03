@@ -974,6 +974,43 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-051
+(deftest an-unread-exclusion-leaves-expect-files-alone-and-says-why
+  ;; The two filesystem-boundary refusals name a file the tool never opened, so
+  ;; whether it required from.lib is not knowable. Decrementing expect.files for
+  ;; it asserts knowledge the tool does not have, and two such exclusions walk
+  ;; the count away from the truth.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        filler (String. (char-array (inc alias-migration/max-source-bytes) \x))]
+    (.mkdirs receipt-dir)
+    (try
+      (doseq [name ["huge1" "huge2"]]
+        (spit (io/file workspace "src" "acid" "fanout" (str name ".clj"))
+              (str "(ns acid.fanout." name ")\n;; " filler "\n")))
+      (loop [call (request workspace) round 0]
+        (let [result (alias-migration/execute! (config workspace receipt-dir) call)]
+          (cond
+            (= 2 round)
+            (do (is (:ok result) (pr-str result))
+                (is (= 12 (:files result))
+                    "the migration that the two exclusions were supposed to
+                     leave intact did not commit"))
+
+            :else
+            (do
+              (is (= "alias-migration-source-too-large" (:error_type result))
+                  (pr-str result))
+              (is (= 12 (get-in (:next_call result) ["expect" "files"]))
+                  "expect.files was decremented for a file nobody read")
+              (is (string? (:expect_files_unchanged_reason result))
+                  "the refusal does not say why expect.files is unchanged")
+              (recur (json/parse-string
+                       (json/generate-string (:next_call result)) true)
+                     (inc round))))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
 
