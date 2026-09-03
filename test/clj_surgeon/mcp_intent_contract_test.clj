@@ -189,6 +189,7 @@
    "docs/intent/performance-regression-sentinel/performance-regression-sentinel-specs.md"
    "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
    "docs/intent/prepared-request/prepared-request-specs.md"
+   "docs/intent/read-path-memory/read-path-memory-specs.md"
    "docs/intent/read-request-normalization/read-request-normalization-specs.md"
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
    "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
@@ -209,7 +210,8 @@
 (def ^:private lanes-added-since-derivation
   "Intent leaves merged onto the integration branch after the registry was derived.
    Each one used to mean a line in the shared production vector; now it means a file."
-  ["docs/intent/alias-migration/alias-migration-specs.md"])
+  ["docs/intent/alias-migration/alias-migration-specs.md"
+   "docs/intent/read-path-memory/read-path-memory-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"
