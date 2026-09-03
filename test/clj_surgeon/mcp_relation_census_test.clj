@@ -1240,8 +1240,9 @@
   "The name the tool published for a refusal, whichever key carries it.
 
    Every shape refusal publishes `error_type` \"invalid-mcp-request\" and the
-   specific name in `reason`; the door-vocabulary row is refused after
-   discovery, so its name is the `error_type` itself."
+   specific name in `reason`. A refusal computed AFTER discovery — the
+   door-DEFINEDNESS check is the one that reaches this helper — publishes its
+   name as the `error_type` itself."
   [result]
   (or (:reason result) (:error_type result)))
 
@@ -2805,8 +2806,6 @@
   (let [req (census/normalise-request entrance params)]
     (some (fn [rule]
             (when (and (keyword? (get rule entrance))
-                       (or (not= :mcp entrance)
-                           (= :shape (:mcp-phase rule :shape)))
                        (not ((:predicate rule) req)))
               (get rule entrance)))
           (census/shape-rules))))

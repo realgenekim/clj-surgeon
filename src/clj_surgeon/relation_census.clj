@@ -584,20 +584,33 @@
     :violation :vocabulary
     ;; The syntactic half of the door check: is this name a symbol at all,
     ;; and does it shadow a collection write head? Whether a door is DEFINED
-    ;; can only be answered after a scan, so that half is not a shape rule
-    ;; and is not here. The tool applies THIS predicate after discovery, so
-    ;; its refusal can carry the discovery facts; the CLI applies it in the
-    ;; shape pass, because the CLI entrance's next filesystem act is a config
-    ;; read it has not yet earned. Same predicate, same published name, same
-    ;; answer — different moment, for a stated reason.
+    ;; can only be answered after a scan, so THAT half is not a shape rule and
+    ;; is not here; it stays after discovery, on both entrances, and keeps the
+    ;; discovery facts a post-scan refusal is owed.
+    ;;
+    ;; This half needs no scan at all. Both questions are decided against
+    ;; `'#{conj cons into concat}` and `default-doors`, two compile-time sets,
+    ;; and `parse-doors` is called with `declared` nil precisely so it asks
+    ;; only what a pure pass can answer. Sol's round-twelve item 10: the row
+    ;; used to carry `:mcp-phase :post-discovery`, so the tool's shape walk
+    ;; skipped it and the CLI's applied it, and `doors=conj, file=""` refused
+    ;; `unknown-door-symbol` at one entrance and `file-not-a-string` at the
+    ;; other. A pure predicate answered later is not a better answer; it is
+    ;; the same answer, on an entrance the other one no longer matches. The
+    ;; facts it bought are facts about a walk the caller's request had already
+    ;; disqualified.
     :predicate (fn [req]
                  (doors-ok? req #(or (not (every? string? %))
                                      (not (map? (parse-doors % nil))))))
     :mcp :unknown-door-symbol
-    ;; The tool applies this row AFTER discovery, so its refusal can carry the
-    ;; discovery facts and the canonical root; the shape walk skips it and the
-    ;; table says so here rather than in a comment the walk cannot read.
-    :mcp-phase :post-discovery
+    :mcp-message (fn [req]
+                   (let [bad (parse-doors (:entries (:doors req)) nil)]
+                     (str "Unknown identity door " (:invalid bad) ": "
+                          (:why bad))))
+    :mcp-data (fn [req]
+                (let [bad (parse-doors (:entries (:doors req)) nil)]
+                  {:door (:invalid bad)
+                   :known_doors (vec (sort (map str default-doors)))}))
     :cli :unknown-door-symbol
     :cli-message (fn [req]
                    (let [bad (parse-doors (:entries (:doors req)) nil)]

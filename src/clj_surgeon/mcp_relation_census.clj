@@ -245,15 +245,16 @@
         ;; away; they moved into the rows as `:mcp-message` and `:mcp-data`
         ;; formatters, beside the predicate that decides them and the name
         ;; each entrance publishes. A row this entrance cannot express carries
-        ;; no `:mcp` keyword and is skipped; a row this entrance applies at a
-        ;; different PHASE says so in `:mcp-phase` — door VOCABULARY is
-        ;; decided after discovery here, so its refusal can carry the
-        ;; discovery facts, and the table records that rather than leaving it
-        ;; to a comment the walk cannot read.
+        ;; no `:mcp` keyword and is skipped, and that is the ONLY reason a row
+        ;; is skipped. Sol's round-twelve item 10 removed the other one: the
+        ;; door-vocabulary row used to declare a PHASE of its own here, so
+        ;; this walk passed over a row the CLI's walk applied and the two
+        ;; entrances chose different first refusals for one request. A table
+        ;; that both entrances read in the same order, minus the rows one of
+        ;; them silently skips, is not one table.
         req (census/normalise-request :mcp params)
         violated (some (fn [rule]
                          (when (and (keyword? (:mcp rule))
-                                    (= :shape (:mcp-phase rule :shape))
                                     (not ((:predicate rule) req)))
                            rule))
                        (census/shape-rules))
