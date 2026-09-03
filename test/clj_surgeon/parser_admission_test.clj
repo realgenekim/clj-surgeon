@@ -17,6 +17,7 @@
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
+   [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -296,6 +297,19 @@
           r (lens/find-file {:file path :match 'x})]
       (is (= :parser_admission_refused (:refusal r)))
       (is (= path (:file r))))))
+
+;; @spec MCP-OP-MEM-005
+(deftest show-form-carries-the-typed-refusal
+  (testing "the refusal witness family holds on the show_form entrance too"
+    (let [path (tower-file!)
+          r (show-form/show-file {:file path :form "x"})]
+      (is (= :parser_admission_refused (:refusal r))
+          "show_form flattened the refusal to a bare :error string")
+      (is (= :parser-admission-refused (:error-type r)))
+      (is (= :max-parse-depth (:reason r)))
+      (is (some? (:limit r)))
+      (is (some? (:observed r)))
+      (is (seq (:remedy r))))))
 
 ;; ------------------------------------------------------------------
 ;; the shipped defaults, against real corpora
