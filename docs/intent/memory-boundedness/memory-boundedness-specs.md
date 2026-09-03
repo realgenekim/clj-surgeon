@@ -47,8 +47,10 @@ In the requirements below:
   sampled process-wide peak at or below the tighter of the used-heap start plus
   224 MiB and 80 percent of the configured maximum heap, keep the attributable
   reserved peak at or below 192 MiB, keep the 10,000-file peak within 32 MiB of
-  the 1,000-file peak, keep 10,000-file after-GC retention within 8 MiB of
-  1,000-file after-GC retention, and refuse before any mutation when the request
+  the 1,000-file peak, keep the largest 10,000-file heap retained WHILE THE
+  RESULT IS STILL REFERENCED within 2.0 MiB of the largest such value at 1,000
+  files, keep 10,000-file after-GC retention within 8 MiB of 1,000-file after-GC
+  retention, and refuse before any mutation when the request
   is over budget; and the battery shall report any of those lines it did not
   observe as UNMEASURED rather than as a pass, terminating in exactly one of
   PASS, FAIL or INCOMPLETE, where a run with no failures and at least one
@@ -97,7 +99,10 @@ MCP-OP-MEM-011:
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.
 - "Retention after the result is released is flat, so retained heap is bounded."
   That measures leaks. What a receipt itself retains is measured with the result
-  still referenced, and is bounded by the peak line.
+  still referenced, and has its own cross-N line.
+- "The peak line already bounds what the result retains." It does not. A result
+  that grew from 1.0 to 9.8 MiB between 1,000 and 10,000 files sat far below
+  every peak line and was reported `ok`; held heap needs its own gate.
 - "Run the battery in `make test` so nobody forgets it." It is minutes-scale and
   needs a dedicated bounded JVM; wiring it into a fast gate gets it disabled.
 

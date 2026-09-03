@@ -31,9 +31,20 @@
                              (~410 MiB at 512m)
   - :scale-peak-slack-mb     peak at :scale-large-n may exceed peak at
                              :scale-small-n by at most this much
-  - :scale-retained-slack-mb after-GC retention at :scale-large-n may exceed
-                             after-GC retention at :scale-small-n by at most
-                             this much
+  - :scale-retained-slack-mb persistent growth (after-GC heap once the result is
+                             released, minus start) at :scale-large-n may exceed
+                             the same at :scale-small-n by at most this much
+  - :scale-held-slack-mb     RESULT retention (after-GC heap while the result is
+                             still referenced) at :scale-large-n may exceed the
+                             same at :scale-small-n by at most this much. Sol's
+                             exact line:
+                               max(held_mb at N=10,000)
+                                 <= max(held_mb at N=1,000) + 2.0 MiB
+                             2.0 is derived from measurement, not taste: twice
+                             the full-match arm's 1.0 MiB held at N=1,000 and ten
+                             times the largest 0.2 MiB jitter seen in a bounded
+                             arm — wide enough not to fire on noise, tight enough
+                             to catch the measured 1.0 -> 9.8 MiB growth.
 
   Two further lines from Sol's set are NOT implemented by this battery and are
   recorded as boundaries on MCP-OP-MEM-011 rather than as constants here: the
@@ -44,6 +55,7 @@
    :peak-xmx-percent        80
    :scale-peak-slack-mb     32
    :scale-retained-slack-mb 8
+   :scale-held-slack-mb     2.0
    :scale-small-n           1000
    :scale-large-n           10000})
 
@@ -206,6 +218,11 @@
                     (for [[line field slack]
                           [[:peak-scales-with-n :heap-used-peak-mb
                             (:scale-peak-slack-mb pass-lines)]
+                           ;; What the RESULT costs to hold. This is the line
+                           ;; that catches an operation sizing its answer by the
+                           ;; repository rather than by the work asked of it.
+                           [:held-scales-with-n :heap-result-retained-mb
+                            (:scale-held-slack-mb pass-lines)]
                            [:retained-scales-with-n :heap-after-gc-mb
                             (:scale-retained-slack-mb pass-lines)]]]
                       (scale-check op line field slack small large)))]

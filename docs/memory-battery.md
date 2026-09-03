@@ -107,6 +107,7 @@ The constants live in exactly one place: `pass-lines` in
 | `peak-over-budget` | sampled process-wide used-heap peak ≤ min(used-heap start + **224 MiB**, **80 %** of `-Xmx`) — about 410 MiB at 512m |
 | `reserved-peak-over-budget` | attributable reserved peak ≤ **192 MiB** |
 | `peak-scales-with-n` | peak at 10,000 files ≤ peak at 1,000 files + **32 MiB** |
+| `held-scales-with-n` | `max(held_mb at N=10,000)` ≤ `max(held_mb at N=1,000)` + **2.0 MiB** |
 | `retained-scales-with-n` | after-GC retention at 10,000 files ≤ after-GC retention at 1,000 files + **8 MiB** |
 | `reference-mismatch` | the bounded result must hash identically to the unbounded reference result at the same N |
 
@@ -124,6 +125,15 @@ flatten. Wall time and spill bytes may grow with N; retained heap may not.
 `held_mb` is the number that shows an operation sizing itself by the repository.
 `afterGC_mb` staying flat is not evidence of boundedness; it only means the
 operation did not leak.
+
+**`held_mb` is gated across N** by `held-scales-with-n`. The 2.0 MiB slack is
+derived from measurement, not taste: it is twice the full-match rename arm's
+1.0 MiB held value at N=1,000 and ten times the largest 0.2 MiB jitter any
+bounded arm showed — wide enough not to fire on noise, tight enough to catch the
+measured 1.0 → 9.8 MiB growth that the first battery reported as `ok` because no
+line looked at it. Before this line existed, the battery gated `afterGC_mb` (a
+leak check) and never gated what the result itself costs to hold, so an
+operation whose answer grew ~10× with the repository passed.
 
 ### UNMEASURED is not a pass
 

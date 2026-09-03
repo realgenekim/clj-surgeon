@@ -24,12 +24,13 @@
   "Build one synthetic measurement cell. Only the fields a pass line reads
   are varied; the rest are inert reporting fields."
   [op n phase peak after-gc & {:keys [start oom? result-hash reference-hash
-                                      reserved-peak]
+                                      reserved-peak held]
                                :or {start 40.0
                                     oom? false
                                     result-hash "h"
                                     reference-hash "h"
-                                    reserved-peak 100.0}}]
+                                    reserved-peak 100.0
+                                    held 1.0}}]
   {:op op
    :n n
    :phase phase
@@ -39,6 +40,7 @@
    :bytes (* n 4000)
    :heap-start-mb start
    :heap-used-peak-mb peak
+   :heap-result-retained-mb held
    :heap-after-gc-mb after-gc
    :heap-reserved-peak-mb reserved-peak
    :oom? oom?
@@ -75,6 +77,7 @@
             :peak-xmx-percent        80
             :scale-peak-slack-mb     32
             :scale-retained-slack-mb 8
+            :scale-held-slack-mb     2.0
             :scale-small-n           1000
             :scale-large-n           10000}
            battery/pass-lines))))
@@ -189,6 +192,51 @@
 
 ;; @spec MCP-OP-MEM-001
 ;; @spec MCP-OP-MEM-011
+;; The numbers below are the ones the battery actually measured on this branch
+;; (docs/observations/2026-09-03-memory-battery-baseline.md): the full-match
+;; rename arm held 1.0 MiB at N=1,000 and 9.8 MiB at N=10,000. Nothing gated
+;; that, so a result whose retained size grew ~10x with the repository passed.
+;; @spec MCP-OP-MEM-011
+(deftest held-heap-that-scales-with-n-fails
+  (testing "the measured full-match arm: 1.0 MiB at 1,000 files, 9.8 at 10,000"
+    (let [cells [(cell :rename-ns-plan-full-match 1000 :warm 195.7 24.1 :held 1.0)
+                 (cell :rename-ns-plan-full-match 10000 :warm 202.7 24.1 :held 9.8)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (false? (:pass? result)))
+      (is (contains? (lines-of result) :held-scales-with-n))
+      (is (= {:op :rename-ns-plan-full-match
+              :line :held-scales-with-n
+              :observed 9.8
+              :limit 3.0
+              :small-n-observed 1.0
+              :slack-mb 2.0}
+             (first (filter #(= :held-scales-with-n (:line %)) (:failures result)))))))
+
+  (testing "the measured narrow arm is flat and passes"
+    (let [cells [(cell :rename-ns-plan-narrow 1000 :warm 194.7 24.1 :held 0.1)
+                 (cell :rename-ns-plan-narrow 10000 :warm 196.9 24.1 :held 0.1)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (true? (:pass? result)))))
+
+  (testing "the slack is 2.0 MiB exactly"
+    (let [at-line [(cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                   (cell :ls-tree 10000 :warm 120.0 50.0 :held 3.0)]
+          over [(cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                (cell :ls-tree 10000 :warm 120.0 50.0 :held 3.1)]]
+      (is (not (contains? (lines-of (battery/verdict {:xmx-mb 512 :cells at-line}))
+                          :held-scales-with-n)))
+      (is (contains? (lines-of (battery/verdict {:xmx-mb 512 :cells over}))
+                     :held-scales-with-n))))
+
+  (testing "a battery with no held measurement reports UNMEASURED, not a pass"
+    (let [cells (mapv #(dissoc % :heap-result-retained-mb)
+                      [(cell :ls-tree 1000 :warm 120.0 50.0)
+                       (cell :ls-tree 10000 :warm 120.0 50.0)])
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= [] (:failures result)))
+      (is (contains? (set (map :line (:unmeasured result))) :held-scales-with-n))
+      (is (= :incomplete (:status result))))))
+
 (deftest a-result-that-differs-from-the-unbounded-reference-fails
   (let [cells [(cell :ls-tree 1000 :warm 120.0 50.0
                      :result-hash "bounded" :reference-hash "unbounded")]
@@ -216,6 +264,7 @@
           result (battery/verdict {:xmx-mb 512 :cells cells})]
       (is (= [] (:failures result)))
       (is (= #{{:op :ls-tree :line :peak-scales-with-n}
+               {:op :ls-tree :line :held-scales-with-n}
                {:op :ls-tree :line :retained-scales-with-n}}
              (set (map #(select-keys % [:op :line]) (:unmeasured result)))))
       (is (false? (:complete? result))))))
