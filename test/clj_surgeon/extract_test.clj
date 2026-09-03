@@ -1810,6 +1810,56 @@
         (is (= :unverified (:ok result)))
         (is (= :classpath-incomplete (:reason result)))))))
 
+;; @spec MCP-OP-EXTRACT-036
+(deftest a-classpath-failure-is-attributed-to-whose-namespace-it-names
+  (let [touched ["/ws/src/app/core.clj" "/ws/src/app/moved.clj"]
+        namespaces ["app.core" "app.moved"]]
+    (testing "a missing dependency this extraction never touched is still
+              :unverified -- the classpath could not load the project"
+      (let [result (extract/attribute-compile-failure
+                     (str "Could not locate cheshire/core__init.class, "
+                          "cheshire/core.clj or cheshire/core.cljc on classpath")
+                     touched namespaces)]
+        (is (= :unverified (:ok result)))
+        (is (= :classpath-incomplete (:reason result)))))
+
+    (testing "but a namespace this extraction WROTE that cannot be located is
+              the extraction's own defect, not incomplete evidence"
+      (let [result (extract/attribute-compile-failure
+                     (str "Could not locate app/moved__init.class, "
+                          "app/moved.clj or app/moved.cljc on classpath")
+                     touched namespaces)]
+        (is (false? (:ok result))
+            (str "the file this extraction just created is not on the "
+                 "classpath; reporting :unverified tells the reader the "
+                 "evidence is inconclusive when it is conclusive: "
+                 (pr-str result)))
+        (is (= :changed-namespace-not-on-classpath (:reason result)))
+        (is (some #(str/includes? (str %) "app/moved") (:missing result))
+            (str "and it names which one: " (pr-str result)))))
+
+    (testing "a namespace named by its ns-symbol is matched too"
+      (let [result (extract/attribute-compile-failure
+                     "Could not locate app.moved on classpath"
+                     touched namespaces)]
+        (is (false? (:ok result)) (pr-str result))))
+
+    (testing "a failure that names NO file routes to :unverified, as the
+              docstring has always promised"
+      (let [result (extract/attribute-compile-failure
+                     "java.lang.OutOfMemoryError: Java heap space\n"
+                     touched namespaces)]
+        (is (= :unverified (:ok result))
+            (str "unattributable evidence must never tell a reader to revert "
+                 "correct work: " (pr-str result)))
+        (is (= :unattributable (:reason result)))))
+
+    (testing "a failure raised inside a changed file is still ours"
+      (let [result (extract/attribute-compile-failure
+                     "Syntax error compiling at (app/moved.clj:3:1).\n"
+                     touched namespaces)]
+        (is (false? (:ok result)) (pr-str result))))))
+
 ;; @spec MCP-OP-EXTRACT-029
 (deftest discovery-does-not-follow-directory-symlinks
   (testing "an in-root symlink CYCLE yields each source exactly once"

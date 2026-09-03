@@ -742,7 +742,23 @@
              seq)
         (catch Exception _ nil)))))
 
+;; @spec MCP-OP-EXTRACT-036
+(defn- namespace-path-forms
+  "Pure: every spelling a compiler might use for one namespace symbol --
+  `app.moved`, `app/moved`, `app/moved.clj`, `app/moved.cljc`, `app/moved.cljs`
+  and the `__init.class` the missing-namespace message names first."
+  [ns-name]
+  (let [dotted (str ns-name)
+        slashed (str/replace (str/replace dotted "." "/") "-" "_")
+        hyphen (str/replace dotted "." "/")]
+    (into #{dotted}
+          (mapcat (fn [base]
+                    [base (str base ".clj") (str base ".cljc") (str base ".cljs")
+                     (str base "__init.class")])
+                  [slashed hyphen]))))
+
 ;; @spec MCP-OP-EXTRACT-020
+;; @spec MCP-OP-EXTRACT-036
 (defn attribute-compile-failure
   "Pure: decide whether a failed compile is attributable to THIS change.
 
@@ -750,9 +766,22 @@
   `:unverified`, never `false`. A missing dependency, or an error raised inside
   a namespace this extraction never touched, says the classpath could not load
   the project at all -- reporting that as `:ok false` would tell a reader to
-  undo work that is in fact correct."
-  [output touched-files]
-  (let [named (set (map second
+  undo work that is in fact correct.
+
+  The mirror of that rule is just as load-bearing: `Could not locate ... on
+  classpath` naming a namespace THIS extraction wrote is conclusive, not
+  inconclusive. The file was created moments ago at a path the extraction
+  chose; reporting `:unverified` there tells a reader the evidence could not
+  see its subject when the evidence is a direct statement about it, and hides
+  the one failure mode -- a target path outside every source root -- that this
+  verb can produce on its own.
+
+  Evidence that names no file at all is unattributable, so it reports
+  `:unverified` too: `{:ok false}` is reserved for a failure something in the
+  output actually ties to a file or namespace this extraction changed."
+  ([output touched-files] (attribute-compile-failure output touched-files nil))
+  ([output touched-files touched-namespaces]
+   (let [named (set (map second
                         (re-seq #"\(([A-Za-z0-9_.\-/]+\.clj[cs]?):" output)))
         ours (set (map #(str/replace (str %) "\\" "/") touched-files))
         ;; @spec MCP-OP-EXTRACT-028
@@ -768,16 +797,43 @@
                        (some #(or (= % candidate)
                                   (str/ends-with? % (str "/" candidate)))
                              ours))))
-        foreign (seq (remove ours? named))]
+        foreign (seq (remove ours? named))
+        ;; @spec MCP-OP-EXTRACT-036
+        ;; every spelling of every namespace this extraction wrote, so a
+        ;; `Could not locate` naming one of them is recognised as OUR defect
+        ours-spellings (into #{} (mapcat namespace-path-forms)
+                             (or touched-namespaces []))
+        locate (second (re-find #"Could not locate ([^\n]*?) on classpath"
+                                output))
+        locate-tokens (when locate
+                        (set (re-seq #"[A-Za-z0-9_.$\-/]+" locate)))
+        missing-ours (when locate-tokens
+                       (seq (filter #(or (contains? ours-spellings %)
+                                         (ours? %))
+                                    locate-tokens)))]
     (cond
-      (re-find #"Could not locate .* on classpath" output)
+      ;; @spec MCP-OP-EXTRACT-036
+      ;; a namespace this extraction WROTE that cannot be located is
+      ;; conclusive evidence about its own subject, not incomplete evidence
+      missing-ours
+      {:ok false
+       :reason :changed-namespace-not-on-classpath
+       :missing (vec (sort (distinct missing-ours)))}
+
+      locate
       {:ok :unverified :reason :classpath-incomplete}
 
       foreign
       {:ok :unverified :reason :failure-outside-the-changed-files
        :raised-in (vec (sort foreign))}
 
-      :else {:ok false})))
+      ;; @spec MCP-OP-EXTRACT-036
+      ;; nothing in the output ties this failure to anything this extraction
+      ;; changed; the docstring has always promised :unverified for that
+      (empty? named)
+      {:ok :unverified :reason :unattributable}
+
+      :else {:ok false}))))
 
 (def ^:private classpath-placeholder
   "The token standing for the resolved classpath in the published argv.
@@ -924,7 +980,9 @@
 
           :else
           ;; @spec MCP-OP-EXTRACT-020
-          (let [attributed (attribute-compile-failure output touched-files)]
+          ;; @spec MCP-OP-EXTRACT-036
+          (let [attributed (attribute-compile-failure output touched-files
+                                                      namespaces)]
             (merge base
                    {:checked true :status :run :exit (:exit result)
                     :output-tail tail}
