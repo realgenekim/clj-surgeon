@@ -618,12 +618,30 @@
     (:workspace-root request)
     (assoc "workspace_root" (:workspace-root request))))
 
-(defn- excluding-call
-  "The same request with one file excluded from scope."
-  [request file]
-  (-> (base-call request)
-      (assoc-in ["scope" "exclude"] [file])
-      (assoc-in ["expect" "files"] (max 0 (dec (or (get-in request [:expect :files]) 1))))))
+;; @spec MCP-OP-ALIAS-015
+;; @spec MCP-OP-ALIAS-051
+(defn excluding-call
+  "The same request with one file, or several, excluded from scope.
+
+  Excluding a file the caller counted means the caller's expectation is now one
+  too high, so `expect.files` drops by the number of files this call newly
+  excludes. Exclusions the request already carried are preserved rather than
+  replaced, so a chain of these refusals converges instead of forgetting what
+  the previous one learned.
+
+  This is the shape every `alias_migration` refusal that names a file uses, the
+  filesystem-boundary ones included: a refusal that names one bad file and
+  offers nothing executable makes the caller compose the remedy by hand."
+  [request file-or-files]
+  (let [named (if (string? file-or-files) [file-or-files] (vec file-or-files))
+        already (set (get-in request [:scope :exclude]))
+        fresh (vec (remove already named))
+        exclude (into (vec (get-in request [:scope :exclude])) fresh)]
+    (-> (base-call request)
+        (assoc-in ["scope" "exclude"] exclude)
+        (assoc-in ["expect" "files"]
+                  (max 0 (- (or (get-in request [:expect :files]) 1)
+                            (count fresh)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; ---------------------------------------------------------------------------

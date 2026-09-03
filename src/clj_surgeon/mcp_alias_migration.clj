@@ -366,6 +366,7 @@
 ;; @spec MCP-OP-ALIAS-048
 ;; @spec MCP-OP-ALIAS-049
 ;; @spec MCP-OP-ALIAS-050
+;; @spec MCP-OP-ALIAS-051
 (defn plan!
   "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
@@ -444,10 +445,14 @@
             oversized (first (filter #(> (:bytes %) max-source-bytes) sized))
             scope-bytes (reduce + 0 (map :bytes sized))]
         (cond
+          ;; @spec MCP-OP-ALIAS-051
           bad
           (refusal :alias-migration-scope-path-refused
                    (or (:error bad) "A scope path is outside the configured project root")
-                   {:path (:path bad) :next_call nil})
+                   {:path (:path bad)
+                    :next_call (planner/excluding-call request (:path bad))
+                    :remedy (str "Exclude " (:path bad) " through scope.exclude"
+                                 " and resend; the next_call already does.")})
 
           oversized
           (refusal :alias-migration-source-too-large
@@ -456,9 +461,11 @@
                    {:path (:relative oversized)
                     :bytes (:bytes oversized)
                     :max_bytes max-source-bytes
-                    :next_call nil
+                    ;; @spec MCP-OP-ALIAS-051
+                    :next_call (planner/excluding-call request (:relative oversized))
                     :remedy (str "Exclude " (:relative oversized)
-                                 " through scope.exclude, or narrow scope.paths.")})
+                                 " through scope.exclude, or narrow scope.paths;"
+                                 " the next_call already excludes it.")})
 
           ;; @spec MCP-OP-ALIAS-046
           (> scope-bytes max-scope-bytes)
@@ -471,9 +478,16 @@
                     :max_bytes max-scope-bytes
                     :scanned_files (count sized)
                     :expected_files expected
+                    ;; no bounded exclusion exists: every file is under the
+                    ;; per-file ceiling, so bringing an over-large scope under
+                    ;; this one takes at least a hundred and twenty-nine
+                    ;; exclusions, and a next_call whose length grows with the
+                    ;; scope is not a constant-size receipt. The remedy is to
+                    ;; narrow scope.paths, which only the caller can do.
                     :next_call nil
-                    :remedy (str "Narrow scope.paths, or exclude the largest "
-                                 "files through scope.exclude.")})
+                    :remedy (str "Narrow scope.paths; no bounded set of "
+                                 "scope.exclude entries can bring this scope "
+                                 "under the aggregate ceiling.")})
 
           :else
           (let [sources (mapv (fn [{:keys [relative path]}]

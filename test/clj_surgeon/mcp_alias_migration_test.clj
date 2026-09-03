@@ -57,6 +57,13 @@
     (spit (io/file workspace "fan_test.clj") (fixture/behaviour-suite))
     workspace))
 
+(defn- requiring-source
+  "One minimal namespace that requires from.lib and calls from.var once."
+  [namespace-name]
+  (str "(ns " namespace-name "\n  (:require\n   ["
+       fixture/from-lib " :as store]))\n\n"
+       "(defn one [id] (store/" fixture/from-var " id))\n"))
+
 (defn- request
   ([workspace] (request workspace {}))
   ([workspace overrides]
@@ -550,20 +557,25 @@
         (delete-tree! workspace)))))
 
 ;; @spec MCP-OP-ALIAS-039
+;; @spec MCP-OP-ALIAS-051
 (deftest a-source-above-the-byte-ceiling-refuses-before-it-is-slurped
   (let [workspace (workspace!)
         receipt-dir (io/file workspace "receipts")
         oversized (io/file workspace "src/acid/fanout/huge.clj")]
     (.mkdirs receipt-dir)
     (try
+      ;; the oversized file requires from.lib, so the caller's expect.files
+      ;; counted it: excluding it must decrement that count by exactly one
       (spit oversized
-            (str "(ns acid.fanout.huge)\n;; "
+            (str (requiring-source "acid.fanout.huge")
+                 ";; "
                  (String. (char-array (inc alias-migration/max-source-bytes)
                                       \x))
                  "\n"))
       (is (> (.length oversized) alias-migration/max-source-bytes))
-      (let [result (alias-migration/execute! (config workspace receipt-dir)
-                                             (request workspace))]
+      (let [result (alias-migration/execute!
+                     (config workspace receipt-dir)
+                     (request workspace {:expect {:files 13}}))]
         (is (false? (:ok result)) (pr-str result))
         (is (= "alias-migration-source-too-large" (:error_type result)))
         (is (= "src/acid/fanout/huge.clj" (:path result)))
@@ -571,16 +583,62 @@
         (is (true? (:source_unchanged result)))
         (testing "no byte was written by the refused call"
           (doseq [[relative expected] (:pre corpus)]
-            (is (= expected (slurp (io/file workspace relative))) relative))))
+            (is (= expected (slurp (io/file workspace relative))) relative)))
+        (testing "the refusal carries an executable next_call that excludes it"
+          (let [next-call (:next_call result)]
+            (is (= "alias_migration" (get next-call "op")))
+            (is (= ["src/acid/fanout/huge.clj"]
+                   (get-in next-call ["scope" "exclude"])))
+            (is (= 12 (get-in next-call ["expect" "files"]))
+                "expect.files is decremented by the one excluded file")
+            (testing "and the replay proceeds"
+              (let [replayed (alias-migration/execute!
+                               (config workspace receipt-dir)
+                               (json/parse-string (json/generate-string next-call)
+                                                  true))]
+                (is (:ok replayed) (pr-str replayed))
+                (is (= 12 (:files replayed)))
+                (doseq [[relative expected] (:post corpus)]
+                  (is (= expected (slurp (io/file workspace relative)))
+                      relative)))))))
       (finally
         (delete-tree! workspace)))))
 
-(defn- requiring-source
-  "One minimal namespace that requires from.lib and calls from.var once."
-  [namespace-name]
-  (str "(ns " namespace-name "\n  (:require\n   ["
-       fixture/from-lib " :as store]))\n\n"
-       "(defn one [id] (store/" fixture/from-var " id))\n"))
+;; @spec MCP-OP-ALIAS-051
+(deftest one-file-symlinked-out-of-the-root-refuses-with-a-replayable-next-call
+  (let [workspace (workspace!)
+        outside (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        escape (io/file workspace "src/acid/fanout/escape.clj")]
+    (.mkdirs receipt-dir)
+    (try
+      (spit (io/file outside "escape.clj") (requiring-source "acid.fanout.escape"))
+      (symlink! escape (io/file outside "escape.clj"))
+      (let [result (alias-migration/execute!
+                     (config workspace receipt-dir)
+                     (request workspace {:expect {:files 13}}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-scope-path-refused" (:error_type result)))
+        (is (= "src/acid/fanout/escape.clj" (:path result)))
+        (is (true? (:source_unchanged result)))
+        (testing "one refused file no longer refuses the whole scope with no remedy"
+          (let [next-call (:next_call result)]
+            (is (some? next-call) "the refusal carried no executable next_call")
+            (is (= ["src/acid/fanout/escape.clj"]
+                   (get-in next-call ["scope" "exclude"])))
+            (is (= 12 (get-in next-call ["expect" "files"])))
+            (let [replayed (alias-migration/execute!
+                             (config workspace receipt-dir)
+                             (json/parse-string (json/generate-string next-call)
+                                                true))]
+              (is (:ok replayed) (pr-str replayed))
+              (is (= 12 (:files replayed)))
+              (doseq [[relative expected] (:post corpus)]
+                (is (= expected (slurp (io/file workspace relative))) relative))))))
+      (finally
+        (Files/deleteIfExists (.toPath escape))
+        (delete-tree! workspace)
+        (delete-tree! outside)))))
 
 (defn- deep-relative-path
   "One project-relative path of exactly `segments` segments ending in a source."
