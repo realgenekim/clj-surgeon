@@ -102,25 +102,36 @@ is the witness that the string/regex/char/comment handling is right.
 | cell | -Xmx | before | after |
 |---|---|---|---|
 | nested cold | 512m | StackOverflowError, 42 ms, **the whole scan dies** | refused `max_parse_depth` (limit 150, observed 601), 19 ms, peak 44.6 MB |
-| nested warm | 512m | completed, peak **312.4 MB**, 827 ms | refused, 4–16 ms, peak **52.5–134.8 MB** |
+| nested warm | 512m | completed, peak **312.4 MB**, 827 ms | refused, 4–18 ms, peak **≤ 160 MB** (see below) |
 | giant | 128m | **OutOfMemoryError** | refused `max_parse_nodes`, 65 ms, peak 52.6 MB |
 | giant | 512m | completed, peak **339.9 MB**, 1,364 ms | refused, 76 ms, peak 65.9 MB |
 
-The nested-warm peak is stated as a RANGE because the single figure did not
-reproduce. Three independent green runs of the same cell at the same -Xmx on
-this box have now measured **52.5, 107.3 and 134.8 MB**: this receipt's
-original run, the post-review re-run of 2026-09-03 at load ~7, and Opus's
-independent review run at load 6–9. The other three cells stay within noise
-across all three (44.6 / 52.6 / 65.9 originally, against 62.3 / 51.5 / 68.5
-and 45.9 / 60.1 / 59.8). The verdict is identical at every point in the range —
-the worst of them is 1.8x under the 247.8 MB budget and 2.9x below the 312.4 MB
-pre-fix figure — but a published cell that does not reproduce on a shared box
-is a figure, not a receipt, and it is restated as the range that does.
+**The nested-warm peak is published as a BOUND WITH ITS MARGIN, not as a figure
+and not as a range.** Five independent green runs of the same cell at the same
+-Xmx on this shared box have now measured **52.5, 107.3, 134.8, 149.0 and
+100.9 MB** — this receipt's original run; the post-review re-run at load ~7
+(107.3); Opus's round-1 review run at load 6–9 (134.8); Opus's round-2
+re-review at load 7.8 (149.0); and the round-3 run at load ~10 (100.9). Twice
+the published figure was then exceeded by the next run, which is what a range
+does when the thing it describes is GC scheduling on a loaded box rather than
+the control: each restatement invited the next escape.
 
-After the fix the peaks are the JVM's own baseline (44–66 MB), not the file's
-shape. Refusal latency on the two 111 KB cells is **19 ms and 4 ms**, both under
-the 50 ms line. The giant cell's 65 ms wall includes reading 1.9 MiB from disk;
-the control's own cost there is `scan-ms` = 9 ms.
+So the claim is: **peak ≤ 160 MB observed across five runs on a loaded box, and
+the gate held at every point — worst case 1.55x under the 247.8 MB budget and
+at least 1.95x below the 312.4 MB pre-fix figure.** A bound with margin is
+falsifiable by one run above 160 MB, which is exactly the event a reader wants
+to hear about; a range is falsified by every ordinary run and tells them
+nothing. The other three cells stay within noise across all five (44.6 / 52.6 /
+65.9 originally, against 62.3 / 51.5 / 68.5, 45.9 / 60.1 / 59.8, and this run's
+65.4 / 52.4 / 71.5). To tighten the bound rather than widen it, pin the
+collector (`-XX:+UseSerialGC`, fixed `-Xmn`) so the cell reproduces.
+
+After the fix the peaks are the JVM's own baseline (44–72 MB), not the file's
+shape. Refusal latency on the two 111 KB cells is **36 ms and 18 ms** in the
+round-3 run, both under the 50 ms line. The giant cell's 104 ms wall includes
+reading 1.9 MiB from disk; the control's own cost there is `scan-ms` = **46 ms**
+at load ~10 — inside the 50 ms line but the thinnest margin in the table, and
+the one figure here worth watching rather than trusting.
 
 ## 4. `make memory-battery`, before and after
 
@@ -215,8 +226,64 @@ Two further corrections to what this receipt claimed:
 
 `rename`'s own planner parses through `rewrite-clj.zip/of-string` directly
 (`rename.clj:67,166`), NOT through `analyze`, so the two `rename-ns-plan-*`
-peaks above are still not reached by this intent. That belongs to whichever
-lane owns the rename receipt.
+peaks above are still not reached by this intent. **Owner: `inb-07c5e7`** — the
+open item that carries the ungated rename constructor. Naming the bead rather
+than "whichever lane owns the rename receipt" is the point: a reader can act on
+an id and cannot act on a lane nobody has named.
+
+### Round 3 — the Opus re-review's two merge-blockers, and the meter rule
+
+The re-review at `ad439f4` returned GO-WITH-FIX with two blockers that round 2
+introduced itself, plus a ruling on the `scan_ms` placement. All three are
+fixed here, each with the witness that was red before it.
+
+- **One extra `)` crashed the whole read path.** The prefix-level `int-array`
+  let the delimiter counter go negative on an unmatched close and then used it
+  unclamped as the subscript for the next open:
+  `ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 64`, thrown
+  UNHANDLED out of `outline`, `run-outline`, `run-deps` and
+  `analyze/file->zloc`, where the reader's own
+  `Unmatched delimiter: ) [at line 1, column 21]` used to be. A syntax error is
+  the single most common defect a structural editing tool meets, and no gate saw
+  it: every fixture in the 24-shape lexical attack, and every file in the corpus
+  witness, is WELL-FORMED. The balance is now signed and the stack index is
+  floored separately. Ratchet: a malformed-input witness family — 20 generated
+  unbalanced/truncated shapes plus all 41 checked-in fixtures — asserting that
+  the scan never throws and that admission ADMITS every one, so the answer is
+  the reader's alone. Confirmed by a differential of `outline` against
+  `origin/main` (`6c07015`) over those same 62 files: **6/62 differed before,
+  62/62 identical after**.
+
+- **`^` consumes TWO forms and the metadata was satisfying it**, so a metadata
+  run scored a CONSTANT for any N: `^:a ^:b ^:c x` at depth 1 against a real 4,
+  and a 2,810-byte two-line `(def x ^:a x700 y)` at depth 2 against a real 701 —
+  admitted, then `StackOverflowError` out of the reader. It survived `ls-tree`
+  only because the tree-scale caller now catches `Error`; every single-file
+  entrance still died. The prefix run now carries how many FORMS it still owes,
+  and `^` owes two. The tower refuses at observed **701 with zero parse calls**,
+  and the corpus max depth is **unchanged at 22** — the longest metadata run in
+  this repository is 1, so counting `^` honestly cost nothing, exactly like the
+  round-2 prefix fix. The witness that should have caught this built
+  `(def x ^^^^…^^y)`, a bare-caret run that is not valid Clojure and is the one
+  caret shape the blind scan happened to count; it is replaced with the field
+  shape.
+
+- **The `scan_ms` rule was wrong on all three counts Opus named**, and the
+  ruling is accepted in full. The meter was dark on ~100% of real scans (a clean
+  `ls-tree` emitted no `:resources` at all, so the 638x regression it exists to
+  catch would have been invisible); the counter was one global atom that two
+  concurrent scans clobbered (measured: the small tree's clock read 10.653 ms
+  concurrently against 4.072 ms alone — it charged the neighbour's work); and
+  the figure had no denominator. `:resources` is now UNCONDITIONAL in the EDN
+  receipt and carries `bytes_scanned` beside `scan_ms`, from a per-scan
+  accumulator. The TEXT rendering stays inside the refusal block, so an ordinary
+  human scan is still byte-identical to before this control existed. Witness:
+  two concurrent tree scans each account for exactly their own tree's bytes
+  (10,882 and 1,088,490), asserted on bytes rather than milliseconds because
+  bytes are exact.
+
+Scan cost is unchanged by all of it — 126,596 B file, 100 warm iterations, same
+harness: **1.446 ms at `ad439f4`, 1.356 ms here** (anvil, load 6.5).
 
 ## 6. Unit figures for the control itself
 
@@ -240,14 +307,21 @@ reflection warning.
 
 ## 7. Gates
 
+Regenerated from the runs at the round-3 head, not carried forward. The table
+published at `ad439f4` still said 737 / 6103, which was the figure before round
+2 added five deftests; the real number there was 745 / 6171, and round 3 adds
+three more. A gate table that does not match the code it ships is the cheapest
+possible way to lose a reader's trust in the rest of the receipt.
+
 | gate | result |
 |---|---|
-| `make test-fast` | Ran 737 tests containing 6103 assertions. 0 failures, 0 errors. (baseline 726 / 6050) |
+| `make test-fast` | Ran 748 tests containing 6196 assertions. 0 failures, 0 errors. (745 / 6171 at `ad439f4`; 737 / 6103 was the stale published figure; 726 / 6050 pre-MEM-005 baseline) |
 | `clojure -M:clj-surgeon/mcp-test` | Ran 385 tests containing 3971 assertions. 0 failures, 0 errors. |
 | `make mcp-operation-oracle` | pass; legacy counterexamples `[verification_failed, verification_pending]` — the baseline two, unchanged |
 | `make memory-battery-self-test` | Ran 24 tests containing 138 assertions. 0 failures, 0 errors. |
-| `make memory-red PARSER_RED_EXPECT=green` | 6/6 assertions held |
+| `make memory-red PARSER_RED_EXPECT=green` | 6/6 assertions held; cells 65.4 / **100.9** / 52.4 / 71.5 MB at load ~10 |
 | intent traceability contract | `:ok true`, zero violations |
 
 All unit suites ran under `~/bin/suite-run`; the battery and `memory-red` took
-the exclusive `~/tmp/suite.lock`. The battery ran exactly once.
+the exclusive `~/tmp/suite.lock`. The battery ran exactly once, and `memory-red`
+ran exactly once per round.
