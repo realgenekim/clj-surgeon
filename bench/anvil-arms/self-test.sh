@@ -956,6 +956,47 @@ want "case25 control (end intact) score rc" 0 "$?"
 want "case25 control wall_s comes from the end stamp" \
      "$(jqf "$A1/run.json" wall_s)" "$(jqf "$D/receipt.json" meter.wall_s)"
 
+echo "== case 23: a rollout REPLACED mid-run is a typed abort, never a split-brain receipt =="
+# Sol round two, item 2: the watcher held an open fd on the original inode while the
+# retained copy was taken BY PATH from the replacement.  The two witnesses were derived
+# from two DIFFERENT FILES and, because each was internally consistent, the receipt
+# asserted sources.agree=true and reported writes.via_verb=1 for a session whose
+# surviving bytes contain no verb call at all.  Sol's rc-0 receipt is the artifact.
+A23="$WORK/st-P-N-23"; mkdir -p "$A23"
+git clone -q --no-hardlinks "$BASE_REPO" "$A23/worktree"
+printf '%s\n' "$BASE_SHA" > "$A23/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A23/prompt.md"
+EXP=st RUNG=P SLOT=23 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A23" N - "" > /dev/null 2>&1
+CH23="$A23/codex-home"
+env CODEX_HOME="$CH23" python3 "$HERE/watch.py" --arm "$A23" --codex-home "$CH23" \
+  --zero-return-window 30 --poll 0.2 \
+  -- env CODEX_HOME="$CH23" bash "$HERE/fake-driver.sh" "$A23" rotate \
+  > "$WORK/case23.out" 2>&1
+want "case23 watch rc" 8 "$?"
+grep -q 'WATCH-ABORT rollout-rotated' "$WORK/case23.out" \
+  && ok "case23 typed refusal: rollout-rotated" \
+  || { bad "case23 a replaced rollout was metered as one file"; cat "$WORK/case23.out"; }
+want "case23 run.json carries the abort" rollout-rotated "$(jqf "$A23/run.json" abort)"
+[ -e "$A23/receipt.json" ] && bad "case23 a receipt was written over two different files" \
+  || ok "case23 no receipt.json written"
+# the retained copy must be the bytes the watcher actually metered -- taken from its own
+# open fd -- not whatever the path names afterwards
+if [ -s "$A23/rollout.jsonl" ]; then
+  grep -q alias_migration "$A23/rollout.jsonl" \
+    && ok "case23 the retained rollout is the inode the watcher read" \
+    || bad "case23 the retained rollout came from the replacement inode"
+  grep -q 'a replacement file nobody metered' "$A23/rollout.jsonl" \
+    && bad "case23 the retained rollout holds bytes from the replacement inode" \
+    || ok "case23 no replacement bytes leaked into the retained rollout"
+else
+  bad "case23 nothing was retained at all"
+fi
+python3 "$HERE/score.py" "$A23" > "$WORK/case23score.out" 2>&1
+want "case23 score rc" 3 "$?"
+[ -e "$A23/receipt.json" ] && bad "case23 the scorer wrote a receipt over an aborted watch" \
+  || ok "case23 the scorer refuses an aborted watch and writes no receipt"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
