@@ -620,6 +620,38 @@
       (finally
         (delete-tree! workspace)))))
 
+(defn- bulk-non-source-files!
+  "`count` empty non-source files in one directory, created without content."
+  [^java.io.File directory count]
+  (.mkdirs directory)
+  (dotimes [index count]
+    (.createNewFile (io/file directory (str "n" index ".txt")))))
+
+;; @spec MCP-OP-ALIAS-050
+(deftest a-walk-above-the-entry-ceiling-refuses-before-the-filtered-set-is-built
+  (let [workspace (bare-workspace!)
+        receipt-dir (io/file workspace "receipts")
+        entries 60000]
+    (.mkdirs receipt-dir)
+    (try
+      (bulk-non-source-files! (io/file workspace "src" "bulk") entries)
+      (write-tree! workspace {"src/open.clj" (requiring-source "open.one")})
+      (testing "the file ceiling cannot see this: the filtered set is one file"
+        (is (> entries alias-migration/max-walk-entries))
+        (is (< 1 alias-migration/max-scope-files)))
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (cap-request workspace {}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-walk-too-large" (:error_type result))
+            "the raw walk was unbounded; only the filtered set was bounded")
+        (is (= (inc alias-migration/max-walk-entries) (:visited_entries result))
+            "the walk stops on the first entry past the ceiling")
+        (is (= alias-migration/max-walk-entries (:max_entries result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result))))
+      (finally
+        (delete-tree! workspace)))))
+
 (defn- chmod!
   [mode ^java.io.File target]
   (shell/sh "chmod" mode (.getPath target)))

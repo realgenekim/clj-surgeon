@@ -137,6 +137,30 @@
   [^Path root ^Path candidate]
   (str/replace (.toString (.relativize root candidate)) "\\" "/"))
 
+(def max-walk-entries
+  "Ceiling on the RAW entries one scope walk visits, filtered or not.
+
+  The file ceiling bounds the filtered set, which is what discovery keeps; it
+  says nothing about what the walk had to touch to build it. Sixty thousand
+  non-source files under scope.paths select nothing and still cost sixty
+  thousand visits. This bound is on the work, so it is counted on every visited
+  entry — directory, file, and failure alike — and it stops the walk on the
+  first entry past it."
+  50000)
+
+(def source-file-suffixes
+  "The file-name suffixes the scope walk retains a path string for.
+
+  `relative-source-path?` also admits `.edn`, which discovery then drops; the
+  walk therefore filters on the file NAME before it materialises any relative
+  path, so a tree of non-source files costs no strings at all."
+  [".clj" ".cljs" ".cljc"])
+
+(defn- source-file-name?
+  [^Path candidate]
+  (let [file-name (str (.getFileName candidate))]
+    (boolean (some #(str/ends-with? file-name ^String %) source-file-suffixes))))
+
 (def max-unreadable-paths
   "How many unreadable scope paths one refusal names.
 
@@ -159,6 +183,7 @@
 ;; @spec MCP-OP-ALIAS-037
 ;; @spec MCP-OP-ALIAS-048
 ;; @spec MCP-OP-ALIAS-049
+;; @spec MCP-OP-ALIAS-050
 (defn scan-scope
   "Every confined project-relative Clojure source under scope.paths, or a scan
   refusal.
@@ -181,6 +206,14 @@
         too-deep (volatile! nil)
         unreadable (java.util.ArrayList.)
         unreadable-count (volatile! 0)
+        visited (volatile! 0)
+        over-walk (volatile! nil)
+        count-entry!
+        (fn []
+          (let [seen (vswap! visited inc)]
+            (when (> seen max-walk-entries)
+              (vreset! over-walk seen))
+            seen))
         depth-of (fn [^Path candidate]
                    (.getNameCount (.relativize root ^Path candidate)))
         record-too-deep!
@@ -192,7 +225,10 @@
           (preVisitDirectory [dir _attrs]
             (let [^Path directory dir
                   depth (depth-of directory)]
+              (count-entry!)
               (cond
+                @over-walk FileVisitResult/TERMINATE
+
                 (> depth max-scope-depth)
                 (record-too-deep! directory depth)
 
@@ -205,13 +241,23 @@
           (visitFile [file _attrs]
             (let [^Path candidate file
                   depth (depth-of candidate)]
-              (if (> depth max-scope-depth)
+              (count-entry!)
+              (cond
+                ;; @spec MCP-OP-ALIAS-050
+                @over-walk FileVisitResult/TERMINATE
+
+                (> depth max-scope-depth)
                 (record-too-deep! candidate depth)
+
+                :else
                 (do
-                  (when (Files/isRegularFile candidate (make-array LinkOption 0))
+                  ;; the name is tested before any relative path is built, so a
+                  ;; tree of non-source files materialises no strings
+                  (when (and (source-file-name? candidate)
+                             (Files/isRegularFile candidate
+                                                  (make-array LinkOption 0)))
                     (let [relative (relative-path root candidate)]
                       (when (and (mcp-paths/relative-source-path? relative)
-                                 (not (str/ends-with? relative ".edn"))
                                  (not (contains? excluded relative))
                                  (some #(.matches ^PathMatcher %
                                                   (.getPath default-fs relative
@@ -221,6 +267,7 @@
                   FileVisitResult/CONTINUE))))
           ;; @spec MCP-OP-ALIAS-049
           (visitFileFailed [file _error]
+            (count-entry!)
             (let [^Path candidate file]
               ;; a subtree the walk would have pruned anyway is not in scope,
               ;; so its unreadability says nothing about the scope
@@ -235,6 +282,13 @@
                         Integer/MAX_VALUE
                         visitor)
     (cond
+      ;; @spec MCP-OP-ALIAS-050
+      @over-walk
+      {:ok false
+       :error-type :alias-migration-walk-too-large
+       :visited-entries @over-walk
+       :max-entries max-walk-entries}
+
       @too-deep
       (let [deep @too-deep]
         {:ok false
@@ -311,6 +365,7 @@
 ;; @spec MCP-OP-ALIAS-046
 ;; @spec MCP-OP-ALIAS-048
 ;; @spec MCP-OP-ALIAS-049
+;; @spec MCP-OP-ALIAS-050
 (defn plan!
   "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
@@ -340,6 +395,20 @@
                              (:path scan) ", or flatten that tree; the bound is "
                              "refused rather than truncated so no file can "
                              "silently leave the found count.")})
+
+      ;; @spec MCP-OP-ALIAS-050
+      (= :alias-migration-walk-too-large (:error-type scan))
+      (refusal :alias-migration-walk-too-large
+               (str "scope.paths walks more than " max-walk-entries
+                    " filesystem entries; the walk stopped at "
+                    (:visited-entries scan))
+               {:visited_entries (:visited-entries scan)
+                :max_entries (:max-entries scan)
+                :next_call nil
+                :remedy (str "Narrow scope.paths to the source directories "
+                             "that can require from.lib; this bound is on the "
+                             "entries walked, not on the sources selected, so "
+                             "a directory of non-source files still costs it.")})
 
       ;; @spec MCP-OP-ALIAS-049
       (= :alias-migration-scope-unreadable (:error-type scan))
