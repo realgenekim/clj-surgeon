@@ -577,16 +577,19 @@
   [transactions-dir now-ms]
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
-        pruned (reduce (fn [n ^File f]
-                         (if (>= (- now (.lastModified f))
-                                 (long broken-lock-retention-ms))
-                           (if (Files/deleteIfExists (.toPath f)) (inc n) n)
-                           n))
-                       0
-                       tombstones)]
-    {:found (count tombstones)
+        found (long (count tombstones))
+        pruned (long (reduce (fn [n ^File f]
+                               (if (>= (- now (.lastModified f))
+                                       (long broken-lock-retention-ms))
+                                 (if (Files/deleteIfExists (.toPath f))
+                                   (unchecked-inc (long n))
+                                   (long n))
+                                 (long n)))
+                             0
+                             tombstones))]
+    {:found found
      :pruned pruned
-     :remaining (- (count tombstones) pruned)
+     :remaining (- found pruned)
      :retention-ms broken-lock-retention-ms}))
 
 (defn- displaced-line
