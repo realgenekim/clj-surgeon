@@ -1036,6 +1036,57 @@ case "$dr" in ''|MISSING|null|0|*[!0-9]*) bad "case26 run.json recorded no desce
 want "case26 run.json orphans_after_reap" 0 "$(jqf "$A26/run.json" orphans_after_reap)"
 want "case26 run.json names the surviving pids" "[]" "$(jqf "$A26/run.json" orphan_pids)"
 
+echo "== case 27: a Make target the map does not resolve makes the run INCOMPLETE =="
+# Sol round two, item 6: an unknown or conditional target fell through to the name rule
+# and was metered as one more NON-TEST ACTION.  Sol's probes -- `make ghost` and
+# `make conditional` -- both produced rc-0 receipts reading test_actions=0,
+# non_test_actions=1.  Non-test actions is the exact quantity E3's pass line is stated
+# in, so an unmetered test run does not merely go missing: it lands on the other side
+# of the comparison.
+run_arm --exp st --rung P --arm N --slot 27 --prompt "$HERE/prompts/E3-P-N.md" \
+        --worktree-src "$BASE_REPO" --base "$BASE_SHA" --fixture makeunknown \
+        --watch-arg --zero-return-window --watch-arg 30 > "$WORK/case27.out" 2>&1
+rc27=$?
+A27="$WORK/st-P-N-27"
+want "case27 run-arm rc" 3 "$rc27"
+grep -q 'WATCH-ABORT incomplete-run' "$A27/driver.log" \
+  && ok "case27 WATCH-ABORT incomplete-run" \
+  || { bad "case27 an unresolvable make target was metered as a non-test action"; tail -5 "$A27/driver.log"; }
+want "case27 run.json abort" incomplete-run "$(jqf "$A27/run.json" abort)"
+want "case27 run.json names the unresolved target" '["ghost"]' \
+     "$(jqf "$A27/run.json" unresolved_make_targets)"
+[ -e "$A27/receipt.json" ] && bad "case27 a receipt was written over an unmetered action" \
+  || ok "case27 no receipt.json written"
+grep -q 'SCORE-ABORT incomplete-run' "$WORK/case27.out" \
+  && ok "case27 SCORE-ABORT incomplete-run names it too" \
+  || { bad "case27 the scorer did not refuse"; cat "$WORK/case27.out"; }
+
+echo "== case 27b: which targets are unresolved is a MAP LOOKUP, and refusal counts =="
+python3 - "$HERE" <<'PY27'
+import sys
+sys.path.insert(0, sys.argv[1])
+from watch import unresolved_make_targets as u
+m = {"verify": "bin/kaocha --focus x", "build": "echo building",
+     "ship": "make verify && echo shipped"}
+cases = [
+    ("make verify", m, []),                       # resolved
+    ("make build && make verify", m, []),         # both resolved
+    ("make ghost", m, ["ghost"]),                 # never declared
+    ("make conditional", m, ["conditional"]),     # declared but REFUSED by the parser
+    ("bash -lc 'make ghost'", m, ["ghost"]),      # still found at command position
+    ("make", m, ["(default-goal)"]),              # which goal? the map cannot say
+    ("make V=1 verify", m, []),                   # a variable override is not a target
+    ("make verify", None, ["verify"]),            # no map at all resolves nothing
+    ("bin/kaocha --focus x", m, []),              # not a make invocation
+]
+bad = [(c, w, u(c, mm)) for c, mm, w in cases if u(c, mm) != w]
+for c, w, got in bad:
+    print(f"FAIL case27b {c!r}: expected {w}, got {got}")
+print(f"ok   case27b unresolved-target lookup {len(cases)-len(bad)}/{len(cases)}")
+sys.exit(1 if bad else 0)
+PY27
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
