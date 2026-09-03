@@ -22,8 +22,9 @@
   "Allocation ceiling for one `outline-source` call, as a multiple of the
    source's UTF-8 byte count.
 
-   Measured on this fixture (48,097 bytes) on 2026-09-03, anvil, JDK on
-   -Xmx1g, min of five calls after three warm-ups:
+   Measured on this fixture (48,097 bytes) on 2026-09-03, anvil, JDK
+   21.0.12, rewrite-clj 1.2.50, -Xmx1g, min of five calls after three
+   warm-ups:
 
      two-parse path with a per-form `:source` string : 62,686,992 B = 1303.3x
      single-parse path with no discarded `:source`   : 38,201,624 B =  794.3x
@@ -38,7 +39,15 @@
    deliberately far above the
    `30x` figure a reader might expect: a rewrite-clj node tree costs ~48x the
    source in retained bytes and ~750x in transient allocation, and this intent
-   does not promise to replace that parser."
+   does not promise to replace that parser.
+
+   This ceiling is tied to JDK and rewrite-clj allocation behaviour, not
+   just to this leaf's code. rewrite-clj is version-pinned above (1.2.50);
+   the JDK is not. If a JDK upgrade moves the measured ratio and this gate
+   trips, that is a real signal, not noise to silence: re-baseline
+   explicitly (measure the new floor with five samples after three
+   warm-ups, set the ceiling to floor x 1.25, and update this docstring)
+   — never bump the constant to make a red gate pass."
   980)
 
 (def ^:private ^java.lang.management.ThreadMXBean thread-mx-bean
@@ -70,6 +79,10 @@
 
 
 ;; @spec MCP-OP-MEM-015
+;; This witness asserts only the allocation ratio. `outline-parses-each-
+;; file-exactly-once` below asserts the parse-count invariant as its own,
+;; separate deftest — deliberately, so a JDK-driven allocation-ratio drift
+;; on this test can never mask a second parse regression hiding on that one.
 (deftest outline-of-one-file-allocates-within-its-ceiling
   (testing "outline-source builds no per-form source text it does not return"
     (let [source @fixture-source
@@ -81,7 +94,13 @@
       (is (<= ratio (double allocated-bytes-per-source-byte-ceiling))
           (str "outline-source allocated " allocated " bytes for "
                bytes " source bytes = " (format "%.1f" ratio)
-               "x, ceiling " allocated-bytes-per-source-byte-ceiling "x")))))
+               "x, ceiling " allocated-bytes-per-source-byte-ceiling "x. "
+               "This ceiling is tied to JDK + rewrite-clj allocation "
+               "behaviour; rewrite-clj is version-pinned, the JDK is not. "
+               "If the JDK moved, re-baseline explicitly (measure the "
+               "floor, set ceiling = floor x 1.25, update the docstring "
+               "on allocated-bytes-per-source-byte-ceiling) — never bump "
+               "the constant to make a red gate pass.")))))
 
 
 ;; @spec MCP-OP-MEM-015
