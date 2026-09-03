@@ -49,7 +49,22 @@
       differing in exactly one line of 98,361 characters — the cursor. The same
       randomness pinned a new 1.4 MB snapshot on every scan of a tree that had
       not moved. Content-addressing makes an unchanged tree scan IDENTICALLY
-      and REUSE its snapshot, and a changed tree get a new id by construction.
+      WITHIN ONE WARM SNAPSHOT STORE and REUSE its snapshot, and a changed
+      tree get a new id by construction.
+
+      THE QUALIFICATION IS LOAD-BEARING, and it was missing. The determinism
+      is split across the two halves of the cursor token, which have opposite
+      requirements. The manifest DIGEST is a pure function of the tree and its
+      root, so it is identical across cold stores, across machines, and after
+      a prune. The MAC is keyed on a per-snapshot random SECRET, which must
+      NOT be derivable from published material — that is the forgery blocker —
+      so a store that has never seen this tree mints a fresh secret and the
+      cursor line differs. Measured: two cold stores, identical digest,
+      different macs, one line of 36,853 bytes apart. So a battery run against
+      a CLEANED state root, or any scan after the 24 h TTL prune
+      (`snapshot-ttl-ms`), is legitimately not byte-identical to the one
+      before it, and a reader who took the unqualified claim as a contract was
+      reading a promise nothing could keep.
 
    A REUSED SNAPSHOT IS VERIFIED, NEVER ASSUMED. A file sitting under a
    content address is a CLAIM about its content; reuse re-folds the rows on

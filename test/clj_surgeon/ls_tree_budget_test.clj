@@ -1159,7 +1159,8 @@
       (is (not= edn-a edn-b))
       (testing "and the namespace says so, because the reviewer read the
                 unqualified claim as a promise"
-        (let [doc (:doc (meta (find-ns 'clj-surgeon.ls-tree-snapshot)))]
-          (is (str/includes? doc "warm")
+        (let [doc (str/lower-case
+                    (:doc (meta (find-ns 'clj-surgeon.ls-tree-snapshot))))]
+          (is (str/includes? doc "warm snapshot store")
               "the determinism claim in the ns docstring must be QUALIFIED to
                a warm snapshot store"))))))
