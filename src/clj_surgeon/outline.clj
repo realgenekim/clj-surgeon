@@ -275,11 +275,17 @@
    arity of itself: a caller that counts calls through the var must see one
    call per outline, whichever arity it used.
 
-   This and `outline-source` are the read path's two tree constructors, so
+   This and `outline-source` are the outline path's two tree constructors, so
    parser admission sits at both: every operation that reads structure through
    them — outline, ls_tree, show_form, compact locations, the extract read path,
    the change buffer's owner scan — inherits the ceiling without knowing it
-   exists."
+   exists.
+
+   Read that as a claim about THESE TWO ENTRANCES, not about the product.
+   MCP-OP-MEM-005 is also wired into `clj-surgeon.analyze`'s two constructors
+   and `clj-surgeon.structural-lens/find-subforms`; `rg z/of-string` finds many
+   more direct sites across the edit and transform surfaces, and this intent
+   does not reach them."
   ;; @spec MCP-OP-MEM-005
   [file source project-aliases include-source?]
   (admission/admit! file source)
