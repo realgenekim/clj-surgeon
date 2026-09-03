@@ -66,8 +66,18 @@
 ;; :ls-tree — directory-wide namespace map
 ;; ============================================================
 
+;; @spec MCP-OP-STUDY-030
 (def ^:private skip-dirs
-  "Directories to skip during project discovery."
+  "Directories to skip during project discovery.
+
+   Matched by NAME at any depth, which is a known limitation, not an accident:
+   `target/` is pruned wherever it appears, so a real source namespace living
+   under `src/app/target/` is invisible to `:ls-tree` exactly as compiled
+   output under a project's own `target/` is. `find`'s `-prune` has no
+   path-anchored form here, and anchoring would mean walking every candidate
+   directory to decide. `test-fixtures/study/prune-target` and its frozen
+   golden hold both cases, so the day this becomes path-anchored the golden
+   changes and someone reads this note."
   #{".git" ".cpcache" ".gitlibs" "target" "node_modules"
     ".clj-kondo" ".lsp" ".shadow-cljs" ".nrepl" ".idea" ".vscode"})
 

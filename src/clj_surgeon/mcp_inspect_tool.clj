@@ -400,6 +400,7 @@
     (count payload)))
 
 ;; @spec MCP-OP-STUDY-015
+;; @spec MCP-OP-STUDY-030
 (defn- ls-tree-bounded
   "Grow the receipt one file at a time and stop at the first overflow, parsing
   only the files the receipt can actually carry.
@@ -420,6 +421,13 @@
                      :payload payload
                      :fits? (<= (ls-tree-payload-size payload output-format)
                                 limit)}))
+        ;; The floor. Below it no bound can go: `names`/`edn` bottom out at the
+        ;; empty array's two characters (MCP-OP-STUDY-018), and `text` bottoms
+        ;; out at its own trailing total line — 38 characters for a two-digit
+        ;; tree — because a receipt that showed nothing must still say how much
+        ;; it omitted. At `limit 1` the text payload is therefore LARGER than
+        ;; the limit, by construction and not by accident: the alternative is a
+        ;; receipt that reports nothing about what it left out.
         empty-receipt {:returned 0
                        :omitted total
                        :truncated (pos? total)

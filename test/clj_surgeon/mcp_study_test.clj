@@ -948,6 +948,38 @@
           (is (<= cost n)
               (str "limit " n ": a non-empty payload must fit its limit")))))))
 
+;; @spec MCP-OP-STUDY-018
+;; @spec MCP-OP-STUDY-030
+(deftest every-ls-tree-format-has-a-documented-empty-receipt-floor
+  ;; MCP-OP-STUDY-018 named the floor for row payloads — the empty array's two
+  ;; characters — and left `text` undocumented, so its 38-character empty
+  ;; receipt at `limit 1` looked like a bound violation rather than the floor
+  ;; it is. A receipt that showed nothing must still say how much it omitted;
+  ;; that line IS the floor.
+  (testing "text bottoms out at its own total line, larger than limit 1"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir
+                         "format" "text" "limit" 1})]
+      (is (true? (:ok response)))
+      (is (zero? (:returned response)))
+      (is (true? (:truncated response)))
+      (is (false? (:read_complete response)))
+      (is (= 7 (:file_count response)))
+      (is (= (str "── total: " (:file_count response) " files; 0 shown, "
+                  (:omitted response) " omitted\n")
+             (:tree response))
+          "the floor is the total line and nothing else")
+      (is (> (count (:tree response)) 1)
+          "a text receipt cannot be smaller than the line that reports what it omitted")))
+  (testing "names and edn bottom out at the empty array's two characters"
+    (doseq [format ["names" "edn"]]
+      (testing format
+        (let [response (run {"mode" "ls-tree" "dir" fixture-dir
+                             "format" format "limit" 1})]
+          (is (true? (:ok response)))
+          (is (zero? (:returned response)))
+          (is (= [] (:files response)))
+          (is (= 2 (inspect/json-character-count (:files response)))))))))
+
 ;; @spec MCP-OP-STUDY-016
 (deftest a-study-receipt-counts-the-source-it-read
   ;; `source_character_count` was hardcoded 0 for every study operation and

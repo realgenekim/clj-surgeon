@@ -279,6 +279,27 @@
     (is (not (str/includes? (:out result) (System/getProperty "user.dir")))
         "a refusal message must not publish where the workspace lives")))
 
+;; @spec MCP-OP-STUDY-008
+;; @spec MCP-OP-STUDY-030
+(deftest cli-ls-tree-prunes-every-directory-named-target-including-a-source-one
+  ;; `-prune` matches `target` by NAME at any depth. `target/foo.clj` is
+  ;; compiled output and correctly absent; `src/app/target/bar.clj` is a real
+  ;; source namespace and is absent too — a known limitation that had no
+  ;; witness at all. The golden freezes BOTH, so the day the rule becomes
+  ;; path-anchored this test changes and the note in `skip-dirs` is read.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree"
+                              ":dir" "test-fixtures/study/prune-target")]
+    (is (zero? (:exit result)))
+    (is (= (slurp "test-fixtures/study/ls-tree-prune-target.golden.txt")
+           (:out result)))
+    (is (str/includes? (:out result) "src/app/core.clj"))
+    (is (not (str/includes? (:out result) "target/foo.clj"))
+        "compiled output must never be walked")
+    (is (not (str/includes? (:out result) "src/app/target/bar.clj"))
+        "and the same rule hides a source namespace: the documented limitation")))
+
 ;; ============================================================
 ;; The format shadow that made a documented refusal unreachable
 ;; ============================================================
