@@ -145,14 +145,28 @@ def main() -> int:
         elif isinstance(health, dict):
             refuse(health.get("ok") is not True,
                    f"healthz-not-ok({health.get('ok')!r})")
+            # /healthz is served by `mcp-runtime/readiness`, NOT by the rich
+            # readiness map `mcp_http_server.clj` builds and writes to ready.edn.
+            # The live server returns {ok, server, tool_runtime, tool_registry}: no
+            # pid, no port, no project-root.  Asserting those three fields refused
+            # every real tool arm (measured 2026-09-04, E3-P preflight, the first
+            # time this apparatus met a live server rather than the fake driver).
+            #
+            # So healthz is a LIVENESS witness, and identity is bound by the
+            # witnesses that actually publish it and are already refused-on-missing
+            # below: `ss -ltnp` for the pid owning the port, ready.edn for the
+            # served project root and pid, and /proc/<pid>/cwd for the server's own
+            # sha.  Each healthz identity field is still checked WHEN THE SERVER
+            # PUBLISHES IT, so a server that grows the fields is held to them and
+            # this never becomes a way to attest a document about another process.
             health_pid = health.get("pid")
-            refuse(attest["port_pid"] != UNV and health_pid != attest["port_pid"],
+            refuse(health_pid is not None and attest["port_pid"] != UNV
+                   and health_pid != attest["port_pid"],
                    f"healthz-pid-ne-port-pid({health_pid}!={attest['port_pid']})")
             health_port = health.get("port")
-            refuse(port != UNV and health_port != port,
+            refuse(health_port is not None and port != UNV and health_port != port,
                    f"healthz-port-ne-arm-port({health_port}!={port})")
             health_root = health.get("project-root", health.get("project_root"))
-            refuse(health_root is None, "healthz-project-root-missing")
             refuse(
                 health_root is not None
                 and attest["worktree"] != UNV
@@ -160,6 +174,9 @@ def main() -> int:
                 != os.path.realpath(str(attest["worktree"])),
                 f"healthz-project-root-ne-worktree({health_root})",
             )
+            attest["healthz_identity_fields"] = sorted(
+                k for k in ("pid", "port", "project-root", "project_root")
+                if health.get(k) is not None)
         refuse(attest["ready_project_root"] == UNV, "ready-project-root-unverified")
         refuse(
             attest["ready_project_root"] != UNV

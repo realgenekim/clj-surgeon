@@ -35,6 +35,7 @@ receipt written, any stale one removed); 4 missing watch.jsonl.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import re
@@ -481,6 +482,61 @@ def score(arm: pathlib.Path, args) -> int:
     via_verb = [c for c in wcalls if c.get("verb")]
     via_verb_committed = [c for c in via_verb if c.get("outcome") == "ok"]
 
+    # ---- MCP verb invocations nested INSIDE a harness action ----------------
+    # Measured 2026-09-04, E3-P PF-5, the first live codex arm this apparatus drove:
+    # codex does not call an MCP tool as its own harness action.  It runs a JS `exec`
+    # sandbox and calls `await tools["clj-surgeon__alias_migration"]({...})` from
+    # inside it, so the rollout carries FOUR `custom_tool_call` records named `exec`
+    # and, separately, THREE `mcp_tool_call_end` records.  A meter keyed only on
+    # harness actions therefore reports `via_verb: 0` for an arm whose diff is a
+    # byte-exact tool migration -- the primary observable of E3's pass line, silently
+    # zero.  That is the `verdict-label-was-a-noun` shape with the sign flipped.
+    #
+    # The harness action count is left ALONE (one exec really is one model action;
+    # that is the quantity the non-test-action pass line is stated in).  What is added
+    # is the verb's own witness: the invocation record names the server, the tool and
+    # the arguments, and the result carries isError.  Both derivations are reported and
+    # a disagreement becomes a note rather than a silently chosen winner.
+    mcp_invocations = []
+    for obj in rollout:
+        payload = obj.get("payload") if isinstance(obj.get("payload"), dict) else None
+        if not payload or payload.get("type") != "mcp_tool_call_end":
+            continue
+        inv = payload.get("invocation") or {}
+        result = payload.get("result")
+        is_error = False
+        error_type = None
+        # codex serialises the MCP result as a Rust Result: {"Ok": {...}} / {"Err": ...}
+        if isinstance(result, dict) and set(result.keys()) <= {"Ok", "Err"}:
+            if "Err" in result:
+                is_error = True
+                result = result.get("Err")
+            else:
+                result = result.get("Ok")
+        if isinstance(result, dict):
+            is_error = bool(result.get("isError"))
+            structured = result.get("structuredContent")
+            if isinstance(structured, dict):
+                if structured.get("ok") is False:
+                    is_error = True
+                error_type = structured.get("error_type") or structured.get("error")
+        elif isinstance(result, str) and result.startswith("Err"):
+            is_error = True
+        mcp_invocations.append({
+            "server": inv.get("server"),
+            "tool": inv.get("tool"),
+            "is_error": is_error,
+            "error_type": error_type,
+            "args_sha256": hashlib.sha256(
+                json.dumps(inv.get("arguments"), sort_keys=True,
+                           default=str).encode()).hexdigest(),
+        })
+    mcp_verb = [i for i in mcp_invocations
+                if (i.get("tool") or "").split("__")[-1] in COMMITTING_VERBS]
+    mcp_verb_ok = [i for i in mcp_verb if not i["is_error"]]
+    via_verb_n = max(len(via_verb), len(mcp_verb))
+    via_verb_committed_n = max(len(via_verb_committed), len(mcp_verb_ok))
+
     # Predicate 6.  The watcher already extracted each apply_patch payload's targets
     # from the FULL arguments; score.py only holds a truncated copy, so it trusts the
     # watcher's fields when present and re-derives from the truncated text only for a
@@ -543,6 +599,15 @@ def score(arm: pathlib.Path, args) -> int:
     # ---- refusal ledger (A.6) ---------------------------------------------
     refusals = []
     errored = [c for c in wcalls if c.get("outcome") not in (None, "ok")]
+    # a verb refused INSIDE an exec sandbox never surfaces as a failed harness action
+    mcp_refusals = [
+        {"n": i, "seq": UNV, "t_offset_s": UNV, "verb": inv.get("tool"),
+         "error_type": inv.get("error_type") or UNV, "class": UNV,
+         "next_call_present": UNV, "next_call_sent_verbatim": UNV,
+         "returns_to_recover": UNV, "agent_visible": UNV, "abandoned_route": UNV,
+         "outcome": "recovered" if mcp_verb_ok else "abandoned",
+         "source": "mcp_tool_call_end"}
+        for i, inv in enumerate([m for m in mcp_verb if m["is_error"]], start=1)]
     for i, call in enumerate(errored, start=1):
         seq = call.get("seq")
         later_ok_same_tool = any(
@@ -633,8 +698,11 @@ def score(arm: pathlib.Path, args) -> int:
         "meter": meter,
         "verbs": verbs,
         "writes": {
-            "via_verb": len(via_verb),
-            "via_verb_committed": len(via_verb_committed),
+            "via_verb": via_verb_n,
+            "via_verb_committed": via_verb_committed_n,
+            "via_verb_sources": {"harness_actions": len(via_verb),
+                                 "mcp_invocations": len(mcp_verb)},
+            "mcp_invocations": mcp_invocations,
             "via_verb_by_name": {
                 v: sum(1 for c in via_verb_committed if c.get("verb") == v)
                 for v in sorted({c.get("verb") for c in via_verb_committed})
@@ -644,7 +712,8 @@ def score(arm: pathlib.Path, args) -> int:
             "native_apply_patch_clj_files": sorted(apply_patch_clj_files),
         },
         "churn": churn,
-        "refusals": refusals,
+        "refusals": refusals + (mcp_refusals if not refusals else []),
+        "refusals_mcp": mcp_refusals,
         "refusal_rate": (round(len(refusals) / metered["total_actions"], 3)
                          if metered["total_actions"] else UNV),
         "adoption": adoption,
@@ -664,7 +733,7 @@ def score(arm: pathlib.Path, args) -> int:
         "via_verb": receipt["writes"]["via_verb"],
         "native_apply_patch_clj": apply_patch_clj,
         "churn": [churn["insertions"], churn["deletions"]],
-        "refusals": len(refusals),
+        "refusals": len(receipt["refusals"]),
         "gate_green": gate["green"],
         "notes": len(notes),
     }))

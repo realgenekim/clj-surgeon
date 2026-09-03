@@ -223,6 +223,15 @@ case "$DRIVER" in
     # newest file, which mis-binds any concurrent codex session on this box and writes
     # outside the arm root besides.
     mkdir -p "$A/codex-home"
+    # A private CODEX_HOME keeps this arm's rollout out of a shared ~/.codex, but codex
+    # reads its CREDENTIALS from that same directory: an empty one makes every arm exit
+    # 1 with zero returns before a single model turn (measured 2026-09-04, E3-P PF-5 --
+    # the first time this apparatus drove a live codex rather than the fake driver).
+    # The credential is SYMLINKED, never copied: one file, one refresh, no fan-out of a
+    # secret across a dozen arm directories, and nothing to delete afterwards.
+    if [ -e "$HOME/.codex/auth.json" ] && [ ! -e "$A/codex-home/auth.json" ]; then
+      ln -s "$HOME/.codex/auth.json" "$A/codex-home/auth.json"
+    fi
     WATCH_ARGS+=(--codex-home "$A/codex-home")
     DRIVER_CMD=(env "CODEX_HOME=$A/codex-home"
                 "$HOME/bin/sol-yolo" "$A/worktree" "$A/prompt.md" "$URL" "$A/driver-report.md")
