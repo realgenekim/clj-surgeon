@@ -314,3 +314,7 @@ GO (nine) unchanged; none merged yet by the mayor.
 GO (ten): + parser-admission 52c5d85 (MEM-005; merge after read-path-memory b7ef23d + memory-battery 5534e94). Follow-ups: inb-114faa (estimator-blind tagged-literal / hat-meta towers; scan_ms sum + false zero).
 Live: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Opus kernel round 3 (eb22036); builders MEM-003 round 2 (~/src/clj-surgeon-stream), fold-diff round 7 (~/src/curtaincall-cfp-folddiff).
 Next memory leaf after MEM-003 lands: MEM-004 (workspace-sources read-all streaming fold/spill — the last battery RED row besides the ungated rename planner).
+
+## RESUME DELTA (fifteenth refresh; commit time is the timestamp)
+GO (ten) unchanged. Live: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Sol fold-diff round 6 at the tip (66325423; production GO stays at 347fe6d3); builders MEM-003 round 2 (~/src/clj-surgeon-stream), kernel round 4 (~/src/clj-surgeon-txn: in-JVM mutex before the file lock, per-thread re-entrancy, atomic stale-lock break, finish! on every exception path).
+Memory added: jvm-file-locks-are-per-process (bash flock does not block FileChannel.lock; second thread → OverlappingFileLockException).
