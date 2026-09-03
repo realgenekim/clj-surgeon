@@ -756,7 +756,27 @@
                  (study/format-ls-tree-names outlined (:dir scan)))
                (:files (run {"mode" "ls-tree" "dir" fixture-dir
                              "limit" 16384})))
-            "names is the default rendering with no grep, and is the same one formatter")))))
+            "names is the default rendering with no grep, and is the same one formatter")))
+
+    (testing "the CLI ls-tree and a max-limit MCP receipt are one tree"
+      ;; Bounding is MCP-only, so the parity witness compared projections at
+      ;; one limit on non-truncating inputs and never compared the CLI's whole
+      ;; rendering against a real receipt. The two entrances must agree on the
+      ;; tree string AND on how many files it covers.
+      (let [cli-text (core/run-ls-tree {:dir fixture-dir})
+            discovered (study/ls-tree {:dir fixture-dir})
+            response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
+                           "limit" 16384})]
+        (is (string? cli-text))
+        (is (false? (:truncated response))
+            "at the maximum limit this fixture must not truncate, or the
+             comparison would be between a whole tree and a partial one")
+        (is (= cli-text (:tree response))
+            "the same tree string from both entrances")
+        (is (= (:file-count discovered) (:file_count response)))
+        (is (= (:file_count response) (:returned response)))
+        (is (str/includes? cli-text
+                           (str "total: " (:file_count response) " files")))))))
 
 ;; ============================================================
 ;; No write authority
