@@ -259,7 +259,13 @@
 
 (def bb-edn "{:paths [\"src\" \"libsrc\" \"test\"]}\n")
 (def deps-edn "{:paths [\"src\" \"libsrc\" \"test\"]\n :deps {}}\n")
-(def gitignore "target/\n.cpcache/\n.clj-kondo/.cache/\n.lsp/\n.cache/\n*.log\n")
+(def gitignore
+  ;; GENERATED state, ignored so the acceptance's file-set check compares SOURCE.
+  ;; `.clj-surgeon/` earns its line the hard way: the PF-4 hand-drive produced a
+  ;; byte-exact migration and check 1 still went red on the verb's own per-file
+  ;; detail files.  Tool bookkeeping is the `.cpcache` case, not a source change --
+  ;; and a scorer that fails the tool arm for existing is measuring the wrong thing.
+  "target/\n.cpcache/\n.clj-kondo/\n.clj-surgeon/\n.lsp/\n.cache/\n*.log\n")
 (def fan-test-sh "#!/usr/bin/env bash\nset -euo pipefail\ncd \"$(dirname \"$0\")/..\"\nexec bb test/run_fan_tests.clj\n")
 
 ;; ------------------------------------------------------------------- emission ----
