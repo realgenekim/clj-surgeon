@@ -414,6 +414,25 @@
                   (:ok (mcp-paths/resolve-source-path root relative))))
         relatives))
 
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn- read-failure-refusal
+  "A read that failed AFTER the fence admitted the path, as a fence refusal.
+
+   The two are the SAME fact to a continuation — a name the next call must not
+   carry — so they answer alike, which is what makes the check-then-read window
+   invisible to the caller instead of visible as a different error type.
+
+   The exception's own message is NOT published: `FileNotFoundException`
+   renders as \"<absolute path> (Permission denied)\", and every other refusal
+   this namespace publishes names paths project-relative."
+  [^Throwable error]
+  {:ok false
+   :error_type :source-not-readable
+   :error (str "Source file passed the fence and then could not be read; its "
+               "mode or its existence changed under the census ("
+               (.getName (class error)) ")")})
+
 ;; @spec MCP-OP-CENSUS-017
 ;; @spec MCP-OP-CENSUS-030
 (defn collect-inputs
@@ -433,32 +452,55 @@
    (reduce
      (fn [acc relative]
        (let [resolved (mcp-paths/resolve-source-path root relative)]
-         (cond
-           (not (:ok resolved))
+         (if-not (:ok resolved)
            (reduced (assoc acc :refusal resolved :file relative))
+           (if (contains? (:seen acc) (str (:canonical resolved)))
+             (update acc :duplicates inc)
+             ;; Sol's round-fifteen item 5, and the residual round fourteen
+             ;; left behind. The fence has answered; between that answer and
+             ;; this read the filesystem may change, and it does: a mode
+             ;; flipped by another process turned 398 of 2,000 requests into
+             ;; `census-adapter-failure` with `exhausted false` and a
+             ;; resource-exhaustion remedy, and an ordinary editor's atomic
+             ;; save — `spit` to `.tmp`, `renameTo` — opens the identical
+             ;; window with no `chmod` anywhere.
+             ;;
+             ;; Moving the CHECK earlier narrowed that class; only a typed
+             ;; catch at the READ closes it. `IOException` and not `Throwable`:
+             ;; an exhaustion is a different fact and keeps its own answer at
+             ;; the catch-all above.
+             (let [read (try
+                          (let [size (Files/size ^Path (:canonical resolved))]
+                            (if (> size census/max-source-bytes)
+                              {:oversized size}
+                              {:source (slurp (:path resolved))}))
+                          (catch java.io.IOException error {:unreadable error}))]
+               (cond
+                 (:unreadable read)
+                 (reduced (assoc acc
+                                 :refusal (read-failure-refusal
+                                            (:unreadable read))
+                                 :file relative))
 
-           (contains? (:seen acc) (str (:canonical resolved)))
-           (update acc :duplicates inc)
+                 (:oversized read)
+                 (reduced (assoc acc
+                                 :oversized relative
+                                 :bytes (:oversized read)))
 
-           (> (Files/size ^Path (:canonical resolved)) census/max-source-bytes)
-           (reduced (assoc acc
-                           :oversized relative
-                           :bytes (Files/size ^Path (:canonical resolved))))
-
-           :else
-           (let [source (slurp (:path resolved))
-                 acc (-> acc
-                         (update :seen conj (str (:canonical resolved)))
-                         (update :read inc))]
-             (if (census/defines-arms? source)
-               (update acc :inputs conj {:file relative :source source})
-               ;; Not an arm file: its text is dropped here. Only its top-level
-               ;; names survive, and only when a caller's doors need checking
-               ;; against them.
-               (cond-> acc
-                 declared?
-                 (update :declared into
-                         (census/source-declared-names source))))))))
+                 :else
+                 (let [source (:source read)
+                       acc (-> acc
+                               (update :seen conj (str (:canonical resolved)))
+                               (update :read inc))]
+                   (if (census/defines-arms? source)
+                     (update acc :inputs conj {:file relative :source source})
+                     ;; Not an arm file: its text is dropped here. Only its
+                     ;; top-level names survive, and only when a caller's doors
+                     ;; need checking against them.
+                     (cond-> acc
+                       declared?
+                       (update :declared into
+                               (census/source-declared-names source)))))))))))
      {:inputs [] :read 0 :declared #{} :seen #{} :duplicates 0}
      relatives)))
 
@@ -825,7 +867,18 @@
       ;; leaves no request, there is no call to hand back and the refusal says
       ;; so. When the caller named no `files` at all, the paths came from the
       ;; walk rather than the request, so there is no request to narrow either.
-      (let [unreadable (when requested (unreadable-among root scanned))
+      (let [tripped (:file loaded)
+            ;; The entries the FENCE refuses, PLUS the one the reader tripped
+            ;; on. Sol's round-fifteen item 5: when the read is what failed,
+            ;; re-resolving the list through the fence answers "every entry is
+            ;; fine" and the narrowing computed from it is the identical
+            ;; request — a loop with a receipt, which is exactly what this
+            ;; branch's continuation exists to prevent.
+            unreadable (when requested
+                         (vec (distinct
+                                (concat (unreadable-among root scanned)
+                                        (when (some #{tripped} requested)
+                                          [tripped])))))
             removed (set unreadable)
             remaining (when requested
                         (vec (remove removed (distinct requested))))
