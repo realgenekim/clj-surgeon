@@ -13,7 +13,8 @@
    [clj-surgeon.txn-journal :as journal]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.test :refer [deftest is testing]]
+   [clojure.walk :as walk])
   (:import
    (java.nio.file Files)))
 
@@ -1605,6 +1606,98 @@
               "the first break's receipt is intact")
           (is (= "ghost-b" (:txid (read-string (slurp lock))))
               "and the claim it refused to break was never touched"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(defn- receipt-file-names
+  "Every value in a receipt that NAMES a file in the transactions directory.
+
+   Walked rather than enumerated, so a key added later is covered by the
+   invariant on the day it appears rather than on the day someone remembers
+   this witness."
+  [receipt]
+  (let [names (atom [])]
+    (walk/postwalk
+      (fn [x]
+        (when (and (map-entry? x)
+                   (contains? #{:tombstone} (key x))
+                   (string? (val x)))
+          (swap! names conj (val x)))
+        x)
+      receipt)
+    @names))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-break-does-not-retire-the-evidence-it-just-created
+  (testing "Opus round 5, blocker 1. The tombstone is made by renaming the
+            LOCK, and a rename PRESERVES mtime, while the prune measured
+            retention against that mtime - so the evidence inherited the age
+            of the claim it was evidence OF. Breaking a crashed holder's
+            two-day-old lock therefore returned a receipt naming
+            `LOCK.broken.recover-...` beside a directory that no longer
+            contained it, in the same call, with no race and no injection
+            point: the ordinary case a break exists for. Evidence carries its
+            OWN creation time or the retention rule is measured against the
+            wrong clock."
+    (let [ws (workspace! "tombstone-own-age" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          lock (io/file dir "LOCK")]
+      (try
+        (plant-lock! ws {:txid "CRASHED-HOLDER"
+                         :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        ;; a holder that crashed two days ago - older than the published
+        ;; retention age, which is what makes this deterministic
+        (.setLastModified lock (- (System/currentTimeMillis) (* 2 24 60 60 1000)))
+        (let [result (journal/recover! (:root ws) {:state-home (:state-home ws)})
+              broken (:lock-broken result)
+              counted (:broken-locks result)]
+          (is (= :process-not-alive (:cause broken))
+              (str "the stale claim is broken: " (pr-str result)))
+          (is (string? (:tombstone broken))
+              "and the receipt names the evidence it left")
+          (is (.isFile (io/file dir (:tombstone broken)))
+              (str "which must be on disk when the call that minted the name "
+                   "returns: " (:tombstone broken)))
+          (is (zero? (long (:pruned counted 0)))
+              (str "the break's own evidence is not old enough to retire: "
+                   (pr-str counted)))
+          (is (= 1 (:remaining counted))
+              (str "it is a standing count of one, not an empty bucket: "
+                   (pr-str counted))))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-receipt-never-names-a-file-that-is-not-there
+  (testing "house rule 20 as a standing witness over `recover!`'s own value.
+            A receipt must name its subject; a name whose file the same call
+            destroyed is worse than no name at all, because it terminates the
+            investigation it exists to start. Every path-naming key in the
+            receipt, and every tombstone row the sweep lists beside it, must
+            resolve to a file that exists when the call returns."
+    (let [ws (workspace! "receipt-names-exist" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          lock (io/file dir "LOCK")
+          opts {:state-home (:state-home ws)}]
+      (try
+        (plant-lock! ws {:txid "CRASHED-HOLDER"
+                         :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (.setLastModified lock (- (System/currentTimeMillis) (* 2 24 60 60 1000)))
+        (let [result (journal/recover! (:root ws) opts)
+              named (receipt-file-names result)
+              missing (remove #(.isFile (io/file dir ^String %)) named)]
+          (is (seq named)
+              (str "the receipt names at least one file: " (pr-str result)))
+          (is (empty? missing)
+              (str "and every name it carries exists at return; missing: "
+                   (pr-str missing) " in " (pr-str result))))
+        (let [rows (filter #(contains? #{:broken-lock :interrupted-break} (:kind %))
+                           (journal/retained-transactions (:root ws) opts))
+              missing (remove #(.isFile (io/file dir ^String (:txid %))) rows)]
+          (is (empty? missing)
+              (str "and the sweep lists no row for a file that is not there: "
+                   (pr-str missing))))
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
