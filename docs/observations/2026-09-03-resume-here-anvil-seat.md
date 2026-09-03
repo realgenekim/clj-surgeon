@@ -203,3 +203,60 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - Memory program: B1 kernel a2b6bbcbdc96b2925 (`~/src/clj-surgeon-txn`, TDD: OOM repro first, `make memory-red`); battery a0e2b73e06754ebf3 (`~/src/clj-surgeon-membat`, `make memory-battery`, MEM-001, red baseline on main); Sol YOLO answer waiter b7qt28zev (`~/tmp/sol/memory-sol-answer-2.md`); Opus consult a2d936e48f3423a0c. Reconcile Sol+Opus → fold numbers into B2 (adoption in alias_migration + extract after their rounds).
 - Review/fix lanes: fold-diff production re-review a94e2e37c80843f35 (gates the mayor's run; inb-3a9818 says DO NOT RUN YET); rf2 r3 a59ea3ce2a6b2a7fc (ruling: no writes into skipped trees via links) → my suites → push → re-check; census a4fe4601c68f5db01; template-upsert abd7fc65de9301f76; ratchets a90f9ebd74d4100af; q5z r3 a4f713cb01afc03cb; study r3 acffa7722710273de; kondo-path af5a3aed64de01ebb.
 - Load ~8/16, 18 GB free, forge JVM RSS ~9.6 GB. Sol-yolo PR: realgenekim/claude-skills#1.
+
+## RESUME DELTA 2026-09-03T04:26Z
+
+- Memory: Sol's measured design filed (2026-09-03-memory-design-sol-answer-2.md: 45 heap bytes per source byte = the node tree; lifetime + concurrency are the win; state root is `~/.local/state/clj-surgeon/workspaces/<digest>/`; MEM-001..011 plan with at-the-ceiling witnesses). B1 (a2b6bbcbdc96b2925) and the battery (a0e2b73e06754ebf3) re-briefed with the state root and id numbering (battery: 001 + 011; kernel: 006, 007, 012–014). Opus consult a2d936e48f3423a0c still measuring; reconcile → B2.
+- Census fix round complete ef545c5; my suites waiter b75uqudhe (`~/tmp/census/my-*.log`); push → Sol re-review (Opus for the symlink item if the filter refuses).
+- Also pending my suites: ratchets 49f6e12 (b1q8ixsp0, `~/tmp/ratchets2-*.log`), kondo f8a9ef9 (bvjc78bi1, `~/tmp/kondo-mcp-test.log`).
+- Running: fold-diff production re-review; rf2 r3 ruling commit; template-upsert; q5z r3; study r3; routing-doc.
+- Builder logs now go under `~/tmp/<lane>/` (a sibling lane overwrote a shared log).
+
+## RESUME DELTA 2026-09-03T04:34Z — NIGHT ORDERS IN FORCE
+Gene is asleep for ~9 h from 2026-09-03T04:34Z. Read `2026-09-03-night-orders-anvil.md` (goals + mayor help) and
+`2026-09-03-merge-queue-for-mayor.md`; keep `/tmp/anvil-pulse.txt` fresh (cron heartbeat every 10 min:
+read new `/tmp/mayor-*.txt`, honour `/tmp/anvil-halt.txt`). Live lanes at this write: ratchets Sol
+re-review (~/tmp/sol/ratchets-sol-review.md), census suites (~/tmp/census/my-*.log), rf2 r3, q5z r3,
+study r3, template-upsert fix, fold-diff r3, battery, B1 kernel, routing-doc fix. Opus memory consult
+LANDED (`2026-09-03-memory-design-opus-answer.md`): the node tree is 48× source, zippers add 1.2% — the
+zipper premise was wrong; outline double-parses (76 MB garbage per 52 KB file); aggregate-bytes ceiling
+is the missing control that explains the alias_migration OOM. Next: reconcile with Sol-2, launch B2
+read-path lane.
+
+## RESUME DELTA 2026-09-03T05:19Z — night orders, mid-night state
+MERGED to main by surgeon1: kondo f8a9ef9 (acda1b3), routing-doc a9d8701 (3ebeafd/d1c5330); main fast-suite baseline is ZERO (702/5912/0, ~/tmp/main/test-fast-981a9f1.log). Queue doc: `2026-09-03-merge-queue-for-mayor.md`.
+Live lanes and where their receipts land (Sol reviews: ~/tmp/sol/<lane>-sol-review.md, log ends with EXIT):
+- ratchets fe7a1a1 pushed → Sol round-3 re-check (ratchets3).
+- rf2 465c956 pushed → Opus found the MCP entrance bypasses the walk (wrote into .git/hooks) → round 4 building on ~/src/clj-surgeon-rf2.
+- q5z ca677bc pushed → Sol NO-GO (undo receipt pruned; aggregate next_call IS possible) → round 4 building on ~/src/clj-surgeon-q5z.
+- census ef545c5 pushed → Sol NO-GO (silent truncation at 4,000) → round 3 building on ~/src/clj-surgeon-census.
+- study round 3 building on ~/src/clj-surgeon-study; template-upsert fix on ~/src/curtaincall-cfp-tmpl; fold-diff round 3 on ~/src/curtaincall-cfp-folddiff (waiting on its suite).
+- memory battery 2bae68b pushed → Sol GO-WITH-FIX as tooling → round 2 building on ~/src/clj-surgeon-membat (INCOMPLETE≠PASS, verified corpus, attested reference, held_mb line: max(held 10k) ≤ max(held 1k) + 2.0 MiB).
+- B1 kernel on ~/src/clj-surgeon-txn (TDD from the OOM; owns the reserved-peak accountant); B2 MEM-015 single-parse on ~/src/clj-surgeon-readpath (gate = battery lines on ls-tree).
+- arms apparatus 598139c pushed (bridge/anvil-arms-apparatus) → Sol instrument review (arms). E3/E6 spec: `2026-09-04-e3-e6-prestaged.md`. Owed before any cohort: PF-1..4, PF-6; PF-4 = G1 hand-drive of alias_migration/ls-tree (needs q5z on main and my MCP tools bound to 7906 — session restart required, NOT tonight while lanes run).
+Crons in this session: heartbeat */10 (pulse /tmp/anvil-pulse.txt, reads /tmp/mayor-*.txt, honours /tmp/anvil-halt.txt); usage watch hourly at :23. Inbox: inb-1165ce (night orders to the mayor), inb-2f78f5 (collateral handler-identity assertion), inb-3a9818 (fold-diff HOLD).
+Docs added tonight: vision.md "How we work" + "When the work is delegated" (+ the-how techniques doc), magic-moments chronicle, memory-design reconciled, night orders, answer to the mayor.
+Next on wake: read the newest Sol/Opus verdicts, file, launch rounds; when lanes go quiet, write the Gene report (tables first) and refresh this note.
+
+## RESUME DELTA 2026-09-03T06:26Z — night orders, second refresh
+GO so far: kondo (MERGED acda1b3), routing-doc (MERGED 3ebeafd/d1c5330), receipt-ratchets c5ef7ca (GO, on inb-1165ce as GO #3). Main baseline is zero (702/5912/0).
+Rule changes tonight: unit suites run under `~/bin/suite-run <cmd>` (three lanes); only the memory battery / memory-red take the exclusive suite.lock. `~/bin/sol-yolo` disables every repo-declared MCP server unless a url is passed (curtaincall-cfp's .codex/config.toml declares 7888 required — incident logged 06:05Z, mayor told on inb-1165ce).
+Live (receipts under ~/tmp/sol/<lane>-sol-review.md, EXIT line in the log): Sol: census round 3 (f43ac03), arms apparatus round 2 (6c1cf0a), MEM-015 read-path (61cb9b5), battery round 2 (c6a2264). Opus: rf2 round 4 (965d49e). Builders: study round 4 (ReDoS step budget; ~/src/clj-surgeon-study), template-upsert round 2 (blank-id contract; ~/src/curtaincall-cfp-tmpl), q5z round 5 (detail ownership by manifest+marker, collision before mkdirs, marker at the real write; ~/src/clj-surgeon-q5z), fold-diff round 3 (~/src/curtaincall-cfp-folddiff, waiting on its suite), B1 kernel (~/src/clj-surgeon-txn), B3 MEM-005 parser admission (~/src/clj-surgeon-admit, based on the MEM-015 tip).
+Inbox: inb-1165ce (night orders + GO notes + the 7888 incident), inb-2f78f5 (candidate-catalog handler identity), inb-46f90f (usage-watch friction: telemetry needs port/session tags), inb-c19ce6 (curtain-call raw-id audit), inb-3a9818 (fold-diff HOLD).
+Next on wake: newest verdicts → file → GO note or next round; at ~08:30Z start the Gene report (tables first) from the captain's log; refresh this note.
+
+## RESUME DELTA 2026-09-03T06:56Z — night orders, third refresh
+GO so far (five): kondo (MERGED acda1b3), routing-doc (MERGED), receipt-ratchets c5ef7ca, template-upsert 25b98a83 (order-gated on Gene), rf2-extract-rewire 965d49e. All on inb-1165ce with verify commands.
+Live Sol reviews (receipts ~/tmp/sol/<lane>-sol-review.md): txn-journal kernel (B1, 1cece9a), q5z round 5 (50098e6), fold-diff round 3 (2b56a484, curtain-call).
+Live builders: study round 4 (ReDoS step budget; ~/src/clj-surgeon-study), census round 4 (one discovery kernel for MCP + both CLIs; ~/src/clj-surgeon-census), B3 MEM-005 parser admission (~/src/clj-surgeon-admit), arms apparatus round 3 (~/src/clj-surgeon-arms), MEM-015 round 2 (~/src/clj-surgeon-readpath), battery round 3 (~/src/clj-surgeon-membat).
+Rules in force: unit suites via ~/bin/suite-run (three lanes); battery/memory-red keep the exclusive suite.lock; sol-yolo disables repo-declared MCP servers (7888 incident 06:05Z, reported).
+Inbox: inb-1165ce (night orders, GO notes, incident), inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4 (rf2 fence follow-ups), inb-3a9818 (fold-diff HOLD until Sol GO).
+Next on wake: file newest verdicts; at ~08:30Z the Gene report (tables first) from the captain's log; refresh this note.
+
+## RESUME DELTA 2026-09-03T07:18Z — night orders, fourth refresh
+GO (seven): kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated on Gene); rf2 965d49e; read-path-memory 2aa648a (MEM-015); memory-battery 5534e94 (tooling; main RED under it by design). fold-diff 2b56a484: GO for the mayor's exact production read with Sol's conditions (inb-3a9818 HOLD lifted); round 4 building for residuals.
+Live reviews: Sol census round 4 (1e5eec7), Sol q5z round 6 (9d72bcf); Opus study round 4 (ec5a592).
+Live builders: B3 MEM-005 (~/src/clj-surgeon-admit, RED committed, GREEN in progress), arms apparatus round 3 (~/src/clj-surgeon-arms), B1 kernel round 2 (~/src/clj-surgeon-txn: recheck→rename race, membership digest, , identity pinning, pre-image lifetime, battery accountant), fold-diff round 4 (~/src/curtaincall-cfp-folddiff).
+Gene report DRAFT committed: docs/observations/2026-09-03-gene-report-night.md (refresh at the end; tables from the log).
+Rules in force unchanged (suite-run lanes; battery/memory-red exclusive; sol-yolo neutralises repo .codex/config.toml — two 7888 contacts reported on inb-1165ce).
+Next on wake: file newest verdicts; when lanes go quiet or at ~08:30Z, refresh the Gene report and this note.
