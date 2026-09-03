@@ -660,16 +660,25 @@
   "Retire the tombstones older than `broken-lock-retention-ms`, and count them.
 
    Returns the bucket both `recover!` and any caller reading it can see. A
-   non-zero `:remaining` is a standing count, not an archive."
+   non-zero `:remaining` is a standing count, not an archive.
+
+   `:vanished` counts the entries whose file was gone between the listing and
+   the stat. They are deliberately NOT in `:found`: `lastModified` of a
+   missing file is 0, which reads as infinitely old, so the old count found
+   them, failed to delete them, and inflated `:remaining` with files that no
+   longer existed - 822 of 9,831 rows under concurrency. An absent file is
+   absent, which is neither an age nor a member of a standing count."
   [transactions-dir now-ms]
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
-        found (long (count tombstones))
-        pruned (long (reduce (fn [n ^File f]
-                               (let [age (tombstone-age-ms f now)]
-                                 (if (and (number? age)
-                                          (>= (long age)
-                                              (long broken-lock-retention-ms)))
+        aged (mapv (fn [^File f] [f (tombstone-age-ms f now)]) tombstones)
+        present (filterv (fn [entry] (number? (nth entry 1))) aged)
+        vanished (- (long (count aged)) (long (count present)))
+        found (long (count present))
+        pruned (long (reduce (fn [n entry]
+                               (let [^File f (nth entry 0)
+                                     age (long (nth entry 1))]
+                                 (if (>= age (long broken-lock-retention-ms))
                                    (do (Files/deleteIfExists
                                          (.toPath ^File (broken-at-file f)))
                                        (if (Files/deleteIfExists (.toPath f))
@@ -677,10 +686,11 @@
                                          (long n)))
                                    (long n))))
                              0
-                             tombstones))]
+                             present))]
     {:found found
      :pruned pruned
      :remaining (- found pruned)
+     :vanished vanished
      :retention-ms broken-lock-retention-ms}))
 
 (defn- displaced-line
@@ -1981,16 +1991,24 @@
                :evictable (:evictable lease false)
                :lease (:lease lease)
                :bytes (dir-bytes d)}))
-       (for [^File f (broken-lock-files transactions)]
+       ;; A file that vanished between the listing and the stat is ABSENT,
+       ;; and a zero-length one carries no claim: neither is evidence, and a
+       ;; row for one bills bytes that are not there against an age no clock
+       ;; produced. `lastModified` of a missing file is 0, which the old row
+       ;; read as infinitely old - 822 of 9,831 rows under concurrency.
+       (for [^File f (broken-lock-files transactions)
+             :let [age (tombstone-age-ms f now)
+                   bytes (.length f)]
+             :when (and (number? age) (pos? (long bytes)))]
          {:txid (.getName f)
           :kind :broken-lock
           :status :lock-broken
           :receipt-refs 0
           :evictable false
           :retired-by :txn/recover
-          :age-ms (- now (.lastModified f))
+          :age-ms age
           :retention-ms broken-lock-retention-ms
-          :bytes (.length f)})))))
+          :bytes bytes})))))
 
 (defn undo!
   ;; @spec MCP-OP-MEM-006

@@ -1707,6 +1707,89 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(deftest the-sweep-and-the-prune-read-one-clock-for-a-tombstone
+  (testing "Opus round 5, finding 2: this build hardened ONE timestamp read
+            and left two others reading the stamp it had just declared
+            insufficient. `retained-transactions` bills a tombstone's age from
+            `.lastModified` alone, so a `cp -p`, `rsync -t`, `tar -x` or a
+            restore from backup - all of which PRESERVE mtime - makes the
+            sweep report evidence as past retention while recovery, reading
+            the newest of mtime and ctime, correctly keeps it. Two verbs
+            disagreeing about one file is a composite state with no
+            authority."
+    (let [ws (workspace! "tombstone-one-clock" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          copied (io/file dir "LOCK.broken.RESTORED-FROM-BACKUP")]
+      (try
+        (.mkdirs dir)
+        (spit copied (pr-str {:txid "ghost-copied" :pid 1}))
+        ;; what `cp -p` leaves: an old mtime on a file created moments ago
+        (.setLastModified copied (- (System/currentTimeMillis)
+                                    (* 30 24 60 60 1000)))
+        (let [row (first (filter #(= "LOCK.broken.RESTORED-FROM-BACKUP" (:txid %))
+                                 (journal/retained-transactions (:root ws) opts)))]
+          (is (some? row) "the sweep lists it")
+          (is (number? (:age-ms row)))
+          (is (< (long (:age-ms row)) (long journal/broken-lock-retention-ms))
+              (str "and reads its age off the same basis recovery does, or the "
+                   "two verbs disagree about one file: " (pr-str row))))
+        (let [result (journal/recover! (:root ws) opts)]
+          (is (.isFile copied)
+              (str "recovery keeps it, which is the reading the sweep must "
+                   "agree with: " (pr-str (:broken-locks result)))))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-sweep-never-bills-a-tombstone-that-is-not-there
+  (testing "the other half of finding 2. `lastModified` of a missing file is
+            0, which the sweep reads as infinitely old and bills as
+            `:bytes 0`: a file that vanishes between the listing and the stat
+            produced a row with an epoch-sized age for a file that was gone -
+            822 of 9,831 rows under concurrency. An ABSENT file is absent, not
+            a zero and not infinitely old, and no row may describe one."
+    (let [ws (workspace! "tombstone-absent-rows" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          running (atom true)
+          churn (Thread.
+                  (fn []
+                    (loop []
+                      (when @running
+                        (let [made (doall
+                                     (for [i (range 40)]
+                                       (let [f (io/file dir (str "LOCK.broken.CHURN-" i))]
+                                         (spit f (pr-str {:txid (str "ghost-" i) :pid 1}))
+                                         f)))]
+                          (doseq [^java.io.File f made] (.delete f)))
+                        (recur)))))
+          rows (atom [])]
+      (try
+        (.mkdirs dir)
+        (.start churn)
+        (loop [i 0]
+          (when (and (< i 4000) (< (count @rows) 400))
+            (swap! rows into (filter #(= :broken-lock (:kind %))
+                                     (journal/retained-transactions (:root ws) opts)))
+            (recur (inc i))))
+        (reset! running false)
+        (.join churn 5000)
+        (is (>= (count @rows) 400)
+            (str "the sweep must actually read the directory while files are "
+                 "vanishing, or it proves nothing: " (count @rows) " rows"))
+        (let [ghosts (remove #(and (number? (:age-ms %))
+                                   (< (long (:age-ms %)) 1000000000000)
+                                   (pos? (long (:bytes % 0))))
+                             @rows)]
+          (is (zero? (count ghosts))
+              (str "no row may bill a file that is not there: " (count ghosts)
+                   " of " (count @rows) "; first: " (pr-str (first ghosts)))))
+        (finally
+          (reset! running false)
+          (.join churn 5000)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
 (deftest the-no-hard-links-restore-fallback-refuses-a-lock-that-reappeared
   (testing "the fallback `restore-lock!` takes on a filesystem with no
             `link(2)` at all. It is check-then-act and its docstring says so;
