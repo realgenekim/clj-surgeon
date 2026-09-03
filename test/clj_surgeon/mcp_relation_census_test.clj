@@ -3442,3 +3442,117 @@
         ;; decoded U+FFFD back out yields three different bytes — so the
         ;; cleanup goes through the shell that created it.
         (proc/shell {:continue true} "rm" "-rf" (.getCanonicalPath parent))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
+;;
+;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
+;; in bytes by every remedy that mentions it — and it was enforced with
+;; `count`, which counts UTF-16 code units. On an ASCII path the two agree,
+;; which is why the bound looked correct for eleven rounds. On a path with
+;; accented characters they do not: Sol emitted a continuation of 490
+;; characters and 890 UTF-8 bytes under a 512-BYTE limit, and the same
+;; arithmetic guards the tool's JSON continuations.
+;;
+;; The bound exists because a continuation is a thing a caller reads, pastes
+;; and execs, and every one of those consumers measures bytes: argv is bytes,
+;; a JSON body is bytes, a terminal line is bytes. So the measurement is
+;; bytes, at one shared predicate both entrances call, and the remedy that
+;; replaces an over-long continuation SAYS what it measured — a refusal that
+;; names a bound without naming the value it compared against leaves the
+;; caller to guess how much shorter is short enough.
+;; ---------------------------------------------------------------------------
+
+(def ^:private wide-continuation-path
+  "A path whose CLI continuation is 490 characters and 890 UTF-8 bytes.
+
+   `é` is one Java character and two UTF-8 bytes, so this is Sol's exact
+   counterexample: comfortably inside a 512-character bound and far outside a
+   512-byte one."
+  (let [segment (apply str (repeat 100 "é"))]
+    (str "/" segment "/" segment "/" segment "/" segment "/"
+         (apply str (repeat 34 "a")))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest the-continuation-ceiling-is-measured-in-bytes
+  (testing "the fixture is Sol's: 490 characters, 890 bytes"
+    (let [command (census/render-command
+                    ["clj-surgeon" ":op" ":relation-census"
+                     ":dir" wide-continuation-path ":threads" "8"])]
+      (is (= 490 (count command))
+          (str "the fixture drifted: " (count command) " characters"))
+      (is (= 890 (alength (.getBytes ^String command "UTF-8")))
+          (str "the fixture drifted: "
+               (alength (.getBytes ^String command "UTF-8")) " bytes"))
+      (is (<= (count command) census/max-next-call-bytes)
+          "the fixture no longer fits the CHARACTER bound it must fit")
+      (is (> (alength (.getBytes ^String command "UTF-8"))
+             census/max-next-call-bytes)
+          "the fixture no longer breaks the BYTE bound it must break")))
+
+  (testing "one shared predicate answers the bound, in bytes"
+    ;; Resolved rather than referred, so this namespace still LOADS while the
+    ;; predicate does not exist and the rest of the witness can report on the
+    ;; behaviour instead of dying at compile time.
+    (let [within? (some-> (resolve 'clj-surgeon.relation-census/within-next-call-bytes?)
+                          var-get)]
+      (is (some? within?)
+          (str "there is no ONE shared predicate for the continuation bound, "
+               "so each call site measures it in whatever units it happens "
+               "to reach for"))
+      (when within?
+        (is (true? (within? (apply str (repeat census/max-next-call-bytes "a"))))
+            "a continuation exactly at the bound was refused")
+        (is (false? (within? (apply str (repeat (inc census/max-next-call-bytes)
+                                                "a"))))
+            "a continuation one byte over the bound was allowed")
+        (is (false? (within? (apply str (repeat (quot census/max-next-call-bytes 2)
+                                                "éé"))))
+            (str "a continuation of " census/max-next-call-bytes
+                 " characters and " (* 2 census/max-next-call-bytes)
+                 " bytes was measured as fitting a "
+                 census/max-next-call-bytes "-byte bound")))))
+
+  (testing "a continuation over the BYTE bound is refused, not emitted"
+    (let [refusal (core/run-relation-census
+                    {:dir wide-continuation-path :threads "not-a-number"})]
+      (is (= :invalid-pool-size (:error-type refusal)))
+      (is (= wide-continuation-path (:absolute (:anchor refusal)))
+          "the refusal stopped naming the workspace it was given")
+      (is (not (contains? refusal :next-command))
+          (str "a continuation of 890 UTF-8 bytes was handed back under a "
+               census/max-next-call-bytes "-byte bound: "
+               (pr-str (:next-command refusal))))
+      (is (not (contains? refusal :next-command-argv)))
+      (is (string? (:remedy refusal))
+          "the refusal offers neither a continuation nor a remedy")
+      (is (str/includes? (str (:remedy refusal)) "890")
+          (str "the remedy does not state the byte length it measured: "
+               (pr-str (:remedy refusal))))
+      (is (str/includes? (str (:remedy refusal))
+                         (str census/max-next-call-bytes))
+          (str "the remedy does not state the bound: "
+               (pr-str (:remedy refusal))))))
+
+  (testing "the post-scan refusals measure the same way"
+    ;; `:doors` reaches its refusal after the scan and builds its
+    ;; continuation at a different site; a bound enforced in one branch is a
+    ;; bound the other branches break.
+    (let [refusal (core/run-relation-census
+                    {:dir wide-continuation-path :doors "conj"})]
+      (is (= :unknown-door-symbol (:error-type refusal)))
+      (is (not (contains? refusal :next-command))
+          (str "the door refusal emitted an over-long continuation: "
+               (pr-str (:next-command refusal))))
+      (is (str/includes? (str (:remedy refusal)) "bytes")
+          (str "the door remedy does not talk about bytes: "
+               (pr-str (:remedy refusal))))))
+
+  (testing "an ASCII continuation of the same length still fits"
+    (let [ascii (str "/" (apply str (repeat 430 "a")))
+          refusal (core/run-relation-census
+                    {:dir ascii :threads "not-a-number"})]
+      (is (= :invalid-pool-size (:error-type refusal)))
+      (is (contains? refusal :next-command)
+          (str "a continuation well inside the byte bound was refused: "
+               (pr-str refusal))))))
