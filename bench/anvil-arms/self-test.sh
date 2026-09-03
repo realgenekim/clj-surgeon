@@ -591,6 +591,63 @@ for bad_n in -1 abc 1.5; do
   want "case18b n=$bad_n rc" 64 "$?"
 done
 
+echo "== case 19: cleanup signals ONLY the server this invocation spawned =="
+# Sol, item 11: SERVER_STARTED=1 was not tied to the spawned pid, and cleanup read
+# whatever pid happened to be in ready.edn -- a stale file, or one written by another
+# arm, could make this script signal a process it never started.  A pid is not an
+# identity: pids are reused, so the recorded start time is checked too.
+starttime_of () { cut -d')' -f2 "/proc/$1/stat" 2>/dev/null | awk '{print $20}'; }
+
+# 19a -- a pid this test really started, correctly recorded: it must be stopped
+A19A="$WORK/st-P-T-19a"; mkdir -p "$A19A/server"
+sleep 300 & P19A=$!
+printf '%s %s\n' "$P19A" "$(starttime_of "$P19A")" > "$A19A/server/spawned.pid"
+printf '{:ok true :pid %s :project-root "%s"}\n' "$P19A" "$A19A" > "$A19A/server/ready.edn"
+bash "$HERE/stop-server.sh" "$A19A" > "$WORK/case19a.out" 2>&1
+want "case19a stop-server rc" 0 "$?"
+sleep 1
+kill -0 "$P19A" 2>/dev/null \
+  && { bad "case19a the server this script started ($P19A) was not stopped"; kill -9 "$P19A" 2>/dev/null; } \
+  || ok "case19a the spawned server $P19A was stopped"
+
+# 19b -- NO spawned.pid, only a ready.edn naming a live process: signal NOTHING
+A19B="$WORK/st-P-T-19b"; mkdir -p "$A19B/server"
+sleep 300 & P19B=$!
+printf '{:ok true :pid %s :project-root "%s"}\n' "$P19B" "$A19B" > "$A19B/server/ready.edn"
+bash "$HERE/stop-server.sh" "$A19B" > "$WORK/case19b.out" 2>&1
+rc19b=$?
+[ "$rc19b" -ne 0 ] && ok "case19b refused (rc $rc19b) with no recorded spawn" \
+  || bad "case19b returned 0 while signalling nothing was the only safe act"
+sleep 1
+kill -0 "$P19B" 2>/dev/null \
+  && ok "case19b the unrelated process $P19B was NOT signalled" \
+  || bad "case19b signalled a process this invocation never started"
+grep -q 'no recorded spawn' "$WORK/case19b.out" \
+  && ok "case19b typed refusal" || { bad "case19b untyped refusal"; cat "$WORK/case19b.out"; }
+kill -9 "$P19B" 2>/dev/null
+
+# 19c -- the recorded pid is live but its START TIME differs: a REUSED pid, not our server
+A19C="$WORK/st-P-T-19c"; mkdir -p "$A19C/server"
+sleep 300 & P19C=$!
+printf '%s %s\n' "$P19C" "$(( $(starttime_of "$P19C") + 4242 ))" > "$A19C/server/spawned.pid"
+bash "$HERE/stop-server.sh" "$A19C" > "$WORK/case19c.out" 2>&1
+rc19c=$?
+[ "$rc19c" -ne 0 ] && ok "case19c refused (rc $rc19c) on a start-time mismatch" \
+  || bad "case19c signalled a pid whose start time does not match the recorded spawn"
+sleep 1
+kill -0 "$P19C" 2>/dev/null \
+  && ok "case19c the reused pid $P19C was NOT signalled" \
+  || bad "case19c killed a process that merely inherited the pid"
+grep -q 'start-time-mismatch' "$WORK/case19c.out" \
+  && ok "case19c typed refusal: start-time-mismatch" \
+  || { bad "case19c untyped refusal"; cat "$WORK/case19c.out"; }
+kill -9 "$P19C" 2>/dev/null
+
+# 19d -- run-arm.sh records what it spawned
+grep -q 'spawned.pid' "$HERE/run-arm.sh" \
+  && ok "case19d run-arm.sh records the pid it spawned" \
+  || bad "case19d run-arm.sh still trusts whatever pid ready.edn holds"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
