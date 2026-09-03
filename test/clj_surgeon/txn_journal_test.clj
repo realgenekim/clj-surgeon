@@ -1707,6 +1707,93 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(deftest two-breakers-sharing-a-txid-cannot-destroy-each-others-evidence
+  (testing "Opus round 5, finding 3. The tombstone-collision guard was
+            `.exists` followed by a `Files/move` carrying ATOMIC_MOVE - a
+            check-then-act in front of `rename(2)`, which on POSIX replaces
+            unconditionally - and the `FileAlreadyExistsException` catch
+            behind it cannot fire on ext4. `begin!` takes `:txid` verbatim
+            from its caller, so two breakers sharing one txid raced: measured
+            13 of 4,000, the judged claim destroyed and BOTH breakers handed
+            `LOCK.broken.SAME-TXID` as the place to find it, a receipt naming
+            a subject only one of them owned. The name must be claimed by a
+            primitive that is create-if-absent IN THE KERNEL, so exactly one
+            breaker owns it and the other is refused."
+    (let [dir (temp-dir "tombstone-collision-race")
+          lock (io/file dir "LOCK")
+          pid (.pid (java.lang.ProcessHandle/current))
+          running (atom true)
+          hammer-n (atom 0)
+          hammer (Thread.
+                   (fn []
+                     (loop []
+                       (when @running
+                         (create-lock-if-absent!
+                           dir (pr-str {:txid (str "HAMMER-" (swap! hammer-n inc))
+                                        :pid pid :boot-id "b"}))
+                         (recur)))))
+          destroyed (atom 0)
+          engaged (atom 0)
+          shared-name (atom 0)
+          sample (atom nil)
+          pool (java.util.concurrent.Executors/newFixedThreadPool 2)]
+      (try
+        (.start hammer)
+        ;; bounded by its OUTCOME - enough rounds in which both breakers
+        ;; actually reached the name, or the first destroyed claim - with a
+        ;; hard cap so a loaded box cannot turn a race witness into an
+        ;; unbounded loop
+        (loop [i 0]
+          (when (and (< i 4000)
+                     (zero? (long @destroyed))
+                     (< (long @engaged) 200))
+            (doseq [^java.io.File f (.listFiles (io/file dir))]
+              (when (.startsWith (.getName f) "LOCK.broken") (.delete f)))
+            (.delete lock)
+            (let [victim (pr-str {:txid (str "VICTIM-" i) :pid pid :boot-id "b"})]
+              (create-lock-if-absent! dir victim)
+              (let [judged (@#'journal/read-lock-claim lock)]
+                (when (= victim (:content judged))
+                  (let [barrier (java.util.concurrent.CyclicBarrier. 2)
+                        task (fn []
+                               (fn []
+                                 (.await barrier)
+                                 (@#'journal/break-lock! dir judged "SAME-TXID")))
+                        outcomes (mapv #(.get ^java.util.concurrent.Future %)
+                                       (.invokeAll pool [(task) (task)]))
+                        on-disk (into #{} (keep (fn [^java.io.File f]
+                                                  (when (.isFile f)
+                                                    (try (slurp f)
+                                                         (catch Exception _ nil))))
+                                                (.listFiles (io/file dir))))]
+                    (when (every? #(not= :lock-vanished (:cause %)) outcomes)
+                      (swap! engaged inc))
+                    (when (< 1 (count (filter #(true? (:broken %)) outcomes)))
+                      (swap! shared-name inc))
+                    (when-not (contains? on-disk victim)
+                      (swap! destroyed inc)
+                      (compare-and-set! sample nil
+                                        [i (pr-str outcomes) (pr-str on-disk)]))))))
+            (recur (inc i))))
+        (reset! running false)
+        (.join hammer 5000)
+
+        (is (zero? (long @destroyed))
+            (str "a break may never destroy the claim another break judged: "
+                 @destroyed " round(s) destroyed it; first: " (pr-str @sample)))
+        (is (zero? (long @shared-name))
+            (str "and two breakers may never both own one tombstone name: "
+                 @shared-name " round(s) did"))
+        (is (>= (long @engaged) 200)
+            (str "the race must actually be exercised, or it proves nothing: "
+                 @engaged " engaged round(s)"))
+        (finally
+          (reset! running false)
+          (.join hammer 5000)
+          (.shutdownNow pool)
+          (delete-tree! dir))))))
+
+;; @spec MCP-OP-MEM-013
 (deftest the-sweep-and-the-prune-read-one-clock-for-a-tombstone
   (testing "Opus round 5, finding 2: this build hardened ONE timestamp read
             and left two others reading the stamp it had just declared
