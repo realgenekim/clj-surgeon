@@ -1164,3 +1164,26 @@
           (is (str/includes? doc "warm snapshot store")
               "the determinism claim in the ns docstring must be QUALIFIED to
                a warm snapshot store"))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-root-spelled-with-dot-dot-pages-exactly-as-it-scans
+  ;; `abs` is `fs/absolutize`d, NOT normalized, and the encoder relativizes
+  ;; candidate files against that exact string. So the confinement resolver
+  ;; must compare on the NORMALIZED form and return the UNNORMALIZED join, or
+  ;; a `:dir` spelled with `..` renders different `:file` values on a
+  ;; continuation page than on the fresh scan — a divergence introduced by the
+  ;; guard, in the same family as the symlink one.
+  (with-project [dir fixture-count "ls-tree-budget-dotdot-root"]
+    (let [odd (str dir "/src/..")
+          whole (core/run-ls-tree {:dir odd :format :edn})
+          p1 (core/run-ls-tree {:dir odd :format :edn :max-results 5})
+          p2 (core/run-ls-tree {:dir odd :format :edn :max-results 5
+                                :cursor (cursor-of p1)})
+          p3 (core/run-ls-tree {:dir odd :format :edn :max-results 5
+                                :cursor (cursor-of p2)})]
+      (is (= fixture-count (count (entry-files whole))))
+      (is (= (entry-files whole)
+             (into (into (entry-files p1) (entry-files p2)) (entry-files p3)))
+          "the pages concatenate to the fresh scan even when the root is
+           spelled with `..`")
+      (is (nil? (cursor-of p3))))))
