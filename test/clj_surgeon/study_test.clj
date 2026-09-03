@@ -408,3 +408,53 @@
         "and the term the new formula produces there")
     (is (re-find #"21(\.\d+)?x" doc)
         "and the margin between them, as a ratio — not a guess")))
+
+;; ============================================================
+;; budgeted-subject's subSequence and toString are counted too
+;; (round-4 re-review fix 4)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest budgeted-subject-subsequence-reads-stay-counted
+  ;; subSequence used to delegate straight to the underlying String,
+  ;; returning an UNCOUNTED CharSequence: reading through it bypassed the
+  ;; pool entirely, contradicting the docstring's "exactly budget reads
+  ;; succeed; the next one throws." Not reachable via ns-grep-hit? today
+  ;; (java.util.regex reads the subject only through charAt), but the
+  ;; invariant on the object itself should be total, not conditional on
+  ;; today's one caller.
+  (let [budgeted #'study/budgeted-subject
+        pool (study/ns-grep-pool 3)
+        view (budgeted "abcdef" pool)
+        sub (.subSequence view 1 4)] ;; "bcd"
+    (is (= \b (.charAt sub 0)))
+    (is (= \c (.charAt sub 1)))
+    (is (= \d (.charAt sub 2)))
+    (is (thrown? clojure.lang.ExceptionInfo (.charAt sub 0))
+        "the subsequence shares the same pool, and it is now exhausted")))
+
+;; @spec MCP-OP-STUDY-031
+(deftest budgeted-subject-tostring-charges-the-whole-length
+  (let [budgeted #'study/budgeted-subject]
+    (testing "a budget covering the whole string succeeds and is spent"
+      (let [pool (study/ns-grep-pool 6)
+            view (budgeted "abcdef" pool)]
+        (is (= "abcdef" (.toString view)))
+        (is (zero? (aget ^longs pool 0)) "toString charges the whole length")
+        (is (thrown? clojure.lang.ExceptionInfo (.charAt view 0))
+            "the pool is now exhausted")))
+    (testing "a budget too small for the whole string refuses, not silently reads"
+      (let [pool (study/ns-grep-pool 3)
+            view (budgeted "abcdef" pool)]
+        (is (thrown? clojure.lang.ExceptionInfo (.toString view)))))))
+
+;; @spec MCP-OP-STUDY-031
+;; @spec MCP-OP-STUDY-012
+(deftest a-grouped-ns-grep-pattern-still-matches-through-the-real-entrance
+  ;; Matcher.group() calls subSequence internally during capture-group
+  ;; extraction. This must keep working exactly as before once subSequence
+  ;; returns a counted view instead of a raw String.
+  (is (true? (study/ns-grep-hit?
+              (study/compile-pattern "(mcp)_(inspect)")
+              "clj_surgeon/mcp_inspect_tool.clj"
+              (study/ns-grep-pool 1000000)))))

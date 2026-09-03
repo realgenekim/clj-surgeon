@@ -551,20 +551,31 @@
    interrupt a running matcher and `Matcher` polls no interrupt flag, so the
    only place a backtracking match can be stopped from is inside the
    `CharSequence` it reads. Exactly `budget` reads succeed; the next one
-   throws."
+   throws — TOTALLY: `subSequence` returns another counted view sharing the
+   same pool rather than the raw, uncounted `String`, and `toString` charges
+   the whole length it hands back. `java.util.regex` reads a subject only
+   through `charAt` (verified across 15 constructs, lookbehind and
+   backreferences included), so neither is on today's match path — but a
+   future engine path, or `Matcher.group()`'s own `subSequence` call during
+   capture extraction, must not be a silent bypass of the counter."
   ^CharSequence [^String s ^longs pool]
-  (reify CharSequence
-    (length [_] (.length s))
-    (charAt [_ index]
-      (let [left (unchecked-dec (aget pool 0))]
-        (aset pool 0 left)
-        (when (neg? left)
-          (throw (ex-info "ns-grep match budget exhausted"
-                          {:error-type :ns-grep-match-budget-exceeded
-                           :budget (aget pool 1)}))))
-      (.charAt s index))
-    (subSequence [_ start end] (.subSequence s start end))
-    (toString [_] s)))
+  (letfn [(charge! [^long n]
+            (let [left (unchecked-subtract (aget pool 0) n)]
+              (aset pool 0 left)
+              (when (neg? left)
+                (throw (ex-info "ns-grep match budget exhausted"
+                                {:error-type :ns-grep-match-budget-exceeded
+                                 :budget (aget pool 1)})))))]
+    (reify CharSequence
+      (length [_] (.length s))
+      (charAt [_ index]
+        (charge! 1)
+        (.charAt s index))
+      (subSequence [_ start end]
+        (budgeted-subject (.substring s start end) pool))
+      (toString [_]
+        (charge! (.length s))
+        s))))
 
 ;; @spec MCP-OP-STUDY-012
 ;; @spec MCP-OP-STUDY-031
