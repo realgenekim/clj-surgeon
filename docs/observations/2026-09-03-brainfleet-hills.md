@@ -617,3 +617,16 @@ tonight outrank the cap: "prove it was worth it", "target 50% functional". The g
 is the fleet's shared next hill after E3/E6: Opus's hill 4 (gate as a harness hook) and Sol's
 hill 4 (gate sensitivity on seeded hazards) are the same square from two sides. The drain ask
 is honored the way the mayor asked at 2230Z: one integration branch, composed here.
+
+## 9. First result: E6-Lb (22:42Z) — adoption 0/3, falsifier fired, 0/13 program-wide
+
+| arm | wall s | returns | tool calls | ls-tree calls | files read before first edit | correct |
+|---|---|---|---|---|---|---|
+| N-1 | 157 | 3 | 8 | 0 | 0 | green |
+| F-1 | 111 | 4 | 7 | 0 | 1 | green |
+| F-2 | 132 | 4 | 8 | 0 | 1 | green |
+| N-2 | 116 | 5 | 8 | 0 | 4 | green |
+| N-3 | 119 | 4 | 7 | 0 | 10 | green |
+| F-3 | 107 | 4 | 7 | 0 | 4 | green |
+
+Predictions scored: Opus "0/3 at 65%" — right; Sol "0/3 — an immediate measured negative" — right; Fable "≤ 2/3" — right but loosest. Mechanism candidate inb-3e298e (text content header-only). Caveat: Lb not blind. Receipt: docs/observations/2026-09-04-e6-lb-cohort.md (de5d7fb). Next wave polled from the fleet (§10 when it lands).
