@@ -1252,6 +1252,41 @@
                    (pr-str (:limit r)))))))))
 
 ;; @spec MCP-OP-MEM-003
+(deftest a-manifest-row-whose-LEAF-is-a-symlinked-DIRECTORY-is-refused-not-paged
+  ;; Round-five review, item (c): `row-file`'s own stated rule is "refuse what
+  ;; discovery can NEVER produce" — an absolute path, a `..` escape, a
+  ;; symlinked DIRECTORY component — "and defer to discovery on what it can" —
+  ;; a symlinked FILE. A LEAF that is ITSELF a symlink to a directory is
+  ;; something `find -name '*.clj' -type f` can never produce either, but the
+  ;; leaf is resolved lexically, so the parent-confinement check passes and
+  ;; the row reaches the encoder, which fails to open it and emits a typed
+  ;; ERROR RECORD in the page — served, not refused, and a wasted page slot.
+  ;; Pinned with `:h nil`: `content-digest` of a directory is `nil`, so this
+  ;; is the branch that reaches the encoder rather than `:stale-result-cursor`.
+  (with-project [dir fixture-count "ls-tree-budget-leafdir"]
+    (let [outside (str (fs/create-temp-dir {:prefix "ls-tree-budget-leafdir-OUTSIDE"}))
+          row "src/leafdir"
+          page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor-id (:cursor-id (budget/parse-cursor (cursor-of page-1)))]
+      (try
+        (fs/create-sym-link (str dir "/src/leafdir") outside)
+        (let [cursor (repin-row! dir cursor-id 6 {:p row :h nil} 5)
+              r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                   :cursor cursor})]
+          (is (map? r)
+              (str "a row whose LEAF is a symlinked directory must REFUSE, "
+                   "not page as an error record; served instead: "
+                   (pr-str (entry-files r))))
+          (is (= :unconfined-manifest-row (:error-type r))
+              (str "expected the confinement refusal, got "
+                   (pr-str (:error-type r)) "; full result "
+                   (pr-str r)))
+          (is (str/includes? (pr-str (:limit r)) row)
+              (str "and the refusal NAMES the offending row path; got "
+                   (pr-str (:limit r)))))
+        (finally (fs/delete-tree outside))))))
+
+;; @spec MCP-OP-MEM-003
 (deftest an-unconfined-row-refusal-really-costs-no-read
   ;; `unconfined-row`'s docstring claims the refusal "costs no read at all".
   ;; The OFFENDING row is indeed never opened — `row-file` returns nil before
