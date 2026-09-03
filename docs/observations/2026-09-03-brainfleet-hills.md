@@ -40,3 +40,18 @@ either gates on them or is not on the vs-native axis.
 **What Fable predicts the fleet will disagree on:** Sol will rank E7 higher (it is the novel
 square); Opus will rank the kernel adoption higher (it turns latent work into value). Both are
 right in a week; neither produces a number tonight.
+
+## 4. Gene's ruling (before the fleet's answers were read), verbatim
+
+> "I favor main functionality of speedups vs native, especially after so much non functional (but
+> important) work. Let's prove it was worth it!!!! Let's target 50% functional work. But your call."
+> "Let's target 50% functional work (overall). But your call."
+
+**Fable's call:** E3 and E6 launch NOW on branch tips (q5z f51ceae + rf2 965d49e served for E3;
+study-ops 4480e3d + MEM-003 95b0881 for E6; apparatus 77e6237), with the tip sha in every
+attestation instead of waiting for the merges — a merge changes provenance, not the measurement.
+The three hardening lanes in flight (census r15, kernel r9, fold-diff r11 — the last just closed
+GO) get no successor round tonight unless a reviewer names a blocker; their remaining findings go
+to the ledger. Until the Gene report opens with a vs-native table, the launch mix is 100%
+functional; thereafter ≥ 50%. Sol's and Opus's rankings are appended below when read; they may
+add a third hill, they do not delay these two.
