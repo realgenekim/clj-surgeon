@@ -32,3 +32,4 @@ cclsp.json
 .beads-credential-key
 .beads/proxieddb/
 .mcp.json
+.cpcache/
