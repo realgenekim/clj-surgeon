@@ -104,6 +104,16 @@
                                                 [java.nio.file.LinkOption/NOFOLLOW_LINKS])))]
     (max (.lastModified lock) ctime)))
 
+(defn- file-key
+  "A file's (device, inode) identity, the way the kernel reads it."
+  [^java.io.File f]
+  (str (.fileKey (Files/readAttributes
+                   (.toPath f)
+                   java.nio.file.attribute.BasicFileAttributes
+                   ^"[Ljava.nio.file.LinkOption;"
+                   (into-array java.nio.file.LinkOption
+                               [java.nio.file.LinkOption/NOFOLLOW_LINKS])))))
+
 (defn- reaped-pid
   "A pid that certainly named a process and certainly names none now."
   []
@@ -1741,15 +1751,9 @@
               (str "the break did not complete: " (pr-str crashed)))
           (is (.isFile lock) "the LOCK is still there")
           (is (.isFile tomb) "and so is the half-made tombstone")
-          (is (= (Files/readAttributes (.toPath lock)
-                                       java.nio.file.attribute.BasicFileAttributes
-                                       ^"[Ljava.nio.file.LinkOption;"
-                                       (into-array java.nio.file.LinkOption []))
-                 (Files/readAttributes (.toPath tomb)
-                                       java.nio.file.attribute.BasicFileAttributes
-                                       ^"[Ljava.nio.file.LinkOption;"
-                                       (into-array java.nio.file.LinkOption [])))
-              "one inode, two names - which is what makes it not a break"))
+          (is (= (file-key lock) (file-key tomb))
+              (str "one inode, two names - which is what makes it not a break: "
+                   (file-key lock) " vs " (file-key tomb))))
 
         (let [row (first (filter #(contains? #{:broken-lock :interrupted-break}
                                              (:kind %))

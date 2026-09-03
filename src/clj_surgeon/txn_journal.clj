@@ -656,6 +656,22 @@
     (- (long now) (long basis))
     :absent))
 
+(defn- interrupted-break-file
+  "The tombstone that is a SECOND LINK to the live LOCK, or nil.
+
+   A crash between `Files/createLink` and the unlink leaves exactly this: a
+   `LOCK.broken.*` whose (device, inode) IS the LOCK's, holding the same bytes.
+   It is not evidence of a break, because the break never completed - reporting
+   it as one names a claim that currently holds the lock, and a later break by
+   that txid is refused for a name that records nothing. `recover!` resolves
+   it; the sweep types it apart from a break that happened."
+  ^File [transactions-dir]
+  (let [^File lock (lock-file transactions-dir)
+        key (lock-file-key lock)]
+    (when key
+      (first (filter (fn [^File f] (= key (lock-file-key f)))
+                     (broken-lock-files transactions-dir))))))
+
 (defn- prune-broken-locks!
   "Retire the tombstones older than `broken-lock-retention-ms`, and count them.
 
@@ -671,7 +687,13 @@
   [transactions-dir now-ms]
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
-        aged (mapv (fn [^File f] [f (tombstone-age-ms f now)]) tombstones)
+        lock-key (lock-file-key (lock-file transactions-dir))
+        ;; a tombstone that IS the live LOCK is a break that was interrupted,
+        ;; not one that happened: retiring it here would resolve it silently
+        live (filterv (fn [^File f] (and lock-key (= lock-key (lock-file-key f))))
+                      tombstones)
+        aged (mapv (fn [^File f] [f (tombstone-age-ms f now)])
+                   (remove (set live) tombstones))
         present (filterv (fn [entry] (number? (nth entry 1))) aged)
         vanished (- (long (count aged)) (long (count present)))
         found (long (count present))
@@ -691,6 +713,7 @@
      :pruned pruned
      :remaining (- found pruned)
      :vanished vanished
+     :interrupted (long (count live))
      :retention-ms broken-lock-retention-ms}))
 
 (defn- displaced-line
@@ -2045,7 +2068,10 @@
   ([workspace-root {:keys [state-home now-ms]}]
    (let [transactions (transactions-dir workspace-root state-home)
          dir (io/file transactions)
-         now (long (or now-ms (System/currentTimeMillis)))]
+         now (long (or now-ms (System/currentTimeMillis)))
+         ;; a tombstone that IS the live LOCK is a break that was interrupted
+         ;; between the link and the unlink, never one that happened
+         interrupted (interrupted-break-file transactions)]
      (into
        (vec (for [^File d (sort-by #(.getName ^File %)
                                    (seq (or (.listFiles dir) (make-array File 0))))
@@ -2068,15 +2094,17 @@
              :let [age (tombstone-age-ms f now)
                    bytes (.length f)]
              :when (and (number? age) (pos? (long bytes)))]
-         {:txid (.getName f)
-          :kind :broken-lock
-          :status :lock-broken
+         (let [interrupted? (= (.getName f) (when interrupted
+                                              (.getName ^File interrupted)))]
+           {:txid (.getName f)
+          :kind (if interrupted? :interrupted-break :broken-lock)
+          :status (if interrupted? :lock-break-interrupted :lock-broken)
           :receipt-refs 0
           :evictable false
           :retired-by :txn/recover
           :age-ms age
           :retention-ms broken-lock-retention-ms
-          :bytes bytes})))))
+          :bytes bytes}))))))
 
 (defn undo!
   ;; @spec MCP-OP-MEM-006
@@ -2267,6 +2295,35 @@
      ;; finished leaves a LOCK with no journal beside it, and releasing only
      ;; `(when (seq results))` left that workspace deadlocked for ever.
      (let [^File lock (lock-file transactions)
+           ;; A crash between the break's `Files/createLink` and its unlink
+           ;; leaves one inode under two names. That is neither a break nor a
+           ;; free lock, and nothing else in this verb can tell the difference:
+           ;; resolve it FIRST, and say which way it went.
+           interrupted
+           (when-let [^File tomb (interrupted-break-file transactions)]
+             (let [holder (:holder (read-lock-claim lock))
+                   cause (stale-holder holder)
+                   ;; the ordinary liveness rule, unweakened: a legacy claim
+                   ;; still needs the explicit remedy AND a receipt of death
+                   dead? (boolean
+                           (and cause
+                                (or (not= cause :legacy-format)
+                                    (and break-legacy-lock
+                                         (legacy-lock-dead? lock holder now-ms)))))]
+               (if dead?
+                 (do (when (= (lock-file-key tomb) (lock-file-key lock))
+                       (Files/deleteIfExists (.toPath lock)))
+                     (stamp-tombstone! tomb)
+                     {:tombstone (.getName tomb)
+                      :resolution :interrupted-break-finished
+                      :holder-txid (:txid holder)
+                      :holder-cause cause})
+                 (do (Files/deleteIfExists (.toPath ^File (broken-at-file tomb)))
+                     (Files/deleteIfExists (.toPath tomb))
+                     {:tombstone (.getName tomb)
+                      :resolution :interrupted-break-reverted
+                      :holder-txid (:txid holder)
+                      :holder-live (nil? cause)}))))
            claim (when (.isFile lock) (read-lock-claim lock))
            holder (:holder claim)
            cause (when claim (stale-holder holder))
@@ -2307,6 +2364,7 @@
                 ;; tombstone made a moment ago is never retired by the
                 ;; recovery that made it.
                 :broken-locks (prune-broken-locks! transactions now-ms)}
+         interrupted (assoc :interrupted-break interrupted)
          broken (assoc :lock-broken broken)
          displaced (assoc :lock-break-displaced displaced)
          refused-break (assoc :lock-break-refused refused-break))))))
