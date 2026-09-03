@@ -1072,3 +1072,15 @@ closes a tidy fan-out at any size.
 | E3-L | 2/3 operational, 1.14× | = E-REG's k=1 cell, derivable | folded into E-REG |
 
 **Launch order:** (1) `--k` knob on the fixture branch (Sonnet, building); (2) the q5z fix (bare dir + text rendering of refusals, building); (3) **E-REG** — N=21, k ∈ {1,2,3,6}, T+N, n=2, primary meter = emitted write-payload chars (floor-free), plus wall and correctness; Opus predicts crossover k*=3 and a tool LOSS at k=1 (T/N 1.0–1.4×) — the result that decides whether square 2 has a product; (4) **E-SLOPE80** — N=80 only, n=3 pairs, does the wall gap clear 172 s (Opus 75%, Sol 65%).
+
+## 17. Third result: E6-C (23:22Z) — routing plate 0/3, bare 0/3; adoption 0/19 program-wide
+
+| arm | run | wall s | returns | inspect calls | plate seen? | correct |
+|---|---|---|---|---|---|---|
+| B bare | 1/2/3 | 123 / 114 / 162 | 4 / 4 / 5 | 0 / 0 / 0 | no (f1a094b9) | green ×3 |
+| R plated | 1/2/3 | 112 / 114 / 108 | 4 / 5 / 4 | 0 / 0 / 0 | YES (ba1c0949) ×3 | green ×3 |
+| N (reused) | 1/2/3 | 157 / 116 / 119 | 3 / 5 / 4 | 0 | n/a | green ×3 |
+
+Predictions scored: Opus "0/3 at 70%" RIGHT (and the mechanism: "a name and presence are not a path, and a description sentence is not one either"); Sol "R 2/3 vs B 0/3 at 55%" WRONG on R. Ratchet delivered: required=true + per-arm tools/list proof (E6-Lb's F arms lacked it). Caveat: rung Lb is not blind. Receipt docs/observations/2026-09-04-e6c-routing-plate-cohort.md (7e34015).
+
+**Fable's call, without a fourth poll on the same square (deviation from poll-each-result, reason: the fleet already rated every remaining routing lever tonight — blind rung Sol 1/3 at 45% / Opus 0/3 at 70%; route-don't-ask hook O4 is a build, not a measurement):** no further free-choice routing cohort tonight. Square 3 is decided by E6-Q (capability with a mandated arm, running); square 2 by E-REG + E-SLOPE80 (queued behind the q5z fix). Tomorrow's first build is O4 — route without asking (a read-side hook that serves clj-scoped rg/grep through the Surgeon read path, Surgeon never named), the only routing lever with a predicted non-zero number (100% routed at 85%).
