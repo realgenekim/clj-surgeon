@@ -248,3 +248,26 @@ bounded inner timeout with guaranteed restore. My full suites queued; push → r
 ## 03:42Z — `bridge/q5z-alias-migration` pushed at 23ea871 (my suites: test-fast 734/6257 baseline five; full `make mcp-test` 409/4593 baseline one, oracle PASS). Re-review acb7e66e0b6224894 running (the seven probes re-run, the walk depth bound, the ceilings' refusal shape, retire-before-write, derived :committed, retention race, the hygiene gate on bb, the restored over-declare idiom on both entrances).
 
 ## 03:43Z — `bridge/study-ops-mcp` pushed at 212b045 (my suites: test-fast 723/5990 baseline five; full `make mcp-test` 404/5224 baseline one, oracle PASS). Still NOT in the queue: re-review a4bf90d6d86f75204 re-runs all twelve probes plus the four flagged items (host-absolute dir in refusals, the grep continuation, the 65,536-char study limit, the claypoole/bb split) before the NO-GO is lifted.
+
+## 03:50Z — fold-diff fix round landed (27b4adec…a765d859, nine commits on f2d8f6eb); a process defect to carry forward
+
+Seven fixes, each red-first with the reviewer's probe: the write guard asserts every var stubbed and names
+them (14 red assertions against the silently-dropping guard); a log past its checkpoint is refused with the
+gap named, `FOLD_DIFF_ALLOW_GAP=1` compares-but-labels UNEXAMINED with a truthful exit; both sides are refs
+in throwaway worktrees (`BASELINE_REF` required, `CANDIDATE_REF` default HEAD, `DEPLOYED_REVISION` printed
+beside the baseline with a WARNING on mismatch); `--expect-baseline-sha` refuses a stale or mislabelled
+baseline; heap (`FOLD_DIFF_XMX` 4g, parse-once, prune-first, streamed writer) with a byte-identical
+characterization pin that bit on a single trailing newline; exit codes 0/1/2/3 measured as a subprocess
+(`FOLD_DIFF_MAX_PATHS=many` was a JVM exit 1 reading as "differences"; now `FAILED :bad-env` exit 3);
+userinfo JDBC URLs redacted (`cfpuser:hunter2@` had survived). Usage: `BASELINE_REF=origin/main
+STORE_BACKEND=postgres make fold-diff-checkpoint`. Unit 1052/13017/0 → 1076/13210/0. Unverified without
+Postgres, stated: the new `SELECT COALESCE(MAX(seq),0)` has never executed; the pool opener is read from
+code; the write guard was exercised only under JSONL; the secrets symlink into the candidate worktree never
+met a real `secrets/`; 4g is a judgement.
+**Process defect (the builder's own report):** it killed a `flock` waiter (`kill 3724641`) before confirming
+ownership; the signature matched its own orphan and other seats' jobs kept running, but ownership was
+checked only for the second kill. Rule for every builder prompt from now on: never signal a process you did
+not start without proving ownership by pid, ppid and cmdline first; on this shared box a wrong kill is
+another seat's outage. My unit run + compile-check queued; push → a short re-review of the Postgres-path
+delta → then the mayor's production run (inb-3a9818 updated with the new command at push time).
+
