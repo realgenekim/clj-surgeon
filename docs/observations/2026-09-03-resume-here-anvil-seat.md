@@ -191,3 +191,9 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 ## RESUME DELTA 2026-09-03T04:17Z
 
 - Memory build brief clauses (Gene): (1) LID intents MCP-OP-MEM- for every new requirement; (2) the no-OOM proof is `make memory-battery` (100/1k/10k files, -Xmx512m, numeric pass lines), NOT in the fast suites; fast suites keep only ms-scale admission/ceiling/receipt witnesses; battery = merge gate for MEM changes, linked by intent id. Decision card sent (A keep in-memory snapshot / B disk-pinned pre-image / C tiers; recommend B); awaiting Gene's letter; tier-1 (read verbs) is authorised and starts when study round three + census land.
+
+## RESUME DELTA 2026-09-03T04:19Z — Gene chose B; memory program is GO
+
+- B1 kernel build on `~/src/clj-surgeon-txn` (`bridge/txn-journal`) launching now; B2 adoption after q5z r3 / rf2 r3 land. Battery build a0e2b73e06754ebf3 on `~/src/clj-surgeon-membat`.
+- rf2 round three landed (70836c0…5839b52) with one ruling sent back (no writes into skipped trees via links → typed refusal); my suites + push after that commit.
+- Sol YOLO memory answer waiter b7qt28zev; Opus consult a2d936e48f3423a0c; fold-diff production re-review a94e2e37c80843f35; census, template-upsert, ratchets, q5z r3, study r3, kondo lanes running.

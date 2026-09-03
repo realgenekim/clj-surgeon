@@ -322,3 +322,16 @@ Builder prompts for the memory rounds carry this clause verbatim.
 Rule for the memory work: the no-OOM proof is a BATTERY, `make memory-battery`, outside `make test`/`test-fast`/`mcp-test`: each tree-scale op (ls-tree, alias migration plan, extract discovery, census, fold-diff) at 100 / 1,000 / 10,000 synthetic files (a cheap generator; sparse or templated sources), `-Xmx512m`, five reps fresh+warm, pass lines: no OOM; `heap_used_peak_mb ≤ min(start+224, 0.8×Xmx)`; the 10k peak ≤ 1k peak + 32 MiB; after-GC retained at 10k ≤ 1k + 8 MiB; over-budget cases refuse structured BEFORE any write; outputs equal the unbounded reference. Runs on Anvil on demand and as the merge gate for any MEM change. The fast suites keep only millisecond witnesses: admission arithmetic refuses before allocation; ceiling behaviour AT the ceiling on tiny fixtures; the receipt carries `heap_used_peak_mb`. The MEM intent "retained heap does not grow with repository size" links the battery by id (LID), so a refactor cannot drop it from the gate silently.
 
 ## 04:18Z — memory battery build launched (a0e2b73e06754ebf3, `~/src/clj-surgeon-membat`, `bridge/memory-battery` from main): generator for 100/1k/10k synthetic trees, one-JVM-at-a-time runner at -Xmx512m with a heap sampler, pass lines as one verdict fn, MCP-OP-MEM-001 with the battery as its linked witness, a ms-scale verdict witness in the fast suite, `make memory-battery` asserted OUT of `make test`; first run on main is the RED baseline (docs/observations/2026-09-03-memory-battery-baseline.md). Nine lanes live.
+
+## 04:19Z — DECISION (Gene): "B. Go. Love the new make target for testing memory; go"
+
+The write verbs' transaction contract becomes **optimistic serializability with conflict detection and
+exact rollback** (Sol's design §1): hashes + spans resident; rollback bytes pinned to a per-transaction
+directory under `.clj-surgeon/transactions/<txid>/` BEFORE any live write; the whole semantic read set
+revalidated by hash before commit; per-path atomic rename with durable progress; crash recovery restores
+pinned bytes and verifies. Not snapshot isolation against writers that ignore the lock — stated in the
+contract. Build order: B1 the kernel as a new module on `bridge/txn-journal` (from main, no collision with
+the open rf2/q5z/ratchets rounds), LID MCP-OP-MEM-002.., crash-injection witnesses, fence-scope review
+before merge; B2 adoption in alias_migration and extract after their rounds land, measured by the memory
+battery (peak-vs-N flat). The heap work budget: Sol's 192 MiB inside 512 MiB stands until the battery
+baseline says otherwise.
