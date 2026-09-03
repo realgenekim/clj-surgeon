@@ -2464,3 +2464,97 @@
                                           "src/a" 100 "src/b" 100}
                         :subtree-counts {"src/a" 1 "src/b" 4}
                         :partial-dirs #{"" "src"}})))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eleven review, item 6 (blocking): oversized MCP integers escape
+;; validation.
+;;
+;; An actual `execute-request!` carrying `pool_size` 9223372036854775808 threw
+;; `IllegalArgumentException: Value out of range for long` instead of
+;; returning `pool-size-out-of-range`. The kernel asked its RANGE question
+;; through a coercion — `(long value)` — so the one value the range check
+;; exists to refuse is the one value the coercion cannot survive. A bound
+;; enforced by an exception is not a bound: the caller gets a stack trace
+;; instead of a typed reason, a bound, and a continuation, and the tool's own
+;; refusal contract (MCP-OP-CENSUS-014) never runs.
+;;
+;; The JSON wire can carry an integer of any magnitude. A caller who sends
+;; 2^63 is asking a question this kernel must ANSWER, and the answer is
+;; "between 1 and 64, and that is not".
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(deftest an-integer-field-is-range-checked-before-it-is-coerced
+  (testing "the shared kernel decides magnitude without coercing to long"
+    (doseq [[value reason]
+            [[9223372036854775808N :out-of-range]
+             [(biginteger "9223372036854775808") :out-of-range]
+             [(- 9223372036854775808N) :out-of-range]
+             ["9223372036854775808" :out-of-range]
+             ["-1" :out-of-range]
+             [-1 :out-of-range]
+             [0 :out-of-range]
+             [(inc census/max-pool-size) :out-of-range]
+             ["1e3" :not-an-integer]
+             ["1.5" :not-an-integer]
+             [1.5 :not-an-integer]
+             ["not-a-number" :not-an-integer]]]
+      (let [outcome (try (census/coerce-pool-size value)
+                         (catch Throwable e
+                           {::threw (str (.getName (class e)) ": "
+                                         (ex-message e))}))]
+        (is (nil? (::threw outcome))
+            (str "coerce-pool-size " (pr-str value) " threw instead of "
+                 "refusing: " (::threw outcome)))
+        (is (= reason (:reason outcome))
+            (str "coerce-pool-size " (pr-str value) " answered "
+                 (pr-str (:reason outcome)) ", not " (pr-str reason))))))
+
+  (testing "no pool_size escapes execute-request! as an exception"
+    (doseq [[value reason]
+            [[9223372036854775808N "pool-size-out-of-range"]
+             [(biginteger "9223372036854775808") "pool-size-out-of-range"]
+             [-1 "pool-size-out-of-range"]
+             [0 "pool-size-out-of-range"]
+             [(inc census/max-pool-size) "pool-size-out-of-range"]
+             [1e3 "pool-size-not-an-integer"]
+             [1.5 "pool-size-not-an-integer"]
+             ["8" "pool-size-not-an-integer"]]]
+      (let [result (try (run {:files [fixture] :pool_size value})
+                        (catch Throwable e
+                          {::threw (str (.getName (class e)) ": "
+                                        (ex-message e))}))]
+        (is (nil? (::threw result))
+            (str "pool_size " (pr-str value)
+                 " escaped execute-request! as an exception: "
+                 (::threw result)))
+        (is (false? (:ok result))
+            (str "pool_size " (pr-str value) " was accepted: "
+                 (pr-str result)))
+        (is (= reason (:reason result))
+            (str "pool_size " (pr-str value) " refused as "
+                 (pr-str (:reason result)) ", not " (pr-str reason)))
+        ;; The refusal is a receipt, so it must survive the wire it is
+        ;; published on: a value too large for a long is still a JSON number.
+        (is (string? (try (json/generate-string result)
+                          (catch Throwable e (str "THREW " (ex-message e)))))
+            "the refusal cannot be serialised")
+        (is (not (str/includes? (str (json/generate-string result)) "THREW"))))))
+
+  (testing "the CLI's :threads refuses the same magnitudes, typed"
+    (doseq [value ["9223372036854775808" "-9223372036854775808" "-1" "0"
+                   "65" "1e3" "1.5" "not-a-number"]]
+      (let [result (try (binding [*out* (java.io.StringWriter.)]
+                          (core/run {:op :relation-census :dir repo-root
+                                     :threads value}))
+                        (catch Throwable e
+                          {::threw (str (.getName (class e)) ": "
+                                        (ex-message e))}))]
+        (is (nil? (::threw result))
+            (str ":threads " (pr-str value) " escaped the CLI entrance as an "
+                 "exception: " (::threw result)))
+        (is (= :invalid-pool-size (:error-type result))
+            (str ":threads " (pr-str value) " refused as "
+                 (pr-str (:error-type result)) ": " (pr-str result)))))))
