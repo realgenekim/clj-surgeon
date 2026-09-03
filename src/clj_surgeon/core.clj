@@ -31,7 +31,9 @@
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.pprint :as pp]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  (:import
+   (java.util.concurrent Executors FutureTask)))
 
 (defn run-outline [{:keys [file]}]
   (let [result (outline/outline file)
@@ -519,18 +521,50 @@
   "Outline `candidates` and hand each `[project-index file outline]` to
    `consume!` IN ORDER, dropping it immediately afterwards.
 
-   Candidates are taken one window of `outline-window-size` at a time and
-   materialised through the same bounded `pmap` the batch path used, then
-   consumed eagerly. Nothing accumulates: this function returns nil, and the
-   only thing that grows with the scan is whatever `consume!` chose to keep."
+   Two bounds hold at once, and they are different bounds:
+
+   - CONCURRENCY is `outline-pool-size`, enforced by a fixed thread pool. At
+     most that many outlines are ever executing, so parser peak cannot grow
+     with the corpus.
+   - IN-FLIGHT WORK is `outline-window-size` (`4 x pool`), enforced by the
+     submission loop. At most that many results are ever resident, so retained
+     heap cannot grow with the corpus either.
+
+   This replaces a chunked `pmap`, which enforced NEITHER: `pmap` realises its
+   input 32 at a time, so it ran 33 outlines against a declared 18 (Sol,
+   2026-09-03). A documented bound that the implementation cannot actually
+   hold is worse than no bound, because everything downstream is sized by it.
+
+   The pool is per-scan and shut down in a `finally`, so a refusal or a throw
+   mid-scan cannot leak threads. Work is submitted as `FutureTask` and handed
+   to `.execute`: both are single-signature, so the call cannot resolve to
+   `submit(Runnable)` and silently return nil results under a reflective
+   runtime such as babashka.
+
+   Results are consumed in SUBMISSION order from a FIFO queue, so a fast tiny
+   file finishing ahead of a slow large one does not reorder the output; the
+   encoding stays byte-identical to the batch path. Nothing accumulates: this
+   returns nil, and the only thing that grows with the scan is whatever
+   `consume!` chose to keep."
   ;; @spec MCP-OP-MEM-003
   [candidates consume!]
-  (loop [xs (seq candidates)]
-    (when xs
-      (let [window (vec (take outline-window-size xs))]
-        (doseq [result (pmap (fn [[pidx f]] [pidx f (safe-outline f)]) window)]
-          (consume! result))
-        (recur (seq (drop outline-window-size xs)))))))
+  (let [pool (Executors/newFixedThreadPool outline-pool-size)]
+    (try
+      (loop [q (clojure.lang.PersistentQueue/EMPTY)
+             xs (seq candidates)]
+        (cond
+          (and xs (< (count q) outline-window-size))
+          (let [[pidx f] (first xs)
+                task (FutureTask. (fn [] [pidx f (safe-outline f)]))]
+            (.execute pool task)
+            (recur (conj q task) (next xs)))
+
+          (seq q)
+          (do (consume! (.get ^FutureTask (peek q)))
+              (recur (pop q) xs))
+
+          :else nil))
+      (finally (.shutdown pool)))))
 
 (defn- admission-refusal-row
   [rel result]

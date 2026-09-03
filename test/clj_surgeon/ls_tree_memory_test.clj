@@ -228,6 +228,12 @@
       (let [pool core/outline-pool-size
             peak (max-concurrent-outlines
                    #(core/run-ls-tree {:dir dir :format :edn :max-results 200}))]
+        ;; The measured number is PRINTED, not only asserted. A bound that
+        ;; passes silently tells a later reader that some peak was under some
+        ;; pool; it does not tell them which, and "33 against 18" is precisely
+        ;; the fact this witness exists to keep visible.
+        (println (format "── outline concurrency: measured peak %d, declared pool %d, window %d"
+                         peak pool core/outline-window-size))
         (is (pos? peak) "the meter saw the scan at all")
         (is (> peak 1)
             "the scan really is concurrent — a serial peak would make the
