@@ -161,3 +161,8 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 ## RESUME DELTA 2026-09-03T03:43Z
 
 - Study pushed 212b045; re-review a4bf90d6d86f75204 running — the NO-GO doc stands until it says GO. q5z re-review acb7e66e0b6224894 running. Fix rounds: rf2 round three, census, fold-diff, template-upsert, ratchets.
+
+## RESUME DELTA 2026-09-03T03:59Z — eight lanes
+
+- Re-reviews: study a4bf90d6d86f75204, fold-diff a94e2e37c80843f35 (production gate). Fix rounds: rf2 round three a59ea3ce2a6b2a7fc, census a4fe4601c68f5db01, template-upsert abd7fc65de9301f76, ratchets a90f9ebd74d4100af, q5z round three a4f713cb01afc03cb (`~/src/clj-surgeon-q5z`), kondo-path test af5a3aed64de01ebb (`~/src/clj-surgeon-kondo`, branch bridge/kondo-path-test from main).
+- Verdict docs on main now: study-ops NO-GO, census GO-WITH-FIX, rf2-q5z, rf2-rereview, q5z-rereview, folddiff-lens, ratchets. Queue frozen until GO verdicts.
