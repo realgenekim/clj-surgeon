@@ -1087,6 +1087,61 @@ sys.exit(1 if bad else 0)
 PY27
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 28: the B.4 PARENT paragraph is part of the source contract =="
+# Sol round two, item 9/7: the manifest hashes the prose of A.8, B.4.1, B.4.2, B.4.3
+# and B.4.4 -- and the load-bearing sentence sits in NONE of them.  "Both arms are
+# byte-identical outside §5" is the parent paragraph every B.4.x block is written
+# under: it is what makes the pair a controlled comparison at all.  Sol changed it to
+# permit differences and `--check` returned 0, because every fence, every prompt and
+# every prompt hash was byte-identical.
+DOC28M="$WORK/doc28-mutated.md"
+python3 - "$DOCSRC" "$DOC28M" <<'PY28'
+import sys, pathlib
+src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+text = src.read_text()
+old = "Both arms are **byte-identical outside §5**."
+assert text.count(old) == 1, f"expected one {old!r}, found {text.count(old)}"
+dst.write_text(text.replace(
+    old, "The two arms **may differ anywhere**, at the runner's discretion."))
+PY28
+[ $? -eq 0 ] && ok "case28 mutated the B.4 parent paragraph to permit differences" \
+  || bad "case28 could not mutate the doc"
+
+python3 "$HERE/prompts/build-prompts.py" --check --doc "$DOC17" > "$WORK/case28ctl.out" 2>&1
+want "case28 control (unmutated copy) rc" 0 "$?"
+python3 "$HERE/prompts/build-prompts.py" --check --doc "$DOC28M" > "$WORK/case28.out" 2>&1
+want "case28 mutated-parent rc" 3 "$?"
+grep -q 'PROMPT-DRIFT' "$WORK/case28.out" \
+  && ok "case28 the parent paragraph is hashed: $(head -n1 "$WORK/case28.out")" \
+  || { bad "case28 the governing sentence changed and --check still passed"; cat "$WORK/case28.out"; }
+grep -q '^[0-9a-f]\{64\}  section:B.4$' "$HERE/prompts/MANIFEST.sha256" \
+  && ok "case28 the manifest carries section:B.4" \
+  || { bad "case28 MANIFEST.sha256 has no B.4 parent hash"; cat "$HERE/prompts/MANIFEST.sha256"; }
+
+# the parent hash must cover the PARENT PARAGRAPH ONLY: if it swallowed B.4.1-B.4.4 it
+# would still catch this mutation, but it would also fire for every subsection edit and
+# say nothing about which one moved.
+python3 - "$HERE" "$DOCSRC" <<'PY28B'
+import sys, pathlib, importlib.util
+spec = importlib.util.spec_from_file_location(
+    "bp", str(pathlib.Path(sys.argv[1]) / "prompts" / "build-prompts.py"))
+bp = importlib.util.module_from_spec(spec); spec.loader.exec_module(bp)
+doc = pathlib.Path(sys.argv[2]).read_text()
+pre = bp.preamble_of(bp.section(doc, "## B.4 "))
+fails = []
+if "byte-identical outside" not in pre:
+    fails.append("the B.4 preamble does not contain the governing sentence")
+if "### B.4.1" in pre:
+    fails.append("the B.4 preamble swallowed its subsections")
+if [lab for lab, _, mode in bp.GOVERNING_SECTIONS if mode == "preamble"] != ["B.4"]:
+    fails.append("B.4 is not registered as a preamble-scoped governing section")
+for f in fails:
+    print(f"FAIL case28b {f}")
+print(f"ok   case28b the parent hash is scoped to the parent paragraph ({3-len(fails)}/3)")
+sys.exit(1 if fails else 0)
+PY28B
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
