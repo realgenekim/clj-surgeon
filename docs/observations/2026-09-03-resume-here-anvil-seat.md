@@ -100,3 +100,7 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
   brnogxq9w (`~/tmp/lens2-unit.log`); push when green.
 - Still running: ratchets a02f87b29b2d27eff; red-teams a45426b8de19c383b (census), af2fbde760adead45
   (rf2+q5z).
+
+## RESUME DELTA 2026-09-03T02:29Z
+
+- Census GO-WITH-FIX filed (docs/observations/2026-09-03-census-redteam-GO-WITH-FIX.md); fix round a4fe4601c68f5db01 running in `~/src/clj-surgeon-census` (items 1–11). After: my suites → push → re-review → queue. Lens follow-ups pushed 7359b8f9. Still running: ratchets a02f87b29b2d27eff, study security round aab6a773af84935ee, rf2+q5z red-team af2fbde760adead45.
