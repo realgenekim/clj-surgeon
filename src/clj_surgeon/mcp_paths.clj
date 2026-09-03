@@ -41,6 +41,24 @@
    :source_unchanged true
    :remedy "Use an existing project-relative source path inside the configured project root."})
 
+(defn- unreadable-ancestor
+  "The nearest existing ancestor DIRECTORY of `relative` that this process may
+   neither read nor traverse, named PROJECT-RELATIVE, or nil.
+
+   Named relative for the reason every other path this namespace publishes is:
+   a refusal that leaks the server's absolute root tells the caller a fact
+   about the box instead of a fact about their request."
+  [^Path root relative]
+  (try
+    (loop [^Path dir (.getParent (.normalize (.resolve root (str relative))))]
+      (when (and dir (.startsWith dir root))
+        (if (Files/exists dir (make-array LinkOption 0))
+          (when-not (and (Files/isReadable dir) (Files/isExecutable dir))
+            (let [shown (.toString (.relativize root dir))]
+              (if (str/blank? shown) (.toString dir) shown)))
+          (recur (.getParent dir)))))
+    (catch Exception _ nil)))
+
 (defn resolve-source-path
   "Resolve one lexically valid relative source path inside canonical root.
 
@@ -95,10 +113,33 @@
                :relative relative
                :path (.toString real)
                :canonical real}))))
+      ;; Sol's round-fifteen item 9. A readable file under a `chmod 000`
+      ;; PARENT cannot be resolved at all — `toRealPath` throws
+      ;; `AccessDeniedException` on the way through the parent — and
+      ;; `.getMessage` on that exception IS the path, so the generic catch
+      ;; below published "/abs/src/app/locked/inner.clj" as the whole
+      ;; explanation and the census printed it beside the relative path: the
+      ;; path twice, once absolutely, and not one word about what may not be
+      ;; read or why. The file's own bits are fine; a DIRECTORY above it is
+      ;; what must change, so that is what the refusal names.
       (catch java.nio.file.NoSuchFileException _
         (path-refusal :source-file-not-found "Source file does not exist" relative))
       (catch Exception error
-        (path-refusal :invalid-source-path (.getMessage error) relative)))))
+        ;; `AccessDeniedException` is matched by NAME rather than by a catch
+        ;; clause because babashka's runtime does not carry that class and a
+        ;; class literal in a `catch` is resolved when the namespace is
+        ;; ANALYSED — the CLI entrance loads this namespace and would die on
+        ;; it, which is the second entrance breaking on a rule written for the
+        ;; first.
+        (if (= "java.nio.file.AccessDeniedException"
+               (.getName (class error)))
+          (path-refusal :source-not-readable
+                        (str "Source file cannot be reached: the directory "
+                             (or (unreadable-ancestor root relative)
+                                 "containing it")
+                             " may not be read by this process")
+                        relative)
+          (path-refusal :invalid-source-path (.getMessage error) relative))))))
 
 (defn resolve-new-source-path
   "Resolve one absent source path below a real project-confined ancestor.
