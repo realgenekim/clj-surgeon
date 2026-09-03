@@ -1131,6 +1131,25 @@
           (finally
             (when (.exists tmp) (.delete tmp))))))))
 
+(defn- finish-after-throw!
+  "End a transaction whose commit raised something no path anticipated.
+
+   A transaction that never reaches `finish!` is a project LOCK nobody
+   releases, and a LOCK held by a LIVE pid is one neither `begin!` nor
+   `recover!` is permitted to break - so an uncaught exception inside the
+   commit deadlocked the workspace for the life of the process. Every
+   exception path must end the transaction; the exception itself is re-thrown
+   by the caller rather than swallowed into a false receipt.
+
+   The last resort is releasing the lock alone: if the rollback or the
+   bookkeeping is what failed, an unreleased lock would turn one failure into
+   a permanent one."
+  [txn]
+  (try
+    (finish! txn :rolled-back (rollback-written! txn))
+    (catch Throwable _
+      (try (release-lock! (:transactions-dir txn)) (catch Throwable _ nil)))))
+
 (defn commit!
   ;; @spec MCP-OP-MEM-006
   ;; @spec MCP-OP-MEM-007
@@ -1148,7 +1167,8 @@
                 in-commit-window after-publish]
          :or {prepare-fn prepare-publish!
               publish-fn publish-prepared!}}]
-   (let [state (:state txn)
+   (try
+    (let [state (:state txn)
          staged (:staged @state)
          pinned (:pinned @state)
          unpinned (first (sort (remove #(contains? pinned %) (keys staged))))]
@@ -1245,7 +1265,12 @@
                                        :rolled-back (every? #(= :verified (:status %)) restored)
                                        :recovery restored
                                        :next_call nil
-                                       :remedy "Another writer that does not hold the project lock raced this rename; the contract detects that rather than preventing it."}))))))))))))))))
+                                       :remedy "Another writer that does not hold the project lock raced this rename; the contract detects that rather than preventing it."}))))))))))))))
+    ;; EVERY exception path ends the transaction; the throw itself is
+    ;; re-raised rather than converted into a receipt.
+    (catch Throwable cause
+      (finish-after-throw! txn)
+      (throw cause)))))
 
 ;; ---------------------------------------------------------------- recovery
 

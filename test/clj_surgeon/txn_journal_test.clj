@@ -997,6 +997,139 @@
         (is (= "(ns f1) (def v :nested)\n" (bytes-of path)))
         (finally (cleanup! ws))))))
 
+;; @spec MCP-OP-MEM-007
+(deftest a-second-thread-waits-for-the-publish-lock-instead-of-throwing
+  (testing "Opus round 3, blocker 1: `FileChannel/lock` is a PER-PROCESS view
+            of the OS lock, so a second THREAD in the same JVM does not block
+            on it - it throws `OverlappingFileLockException`. The re-entrancy
+            guard was a dynamic BINDING, so nothing serialised two threads
+            before the OS lock was taken and the opt-in that finally gave the
+            advisory lock a non-empty referent was unsafe in the direction it
+            was added for. A process-wide monitor keyed by the lock file's
+            canonical path is what makes threads queue."
+    (let [ws (workspace! "publish-lock-threads" 2)
+          path (second (sort (:paths ws)))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          holding (promise)
+          release (promise)]
+      (try
+        (let [holder (future (file-ops/with-publish-lock*
+                               dir
+                               (fn [] (deliver holding true)
+                                 (deref release 10000 :timeout))))
+              _ (deref holding 10000 nil)
+              started (System/nanoTime)
+              writer (future
+                       (try (journal/with-cooperating-writes
+                              dir
+                              (fn []
+                                (file-ops/atomic-write!
+                                  path "(ns f1) (def v :second-thread)\n")
+                                :wrote))
+                            (catch Throwable cause
+                              {:threw (.getName (class cause))})))]
+          (Thread/sleep 400)
+          (is (not (realized? writer))
+              (str "a second thread must WAIT for the holder rather than "
+                   "throwing past it; it had already returned "
+                   (pr-str (when (realized? writer) @writer))))
+          (deliver release :released)
+          (is (= :wrote (deref writer 10000 :timeout))
+              "and once the holder lets go it completes normally")
+          (is (>= (quot (- (System/nanoTime) started) 1000000) 400)
+              "having actually waited")
+          (is (= "(ns f1) (def v :second-thread)\n" (bytes-of path)))
+          (is (= :released (deref holder 10000 :timeout))))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+;; @spec MCP-OP-MEM-013
+(deftest a-commit-racing-a-sibling-thread-does-not-strand-the-project-lock
+  (testing "the blast radius of blocker 1. The `OverlappingFileLockException`
+            escaped `publish-one!`, which is wrapped only around `prepare-fn`,
+            so `commit!` never reached `finish!`: the transaction stayed
+            `:sealed` and the project LOCK stayed behind a LIVE pid - which
+            `begin!` may not break and `recover!` may not break either. The
+            workspace was deadlocked for the life of the process, which is the
+            exact failure the round this door arrived in was written to end."
+    (let [ws (workspace! "commit-sibling-thread" 2)
+          path (first (sort (:paths ws)))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")
+          holding (promise)
+          release (promise)]
+      (try
+        (let [txn (begin! ws {})]
+          (record-scope! txn (:paths ws))
+          (journal/seal-read-set! txn)
+          (journal/pin! txn path)
+          (journal/stage! txn path "(ns f0) (def v :committed)\n")
+          (let [holder (future (file-ops/with-publish-lock*
+                                 dir
+                                 (fn [] (deliver holding true)
+                                   (deref release 10000 :timeout))))
+                _ (deref holding 10000 nil)
+                receipt (future (try (journal/commit! txn)
+                                     (catch Throwable cause
+                                       {:threw (.getName (class cause))})))]
+            (Thread/sleep 400)
+            (is (not (realized? receipt))
+                (str "the commit must wait for the sibling thread's lock; it "
+                     "had already returned "
+                     (pr-str (when (realized? receipt) @receipt))))
+            (deliver release :released)
+            (let [result (deref receipt 20000 :timeout)]
+              (is (:ok result) (str "the commit completed: " (pr-str result)))
+              (is (= 1 (:files-written result))))
+            (is (= :released (deref holder 10000 :timeout))))
+          (is (not (.isFile lock)) "and the project LOCK is released")
+          (is (= "(ns f0) (def v :committed)\n" (bytes-of path)))
+          (let [next-txn (begin! ws {})]
+            (is (string? (:txid next-txn))
+                "so the workspace is not deadlocked for the life of the process")
+            (when (:txid next-txn) (journal/rollback! next-txn))))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+;; @spec MCP-OP-MEM-013
+(deftest a-commit-that-throws-inside-the-lock-still-releases-the-project-lock
+  (testing "the general form of blocker 1, independent of its cause: any
+            exception raised between taking the publish lock and returning
+            left `commit!` without a `finish!`, and a transaction without a
+            `finish!` is a project LOCK nobody releases. The lock must be
+            released and the transaction marked on EVERY exception path, not
+            only on the ones the kernel anticipated."
+    (let [ws (workspace! "commit-throws" 2)
+          path (first (sort (:paths ws)))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (let [txn (begin! ws {})]
+          ;; keep the directory so the durable marking can be read back
+          (swap! (:state txn) assoc :retain-dir? true)
+          (record-scope! txn (:paths ws))
+          (journal/seal-read-set! txn)
+          (journal/pin! txn path)
+          (journal/stage! txn path "(ns f0) (def v :never)\n")
+          (let [thrown (try (journal/commit!
+                              txn
+                              {:in-commit-window
+                               (fn [_] (throw (ex-info "injected inside the lock" {})))})
+                            (catch Throwable cause cause))]
+            (is (instance? Throwable thrown)
+                "the exception itself is not swallowed into a false receipt")
+            (is (not (.isFile lock))
+                "but the project LOCK is released on every exception path")
+            (is (= :rolled-back
+                   (:status (read-string (slurp (io/file (:dir txn) "state.edn")))))
+                "and the transaction is marked finished rather than left :sealed")
+            (is (str/includes? (slurp (io/file (:dir txn) "journal.log")) "rolled-back")
+                "with the durable journal line beside it")
+            (let [next-txn (begin! ws {})]
+              (is (string? (:txid next-txn)) "so the workspace is still usable")
+              (when (:txid next-txn) (journal/rollback! next-txn)))))
+        (finally (cleanup! ws))))))
+
 ;; @spec MCP-OP-MEM-006
 ;; @spec MCP-OP-MEM-007
 (deftest undo-refuses-a-target-another-writer-changed-after-the-commit

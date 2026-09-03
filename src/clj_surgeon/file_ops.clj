@@ -5,6 +5,7 @@
   (:import
    (java.io File)
    (java.nio.channels FileChannel)
+   (java.util.concurrent.locks ReentrantLock)
    (java.nio.file CopyOption Files LinkOption OpenOption StandardCopyOption
                   StandardOpenOption)))
 
@@ -36,6 +37,29 @@
   ^File [transactions-dir]
   (io/file transactions-dir "PUBLISH.lock"))
 
+(defonce ^{:private true
+           :doc "One in-JVM mutex per canonical lock path, process-wide.
+
+   `FileChannel/lock` is a PER-PROCESS view of the OS lock, not a per-thread
+   one: a second thread in the same JVM that calls `.lock` on a file this JVM
+   already holds gets `OverlappingFileLockException` thrown at it rather than
+   blocking. Two cooperating threads therefore cannot serialise on the OS lock
+   alone - they have to serialise BEFORE it, in this process, which is what
+   this table is. It is keyed by the lock file's canonical path so that two
+   spellings of one workspace share one monitor."}
+  publish-monitors
+  (atom {}))
+
+(defn- publish-monitor
+  ^ReentrantLock [^String lock-path]
+  (or (get @publish-monitors lock-path)
+      (get (swap! publish-monitors
+                  (fn [table]
+                    (if (contains? table lock-path)
+                      table
+                      (assoc table lock-path (ReentrantLock.)))))
+           lock-path)))
+
 (defn with-publish-lock*
   "Run `f` while holding the workspace's advisory publish lock.
 
@@ -46,21 +70,33 @@
    and the residual window is documented rather than papered over.
 
    Re-entrant on the same thread and the same directory, because the JVM's own
-   lock table is not."
+   lock table is not.
+
+   THREADS SERIALISE IN THIS PROCESS BEFORE THE OS LOCK IS TAKEN. The OS lock
+   is per-process: a second thread calling `.lock` on a file this JVM already
+   holds is thrown `OverlappingFileLockException` rather than made to wait, and
+   an exception is not mutual exclusion - it escaped `commit!` before
+   `finish!` could release the project lock and stranded the workspace behind
+   a LIVE pid no recovery is permitted to break. The per-path `ReentrantLock`
+   is what turns that throw back into a wait."
   [transactions-dir f]
-  (if (= *publish-lock-held* (str transactions-dir))
-    (f)
-    (let [^File file (publish-lock-file transactions-dir)]
-      (.mkdirs (.getParentFile (.getAbsoluteFile file)))
-      (with-open [channel (FileChannel/open
-                            (.toPath file)
-                            ^"[Ljava.nio.file.OpenOption;"
-                            (into-array OpenOption [StandardOpenOption/CREATE
-                                                    StandardOpenOption/WRITE]))]
-        (let [lock (.lock channel)]
-          (try
-            (binding [*publish-lock-held* (str transactions-dir)] (f))
-            (finally (.release lock))))))))
+  (let [^File file (publish-lock-file transactions-dir)
+        _ (.mkdirs (.getParentFile (.getAbsoluteFile file)))
+        ^ReentrantLock monitor (publish-monitor (.getCanonicalPath file))]
+    (.lock monitor)
+    (try
+      (if (= *publish-lock-held* (str transactions-dir))
+        (f)
+        (with-open [channel (FileChannel/open
+                              (.toPath file)
+                              ^"[Ljava.nio.file.OpenOption;"
+                              (into-array OpenOption [StandardOpenOption/CREATE
+                                                      StandardOpenOption/WRITE]))]
+          (let [lock (.lock channel)]
+            (try
+              (binding [*publish-lock-held* (str transactions-dir)] (f))
+              (finally (.release lock))))))
+      (finally (.unlock monitor)))))
 
 (defn with-publish-lock-dir*
   "Run `f` with every `atomic-write!` on this thread taking `transactions-dir`'s
