@@ -80,11 +80,25 @@
   [requested]
   (cond
     (nil? requested) nil
-    (integer? requested) (if (pos? requested) (long requested) :invalid)
+    (integer? requested) (or (try
+                               (when (pos? requested)
+                                 (let [n (long requested)]
+                                   (when (pos? n) n)))
+                               ;; `long` throws on an integer past Long range.
+                               ;; A ceiling that cannot be a record count is
+                               ;; invalid, and invalid is a receipt.
+                               (catch Exception _ nil))
+                             :invalid)
     (string? requested) (let [t (str/trim requested)]
                           (if (re-matches #"\d+" t)
-                            (let [n (Long/parseLong t)]
-                              (if (pos? n) n :invalid))
+                            ;; A well-FORMED integer can still be one this
+                            ;; server could not have meant. Forty digits parse
+                            ;; as nothing and used to throw
+                            ;; NumberFormatException out of the operation; a
+                            ;; number too large to be a record count is
+                            ;; invalid, not an exception.
+                            (let [n (try (Long/parseLong t) (catch Exception _ nil))]
+                              (if (and n (pos? n)) n :invalid))
                             :invalid))
     :else :invalid))
 
@@ -117,7 +131,12 @@
   (str cursor-id ":" offset ":" mac))
 
 (defn parse-cursor
-  "Parse a continuation cursor, or return `nil` when it is not one."
+  "Parse a continuation cursor, or return `nil` when it is not one.
+
+   `nil` covers BOTH a token of the wrong shape and a well-shaped token whose
+   offset cannot be a record index — forty digits parse as nothing and used to
+   throw `NumberFormatException` out of the operation. Both are the same fact
+   about the caller's token, so both earn the same typed refusal."
   [token]
   (when (string? token)
     (let [parts (str/split (str/trim token) #":")]
@@ -126,7 +145,8 @@
           (when (and (re-matches hex64 cursor-id)
                      (re-matches hex64 mac)
                      (re-matches #"\d+" offset))
-            {:cursor-id cursor-id :offset (Long/parseLong offset) :mac mac}))))))
+            (when-let [n (try (Long/parseLong offset) (catch Exception _ nil))]
+              {:cursor-id cursor-id :offset n :mac mac})))))))
 
 ;; ============================================================
 ;; Typed receipts — continuation, refusal, stale cursor
