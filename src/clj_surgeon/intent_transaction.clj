@@ -2612,11 +2612,19 @@
   "Write one receipt to a staging file beside its destination.
 
   The staging file is opened CREATE_NEW: an open that FAILS when anything
-  already holds the name — a regular file, or a symlink pointing somewhere
-  else — rather than following it. No byte of a receipt is ever written through
-  a link somebody else installed, and the publish below is an ATOMIC_MOVE,
-  which renames onto the destination name and so replaces a link sitting there
-  instead of writing through it."
+  already holds the STAGING name — a regular file, or a symlink pointing
+  somewhere else — rather than following it, and the publish below is an
+  ATOMIC_MOVE off that name.
+
+  That pair protects the staging name and NOT the destination name. The
+  receipt path arrives here already canonicalised (`canonical-receipt-path`
+  → `getCanonicalPath`), so a link sitting on the DESTINATION name was
+  resolved before this function computed its parent: there is no link left for
+  the rename to replace, and both the staging file and the published receipt
+  land in the link's target directory. Detecting that redirect is
+  MCP-OP-ALIAS-056's post-write proof, which reads the published file's real
+  path — parent AND `.edn` extension — and rolls the transaction back rather
+  than reporting ok over a receipt no undo can read."
   [receipt-path receipt]
   (let [target (io/file receipt-path)
         parent (.getParentFile (.getAbsoluteFile target))]

@@ -48,6 +48,24 @@
   guard above, not this set, is what keeps the two name namespaces disjoint."
   #{".git" ".hg" ".svn" ".jj" "target" "node_modules" ".cpcache"})
 
+;; @spec MCP-OP-ALIAS-056
+(def control-directories-anywhere
+  "Control directory names refused at ANY depth, inside the workspace or out.
+
+  Containment against the workspace root is the wrong instrument for these.
+  A LINKED git worktree's `.git` is a file, and its real control directory is
+  `<main>/.git/worktrees/<name>/` — outside the root, so containment never
+  sees it, and `receipt-dir=<that>/refs/heads` published a receipt into git's
+  per-worktree ref storage with ok=true. A monorepo subproject whose
+  `project-root` sits below the repository root has the same shape.
+
+  Only the version-control metadata names are here. `target`, `node_modules`
+  and `.cpcache` stay containment-only: they are ordinary words that a
+  caller's own absolute receipt directory may legitimately contain, and an
+  absolute receipt directory outside the workspace is the ORDINARY
+  configuration. A `.git` anywhere on the path is never ordinary."
+  #{".git" ".hg" ".svn" ".jj"})
+
 ;; ---------------------------------------------------------------------------
 ;; refusals
 
@@ -972,11 +990,21 @@
   inside it is named by the first control segment on the way down, so a
   directory nested any depth below `.git` answers as truthfully as `.git`
   itself. An existing symlink component is already resolved by `resolved-path`,
-  so a link INTO `.git` is caught by the same containment as a plain path."
+  so a link INTO `.git` is caught by the same containment as a plain path.
+
+  Containment is not the whole guard. It answers only about the workspace
+  ROOT, and a linked git worktree keeps its real control directory outside
+  that root; so a version-control metadata segment is refused wherever it
+  appears on the resolved path, and the containment scan is what adds the
+  build-cache names on top of it inside the workspace."
   [project-root ^Path receipt]
   (let [root (resolved-path project-root)]
-    (when (and root receipt (.startsWith receipt root))
-      (first (filter control-directories (map str (.relativize root receipt)))))))
+    (or (when (and root receipt (.startsWith receipt root))
+          (first (filter control-directories (map str (.relativize root receipt)))))
+        ;; @spec MCP-OP-ALIAS-056
+        ;; and a version-control metadata segment ANYWHERE, root or not
+        (when receipt
+          (first (filter control-directories-anywhere (map str receipt)))))))
 
 ;; @spec MCP-OP-ALIAS-056
 (defn receipt-dir-in-control-directory
@@ -1080,21 +1108,70 @@
       (catch SecurityException _ nil))))
 
 ;; @spec MCP-OP-ALIAS-056
-(defn- receipt-published-elsewhere?
-  "Whether the published receipt is not in the directory whose identity was proved.
+(defn- receipt-publication-fault
+  "Why the receipt that now exists cannot be trusted, or nil.
 
   The last window the OS leaves open is the receipt directory's own name. It
   cannot be closed before the write, because a name is resolved on every open;
   it can be DETECTED after it, and a detected one is rolled back rather than
   reported as a success. `toRealPath` on the file that now exists names the
-  directory it actually landed in, which is the only authority on the question."
+  file it actually landed in, which is the only authority on the question.
+
+  The extension is proved on that real name too. The receipt path is
+  CANONICALISED before staging (`canonical-receipt-path`), so a link already
+  sitting on the destination name is followed rather than replaced by the
+  atomic rename, and the write lands under the link's target name. When that
+  target sits INSIDE the proved directory, the parent comparison agrees — and
+  a canonical name without `.edn` is one `execute-undo!` refuses to read, so
+  the transaction reported ok is one nothing can undo. Proving the extension
+  is what turns that into a typed refusal with a rollback attempt."
   [^Path proved receipt-file]
   (let [actual (try
-                 (.getParent (.toRealPath (.toPath (io/file (str receipt-file)))
-                                          (make-array LinkOption 0)))
+                 (.toRealPath (.toPath (io/file (str receipt-file)))
+                              (make-array LinkOption 0))
                  (catch java.io.IOException _ nil)
                  (catch SecurityException _ nil))]
-    (not (and actual proved (= actual proved)))))
+    (cond
+      (or (nil? actual) (nil? proved)) :receipt-unlocatable
+      (not= (.getParent actual) proved) :receipt-published-elsewhere
+      (not (str/ends-with? (str (.getFileName actual)) ".edn")) :receipt-not-undoable
+      :else nil)))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- real-path-string
+  "The path this name resolves to right now, or the name as written."
+  [path]
+  (or (try
+        (str (.toRealPath (.toPath (io/file (str path))) (make-array LinkOption 0)))
+        (catch java.io.IOException _ nil)
+        (catch SecurityException _ nil))
+      (str path)))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- rollback-report
+  "The fields a post-write refusal owes its caller about the tree it left.
+
+  `source-unchanged` is the ROLLBACK's own answer and nothing else. A refusal
+  that restored the tree and one whose restoration FAILED are otherwise the
+  same shape, and the difference is the only thing the caller needs: whether
+  its working tree is mid-migration. The orphan receipt is named by its REAL
+  path — the receipt name is canonicalised before staging, so the path the
+  caller configured is not necessarily where the bytes are."
+  [rolled-back? receipt-file file-count]
+  {:rolled-back rolled-back?
+   :source-unchanged rolled-back?
+   :receipt-file (real-path-string receipt-file)
+   :files-still-migrated (if rolled-back? 0 file-count)})
+
+;; @spec MCP-OP-ALIAS-056
+(defn- rollback-sentence
+  "The clause a post-write refusal ends with, true of what actually happened."
+  [rolled-back? receipt-file file-count]
+  (if rolled-back?
+    "the alias migration was rolled back"
+    (str "rollback FAILED; " file-count
+         (if (= 1 file-count) " file remains" " files remain")
+         " migrated; receipt at " (real-path-string receipt-file))))
 
 ;; @spec MCP-OP-ALIAS-045
 ;; @spec MCP-OP-ALIAS-054
@@ -1245,26 +1322,59 @@
       (select-keys commit [:undo_receipt :receipt_hash]))))
 
 (defn commit-refusal
-  "Translate one kernel refusal into the verb's typed public refusal."
+  "Translate one kernel refusal into the verb's typed public refusal.
+
+  `source_unchanged` is READ from the refusal when the refusal states it, and
+  synthesised from `:committed` only when it does not. The two are not the
+  same question. A post-write refusal rolls the transaction back and reports
+  the rollback's answer; it carries no `:committed` key at all, so
+  `(not (:committed commit))` answered `true` for a FAILED rollback as
+  readily as for a successful one — a constant no unrestored tree could move,
+  published beside prose that claimed the rollback happened. Absent still
+  falls back; an explicit `false` is now the answer.
+
+  @spec MCP-OP-ALIAS-056"
   [plan commit]
-  (refusal (or (some-> (or (:error-type commit) (:error_type commit)) name)
-               "alias-migration-transaction-refused")
-           (or (:error commit) "The alias migration transaction refused")
-           (cond-> {:files (get-in plan [:totals :files])
-                    :sites (get-in plan [:totals :sites])
-                    :source_unchanged (boolean
-                                        (or (:source-unchanged commit)
-                                            (:source_unchanged commit)
-                                            (not (:committed commit))))
-                    :remedy (or (:remedy commit)
-                                (str "Re-send the same alias_migration request;"
-                                     " the frozen snapshot is recomputed from"
-                                     " current source."))}
-             (:change-id commit) (assoc :change_id (str (:change-id commit)))
-             ;; @spec MCP-OP-ALIAS-054
-             ;; a guard asked before and after the directory exists has two
-             ;; answers, and the caller is told which one refused it
-             (:phase commit) (assoc :phase (:phase commit)))))
+  (let [source-unchanged (cond
+                           (contains? commit :source-unchanged)
+                           (:source-unchanged commit)
+
+                           (contains? commit :source_unchanged)
+                           (:source_unchanged commit)
+
+                           :else (not (:committed commit)))]
+    (refusal (or (some-> (or (:error-type commit) (:error_type commit)) name)
+                 "alias-migration-transaction-refused")
+             (or (:error commit) "The alias migration transaction refused")
+             (cond-> {:files (get-in plan [:totals :files])
+                      :sites (get-in plan [:totals :sites])
+                      :source_unchanged (boolean source-unchanged)
+                      :remedy (or (:remedy commit)
+                                  (str "Re-send the same alias_migration request;"
+                                       " the frozen snapshot is recomputed from"
+                                       " current source."))}
+               (:change-id commit) (assoc :change_id (str (:change-id commit)))
+               ;; @spec MCP-OP-ALIAS-054
+               ;; a guard asked before and after the directory exists has two
+               ;; answers, and the caller is told which one refused it
+               (:phase commit) (assoc :phase (:phase commit))
+               ;; @spec MCP-OP-ALIAS-056
+               ;; a refusal that attempted a rollback owes the caller three
+               ;; facts about the tree it left, and an allowlist that computes
+               ;; them and drops them tells the caller nothing
+               (contains? commit :rolled-back)
+               (assoc :rolled_back (boolean (:rolled-back commit)))
+
+               (contains? commit :files-still-migrated)
+               (assoc :files_still_migrated (:files-still-migrated commit))
+
+               (:receipt-file commit)
+               (assoc :receipt_file (str (:receipt-file commit)))
+
+               ;; @spec MCP-OP-ALIAS-056
+               ;; the control directory the guard found, named on the wire
+               (:control_directory commit)
+               (assoc :control_directory (:control_directory commit))))))
 
 (defn declared-file-set
   "The project-relative files one plan will change."
@@ -1531,7 +1641,15 @@
                       :on-write-boundary (when attempted
                                            #(vreset! attempted true))
                       :write-refusal-context {:operation "alias_migration"
-                                              :project-root project-root}})]
+                                              :project-root project-root}})
+            ;; @spec MCP-OP-ALIAS-056
+            ;; resolved ONCE, before anything else touches the tree: asking
+            ;; twice would let the answer change between the test and the
+            ;; branch that reports it
+            ;; only a COMMITTED result published a receipt; a kernel result
+            ;; that did not commit has nothing to prove and nothing to undo
+            fault (when (and (not (:error result)) (:committed result))
+                    (receipt-publication-fault real-dir (:receipt-file result)))]
         (cond
           (:error result)
           result
@@ -1543,22 +1661,36 @@
           ;; receipt somewhere else is rolled back, not reported as a success:
           ;; the OS leaves the window open, and what must never happen is a
           ;; verb reporting ok over it.
-          (receipt-published-elsewhere? real-dir (:receipt-file result))
+          fault
           (let [rollback (transaction/execute-undo!
                            {:receipt (:receipt-file result)})
-                rolled-back? (boolean (:ok rollback))]
+                rolled-back? (boolean (:ok rollback))
+                count-migrated (count files)
+                report (rollback-report rolled-back? (:receipt-file result)
+                                        count-migrated)]
             (when rolled-back?
               (.delete (io/file (:receipt-file result))))
-            {:error (str "The undo receipt was published outside the receipt "
-                         "directory whose identity this verb proved; the alias "
-                         "migration was rolled back")
-             :error-type :alias-migration-receipt-published-elsewhere
-             :phase "post-write"
-             :rolled-back rolled-back?
-             :source-unchanged rolled-back?
-             :remedy (str "Check what is replacing " (str real-dir)
-                          " while this verb runs; a receipt this verb cannot "
-                          "locate is a receipt no undo can be trusted to find.")})
+            (merge
+              {:error (str (if (= :receipt-not-undoable fault)
+                             (str "The undo receipt resolved onto a name no "
+                                  "undo can read — a published receipt must "
+                                  "still be an .edn file after resolution")
+                             (str "The undo receipt was published outside the "
+                                  "receipt directory whose identity this verb "
+                                  "proved"))
+                           "; "
+                           (rollback-sentence rolled-back?
+                                              (:receipt-file result)
+                                              count-migrated))
+               :error-type :alias-migration-receipt-published-elsewhere
+               :phase "post-write"
+               :remedy (str "Check what is replacing " (str real-dir)
+                            " while this verb runs; a receipt this verb cannot "
+                            "locate is a receipt no undo can be trusted to find."
+                            (when-not rolled-back?
+                              (str " The tree is MID-MIGRATION: undo it by hand "
+                                   "from the receipt named in receipt_file.")))}
+              report))
 
           :else
           (let [retired (try
@@ -1572,18 +1704,24 @@
               (:retire-error retired)
               (let [rollback (transaction/execute-undo!
                                {:receipt (:receipt-file result)})
-                    rolled-back? (boolean (:ok rollback))]
+                    rolled-back? (boolean (:ok rollback))
+                    count-migrated (count files)
+                    report (rollback-report rolled-back? (:receipt-file result)
+                                            count-migrated)]
                 ;; the same discipline as the verification-failure branch: an
                 ;; undo receipt for a transaction that has already been undone
                 ;; would invite a second, destructive undo
                 (when rolled-back?
                   (.delete (io/file (:receipt-file result))))
-                {:error (str "The superseded defining file could not be retired; "
-                             "the alias migration was rolled back")
-                 :error-type :alias-migration-retire-failed
-                 :cause-error (:retire-error retired)
-                 :rolled-back rolled-back?
-                 :source-unchanged rolled-back?})
+                (merge
+                  {:error (str "The superseded defining file could not be "
+                               "retired; "
+                               (rollback-sentence rolled-back?
+                                                  (:receipt-file result)
+                                                  count-migrated))
+                   :error-type :alias-migration-retire-failed
+                   :cause-error (:retire-error retired)}
+                  report))
 
               (nil? profile)
               (cond-> result retired (assoc :retired-file retired))
@@ -1600,14 +1738,22 @@
                                               (:path retire-source)))
                         rollback (transaction/execute-undo!
                                    {:receipt (:receipt-file result)})
-                        rolled-back? (boolean (:ok rollback))]
+                        rolled-back? (boolean (:ok rollback))
+                        count-migrated (count files)
+                        report (rollback-report rolled-back?
+                                                (:receipt-file result)
+                                                count-migrated)]
                     (when rolled-back?
                       (.delete (io/file (:receipt-file result))))
-                    {:error "Verification failed; the alias migration was rolled back"
-                     :error-type (or (:error-type verification) :verification-failed)
-                     :verification verification
-                     :rolled-back rolled-back?
-                     :source-unchanged rolled-back?})))))))))))))))
+                    (merge
+                      {:error (str "Verification failed; "
+                                   (rollback-sentence rolled-back?
+                                                      (:receipt-file result)
+                                                      count-migrated))
+                       :error-type (or (:error-type verification)
+                                       :verification-failed)
+                       :verification verification}
+                      report))))))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001
 ;; @spec MCP-OP-ALIAS-005

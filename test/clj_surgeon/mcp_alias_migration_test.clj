@@ -2039,6 +2039,7 @@
         receipts (io/file workspace "receipts")
         victim (io/file receipts "victim.txt")]
     (.mkdirs receipts)
+    (spit victim "not a receipt\n")
     (symlink! (io/file receipts "pinned.edn") victim)
     (try
       (let [result (with-redefs [alias-migration/new-receipt-name

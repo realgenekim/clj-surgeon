@@ -44,11 +44,15 @@
          (map first)
          set)))
 
+(defn- top-level-form-index
+  [file]
+  (into {}
+        (map (juxt :name :source))
+        (outline/top-level-form-records file (slurp file))))
+
 (defn- top-level-form-source
   [file owner]
-  (or (some (fn [{:keys [name source]}]
-              (when (= owner name) source))
-            (outline/top-level-form-records file (slurp file)))
+  (or (get (top-level-form-index file) owner)
       (throw (ex-info "Architecture owner not found"
                       {:file file :owner owner}))))
 
@@ -73,11 +77,42 @@
                  (filter raw-effect-symbols all-symbols)
                  (filter effect-head? invoked-heads)))))
 
+;; @spec MCP-OP-ALIAS-056
+(defn- callees-in-file
+  "Top-level forms of the same file this form invokes directly."
+  [index owner source]
+  (->> (read-string source)
+       (tree-seq coll? seq)
+       (keep #(when (seq? %) (first %)))
+       (filter symbol?)
+       (filter index)
+       (remove #{owner})
+       distinct))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- architecture-references-one-frame-deeper
+  "This form's effect symbols, plus those of the helpers it calls in this file.
+
+  The inventory used to read ONE top-level form textually and follow no calls,
+  which left it blind exactly one frame down: a `spit` added to the private
+  `receipt-source` — a helper `stage-receipt!` calls on every receipt — ran on
+  every run and this oracle stayed green. A bounded write is not bounded by
+  reading only the form that names it. One frame is where the boundary is
+  drawn: it covers the helpers the bounded forms actually delegate to, and it
+  stops before the whole file collapses into one set, which would make the
+  oracle assert nothing. Effects reachable two frames down are still outside
+  it, and that is the stated limit rather than an oversight."
+  [index owner]
+  (let [source (get index owner)]
+    (into (architecture-references source)
+          (mapcat #(architecture-references (get index %)))
+          (callees-in-file index owner source))))
+
 (defn- runtime-architecture-inventory
   []
   (let [file "src/clj_surgeon/intent_transaction.clj"
-        refs #(architecture-references
-                (top-level-form-source file %))]
+        index (top-level-form-index file)
+        refs #(architecture-references-one-frame-deeper index %)]
     {:preview (refs 'plan-change)
      :commit-adapters
      (into #{}
@@ -153,20 +188,65 @@
                (:capabilities
                  (algebra/derive-capabilities catalog-entry commit-context))
                #{:formatter-launch :process-exit :verifier-launch})))
-      (is (= {:preview #{'refuse! 'validate-spec!}
-              :commit-adapters #{'execute-change!
+      ;; @spec MCP-OP-ALIAS-056
+      ;; The inventory reads each bounded form AND the same-file helpers it
+      ;; calls, one frame down. Reading only the named form left this oracle
+      ;; blind exactly where the write lives: a `spit` added to the private
+      ;; `receipt-source`, which `stage-receipt!` calls on every receipt, ran
+      ;; on every run and this test stayed green. The sets below are larger
+      ;; for it, and that is the point — every symbol here is a call the
+      ;; bounded entry can reach without another named form standing between.
+      (is (= {:preview #{'refuse!
+                         'slurp
+                         'validate-aggregate-expectation!
+                         'validate-change-aggregate-expectation!
+                         'validate-changes!
+                         'validate-create-files!
+                         'validate-intent!
+                         'validate-spec!}
+              :commit-adapters #{'.delete
+                                 'assert-receipt-does-not-alias-source!
+                                 'commit-compiled!
+                                 'execute-change!
                                  'execute-change-with-context!
-                                 'execute-mcp-change!}
+                                 'execute-mcp-change!
+                                 'prepare-compiled!
+                                 'publish-staged-receipt!
+                                 'refuse!
+                                 'slurp
+                                 'stage-receipt!
+                                 'validate-receipt!}
               :commit-entry #{'.delete
+                              '.write
+                              'Files/move
+                              'Files/newOutputStream
+                              'assert-file-hash!
                               'assert-receipt-does-not-alias-source!
                               'commit-compiled!
+                              'create-directory!
+                              'create-source!
+                              'default-create-directory!
+                              'default-delete-file!
+                              'delete-file!
                               'execute-change-with-context!
+                              'execute-creations!
+                              'execute-deletions!
+                              'execute-writes!
+                              'file-ops/atomic-create!
+                              'file-ops/atomic-write!
+                              'invalid-receipt!
                               'prepare-compiled!
                               'publish-staged-receipt!
+                              'recover-transaction!
                               'refuse!
+                              'rollback-creations!
+                              'rollback-deletions!
                               'slurp
                               'stage-receipt!
-                              'validate-receipt!}
+                              'validate-complete-source!
+                              'validate-receipt!
+                              'validate-spec!
+                              'write-source!}
               :commit-runtime #{'assert-file-hash!
                                 'commit-compiled!
                                 'execute-writes!
@@ -182,11 +262,14 @@
                                 'recover-transaction!
                                 'refuse!
                                 'slurp
+                                'swap!
                                 ;; @spec MCP-OP-EDIT-035
                                 'create-source!
                                 'write-source!
+                                'read-source!
                                 'file-ops/atomic-create!
-                                'file-ops/atomic-write!}
+                                'file-ops/atomic-write!
+                                'file-ops/revalidate-create-target!}
               ;; @spec MCP-OP-ALIAS-056
               ;; the staged receipt is opened CREATE_NEW rather than spat over
               ;; a createTempFile name, so an open that would follow a link
@@ -195,11 +278,12 @@
                                '.write
                                'refuse!
                                'slurp
+                               'invalid-receipt!
                                'stage-receipt!
                                'validate-receipt!
                                'Files/newOutputStream}
               :receipt-publish #{'publish-staged-receipt! 'Files/move}
-              :rollback #{'read-source! 'write-source!}}
+              :rollback #{'read-source! 'refuse! 'write-source!}}
              (runtime-architecture-inventory))))))
 
 ;; @spec OP-ALG-CATALOG-001, OP-ALG-CONTEXT-001, OP-ALG-CONTEXT-002,
