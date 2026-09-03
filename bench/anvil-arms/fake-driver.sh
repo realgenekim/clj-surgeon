@@ -16,6 +16,10 @@
 #   makeverify a kaocha run reached through `make verify` (a non-test-named target)
 #   zero  a rollout with tool calls and NO assistant return (the abort path)
 #   hang  no returns, then sleeps, so the zero-return WINDOW fires rather than EOF
+#   makeunknown a Make target the attest-time map does not resolve (item 6)
+#   rotate    a bound rollout whose file is REPLACED by a new inode mid-run (item 2)
+#   setsidhang a descendant that leaves the driver's process group via setsid (item 5)
+#   ceiling   a session id announced AFTER the 64 KiB banner scan ceiling (diagnostic)
 set -euo pipefail
 
 A=${1:?usage: fake-driver.sh <ARMDIR> <fixture>}
@@ -113,6 +117,74 @@ case "$FIXTURE" in
     R="$DEC"; : > "$R"
     for _ in 1 2 3 4 5 6 7 8 9; do ret '"a concurrent session nobody asked this arm to meter"'; done
     printf 'TOOLCALLS: 2\n' > "$A/driver-report.md"
+    ;;
+
+  makeunknown)
+    # A Make target the attest-time map does not resolve.  Sol, item 6: an unknown or
+    # conditional target failed OPEN as a non-test action, so an unmetered test run
+    # counted as one more non-test action -- the exact quantity E3's pass line uses.
+    ret '"Running an unmapped target."'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"make ghost\"]}"' '"c1"'
+    out '"c1"' '"42 tests, 416 assertions, 0 failures."'
+    ret '"Done.\n\nTOOLCALLS: 1"'
+    printf 'TOOLCALLS: 1\n' > "$A/driver-report.md"
+    ;;
+
+  rotate)
+    # The bound rollout is REPLACED by a different inode mid-run.  Sol, item 2: the
+    # watcher kept reading the old (unlinked) inode while the retained copy was taken
+    # BY PATH from the replacement, and the receipt asserted sources.agree=true over
+    # two different files.
+    SID=${FAKE_SESSION_ID:-22222222-3333-4444-5555-666666666666}
+    : "${CODEX_HOME:?rotate fixture requires CODEX_HOME}"
+    D="$CODEX_HOME/sessions/2026/09/03"
+    mkdir -p "$D"
+    echo "OpenAI Codex (research preview)"
+    echo "session id: $SID"
+    R="$D/rollout-2026-09-03T06-00-00-$SID.jsonl"
+    : > "$R"
+    ret '"Reading the tree."'
+    call '"clj-surgeon__alias_migration"' '"{\"expect_files\":21}"' '"c1"'
+    out '"c1"' '"{\"files_changed\":21}"'
+    ret '"Done.\n\nTOOLCALLS: 1"'
+    sleep 3                        # the watcher binds THIS inode and reads THESE bytes
+    rm -f "$R"                     # rotation: the path now names a different inode
+    : > "$R"
+    ret '"a replacement file nobody metered"'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"echo replaced\"]}"' '"r1"'
+    out '"r1"' '"replaced"'
+    sleep 3
+    printf 'TOOLCALLS: 1\n' > "$A/driver-report.md"
+    ;;
+
+  setsidhang)
+    # A descendant that leaves the driver's process group by calling setsid.  Sol,
+    # item 5: the PGID reap could not see it, it survived the abort, and run.json
+    # still reported zero orphans.
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"setsid sleep 60\"]}"' '"c1"'
+    setsid bash -c "printf '%s\n' \$\$ > \"$A/fake-driver-setsid.pid\"; exec sleep 60" &
+    printf '%s\n' "$$" > "$A/fake-driver.pid"
+    sleep 60 &
+    child=$!
+    printf '%s\n' "$child" > "$A/fake-driver-child.pid"
+    wait "$child"
+    ;;
+
+  ceiling)
+    # The session id announced AFTER the 64 KiB banner scan ceiling.  Binding fails
+    # closed, correctly -- but the diagnostic must say WHY.  "no ID announced" is a
+    # false statement about a driver that announced one.
+    SID=${FAKE_SESSION_ID:-33333333-4444-5555-6666-777777777777}
+    : "${CODEX_HOME:?ceiling fixture requires CODEX_HOME}"
+    D="$CODEX_HOME/sessions/2026/09/03"
+    mkdir -p "$D"
+    head -c 70000 /dev/zero | tr '\0' 'x'
+    echo
+    echo "session id: $SID"
+    R="$D/rollout-2026-09-03T07-00-00-$SID.jsonl"
+    : > "$R"
+    ret '"Reading the tree."'
+    ret '"Done.\n\nTOOLCALLS: 0"'
     ;;
 
   zero)
