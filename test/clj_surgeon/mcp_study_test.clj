@@ -646,6 +646,29 @@
                           (not (matches? declared (get receipt key))))]
            {:field field :value (pr-str (get receipt key))}))))
 
+(defn- object-schema-violations
+  "Minimal structural check of `value` (a map with string keys) against a
+   JSON-Schema-shaped object schema: every `:required` key present, every
+   declared `:enum` honoured, and — when `:additionalProperties` is false —
+   no key outside `:properties`. Same hand-rolled-checker shape as
+   `output-schema-violations` above, one level deeper, so a `paths_unresolved`
+   entry can be validated against its own published item schema and not just
+   against \"is the container an array\"."
+  [schema value]
+  (let [{:keys [properties required]} schema
+        additional? (:additionalProperties schema)]
+    (vec (concat
+          (for [k required :when (not (contains? value k))]
+            {:missing k})
+          (keep (fn [[k v]]
+                  (let [prop (get properties k)]
+                    (cond
+                      (nil? prop)
+                      (when (false? additional?) {:unknown-key k})
+                      (and (:enum prop) (not (contains? (set (:enum prop)) v)))
+                      {:field k :not-in-enum v})))
+                value)))))
+
 ;; @spec MCP-OP-STUDY-022
 (deftest ls-tree-refuses-an-uncompilable-ns-grep-with-a-typed-error
   ;; `ns_grep` compiled its pattern with `re-pattern` once PER FILE and under
@@ -1699,3 +1722,30 @@
                  (:paths_unresolved response))
               "but a successful receipt still says what it could not reach")
           (is (empty? (output-schema-violations response))))))))
+
+;; ============================================================
+;; The paths_unresolved item shape is published, not just its container
+;; (round-4 re-review fix 6)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-035
+(deftest paths-unresolved-item-schema-is-published-and-constrains-reason
+  ;; `"paths_unresolved" {:type "array"}` constrained only the container: a
+  ;; caller had no machine-readable contract for the `{project path reason}`
+  ;; shape every entry actually carries, published only in prose and in
+  ;; STUDY-035. The item schema must be declared, and it must reject an
+  ;; unknown `reason`, a missing required field, and an undeclared key.
+  (let [item-schema (get-in inspect-tool/inspect-output-schema
+                            [:properties "paths_unresolved" :items])
+        valid-item {"project" "p" "path" "src" "reason" "symlink"}]
+    (is (some? item-schema)
+        "the array must publish an entry shape, not just \"is an array\"")
+    (is (empty? (object-schema-violations item-schema valid-item))
+        "a real production item validates cleanly")
+    (is (seq (object-schema-violations
+              item-schema (assoc valid-item "reason" "no-such-reason")))
+        "an unknown reason is rejected by the published enum")
+    (is (seq (object-schema-violations item-schema (dissoc valid-item "path")))
+        "a missing required field is rejected")
+    (is (seq (object-schema-violations item-schema (assoc valid-item "extra" "x")))
+        "an undeclared key is rejected (additionalProperties false)")))

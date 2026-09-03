@@ -852,6 +852,21 @@
    :required ["descriptor_sha256" "expires_in_ms" "session_bound"
               "commit_single_use" "executable" "write_authority"]})
 
+;; @spec MCP-OP-STUDY-035
+(def ^:private paths-unresolved-item-schema
+  "One `paths_unresolved` entry: a declared source directory `ls-tree`
+   discovery could not walk. `unresolved-source-dir` (study.clj) names only
+   `:symlink` today; the enum is deliberately narrow rather than an open
+   string so a caller can distinguish a documented skip class from a typo
+   the way `error_type` already lets it."
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"project" {:type "string"}
+    "path" {:type "string"}
+    "reason" {:type "string" :enum ["symlink"]}}
+   :required ["project" "path" "reason"]})
+
 (def inspect-output-schema
   {:type "object"
    :additionalProperties true
@@ -902,7 +917,7 @@
     "max_files" {:type "integer"}
     "match_budget" {:type "integer"}
     "observed_at_least" {:type "boolean"}
-    "paths_unresolved" {:type "array"}
+    "paths_unresolved" {:type "array" :items paths-unresolved-item-schema}
     "remedy" {:type "string"}
     "format" {:type "string"}
     "limit" {:type "integer"}
