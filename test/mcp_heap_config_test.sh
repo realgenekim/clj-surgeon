@@ -69,7 +69,28 @@ printf '%s\n' "$default_serve_output" | grep -Fq -- ":port '7888'"
 
 override_serve_output=$(make --no-print-directory -n mcp-serve MCP_PORT=7901)
 printf '%s\n' "$override_serve_output" | grep -Fq -- ":port '7901'"
-printf '%s\n' "$override_serve_output" | grep -Fqv -- ":port '7888'"
+# `grep -Fqv` succeeds when ANY line lacks the string, which is always true of
+# a multi-line recipe: the assertion below is the one that actually holds the
+# overridden recipe to carrying no default port.
+if printf '%s\n' "$override_serve_output" | grep -Fq -- ":port '7888'"; then
+  echo 'mcp-serve still carries the default port when MCP_PORT is overridden' >&2
+  exit 1
+fi
+
+# Regression: `make mcp-serve-benchmark` carried the same defect mcp-serve
+# did — no `:port` at all, so it always bound the 7888 default regardless of
+# MCP_PORT and failed "Address already in use" against any clj-surgeon MCP
+# already holding that port. Benchmarks are exactly the workload that runs
+# beside an existing server.
+default_benchmark_output=$(make --no-print-directory -n mcp-serve-benchmark)
+printf '%s\n' "$default_benchmark_output" | grep -Fq -- ":port '7888'"
+
+override_benchmark_output=$(make --no-print-directory -n mcp-serve-benchmark MCP_PORT=7902)
+printf '%s\n' "$override_benchmark_output" | grep -Fq -- ":port '7902'"
+if printf '%s\n' "$override_benchmark_output" | grep -Fq -- ":port '7888'"; then
+  echo 'mcp-serve-benchmark still carries the default port when MCP_PORT is overridden' >&2
+  exit 1
+fi
 
 url_output=$(make --no-print-directory -n mcp-start MCP_PORT=7901 2>/dev/null || true)
 if [ -n "$url_output" ]; then
