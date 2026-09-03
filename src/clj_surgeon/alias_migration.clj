@@ -340,12 +340,25 @@
         (if qualifier
           (if-not (contains? qualifiers qualifier)
             {}
-            (let [fully-qualified? (= qualifier (:from-lib context))]
+            (let [fully-qualified? (= qualifier (:from-lib context))
+                  ;; @spec MCP-OP-ALIAS-035
+                  ;; Inside a plain quote the symbol is a VALUE, not a
+                  ;; reference the reader resolves: the alias map plays no part
+                  ;; in what it names. A fully-qualified quoted symbol names
+                  ;; exactly one namespace from anywhere, which is the whole
+                  ;; reason it is a site at all — (requiring-resolve
+                  ;; 'old.lib/v) would otherwise break lazily at call time —
+                  ;; so its replacement must name exactly one namespace too.
+                  ;; Alias-qualifying it produces 'alias/x, the shape this same
+                  ;; verb refuses to READ because nothing resolves it.
+                  qualify (if (and (:quoted-data? context) fully-qualified?)
+                            (:to-lib context)
+                            alias)]
               (if (= :lib mode)
-                {:rewrite (str alias "/" var-name)
+                {:rewrite (str qualify "/" var-name)
                  :fully-qualified? fully-qualified?}
                 (if (= var-name from-var)
-                  {:rewrite (str alias "/" to-var)
+                  {:rewrite (str qualify "/" to-var)
                    :fully-qualified? fully-qualified?}
                   {:other-use? true}))))
           (let [live? (contains? live-bare var-name)]
@@ -423,9 +436,11 @@
           ;; resolves it away, so the rewrite is mechanical — this is how a
           ;; runtime (requiring-resolve 'old.lib/v) survives a lib rename
           (every? :fully-qualified? facts)
-          (let [walked (reduce (fn [state child]
+          (let [quoted-context (assoc context :quoted-data? true)
+                walked (reduce (fn [state child]
                                  (accumulate state
-                                             (rewrite-forms child context live-bare)))
+                                             (rewrite-forms child quoted-context
+                                                            live-bare)))
                                empty-walk
                                (children node))]
             (walk-result node walked))
@@ -691,6 +706,18 @@
                      (max 0 (- declared (count fresh)))
                      declared))))))
 
+;; @spec MCP-OP-ALIAS-058
+(defn rescoping-call
+  "The same request with `scope.paths` replaced outright, or nil if it would not fit.
+
+  The executable remedy for a scope that matched NOTHING, where no exclusion and
+  no narrowing prefix can help: the caller's spelling selected no file, so the
+  only correction is a different spelling. `expect.files` is left exactly as
+  declared, because not one file of the new scope has been read."
+  [request paths]
+  (let [call (assoc-in (base-call request) ["scope" "paths"] (vec paths))]
+    (when (and (seq paths) (within-next-call-bound? call)) call)))
+
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-055
 (defn narrowing-call
@@ -881,6 +908,7 @@
       (and (nil? analysis) lib-mode?)
       (let [context {:mode :lib
                      :from-lib from-lib
+                     :to-lib to-lib
                      :qualifiers #{from-lib}
                      :alias to-lib
                      :rewrite-bare #{}
@@ -956,6 +984,7 @@
                     kept-refer (if (and lib-mode? preserve-refer?) referred #{})
                     context {:mode (if lib-mode? :lib :var)
                              :from-lib from-lib
+                             :to-lib to-lib
                              :qualifiers (into #{from-lib} (:aliases target))
                              :from-var from-var
                              :to-var to-var

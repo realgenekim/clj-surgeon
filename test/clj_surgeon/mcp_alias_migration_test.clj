@@ -340,6 +340,229 @@
       (finally
         (delete-tree! workspace)))))
 
+
+;; @spec MCP-OP-ALIAS-057
+(deftest a-bare-directory-in-scope-paths-is-that-directorys-subtree
+  ;; The exact scope EVERY tool arm of the E3-P cohort sent on its FIRST call
+  ;; (/home/forge/tmp/arms/e3/e3-P-T-1/rollout.jsonl, 2026-09-03T22:42:20.546Z):
+  ;;   scope: { paths: ["src"] }
+  ;; It selected nothing, because scope.paths are globs and the glob `src`
+  ;; matches only a path whose whole spelling is `src`. Four refusals in four of
+  ;; four arms, one model return each, on a rung whose pass line is one call.
+  ;; A scope path that IS an existing directory is that directory's subtree:
+  ;; the obvious reading, and the only one under which the caller's spelling is
+  ;; not a trap.
+  (let [workspace (workspace!)]
+    (try
+      (testing "a directory selects exactly what its explicit glob selects"
+        (is (= (alias-migration/expand-scope (.toPath (.getCanonicalFile workspace))
+                                            {:paths ["src/**"] :exclude []})
+               (alias-migration/expand-scope (.toPath (.getCanonicalFile workspace))
+                                             {:paths ["src"] :exclude []}))))
+      (testing "the cohort's exact first request commits in ONE call"
+        (let [result (execute! workspace {:scope {:paths ["src"]}
+                                          :expect {:files 12}})]
+          (is (true? (:ok result)) (pr-str result))
+          (is (true? (:committed result)))
+          (is (= 12 (:files result)))))
+      (finally
+        (delete-tree! workspace)))))
+
+
+;; @spec MCP-OP-ALIAS-058
+(deftest a-scope-that-matches-no-file-names-the-spelling-not-the-domain
+  ;; `alias-migration-empty-scope` announced a DOMAIN cause — "No namespace
+  ;; under scope requires acid.fanout.store" — for a SPELLING cause, and a
+  ;; refusal that cannot tell "your glob matched nothing" from "nothing in this
+  ;; tree requires that lib" teaches the wrong lesson. The two states are now
+  ;; two refusals: this one fires only when the scope matched no file at all.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (let [result (execute! workspace {:scope {:paths ["srk/**"]}
+                                        :expect {:files 12}})]
+        (is (false? (:ok result)))
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+            "a glob that matched nothing was reported as a fact about the tree")
+        (is (= ["srk/**"] (:paths result))
+            "the refusal does not name the paths as the caller gave them")
+        (is (= 0 (:files_matched result)))
+        ;; the proxy "the word `requires` is absent" is too crude: the refusal
+        ;; must not ASSERT the domain cause, and saying that the domain fact is
+        ;; NOT KNOWN is the honest thing to publish, not a violation
+        (is (not (str/includes? (str (:error result))
+                                (str "No namespace under scope requires "
+                                     fixture/from-lib)))
+            "a spelling cause was announced as the domain cause")
+        (is (str/includes? (str (:error result)) "matched 0 files")
+            "the refusal does not state what the caller's own paths matched")
+        (is (str/includes? (str (:error result)) "is not known")
+            "the refusal leaves the unread domain fact looking settled")
+        (is (string? (:remedy result)))
+        (is (true? (:source_unchanged result)))
+        (testing "the corrected spelling is executable, not merely described"
+          (let [next-call (:next_call result)]
+            (is (some? next-call) "the refusal carried no executable next_call")
+            (is (contains? (set (get-in next-call ["scope" "paths"])) "src/**")
+                "the remedy does not name the tree's own source root")
+            (let [replayed (alias-migration/execute!
+                             (config workspace receipt-dir)
+                             (json/parse-string (json/generate-string next-call)
+                                                true))]
+              (is (not= "alias-migration-scope-matches-nothing"
+                        (:error_type replayed))
+                  "the corrected spelling still matched nothing")
+              (is (or (:ok replayed)
+                      (= "alias-migration-expect-mismatch" (:error_type replayed)))
+                  (pr-str replayed))
+              (when-not (:ok replayed)
+                (is (pos? (long (:found_files replayed))))
+                (let [committed (alias-migration/execute!
+                                  (config workspace receipt-dir)
+                                  (json/parse-string
+                                    (json/generate-string (:next_call replayed))
+                                    true))]
+                  (is (:ok committed) (pr-str committed))))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-006
+(deftest the-domain-refusal-fires-only-when-the-scope-matched-files
+  ;; The counterpart of ALIAS-058: three files matched, none of them requires
+  ;; from.lib. That IS a fact about the tree, and it keeps its own name.
+  (let [workspace (workspace!)]
+    (try
+      (let [result (execute! workspace {:scope {:paths ["src/acid/fanout/n0*.clj"]}
+                                        :expect {:files 0}})]
+        (is (false? (:ok result)))
+        (is (= "alias-migration-empty-scope" (:error_type result)))
+        (is (= 3 (:scanned_files result))
+            "the domain refusal fired over a scope that matched no file"))
+      (finally
+        (delete-tree! workspace)))))
+
+
+;; ---------------------------------------------------------------------------
+;; the refusal TEXT block carries what the structured refusal carries
+
+;; @spec MCP-OP-ALIAS-059
+(def ^:private refusal-envelope-keys
+  "Receipt keys the refusal text renders structurally rather than as facts."
+  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
+    :write_authority :next_action :next_call :remedy :elapsed_ms
+    :workspace_root :expect_files_unchanged_reason :receipt_hash
+    :undo_receipt :details_path :details_retained :details_retention})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- refusal-kinds-in-source
+  "Every refusal kind alias_migration can emit, read from the SOURCE.
+
+  Derived rather than listed, so a refusal kind added later without a text
+  witness fails this gate on the day it is written."
+  []
+  (let [text (str (slurp "src/clj_surgeon/alias_migration.clj")
+                  (slurp "src/clj_surgeon/mcp_alias_migration.clj")
+                  (slurp "src/clj_surgeon/mcp_tool.clj"))]
+    (into (sorted-set "invalid-mcp-request" "server-not-initialized")
+          (map second)
+          (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]" text))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- assert-refusal-text!
+  "The text block a text-reading client sees carries the cause, every
+  discriminating fact, the remedy, and the next_call as sendable JSON — or an
+  explicit statement that there is none."
+  [structured label]
+  (let [text (mcp-tool/alias-migration-summary structured)]
+    (is (str/includes? text (str (:error_type structured)))
+        (str label " · the text block does not name the cause"))
+    (doseq [[field value] (sort-by key structured)
+            :when (and (not (contains? refusal-envelope-keys field))
+                       (or (string? value) (number? value) (boolean? value)
+                           (and (sequential? value)
+                                (every? #(or (string? %) (number? %)) value))))]
+      (is (str/includes? text (name field))
+          (str label " · the text block drops the discriminating field "
+               (name field))))
+    (when-let [error (:error structured)]
+      (is (str/includes? text error)
+          (str label " · the text block drops the error sentence")))
+    (when-let [remedy (:remedy structured)]
+      (is (str/includes? text remedy)
+          (str label " · the text block drops the remedy")))
+    (if-let [call (:next_call structured)]
+      (let [encoded (json/generate-string call)]
+        (is (or (str/includes? text encoded)
+                (and (str/includes? text "next_call")
+                     (str/includes? text "structuredContent")
+                     (str/includes? text (str (count encoded)))))
+            (str label " · the text block drops the next_call the caller must send")))
+      (is (re-find #"next_call[^\n]*none" text)
+          (str label " · an absent next_call is omitted rather than stated")))
+    text))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest every-refusal-kind-renders-its-remedy-and-next-call-in-the-text-block
+  ;; E3-P, 2026-09-03: `content[0].text` rendered ONLY the domain sentence.
+  ;; structuredContent carried a complete, executable next_call — T-1 and T-3
+  ;; found it and converged in 3.3 s — but T-2, reading the text, sent the same
+  ;; wrong scope a second time. A refusal whose two faces disagree about what
+  ;; the caller must do next is a refusal that costs a return at random.
+  (testing "every refusal kind the source can emit"
+    (doseq [kind (refusal-kinds-in-source)]
+      (assert-refusal-text!
+        {:ok false
+         :operation "alias_migration"
+         :error_type kind
+         :error (str "one sentence stating the " kind " cause")
+         :remedy (str "Resend the next_call; it corrects " kind ".")
+         :found_files 0
+         :scanned_files 7
+         :elapsed_ms 1.25
+         :source_unchanged true
+         :next_call {"op" "alias_migration"
+                     "scope" {"paths" ["src/**"]}
+                     "expect" {"files" 21}}}
+        kind)))
+  (testing "a refusal with no computable next_call says so"
+    (let [text (assert-refusal-text!
+                 {:ok false
+                  :operation "alias_migration"
+                  :error_type "alias-migration-scope-too-deep"
+                  :error "one path is past the depth bound"
+                  :remedy "Narrow scope.paths so the walk does not reach it."
+                  :depth 65
+                  :max_depth 64
+                  :elapsed_ms 1.0
+                  :source_unchanged true
+                  :next_call nil}
+                 "no-next-call")]
+      (is (str/includes? text "65"))
+      (is (str/includes? text "Narrow scope.paths")))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest a-live-refusals-text-and-structured-receipt-do-not-disagree
+  (let [workspace (workspace!)]
+    (try
+      (doseq [[label overrides]
+              [["scope-matches-nothing" {:scope {:paths ["srk/**"]}
+                                         :expect {:files 12}}]
+               ["empty-scope" {:scope {:paths ["src/acid/fanout/n0*.clj"]}
+                               :expect {:files 0}}]
+               ["expect-mismatch" {:expect {:files 99}}]
+               ["mixed-var-spec" {:from {:lib fixture/from-lib :var nil}
+                                  :to {:lib fixture/to-lib :var fixture/to-var
+                                       :alias_policy fixture/alias-policy}}]]]
+        ;; execute! is the workspace half; mcp-operation/invoke! stamps
+        ;; elapsed_ms at the tool boundary, so it is supplied here rather than
+        ;; driving the whole MCP callback for a rendering assertion
+        (let [result (assoc (execute! workspace overrides) :elapsed_ms 1.0)]
+          (is (false? (:ok result)) (str label " did not refuse"))
+          (assert-refusal-text! result label)))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-013
 (deftest an-indirect-reference-refuses-closed-and-names-the-file
   (let [workspace (workspace!)]
