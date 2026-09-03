@@ -8,7 +8,7 @@
 | 4 | clj-surgeon bridge/rf2-extract-rewire | 465c956 | pushed; Sol refused by content filter → Opus re-check running | ruling (no writes into pruned trees via links) landed fails-first |
 | 5 | clj-surgeon bridge/q5z-alias-migration | ca677bc | pushed, Sol round-3 re-check running | seven fails-first witnesses (ALIAS-046..053); aggregate-bytes ceiling refuses 450 × 1.9 MB before any read = MEM-002 host |
 | 6 | clj-surgeon bridge/study-ops-mcp | round 3 building | — | E6 cohort gated on it |
-| 7 | clj-surgeon bridge/routing-doc-test | a9d8701 | **GO** (merge second, after kondo) | restores the MCP-OP-RELAY-004 relay paragraph dropped by 01f0739; test-fast 702/5912/0 failures; 8 doc lines, one file |
+| 7 | clj-surgeon bridge/routing-doc-test | a9d8701 | **MERGED** (surgeon1, 3ebeafd/d1c5330) | restores the MCP-OP-RELAY-004 relay paragraph dropped by 01f0739; test-fast 702/5912/0 failures; 8 doc lines, one file |
 | 8 | curtain-call bridge/template-upsert | fix building | — | after fold → store → settings-lens |
 | 9 | curtain-call bridge/fold-diff-tool | round 3 building | HOLD | mayor runs bin/ directly after GO |
 | 10 | curtain-call bridge/lens-followups | 934716dc | ready | last in the curtain-call order |
