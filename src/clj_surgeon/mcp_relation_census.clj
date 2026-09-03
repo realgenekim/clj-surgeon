@@ -9,6 +9,7 @@
    is not an enforcement gate."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.census-discovery :as discovery]
    [clj-surgeon.census-pool :as census-pool]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -17,8 +18,7 @@
    [clj-surgeon.relation-census :as census]
    [clojure.string :as str])
   (:import
-   (java.nio.file FileVisitResult Files LinkOption Path SimpleFileVisitor)
-   (java.nio.file.attribute BasicFileAttributes)))
+   (java.nio.file Files Path)))
 
 (def max-scanned-files census/max-scanned-files)
 (def max-source-bytes census/max-source-bytes)
@@ -210,86 +210,20 @@
 ;; Discovery
 ;; ---------------------------------------------------------------------------
 
-(def ^:private skipped-directories census/skipped-directories)
-
-(defn- source-name?
-  [^Path path]
-  (boolean (re-find census/source-name-pattern (str (.getFileName path)))))
-
-(defn- escapes-root?
-  "Does this entry's real location lie outside the canonical root?"
-  [^Path root ^Path path]
-  (try
-    (not (.startsWith (.toRealPath path (make-array LinkOption 0)) root))
-    (catch Throwable _ true)))
-
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-028
+;; @spec MCP-OP-CENSUS-032
 (defn- candidate-files
   "Project-relative Clojure sources under one canonical root, bounded.
 
-   Walks with `Files/walkFileTree` and no `FOLLOW_LINKS`, so a symlinked
-   directory is never descended: `dev/checkouts/foo -> ../../foo` costs one
-   counted skip instead of refusing the whole census. Skip-directories are
-   pruned before they are read rather than filtered out of the result, and the
-   file cap terminates the walk rather than truncating it afterwards.
-
-   A discovered source above `max-source-bytes` is never read, and it is never
-   dropped in silence either: it is counted and NAMED, and the census that
-   skipped it does not claim `read_complete`.
-
-   Reaching the cap is a REFUSAL, not a result: the walk stops at one candidate
-   past the ceiling and reports `:exceeded?` with the count it had seen, so the
-   caller is told the tree is larger than the census may read instead of being
-   handed a subset dressed as a complete answer."
+   Discovery is not implemented here. It is the shared
+   `clj-surgeon.census-discovery` kernel, which the CLI op calls too: root
+   canonicalisation, root confinement, skip-directory pruning, the byte cap,
+   and the scanned-file ceiling are ONE implementation, so the two entrances
+   cannot answer the same tree differently."
   [^Path root]
-  (let [found (java.util.ArrayList.)
-        oversized (java.util.ArrayList.)
-        skipped (atom 0)
-        exceeded (atom false)
-        visitor
-        (proxy [SimpleFileVisitor] []
-          (preVisitDirectory [dir _attrs]
-            (let [^Path dir dir]
-              (if (and (not (.equals dir root))
-                       (contains? skipped-directories (str (.getFileName dir))))
-                FileVisitResult/SKIP_SUBTREE
-                FileVisitResult/CONTINUE)))
-          (visitFile [path attrs]
-            (let [^Path path path
-                  ^BasicFileAttributes attrs attrs]
-              (cond
-                (and (.isRegularFile attrs) (source-name? path))
-                (cond
-                  (escapes-root? root path)
-                  (do (swap! skipped inc)
-                      FileVisitResult/CONTINUE)
-
-                  (> (.size attrs) census/max-source-bytes)
-                  (do (.add oversized (str (.relativize root path)))
-                      FileVisitResult/CONTINUE)
-
-                  (>= (.size found) census/max-scanned-files)
-                  (do (reset! exceeded true)
-                      FileVisitResult/TERMINATE)
-
-                  :else
-                  (do (.add found (str (.relativize root path)))
-                      FileVisitResult/CONTINUE))
-
-                (and (.isSymbolicLink attrs) (escapes-root? root path))
-                (do (swap! skipped inc)
-                    FileVisitResult/CONTINUE)
-
-                :else FileVisitResult/CONTINUE)))
-          (visitFileFailed [_path _error] FileVisitResult/CONTINUE))]
-    (Files/walkFileTree root #{} Integer/MAX_VALUE visitor)
-    {:files (vec (sort found))
-     :oversized (vec (sort oversized))
-     :skipped-outside-root @skipped
-     :exceeded? @exceeded
-     :observed (cond-> (.size found) @exceeded inc)}))
+  (discovery/discover root))
 
 ;; @spec MCP-OP-CENSUS-017
 ;; @spec MCP-OP-CENSUS-030
