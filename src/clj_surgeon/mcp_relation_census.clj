@@ -227,7 +227,14 @@
       (refuse :unknown-fields
               (str "relation_census does not accept " (str/join ", " unknown))
               {:unknown unknown
-               :accepted (vec (sort (map name census-fields)))})
+               ;; The accepted list is what the caller retries with, so it
+               ;; names every field this tool accepts — the routing field
+               ;; included. Sol's round-nine item 6: advertising only the
+               ;; census fields tells a caller that the workspace_root it
+               ;; legitimately supplied is not accepted, and workspace_root
+               ;; is the field that decides which tree gets censused.
+               :accepted (vec (sort (map name (into census-fields
+                                                    routing-fields))))})
 
       (and (some? doors) (not (sequential? doors)))
       (refuse :doors-not-an-array "doors must be a JSON array of symbols" {})
