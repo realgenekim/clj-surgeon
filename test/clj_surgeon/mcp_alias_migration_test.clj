@@ -621,6 +621,7 @@
 ;; @spec MCP-OP-ALIAS-021
 ;; @spec MCP-OP-ALIAS-022
 ;; @spec MCP-OP-ALIAS-026
+;; @spec MCP-OP-ALIAS-044
 (deftest a-lib-only-migration-rewrites-every-var-and-renames-the-namespace
   (let [workspace (workspace!)]
     (try
@@ -636,9 +637,13 @@
                   :to "acid.fanout.event-store"
                   :file "src/acid/fanout/store.clj"
                   :new_file "src/acid/fanout/event_store.clj"
-                  :retired_to (str (io/file workspace ".clj-surgeon" "alias-migration"
-                                            "retired" "src/acid/fanout/store.clj"))}
-                 (:lib_renamed result))))
+                  :retired_to (str ".clj-surgeon/alias-migration/retired/"
+                                   "src/acid/fanout/store.clj")}
+                 (:lib_renamed result)))
+          (testing "retired_to names a project-relative path, not a server path"
+            (is (not (str/starts-with? (:retired_to (:lib_renamed result)) "/")))
+            (is (.exists (io/file workspace
+                                  (:retired_to (:lib_renamed result)))))))
 
         (testing "the receipt is still constant in N"
           (let [encoded (json/generate-string result)]
@@ -655,7 +660,8 @@
 
         (testing "the superseded file is retired, not destroyed"
           (is (= (get (:pre corpus) (:defining-file lib-manifest))
-                 (slurp (io/file (:retired_to (:lib_renamed result)))))))
+                 (slurp (io/file workspace
+                                 (:retired_to (:lib_renamed result)))))))
 
         (testing "every var of the old lib moved, under every spelling"
           (is (str/includes? (slurp (io/file workspace "src/acid/fanout/t03.clj"))
@@ -836,6 +842,40 @@
         (testing "every other file is byte-identical to its pre-migration source"
           (doseq [[relative expected] (:pre corpus)]
             (is (= expected (slurp (io/file workspace relative))) relative))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-045
+(deftest per-run-detail-files-are-retained-to-a-documented-bound
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        details (io/file workspace ".clj-surgeon" "alias-migration")]
+    (.mkdirs receipt-dir)
+    (.mkdirs details)
+    (try
+      ;; thirty older runs, each with a distinct and strictly older timestamp
+      (dotimes [index 30]
+        (let [stale (io/file details (str "old-" index ".edn"))]
+          (spit stale "{:version 1 :files []}")
+          (.setLastModified stale (- (System/currentTimeMillis)
+                                     (* 1000 (- 60 index))))))
+      (let [result (execute! workspace)
+            remaining (->> (.listFiles details)
+                           (filter #(str/ends-with? (.getName %) ".edn"))
+                           (mapv #(.getName %)))]
+        (is (:ok result) (pr-str result))
+        (is (= alias-migration/max-detail-files (count remaining))
+            (str "detail files retained: " (sort remaining)))
+        (testing "the run's own detail file is the one that survives"
+          (is (contains? (set remaining)
+                         (.getName (io/file (:details_path result)))))
+          (is (= (:file (first (:files (edn/read-string
+                                         (slurp (io/file workspace
+                                                         (:details_path result)))))))
+                 "src/acid/fanout/t01.clj")))
+        (testing "the oldest runs are the ones dropped"
+          (is (not (contains? (set remaining) "old-0.edn")))
+          (is (contains? (set remaining) "old-29.edn"))))
       (finally
         (delete-tree! workspace)))))
 

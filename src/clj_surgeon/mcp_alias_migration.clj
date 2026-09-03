@@ -381,7 +381,37 @@
 ;; ---------------------------------------------------------------------------
 ;; durable per-file detail
 
+(def max-detail-files
+  "How many alias_migration detail documents one workspace keeps.
+
+  Every call writes one per-file detail document under
+  `.clj-surgeon/alias-migration/`. They are diagnostic, not transactional — the
+  undo receipt is the durable artefact — so the directory retains the most
+  recent twenty, the run's own document always among them, and deletes the rest."
+  20)
+
+;; @spec MCP-OP-ALIAS-045
+(defn- prune-details!
+  "Delete all but the most recent `max-detail-files` detail documents.
+
+  `keep` is the document this run just wrote; it is retained regardless of how
+  the filesystem timestamps compare, so a run can never discard its own
+  receipt's `details_path`. Only `.edn` files directly in the directory are
+  considered, never the `retired/` subtree, which is transactional."
+  [^java.io.File directory ^String keep]
+  (let [candidates
+        (->> (or (.listFiles directory) (make-array java.io.File 0))
+             (filter (fn [^java.io.File file]
+                       (and (.isFile file)
+                            (str/ends-with? (.getName file) ".edn")
+                            (not= keep (.getName file)))))
+             (sort-by (juxt (fn [^java.io.File file] (- (.lastModified file)))
+                            (fn [^java.io.File file] (.getName file)))))]
+    (doseq [^java.io.File stale (drop (dec max-detail-files) candidates)]
+      (.delete stale))))
+
 ;; @spec MCP-OP-ALIAS-020
+;; @spec MCP-OP-ALIAS-045
 (defn write-details!
   "Write per-file detail outside the receipt and return its relative path."
   [^Path root plan]
@@ -400,6 +430,7 @@
                                     (:files plan))}
                 (:lib-rename plan)
                 (assoc :lib-rename (dissoc (:lib-rename plan) :content)))))
+    (prune-details! directory file-name)
     (str ".clj-surgeon/alias-migration/" file-name)))
 
 ;; ---------------------------------------------------------------------------
@@ -518,10 +549,16 @@
 ;; @spec MCP-OP-ALIAS-016
 ;; @spec MCP-OP-ALIAS-017
 ;; @spec MCP-OP-ALIAS-022
+;; @spec MCP-OP-ALIAS-044
+(defn retire-relative-path
+  "Where the superseded defining file is kept, as a project-relative path."
+  [relative]
+  (str ".clj-surgeon/alias-migration/retired/" relative))
+
 (defn retire-path
   "Where the superseded defining file is kept so the move stays reversible."
   [project-root relative]
-  (str (io/file project-root ".clj-surgeon" "alias-migration" "retired" relative)))
+  (str (io/file project-root (retire-relative-path relative))))
 
 ;; @spec MCP-OP-ALIAS-041
 (defn resolve-retire-source
@@ -559,7 +596,9 @@
     (Files/move (.toPath (io/file real-source)) (.toPath target)
                 (into-array java.nio.file.CopyOption
                             [java.nio.file.StandardCopyOption/REPLACE_EXISTING]))
-    (.getPath target)))
+    ;; the receipt publishes this, so it is project-relative: an absolute server
+    ;; path is not something the caller can act on and leaks the host layout
+    (retire-relative-path relative)))
 
 ;; @spec MCP-OP-ALIAS-041
 (defn- restore-retired!
