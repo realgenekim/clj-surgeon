@@ -404,9 +404,11 @@
 (def request-shape-rules
   "The ONE ordered refusal table both census entrances validate against.
 
-   Order is the order MCP-OP-CENSUS-016 states — unknown fields, then
-   `doors`, then `files`, then `pool_size` — and both entrances refuse on
-   the FIRST row that fails.
+   Order is DECODABILITY first — a path that did not survive the trip into
+   the process is a request no later row can narrow (Sol's round-thirteen
+   item 2) — then the CLI's anchor, then the order MCP-OP-CENSUS-016 states:
+   unknown fields, then `doors`, then `files`, then `pool_size`. Both
+   entrances refuse on the FIRST row that fails.
 
    Per row: `:predicate` is true when the request is ACCEPTABLE for that row.
    `:mcp` and `:cli` are the names the two entrances publish; a map instead
@@ -416,7 +418,56 @@
    tool's validator keeps its own `cond` (its per-branch payloads differ)
    but takes its predicates and its published names from these same rows, so
    a rename or a loosened bound reaches both entrances at once."
-  [{:field :unknown-fields
+  [;; @spec MCP-OP-CENSUS-014
+   ;; @spec MCP-OP-CENSUS-029
+   ;; DECODABILITY IS ASKED FIRST OVERALL, on both entrances, ahead of every
+   ;; other shape question — unknown fields included.
+   ;;
+   ;; Sol's round-thirteen item 2, blocking: this row used to sit fourth, and
+   ;; U+FFFD ALONE was refused correctly while U+FFFD BESIDE a `bogus` field
+   ;; was refused as `unknown-fields`/`unknown-arguments` — refusals that DO
+   ;; compute a continuation — and the continuation carried the corrupted
+   ;; spelling back for the caller to replay.
+   ;;
+   ;; The rule, stated once: A CONTINUATION IS A NARROWING OF THE REQUEST, and
+   ;; a request whose path did not decode HAS no faithful narrowing. The bytes
+   ;; are gone, the replacement is lossy, and anything carried names a
+   ;; different directory or none at all. So this is not a severity ordering;
+   ;; it is a precondition. Every row after this one builds its continuation
+   ;; out of a path argument, so every row after this one is asking its
+   ;; question of a value that no longer denotes anything, and answering it
+   ;; produces a refusal whose continuation is a silent retarget.
+   ;;
+   ;; This is the ONE thing the tool's shape pass checks about
+   ;; `workspace_root`, and it does not break the rule the `:dir` row states.
+   ;; Deciding WHERE a path points means resolving it — the filesystem work
+   ;; this pass runs before. Deciding whether the caller's argument is text at
+   ;; all is a string inspection that touches nothing, which is exactly why it
+   ;; can be asked before everything else.
+   {:field :paths
+    :violation :not-decodable
+    :predicate (fn [req] (nil? (undecodable-path req)))
+    :mcp :workspace-root-not-decodable
+    :mcp-message (fn [req] (not-decodable-message (undecodable-path req)))
+    :mcp-data (fn [req]
+                {:argument (:argument (undecodable-path req))
+                 :encoding (argv-encoding)})
+    ;; NO continuation, at either entrance. A continuation carries the path
+    ;; the caller named, and the bytes of that path are gone: what could be
+    ;; carried is the corrupted spelling, which names a different directory
+    ;; or none at all. That is the silent retarget MCP-OP-CENSUS-014 forbids,
+    ;; so the refusal offers a remedy instead.
+    :mcp-fix :uncomputable
+    :mcp-remedy (fn [req] (not-decodable-remedy (undecodable-path req)))
+    :cli :dir-not-decodable
+    :cli-message (fn [req] (not-decodable-message (undecodable-path req)))
+    :cli-data (fn [req]
+                {:argument (:argument (undecodable-path req))
+                 :encoding (argv-encoding)})
+    :cli-fix :uncomputable
+    :cli-remedy (fn [req] (not-decodable-remedy (undecodable-path req)))}
+
+   {:field :unknown-fields
     :violation :present
     :predicate (fn [req] (empty? (:unknown req)))
     :mcp :unknown-fields
@@ -442,7 +493,8 @@
     :cli-fix :none}
 
    ;; The CLI's ANCHOR, and it is checked ahead of `doors`, `files` and
-   ;; `threads` for a reason that is not alphabetical: every refusal below
+   ;; `threads` — and behind decodability alone, for the same reason stated
+   ;; one row up — because every refusal below
    ;; builds its continuation from this value (`cli-anchor`), so a request
    ;; whose anchor is unusable cannot produce a faithful continuation for any
    ;; later row. Sol's round-eleven item 8: `:dir [1]` returned a generic
@@ -486,40 +538,6 @@
                        "of the workspace the caller named, so no narrower "
                        "command can be computed: retry with :dir naming a "
                        "directory, or name one source with :file."))}
-
-   ;; @spec MCP-OP-CENSUS-014
-   ;; Decodability, asked of every PATH argument, on both entrances — and
-   ;; asked HERE, ahead of doors, files and threads, for the reason the row
-   ;; above it is here: an anchor that did not survive the trip into the
-   ;; process cannot produce a faithful continuation for any later row.
-   ;;
-   ;; This is the ONE thing the tool's shape pass checks about
-   ;; `workspace_root`, and it does not break the rule the row above states.
-   ;; Deciding WHERE a path points means resolving it — the filesystem work
-   ;; this pass runs before. Deciding whether the caller's argument is text
-   ;; at all is a string inspection that touches nothing.
-   {:field :paths
-    :violation :not-decodable
-    :predicate (fn [req] (nil? (undecodable-path req)))
-    :mcp :workspace-root-not-decodable
-    :mcp-message (fn [req] (not-decodable-message (undecodable-path req)))
-    :mcp-data (fn [req]
-                {:argument (:argument (undecodable-path req))
-                 :encoding (argv-encoding)})
-    ;; NO continuation, at either entrance. A continuation carries the path
-    ;; the caller named, and the bytes of that path are gone: what could be
-    ;; carried is the corrupted spelling, which names a different directory
-    ;; or none at all. That is the silent retarget MCP-OP-CENSUS-014 forbids,
-    ;; so the refusal offers a remedy instead.
-    :mcp-fix :uncomputable
-    :mcp-remedy (fn [req] (not-decodable-remedy (undecodable-path req)))
-    :cli :dir-not-decodable
-    :cli-message (fn [req] (not-decodable-message (undecodable-path req)))
-    :cli-data (fn [req]
-                {:argument (:argument (undecodable-path req))
-                 :encoding (argv-encoding)})
-    :cli-fix :uncomputable
-    :cli-remedy (fn [req] (not-decodable-remedy (undecodable-path req)))}
 
    {:field :doors
     :violation :container-type
