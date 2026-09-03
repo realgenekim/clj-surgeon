@@ -555,3 +555,77 @@
         (is (true? (:source-unchanged r))))
       (testing "the ordinary offset in the same token still parses"
         (is (= 2 (:offset (budget/parse-cursor cursor))))))))
+
+;; ============================================================
+;; The ceiling AT its shipped value
+;;
+;; Sol finding 4: the ceiling behaviour is correct, but every checked-in
+;; witness exercised a caller-LOWERED fixture ceiling — R=12 — while the value
+;; that actually ships is `max-result-records` = 1,000. A witness below the
+;; hard ceiling proves the paging arithmetic and proves nothing about the
+;; constant: lowering the constant to 12 would leave it green, and raising it
+;; to a million would too. This one binds to the shipped number.
+;;
+;; It is deliberately cheap. 1,001 two-form files scan in about 100 ms, so the
+;; strongest witness in the file is also one of the fastest.
+;; ============================================================
+
+(defn- ceiling-project!
+  "`n` files of two forms each — the smallest thing that still produces one
+   record per file, so a witness at N = 1,001 costs a tenth of a second."
+  [n prefix]
+  (let [dir (str (fs/create-temp-dir {:prefix prefix}))
+        src (str dir "/src/fixt")]
+    (fs/create-dirs src)
+    (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+    (dotimes [i n]
+      (spit (format "%s/m%04d.clj" src i)
+            (format "(ns fixt.m%04d)\n(def v %d)\n" i i)))
+    dir))
+
+;; @spec MCP-OP-MEM-003
+(deftest the-server-ceiling-binds-at-its-shipped-value-not-at-a-fixture-value
+  (is (= 1000 budget/max-result-records)
+      "the witnesses below are written against this number; changing it is a
+       decision that must re-measure the retention it was derived from")
+  ;; The fixture sizes are LITERAL, not derived from the constant. Deriving
+  ;; them would make the whole witness scale with whatever the constant became,
+  ;; so lowering it to 900 would leave every behavioural assertion green — a
+  ;; test that cannot see the change it exists to see.
+  (let [at (ceiling-project! 1000 "ls-tree-ceiling-at")
+        over (ceiling-project! 1001 "ls-tree-ceiling-over")]
+    (try
+      (testing "exactly R records is a COMPLETE result, with no receipt"
+        (let [r (core/run-ls-tree {:dir at :format :edn})]
+          (is (= 1000 (count (entry-files r))))
+          (is (nil? (receipt r))
+              "at the ceiling the caller is told nothing, because nothing was
+               withheld")))
+      (testing "R+1 candidates yield R records and a typed continuation"
+        (let [r (core/run-ls-tree {:dir over :format :edn})
+              rc (get-in (receipt r) [:receipt :result_ceiling])]
+          (is (= 1000 (count (entry-files r))))
+          (is (= {:limit 1000
+                  :server_max 1000
+                  :offset 0
+                  :returned 1000
+                  :total 1001
+                  :remaining 1}
+                 (select-keys rc [:limit :server_max :offset :returned
+                                  :total :remaining])))
+          (testing "and the continuation serves the one remaining record"
+            (let [page-2 (core/run-ls-tree
+                           {:dir over :format :edn
+                            :cursor (get-in (receipt r) [:next_call :cursor])})]
+              (is (= 1 (count (entry-files page-2))))
+              (is (nil? (receipt page-2)) "the last page is complete")))))
+      (testing "R+1 with :complete refuses, naming the shipped cap"
+        (let [r (core/run-ls-tree {:dir over :format :edn :complete true})]
+          (is (= :result-ceiling-exceeded (:error-type r)))
+          (is (= {:kind :result-records
+                  :requested 1000
+                  :server-max 1000
+                  :observed 1001
+                  :fits 1000}
+                 (:limit r)))))
+      (finally (fs/delete-tree at) (fs/delete-tree over)))))
