@@ -129,6 +129,124 @@
         (recur (inc k))))
     (str sb)))
 
+(def profiles
+  "The corpus shapes the battery measures. `:default` is the representative
+  small/medium Clojure tree; the other three are the adversarial shapes Sol
+  named as cheap and missing.
+
+  Each is a SEPARATE ARM, not a variation folded into the default tree, because
+  an operation can be bounded over 10,000 ordinary files and unbounded over one
+  pathological one — averaging them together hides exactly the case worth
+  measuring."
+  {:default {:extension "clj"
+             :note "representative small/medium Clojure sources, mean ~4 KB"}
+   :cljc    {:extension "cljc"
+             :note (str "reader conditionals: #? and #?@ in requires and in "
+                        "forms, so every platform branch is parsed and carried")}
+   :giant   {:extension "clj"
+             :note "ONE ~1.9 MiB source file — the per-file, not per-tree, case"}
+   :nested  {:extension "clj"
+             :note (str "ONE adversarial file: ~300-deep nesting plus a "
+                        "token-dense literal, so node count dwarfs byte count")}})
+
+(def profile-arms
+  "The adversarial arms built beside the default trees, as [profile n]. MUST
+  agree with clj-surgeon.memory-battery/extra-corpus-arms; the self-test loads
+  both and compares them so the two lists cannot drift apart silently."
+  [[:cljc 100] [:giant 1] [:nested 1]])
+
+(def ^:private giant-target-bytes 1992294)   ; 1.9 MiB
+(def ^:private nesting-depth 300)
+(def ^:private dense-token-count 20000)
+
+(defn tree-dir-name
+  "Directory under the corpus root for one (profile, N). The default profile
+  keeps its bare `<N>` name so existing corpora and receipts stay readable."
+  [profile n]
+  (if (= :default profile) (str n) (str (name profile) "-" n)))
+
+(defn rel-path-for-profile
+  [profile i]
+  (case profile
+    :default (rel-path-for i)
+    :cljc (format "src/membat/pkg%03d/mod%05d.cljc" (quot i 100) i)
+    :giant "src/membat/giant.clj"
+    :nested "src/membat/nested.clj"))
+
+(defn- cljc-file-source
+  "A .cljc whose every form carries a platform branch."
+  [i total]
+  (let [nsname (ns-name-for i)
+        dep-a (ns-name-for (mod (+ i 7) total))]
+    (format
+      (str "(ns %s\n"
+           "  \"Synthetic reader-conditional namespace %05d of %d.\"\n"
+           "  (:require\n"
+           "   [clojure.string :as str]\n"
+           "   #?(:clj [clojure.set :as set]\n"
+           "      :cljs [clojure.set :as set])\n"
+           "   [%s :as dep-a]))\n\n"
+           "(def ^:private platform-%05d\n"
+           "  #?(:clj :jvm :cljs :browser :default :unknown))\n\n"
+           "(defn handle-%05d\n"
+           "  \"Public entry point for module %05d.\"\n"
+           "  [options]\n"
+           "  #?(:clj  (assoc options :on :jvm :id %d)\n"
+           "     :cljs (assoc options :on :js  :id %d)))\n\n"
+           "#?@(:clj [(def ^:private jvm-only-%05d {:id %d})\n"
+           "          (defn jvm-handle-%05d [] (dep-a/handle-%05d {} []))]\n"
+           "    :cljs [(def ^:private js-only-%05d {:id %d})])\n\n"
+           "(defn summarize-%05d\n"
+           "  \"Set-union the tags across a record sequence.\"\n"
+           "  [records]\n"
+           "  (reduce set/union #{} (map :tags records)))\n\n")
+      nsname i total dep-a
+      i
+      i i i i
+      i i i (mod (+ i 7) total) i i
+      i)))
+
+(defn- giant-file-source
+  "One namespace padded with ordinary forms to ~1.9 MiB."
+  [_i _total]
+  (let [sb (StringBuilder.
+             (str "(ns membat.giant\n"
+                  "  \"One ~1.9 MiB synthetic source file.\"\n"
+                  "  (:require [clojure.string :as str]))\n\n"))]
+    (loop [k 0]
+      (when (< (.length sb) giant-target-bytes)
+        ;; distinct name per form, so the file is one large realistic namespace
+        ;; rather than the same defn repeated thousands of times
+        (.append sb (filler-form (quot k 100) (mod k 100)))
+        (recur (inc k))))
+    (str sb)))
+
+(defn- nested-file-source
+  "One adversarial file: a ~300-deep tower plus a token-dense literal. Node
+  count, not byte count, is what this arm stresses."
+  [_i _total]
+  (str "(ns membat.nested\n"
+       "  \"Adversarial shape: deep nesting and token density in a small file.\")\n\n"
+       "(def tower\n  "
+       (apply str (repeat nesting-depth "{:k ["))
+       ":leaf"
+       (apply str (repeat nesting-depth "]}"))
+       ")\n\n"
+       "(def dense\n  ["
+       (str/join " " (range dense-token-count))
+       "])\n\n"
+       "(defn depth [x]\n"
+       "  (if (map? x) (inc (depth (first (:k x)))) 0))\n"))
+
+(defn source-for
+  "Deterministic source text for one file of one profile."
+  [profile i total]
+  (case profile
+    :default (file-source i total)
+    :cljc (cljc-file-source i total)
+    :giant (giant-file-source i total)
+    :nested (nested-file-source i total)))
+
 (defn- sha256-hex
   [^String s]
   (let [md (java.security.MessageDigest/getInstance "SHA-256")]
@@ -153,15 +271,17 @@
   "{:paths [\"src\"]\n :deps {org.clojure/clojure {:mvn/version \"1.12.1\"}}}\n")
 
 (defn expected-entries
-  "The corpus the generator promises for `n`, as [rel bytes content-sha]. Derived
-  from `file-source`, which is deterministic, so no per-file digest has to be
-  stored anywhere for a later run to check the bytes."
-  [n]
-  (mapv (fn [i]
-          (let [text (file-source i n)]
-            [(rel-path-for i) (count (.getBytes ^String text "UTF-8"))
-             (sha256-hex text)]))
-        (range n)))
+  "The corpus the generator promises for (profile, n), as
+  [rel bytes content-sha]. Derived from `source-for`, which is deterministic, so
+  no per-file digest has to be stored anywhere for a later run to check bytes."
+  ([n] (expected-entries :default n))
+  ([profile n]
+   (mapv (fn [i]
+           (let [text (source-for profile i n)]
+             [(rel-path-for-profile profile i)
+              (count (.getBytes ^String text "UTF-8"))
+              (sha256-hex text)]))
+         (range n))))
 
 (defn entries-digest
   "Manifest digest over path, size AND content. The old path+size digest could
@@ -193,12 +313,13 @@
   This exists because the previous no-op checked only :generator-version, :n and
   the manifest's own claimed file count, so one deleted file could let a table
   print N=10,000 over 9,999 files."
-  [root n]
-  (let [dir (io/file root (str n))
+  ([root n] (verify-tree root :default n))
+  ([root profile n]
+  (let [dir (io/file root (tree-dir-name profile n))
         manifest-file (io/file dir "manifest.edn")
         existing (when (.exists manifest-file)
                    (try (read-string (slurp manifest-file)) (catch Exception _ nil)))
-        expected (expected-entries n)
+        expected (expected-entries profile n)
         expected-index (into {} (map (fn [[rel size sha]] [rel [size sha]])) expected)]
     (cond
       (nil? existing)
@@ -207,6 +328,10 @@
       (not= generator-version (:generator-version existing))
       {:status :regenerate :reason :generator-version
        :detail {:manifest (:generator-version existing) :expected generator-version}}
+
+      (not= profile (:profile existing :default))
+      {:status :regenerate :reason :wrong-profile
+       :detail {:manifest (:profile existing) :expected profile}}
 
       (not= n (:n existing))
       {:status :regenerate :reason :wrong-n
@@ -249,7 +374,7 @@
               {:status :regenerate :reason :digest-mismatch
                :detail {:manifest (:digest existing)
                         :expected (entries-digest expected)}})
-            {:status :ok}))))))
+            {:status :ok})))))))
 
 (defn generate-tree!
   "Write (or verify) the N-file tree under `root`. Returns the manifest.
@@ -257,10 +382,11 @@
   The reuse path is only taken when `verify-tree` has confirmed the bytes on
   disk; a corpus that does not match its promise is rewritten, and one carrying
   files the generator never wrote is refused by throwing."
-  [root n]
-  (let [dir (io/file root (str n))
+  ([root n] (generate-tree! root :default n))
+  ([root profile n]
+  (let [dir (io/file root (tree-dir-name profile n))
         manifest-file (io/file dir "manifest.edn")
-        check (verify-tree root n)]
+        check (verify-tree root profile n)]
     (case (:status check)
       :refuse
       (throw (ex-info (str "corpus at " dir " holds files the generator never wrote")
@@ -273,13 +399,14 @@
       (do
         (.mkdirs dir)
         (spit (io/file dir "deps.edn") (deps-edn-text))
-        (let [entries (expected-entries n)
+        (let [entries (expected-entries profile n)
               _ (doseq [[i [rel _ _]] (map-indexed vector entries)]
                   (let [f (io/file dir rel)]
                     (.mkdirs (.getParentFile f))
-                    (spit f (file-source i n))))
+                    (spit f (source-for profile i n))))
               total-bytes (reduce + 0 (map second entries))
               manifest {:generator-version generator-version
+                        :profile profile
                         :n n
                         :files (count entries)
                         :bytes total-bytes
@@ -289,7 +416,7 @@
                         :verified-reason (:reason check)
                         :reused false}]
           (spit manifest-file (pr-str manifest))
-          manifest)))))
+          manifest))))))
 
 ;; ------------------------------------------------------------------
 
@@ -361,6 +488,38 @@
         (spit mf (pr-str (assoc (read-string (slurp mf)) :digest "deadbeef")))
         (assert (= :digest-mismatch (:reason (verify-tree root 3)))
                 "the manifest digest is rechecked against the actual bytes"))
+      ;; Every adversarial arm builds, verifies, and reuses — and is the shape
+      ;; it claims to be. These are separate corpora, so each gets its own
+      ;; directory and its own manifest.
+      (doseq [[profile n] profile-arms]
+        (let [m (generate-tree! root profile n)]
+          (assert (false? (:reused m)) (str profile " builds"))
+          (assert (= n (:files m)) (str profile " file count"))
+          (assert (= profile (:profile m)) (str profile " is recorded"))
+          (assert (= :ok (:status (verify-tree root profile n)))
+                  (str profile " verifies"))
+          (assert (true? (:reused (generate-tree! root profile n)))
+                  (str profile " reuses"))
+          (assert (.isDirectory (io/file root (tree-dir-name profile n)))
+                  (str profile " has its own corpus directory"))))
+
+      (let [cljc (slurp (io/file root (tree-dir-name :cljc 100)
+                                  (rel-path-for-profile :cljc 3)))
+            giant (io/file root (tree-dir-name :giant 1)
+                           (rel-path-for-profile :giant 0))
+            nested (slurp (io/file root (tree-dir-name :nested 1)
+                                   (rel-path-for-profile :nested 0)))]
+        (assert (str/includes? cljc "#?(:clj") "cljc carries reader conditionals")
+        (assert (str/includes? cljc "#?@(:clj") "cljc carries splicing conditionals")
+        (assert (str/ends-with? (.getName giant) ".clj"))
+        (assert (>= (.length giant) 1900000)
+                (str "the giant arm is ~1.9 MiB, got " (.length giant)))
+        (assert (= nesting-depth (count (re-seq #"\{:k \[" nested)))
+                "the nested arm reaches its stated depth")
+        (assert (str/includes? nested "(def dense") "the nested arm is token-dense")
+        (assert (< (count nested) 200000)
+                "the nested arm stresses node count, not byte count"))
+
       (println "generate_tree verification self-test: ok")
       (finally (rm-rf! root)))))
 
@@ -386,18 +545,20 @@
     (if self-test
       (System/exit (self-test!))
       (do
-        (doseq [n scales]
+        (doseq [[profile n] (into (vec (for [n (sort scales)] [:default n]))
+                                  profile-arms)]
           (let [t0 (System/currentTimeMillis)
                 m (try
-                    (generate-tree! root n)
+                    (generate-tree! root profile n)
                     (catch clojure.lang.ExceptionInfo e
                       (binding [*out* *err*]
                         (println "REFUSED:" (.getMessage e))
                         (println (pr-str (ex-data e))))
                       (System/exit 2)))
                 ms (- (System/currentTimeMillis) t0)]
-            (println (format "%-8s files=%-7d bytes=%-11d mean=%-6d largest=%-7d %s (%d ms)"
-                             (str n) (:files m) (:bytes m) (:mean-file-bytes m)
+            (println (format "%-10s files=%-7d bytes=%-11d mean=%-8d largest=%-8d %s (%d ms)"
+                             (tree-dir-name profile n)
+                             (:files m) (:bytes m) (:mean-file-bytes m)
                              (:largest-file-bytes m)
                              (if (:reused m)
                                "verified"

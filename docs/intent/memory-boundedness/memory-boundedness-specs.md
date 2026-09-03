@@ -153,9 +153,17 @@ MCP-OP-MEM-011:
   not gate on them, except that an operation exceeding `MEMBAT_OP_TIMEOUT_MS`
   causes its larger N cells to be recorded as skipped, which makes the cross-N
   lines UNMEASURED.
-- The synthetic trees are representative small/medium Clojure sources. They do
-  not include token-dense or deeply nested adversarial files; those are a
-  separate arm.
+- Beside the representative small/medium trees, the battery measures three
+  adversarial corpora as SEPARATE arms, each at one size: 100 `.cljc` files whose
+  forms sit behind reader conditionals, one ~1.9 MiB source file, and one file
+  combining ~300-deep nesting with a 20,000-token literal. Cross-N lines compare
+  the default corpus only — an adversarial arm exists at one size, so comparing
+  it against the default trees would be a statement about two different corpora
+  rather than about scaling; every per-cell line still applies to it.
+- Two shapes remain out of scope and are not claimed: a 17 KiB-mean real-file
+  profile (roughly four times the 10,000-file battery's weight), and 450 x
+  1.9 MiB (~855 MiB of source), which only becomes cheap once aggregate
+  admission exists and parsing never starts.
 - The corpus is verified, not asserted: every promised file's existence, byte
   count and content digest are checked against the deterministic generator, and
   unlisted files under the tree are a refusal, before any cell is measured. A

@@ -216,10 +216,11 @@
 (defn- aggregate
   "Fold reps into one cell. The worst reading wins for every heap field; wall
   is the median. Per-rep detail is preserved under :reps."
-  [op n phase readings reference-hash]
+  [op profile n phase readings reference-hash]
   (let [walls (sort (map :wall-ms readings))
         hashes (set (keep :result-hash readings))]
     {:op (:id op)
+     :profile profile
      :n n
      :phase phase
      :reps (count readings)
@@ -250,12 +251,18 @@
 ;; Trees and reference hashes
 ;; ============================================================
 
-(defn- tree-path [root n] (str (io/file root (str n))))
+(defn- tree-path [root profile n]
+  (str (io/file root (battery/tree-dir-name profile n))))
 
-(defn- read-manifest [root n]
-  (let [f (io/file (tree-path root n) "manifest.edn")]
+(defn- read-manifest [root profile n]
+  (let [f (io/file (tree-path root profile n) "manifest.edn")]
     (when (.exists f)
       (edn/read-string (slurp f)))))
+
+(defn- read-manifests
+  "Every corpus arm's manifest, keyed [profile n]."
+  [root arms]
+  (into {} (for [[profile n] arms] [[profile n] (read-manifest root profile n)])))
 
 (defn- reference-file [root] (io/file root "reference-hashes.edn"))
 
@@ -313,7 +320,7 @@
                                  sha256-hex)
                          :unavailable)
    :corpus-digests (into (sorted-map)
-                         (for [[n m] manifests] [n (:digest m)]))
+                         (for [[k m] manifests] [(vec k) (:digest m)]))
    :jvm (System/getProperty "java.version")
    :head-sha (or (not-empty (System/getenv "MEMBAT_HEAD_SHA")) "unknown")})
 
@@ -341,10 +348,11 @@
   unbounded reference hashes at a large heap)."
   [{:keys [root scales reps mode op-timeout-ms sample-interval-ms]}]
   (let [xmx-mb (parse-xmx-mb)
-        manifests (into {} (for [n scales] [n (read-manifest root n)]))
+        arms (battery/corpus-arms scales)
+        manifests (read-manifests root arms)
         missing (remove #(let [m (get manifests %)]
-                           (and m (= % (:files m))))
-                        scales)
+                           (and m (= (second %) (:files m))))
+                        arms)
         att (attestation manifests)
         reference (read-reference root)
         staleness (battery/reference-staleness att reference)]
@@ -386,47 +394,63 @@
                 ;; is not comparable with any later cell.
                 _ (do (println "  warming the JVM (results discarded)...")
                       (doseq [op ops]
-                        (measure-once sampler op (tree-path root (apply min scales))))
+                        (measure-once sampler op
+                                      (tree-path root :default (apply min scales))))
                       (flush))
+                measure-arm
+                (fn [op profile n]
+                  (let [tree (tree-path root profile n)
+                        ref-hash (get-in hashes [(:id op) profile n])
+                        fresh (measure-once sampler op tree)
+                        blown? (> (:wall-ms fresh) op-timeout-ms)
+                        warm (when-not blown?
+                               (vec (repeatedly (max 0 (dec reps))
+                                                #(measure-once sampler op tree))))]
+                    (println (format "  %-28s %-9s N=%-6d fresh %7d ms  peak %7.1f MB  held %7.1f MB%s"
+                                     (name (:id op)) (name profile) n
+                                     (:wall-ms fresh)
+                                     (:heap-used-peak-mb fresh)
+                                     (:heap-result-retained-mb fresh)
+                                     (cond
+                                       (:oom? fresh) "  OOM"
+                                       (:error fresh) (str "  ERROR " (:error fresh))
+                                       blown? "  (wall budget exceeded; warm reps and larger N skipped)"
+                                       :else "")))
+                    (flush)
+                    {:blown? blown?
+                     :cells (cond-> [(aggregate op profile n :fresh [fresh] ref-hash)]
+                              (seq warm)
+                              (conj (aggregate op profile n :warm warm ref-hash)))}))
                 cells
                 (reduce
                   (fn [acc op]
-                    (:cells
-                      (reduce
-                        (fn [{:keys [cells stop?] :as st} n]
-                          (let [tree (tree-path root n)
-                                ref-hash (get-in hashes [(:id op) n])]
-                            (if stop?
-                              (do (println (format "  %-28s N=%-6d SKIPPED (a smaller N already exceeded MEMBAT_OP_TIMEOUT_MS=%d)"
-                                                   (name (:id op)) n op-timeout-ms))
-                                  (flush)
-                                  (update st :cells conj
-                                          {:op (:id op) :n n :phase :fresh
-                                           :skipped? true
-                                           :skip-reason :wall-budget-exceeded}))
-                              (let [fresh (measure-once sampler op tree)
-                                    blown? (> (:wall-ms fresh) op-timeout-ms)
-                                    warm (when-not blown?
-                                           (vec (repeatedly
-                                                  (max 0 (dec reps))
-                                                  #(measure-once sampler op tree))))]
-                                (println (format "  %-28s N=%-6d fresh %7d ms  peak %7.1f MB  held %7.1f MB%s"
-                                                 (name (:id op)) n
-                                                 (:wall-ms fresh)
-                                                 (:heap-used-peak-mb fresh)
-                                                 (:heap-result-retained-mb fresh)
-                                                 (cond
-                                                   (:oom? fresh) "  OOM"
-                                                   (:error fresh) (str "  ERROR " (:error fresh))
-                                                   blown? "  (wall budget exceeded; warm reps and larger N skipped)"
-                                                   :else "")))
-                                (flush)
-                                {:stop? blown?
-                                 :cells (cond-> (conj cells (aggregate op n :fresh [fresh] ref-hash))
-                                          (seq warm)
-                                          (conj (aggregate op n :warm warm ref-hash)))}))))
-                        {:cells acc :stop? false}
-                        (sort scales))))
+                    (let [;; The default scales run in order, and a blown wall
+                          ;; budget skips the larger ones for THIS operation.
+                          scaled
+                          (:cells
+                            (reduce
+                              (fn [{:keys [cells stop?] :as st} n]
+                                (if stop?
+                                  (do (println (format "  %-28s %-9s N=%-6d SKIPPED (a smaller N already exceeded MEMBAT_OP_TIMEOUT_MS=%d)"
+                                                       (name (:id op)) "default" n op-timeout-ms))
+                                      (flush)
+                                      (update st :cells conj
+                                              {:op (:id op) :profile :default :n n
+                                               :phase :fresh
+                                               :skipped? true
+                                               :skip-reason :wall-budget-exceeded}))
+                                  (let [r (measure-arm op :default n)]
+                                    {:stop? (:blown? r)
+                                     :cells (into cells (:cells r))})))
+                              {:cells [] :stop? false}
+                              (sort scales)))
+                          ;; The adversarial arms are separate corpora, each one
+                          ;; size only. A default-scale timeout must not skip
+                          ;; them, and their wall time must not skip anything.
+                          extra (mapcat (fn [[profile n]]
+                                          (:cells (measure-arm op profile n)))
+                                        battery/extra-corpus-arms)]
+                      (into acc (concat scaled extra))))
                   []
                   ops)
                 errors (mapcat :errors cells)
@@ -451,10 +475,13 @@
                                   "operation on this branch has an admission "
                                   "accountant.")
                              :ops (mapv #(select-keys % [:id :entrance :site :note]) ops)
-                             :trees (into {} (for [n scales]
-                                               [n (dissoc (get manifests n) :reused)]))
+                             :arms (mapv vec arms)
+                             :trees (into {} (for [[k m] manifests]
+                                               [(vec k) (dissoc m :reused)]))
                              :cells (mapv (fn [c]
-                                            (let [m (get manifests (:n c))]
+                                            (let [m (get manifests
+                                                         [(:profile c :default)
+                                                          (:n c)])]
                                               (assoc c
                                                      :files (:files m)
                                                      :bytes (:bytes m)
@@ -484,7 +511,7 @@
   refusing halfway through a minutes-long battery. Exits 0 when fresh, and the
   refusal code otherwise, naming the fields that differ."
   [root scales]
-  (let [manifests (into {} (for [n scales] [n (read-manifest root n)]))
+  (let [manifests (read-manifests root (battery/corpus-arms scales))
         att (attestation manifests)
         reference (read-reference root)
         staleness (battery/reference-staleness att reference)]
@@ -520,7 +547,9 @@
         (let [receipt (write-receipt! root observation)]
           (if (= :reference mode)
             (let [hashes (reduce (fn [acc c]
-                                   (assoc-in acc [(:op c) (:n c)] (:result-hash c)))
+                                   (assoc-in acc
+                                             [(:op c) (:profile c :default) (:n c)]
+                                             (:result-hash c)))
                                  {}
                                  (:cells observation))]
               ;; The hashes are only meaningful together with what produced

@@ -31,7 +31,7 @@ Knobs, all optional:
 | `MEMBAT_XMX` | `512m` | the bounded budget the battery runs at |
 | `MEMBAT_REFERENCE_XMX` | `4g` | heap for the one unbounded reference pass |
 | `MEMBAT_REPS` | `5` | reps per (op, N); rep 1 is `fresh`, the rest aggregate into `warm` |
-| `MEMBAT_SCALES` | `100,1000,10000` | tree sizes |
+| `MEMBAT_SCALES` | `100,1000,10000` | default-corpus tree sizes (the adversarial arms are fixed) |
 | `MEMBAT_OP_TIMEOUT_MS` | `600000` | if one fresh rep exceeds this, its warm reps and every larger N for that operation are skipped |
 
 Sub-targets, if you want them separately:
@@ -267,6 +267,35 @@ files while only matching 1 % of them. **A battery that grades the query shape
 rather than the operation is worse than no battery.** When you add an arm, ask
 what query would make its result grow with N, and add that one too.
 
+### The corpus arms
+
+Every operation above is run against each corpus below. They are **separate
+corpora, not extra files in the default tree**: an operation can be bounded over
+10,000 ordinary files and unbounded over one pathological file, and mixing them
+averages away exactly the case worth measuring.
+
+| corpus | dir | shape |
+|---|---|---|
+| `default` | `100`, `1000`, `10000` | representative small/medium Clojure, mean ~4 KB/file |
+| `cljc` | `cljc-100` | 100 `.cljc` files, every form behind `#?` / `#?@` reader conditionals |
+| `giant` | `giant-1` | **one ~1.9 MiB source file** — the per-file case, not the per-tree one |
+| `nested` | `nested-1` | **one adversarial file**: 300-deep nesting plus a 20,000-token literal, so node count dwarfs its 111 KB |
+
+**Cross-N lines compare the default corpus only.** The adversarial arms exist at
+one size each; comparing a 1.9 MiB single file against 10,000 ordinary ones
+would be a statement about two different corpora, not about scaling. They still
+carry every per-cell line: OOM, output parity, and the peak trend.
+
+Two shapes Sol named are deliberately **not** arms, and stay boundaries on
+MCP-OP-MEM-011:
+
+- a **17 KiB-mean** profile matching this repository's real file-size
+  distribution — easy to generate, but roughly 4× the weight of the
+  10,000-file battery;
+- **450 × 1.9 MiB** (~855 MiB of source). Expensive until aggregate admission
+  exists; once it does, this becomes a *cheap* refusal arm, because parsing
+  should never start.
+
 ## The synthetic trees
 
 `bench/memory_battery/generate_tree.clj` writes deterministic namespaces with
@@ -293,8 +322,8 @@ compared only `generator-version`, `n`, and the manifest's *claimed* file count,
 so one deleted file was invisible and its claim was copied straight into the
 receipt.
 
-They do **not** include token-dense or deeply nested adversarial files. That is
-a separate arm.
+The `cljc`, `giant` and `nested` corpora above are built by the same generator
+and verified the same way, each in its own directory with its own manifest.
 
 ## The receipt
 

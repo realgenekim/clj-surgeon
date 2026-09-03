@@ -76,8 +76,36 @@
    :incomplete   4})
 
 (def tree-scales
-  "The file counts the battery builds and measures."
+  "The file counts the battery builds and measures, for the default profile."
   [100 1000 10000])
+
+(defn tree-dir-name
+  "Directory under the corpus root for one (profile, N). The default profile
+  keeps its bare `<N>` name. MUST agree with the generator's function of the
+  same name; the self-test asserts that for every arm."
+  [profile n]
+  (if (= :default profile) (str n) (str (name profile) "-" n)))
+
+;; @spec MCP-OP-MEM-011
+(def extra-corpus-arms
+  "Adversarial corpus shapes measured ALONGSIDE the default trees, each as its
+  own arm rather than mixed into them: an operation can be bounded over 10,000
+  ordinary files and unbounded over one pathological file, and averaging the
+  two hides exactly the case worth measuring.
+
+  Deliberately small: these are the shapes Sol called cheap. The expensive ones
+  he named stay documented boundaries on MCP-OP-MEM-011 rather than arms — a
+  17 KiB-mean profile (roughly 4x the 10,000-file battery's weight) and
+  450 x 1.9 MiB (~855 MiB of source, which only becomes cheap once aggregate
+  admission exists and parsing never starts).
+
+  MUST agree with the generator's `profile-arms`; the self-test asserts that."
+  [[:cljc 100] [:giant 1] [:nested 1]])
+
+(defn corpus-arms
+  "Every [profile n] the battery measures, default scales first."
+  [scales]
+  (into (vec (for [n (sort scales)] [:default n])) extra-corpus-arms))
 
 ;; ============================================================
 ;; Pass lines as pure predicates
@@ -235,8 +263,16 @@
         op-results
         (for [op (sort-by str (keys by-op))
               :let [op-cells (get by-op op)
-                    small (filter #(= small-n (:n %)) op-cells)
-                    large (filter #(= large-n (:n %)) op-cells)]
+                    ;; Cross-N lines compare the DEFAULT corpus only. The
+                    ;; adversarial arms exist at one size each; comparing a
+                    ;; 1.9 MiB single file against 10,000 ordinary ones would
+                    ;; be a statement about two different corpora.
+                    ;; NB: (#{:default nil} nil) is nil, not truthy — a cell
+                    ;; with no :profile key IS the default corpus.
+                    default-cells (filter #(= :default (:profile % :default))
+                                          op-cells)
+                    small (filter #(= small-n (:n %)) default-cells)
+                    large (filter #(= large-n (:n %)) default-cells)]
               result
               (into [(reserved-check op op-cells)
                      (reference-check op op-cells)]
@@ -370,14 +406,20 @@
   a string."
   [{:keys [xmx-mb cells] :as observation}]
   (let [v (verdict observation)
-        header (str (fmt "op" 26) (rfmt "N" 7) (rfmt "phase" 7)
+        header (str (fmt "op" 26) (rfmt "prof" 8) (rfmt "N" 7) (rfmt "phase" 7)
                     (rfmt "wall_ms" 9) (rfmt "peak_mb" 9)
                     (rfmt "held_mb" 9) (rfmt "excl_mb" 9)
                     (rfmt "grow_mb" 9) (rfmt "afterGC_mb" 11)
                     (rfmt "files" 7) (rfmt "bytes" 11)
                     (rfmt "OOM?" 6) (rfmt "verdict" 9))
-        rows (for [c (sort-by (juxt #(str (:op %)) :n #(str (:phase %))) cells)]
+        rows (for [c (sort-by (juxt #(str (:op %))
+                                    #(if (= :default (:profile % :default)) 0 1)
+                                    #(str (:profile % :default))
+                                    :n
+                                    #(str (:phase %)))
+                              cells)]
                (str (fmt (name (:op c)) 26)
+                    (rfmt (name (:profile c :default)) 8)
                     (rfmt (:n c) 7)
                     (rfmt (name (:phase c)) 7)
                     (rfmt (:wall-ms c) 9)

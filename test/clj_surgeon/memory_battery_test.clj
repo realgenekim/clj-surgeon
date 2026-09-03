@@ -379,6 +379,83 @@
            (set (map :op (:failures result)))))))
 
 ;; ------------------------------------------------------------------
+;; Adversarial corpus arms are measured beside the default trees, never
+;; averaged into them
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-011
+(deftest the-adversarial-arms-are-separate-corpora-not-extra-cells
+  (testing "the arms are the cheap shapes, at one size each"
+    (is (= [[:cljc 100] [:giant 1] [:nested 1]] battery/extra-corpus-arms)))
+
+  (testing "default scales come first, then the adversarial arms"
+    (is (= [[:default 100] [:default 1000] [:default 10000]
+            [:cljc 100] [:giant 1] [:nested 1]]
+           (battery/corpus-arms [1000 100 10000]))))
+
+  (testing "the corpus root directory names"
+    (is (= "10000" (battery/tree-dir-name :default 10000)))
+    (is (= "cljc-100" (battery/tree-dir-name :cljc 100)))
+    (is (= "giant-1" (battery/tree-dir-name :giant 1))))
+
+  (testing "a cross-N line never compares one corpus against another"
+    ;; A giant-profile cell at N=1 and a default cell at N=10,000 are two
+    ;; different corpora; held heap growing between them says nothing.
+    (let [cells [(assoc (cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                        :profile :default)
+                 (assoc (cell :ls-tree 10000 :warm 120.0 50.0 :held 1.0)
+                        :profile :default)
+                 (assoc (cell :ls-tree 1 :warm 120.0 50.0 :held 90.0)
+                        :profile :giant)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= :pass (:status result)))))
+
+  (testing "and an adversarial arm never becomes the small-N or large-N term"
+    (let [cells [(assoc (cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                        :profile :default)
+                 (assoc (cell :ls-tree 10000 :warm 120.0 50.0 :held 1.0)
+                        :profile :default)
+                 ;; same op, same N labels, other corpus, wild growth
+                 (assoc (cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                        :profile :cljc)
+                 (assoc (cell :ls-tree 10000 :warm 120.0 50.0 :held 99.0)
+                        :profile :cljc)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= :pass (:status result)))))
+
+  (testing "a cell with no :profile key is the default corpus"
+    (let [cells [(cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                 (cell :ls-tree 10000 :warm 120.0 50.0 :held 9.8)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (contains? (lines-of result) :held-scales-with-n))))
+
+  (testing "the table names each cell's corpus"
+    (let [table (battery/render-table
+                  {:xmx-mb 512
+                   :cells [(assoc (cell :ls-tree 1 :warm 120.0 50.0)
+                                  :profile :giant)]})]
+      (is (str/includes? table "prof"))
+      (is (str/includes? table "giant")))))
+
+;; @spec MCP-OP-MEM-011
+(deftest the-generator-and-the-battery-agree-on-every-arm
+  ;; Two files name the corpus arms — the bb generator and the pure battery ns.
+  ;; They are loaded here and compared, so they cannot drift apart silently.
+  (let [gen-ns (do (load-file "bench/memory_battery/generate_tree.clj")
+                   (find-ns 'generate-tree))
+        gen-arms @(ns-resolve gen-ns 'profile-arms)
+        gen-dir-name @(ns-resolve gen-ns 'tree-dir-name)
+        gen-profiles @(ns-resolve gen-ns 'profiles)]
+    (is (= battery/extra-corpus-arms gen-arms)
+        "the generator builds exactly the arms the battery measures")
+    (doseq [[profile n] (battery/corpus-arms [100 1000 10000])]
+      (testing (str profile "-" n)
+        (is (= (battery/tree-dir-name profile n) (gen-dir-name profile n))
+            "both sides must look in the same directory")
+        (is (contains? gen-profiles profile)
+            "every measured arm is a profile the generator knows how to build")))))
+
+;; ------------------------------------------------------------------
 ;; The unbounded reference must be attested to the thing it measured
 ;; ------------------------------------------------------------------
 
