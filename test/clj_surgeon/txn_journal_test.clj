@@ -1547,8 +1547,13 @@
         (.mkdirs dir)
         (spit fresh (pr-str {:txid "ghost-fresh" :pid 1}))
         (spit stale (pr-str {:txid "ghost-stale" :pid 2}))
-        (.setLastModified stale (- (System/currentTimeMillis)
-                                   (* 30 24 60 60 1000)))
+        ;; Both tombstones were made NOW and ctime cannot be moved backwards
+        ;; through the filesystem API at all, which is the point of the fix:
+        ;; back-dating mtime is exactly the forgery the newest-of-two rule
+        ;; refuses, so a witness separates them with the CLOCK. FRESH's basis
+        ;; is pushed an hour ahead of STALE's, and the sweep is read at a
+        ;; clock one millisecond past STALE's retention.
+        (.setLastModified fresh (+ (System/currentTimeMillis) 3600000))
         (let [rows (journal/retained-transactions (:root ws) opts)
               tombstone-rows (filter #(= :broken-lock (:kind %)) rows)]
           (is (= 2 (count tombstone-rows))
@@ -1560,7 +1565,8 @@
                       tombstone-rows)
               "with the bytes it bills and the age that retires it"))
 
-        (let [result (journal/recover! (:root ws) opts)
+        (let [clock (+ (lock-age-basis stale) (long journal/broken-lock-retention-ms) 1)
+              result (journal/recover! (:root ws) (assoc opts :now-ms clock))
               counted (:broken-locks result)]
           (is (some? counted)
               (str "recovery counts them in its own value: " (pr-str result)))

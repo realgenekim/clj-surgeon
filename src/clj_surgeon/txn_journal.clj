@@ -34,7 +34,7 @@
   (:import
    (java.io File FileOutputStream)
    (java.nio.file Files LinkOption StandardCopyOption CopyOption)
-   (java.nio.file.attribute BasicFileAttributes PosixFilePermissions)
+   (java.nio.file.attribute BasicFileAttributes FileTime PosixFilePermissions)
    (java.security MessageDigest)))
 
 (set! *warn-on-reflection* true)
@@ -559,6 +559,10 @@
    directory cannot grow without bound."
   86400000)
 
+(def ^:private tombstone-prefix
+  "The prefix every break's evidence file carries."
+  "LOCK.broken.")
+
 (defn- broken-lock-files
   "Every `LOCK.broken.*` tombstone in a transactions directory."
   [transactions-dir]
@@ -566,8 +570,91 @@
     (vec (sort-by #(.getName ^File %)
                   (filter (fn [^File f]
                             (and (.isFile f)
-                                 (str/starts-with? (.getName f) "LOCK.broken.")))
+                                 (str/starts-with? (.getName f) tombstone-prefix)))
                           (seq (or (.listFiles dir) (make-array File 0))))))))
+
+(def ^:private broken-at-prefix
+  "The prefix of a tombstone's own-creation-time sidecar.
+
+   Deliberately NOT `LOCK.broken.` - `broken-lock-files` selects on that
+   prefix, and a sidecar that answered it would be listed, billed and retired
+   as a tombstone in its own right. `LOCK.broken-at.` shares no prefix with
+   it: the character after `LOCK.broken` is `-`, not `.`."
+  "LOCK.broken-at.")
+
+(defn- broken-at-file
+  "The sidecar that records when a tombstone was MADE."
+  ^File [^File tomb]
+  (io/file (.getParentFile tomb)
+           (str broken-at-prefix
+                (subs (.getName tomb) (count tombstone-prefix)))))
+
+(defn- read-broken-at-ms
+  "The creation time a tombstone's sidecar records, or nil."
+  [^File tomb]
+  (let [^File side (broken-at-file tomb)]
+    (when (.isFile side)
+      (try
+        (let [v (:broken-at-ms (read-string (slurp side)))]
+          (when (number? v) (long v)))
+        (catch Exception _ nil)))))
+
+(defn- stamp-tombstone!
+  "Give the break's evidence its OWN creation time, twice over.
+
+   A tombstone is made by moving or linking the LOCK, and BOTH preserve the
+   claim's mtime - so the evidence inherited the age of the claim it is
+   evidence OF, and a lock older than `broken-lock-retention-ms` produced a
+   tombstone that was already past retention the instant it existed. The same
+   `recover!` then deleted it and returned a receipt naming a file that was no
+   longer there. Measured: `{:found 1 :pruned 1 :remaining 0}` beside
+   `:tombstone \"LOCK.broken.recover-...\"`, deterministic, through the public
+   verb.
+
+   The stamp is the file's own mtime AND a sidecar carrying `:broken-at-ms`,
+   because neither alone is enough: mtime is what a directory listing shows
+   and what `lock-age-basis-ms` reads, and the sidecar is what survives a
+   `cp -p` or a `tar -x` that puts the inherited mtime back. Retention is
+   measured against the NEWEST of them, which is the direction that keeps
+   evidence rather than the one that retires it.
+
+   Called only once the tombstone is a file this break OWNS: never while it is
+   still a second link to a live LOCK, because setting mtime through one link
+   sets it on the inode both names."
+  [^File tomb]
+  (let [now (System/currentTimeMillis)]
+    (try
+      (Files/setLastModifiedTime (.toPath tomb) (FileTime/fromMillis now))
+      (spit (broken-at-file tomb)
+            (pr-str {:tombstone (.getName tomb)
+                     :broken-at (str (java.time.Instant/ofEpochMilli now))
+                     :broken-at-ms now}))
+      (catch Exception _ nil))
+    now))
+
+(defn- tombstone-basis-ms
+  "The stamp a tombstone's retention is measured against, or nil when absent.
+
+   The newest of what `lock-age-basis-ms` reads off the file - itself the
+   newest of mtime and ctime - and the `:broken-at-ms` its sidecar records.
+   Newest, because every way this value can be wrong except one makes evidence
+   look OLDER than it is, and retiring evidence early is the failure that
+   matters."
+  [^File tomb]
+  (when-let [basis (lock-age-basis-ms tomb)]
+    (let [stamped (read-broken-at-ms tomb)]
+      (max (long basis) (long (or stamped basis))))))
+
+(defn- tombstone-age-ms
+  "How old a break's evidence is, or `:absent` when the file is not there.
+
+   `lastModified` of a missing file is 0, which reads as infinitely old and
+   bills `:bytes 0`; a file that vanished between a listing and its stat is
+   ABSENT, which is neither an age nor a zero."
+  [^File tomb now]
+  (if-let [basis (tombstone-basis-ms tomb)]
+    (- (long now) (long basis))
+    :absent))
 
 (defn- prune-broken-locks!
   "Retire the tombstones older than `broken-lock-retention-ms`, and count them.
@@ -579,12 +666,16 @@
         tombstones (broken-lock-files transactions-dir)
         found (long (count tombstones))
         pruned (long (reduce (fn [n ^File f]
-                               (if (>= (- now (.lastModified f))
-                                       (long broken-lock-retention-ms))
-                                 (if (Files/deleteIfExists (.toPath f))
-                                   (unchecked-inc (long n))
-                                   (long n))
-                                 (long n)))
+                               (let [age (tombstone-age-ms f now)]
+                                 (if (and (number? age)
+                                          (>= (long age)
+                                              (long broken-lock-retention-ms)))
+                                   (do (Files/deleteIfExists
+                                         (.toPath ^File (broken-at-file f)))
+                                       (if (Files/deleteIfExists (.toPath f))
+                                         (unchecked-inc (long n))
+                                         (long n)))
+                                   (long n))))
                              0
                              tombstones))]
     {:found found
@@ -691,7 +782,7 @@
   ([transactions-dir claim txid] (break-lock! transactions-dir claim txid nil))
   ([transactions-dir claim txid opts]
    (let [^File lock (lock-file transactions-dir)
-         ^File tomb (io/file transactions-dir (str "LOCK.broken." txid))]
+         ^File tomb (io/file transactions-dir (str tombstone-prefix txid))]
      (if (.exists tomb)
        ;; the name is the BREAKER's txid and `begin!` takes that from its
        ;; caller, so two breaks by one txid used to overwrite each other -
@@ -708,12 +799,17 @@
                     (= (:file-key claim) (lock-file-key tomb)))
              {:broken true
               :tombstone (.getName tomb)
-              :content-sha256 (:content-sha256 claim)}
+              :content-sha256 (:content-sha256 claim)
+              :broken-at-ms (stamp-tombstone! tomb)}
              ;; somebody else's claim: put it back untouched and break nothing
              (do
                ;; the seam a witness needs to put a third acquirer in the gap
                (when-let [hook (:before-restore opts)] (hook tomb))
                (let [outcome (restore-lock! tomb lock)]
+                 ;; a refused restore leaves the displaced claim in the
+                 ;; tombstone, so that file is evidence too and is retained
+                 ;; from ITS creation, not from the claim's mtime
+                 (when (false? (:restored outcome)) (stamp-tombstone! tomb))
                  (cond-> (merge {:broken false :cause :holder-changed} outcome)
                    (false? (:restored outcome)) (assoc :tombstone (.getName tomb)))))))
          (catch java.nio.file.NoSuchFileException _
