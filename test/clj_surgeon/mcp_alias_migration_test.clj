@@ -1077,9 +1077,11 @@
     (.mkdirs receipt-dir)
     (.mkdirs details)
     (try
-      ;; thirty older runs, each with a distinct and strictly older timestamp
+      ;; thirty older runs, each with a distinct and strictly older timestamp.
+      ;; They carry the detail writer's own name prefix, because that prefix is
+      ;; now what retention recognises as its own to delete.
       (dotimes [index 30]
-        (let [stale (io/file details (str "old-" index ".edn"))]
+        (let [stale (io/file details (str "detail-old-" index ".edn"))]
           (spit stale "{:version 1 :files []}")
           (.setLastModified stale (- (System/currentTimeMillis)
                                      (* 1000 (- 60 index))))))
@@ -1098,8 +1100,8 @@
                                                          (:details_path result)))))))
                  "src/acid/fanout/t01.clj")))
         (testing "the oldest runs are the ones dropped"
-          (is (not (contains? (set remaining) "old-0.edn")))
-          (is (contains? (set remaining) "old-29.edn"))))
+          (is (not (contains? (set remaining) "detail-old-0.edn")))
+          (is (contains? (set remaining) "detail-old-29.edn"))))
       (finally
         (delete-tree! workspace)))))
 
@@ -1109,9 +1111,12 @@
         receipt-dir (io/file workspace "receipts")
         details (io/file workspace ".clj-surgeon" "alias-migration")
         ;; twenty peers, each holding a details_path its own receipt published
-        ;; a moment ago and its own caller may not have read yet
+        ;; a moment ago and its own caller may not have read yet. A peer's
+        ;; document IS a detail document, so it stays within retention's reach
+        ;; even now that retention deletes nothing else.
         peers (mapv (fn [index]
-                      (let [peer (io/file details (str "peer-" index ".edn"))]
+                      (let [peer (io/file details
+                                          (str "detail-peer-" index ".edn"))]
                         (.mkdirs details)
                         (spit peer "{:version 1 :files []}")
                         peer))

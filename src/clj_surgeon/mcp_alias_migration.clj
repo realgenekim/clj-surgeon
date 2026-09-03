@@ -609,23 +609,70 @@
   "best-effort")
 
 ;; @spec MCP-OP-ALIAS-045
+;; @spec MCP-OP-ALIAS-054
+(def detail-document-prefix
+  "The name prefix every `alias_migration` detail document carries.
+
+  Retention has to delete files, and a deleter that cannot name what it owns
+  will eventually delete something it does not. The prefix is that name: it is
+  the only thing `prune-details!` will remove, so any other document sharing
+  the directory — an undo receipt written there because the caller configured
+  `receipt-dir` to this path, a peer tool's notes, a human's scratch file — is
+  outside retention's reach by construction rather than by luck."
+  "detail-")
+
+;; @spec MCP-OP-ALIAS-054
+(defn detail-document-name?
+  "Whether one file name is a detail document this writer produced."
+  [^String file-name]
+  (boolean (and file-name
+                (str/starts-with? file-name detail-document-prefix)
+                (str/ends-with? file-name ".edn"))))
+
+;; @spec MCP-OP-ALIAS-054
+(defn detail-directory
+  "The directory `alias_migration` publishes its per-run detail documents in."
+  ^java.io.File [project-root]
+  (io/file (io/file (str project-root)) ".clj-surgeon" "alias-migration"))
+
+;; @spec MCP-OP-ALIAS-054
+(defn receipt-detail-collision?
+  "Whether a receipt written under `receipt-name` would land in the detail
+  writer's own name namespace.
+
+  Co-locating the two directories is legal and stays legal: the prefix above
+  keeps the namespaces disjoint, so this predicate is false for every name the
+  two actually generate. It exists so that a future change to either naming
+  scheme fails as a typed refusal at the boundary rather than as a silently
+  deleted undo receipt in the field."
+  [project-root receipt-dir ^String receipt-name]
+  (boolean (and (detail-document-name? receipt-name)
+                (= (.getAbsoluteFile (io/file (str receipt-dir)))
+                   (.getAbsoluteFile (detail-directory project-root))))))
+
+;; @spec MCP-OP-ALIAS-045
 (defn- prune-details!
   "Delete all but the most recent `max-detail-files` detail documents.
 
   `keep` is the document this run just wrote; it is retained regardless of how
   the filesystem timestamps compare, so a run can never discard its own
-  receipt's `details_path`. Only `.edn` files directly in the directory are
-  considered, never the `retired/` subtree, which is transactional.
+  receipt's `details_path`. Only documents this writer produced are candidates
+  at all — files matching `detail-document-name?` directly in the directory —
+  never the `retired/` subtree, which is transactional, and never a document
+  written by anything else. A caller may point `receipt-dir` at this same
+  directory; an undo receipt sitting here is not retention's to delete, and
+  deleting one would publish a committed receipt naming an inverse that no
+  longer exists.
 
-  It protects nothing else. A concurrent peer's freshly published path is an
-  ordinary candidate here and can be deleted; `details-retention` says why that
-  is the chosen behaviour and the receipt publishes the word."
+  It protects no PEER's detail document. A concurrent peer's freshly published
+  path is an ordinary candidate here and can be deleted; `details-retention`
+  says why that is the chosen behaviour and the receipt publishes the word."
   [^java.io.File directory ^String keep]
   (let [candidates
         (->> (or (.listFiles directory) (make-array java.io.File 0))
              (filter (fn [^java.io.File file]
                        (and (.isFile file)
-                            (str/ends-with? (.getName file) ".edn")
+                            (detail-document-name? (.getName file))
                             (not= keep (.getName file)))))
              (sort-by (juxt (fn [^java.io.File file] (- (.lastModified file)))
                             (fn [^java.io.File file] (.getName file)))))]
@@ -638,7 +685,7 @@
   "Write per-file detail outside the receipt and return its relative path."
   [^Path root plan]
   (let [directory (io/file (.toFile root) ".clj-surgeon" "alias-migration")
-        file-name (str (UUID/randomUUID) ".edn")
+        file-name (str detail-document-prefix (UUID/randomUUID) ".edn")
         target (io/file directory file-name)]
     (.mkdirs directory)
     (file-ops/atomic-write!
@@ -734,9 +781,10 @@
                                         (or (:source-unchanged commit)
                                             (:source_unchanged commit)
                                             (not (:committed commit))))
-                    :remedy (str "Re-send the same alias_migration request; the"
-                                 " frozen snapshot is recomputed from current"
-                                 " source.")}
+                    :remedy (or (:remedy commit)
+                                (str "Re-send the same alias_migration request;"
+                                     " the frozen snapshot is recomputed from"
+                                     " current source."))}
              (:change-id commit) (assoc :change_id (str (:change-id commit))))))
 
 (defn declared-file-set
@@ -751,6 +799,12 @@
 
 ;; ---------------------------------------------------------------------------
 ;; the write, through the shared transaction kernel
+
+;; @spec MCP-OP-ALIAS-054
+(defn new-receipt-name
+  "The file name one alias migration publishes its undo receipt under."
+  []
+  (str (UUID/randomUUID) ".edn"))
 
 ;; @spec MCP-OP-ALIAS-028
 (defn selected-profile
@@ -848,8 +902,20 @@
   ([config project-root spec files] (commit! config project-root spec files nil))
   ([{:keys [verification-profiles receipt-dir verify]} project-root spec files retire]
   (.mkdirs (io/file receipt-dir))
-  (let [retire-source (when retire (resolve-retire-source project-root retire))]
+  (let [retire-source (when retire (resolve-retire-source project-root retire))
+        receipt-name (new-receipt-name)]
   (cond
+    ;; @spec MCP-OP-ALIAS-054
+    (receipt-detail-collision? project-root receipt-dir receipt-name)
+    {:error (str "The configured receipt directory would publish this undo "
+                 "receipt inside the detail writer's own name namespace")
+     :error-type :alias-migration-receipt-detail-collision
+     :source-unchanged true
+     :remedy (str "Configure receipt-dir outside "
+                  (.getPath (detail-directory project-root))
+                  ", or rename the detail documents; a receipt this verb may "
+                  "prune is a receipt that cannot be trusted.")}
+
     (unknown-profile? verification-profiles verify)
     {:error (str "Unknown verification profile: " verify)
      :error-type :unknown-verification-profile
@@ -874,8 +940,7 @@
        :source-unchanged true}
       (let [result (transaction/execute-mcp-change!
                      {:spec spec
-                      :receipt-out (str (io/file receipt-dir
-                                                 (str (UUID/randomUUID) ".edn")))
+                      :receipt-out (str (io/file receipt-dir receipt-name))
                       :write-refusal-context {:operation "alias_migration"
                                               :project-root project-root}})]
         (if (:error result)
