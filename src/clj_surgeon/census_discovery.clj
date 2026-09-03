@@ -26,6 +26,9 @@
    - the walk STOPS at one candidate past `max-scanned-files` rather than
      enumerating the tree and truncating the result, and reaching the ceiling
      is reported as `:exceeded?` with nothing read;
+   - the walk also stops at one ENTRY past `max-walk-entries`, counting every
+     entry it visits of any name, because the candidate ceiling bounds what
+     the census READS and not what the walk COSTS;
    - a source above `max-source-bytes` is collected BY NAME instead of read,
      so the receipt can say what it did not look at."
   (:require
@@ -92,6 +95,7 @@
 ;; @spec MCP-OP-CENSUS-028
 ;; @spec MCP-OP-CENSUS-030
 ;; @spec MCP-OP-CENSUS-032
+;; @spec MCP-OP-CENSUS-033
 (defn discover
   "Walk one workspace root and return what the census may read.
 
@@ -103,12 +107,17 @@
      :duplicates n
      :exceeded? bool
      :observed n
+     :walk-exceeded? bool
+     :entries-observed n
      :subtree-counts {project-relative directory -> candidates beneath it}
+     :subtree-entries {project-relative directory -> entries beneath it}
      :partial-dirs #{directories whose counts are lower bounds}}`
 
    `:observed` is the candidate count the walk had seen when it stopped; when
    `:exceeded?` it is a LOWER BOUND, because the walk stops rather than
-   enumerating the rest of the tree.
+   enumerating the rest of the tree. `:entries-observed` is the same shape for
+   the ENTRY bound: every entry the walk visited, of any name, and a lower
+   bound once `:walk-exceeded?`.
 
    A root that does not resolve to a directory yields an empty walk with
    `:unresolved-root? true`; deciding what to say about that belongs to the
@@ -121,7 +130,10 @@
           skipped (volatile! 0)
           duplicates (volatile! 0)
           exceeded (volatile! false)
+          walk-exceeded (volatile! false)
+          visited (volatile! 0)
           per-directory (volatile! {})
+          per-directory-entries (volatile! {})
           terminated-in (volatile! nil)
           relative (fn [^Path path] (.toString (.relativize root path)))
           visit-file
@@ -156,20 +168,39 @@
                           :continue))))
           walk
           (fn walk [^File dir ^String rel-dir]
-            (loop [entries (sort-by #(.getName ^File %)
-                                    (or (seq (.listFiles dir)) []))]
-              (if-let [^File entry (first entries)]
-                (let [name (.getName entry)
-                      outcome
-                      (if (real-directory? entry)
-                        (if (contains? census/skipped-directories name)
-                          :continue
-                          (walk entry (child-relative rel-dir name)))
-                        (visit-file entry rel-dir))]
+            ;; Names, not files: `.list` asks the directory what it holds
+            ;; without stat'ing anything, the sort orders plain strings, and
+            ;; the ENTRY BOUND is charged before the entry is looked at. A
+            ;; walk that stat'ed every entry of a 60,000-entry directory to
+            ;; decide whether it had exceeded its budget has already spent it.
+            (loop [names (sort (or (seq (.list dir)) []))]
+              (if-let [^String name (first names)]
+                (let [outcome
+                      (if (> (vswap! visited inc) census/max-walk-entries)
+                        (do (vreset! walk-exceeded true)
+                            (vreset! terminated-in rel-dir)
+                            :terminate)
+                        (let [^File entry (File. dir name)]
+                          (vswap! per-directory-entries
+                                  update rel-dir (fnil inc 0))
+                          (if (real-directory? entry)
+                            (if (contains? census/skipped-directories name)
+                              :continue
+                              (walk entry (child-relative rel-dir name)))
+                            (visit-file entry rel-dir))))]
                   (if (= :terminate outcome)
                     :terminate
-                    (recur (rest entries))))
-                :continue)))]
+                    (recur (rest names))))
+                :continue)))
+          subtree-totals
+          (fn [per-dir]
+            (reduce (fn [totals [rel-dir n]]
+                      (reduce (fn [totals dir]
+                                (update totals dir (fnil + 0) n))
+                              totals
+                              (ancestor-chain rel-dir)))
+                    {}
+                    per-dir))]
       (walk (.toFile root) "")
       {:root (.toString root)
        :files (vec (sort found))
@@ -178,14 +209,11 @@
        :duplicates @duplicates
        :exceeded? @exceeded
        :observed (cond-> (.size found) @exceeded inc)
-       :subtree-counts (reduce (fn [totals [rel-dir n]]
-                                 (reduce (fn [totals dir]
-                                           (update totals dir (fnil + 0) n))
-                                         totals
-                                         (ancestor-chain rel-dir)))
-                               {}
-                               @per-directory)
-       :partial-dirs (if @exceeded
+       :walk-exceeded? @walk-exceeded
+       :entries-observed @visited
+       :subtree-counts (subtree-totals @per-directory)
+       :subtree-entries (subtree-totals @per-directory-entries)
+       :partial-dirs (if (or @exceeded @walk-exceeded)
                        (set (ancestor-chain @terminated-in))
                        #{})})
     {:root nil
@@ -196,31 +224,57 @@
      :duplicates 0
      :exceeded? false
      :observed 0
+     :walk-exceeded? false
+     :entries-observed 0
      :subtree-counts {}
+     :subtree-entries {}
      :partial-dirs #{}}))
 
-;; @spec MCP-OP-CENSUS-027
-(defn narrowing-subtree
-  "The project-relative subtree a caller should retry, or nil.
+(defn- largest-fitting-subtree
+  "The largest fully-walked subtree that fits, by one measure, or nil.
 
-   The walk STOPS at one candidate past the ceiling, so the only counts it
-   knows exactly are the ones for directories it FINISHED: every ancestor of
-   the file it stopped on holds a lower bound, and offering one of those as a
+   The walk STOPS one past whichever bound it hit, so the only counts it knows
+   exactly are the ones for directories it FINISHED: every ancestor of the
+   entry it stopped on holds a lower bound, and offering one of those as a
    narrowing would hand back a call that refuses again. Those are excluded,
-   and of what remains the LARGEST subtree that fits under the ceiling wins,
-   ties broken deepest first and then lexicographically — the deepest of two
-   equal subtrees is the one that excludes the most, and the name is the
-   tiebreak of last resort so the answer is stable across runs.
+   and of what remains the LARGEST subtree that fits wins, ties broken deepest
+   first and then lexicographically — the deepest of two equal subtrees is the
+   one that excludes the most, and the name is the tiebreak of last resort so
+   the answer is stable across runs.
 
    nil means the walk learned nothing it can promise: the caller is told that,
    and told why, rather than handed a call that cannot work."
-  [{:keys [subtree-counts partial-dirs]}]
-  (->> subtree-counts
+  [measure partial-dirs fits?]
+  (->> measure
        (remove (fn [[dir n]]
                  (or (str/blank? dir)
                      (contains? partial-dirs dir)
                      (not (pos? n))
-                     (> n census/max-scanned-files))))
+                     (not (fits? dir n)))))
        (sort-by (fn [[dir n]]
                   [(- n) (- (count (str/split dir #"/"))) dir]))
        ffirst))
+
+;; @spec MCP-OP-CENSUS-027
+(defn narrowing-subtree
+  "The subtree a caller should retry after the CANDIDATE ceiling, or nil."
+  [{:keys [subtree-counts partial-dirs]}]
+  (largest-fitting-subtree subtree-counts
+                           partial-dirs
+                           (fn [_ n] (<= n census/max-scanned-files))))
+
+;; @spec MCP-OP-CENSUS-033
+(defn entry-narrowing-subtree
+  "The subtree a caller should retry after the ENTRY bound, or nil.
+
+   Ranked by the entries beneath it rather than the candidates, because
+   entries are what was exhausted — but a subtree is only offered when BOTH
+   bounds hold for it: a narrowing that replays into the candidate ceiling is
+   a call that cannot work, which is the one thing this must never hand back."
+  [{:keys [subtree-entries subtree-counts partial-dirs]}]
+  (largest-fitting-subtree
+    subtree-entries
+    partial-dirs
+    (fn [dir n]
+      (and (<= n census/max-walk-entries)
+           (<= (get subtree-counts dir 0) census/max-scanned-files)))))

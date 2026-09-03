@@ -310,7 +310,15 @@
         (is (false? (:ok result)))
         (is (= "census-resource-exhausted" (:error_type result)))
         (is (nil? (:counts result)))
-        (is (= "relation_census" (get-in result [:next_call :tool]))))))
+        ;; This assertion used to require a next_call, which the refusal
+        ;; satisfied with `files ["<a narrower file list>"]` — a caption in an
+        ;; argument position. After an exhaustion the walk's aggregates are
+        ;; gone with the heap that held them, so there is no narrower call to
+        ;; compute: MCP-OP-CENSUS-017 now requires a remedy and no next_call,
+        ;; and `an-exhausted-census-offers-no-placeholder-continuation` is the
+        ;; witness for it.
+        (is (not (contains? result :next_call)))
+        (is (string? (:remedy result))))))
 
   (testing "any other Throwable is typed too"
     (with-redefs [census-tool/collect-inputs

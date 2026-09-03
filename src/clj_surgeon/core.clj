@@ -504,11 +504,26 @@
        (and file (> (fs/size (first paths)) relation-census/max-source-bytes))
        {:oversized (relative (first paths))}
 
-       ;; The ceiling is answered before a single source is read.
+       ;; Both bounds are answered before a single source is read, and the
+       ;; walk's own figures travel with the refusal: what it skipped and what
+       ;; it collapsed are facts about the tree, not decorations on a success.
+       (:walk-exceeded? discovered)
+       {:walk-exceeded? true
+        :entries-observed (:entries-observed discovered)
+        :discovered discovered
+        :scanned 0
+        :oversized-skipped (vec (:oversized discovered))
+        :skipped-outside-root (:skipped-outside-root discovered 0)
+        :duplicates (:duplicates discovered 0)}
+
        (:exceeded? discovered)
        {:exceeded? true
         :observed (:observed discovered)
-        :discovered discovered}
+        :discovered discovered
+        :scanned 0
+        :oversized-skipped (vec (:oversized discovered))
+        :skipped-outside-root (:skipped-outside-root discovered 0)
+        :duplicates (:duplicates discovered 0)}
 
        :else
        (reduce
@@ -564,7 +579,19 @@
                          (str/split (str doors) #",") nil)
                        relation-census/default-doors)
         want-declared? (boolean doors)
-        scan (delay (census-sources dir file {:declared? want-declared?}))]
+        scan (delay (census-sources dir file {:declared? want-declared?}))
+        ;; ONE fact bundle, published by EVERY receipt shape below that got as
+        ;; far as a scan — success, no-fold-arms-found and every refusal. The
+        ;; MCP tool builds its own from the same kernel, so the two entrances
+        ;; cannot publish different evidence for one tree. Forced only inside
+        ;; a branch that has already forced the scan; the bounds refusals
+        ;; above it never walk anything.
+        facts #(relation-census/discovery-facts
+                 {:files-scanned (:scanned @scan)
+                  :skipped-outside-root (:skipped-outside-root @scan 0)
+                  :duplicates (:duplicates @scan 0)
+                  :oversized (:oversized-skipped @scan)}
+                 :kebab)]
     (cond
       (and pool (not (:ok pool)))
       {:ok false
@@ -593,6 +620,46 @@
        :maximum relation-census/max-source-bytes
        :next-command "clj-surgeon :op :relation-census :file <a source under the byte cap>"}
 
+      ;; The entry bound: the ceiling bounds what the census READS, this one
+      ;; bounds what the walk COSTS, and a tree of non-sources trips only this.
+      (:walk-exceeded? @scan)
+      (let [discovered (:discovered @scan)
+            narrower (census-discovery/entry-narrowing-subtree discovered)
+            candidate (when narrower
+                        (str "clj-surgeon :op :relation-census :dir "
+                             (:root discovered) "/" narrower))
+            next-command (when (and candidate
+                                    (<= (count candidate)
+                                        relation-census/max-next-call-bytes))
+                           candidate)]
+        (merge
+          {:ok false
+           :error-type :too-many-walk-entries
+           :error (str "This directory holds more than "
+                       relation-census/max-walk-entries
+                       " filesystem entries ("
+                       (:entries-observed @scan)
+                       " visited before the walk stopped). The census visits "
+                       "at most " relation-census/max-walk-entries
+                       " entries and will not report a truncated tree as a "
+                       "complete census")
+           :maximum relation-census/max-walk-entries
+           :fits relation-census/max-walk-entries
+           :observed (:entries-observed @scan)
+           :observed-at-least true
+           :files-read 0
+           :read-complete false}
+          ;; A null continuation is not a smaller promise than a real one; the
+          ;; refusal offers exactly one of a next-command and a remedy.
+          (if next-command
+            {:next-command next-command}
+            {:remedy (str "The walk stopped at the entry bound, so every count "
+                          "it observed is a lower bound and no subtree it "
+                          "finished walking is known to fit; point :dir at a "
+                          "directory you know is smaller, or census one :file "
+                          "at a time.")})
+          (facts)))
+
       ;; The same ceiling semantics as the MCP entrance: a tree the census may
       ;; not finish is refused with nothing read, never truncated into success,
       ;; and the continuation is COMPUTED from the walk's own per-directory
@@ -607,7 +674,8 @@
                                     (<= (count candidate)
                                         relation-census/max-next-call-bytes))
                            candidate)]
-        {:ok false
+        (merge
+         {:ok false
          :error-type :too-many-candidate-files
          :error (str "This directory holds more than "
                      relation-census/max-scanned-files
@@ -620,23 +688,26 @@
          :observed (:observed @scan)
          :observed-at-least true
          :files-read 0
-         :read-complete false
-         :next-command next-command
-         :remedy (when-not next-command
-                   (str "The walk stopped at the ceiling, so every count it "
-                        "observed is a lower bound and no subtree it finished "
-                        "walking is known to fit; point :dir at a directory you "
-                        "know is smaller, or census one :file at a time."))})
+         :read-complete false}
+         (if next-command
+           {:next-command next-command}
+           {:remedy (str "The walk stopped at the ceiling, so every count it "
+                         "observed is a lower bound and no subtree it finished "
+                         "walking is known to fit; point :dir at a directory you "
+                         "know is smaller, or census one :file at a time.")})
+         (facts)))
 
       :else
       (let [inputs (:inputs @scan)
             doors parsed-doors]
         (if (empty? inputs)
-          {:ok false
-           :error-type :no-fold-arms-found
-           :error "No file defines defmethod fold-event arms"
-           :dir (census-root dir)
-           :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
+          (merge
+            {:ok false
+             :error-type :no-fold-arms-found
+             :error "No file defines defmethod fold-event arms"
+             :dir (census-root dir)
+             :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
+            (facts))
           (let [threads (when pool (:size pool))
                 {:keys [map-fn pool-size]} (census-plan-pool threads)
                 result (relation-census/plan
@@ -654,14 +725,16 @@
               ;; has been parsed: confirm it against the plan's own :declared
               ;; plus the names read from the files that define no arms.
               (map? confirmed)
-              {:ok false
-               :error-type :unknown-door-symbol
-               :error (str "Unknown identity door " (:invalid confirmed) ": "
-                           (:why confirmed))
-               :door (:invalid confirmed)
-               :known-doors (vec (sort (map str relation-census/default-doors)))
-               :next-command (str "clj-surgeon :op :relation-census :dir . :doors "
-                                  (str/join "," (sort (map str relation-census/default-doors))))}
+              (merge
+                {:ok false
+                 :error-type :unknown-door-symbol
+                 :error (str "Unknown identity door " (:invalid confirmed) ": "
+                             (:why confirmed))
+                 :door (:invalid confirmed)
+                 :known-doors (vec (sort (map str relation-census/default-doors)))
+                 :next-command (str "clj-surgeon :op :relation-census :dir . :doors "
+                                    (str/join "," (sort (map str relation-census/default-doors))))}
+                (facts))
 
               :else
               (let [unrecognised (relation-census/unrecognised-summary
@@ -669,28 +742,10 @@
                     skipped (:oversized-skipped @scan)]
                 (-> result
                     (dissoc :all-sites :declared :unrecognised)
+                    ;; The discovery facts are the SAME facts every refusal
+                    ;; above publishes, through the same kernel the tool uses.
+                    (merge (facts))
                     (assoc :read-complete (empty? skipped)
-                           ;; The scan the receipt claims, as a number the
-                           ;; caller can check: the tool publishes
-                           ;; `files_scanned` and the CLI published nothing.
-                           :files-scanned (:scanned @scan)
-                           :oversized-skipped
-                           (when (seq skipped)
-                             {:count (count skipped)
-                              :files (vec (take relation-census/max-listed-files
-                                                skipped))
-                              :maximum relation-census/max-source-bytes})
-                           ;; A list bounded in silence reads as complete.
-                           :oversized-skipped-omitted
-                           (when (seq skipped)
-                             (max 0 (- (count skipped)
-                                       relation-census/max-listed-files)))
-                           :skipped-outside-root
-                           (when (pos? (:skipped-outside-root @scan 0))
-                             (:skipped-outside-root @scan))
-                           :duplicates-collapsed
-                           (when (pos? (:duplicates @scan 0))
-                             (:duplicates @scan))
                            :pool-size pool-size
                            :pool-size-requested (when (and threads
                                                           (> threads pool-size))

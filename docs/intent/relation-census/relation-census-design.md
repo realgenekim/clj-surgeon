@@ -129,6 +129,15 @@ Every refusal carries an executable `next_call`: workspace not found, no fold
 arms found (naming the files scanned), an unparseable file (naming it), and an
 unknown door symbol (naming it and the known doors).
 
+Two refusals deliberately carry NO `next_call`, and say why in a `remedy`
+instead. A bounds refusal whose walk finished no subtree that fits has nothing
+to offer, and a `census-resource-exhausted` refusal has less than that: the
+walk's own per-directory aggregates were lost with the resource that held them,
+so no narrower call can be computed at all. Both cases publish a `remedy`
+rather than a caption in an argument position — a placeholder such as `files
+["<a narrower file list>"]` is not a smaller promise than a real continuation,
+it is an unexecutable one.
+
 ## Versioning
 
 The receipt carries `census_version`. A change to the recognised vocabulary,
@@ -187,11 +196,30 @@ does and does not do:
   of the file the walk stopped on is excluded, because those counts are lower
   bounds. When nothing is known to fit there is no continuation at all, and a
   `remedy` says why;
+- the walk also stops at `max-walk-entries` — 50,000 — counting EVERY entry it
+  visits, of any name, and charging the bound BEFORE it stats the entry. The
+  scanned-file ceiling bounds what the census will READ; it does not bound what
+  the walk COSTS, and a tree of 60,000 images or fixtures holds no candidate at
+  all, so the ceiling never fires while the walk enumerates the lot. Reaching
+  this bound is the refusal `too-many-walk-entries`, with the same shape as the
+  ceiling refusal — the bound, the entry count visited and that it is a lower
+  bound, `files_read` 0 — and a continuation computed from the walk's own
+  per-directory ENTRY aggregates: the largest fully-walked subtree that fits
+  under BOTH bounds, so the narrowing cannot replay into the other refusal;
 - a discovered source above `max-source-bytes` is never read, and never
   dropped in silence: it is counted in `oversized_skipped`, at most
   `max-listed-files` of them are named, and `oversized_skipped_omitted` states
   how many were counted but not named — zero when the list is complete. That
   census publishes `read_complete` false;
+- every one of those discovery figures — `files_scanned`,
+  `skipped_outside_root`, `duplicates_collapsed`, `oversized_skipped` and its
+  omission count — is built by ONE kernel fn and published on EVERY receipt
+  shape either entrance can return: the success, `no-fold-arms-found`, and
+  every refusal reached after a walk. A receipt that carries its evidence when
+  the census succeeds and drops it when the census refuses hides the walk
+  exactly where the caller needs to audit it: `no-fold-arms-found` on a tree
+  whose only sources were skipped for size would otherwise read the same as
+  `no-fold-arms-found` on an empty directory;
 - only the sources that define arms are retained, and the receipt carries
   one-line excerpts, never file text.
 

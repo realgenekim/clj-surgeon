@@ -40,6 +40,21 @@
   "Discovery stops after this many candidate sources."
   4000)
 
+;; @spec MCP-OP-CENSUS-033
+(def max-walk-entries
+  "Discovery stops after visiting this many directory entries, of any name.
+
+   `max-scanned-files` bounds what the census will READ; it does not bound what
+   the walk COSTS. Only a candidate Clojure source counts toward that ceiling,
+   so a tree of 60,000 images, fixtures or build artefacts holds no candidate
+   at all: the ceiling never fires and the walk enumerates the whole tree to
+   discover nothing. This bound counts EVERY entry the walk visits — files,
+   directories, and the pruned directories it declines to descend — and is the
+   same 50,000 the alias-migration walker uses, because the resource being
+   protected is the same one: the number of directory entries one operation may
+   touch before it owes the caller an answer."
+  50000)
+
 (def skipped-directories
   "Directories both entrances prune before reading them."
   #{".git" "node_modules" "target" ".cpcache" ".clj-kondo" ".lsp" ".shadow-cljs"
@@ -60,6 +75,63 @@
    A continuation is only useful if the caller can read it and run it; one
    that grows with the tree it is refusing is neither."
   512)
+
+(def discovery-fact-keys
+  "The discovery facts, in the CLI's key style mapped to the tool's.
+
+   Two entrances publish one set of facts in two spellings; the spelling is a
+   table here rather than a literal in each entrance, so neither entrance can
+   invent a fact or quietly drop one."
+  {:files-scanned :files_scanned
+   :skipped-outside-root :skipped_outside_root
+   :duplicates-collapsed :duplicates_collapsed
+   :oversized-skipped :oversized_skipped
+   :oversized-skipped-omitted :oversized_skipped_omitted})
+
+;; @spec MCP-OP-CENSUS-028
+;; @spec MCP-OP-CENSUS-030
+;; @spec MCP-OP-CENSUS-032
+(defn discovery-facts
+  "What a walk observed, in the key style of the entrance publishing it.
+
+   ONE publication rule for EVERY receipt shape. A receipt that carries the
+   escaping-path count, the collapsed link chain and the oversized names when
+   the census succeeds, and drops them when it refuses, hides exactly the
+   evidence the caller needs to understand a refusal: `no-fold-arms-found` on a
+   tree whose only sources were skipped for size looks identical to
+   `no-fold-arms-found` on an empty directory.
+
+   `style` is `:kebab` for the CLI's EDN receipt and `:snake` for the tool's
+   JSON one. The facts are the same facts; only the spelling differs.
+
+   A fact the walk did not observe is not published: a census that reached no
+   source twice publishes no `duplicates_collapsed` and one that skipped
+   nothing publishes no `oversized_skipped` (MCP-OP-CENSUS-028/030). The
+   `files-scanned` count is published whenever the walk knows it, zero
+   included — zero scanned files is a fact, not an absence."
+  [{:keys [files-scanned skipped-outside-root duplicates oversized]} style]
+  (let [oversized (vec oversized)
+        facts (cond-> {}
+                (some? files-scanned)
+                (assoc :files-scanned files-scanned)
+
+                (pos? (or skipped-outside-root 0))
+                (assoc :skipped-outside-root skipped-outside-root)
+
+                (pos? (or duplicates 0))
+                (assoc :duplicates-collapsed duplicates)
+
+                (seq oversized)
+                (assoc :oversized-skipped {:count (count oversized)
+                                           :files (vec (take max-listed-files
+                                                             oversized))
+                                           :maximum max-source-bytes}
+                       ;; A list bounded in silence reads as complete.
+                       :oversized-skipped-omitted
+                       (max 0 (- (count oversized) max-listed-files))))]
+    (if (= :snake style)
+      (into {} (map (fn [[k v]] [(get discovery-fact-keys k k) v])) facts)
+      facts)))
 
 (def source-name-pattern
   "The file names both entrances treat as candidate Clojure sources."

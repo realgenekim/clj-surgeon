@@ -109,15 +109,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- refusal
+  "A typed refusal, with a continuation only when there IS one.
+
+   `next-call` nil publishes NO `next_call` key at all. A null continuation is
+   not a smaller promise than a real one, it is a field the caller must
+   interpret; the refusal says what it can offer instead, in `remedy`."
   [error-type message next-call & [data]]
-  (merge {:ok false
-          :operation "relation-census"
-          :census_version census/census-version
-          :error_type (name error-type)
-          :error message
-          :source_unchanged true
-          :read_complete false
-          :next_call next-call}
+  (merge (cond-> {:ok false
+                  :operation "relation-census"
+                  :census_version census/census-version
+                  :error_type (name error-type)
+                  :error message
+                  :source_unchanged true
+                  :read_complete false}
+           (some? next-call) (assoc :next_call next-call))
          data))
 
 ;; ---------------------------------------------------------------------------
@@ -373,8 +378,7 @@
 ;; @spec MCP-OP-CENSUS-028
 ;; @spec MCP-OP-CENSUS-030
 (defn- build-receipt
-  [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root
-           oversized duplicates reserved]}]
+  [{:keys [merged pool-size requested-pool phases facts oversized reserved]}]
   (let [counts (:counts merged)
         sites (:all-sites merged)
         unrecognised (census/unrecognised-summary
@@ -382,46 +386,39 @@
     (bound-receipt
       (into {}
             (remove (comp nil? val))
-            {:ok true
-             :operation "relation-census"
-             :census_version census/census-version
-             ;; A census that skipped a source in scope is not complete, and
-             ;; says so in the same receipt that names what it skipped.
-             :read_complete (empty? oversized)
-             :oversized_skipped (when (seq oversized)
-                                  {:count (count oversized)
-                                   :files (vec (take max-listed-files oversized))
-                                   :maximum census/max-source-bytes})
-             ;; A list bounded in silence is a list that reads as complete.
-             :oversized_skipped_omitted (when (seq oversized)
-                                          (max 0 (- (count oversized)
-                                                    max-listed-files)))
-             :files (:files merged)
-             :arms (:arms merged)
-             :sites (:sites merged)
-             :outside_arms (:outside-arms merged)
-             :files_scanned scanned
-             :duplicates_collapsed (when (pos? (or duplicates 0)) duplicates)
-             :skipped_outside_root (when (pos? (or skipped-outside-root 0))
-                                     skipped-outside-root)
-             :counts counts
-             :by_file (into (sorted-map)
-                            (take max-listed-files
-                                  (map (fn [[f v]]
-                                         [f (assoc (:counts v)
-                                                   :arms (:arms v)
-                                                   :sites (:sites v))])
-                                       (:by-file merged))))
-             :raw (listed sites :raw)
-             :guarded (listed sites :guarded)
-             :unknown (listed sites :unknown)
-             :pool_size pool-size
-             :pool_size_requested (when (and requested-pool
-                                             (> requested-pool pool-size))
-                                    requested-pool)
-             :phases_elapsed_ms phases
-             :unrecognised_calls unrecognised
-             :next_action (next-action counts unrecognised)})
+            ;; The discovery facts are the SAME facts every refusal publishes,
+            ;; built by the same kernel: a success is not a different receipt
+            ;; shape with evidence rules of its own.
+            (merge
+              {:ok true
+               :operation "relation-census"
+               :census_version census/census-version
+               ;; A census that skipped a source in scope is not complete, and
+               ;; says so in the same receipt that names what it skipped.
+               :read_complete (empty? oversized)
+               :files (:files merged)
+               :arms (:arms merged)
+               :sites (:sites merged)
+               :outside_arms (:outside-arms merged)
+               :counts counts
+               :by_file (into (sorted-map)
+                              (take max-listed-files
+                                    (map (fn [[f v]]
+                                           [f (assoc (:counts v)
+                                                     :arms (:arms v)
+                                                     :sites (:sites v))])
+                                         (:by-file merged))))
+               :raw (listed sites :raw)
+               :guarded (listed sites :guarded)
+               :unknown (listed sites :unknown)
+               :pool_size pool-size
+               :pool_size_requested (when (and requested-pool
+                                               (> requested-pool pool-size))
+                                      requested-pool)
+               :phases_elapsed_ms phases
+               :unrecognised_calls unrecognised
+               :next_action (next-action counts unrecognised)}
+              facts))
       (or reserved 0))))
 
 ;; ---------------------------------------------------------------------------
@@ -439,7 +436,7 @@
    under the ceiling. A placeholder in an argument position is not a
    continuation; when nothing is known to fit, the caller is told so and told
    why, and gets no next_call at all."
-  [discovered canonical]
+  [discovered canonical facts]
   (let [narrower (discovery/narrowing-subtree discovered)
         candidate (when narrower
                     {:tool "relation_census"
@@ -460,11 +457,12 @@
                          ".")
                     "name the sources, or point workspace_root at a subtree you know is smaller."))
              next-call
-             (cond-> {:maximum census/max-scanned-files
-                      :fits census/max-scanned-files
-                      :observed (:observed discovered)
-                      :observed_at_least true
-                      :files_read 0}
+             (cond-> (merge {:maximum census/max-scanned-files
+                             :fits census/max-scanned-files
+                             :observed (:observed discovered)
+                             :observed_at_least true
+                             :files_read 0}
+                            facts)
                (not next-call)
                (assoc :remedy
                       (str "The walk stopped at the ceiling, so every count it "
@@ -474,16 +472,66 @@
                            " sources with files, or point workspace_root at a "
                            "directory you know is smaller."))))))
 
+;; @spec MCP-OP-CENSUS-033
+(defn- walk-entry-refusal
+  "Refuse a tree that costs more directory entries than the walk may visit.
+
+   The candidate ceiling bounds what the census READS; this one bounds what
+   the walk COSTS. A tree of 60,000 non-sources holds no candidate at all, so
+   the ceiling never fires and the walk enumerates every entry to discover
+   nothing. The caller gets the bound, the entry count the walk had visited
+   when it stopped (a lower bound, for the same reason the candidate count
+   is), and a continuation computed from the walk's own per-directory
+   aggregates: the largest subtree it FINISHED walking that fits under BOTH
+   bounds. When nothing is known to fit, it gets a remedy and no next_call."
+  [discovered canonical facts]
+  (let [narrower (discovery/entry-narrowing-subtree discovered)
+        candidate (when narrower
+                    {:tool "relation_census"
+                     :workspace_root (str canonical "/" narrower)})
+        next-call (when (and candidate
+                             (<= (count (json/generate-string candidate))
+                                 census/max-next-call-bytes))
+                    candidate)]
+    (refusal :too-many-walk-entries
+             (str "This workspace holds more than " census/max-walk-entries
+                  " filesystem entries (" (:entries-observed discovered)
+                  " visited before the walk stopped). The census visits at most "
+                  census/max-walk-entries
+                  " entries and will not report a truncated tree as a complete "
+                  "census: "
+                  (if next-call
+                    (str "retry under " narrower ", which holds "
+                         (get-in discovered [:subtree-entries narrower])
+                         " entries.")
+                    "name the sources, or point workspace_root at a subtree you know is smaller."))
+             next-call
+             (cond-> (merge {:maximum census/max-walk-entries
+                             :fits census/max-walk-entries
+                             :observed (:entries-observed discovered)
+                             :observed_at_least true
+                             :files_read 0}
+                            facts)
+               (not next-call)
+               (assoc :remedy
+                      (str "The walk stopped at the entry bound, so every "
+                           "count it observed is a lower bound and no subtree "
+                           "it finished walking is known to fit; name at most "
+                           census/max-requested-files
+                           " sources with files, or point workspace_root at a "
+                           "directory you know is smaller."))))))
+
 ;; @spec MCP-OP-CENSUS-014
 (defn- door-refusal
-  [invalid canonical]
+  [invalid canonical facts]
   (refusal :unknown-door-symbol
            (str "Unknown identity door " (:invalid invalid) ": " (:why invalid))
            {:tool "relation_census"
             :workspace_root canonical
             :doors (vec (sort (map str census/default-doors)))}
-           {:door (:invalid invalid)
-            :known_doors (vec (sort (map str census/default-doors)))}))
+           (merge {:door (:invalid invalid)
+                   :known_doors (vec (sort (map str census/default-doors)))}
+                  facts)))
 
 ;; @spec MCP-OP-CENSUS-023
 ;; @spec MCP-OP-CENSUS-031
@@ -498,9 +546,10 @@
         scanned (or requested (:files discovered))
         skipped-outside-root (:skipped-outside-root discovered 0)
         t-discovered (System/nanoTime)
-        ;; The ceiling is checked BEFORE any read: a tree the census may not
+        ;; Both bounds are checked BEFORE any read: a tree the census may not
         ;; finish is refused, never partially read and published as complete.
-        loaded (when-not (:exceeded? discovered)
+        bounded? (or (:exceeded? discovered) (:walk-exceeded? discovered))
+        loaded (when-not bounded?
                  (collect-inputs root scanned {:declared? want-declared?}))
         t-read (System/nanoTime)
         ;; Two ways one real source reaches the census twice: a caller who
@@ -508,10 +557,26 @@
         ;; collapsed, and the receipt reports the SUM — the caller cannot
         ;; reconcile `files` against what it asked for otherwise.
         duplicates (+ (:duplicates loaded 0) (:duplicates discovered 0))
-        scanned-count (- (count scanned) (:duplicates loaded 0))]
+        scanned-count (- (count scanned) (:duplicates loaded 0))
+        ;; ONE fact bundle, published by EVERY shape this fn returns. A
+        ;; receipt whose evidence depends on whether the census succeeded is a
+        ;; receipt that hides the walk exactly when the caller must audit it.
+        facts (census/discovery-facts
+                {:files-scanned (cond
+                                  bounded? 0
+                                  (or (:refusal loaded) (:oversized loaded))
+                                  (:read loaded 0)
+                                  :else scanned-count)
+                 :skipped-outside-root skipped-outside-root
+                 :duplicates duplicates
+                 :oversized (:oversized discovered)}
+                :snake)]
     (cond
+      (:walk-exceeded? discovered)
+      (walk-entry-refusal discovered canonical facts)
+
       (:exceeded? discovered)
-      (ceiling-refusal discovered canonical)
+      (ceiling-refusal discovered canonical facts)
 
       (:refusal loaded)
       (refusal :unreadable-source-path
@@ -519,7 +584,7 @@
                {:tool "relation_census"
                 :workspace_root canonical
                 :files [(:file loaded)]}
-               {:file (:file loaded)})
+               (merge {:file (:file loaded)} facts))
 
       (:oversized loaded)
       (refusal :source-too-large
@@ -528,9 +593,10 @@
                {:tool "relation_census"
                 :workspace_root canonical
                 :files ["<a source under the byte cap>"]}
-               {:file (:oversized loaded)
-                :bytes (:bytes loaded)
-                :maximum census/max-source-bytes})
+               (merge {:file (:oversized loaded)
+                       :bytes (:bytes loaded)
+                       :maximum census/max-source-bytes}
+                      facts))
 
       :else
       (let [candidates (:inputs loaded)]
@@ -538,14 +604,16 @@
           (refusal :no-fold-arms-found
                    (str "No file defines defmethod fold-event arms. Scanned "
                         scanned-count " file(s).")
-                   {:tool "relation_census"
-                    :workspace_root canonical
-                    :files (vec (take max-listed-files (distinct scanned)))}
-                   (cond-> {:files_scanned scanned-count
-                            :scanned (vec (take max-listed-files
-                                                (distinct scanned)))}
-                     (pos? skipped-outside-root)
-                     (assoc :skipped_outside_root skipped-outside-root)))
+                   (cond-> {:tool "relation_census"
+                            :workspace_root canonical}
+                     ;; An empty array is not a narrower call, and the schema
+                     ;; this tool advertises does not accept one.
+                     (seq scanned)
+                     (assoc :files (vec (take max-listed-files
+                                              (distinct scanned)))))
+                   (merge {:scanned (vec (take max-listed-files
+                                               (distinct scanned)))}
+                          facts))
           ;; The door symbols themselves are checked before any census runs;
           ;; whether a door is DEFINED anywhere can only be answered once the
           ;; scan has been parsed, so that half waits for the plan's own
@@ -554,7 +622,7 @@
                             (census/parse-doors doors nil)
                             census/default-doors)]
             (if (map? syntactic)
-              (door-refusal syntactic canonical)
+              (door-refusal syntactic canonical facts)
               (let [requested-pool (or pool_size (census-pool/default-pool-size))
                     pool-size (census/effective-pool-size requested-pool)
                     planned (census/plan {:inputs candidates
@@ -571,21 +639,19 @@
                            {:tool "relation_census"
                             :workspace_root canonical
                             :files [(:file planned)]}
-                           {:file (:file planned)})
+                           (merge {:file (:file planned)} facts))
 
                   (map? confirmed)
-                  (door-refusal confirmed canonical)
+                  (door-refusal confirmed canonical facts)
 
                   :else
                   (build-receipt
                     {:merged planned
                      :reserved (+ receipt-envelope-allowance (count canonical))
                      :oversized (:oversized discovered)
+                     :facts facts
                      :pool-size pool-size
                      :requested-pool requested-pool
-                     :scanned scanned-count
-                     :duplicates duplicates
-                     :skipped-outside-root skipped-outside-root
                      :phases (cond-> {:read (/ (- t-read t-discovered) 1e6)
                                       :classify (get-in planned [:phases :classify])
                                       :merge (get-in planned [:phases :merge])}
@@ -598,7 +664,15 @@
 
    A census walks a tree it did not choose. Running out of heap or stack is a
    bounded, reportable outcome of that walk, not an adapter crash, and the
-   caller needs an executable narrower call rather than a stack trace."
+   caller needs a typed answer rather than a stack trace.
+
+   It gets NO next_call. Every continuation this tool hands back is COMPUTED
+   from the walk's own per-directory aggregates, and an exhaustion is exactly
+   the case in which those aggregates were lost with the heap that held them:
+   there is no narrower call to compute. The refusal says that in a `remedy`
+   instead. A caption in an argument position — `files
+   [\"<a narrower file list>\"]` — is not a smaller promise than a real
+   continuation, it is an unexecutable one, and MCP-OP-CENSUS-017 forbids it."
   [^Throwable error]
   (let [exhausted? (instance? VirtualMachineError error)]
     (refusal (if exhausted? :census-resource-exhausted :census-adapter-failure)
@@ -607,10 +681,16 @@
                     "The census failed: ")
                   (.getName (class error))
                   (when-let [message (.getMessage error)] (str " " message)))
-             {:tool "relation_census"
-              :files ["<a narrower file list>"]
-              :pool_size 1}
-             {:exhausted exhausted?})))
+             nil
+             {:exhausted exhausted?
+              :files_read 0
+              :remedy
+              (str "The census ran out of a runtime resource part-way through, "
+                   "so the walk's own aggregates were lost with it and this "
+                   "refusal can compute no narrower call: name at most "
+                   census/max-requested-files
+                   " sources with files, or point workspace_root at a "
+                   "directory you know is smaller, and retry.")})))
 
 (defn execute-request!
   "Route and execute one relation_census request."
