@@ -41,12 +41,21 @@ NAMES = ["E3-P-N", "E3-P-T", "E3-L-N", "E3-L-T"]
 # Every section whose PROSE governs what the prompts are or how they are derived.
 # Its hash goes in the manifest, so a prose edit fails --check even when every
 # fence, every prompt and every prompt hash is byte-identical.
+#
+# `preamble` scope is the PARENT PARAGRAPH ONLY -- the text under `## B.4` before its
+# first subsection.  Sol round two, item 7: the five subsection hashes below miss the
+# sentence every B.4.x block is written under ("Both arms are byte-identical outside
+# §5"), which is what makes the pair a controlled comparison at all; Sol rewrote it to
+# permit differences and --check returned 0.  Scoping it to the preamble rather than
+# hashing all of `## B.4` keeps the manifest's report precise: a subsection edit still
+# names that subsection instead of firing two hashes at once.
 GOVERNING_SECTIONS = [
-    ("A.8",   "## A.8 "),
-    ("B.4.1", "### B.4.1 "),
-    ("B.4.2", "### B.4.2 "),
-    ("B.4.3", "### B.4.3 "),
-    ("B.4.4", "### B.4.4 "),
+    ("A.8",   "## A.8 ",    "section"),
+    ("B.4",   "## B.4 ",    "preamble"),
+    ("B.4.1", "### B.4.1 ", "section"),
+    ("B.4.2", "### B.4.2 ", "section"),
+    ("B.4.3", "### B.4.3 ", "section"),
+    ("B.4.4", "### B.4.4 ", "section"),
 ]
 
 
@@ -76,6 +85,22 @@ def section(doc: str, heading: str) -> str:
     for line in lines[1:]:
         match = HEADING_RE.match(line)
         if match and len(match.group(1)) <= level:
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
+def preamble_of(section_text: str) -> str:
+    """A section's own text, up to its first SUBSECTION heading.
+
+    The parent paragraph of `## B.4` is the governing sentence for all four prompts,
+    and it belongs to no subsection.  Bounding it here means hashing that sentence
+    without also re-hashing everything under it.
+    """
+    lines = section_text.split("\n")
+    out = [lines[0]]
+    for line in lines[1:]:
+        if HEADING_RE.match(line):
             break
         out.append(line)
     return "\n".join(out)
@@ -229,8 +254,9 @@ def build(out: pathlib.Path, doc_path: pathlib.Path | None = None,
         (out / f"{name}.sha256").write_text(digest + "\n")
         digests[name] = digest
     manifest = "".join(f"{digests[n]}  {n}.md\n" for n in NAMES)
-    for label, heading in GOVERNING_SECTIONS:
-        prose = prose_of(section(doc, heading))
+    for label, heading, scope in GOVERNING_SECTIONS:
+        body = section(doc, heading)
+        prose = prose_of(preamble_of(body) if scope == "preamble" else body)
         digest = hashlib.sha256(prose.encode()).hexdigest()
         digests[f"section:{label}"] = digest
         manifest += f"{digest}  section:{label}\n"
