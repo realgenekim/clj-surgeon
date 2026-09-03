@@ -801,7 +801,17 @@
     :too-many-candidate-files
     :no-fold-arms-found
     :unparseable-file
-    :census-worker-failure})
+    :census-worker-failure
+    ;; Sol's round-fifteen NO-GO item 3. Anything that escapes the census path
+    ;; used to reach the launcher's catch-all and be stamped
+    ;; `:invalid-arguments`, which is in NEITHER declared set — so every
+    ;; witness pinned to them was green over a whole class of answers this op
+    ;; can give. These are the names the MCP entrance already publishes for the
+    ;; same two events, because a throw is not a different KIND of event at the
+    ;; two entrances, and declaring them here is what makes the enumeration
+    ;; TOTAL rather than a subset.
+    :census-adapter-failure
+    :census-resource-exhausted})
 
 ;; @spec MCP-OP-CENSUS-014
 (def mcp-refusal-types

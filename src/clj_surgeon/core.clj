@@ -654,11 +654,61 @@
       {:map-fn pooled :pool-size size}
       {:map-fn map :pool-size 1})))
 
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn- census-crash-refusal
+  "A Throwable that escaped the census, as a DECLARED typed refusal.
+
+   Sol's round-fifteen review, NO-GO item 3. `:invalid-arguments` — the type
+   the launcher's catch-all stamps on anything that reaches it — is in neither
+   `cli-refusal-types` nor `mcp-refusal-types`, so every witness pinned to
+   those sets was green over an entire class of answers this op can give. That
+   is the general form of the `:dir` defect rather than the defect itself: the
+   declared enumeration described a SUBSET of what the op emits, and the next
+   escape would have had the same signature.
+
+   The two names are the ones the MCP entrance already publishes for these two
+   cases, because a throw is not a different KIND of event at the two
+   entrances. It gets NO continuation, for the reason `exhaustion-refusal`
+   gives at the tool: every continuation this op hands back is computed from
+   the walk's own aggregates, and a walk that threw is exactly the case in
+   which those were lost with it.
+
+   `VirtualMachineError` is tested by NAME rather than with `instance?`,
+   because a class literal is resolved when this namespace is analysed and
+   babashka's runtime does not carry that class."
+  [opts ^Throwable error]
+  (let [exhausted? (boolean
+                     (some #(= "java.lang.VirtualMachineError" (.getName ^Class %))
+                           (supers (class error))))
+        anchor (try (relation-census/cli-anchor opts) (catch Throwable _ nil))]
+    (cond-> {:ok false
+             :error-type (if exhausted?
+                           :census-resource-exhausted
+                           :census-adapter-failure)
+             :error (str (if exhausted?
+                           "The census exhausted a runtime resource: "
+                           "The census failed: ")
+                         (.getName (class error))
+                         (when-let [message (.getMessage error)]
+                           (str " " message)))
+             :exhausted exhausted?
+             :files-read 0
+             :read-complete false
+             :remedy (str "The census stopped part-way through, so the walk's "
+                          "own aggregates were lost with it and this refusal "
+                          "can compute no narrower command: point :dir at a "
+                          "directory you know is smaller, or census one :file "
+                          "at a time, and retry.")}
+      anchor (assoc :anchor anchor))))
+
 ;; @spec MCP-OP-CENSUS-015
 ;; @spec MCP-OP-CENSUS-019
 ;; @spec MCP-OP-CENSUS-021
-(defn run-relation-census
-  "Census collection writes inside fold arms. Reads only; writes nothing."
+(defn- run-relation-census*
+  "The census op body. Every exit from it is a receipt or a typed refusal;
+   `run-relation-census` is what guarantees that for the exits it does not
+   plan."
   [{:keys [dir file doors threads] :as opts}]
   (let [doors-arg doors
         ;; The SAME pure pass the entrance (`run`) runs ahead of its config
@@ -1027,6 +1077,21 @@
                                   (str/join ", " (take 3 (map :call (:examples unrecognised))))
                                   "): a write behind one of them is not a site here")
                              :else "none")))))))))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn run-relation-census
+  "Census collection writes inside fold arms. Reads only; writes nothing.
+
+   The one entrance, and the one place a Throwable from the census path is
+   turned into a DECLARED refusal. Nothing below may reach the launcher's
+   catch-all: a refusal typed `:invalid-arguments` is a refusal no enumeration
+   witness can see."
+  [opts]
+  (try
+    (run-relation-census* opts)
+    (catch Throwable error
+      (census-crash-refusal opts error))))
 
 (defn run-ls-tree [{:keys [dir format grep] :as _opts}]
   (when-not dir

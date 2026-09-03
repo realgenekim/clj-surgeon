@@ -3281,6 +3281,27 @@
                                 (fn [& _]
                                   (throw (ex-info "boom" {})))]
                     (f)))}
+       ;; Sol's round-fifteen NO-GO item 3: the two names the op gives to a
+       ;; throw that escapes its own branches, driven by injecting one. Without
+       ;; a drive here the enumeration would be a subset of what the op emits,
+       ;; which is the property these witnesses exist to deny.
+       {:label :census-adapter-failure
+        :error-type :census-adapter-failure
+        :root workspace
+        :opts {:dir (named workspace)}
+        :around (fn [f]
+                  (with-redefs [census-discovery/discover
+                                (fn [& _]
+                                  (throw (ex-info "injected" {})))]
+                    (f)))}
+       {:label :census-resource-exhausted
+        :error-type :census-resource-exhausted
+        :root workspace
+        :opts {:dir (named workspace)}
+        :around (fn [f]
+                  (with-redefs [census-discovery/discover
+                                (fn [& _] (throw (OutOfMemoryError. "injected")))]
+                    (f)))}
        {:label :too-many-candidate-files
         :error-type :too-many-candidate-files
         :root workspace
