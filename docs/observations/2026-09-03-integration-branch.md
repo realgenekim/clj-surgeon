@@ -110,9 +110,187 @@ suite-run bb test/run_all.clj
 
 ## STEP 1 — merges
 
-(recorded below as each merge lands)
+Order as briefed. Each merge is `--no-ff`, each names its branch and its GO
+verdict file, and the fast gate `suite-run bb test/run_all.clj` ran after every
+one. Two lanes were REFUSED and are argued below.
+
+| # | lane | sha merged | brief said | fast gate after |
+|---|---|---|---|---|
+| 0 | (ratchet) | — | — | 727/6051/0 |
+| 1 | q5z-alias-migration | f51ceae | f51ceae | 760/6402/0 (after one fix) |
+| 2 | read-path-memory | b7ef23d | b7ef23d | 760/6402/0 (after one fix) |
+| 3 | parser-admission | 52c5d85 | 52c5d85 | 806/6688/0 |
+| 4 | **study-ops-mcp** | **REFUSED** | 4480e3d | — |
+| 5 | memory-battery | 5534e94 | 5534e94 | 811/6708/0 |
+| 6 | **streaming-ls-tree** | **REFUSED** | 95b0881 | — |
+| 7 | anvil-arms-apparatus | 89295d8 | 77e6237 (seat amended) | 811/6708/0 |
+| 8 | txn-journal | 2df05b3 | 5a2d254 (seat amended) | 811/6708/0 |
+
+Excluded before I started, by the mayor: rf2 965d49e.
+
+### The two refusals
+
+**bridge/study-ops-mcp — REFUSED. It silently reverts MEM-005, and its own
+lane's O2 round does not touch that.**
+
+The lane moves project discovery and the whole `ls-tree` implementation out of
+`clj-surgeon.core` and into `clj-surgeon.study`, so that the CLI and the MCP read
+entrance share one kernel. That is the right shape. But the kernel it moves the
+code INTO was written against a main that predates two lanes already on this
+branch, and the move takes their work with it:
+
+| what disappears | where it lives on this branch | measured consequence |
+|---|---|---|
+| `safe-outline`'s `catch StackOverflowError` | core.clj, MCP-OP-MEM-005 | study's `safe-outline` catches `Exception` only. An `Error` is not an `Exception`, so ONE overflowing file kills the whole scan again — the exact defect MEM-005 shipped to close |
+| the `:resources` / `parser_admission_refused` receipt | core.clj `format-ls-tree-edn`, `admission-refusals`, `scan-resources` | absent from study's encoders; 5 parser_admission_test witnesses error |
+| `ls-tree-root-refusal` | core.clj, MCP-OP-SHELL-ARGV-002 (andon inb-d27b79) | study's `run-ls-tree` calls `System/exit 1` on a bad root, which **aborts the babashka test process** rather than returning a typed refusal |
+| `find-build-files` `-H` / `-print0` / `find-start-token` | core.clj (andon) | study's copy is argv-safe but line-framed and `-P`-default |
+
+The andon witness namespace does not even load: it resolves
+`#'clj-surgeon.core/find-build-files`, which no longer exists.
+
+I began the port — `existing-directory?`, `find-start-token`,
+`nul-separated-paths`, a deterministic `prune-tokens`, `-H`/`-print0` on both
+find sites, and repointing the andon witness — and stopped when the remaining
+work was the whole MEM-005 surface (`safe-outline`, `admission-refusals`,
+`scan-resources`, the text refusal block, the EDN receipt, and the root refusal)
+re-implemented inside `study.clj`, unreviewed, at 05:00. **MEM-005 has a GO for
+its implementation in `core.clj`. Writing a second implementation of it inside
+`study.clj` tonight would ship an unreviewed version of a ratified lane**, which
+is the thing the fence-review doctrine exists to prevent.
+
+Checked again after the seat pushed O2 (`26e4810`, "ls-tree text rows, default
+limit 8192, session.start telemetry"):
+
+```
+git diff --stat 4480e3d 26e4810
+  docs/intent/study-ops/study-ops-specs.md, docs/observations/...o2..., 
+  src/clj_surgeon/mcp_inspect_tool.clj, src/clj_surgeon/mcp_telemetry.clj,
+  src/clj_surgeon/mcp_tool.clj, test/... — 7 files
+```
+
+**`src/clj_surgeon/study.clj` and `src/clj_surgeon/core.clj` are untouched by
+O2**, and all four markers are still absent at the new tip:
+
+```
+26e4810:src/clj_surgeon/study.clj   StackOverflowError 0  parser_admission_refused 0
+                                    ls-tree-root-refusal 0  -print0 0
+```
+
+So the refusal holds at 4480e3d and at 26e4810 alike. What the lane needs is one
+round on a main that HAS parser-admission and the andon fix — the same ruling the
+mayor already made for rf2.
+
+**bridge/streaming-ls-tree — REFUSED. Two GO'd lanes carry contradictory
+ratified requirements, and composing them means amending one lane's gate.**
+
+The merge itself resolves cleanly and I did resolve it: `find-clj-files` takes
+the union (andon's `-H`, `find-start-token`, NUL parse; MEM-003's
+`( -type f -o ( -type l -xtype f ) )` predicate and parenthesised name chain),
+`safe-outline` takes the union (MEM-003's regular-file guard wrapping MEM-005's
+`StackOverflowError` catch), the andon `ls-tree-root-refusal` is kept and wired
+into MEM-003's new `run-ls-tree` ahead of the ceiling check, and I threaded the
+MEM-005 admission meter through MEM-003's streaming encoders so the streamed EDN
+publishes the same `:resources` trailer the batch encoder does.
+
+That last step is where it stops being a merge. **MEM-005 requires the timing
+UNCONDITIONALLY; MEM-003 requires the result to be byte-identical across two
+scans and to carry NO receipt when it is complete.** `scan_ms` is a wall-clock
+reading. The two cannot both hold:
+
+- MEM-005, `read-path-memory-specs.md`: *"the scan's own cost charged as
+  `scan_ms` WITH its `bytes_scanned` denominator in the EDN receipt's
+  `:resources` block UNCONDITIONALLY — a meter that only reports on the rare
+  refusal branch is dark on the ~100% of scans a regression would appear in"*.
+- MEM-003, same file: *"Two scans of an UNCHANGED tree ... producing
+  byte-identical results in both the text and EDN encodings, cursor included"*,
+  witnessed by `two-scans-of-an-unchanged-tree-are-byte-identical-and-pin-one-snapshot`;
+  and `a-result-exactly-at-the-ceiling-is-complete` asserts `(nil? (receipt at))`.
+
+Measured, with the composition applied — nine failures, every one of them this
+one disagreement:
+
+```
+FAIL two-scans-of-an-unchanged-tree-are-byte-identical-and-pin-one-snapshot
+     the two EDN results differ in exactly :scan_ms (2.888 vs 2.782)
+FAIL a-result-exactly-at-the-ceiling-is-complete
+     "a complete result carries no ceiling receipt"
+     expected: (nil? (receipt at))
+     actual:   (not (nil? {:receipt {:resources {:scan_ms 7.906, :bytes_scanned 674}}}))
+FAIL under-the-ceiling-the-streamed-result-equals-the-batch-result  (x2)
+FAIL a-parse-error-under-the-ceiling-still-reads-exactly-as-before
+FAIL the-server-ceiling-binds-at-its-shipped-value-not-at-a-fixture-value  (x2)
+FAIL the-continuation-cursor-pages-the-remainder-exactly-once
+```
+
+Note that MEM-003's own falsifier for the determinism row is the battery's
+`nondeterministic:4` — four output hashes over five reps of one operation,
+"differing in exactly the cursor line". A wall-clock field in the same result is
+the same defect class arriving from the other lane.
+
+**Two honest resolutions exist and both amend a ratified gate**, which is why I
+am not choosing:
+
+1. Narrow MEM-003's determinism and no-receipt rows so their subject is the
+   CURSOR and the CEILING receipt (which is what their falsifiers are actually
+   about), and mask the measured field the way this branch already masks it in
+   the andon symlink witness. Cheap, and arguably what both rows meant.
+2. Narrow MEM-005's "unconditionally" so `:resources` is published on the text
+   encoding and on any scan that refused, and `bytes_scanned` (deterministic)
+   always, with `scan_ms` excluded from a complete EDN result. Keeps MEM-003
+   byte-exact, weakens the meter on exactly the scans MEM-005 says matter.
+
+My own read, offered as a recommendation and not acted on: **(1)**. MEM-003's
+requirement text says "cursor included" and its measured falsifier is the cursor
+line; MEM-005's meter is the thing that would go dark under (2), and it was
+argued for precisely because a dark meter is invisible. But it is a gate change
+on a GO'd lane and it belongs to whoever owns that lane.
+
+Everything else about the lane composed cleanly, so this is one decision, not a
+round of work.
 
 ## Conflict table
 
-| # | merge | file : site | side kept | why |
+Every conflict resolved on this branch, in merge order.
+
+| # | merge | file : site | resolution | why |
 |---|---|---|---|---|
+| 1 | q5z | `src/clj_surgeon/mcp_intent_contract.clj` : `audit-current-repository` | OURS | their hunk appended `alias-migration` to the literal vector; the derived scan finds the file |
+| 1 | q5z | `test/clj_surgeon/mcp_test_runner.clj` : ns require + `-main` | UNION | both inserted one ns at the same alphabetical slot: ours `core-discovery-test` (andon), theirs `mcp-alias-migration-test` |
+| 1 | q5z | `src/clj_surgeon/intent_transaction.clj` : `change!` | UNION | main's `:expect-matched` and q5z's `:on-write-boundary`; dropping either makes that lane's own feature refuse as `:unknown-arguments` |
+| 1 | q5z | `test/clj_surgeon/operation_algebra_test.clj` : effect inventory (fix commit 511814c) | CORRECT THE ORACLE | q5z rewrote the inventory to be owner-keyed; main added `matched-basis-evidence`, a callee of `execute-change-with-context!`. Added with the empty effect set its own docstring justifies ("Performs no I/O") |
+| 2 | read-path | `src/clj_surgeon/mcp_intent_contract.clj` | OURS | same registry line |
+| 2 | read-path | `src/clj_surgeon/outline.clj` : `top-level-form-records` | THEIRS | ours was the pre-MEM-015 inline builder this lane exists to replace; the three arities now delegate to `parse-and-build-records` so an outline parses ONCE |
+| 2 | read-path | `src/clj_surgeon/outline.clj` : `form-records-from-walked` (fix 0a14fc6) | PORT MAIN IN | the new builder was written before main's `defmethod` dispatch (a28690e) and dropped `:dispatch` from every record |
+| 2 | read-path | `test/clj_surgeon/outline_differential_test.clj` (fix 0a14fc6) | RE-FREEZE | the frozen twin was taken at 9f48694, before a28690e; left alone it reported a difference that was really the frozen side being stale |
+| 3 | parser-admission | `src/clj_surgeon/mcp_intent_contract.clj` | OURS | same registry line |
+| 3 | parser-admission | `Makefile` : `.PHONY` | UNION | ours `repository-hygiene(-self-test)`, theirs the five battery/red targets; a dropped `.PHONY` name is a silent no-op the day a file of that name exists |
+| 3 | parser-admission | `docs/intent/read-path-memory/read-path-memory-specs.md` : MEM-015 / MEM-005 | OURS + ADD | ours is read-path round 2's EARS-scoped MEM-015; theirs is the pre-correction wording. MEM-005 added |
+| 3 | parser-admission | `docs/observations/2026-09-03-captains-log-anvil-seat.md` | UNION, chronological | append-only lab notebook; the 06:22Z branch entry inserted before main's 06:25Z entry for the same round |
+| 3 | parser-admission | `test/clj_surgeon/core_discovery_test.clj` : symlinked-root witness | MASK THE MEASURED FIELD | MEM-005 added a wall-clock `scan_ms`, so two runs of one scan are never byte-identical. The discovery claim is about what was found: `scan_ms` is masked and asserted separately, everything else compared byte for byte |
+| 5 | memory-battery | — | none | the parser-admission merge had already absorbed this lane's Makefile targets |
+| 7 | anvil-arms | `Makefile` : `.PHONY` | UNION | `anvil-arms-self-test` added |
+| 8 | txn-journal | 7 battery files (add/add) | OURS | this branch carried an OLDER copy; the battery lane's is the reviewed one and has the attestation surface, the INCOMPLETE state, and the round-3 ruling that peak lines are a TREND. Theirs' five extra tests assert the SUPERSEDED gating |
+| 8 | txn-journal | `Makefile` : `memory-red` | **RENAME, NOT MERGE** | **two different meters under one name.** Ours = the parser-admission red witness; theirs = the kernel's OOM witness. Their GO evidence quotes different numbers for the same word. `memory-red` stays the parser witness; `memory-red-kernel` is the kernel's, under the exclusive lock |
+| 8 | txn-journal | `Makefile` : mcp-test tail, `MEMBAT_ENV`, `memory-battery`, `.PHONY` | UNION / OURS / OURS / UNION | both self-checks kept; the attestation env and the attest-gated battery are round 3's |
+| 8 | txn-journal | `deps.edn` | THEIRS | additive `:clj-surgeon/memory-test` alias the kernel witness needs |
+| 8 | txn-journal | `test/clj_surgeon/mcp_test_runner.clj` | UNION | `run_all` does NOT load `txn-journal-test`; the kernel's witnesses run only under mcp-test, so dropping either side removes a whole lane's gate |
+| 8 | txn-journal | `src/clj_surgeon/memory_battery{,_runner}.clj` (fix 151e131) | PORT THEIRS' ONE FIX FORWARD | the battery lane's runner hard-coded `:heap-reserved-peak-mb nil`, so `reserved-check` could only ever say UNMEASURED. Sol's blocker 6 had been fixed on the kernel lane's superseded copy; `bytes->mb` + `reserved-peak-mb` ported |
+| 8 | txn-journal | `Makefile` (fix 5cc1465) | REPAIR MY OWN DAMAGE | `memory-battery-self-test:` came out of the resolution COMMENTED — `make test` would have skipped the battery's gate in silence |
+
+## What caught what
+
+Worth recording, because in every case the composition was caught by a witness
+and not by review:
+
+- **a compile error**, not a silent pass, caught the battery/kernel accountant
+  split: `No such var: battery/reserved-peak-mb` at `scope_stream_test.clj:279`,
+  which is the witness whose own docstring names that hazard — *"if they
+  disagree the battery reports UNMEASURED for ever and nothing fails"*.
+- **the frozen differential** caught the dropped `defmethod` dispatch by naming
+  the file: *"1 of 167 files outlined differently:
+  test/clj_surgeon/analyzer_contract_test.clj"*. That is also the sabotage proof
+  the lane claimed, delivered against a real divergence rather than an injected one.
+- **the effect-inventory oracle** caught the q5z/main union at exactly one entry.
+- **`make -n`** caught the commented Makefile target that `make` reported as
+  "Nothing to be done".
