@@ -1123,3 +1123,43 @@
             "and the pages concatenate to exactly the fresh scan, symlink
              included: the guard never diverges from discovery")
         (is (nil? (cursor-of p3)) "the last page carries no cursor")))))
+
+;; @spec MCP-OP-MEM-003
+(deftest an-unchanged-tree-scans-identically-only-within-a-WARM-snapshot-store
+  ;; The determinism claim is TRUE and NARROWER than it was written. The
+  ;; manifest digest is a function of the tree (and its root); the MAC is a
+  ;; function of a per-snapshot secret that must not be derivable from
+  ;; published material — so a snapshot store that has never seen this tree
+  ;; mints a fresh secret and the cursor line differs. A battery run against a
+  ;; cleaned state root, or any scan after the 24 h TTL prune, lands here.
+  (with-project [dir fixture-count "ls-tree-budget-cold-store"]
+    (let [cold (fn []
+                 (let [store (str (fs/create-temp-dir {:prefix "cold-state"}))]
+                   (try
+                     (binding [snapshot/*state-root* store]
+                       [(core/run-ls-tree {:dir dir :max-results 5})
+                        (core/run-ls-tree {:dir dir :format :edn
+                                           :max-results 5})])
+                     (finally (fs/delete-tree store)))))
+          [text-a edn-a] (cold)
+          [text-b edn-b] (cold)
+          pa (budget/parse-cursor (cursor-of edn-a))
+          pb (budget/parse-cursor (cursor-of edn-b))]
+      (is (and (some? pa) (some? pb)) "both cold scans issued a cursor")
+      (is (= (:cursor-id pa) (:cursor-id pb))
+          "the manifest DIGEST is a function of the tree and its root, not of
+           the snapshot store: identical across cold stores")
+      (is (not= (:mac pa) (:mac pb))
+          "the MAC is not, and must not be — a fresh store mints a fresh
+           secret, and a secret derivable from published material is the
+           forgery blocker")
+      (is (not= text-a text-b)
+          "so two scans against COLD stores are NOT byte-identical; the claim
+           holds within one WARM store")
+      (is (not= edn-a edn-b))
+      (testing "and the namespace says so, because the reviewer read the
+                unqualified claim as a promise"
+        (let [doc (:doc (meta (find-ns 'clj-surgeon.ls-tree-snapshot)))]
+          (is (str/includes? doc "warm")
+              "the determinism claim in the ns docstring must be QUALIFIED to
+               a warm snapshot store"))))))
