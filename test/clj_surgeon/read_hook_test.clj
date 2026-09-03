@@ -86,11 +86,21 @@
     (write! root "src/app/README.md" "# app\n\nUses System/currentTimeMillis.\n")
     root))
 
-(def ^:private tree-files
-  "The `ls-tree` receipt rows for `clojure-tree!`, dir = src, hand written."
-  [{:file "app/core.clj" :ns "app.core" :form_count 5 :line_count 17}
-   {:file "app/deep/nested.clj" :ns "app.deep.nested" :form_count 3 :line_count 7}
-   {:file "app/util.clj" :ns "app.util" :form_count 3 :line_count 11}])
+(def ^:private tree-paths
+  "Every Clojure file `clojure-tree!` holds, relative to the workspace root.
+  The stub renders `ls-tree` rows from these, relative to whatever `dir` the
+  hook asked for, exactly as the real receipt does."
+  ["src/app/core.clj" "src/app/deep/nested.clj" "src/app/util.clj"])
+
+(defn- rows-under
+  [dir paths]
+  (let [prefix (if (= dir ".") "" (str dir "/"))]
+    (vec (for [p paths
+               :when (str/starts-with? p prefix)]
+           {:file (subs p (count prefix))
+            :ns "fixture"
+            :form_count 1
+            :line_count 1}))))
 
 ;; ---------------------------------------------------------------------------
 ;; the read-path stub
@@ -137,23 +147,24 @@
     (.flush out)))
 
 (defn- tools-call-result
-  [{:keys [root files file-count read-complete truncated]}]
-  {:content [{:type "text" :text "inspect_clojure · ls-tree"}]
-   :structuredContent
-   {:ok true
-    :operation "ls-tree"
-    :mode "ls-tree"
-    :dir "src"
-    :workspace_root root
-    :format "names"
-    :files files
-    :file_count (or file-count (count files))
-    :returned (count files)
-    :omitted 0
-    :read_complete (if (nil? read-complete) true read-complete)
-    :truncated (boolean truncated)
-    :next_action "none"}
-   :isError false})
+  [{:keys [root files file-count read-complete truncated]} dir]
+  (let [rows (rows-under dir (or files tree-paths))]
+    {:content [{:type "text" :text "inspect_clojure · ls-tree"}]
+     :structuredContent
+     {:ok true
+      :operation "ls-tree"
+      :mode "ls-tree"
+      :dir dir
+      :workspace_root root
+      :format "names"
+      :files rows
+      :file_count (or file-count (count rows))
+      :returned (count rows)
+      :omitted 0
+      :read_complete (if (nil? read-complete) true read-complete)
+      :truncated (boolean truncated)
+      :next_action "none"}
+     :isError false}))
 
 (defn- start-stub!
   "A one-thread HTTP/1.1 stub on an OS-assigned port. Returns {:url :stop! :calls}."
@@ -188,7 +199,11 @@
                               (str "event: message\r\ndata: "
                                    (json/generate-string
                                      {:jsonrpc "2.0" :id (:id payload)
-                                      :result (tools-call-result opts)})
+                                      :result (tools-call-result
+                                                opts
+                                                (get-in payload
+                                                        [:params :arguments :dir]
+                                                        "."))})
                                    "\r\n\r\n")
                               {})
 
@@ -253,7 +268,7 @@
    & body]
   `(let [~root-sym (clojure-tree!)
          stub# (start-stub! {:root ~root-sym
-                             :files (or ~files tree-files)
+                             :files ~files
                              :file-count ~file-count
                              :read-complete ~read-complete
                              :truncated ~truncated})
@@ -304,7 +319,7 @@
 ;; @spec MCP-OP-READ-HOOK-008
 (deftest unservable-invocations-fall-back-to-real-ripgrep
   (let [root (mixed-tree!)
-        stub (start-stub! {:root root :files tree-files})
+        stub (start-stub! {:root root :files tree-paths})
         bin (install-shim!)
         log (str (fs/path root "route.jsonl"))
         ctx {:dir root :bin bin
@@ -373,7 +388,7 @@
           (is (= "" (:err hooked)))
           (is (= "fallback" (:served_by (last (route-records log)))))))
       (testing "a truncated receipt is refused"
-        (let [stub (start-stub! {:root root :files (take 2 tree-files)
+        (let [stub (start-stub! {:root root :files (vec (take 2 tree-paths))
                                  :file-count 3 :read-complete false :truncated true})]
           (try
             (let [hooked (run {:dir root :bin bin
@@ -461,10 +476,28 @@
 ;; ---------------------------------------------------------------------------
 ;; MCP-OP-READ-HOOK-007 — the read path's set is the set, and it is falsifiable
 
+;; @spec MCP-OP-READ-HOOK-001
+;; @spec MCP-OP-READ-HOOK-002
+(deftest overlapping-path-arguments-are-refused
+  (testing "ripgrep prints a file once per path argument that reaches it"
+    (with-served [root ctx log calls]
+      (let [hooked (run ctx "-n" "System/currentTimeMillis" "src" "src/app")
+            native @(proc/process [(real-rg) "--sort" "path" "-n"
+                                   "System/currentTimeMillis" "src" "src/app"]
+                                  {:dir root :out :string :err :string
+                                   :continue true})]
+        (is (= 8 (count (re-seq #"System/currentTimeMillis" (:out native))))
+            "four matches, printed twice, because the arguments overlap")
+        (is (= (set (str/split-lines (:out native)))
+               (set (str/split-lines (:out hooked)))))
+        (is (= 8 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
+            "a set-based reconciliation would have halved this")
+        (is (= "fallback" (:served_by (last (route-records log)))))))))
+
 ;; @spec MCP-OP-READ-HOOK-007
 (deftest a-read-path-set-that-disagrees-with-ripgrep-is-refused
   (testing "a read path that omits a file the tree holds"
-    (with-served [root ctx log calls :files (vec (butlast tree-files))]
+    (with-served [root ctx log calls :files (vec (butlast tree-paths))]
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
         (is (= 4 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
             "every match, because the disagreement forced a fallback")
@@ -472,9 +505,7 @@
         (is (= "discovery-mismatch" (:reason (last (route-records log))))))))
   (testing "a read path that names a file the tree does not hold"
     (with-served [root ctx log calls
-                  :files (conj tree-files
-                               {:file "app/ghost.clj" :ns "app.ghost"
-                                :form_count 1 :line_count 1})]
+                  :files (conj tree-paths "src/app/ghost.clj")]
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
         (is (= 4 (count (re-seq #"System/currentTimeMillis" (:out hooked)))))
         (is (= "fallback" (:served_by (last (route-records log)))))

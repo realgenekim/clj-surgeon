@@ -244,6 +244,15 @@
       (not (every? #(= :dir (get path-kinds %)) paths))
       {:servable? false :reason :path-argument-not-a-directory}
       (empty? candidates) {:servable? false :reason :no-candidate-files}
+      ;; Overlapping path arguments make ripgrep print a file once per
+      ;; argument that reaches it, INTERLEAVED by argument rather than grouped
+      ;; by file. An explicit file list cannot reproduce that interleaving, and
+      ;; a set-based reconciliation cannot even see the multiplicity: measured
+      ;; 2026-09-04, `rg -n PAT src src/marvin_voice_remote` served through an
+      ;; earlier build of this hook produced a NON-EMPTY diff — the right lines
+      ;; in the wrong order. Refusing is the only honest answer.
+      (not= (count candidates) (count (set candidates)))
+      {:servable? false :reason :overlapping-path-arguments}
       (not (every? clojure-source? candidates))
       {:servable? false :reason :non-clojure-candidate}
       :else {:servable? true :reason :servable})))
@@ -289,7 +298,8 @@
   because a hook that silently prefers one of the two answers is a hook whose
   correctness nobody can audit."
   [read-path-files candidates]
-  (if (= (set read-path-files) (set candidates))
+  (if (and (= (count read-path-files) (count candidates))
+           (= (set read-path-files) (set candidates)))
     {:ok? true
      :files (let [order (into {} (map-indexed (fn [i p] [p i]) candidates))]
               (vec (sort-by order read-path-files)))}

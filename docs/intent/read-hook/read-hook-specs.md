@@ -50,6 +50,12 @@ required), `[x]` implemented (implementation and test witnesses required),
   hook makes **no wall claim at all**. 007 keeps ripgrep's own candidate set as
   the falsifier for the read path's answer, so a discovery defect surfaces as a
   logged fallback rather than as a missing match.
+- "Equal sets means the same search." It does not. Path arguments can overlap,
+  and ripgrep then prints a file once per argument that reaches it, interleaved
+  by argument rather than grouped by file. Set equality is blind to that
+  multiplicity, and an explicit file list cannot reproduce the interleaving at
+  all. MCP-OP-READ-HOOK-007 therefore compares counts as well as sets, and
+  MCP-OP-READ-HOOK-002 refuses overlapping path arguments outright.
 - "Exit 0 when we served successfully." Ripgrep exits 1 when nothing matched.
   004 forbids inventing a status.
 - "Resolving `rg` from `PATH` is enough." The hook *is* `rg` on that `PATH`.

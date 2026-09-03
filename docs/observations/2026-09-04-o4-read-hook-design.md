@@ -20,6 +20,7 @@ connected and quoted back verbatim). Program record: **0 of 19.***
 | fallback, non-Clojure path | `rg -n 'defn' .` | **diff EMPTY** | `fallback`, reason `non-clojure-candidate`, 17 ms |
 | fallback, unsupported flag | `rg -n --max-depth 1 'System/…' src` | **diff EMPTY** | `fallback`, reason `unsupported-flag`, 16 ms |
 | fallback, file argument | `rg -n 'System/…' src/…/channel.clj` | **diff EMPTY** | `fallback`, reason `path-argument-not-a-directory`, 11 ms |
+| fallback, overlapping paths | `rg -n 'defn -main' src src/marvin_voice_remote` | **diff EMPTY** *(after the fix below)* | `fallback`, reason `overlapping-path-arguments`, 12 ms |
 | exit status | match / no match / bad regex | **0 / 1 / 2**, ripgrep's own | — |
 
 **Routed: 6 of 6 Clojure-scoped invocations. Fallbacks among them: 0.** Fixture:
@@ -72,6 +73,26 @@ argv ─► parse-argv ─► servable? ─► ls-tree (SURGEON_URL) ─► set 
    forms and line spans. Nothing in the read path can reproduce a `-C 5` context
    block. So the division is forced: **the read path owns which files are
    searched; ripgrep owns what matches, how it prints, and the exit status.**
+
+## The defect my own red team found, and the fix
+
+The first green build **served** `rg -n 'defn -main' src src/marvin_voice_remote`
+and produced a **non-empty diff** against ripgrep. Ripgrep prints a file once per
+path argument that reaches it, **grouped by argument** — `core`, `server`,
+`core`, `server` — while an explicit file list under `--sort path` groups by file
+— `core`, `core`, `server`, `server`. The reconciliation compared *sets*, so the
+duplicates collapsed and the multiplicity was invisible to it. Right lines, wrong
+order, `served_by surgeon`, and every existing witness green.
+
+The fix is two clauses and a refusal: the reconciliation compares counts as well
+as sets, and an invocation whose ripgrep candidate list contains duplicates is
+refused as `overlapping-path-arguments`. Both are witnessed
+(`overlapping-path-arguments-are-refused`), the witness was RED before the fix on
+exactly the `served_by` assertion, and the live receipt above is the same command
+after it.
+
+The general form is worth carrying: **a hook that reconciles by set equality is
+blind to any property of a search that is not a property of its file set.**
 
 ## What this build does NOT claim
 

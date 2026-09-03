@@ -43,6 +43,16 @@ Two measurements, both on `marvin-voice-remote @ ab267f9`, 2026-09-04:
    (`rg --files --sort path <original path args>`), which is the same call that
    supplies the falsifier set for MCP-OP-READ-HOOK-007.
 
+3. **Overlapping path arguments interleave, and a set cannot see it.** Measured
+   on the fixture, 2026-09-04: `rg -n 'defn -main' src src/marvin_voice_remote`
+   prints each match twice, **grouped by argument** (`core`, `server`, `core`,
+   `server`), while an explicit file list ordered by `--sort path` groups by
+   file (`core`, `core`, `server`, `server`). An earlier build of this hook
+   served that call and produced a NON-EMPTY diff — the right lines in the wrong
+   order — because the reconciliation compared sets and the duplicates
+   collapsed. The hook now refuses `overlapping-path-arguments`, and the
+   reconciliation compares counts as well as sets.
+
 The `ls-tree` receipt carries a namespace map, not matched lines: `study/grep-tree`
 returns matching *paths* (`rg -li`), and `format-ls-tree-*` renders forms and
 line spans. Nothing in the read path can reproduce a `-C 5` context block. So
@@ -59,6 +69,7 @@ this rung routes discovery and leaves matching where it is.
 | 005 | Put the shim first on `PATH` under the name `rg` and invoke it | terminates, with ripgrep's answer, never an exec loop | `real-ripgrep-is-never-the-hook-itself` |
 | 006 | Serve an invocation whose single path argument is a directory | every line carries its filename prefix | `filename-prefix-survives-the-substitution` |
 | 007 | Hand the hook a read-path file set with one file removed, and one with a file added | refuses to serve; falls back; the route record says so | `a-read-path-set-that-disagrees-with-ripgrep-is-refused` |
+| 001, 002 | Two path arguments that overlap (`src` and `src/app`), so ripgrep prints each file once per argument | refuses to serve; ripgrep's own answer | `overlapping-path-arguments-are-refused` |
 | 008 | Every fallback case in 002 | the hook's own streams are empty; only ripgrep's bytes appear | asserted inside the 002 witnesses |
 
 ## Environment
