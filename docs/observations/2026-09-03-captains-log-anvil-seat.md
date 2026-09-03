@@ -67,3 +67,9 @@ subprocess, bounds, `doors` as user input, pool_size 64 on a shared box) and rf2
 eval, write confinement for rename/retire and target files, atomicity, discovery bounds). CLAUDE.md now
 carries "Fence review scope": subprocess argv, reader eval, walk paths, pre-parse bounds, next_call
 termination — executed review before any surface enters the queue.
+
+## 02:21Z — `bridge/template-upsert` pushed at 619d3192 (my run 1054/13155/0)
+
+For Gene's merge list, stacked on settings-lens: FOLD-IDEM-004. Inbox item inb-06d376 cannot be updated
+from this seat (no maven creds) — the mayor or the morning provisioning closes that loop.
+
