@@ -555,6 +555,7 @@
         paths)))))
 
 ;; @spec MCP-OP-CENSUS-021
+;; @spec MCP-OP-CENSUS-031
 (defn census-plan-pool
   "The plan-phase map-fn and the pool that will actually run it.
 

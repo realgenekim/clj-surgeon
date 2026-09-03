@@ -69,7 +69,7 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-026**: When clj-surgeon publishes its tool catalog in prose, that prose shall state five tools, shall name `relation_census` in the README, in CLAUDE.md, and in the clj-surgeon skill reference and its mirror, shall state that the census locates review work rather than proving idempotency, and shall state that the census is the one tool that enumerates the workspace tree; the tool's own description shall state the same.
 
-- [ ] **MCP-OP-CENSUS-031**: When clj-surgeon publishes the relation-census low-level design, that design shall name exactly the phases the implementation publishes in `phases_elapsed_ms` — `discover` when a tree was walked, `read`, `classify` and `merge` — shall promise no `parse` phase, and shall state that on the JVM both entrances run the plan phase on the shutdown-bound `census_pool` while babashka runs it at pool size 1 and reports the requested size.
+- [x] **MCP-OP-CENSUS-031**: When clj-surgeon publishes the relation-census low-level design, that design shall name exactly the phases the implementation publishes in `phases_elapsed_ms` — `discover` when a tree was walked, `read`, `classify` and `merge` — shall promise no `parse` phase, and shall state that on the JVM both entrances run the plan phase on the shutdown-bound `census_pool` while babashka runs it at pool size 1 and reports the requested size.
 
 ## Falsifiers
 

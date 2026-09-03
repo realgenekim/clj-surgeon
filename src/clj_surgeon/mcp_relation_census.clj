@@ -528,6 +528,7 @@
             :known_doors (vec (sort (map str census/default-doors)))}))
 
 ;; @spec MCP-OP-CENSUS-023
+;; @spec MCP-OP-CENSUS-031
 (defn- execute-in-context!
   [{:keys [project-root]} {:keys [files doors pool_size]}]
   (let [root (mcp-paths/real-root project-root)

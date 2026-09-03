@@ -88,13 +88,25 @@ unrecognised enclosing form between the arm body and the write is `:unknown`
 with reason `:unsupported-container` and the form named. A target expression
 the resolver cannot reduce is `:unknown` with reason `:unresolved-target`.
 
-## Plan phase
+## Phases
 
-Discovery reads each candidate file once. The plan phase parses and classifies
-files in parallel on a `com.climate.claypoole` thread pool sized to the
-available processors, inside `cp/with-shutdown!`, using the eager unordered
-`cp/upmap`. The merge re-keys results by path and sorts by path, so the pool
-cannot reorder the answer.
+A census publishes `phases_elapsed_ms` for exactly the phases that ran, and for
+no others:
+
+- `discover` — only when the census walked a tree. A caller who names files
+  discovers nothing, and no `discover` timing is published.
+- `read` — resolving the scan through the path fence and reading it. Each
+  candidate file is read once; a file already read under another name is
+  collapsed rather than read again.
+- `classify` — parsing and classifying each retained source. There is no
+  separate parse phase: parsing happens inside `classify`, on the same single
+  pass over each file, so no receipt ever carries a parse timing.
+- `merge` — re-keying and ordering the per-file results.
+
+The `classify` phase runs in parallel on a `com.climate.claypoole` thread pool
+sized to the available processors, inside `cp/with-shutdown!`, using the eager
+unordered `cp/upmap`. The merge re-keys results by path and sorts by path, so
+the pool cannot reorder the answer.
 
 **Parallelism changes elapsed time and never the answer.** The complete ordered
 output and the published receipt, minus `elapsed_ms`, are byte-identical at
@@ -109,7 +121,7 @@ The receipt leads with state, is bounded at 4 KB, and carries no file text
 beyond one-line site sources. It reports `census_version`, per-file counts by
 class, every `:raw` site with its evidence, every `:guarded` site with its guard
 line, every `:unknown` site with its reason, the `:outside-arms` count,
-`phases_elapsed_ms` for `:discover`, `:parse`, `:classify` and `:merge`, the
+`phases_elapsed_ms` for each phase that ran, the
 pool size, and a `next_action`. Listed evidence is trimmed until the receipt
 fits its budget, and the trim is reported.
 
@@ -127,9 +139,17 @@ code change.
 ## Surfaces
 
 The capability is exposed as the `relation_census` MCP tool and as the
-`:relation-census` CLI op. The CLI is the same pure kernel with a `map`-shaped
-plan phase; only the MCP route carries the claypoole pool, so the babashka CLI
-keeps loading without the JVM dependency.
+`:relation-census` CLI op, and both run the same pure kernel over the same
+bounds.
+
+The pool is resolved at RUN time, not at load time, so the CLI keeps loading
+under babashka without the JVM dependency and still uses the pool when it has
+one. On the JVM both entrances run the `classify` phase on `census_pool`'s
+shutdown-bound claypoole pool. Under babashka, where that namespace cannot
+load, the CLI runs it serially at pool size 1 and reports the size that was
+asked for alongside the pool that actually ran — `pool_size_requested` on the
+tool, `:pool-size-requested` on the CLI — so a receipt never claims a pool it
+did not use.
 
 ## Enumeration posture
 
@@ -139,8 +159,9 @@ that posture, but it is the first tool that ENUMERATES a tree rather than
 reading paths the caller named, so it is worth stating plainly what the walk
 does and does not do:
 
-- it walks with `Files/walkFileTree` and no `FOLLOW_LINKS`, so a symlinked
-  directory is never descended;
+- both entrances walk without following symbolic links — `Files/walkFileTree`
+  in the tool, `fs/walk-file-tree` in the CLI — so a symlinked directory is
+  never descended, and neither enumerates the whole tree to take a prefix;
 - a discovered path whose real location escapes the root is skipped and counted
   in `skipped_outside_root`, never read;
 - `.git`, `node_modules`, `target` and their relatives are pruned before they
