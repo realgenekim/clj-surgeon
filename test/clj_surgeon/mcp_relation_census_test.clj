@@ -249,6 +249,30 @@
         (is (= 64 (:pool_size_requested result)))
         (is (nil? (:pool_size_requested result)))))))
 
+;; @spec MCP-OP-CENSUS-029
+(deftest pool-size-accepts-only-the-json-integer-the-schema-advertises
+  (testing "the advertised schema is the one being enforced"
+    (is (= {:type "integer" :minimum 1 :maximum 64}
+           (get-in census-tool/census-tool-schema [:properties "pool_size"]))))
+
+  (doseq [value ["8" 8.0 true nil []]]
+    (testing (str "pool_size " (pr-str value) " is not a JSON integer")
+      (let [result (run {:files [fixture] :pool_size value})]
+        (is (false? (:ok result))
+            (str "the wire accepted pool_size " (pr-str value)
+                 " though the advertised schema requires an integer"))
+        (is (= "invalid-mcp-request" (:error_type result)))
+        (is (= "pool-size-not-an-integer" (:reason result)))
+        (is (= census/max-pool-size (:maximum result)))
+        (is (nil? (:counts result)))
+        (is (= "relation_census" (get-in result [:next_call :tool]))))))
+
+  (testing "a JSON integer inside the advertised range still censuses"
+    (let [result (run {:files [fixture] :pool_size 2})]
+      (is (true? (:ok result)))
+      (is (= (min 2 (.availableProcessors (Runtime/getRuntime)))
+             (:pool_size result))))))
+
 ;; @spec MCP-OP-CENSUS-017
 (deftest reads-are-bounded-and-exhaustion-is-a-typed-refusal
   (testing "an oversized requested file refuses typed instead of being slurped"
