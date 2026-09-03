@@ -1343,6 +1343,14 @@
   argument is required rather than defaulted, because a default is how the
   constant came back.
 
+  `next_action` answers a fourth question — is this tree safe to send another
+  request over — so it follows `source_unchanged` and not `mutated?`. The
+  hardcoded `correct_request` told an automated caller to re-send an alias
+  migration across twelve already-migrated files, beside a `remedy` in the
+  same map that says the tree is MID-MIGRATION and to undo it by hand. A rollback
+  that SUCCEEDED is the other side of it: that branch deletes the orphan
+  receipt, so `review_receipt` there would name a file that no longer exists.
+
   @spec MCP-OP-ALIAS-047
   @spec MCP-OP-ALIAS-056"
   [plan commit mutated?]
@@ -1362,6 +1370,9 @@
                       :source_unchanged (boolean source-unchanged)
                       ;; @spec MCP-OP-ALIAS-056
                       :mutation_attempted (boolean mutated?)
+                      :next_action (if source-unchanged
+                                     "correct_request"
+                                     "review_receipt")
                       :remedy (or (:remedy commit)
                                   (str "Re-send the same alias_migration request;"
                                        " the frozen snapshot is recomputed from"
