@@ -19,6 +19,18 @@ is cut.
 
 ### Added
 
+- Multimethod owner addressing is now discoverable from reads. Every outline row
+  for a `defmethod` carries `dispatch`, the exact source spelling of that arm's
+  dispatch value, so a file whose owner vocabulary collapses many arms into one
+  name still shows how to address one of them. The exact-owner selector refusal
+  now recognizes a selector whose leading name owns `defmethod` arms and
+  publishes the exact `{kind, name, dispatch}` owner form to send, the entrance
+  that accepts it, and a bounded dispatch vocabulary (at most 40 values, with
+  returned/omitted/truncated counts). Field case: 117 arms collapsed to one
+  owner `fold-event`, and a cold agent paid a refusal to learn the shape from
+  another tool's schema.
+
+
 - Experimental `inspect_clojure` MCP read batches. One typed call can retrieve
   ordered named forms, a compact outline, exact structural matches, and
   capability-limited X-ray results from immutable once-read file snapshots.

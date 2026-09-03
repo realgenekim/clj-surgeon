@@ -152,6 +152,12 @@ These requirements define the project-owned exact-verifier fusion contract.
 - [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
 - [x] **MCP-OP-READ-PARITY-001**: When the transport-neutral exact-form selector refuses a missing or ambiguous owner, the CLI and MCP projections shall expose the same complete bounded owner vocabulary and non-authoritative per-owner hypotheses without source bodies.
 
+# #Multimethod Owner Addressing
+
+- [x] **MCP-OP-DISPATCH-001**: When an outline record describes a `defmethod` top-level form, clj-surgeon shall publish that form's dispatch value as a `dispatch` field carrying its exact source spelling.
+- [x] **MCP-OP-DISPATCH-002**: When an exact-owner selector refusal names an owner whose leading name resolves to one or more `defmethod` owners in the frozen snapshot, clj-surgeon shall publish the exact `{kind, name, dispatch}` owner form to send, the entrance that accepts it, and a bounded deterministic dispatch vocabulary with returned, omitted, and truncated counts. The evidence shall carry `authority=false`.
+- [x] **MCP-OP-DISPATCH-003**: When clj-surgeon summarizes a selector refusal that carries multimethod owner evidence, the visible summary shall state that the owner is a multimethod, show the exact owner form to send with the entrance that accepts it, and list the bounded dispatch vocabulary instead of only the collapsed owner name.
+
 # #Positional Mutation Authority
 
 - [x] **MCP-OP-POS-AUTH-001**: When CLI `:edit` receives `:expect`, the compiled query shall start with exactly one caller-visible named top-level owner step `[:form NAME]` or `[:form NAME PLATFORM]` before source or plan I/O can occur.
@@ -244,6 +250,9 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-READ-DIAG-003` | A ranked list makes the complete owner vocabulary unnecessary, or returning source is required for useful evidence. | Small namespace ; semantic rename outside the top ten; repeated owner names; name-only vector over budget. |
 | `MCP-OP-READ-HYP-001` | The highest-ranked owner can be selected automatically because the list is deterministic. | One-character typo ; semantic paraphrase; one candidate; tied candidates; candidate input permutation. |
 | `MCP-OP-READ-HYP-002` | A top-ten presentation is the complete candidate universe, or a score gap proves intent. | Eleven or more owners ; intended owner at rank ten; intended owner outside the bound; one displayed candidate from many available owners. |
+| `MCP-OP-DISPATCH-001` | A collapsed owner name is enough to address one multimethod arm, or the dispatch value may be normalized away from its source spelling. | String, keyword, vector, and namespaced-keyword dispatch ; metadata before the name ; non-defmethod owners carry no field. |
+| `MCP-OP-DISPATCH-002` | The refusal's collapsed owner list already teaches the owner shape, or the whole dispatch vocabulary may be returned unbounded. | Bare multimethod name ; name plus an exact dispatch spelling ; name plus an unknown dispatch ; more arms than the vocabulary bound ; non-multimethod owner. |
+| `MCP-OP-DISPATCH-003` | Structured evidence is enough when the summary shows only the collapsed name. | Refusal summary for a 117-arm multimethod ; truncated vocabulary ; refusal without multimethod evidence. |
 
 # #Deferred Surface
 

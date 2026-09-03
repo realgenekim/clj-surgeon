@@ -145,6 +145,15 @@
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 
+(defn- extract-dispatch
+  "Source spelling of a `defmethod` dispatch value: the child after the name.
+
+   The exact spelling is returned, not a normalized value, so a caller can copy
+   it verbatim into an exact `{kind, name, dispatch}` owner form."
+  ;; @spec MCP-OP-DISPATCH-001
+  [zloc]
+  (some-> zloc z/down z/right z/right z/string))
+
 (defn attached-comment-start
   "Look backwards from a form's start line to find attached comment lines.
    Comments must be contiguous (no blank lines between them and the form)."
@@ -253,6 +262,9 @@
                    arglist (cond
                              user-fields (:arglist extracted)
                              name-val (extract-arglist zloc))
+                   dispatch (when (and name-val
+                                       (= :defmethod (:kind form-spec)))
+                              (extract-dispatch zloc))
                    form-line (:row m)
                    comment-start (when form-line
                                    (attached-comment-start lines form-line))
@@ -267,6 +279,7 @@
                                          name-val
                                          (symbol (str name-val))))
                  arglist (assoc :args arglist)
+                 dispatch (assoc :dispatch dispatch)
                  (seq extras) (merge extras)
                  (and form-line comment-start (< comment-start form-line))
                  (assoc :comment-start comment-start))))

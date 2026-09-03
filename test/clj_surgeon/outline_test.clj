@@ -294,3 +294,52 @@
                    (deftest a (is true))
                    (deftest ^:slow b (is true))")]
       (is (= 2 (:form-count result))))))
+
+;; ---------------------------------------------------------------------------
+;; Multimethod dispatch (field case: curtain-call src/cfp_scheduler_killer/folds.clj,
+;; 2026-09-02 session 4 — 117 defmethod arms collapsed to one owner "fold-event").
+;; ---------------------------------------------------------------------------
+
+(def folds-arms
+  "(ns cfp-scheduler-killer.folds)
+
+(defmulti fold-event (fn [_state payload] (:type payload)))
+
+(defmethod fold-event \"schedule.locked\"
+  [state payload]
+  ;; INTENT: LENS-004
+  (if-let [slug (:slug (event-by-id state (:event-id payload)))]
+    (assoc-in state [:events slug :settings :schedule-locked?] true)
+    state))
+
+(defmethod fold-event \"schedule.unlocked\"
+  [state payload]
+  (if-let [slug (:slug (event-by-id state (:event-id payload)))]
+    (assoc-in state [:events slug :settings :schedule-locked?] false)
+    state))
+
+(defmethod fold-event :agenda/published
+  [state payload]
+  state)
+
+(defmethod fold-event [::sink :registered]
+  [state payload]
+  state)
+
+(defn event-by-id [state id] nil)
+")
+
+(deftest outline-emits-defmethod-dispatch-source-spelling
+  ;; @spec MCP-OP-DISPATCH-001
+  (let [forms (:forms (outline/outline-source "folds.clj" folds-arms))
+        arms (filterv #(= 'defmethod (:type %)) forms)]
+    (is (= 4 (count arms)))
+    (is (= ["fold-event" "fold-event" "fold-event" "fold-event"]
+           (mapv (comp str :name) arms)))
+    (testing "the dispatch value keeps its exact source spelling"
+      (is (= ["\"schedule.locked\"" "\"schedule.unlocked\""
+              ":agenda/published" "[::sink :registered]"]
+             (mapv :dispatch arms))))
+    (testing "non-defmethod owners carry no dispatch field"
+      (is (not-any? #(contains? % :dispatch)
+                    (remove #(= 'defmethod (:type %)) forms))))))

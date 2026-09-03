@@ -307,6 +307,77 @@
         (inspect-tool/init! nil)
         (delete-tree! project)))))
 
+(def ^:private folds-arms-source
+  (str "(ns cfp-scheduler-killer.folds)\n\n"
+       "(defmulti fold-event (fn [_state payload] (:type payload)))\n\n"
+       (apply str
+              (for [dispatch ["\"schedule.locked\"" "\"schedule.unlocked\""
+                              "\"agenda.published\"" "\"replay.marked\""
+                              "\"sink.registered\""]]
+                (str "(defmethod fold-event " dispatch "\n"
+                     "  [state payload]\n"
+                     "  ;; INTENT: LENS-004\n"
+                     "  (if-let [slug (:slug (event-by-id state"
+                     " (:event-id payload)))]\n"
+                     "    (assoc-in state [:events slug :settings :x] true)\n"
+                     "    state))\n\n")))
+       "(defn event-by-id [state id] nil)\n"))
+
+(deftest selector-refusal-summary-shows-the-exact-defmethod-owner-form
+  ;; @spec MCP-OP-DISPATCH-002
+  ;; @spec MCP-OP-DISPATCH-003
+  (let [project (temp-dir)
+        _source (write-source! project "src/folds.clj" folds-arms-source)
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "owner-probe" "operation" "forms"
+                      "file" "src/folds.clj"
+                      "forms" ["fold-event \"schedule.locked\""]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error? structured]} (first @calls)
+            summary (first content)
+            failure (first (:selection_failures structured))
+            owner (:defmethod_owner failure)]
+        (is error?)
+        (is (= "batch-form-selection-failed" (:error_type structured)))
+        (testing "the structured refusal carries the exact owner form"
+          (is (= {:kind "defmethod" :name "fold-event"
+                  :dispatch "\"schedule.locked\""}
+                 (:owner_form owner)))
+          (is (true? (:owner_form_is_exact owner)))
+          (is (= "apply_clojure_changes changes[].forms" (:accepted_by owner)))
+          (is (= 5 (:arm_count owner)))
+          (is (= ["\"schedule.locked\"" "\"schedule.unlocked\""
+                  "\"agenda.published\"" "\"replay.marked\""
+                  "\"sink.registered\""]
+                 (:dispatch_vocabulary owner)))
+          (is (false? (:authority owner))))
+        (testing "the visible summary teaches the shape, not just the name"
+          (is (str/includes?
+                summary
+                "owner is a multimethod · 5 defmethod arms share the name fold-event"))
+          (is (str/includes?
+                summary
+                (str "send this exact owner form to apply_clojure_changes"
+                     " changes[].forms: {kind: \"defmethod\","
+                     " name: \"fold-event\","
+                     " dispatch: \"\\\"schedule.locked\\\"\"}")))
+          (is (str/includes?
+                summary
+                (str "dispatch values (5/5): \"schedule.locked\","
+                     " \"schedule.unlocked\", \"agenda.published\","
+                     " \"replay.marked\", \"sink.registered\"")))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
 (deftest selector-refusal-summary-names-the-miss-and-hypothesis-without-authority
   ;; @spec MCP-OP-READ-DIAG-002 MCP-OP-READ-DIAG-003 MCP-OP-READ-CONT-001
   (let [project (temp-dir)

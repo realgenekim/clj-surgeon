@@ -137,7 +137,12 @@
 (def ^:private forms-request-properties
   {"forms" {:type "array" :minItems 1 :maxItems inspect/max-forms
             :uniqueItems true
-            :items {:type "string" :minLength 1}}
+            :items {:type "string" :minLength 1}
+            :description (str "Exact unqualified top-level owner names. A multimethod "
+                              "collapses every arm to one name here; read its per-arm "
+                              "dispatch from an outline row's dispatch field, then address "
+                              "one arm with apply_clojure_changes changes[].forms "
+                              "{kind: \"defmethod\", name, dispatch}.")}
    "include_source" {:type "boolean" :default true
                      :description "Set false for metadata-only form reads; line ranges, source character counts, hashes, and source anchors remain, while exact source bodies are omitted. Omit for exact source."}
    "expect" {:type "object" :additionalProperties false
@@ -150,6 +155,9 @@
     :description (str "Set true to add bounded JS-ish declarations found in "
                       "Clojure string literals to each outline row. Omit to "
                       "preserve the ordinary outline response exactly.")}})
+
+;; Outline rows for defmethod owners always carry `dispatch`, the exact source
+;; spelling of that arm's dispatch value. @spec MCP-OP-DISPATCH-001
 
 (defn- operationless-forms-request
   []
@@ -888,7 +896,32 @@
             (execute-inspect-in-context! (:config routed) (:params routed))
             (:workspace-root routed)))))))
 
+;; @spec MCP-OP-DISPATCH-003
+(defn- defmethod-owner-lines
+  "Render the exact multimethod owner form and its bounded dispatch vocabulary."
+  [owner]
+  (when owner
+    (let [{:keys [kind name dispatch]} (:owner_form owner)
+          vocabulary (:dispatch_vocabulary owner)]
+      (str
+        (format "  owner is a multimethod · %d defmethod arms share the name %s\n"
+                (:arm_count owner) (:name owner))
+        (format "  send this exact owner form to %s: {kind: %s, name: %s%s}\n"
+                (:accepted_by owner)
+                (pr-str kind)
+                (pr-str name)
+                (if dispatch
+                  (str ", dispatch: " (pr-str dispatch))
+                  ""))
+        (when (seq vocabulary)
+          (format "  dispatch values (%d/%d%s): %s\n"
+                  (:dispatch_vocabulary_returned owner)
+                  (:dispatch_count owner)
+                  (if (:dispatch_vocabulary_truncated owner) "; truncated" "")
+                  (str/join ", " vocabulary)))))))
+
 ;; @spec MCP-OP-READ-DIAG-002
+;; @spec MCP-OP-DISPATCH-003
 ;; @spec MCP-OP-PREP-REQ-005
 (defn- inspect-summary
   [result]
@@ -906,6 +939,7 @@
           candidate (or (:owner hypothesis) (first (:form_candidates result)))
           hypotheses-truncated (or (:hypotheses_truncated selection-failure)
                                    (:candidates_truncated result))
+          defmethod-owner (:defmethod_owner selection-failure)
           available-owners (:available_owners result)
           available-returned (or (:available_owners_returned result)
                                  (count available-owners))
@@ -943,7 +977,8 @@
                       (if (:available_owners_truncated result)
                         "; truncated"
                         "")
-                      (str/join ", " available-owners)))))
+                      (str/join ", " available-owners)))
+            (defmethod-owner-lines defmethod-owner)))
         (str (when (seq available-owners)
                (str "\n  All listed owners are real snapshot evidence; "
                     "ranking is non-authoritative. Semantic selection "
@@ -957,6 +992,8 @@
                        (str/join ", " pending-ids)))
              (cond
                continuation "\n→ copy continuation.retry_template.arguments, fill only its null selector holes, and submit it"
+               (and diagnostic? defmethod-owner)
+               "\n→ send the exact defmethod owner form above, or choose one exact owner and retry"
                diagnostic? "\n→ choose one exact owner and retry"
                :else (format "\n→ %s" (or (:next_action result) "correct_request"))))))
 

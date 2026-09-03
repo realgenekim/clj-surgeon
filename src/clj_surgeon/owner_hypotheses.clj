@@ -8,6 +8,7 @@
    [clojure.string :as str]))
 
 (def ^:private candidate-limit 10)
+(def ^:private dispatch-vocabulary-limit 40)
 (def ^:private available-owner-character-limit 32768)
 
 (defn- normalized-name
@@ -127,8 +128,49 @@
        :omitted 0
        :truncated false})))
 
+;; @spec MCP-OP-DISPATCH-002
+(defn defmethod-owner-evidence
+  "Bounded multimethod addressing evidence for one unresolved owner selector.
+
+  `requested` is the caller's exact selector text; its leading whitespace-free
+  token is the owner name and any remainder is the dispatch spelling the caller
+  attempted. Returns nil unless that name owns at least one `defmethod` record
+  in the frozen snapshot. The evidence is model-facing only: it never selects an
+  owner and never grants write authority."
+  [requested records]
+  (let [text (str/trim (str requested))
+        [_ owner-name remainder] (re-matches #"(?s)(\S+)(?:\s+(.*))?" text)
+        arms (when owner-name
+               (->> records
+                    (filter #(and (= 'defmethod (:type %))
+                                  (= owner-name (str (:name %)))))
+                    vec))]
+    (when (seq arms)
+      (let [dispatches (->> arms (keep :dispatch) (map str) distinct vec)
+            attempted (some-> remainder str/trim not-empty)
+            matched (some #{attempted} dispatches)
+            example (or matched (first dispatches))
+            returned (vec (take dispatch-vocabulary-limit dispatches))]
+        (cond-> {:owner-kind "defmethod"
+                 :name owner-name
+                 :arm-count (count arms)
+                 :owner-form (cond-> {:kind "defmethod" :name owner-name}
+                               example (assoc :dispatch example))
+                 :owner-form-is-exact (boolean matched)
+                 :accepted-by "apply_clojure_changes changes[].forms"
+                 :dispatch-vocabulary returned
+                 :dispatch-count (count dispatches)
+                 :dispatch-vocabulary-returned (count returned)
+                 :dispatch-vocabulary-omitted (- (count dispatches)
+                                                 (count returned))
+                 :dispatch-vocabulary-truncated (> (count dispatches)
+                                                   dispatch-vocabulary-limit)
+                 :authority false
+                 :next-action "send_defmethod_owner_form"}
+          attempted (assoc :attempted-dispatch attempted))))))
+
 (defn- selection-failure
-  [failure available-records resolved-names]
+  [failure available-records resolved-names all-records]
   (let [requested (str (:form failure))
         missing? (= :form-not-found (:error-type failure))
         ranking (when missing?
@@ -136,7 +178,8 @@
                                          {:resolved-names resolved-names}))
         hypotheses (or (:did-you-mean ranking) [])
         candidate-count (or (:candidate-count ranking) 0)
-        returned (count hypotheses)]
+        returned (count hypotheses)
+        defmethod-owner (defmethod-owner-evidence requested all-records)]
     (cond-> {:requested-owner requested
              :failure-kind (:error-type failure)
              :match-count (:match-count failure)
@@ -144,7 +187,8 @@
              :hypotheses-returned returned
              :hypotheses-omitted (- candidate-count returned)
              :hypotheses-truncated (boolean (:candidates-truncated ranking))}
-      (:matches failure) (assoc :matches (:matches failure)))))
+      (:matches failure) (assoc :matches (:matches failure))
+      defmethod-owner (assoc :defmethod-owner defmethod-owner))))
 
 ;; @spec MCP-OP-READ-PARITY-001
 (defn owner-recovery-evidence
@@ -156,7 +200,8 @@
         failed-names (set (map (comp str :form) failures))
         resolved-names (remove failed-names (map str requested))
         selection-failures (mapv #(selection-failure
-                                    % available-records resolved-names)
+                                    % available-records resolved-names
+                                    records)
                                  failures)
         first-ranked (some #(when (seq (:hypotheses %)) %) selection-failures)
         candidates (mapv :owner (:hypotheses first-ranked))]

@@ -18,6 +18,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | `:ls-tree` workspace table of contents, grep-filterable | WON | CLI | big-aha log, winners table (df432c4) |
 | `:ls-deps` / `:deps` / `:topo` / `:ls-extract` | WON | CLI | same |
 | `inspect_clojure` outline / forms / owners / prepare-change | KEEP | MCP | l1 taxonomy: substituted reads only under the mandate (07:36Z receipt) |
+| outline emits `defmethod` dispatch; owner refusal teaches the `{kind,name,dispatch}` form | BUILT | MCP + CLI | friction ledger item 1 (session-4 watch n=2); inb-11a6ae |
 | workspace-wide inspect (ls-tree through MCP) | OPEN | MCP | inb-f403aa |
 | inspect that returns the next write's literals (the dossier) | OPEN | MCP | fleet round 6, Plan 3 (mission-design) |
 
