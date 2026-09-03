@@ -159,20 +159,39 @@ that posture, but it is the first tool that ENUMERATES a tree rather than
 reading paths the caller named, so it is worth stating plainly what the walk
 does and does not do:
 
-- both entrances walk without following symbolic links — `Files/walkFileTree`
-  in the tool, `fs/walk-file-tree` in the CLI — so a symlinked directory is
-  never descended, and neither enumerates the whole tree to take a prefix;
-- a discovered path whose real location escapes the root is skipped and counted
-  in `skipped_outside_root`, never read;
+- there is exactly ONE walk. `clj-surgeon.census-discovery` is the kernel both
+  entrances call; the tool and the CLI op each hand it a root and read its
+  result, and neither carries a discovery rule of its own. It is written in
+  `java.io.File` listing plus `java.nio.file.Files` predicates rather than a
+  `SimpleFileVisitor`, because babashka has no `SimpleFileVisitor` and that
+  absence is what grew a second walk — with different answers — the first time;
+- the root is CANONICALISED before the walk begins, so a `workspace_root` or a
+  `:dir` naming a symlink walks the workspace it points at rather than
+  enumerating a link and finding nothing;
+- a symbolic link is never followed out of the canonical root: a discovered
+  path whose real location escapes is skipped and counted in
+  `skipped_outside_root`, never read, and never fatal;
+- the discovered path SET is a set of REAL paths, so a chain of links onto one
+  source is one source; what collapsed is published as `duplicates_collapsed`,
+  which also carries the repeats in a caller's explicit `files` list;
 - `.git`, `node_modules`, `target` and their relatives are pruned before they
   are read, not filtered out afterwards;
 - the walk stops at `max-scanned-files`, and reaching that ceiling is a
   REFUSAL (`too-many-candidate-files`, naming the ceiling, the count that
-  fits, the observed lower bound, and a narrowing `next_call`) rather than
-  a truncated scan published as a complete census; a discovered source above
-  `max-source-bytes` is never read, and never dropped in silence: it is
-  counted and named in `oversized_skipped`, and that census publishes
-  `read_complete` false;
+  fits, and the observed lower bound) rather than a truncated scan published
+  as a complete census. Its continuation is COMPUTED, not described: the walk
+  aggregates candidates per directory as it goes, and the refusal offers the
+  largest subtree the walk FINISHED whose count fits — ties deepest first,
+  then lexicographic — as a `next_call` (a `:next-command` at the CLI) the
+  caller can replay verbatim, bounded by `max-next-call-bytes`. Every ancestor
+  of the file the walk stopped on is excluded, because those counts are lower
+  bounds. When nothing is known to fit there is no continuation at all, and a
+  `remedy` says why;
+- a discovered source above `max-source-bytes` is never read, and never
+  dropped in silence: it is counted in `oversized_skipped`, at most
+  `max-listed-files` of them are named, and `oversized_skipped_omitted` states
+  how many were counted but not named — zero when the list is complete. That
+  census publishes `read_complete` false;
 - only the sources that define arms are retained, and the receipt carries
   one-line excerpts, never file text.
 
