@@ -16,7 +16,7 @@ lanes own their own rows in their own leaves.
 
 ## Outline read path
 
-- [x] **MCP-OP-MEM-015**: When clj-surgeon outlines a source file, it shall parse the file once and shall not construct per-form source text that the outline does not return.
+- [x] **MCP-OP-MEM-015**: When clj-surgeon outlines a source file with its default (non-`include_string_symbols`) projection, it shall parse the file once and shall not construct per-form source text that the outline does not return. `include_string_symbols` is explicitly out of scope: it deliberately builds and reparses each selected form's own source text by design.
 
 ## Falsifiers
 
