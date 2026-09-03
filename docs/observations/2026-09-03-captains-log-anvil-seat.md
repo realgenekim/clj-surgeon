@@ -404,3 +404,4 @@ Reds worth recording: `pool_size 0` HUNG the tool forever (a zero-thread claypoo
 
 ## 05:50Z — 
 ## 05:50Z — Sol content filter refused the study round-3 re-check (2 flags, 129,970 tokens, no report) → Opus fallback launched (report to ~/tmp/sol/study-opus-review.md).
+## 05:50Z — CORRECTION (the previous usage line was empty: a quoting error in my extractor, not a collector zero) — usage watch: mcp_tool_calls 96, outcomes {"ok": 49, "refused": 47}, tools {"inspect_clojure": 96}, providers claude 96 / codex 128, error_types 47 (top: no-clojure-files 11, invalid-grep-pattern 7, study-tree-too-large 6, study-output-limit 4); window since 2026-08-30T15:00:00Z
