@@ -2487,3 +2487,56 @@
         (is (:ok recovery))
         (is (= 0 (:transactions-recovered recovery))))
       (finally (cleanup! ws)))))
+
+;; --------------------------------- MCP-OP-MEM-013, Opus round 6's residuals
+
+;; @spec MCP-OP-MEM-013
+(deftest every-lock-broken-receipt-names-the-primitive-that-took-the-claim
+  (testing "Opus round 6, finding 1. Both break primitives produce
+            `:break-path` and BOTH callers threw it away - `acquire-lock!` and
+            `recover!` kept `(select-keys outcome [:tombstone
+            :content-sha256])` - so `begin!` and `recover!` published an
+            identical `:lock-broken` line whether the break was the
+            kernel-atomic `link(2)` or the check-then-act rename this branch
+            measured destroying 13 judged claims in 4,000 races. And the opt
+            that selects that rename was `:no-hard-links`, an ordinary
+            descriptive word on the PUBLIC `begin!`/`recover!` surface, one
+            keyword away from a caller who meant nothing by it. The opt is
+            now `:unsafe-break-by-move`, which nobody types by accident, and
+            the receipt says which path ran."
+    (let [ws (workspace! "break-path-receipt" 2)
+          opts {:state-home (:state-home ws)}
+          dead (fn [label] {:txid label :pid (reaped-pid) :boot-id (boot-id-now)})]
+      (try
+        (plant-lock! ws (dead "ghost-atomic"))
+        (let [broken (:lock-broken (journal/recover! (:root ws) opts))]
+          (is (some? broken) "the dead holder's lock is broken")
+          (is (= :link (:break-path broken))
+              (str "and the receipt names the kernel-atomic primitive that "
+                   "took it: " (pr-str broken))))
+
+        (plant-lock! ws (dead "ghost-move"))
+        (let [broken (:lock-broken (journal/recover!
+                                     (:root ws)
+                                     (assoc opts :unsafe-break-by-move true)))]
+          (is (some? broken))
+          (is (= :move (:break-path broken))
+              (str "the fallback is reachable only under a name that says it "
+                   "is unsafe, and the receipt echoes it: " (pr-str broken))))
+
+        (plant-lock! ws (dead "ghost-retired-name"))
+        (let [broken (:lock-broken (journal/recover!
+                                     (:root ws)
+                                     (assoc opts :no-hard-links true)))]
+          (is (= :link (:break-path broken))
+              (str "and the retired name selects nothing: an unknown option "
+                   "may not silently choose the measured check-then-act path: "
+                   (pr-str broken))))
+
+        (plant-lock! ws (dead "ghost-begin"))
+        (let [txn (begin! ws {:unsafe-break-by-move true})]
+          (is (= :move (:break-path (:lock-broken txn)))
+              (str "begin! carries it too, or the caller that broke a lock "
+                   "cannot tell how: " (pr-str (:lock-broken txn))))
+          (journal/rollback! txn))
+        (finally (cleanup! ws))))))
