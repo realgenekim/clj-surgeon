@@ -295,3 +295,8 @@ Follow-ups filed since the eighth refresh: inb-9c5826 (timing/HEAD-stamp test fr
 GO (nine): + q5z-alias-migration f51ceae (Opus round 9 withdrew its own item after reproducing the builder's counter-proof). E3's prerequisite amended in the prestaged doc: q5z merged + alias_migration admits the rung's scope (not "battery green").
 Live: Sol apparatus round 4 (895eed0), Sol fold-diff round 5 (885f58b3). Builders: kernel round 3 (~/src/clj-surgeon-txn), MEM-005 round 3 (~/src/clj-surgeon-admit), census round 7 (~/src/clj-surgeon-census), MEM-003 round 2 (~/src/clj-surgeon-stream: pinned manifest + MAC cursor).
 Follow-ups since the ninth refresh: inb-c95f37 (alias_migration deletions count / retire-failed).
+
+## RESUME DELTA (eleventh refresh; commit time is the timestamp)
+GO (nine) unchanged. Live: Sol apparatus round 4 (895eed0), Sol fold-diff round 5 (885f58b3), Sol census round 7 (5eee690); Opus kernel round 3 (eb22036). Builders: MEM-005 round 3 (~/src/clj-surgeon-admit), MEM-003 round 2 (~/src/clj-surgeon-stream).
+Follow-ups since the tenth refresh: inb-2c5b2a (publish-lock retrofit obligation, ~15 writer sites).
+Gene report refresh: launch the refresh agent at ~10:20Z (tables from the captain's log, numbers verbatim with entry times), commit by ~10:35Z; final at ~13:00Z.
