@@ -2347,3 +2347,82 @@
             (is (= "correct_request" (:next_action result)))))
         (finally
           (delete-tree! workspace))))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-partial-rollback-counts-the-files-it-left-migrated
+  ;; `files_still_migrated` was `(if rolled-back? 0 (count files))` — the
+  ;; PLAN's file count, never a measurement. `commit-compiled!` answers per
+  ;; file when its writes fail, in `:recovery`, and `rollback-report` threw
+  ;; that answer away, so a rollback that left six of twelve files migrated
+  ;; published twelve. The number is the one a human uses to decide what to
+  ;; undo by hand.
+  ;;
+  ;; The `:recovery` map is about the UNDO transaction, not the migration.
+  ;; Recovery restores each file to the state that transaction READ, which for
+  ;; an undo is the MIGRATED content — so `:restored` and `:original` mean
+  ;; STILL MIGRATED, and only `:restore-failed` (the undo rewrote the file and
+  ;; recovery could not put it back) leaves pre-migration bytes on disk. The
+  ;; injection below matches the tree to the map it returns.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (let [result (post-write-redirect!
+                     workspace details receipts
+                     (fn [_]
+                       (let [changed (vec (still-migrated workspace))
+                             undone (vec (take 6 changed))
+                             kept (vec (drop 6 changed))]
+                         (doseq [relative undone]
+                           (spit (io/file workspace relative)
+                                 (get (:pre corpus) relative)))
+                         {:error (str "Transaction write failed; manual "
+                                      "recovery required")
+                          :error-type :transaction-recovery-required
+                          :rolled-back false
+                          :recovery
+                          (into (mapv (fn [file]
+                                        {:file file :status :restore-failed})
+                                      undone)
+                                (mapv (fn [file]
+                                        {:file file :status :restored})
+                                      kept))})))
+            migrated (still-migrated workspace)]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "post-write" (:phase result)))
+        (is (= 6 (count migrated))
+            (str "the injection did not leave six migrated files: "
+                 (vec migrated)))
+        (is (= 6 (:files_still_migrated result))
+            "the published count is the plan's file count, not a measurement")
+        (is (= (count migrated) (:files_still_migrated result))
+            (str "the published count disagrees with the tree: " (vec migrated)))
+        (is (= 6 (:files_restored result))
+            "the rollback's own per-file answers were discarded")
+        (is (false? (:rolled_back result)))
+        (is (false? (:source_unchanged result)))
+        (is (str/includes? (str (:error result)) "6 files remain migrated")
+            (str "the prose counts the plan, not the tree: " (:error result))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-rollback-with-no-per-file-answer-still-over-states-the-migration
+  ;; The safe direction, pinned. A rollback that fails without a `:recovery`
+  ;; map has told this verb nothing per file, and an unmeasured file is
+  ;; counted as still migrated: over-stating the work a human has left to do
+  ;; costs a wasted look, under-stating it loses a file.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (let [result (post-write-redirect!
+                     workspace details receipts
+                     (fn [_] {:ok false :error "injected rollback failure"}))]
+        (is (= 12 (:files_still_migrated result)))
+        (is (= 0 (:files_restored result)))
+        (is (= 12 (count (still-migrated workspace)))))
+      (finally
+        (delete-tree! workspace)))))
