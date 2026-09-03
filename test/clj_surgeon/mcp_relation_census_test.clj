@@ -827,3 +827,28 @@
         (testing "the site counts agree across the three entrances"
           (is (= (:counts mcp) (:counts jvm-cli) (:counts bb-cli)))))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-032
+(deftest every-entrance-publishes-the-count-of-files-it-scanned
+  (let [dir (.getPath (io/file repo-root "test-fixtures/relation-census"))
+        {:keys [mcp jvm-cli bb-cli]} (census-entrances dir)
+        scanned (count (filter #(re-find census/source-name-pattern (.getName ^java.io.File %))
+                               (.listFiles (io/file dir))))]
+    (testing "the tool substantiates the scan it claims to have completed"
+      (is (true? (:ok mcp)) (str "refused: " (:error mcp)))
+      (is (= scanned (:files_scanned mcp))))
+
+    (testing "the JVM CLI publishes the same count from the same walk"
+      (is (true? (:ok jvm-cli)) (str "refused: " (:error jvm-cli)))
+      (is (= scanned (:files-scanned jvm-cli))
+          "the CLI discovery counted the scan and the receipt dropped it"))
+
+    (testing "the babashka CLI publishes the same count"
+      (is (true? (:ok bb-cli)) (str "refused: " (:error bb-cli)))
+      (is (= scanned (:files-scanned bb-cli))
+          "the CLI discovery counted the scan and the receipt dropped it"))
+
+    (testing "the arm figures agree, so the counts describe one scan"
+      (is (= (:files mcp) (:files jvm-cli) (:files bb-cli)))
+      (is (= (:arms mcp) (:arms jvm-cli) (:arms bb-cli)))
+      (is (= (:counts mcp) (:counts jvm-cli) (:counts bb-cli))))))

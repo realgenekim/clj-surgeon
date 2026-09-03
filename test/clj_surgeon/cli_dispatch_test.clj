@@ -453,7 +453,10 @@
           (is (zero? exit) (str "the CLI refused AT the ceiling: " (:error result)))
           (is (true? (:ok result)))
           (is (true? (:read-complete result)))
-          (is (= 1 (:files result)))))
+          (is (= 1 (:files result)))
+          ;; @spec MCP-OP-CENSUS-032
+          (is (= relation-census/max-scanned-files (:files-scanned result))
+              "the CLI cannot substantiate the scan it just claimed")))
 
       (testing "one candidate past the ceiling refuses typed before any read"
         (spit (io/file dir "src/filler/one_too_many.clj") census-filler-source)
