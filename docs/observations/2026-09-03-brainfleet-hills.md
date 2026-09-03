@@ -789,3 +789,57 @@ Anvil, servers on **7909/7910**, tip ∪ `origin/main` merged locally (the E6 se
 → O4 (build tonight, cohort after O2) → O3 (= b+c fused, 3-run screen).** And the apparatus ratchet
 from §1.5 ships with whichever cohort runs first, because without an in-arm connection witness every
 adoption null in this program is credible rather than proven.
+
+## 11. Result poll on E6 — Sol (file /home/forge/tmp/sol/e6poll-sol.md, 22:49Z)
+
+## Interpretation of the 0/3
+
+This is primarily a **routing null**: no arm called the tool, so post-call rendering cannot explain the initial choice.  
+The prompt/rung weakened the test by naming 8/10 owner namespaces; native `rg` was already a complete, cheap route.  
+Header-only text is nevertheless a real **product/client-rendering defect** that would cripple value after a call.  
+Thus 0/3 closes bare exposure on Lb—not square 3’s capability, a genuinely blind task, or explicit conditional routing.
+
+## Next-wave experiments
+
+### A. Rendered rows, same rung — rating: low causal value, high hygiene value
+
+- **Pass line:** `content[0].text` contains at least one bounded namespace/form row and agrees with `structuredContent.tree`; then ≥2/3 F arms call `ls-tree`, with ≥1 call by return 3; all gates green.
+- **Prediction:** **0/3 adoption, 85% confidence.** The rendering fix occurs after the choice being measured.
+- **Cost:** 3 arm-runs; 2–3 agent-hours including linked intent, witnesses, build and scoring; 2–3 hours wall.
+- **Tonight:** Attested successor built from `bridge/study-ops-mcp 4480e3d ∪ origin/main 08bfcb1` plus the rendering leaf, on **7910**; reuse the exact Lb F prompt and caller.
+- **Could be waste because:** It cannot causally change the first call when the model has not yet seen any result content.
+
+### B. E6-Blind: workspace discovery without owner leakage — rating: high diagnostic value
+
+- **Pass line:** Prompt lint finds **0/10 owner namespaces and zero owner paths**; ≥2/3 F arms call `ls-tree`, with ≥1 by return 3; both arms are 3/3 exact under the unchanged oracle. Claim fewer reads only if `max(F pre-write files) < min(N pre-write files)`.
+- **Prediction:** **1/3 F adoption, 45% confidence**; both arms 3/3 correct and read ranges still overlap. Probability of passing ≥2/3: about 20%.
+- **Cost:** 6 arm-runs; 1–1.5 agent-hours; 1–1.5 hours wall.
+- **Tonight:** N has no MCP; F uses the unchanged bare-exposure server `4480e3d ∪ 08bfcb1` on **7909**. Keeping the header-only response unchanged isolates the rung/prompt variable.
+- **Could be waste because:** A manufactured blind rung may still measure benchmark construction rather than organic repository navigation.
+
+### C. WHEN-routing plate versus bare exposure — rating: high routing value
+
+- **Pass line:** On byte-identical Lb tasks, plated arm R has ≥2/3 early `ls-tree` adoptions, bare arm B has ≤1/3, and `adoption(R) − adoption(B) ≥ 2`; all R/B/N gates green.
+- **Prediction:** **R 2/3 versus B 0/3, 55% confidence.**
+- **Cost:** 9 arm-runs—3 R, 3 B, 3 native controls; about 2 agent-hours; about 2 hours wall.
+- **Tonight:** Two fresh-session catalogs from otherwise identical `4480e3d ∪ 08bfcb1` servers: bare description on **7909**, plated description on **7910**. The plate says when to call first for workspace-wide owner discovery; result rendering remains identical.
+- **Could be waste because:** A WHEN clause may be a soft mandate that measures obedience and recreates the previously measured layering tax.
+
+### D. E6-Q: “who calls X, at which arities?” — rating: high square-3 product value, build-gated
+
+- **Pass line:** Against an arm-independent sabotaged oracle containing real calls plus string, comment, quoted-data, local-shadow and reader-conditional decoys: F exact answer **3/3**, N exact answer **≤1/3**, hence paired exactness advantage ≥2; F uses exactly one read request and reports precision=recall=1.0 with every arity and source anchor correct.
+- **Prediction:** **F 3/3 versus N 1/3 exact, 65% confidence.**
+- **Cost:** 6 arm-runs plus G1; 3–5 agent-hours because the arity-bearing `called-by` projection is not yet a public inspected view; 3–4 hours wall.
+- **Tonight:** N uses `rg` plus ordinary reads. F uses a read-only `called-by` successor stacked on `4480e3d ∪ 08bfcb1`, attested on **7910**; no writes or acceptance JVM are needed.
+- **Could be waste because:** A mandated capability win would not reverse the 0/13 evidence that the capability remains unshipped without routing.
+## 12. Next-wave verdict (Fable, 22:49Z)
+
+| question | Opus | Sol | verdict |
+|---|---|---|---|
+| what the 0/3 means | routing/product; rendering cannot be the cause (never seen) | routing null; rendering a real post-call defect | agreed — both |
+| re-run same rung after the rendering fix | waste, 0/3 at 85% | waste, 0/3 at 85% | NOT run; O2 fix built anyway (product) |
+| square 3 on its own terms | O1: N / M(mandated) / F, existing server, 9 arm-runs | D: F vs N with a decoy-laden sabotaged oracle, needs a called-by build (3–5 h) | **E6-Q launched**: three arms incl. M, Sol's decoys, existing study ops only (no build gate), frozen truth, mechanical scoring |
+| routing plate | O3 fused with a blind rung, 0/3 at 70% | C: plate vs bare, R 2/3 vs B 0/3 at 55% | **E6-C launched**: plate in the tool DESCRIPTION (Opus's placement), Sol's design, per-arm proof the plate was served |
+| blind rung | 3-run screen | B: 1/3 at 45% | deferred to the next wave |
+| route-don't-ask read hook (O4) | unique to Opus, "most valuable number" | — | build tomorrow (not a measurement tonight) |
+| ratchet | required=true + per-arm connection proof | — | adopted in both cohorts: an arm without proof is VOID |
