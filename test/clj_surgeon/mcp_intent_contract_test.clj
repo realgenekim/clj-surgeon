@@ -185,6 +185,7 @@
    "docs/intent/alias-migration/alias-migration-specs.md"
    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
    "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
+   "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/operation-algebra/operation-algebra-specs.md"
    "docs/intent/performance-regression-sentinel/performance-regression-sentinel-specs.md"
    "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
@@ -211,6 +212,7 @@
   "Intent leaves merged onto the integration branch after the registry was derived.
    Each one used to mean a line in the shared production vector; now it means a file."
   ["docs/intent/alias-migration/alias-migration-specs.md"
+   "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/read-path-memory/read-path-memory-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly

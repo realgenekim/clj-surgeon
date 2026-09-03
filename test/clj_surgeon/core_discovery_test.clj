@@ -211,8 +211,18 @@
                      (:out linked) " stderr: " (:err linked)))
             (is (str/includes? (:out linked) "src/core.clj")
                 "the symlinked root discovers the file its target discovers")
-            (is (= (:out control) (:out linked))
-                "and discovers exactly the same projects and files")))
+            ;; MEM-005 (bridge/parser-admission) added a MEASURED `scan_ms` to
+            ;; the ls-tree receipt, so two runs of the same scan never produce
+            ;; byte-identical output. The discovery claim is about what was
+            ;; found, not how long it took: the wall-clock reading is masked and
+            ;; asserted separately, so everything else -- projects, files, forms,
+            ;; and `bytes_scanned` -- is still compared byte for byte.
+            (let [mask #(str/replace % #":scan_ms [0-9.]+" ":scan_ms <measured>")]
+              (doseq [[what out] [["control" (:out control)] ["linked" (:out linked)]]]
+                (is (re-find #":scan_ms [0-9.]+" out)
+                    (str "the " what " receipt still charges the scan")))
+              (is (= (mask (:out control)) (mask (:out linked)))
+                  "and discovers exactly the same projects and files"))))
         (finally (fs/delete-tree sandbox))))))
 
 ;; ============================================================

@@ -23,6 +23,7 @@
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -30,12 +31,34 @@
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
+(defn- named-plan-refusal
+  "Run `f`; turn a parser-admission refusal into a NAMED refusal the caller can
+   read, instead of a stack trace.
+
+   Gating `clj-surgeon.analyze` (MCP-OP-MEM-005) swaps an uncatchable
+   StackOverflowError for a typed ExceptionInfo. This is the minimal surface
+   that makes that typed refusal usable at the planning ops, the way
+   `safe-outline` does for the scan. Anything that is not an admission refusal
+   is re-thrown untouched."
+  ;; @spec MCP-OP-MEM-005
+  [f]
+  (try
+    (f)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy :file])
+                 :error (ex-message e))
+          (throw e))))))
+
 (defn run-outline [{:keys [file]}]
-  (let [result (outline/outline file)
-        ns-name (:ns result)
-        forward-refs (when ns-name
-                       (fwd/detect-forward-refs file ns-name))]
-    (assoc result :forward-refs (or forward-refs []))))
+  (named-plan-refusal
+    (fn []
+      (let [result (outline/outline file)
+            ns-name (:ns result)
+            forward-refs (when ns-name
+                           (fwd/detect-forward-refs file ns-name))]
+        (assoc result :forward-refs (or forward-refs []))))))
 
 (defn run-mv [{:as opts}]
   (move/move-form (cond-> opts (#{:mv-with-deps "mv-with-deps" ":mv-with-deps"} (:op opts)) (assoc :with-deps true))))
@@ -53,6 +76,8 @@
       (edit-dsl/evaluate-xray (slurp (:file prepared)) prepared))))
 
 (defn run-declares [{:keys [file]}]
+ (named-plan-refusal
+  (fn []
   (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
         ol (outline/outline file)
         declares (->> (:forms ol)
@@ -81,27 +106,35 @@
                                          declares))
                :needed (count (filter #(or (contains? truly-cyclic (str (:name %)))
                                            (contains? fwd (str (:name %))))
-                                      declares))}}))
+                                      declares))}}))))
 
 (defn run-deps [{:keys [file form]}]
-  (let [zloc (analyze/file->zloc file)
-        deps (analyze/intra-ns-deps zloc)]
-    (if form
-      (first (filter #(= form (:name %)) deps))
-      deps)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)
+            deps (analyze/intra-ns-deps zloc)]
+        (if form
+          (first (filter #(= form (:name %)) deps))
+          deps)))))
 
 (defn run-topo [{:keys [file]}]
-  (let [zloc (analyze/file->zloc file)]
-    (analyze/topological-sort zloc)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)]
+        (analyze/topological-sort zloc)))))
 
 (defn run-closure [{:keys [file form]}]
-  (let [zloc (analyze/file->zloc file)]
-    (analyze/extraction-closure zloc form)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)]
+        (analyze/extraction-closure zloc form)))))
 
 (defn run-ls-deps [{:keys [file form]}]
-  (let [zloc (analyze/file->zloc file)
-        deps (analyze/intra-ns-deps zloc)]
-    (analyze/dep-tree deps form)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)
+            deps (analyze/intra-ns-deps zloc)]
+        (analyze/dep-tree deps form)))))
 
 ;; ============================================================
 ;; CLJC operations: merge, split, add-require
@@ -382,32 +415,88 @@
          vec)))
 
 (defn- safe-outline
-  "Run outline on a file, returning error map on parse errors."
+  "Run outline on a file, returning error map on parse errors.
+
+   A parser-admission refusal (MCP-OP-MEM-005) is kept TYPED rather than
+   flattened to a message: the entry carries `:refusal`, `:reason`, `:limit`
+   and `:observed` so the scan's receipt can name and count it. It stays a
+   per-file skip — before this, a file deep enough to exhaust the reader's
+   stack threw a StackOverflowError, which is an `Error` and not an
+   `Exception`, and killed the whole scan."
+  ;; @spec MCP-OP-MEM-005
   [file]
   (try
     (outline/outline file)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+                 :file file
+                 :error (ex-message e))
+          {:file file :error (str (ex-message e))})))
+    (catch StackOverflowError _
+      ;; @spec MCP-OP-MEM-005
+      ;; The estimator is an ESTIMATE, and this catch is what makes the
+      ;; scan-kill class closed WITHOUT depending on it being complete. An
+      ;; Error is not an Exception, so before this one overflowing file killed
+      ;; the whole pmap scan and no file's outline came back at all.
+      (let [r (admission/stack-overflow-refusal file)]
+        (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
+               :file file
+               :error (str "parser admission refused "
+                           (admission/public-ceiling-name (:reason r))
+                           ": " file))))
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
+
+(defn- admission-refusals
+  "Every parser-admission refusal in a scan, as receipt rows in path order."
+  ;; @spec MCP-OP-MEM-005
+  [projects dir]
+  (vec
+    (for [{:keys [outlines]} projects
+          [f result] outlines
+          :when (= :parser_admission_refused (:refusal result))]
+      {:file (str (fs/relativize (fs/path dir) (fs/path f)))
+       :reason (:reason result)
+       :limit (:limit result)
+       :observed (:observed result)
+       :remedy (:remedy result)})))
 
 (defn- outline-all-files
   "Compute outlines for all files across projects, in parallel.
    Returns projects with :outlines — a vec of [file outline] pairs."
   [projects]
-  (let [;; Collect all [project-idx file] pairs
+  ;; @spec MCP-OP-MEM-005 — charge the admission scan against THIS scan only.
+  ;; The meter is made here and closed over lexically, then rebound inside each
+  ;; worker: two concurrent ls-tree calls each charge their own, and the count
+  ;; does not depend on binding conveyance surviving a change of executor.
+  (let [meter (admission/new-meter)
+        ;; Collect all [project-idx file] pairs
         all-files (for [[pidx project] (map-indexed vector projects)
                         f (:files project)]
                     [pidx f])
         ;; Parse all files in parallel
         results (pmap (fn [[pidx f]]
-                        [pidx f (safe-outline f)])
+                        (binding [admission/*scan-meter* meter]
+                          [pidx f (safe-outline f)]))
                       all-files)
         ;; Group back by project index
-        by-project (group-by first results)]
-    (mapv (fn [[pidx project]]
-            (let [file-results (mapv (fn [[_ f outline]] [f outline])
-                                     (get by-project pidx []))]
-              (assoc project :outlines file-results)))
-          (map-indexed vector projects))))
+        by-project (group-by first results)
+        outlined (mapv (fn [[pidx project]]
+                         (let [file-results (mapv (fn [[_ f outline]] [f outline])
+                                                  (get by-project pidx []))]
+                           (assoc project :outlines file-results)))
+                       (map-indexed vector projects))]
+    (with-meta outlined {::scan-resources (admission/meter-resources meter)})))
+
+(defn- scan-resources
+  "The scan's own cost, carried on the projects vector `outline-all-files`
+   returned. Zeroed when a caller assembled the projects some other way."
+  ;; @spec MCP-OP-MEM-005
+  [projects]
+  (or (::scan-resources (meta projects))
+      (admission/meter-resources nil)))
 
 (defn format-file-text
   "Pure: format a single file's outline map as compact text lines."
@@ -458,19 +547,67 @@
         (.append sb (format-file-text result rel-path))
         (.append sb "\n")))
     (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
+    ;; @spec MCP-OP-MEM-005
+    ;; A refused file is a named, counted skip — never a silent one and never a
+    ;; dead scan. Nothing is appended when nothing was refused, so an ordinary
+    ;; scan's output is byte-identical to before this control existed.
+    (let [refused (admission-refusals projects dir)]
+      (when (seq refused)
+        (.append sb (format "── parser_admission_refused: %d file(s)\n"
+                            (count refused)))
+        (doseq [{:keys [file reason limit observed]} refused]
+          ;; A stack-overflow skip measured nothing, so it names no limit.
+          (.append sb (if (and limit observed)
+                        (format "   %s  %s limit %d, observed %d\n"
+                                file
+                                (admission/public-ceiling-name reason)
+                                limit observed)
+                        (format "   %s  %s\n"
+                                file
+                                (admission/public-ceiling-name reason)))))
+        ;; @spec MCP-OP-MEM-005 — charge the control's own cost with its
+        ;; denominator. The TEXT rendering stays inside the refusal block, so an
+        ;; ordinary scan's human output is byte-identical to before this control
+        ;; existed; the EDN receipt carries it unconditionally, because that is
+        ;; the surface a regression check reads.
+        (let [{:keys [scan_ms bytes_scanned]} (scan-resources projects)]
+          (.append sb (format "── resources: scan_ms %s, bytes_scanned %s\n"
+                              scan_ms bytes_scanned)))))
     (str sb)))
 
 (defn format-ls-tree-edn
   "Pure: format ls-tree results as EDN vector.
-   Expects projects with :outlines already computed."
+   Expects projects with :outlines already computed.
+
+   ONE trailing receipt map is always appended. It carries `:resources`
+   unconditionally — the scan's own cost with its `bytes_scanned` denominator,
+   because a scan regression appears on ORDINARY scans and a meter wired to the
+   rare refusal branch is one nobody ever sees move — and it names and counts
+   `:parser_admission_refused` only when something actually was refused. The
+   human TEXT rendering keeps the older, quieter contract: an ordinary scan's
+   text is byte-identical to before this control existed."
+  ;; @spec MCP-OP-MEM-005
   [projects dir]
-  (vec
-    (for [{:keys [outlines]} projects
-          [f result] outlines
-          :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
-      (-> result
-          (assoc :file rel-path)
-          (dissoc :forward-refs)))))
+  (let [entries (vec
+                  (for [{:keys [outlines]} projects
+                        [f result] outlines
+                        :let [rel-path (str (fs/relativize (fs/path dir)
+                                                           (fs/path f)))]]
+                    (-> result
+                        (assoc :file rel-path)
+                        (dissoc :forward-refs))))
+        refused (admission-refusals projects dir)
+        ;; @spec MCP-OP-MEM-005
+        ;; `:resources` is UNCONDITIONAL. The meter exists to catch a scan
+        ;; regression — the first draft was 638x slower and every test passed —
+        ;; and a regression shows up on ORDINARY scans, which are ~100% of
+        ;; production runs and were 0% of the runs that printed the number. A
+        ;; gauge wired to the rare branch is a gauge nobody will see move.
+        receipt (cond-> {:resources (scan-resources projects)}
+                  (seq refused)
+                  (assoc :parser_admission_refused
+                         {:count (count refused) :files refused}))]
+    (conj entries {:receipt receipt})))
 
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
