@@ -230,6 +230,51 @@ sys.exit(1 if bad else 0)
 PY
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 11: a receipt is emitted ONLY from a stream that validates =="
+# Sol's executed probes: a truncated final record scored rc 0; duplicated and fully
+# reversed streams produced receipts with sources.agree=true; a stale receipt.json
+# survived an rc-3 abort; an empty watch.jsonl scored 0 returns; attest_ok=false scored.
+mk11 () {                       # mk11 <suffix> -> prints a fresh arm dir holding case 1's evidence
+  local d="$WORK/st-P-N-11$1"
+  rm -rf "$d"; mkdir -p "$d"
+  cp "$A1/attest.json" "$A1/rollout.jsonl" "$A1/watch.jsonl" "$A1/run.json" "$d/"
+  printf '%s' "$d"
+}
+score11 () {                    # score11 <dir> <label> <want-rc> <want-abort-substring>
+  local d=$1 label=$2 wrc=$3 sub=$4 rc
+  python3 "$HERE/score.py" "$d" > "$WORK/$label.out" 2>&1; rc=$?
+  want "$label rc" "$wrc" "$rc"
+  [ -e "$d/receipt.json" ] && bad "$label a receipt was written from an invalid stream" \
+    || ok "$label no receipt.json written"
+  grep -q "$sub" "$WORK/$label.out" \
+    && ok "$label typed abort ($sub)" || { bad "$label no typed abort ($sub)"; cat "$WORK/$label.out"; }
+}
+
+D=$(mk11 a); head -c -12 "$A1/rollout.jsonl" > "$D/rollout.jsonl"
+score11 "$D" case11a 3 'SCORE-ABORT malformed-rollout'
+
+D=$(mk11 b); cat "$A1/rollout.jsonl" "$A1/rollout.jsonl" > "$D/rollout.jsonl"
+score11 "$D" case11b 3 'SCORE-ABORT malformed-rollout duplicate-call-id'
+
+D=$(mk11 c); tac "$A1/rollout.jsonl" > "$D/rollout.jsonl"
+score11 "$D" case11c 3 'SCORE-ABORT malformed-rollout'
+
+D=$(mk11 d); rm -f "$D/rollout.jsonl"
+printf '{"stale":true}\n' > "$D/receipt.json"; printf 'stale\n' > "$D/receipt.md"
+score11 "$D" case11d 3 'SCORE-ABORT missing-rollout'
+[ -e "$D/receipt.md" ] && bad "case11d a stale receipt.md survived an rc-3 abort" \
+  || ok "case11d the stale receipt.md was deleted too"
+
+D=$(mk11 e); : > "$D/watch.jsonl"
+score11 "$D" case11e 3 'SCORE-ABORT empty-watch'
+
+D=$(mk11 f)
+python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d["attest_ok"]=False;d["refusals"]=["injected"];open(p,"w").write(json.dumps(d))' "$D/attest.json"
+score11 "$D" case11f 2 'SCORE-ABORT attest-not-ok'
+
+D=$(mk11 g); cat "$A1/watch.jsonl" "$A1/watch.jsonl" > "$D/watch.jsonl"
+score11 "$D" case11g 3 'SCORE-ABORT malformed-watch'
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
