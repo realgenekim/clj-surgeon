@@ -694,6 +694,9 @@
                                                   "Scan a directory that contains Clojure sources."))}
                              (:file-count scan) (assoc :file_count (:file-count scan))
                              (:max-files scan) (assoc :max_files (:max-files scan))
+                             (contains? scan :observed-at-least)
+                             (assoc :observed_at_least
+                                    (:observed-at-least scan))
                              (:match-budget scan) (assoc :match_budget
                                                          (:match-budget scan))
                              (:grep params) (assoc :grep (:grep params))
@@ -870,6 +873,7 @@
     "ns_grep" {:type ["string" "null"]}
     "max_files" {:type "integer"}
     "match_budget" {:type "integer"}
+    "observed_at_least" {:type "boolean"}
     "format" {:type "string"}
     "limit" {:type "integer"}
     "project_count" {:type "integer"}

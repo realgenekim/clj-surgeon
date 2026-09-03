@@ -175,8 +175,15 @@
 
    The canonical path travels alongside it because it is the identity a file
    is deduplicated by: two projects whose declared `:paths` overlap reach the
-   same bytes, and the same bytes must be counted and printed once."
-  [root dir]
+   same bytes, and the same bytes must be counted and printed once.
+
+   `limit` bounds the entries this returns AND the work spent producing them.
+   The pipeline is a transducer over `into`, not a lazy `keep`: a lazy seq
+   over the vector `split-lines` returns is CHUNKED, so it would canonicalise
+   32 paths to yield 11. `keep?` is a cheap string test applied before any
+   `toRealPath` syscall, so a caller that filters afterwards cannot make the
+   limit under-count."
+  [root dir limit keep?]
   (when (fs/directory? dir)
     (try
       (let [;; -prune the cache/vendor directories exactly as find-build-files
@@ -192,12 +199,15 @@
                           {:out :string :err :string :continue true}
                           "find" (str dir) prune-args)]
         (when (zero? (:exit result))
-          (->> (str/split-lines (str/trim (:out result)))
-               (remove str/blank?)
-               (keep (fn [path]
-                       (when-let [canonical (mcp-paths/real-path-within root path)]
-                         [path (str canonical)])))
-               vec)))
+          (into []
+                (comp (remove str/blank?)
+                      (filter keep?)
+                      (keep (fn [path]
+                              (when-let [canonical (mcp-paths/real-path-within
+                                                     root path)]
+                                [path (str canonical)])))
+                      (take limit))
+                (str/split-lines (str/trim (:out result))))))
       (catch Exception _e nil))))
 
 ;; @spec MCP-OP-STUDY-021
@@ -206,14 +216,19 @@
 
    500 sibling `deps.edn` files each declaring `:paths [\"..\"]` all resolve
    to the same directory. Walking it once per project cost 500 walks of the
-   same 500 files — 8.4 s — and reported `file_count` 250,500."
-  [cache root dir]
-  (let [key (str dir)]
-    (if (contains? @cache key)
-      (get @cache key)
-      (let [found (vec (walk-clj-files root dir))]
-        (swap! cache assoc key found)
-        found))))
+   same 500 files — 8.4 s — and reported `file_count` 250,500.
+
+   `limit` is constant for one scan (`cap + 1`), so the cache key does not
+   carry it."
+  ([cache root dir limit]
+   (source-dir-files cache root dir limit (constantly true)))
+  ([cache root dir limit keep?]
+   (let [key (str dir)]
+     (if (contains? @cache key)
+       (get @cache key)
+       (let [found (vec (walk-clj-files root dir limit keep?))]
+         (swap! cache assoc key found)
+         found)))))
 
 ;; @spec MCP-OP-STUDY-014
 (defn- confined-source-dirs
@@ -234,11 +249,19 @@
   "Fold project candidates into a DEDUPLICATED, capped file set.
 
    `candidates` is a seq of THUNKS, each returning
-   `{:name :root :files [[walk-path canonical-path] ...]}`. They are thunks so
-   that `cap` stops the WALK and not merely the count: once the distinct file
-   count passes the cap, no later candidate is ever listed. The cap used to be
-   compared against a count that `discover-projects` had already materialised
-   in full, which is the opposite of a bound on work.
+   `{:name :root :files [[walk-path canonical-path] ...] :truncated? bool}`.
+   They are thunks so that `cap` stops the WALK and not merely the count: once
+   the distinct file count passes the cap, no later candidate is ever listed.
+   The cap used to be compared against a count that `discover-projects` had
+   already materialised in full, which is the opposite of a bound on work.
+
+   `:truncated?` says the candidate's own walk stopped at `cap + 1` rather
+   than running out of files, which is what the cap stopping INSIDE a
+   candidate looks like from here. A walk cut short always pushes the distinct
+   count past the cap — at most `|seen|` of its `cap + 1` entries can be
+   duplicates, and `|seen| <= cap` on entry — so it can only ever produce a
+   refusal, never a silently short listing. The count that refusal carries is
+   a FLOOR, and `:halted-early` is what makes the receipt say so.
 
    A file belongs to exactly one project — the first candidate to reach it —
    keyed by its CANONICAL path. Overlapping declarations (a root project
@@ -254,7 +277,7 @@
          projects (:projects state)]
     (if-not remaining
       {:ok true :seen seen :projects projects :file-count (count seen)}
-      (let [{:keys [name root files]} ((first remaining))
+      (let [{:keys [name root files truncated?]} ((first remaining))
             [seen-after kept]
             (reduce (fn [[seen kept] [walk-path canonical]]
                       (if (contains? seen canonical)
@@ -277,7 +300,7 @@
            :seen seen-after
            :projects projects-after
            :file-count (count seen-after)
-           :halted-early (boolean (next remaining))}
+           :halted-early (boolean (or truncated? (next remaining)))}
           (recur (next remaining) seen-after projects-after))))))
 
 (defn- by-name
@@ -290,16 +313,18 @@
   "One thunk per project root, DEEPEST root first, so the most specific
    project owns its own files and an outer project that declares `:paths
    [\".\"]` takes only what is left."
-  [cache root by-root]
+  [cache root by-root limit]
   (map (fn [[project-root files]]
          (fn []
            (let [build-file (first files)
                  src-paths (extract-source-paths build-file)
-                 root-path (fs/path project-root)]
+                 root-path (fs/path project-root)
+                 walks (mapv #(source-dir-files cache root % limit)
+                             (confined-source-dirs root root-path src-paths))]
              {:name (str (fs/file-name root-path))
               :root (str root-path)
-              :files (mapcat #(source-dir-files cache root %)
-                             (confined-source-dirs root root-path src-paths))})))
+              :files (vec (apply concat walks))
+              :truncated? (boolean (some #(>= (count %) limit) walks))})))
        (sort-by (fn [[project-root _]] [(- (count project-root)) project-root])
                 by-root)))
 
@@ -315,22 +340,30 @@
   [root dir cap]
   (let [dir (fs/path dir)
         cache (atom {})
+        ;; One file past the cap is all any walk needs to produce: it is
+        ;; already a refusal, and stopping there is what keeps the syscalls
+        ;; proportional to the cap instead of to the tree.
+        limit (inc cap)
         build-files (find-build-files root dir)
         ;; Group by project root, keep first build file per root
         by-root (group-by #(str (fs/parent %)) build-files)]
     (by-name
       (if (seq by-root)
         (accumulate-projects cap
-                             (build-project-candidates cache root by-root)
+                             (build-project-candidates cache root by-root limit)
                              empty-accumulation)
-        ;; No build files — fallback to recursive scan
+        ;; No build files — fallback to recursive scan. The skip-directory
+        ;; test goes INTO the walk, so it can never shrink a listing below the
+        ;; limit the walk stopped at.
         (accumulate-projects
           cap
           [(fn []
-             {:name (str (fs/file-name dir))
-              :root (str dir)
-              :files (remove (fn [[walk-path _]] (in-skip-dir? walk-path dir))
-                             (source-dir-files cache root dir))})]
+             (let [walk (source-dir-files cache root dir limit
+                                          #(not (in-skip-dir? % dir)))]
+               {:name (str (fs/file-name dir))
+                :root (str dir)
+                :files walk
+                :truncated? (>= (count walk) limit)}))]
           empty-accumulation)))))
 
 (defn- rg-available?
@@ -744,6 +777,7 @@
    underneath it."
   [root grep-hits dir cap]
   (let [cache (atom {})
+        limit (inc cap)
         build-files #{"deps.edn" "project.clj" "bb.edn"}
         {build-hits true src-hits false}
         (group-by #(contains? build-files (str (fs/file-name %))) grep-hits)
@@ -753,14 +787,17 @@
                 cap
                 (map (fn [build-file]
                        (fn []
-                         (let [project-root (str (fs/parent (fs/path build-file)))]
+                         (let [project-root (str (fs/parent (fs/path build-file)))
+                               walks (mapv
+                                       #(source-dir-files cache root % limit)
+                                       (confined-source-dirs
+                                         root (fs/path project-root)
+                                         (extract-source-paths build-file)))]
                            {:name (str (fs/file-name (fs/path project-root)))
                             :root project-root
-                            :files (mapcat
-                                     #(source-dir-files cache root %)
-                                     (confined-source-dirs
-                                       root (fs/path project-root)
-                                       (extract-source-paths build-file)))})))
+                            :files (vec (apply concat walks))
+                            :truncated? (boolean
+                                          (some #(>= (count %) limit) walks))})))
                      (sort-by #(vector (- (count (str %))) (str %))
                               (or build-hits [])))
                 empty-accumulation)]
@@ -788,14 +825,24 @@
                  (group-by :root)
                  (map (fn [[project-root entries]]
                         (fn []
-                          {:name (str (fs/file-name (fs/path project-root)))
-                           :root project-root
-                           :files (keep (fn [{:keys [file]}]
-                                          (when-let [canonical
+                          ;; Grep hits are canonicalised here, so the same
+                          ;; cap-plus-one bound applies: a pattern matching a
+                          ;; whole tree must not cost one toRealPath per hit.
+                          (let [files (into []
+                                            (comp
+                                              (keep
+                                                (fn [{:keys [file]}]
+                                                  (when-let
+                                                    [canonical
                                                      (mcp-paths/real-path-within
                                                        root file)]
-                                            [file (str canonical)]))
-                                        entries)}))))
+                                                    [file (str canonical)])))
+                                              (take limit))
+                                            entries)]
+                            {:name (str (fs/file-name (fs/path project-root)))
+                             :root project-root
+                             :files files
+                             :truncated? (>= (count files) limit)})))))
             (select-keys built [:seen :projects])))))))
 
 
@@ -952,6 +999,9 @@
          :ns-grep ns-grep
          :file-count (:file-count discovery)
          :max-files cap
+         ;; A count taken where the walk stopped is a FLOOR, and the receipt
+         ;; carries that as data, not only as two words inside a sentence.
+         :observed-at-least (boolean (:halted-early discovery))
          :error (format "Discovery found %s%d Clojure files under %s, above the %d-file scan cap"
                         (if (:halted-early discovery) "at least " "")
                         (:file-count discovery) named cap)

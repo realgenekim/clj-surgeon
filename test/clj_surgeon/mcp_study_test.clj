@@ -350,9 +350,12 @@
             elapsed-ms (/ (- (System/nanoTime) started) 1e6)]
         (is (false? (:ok response)))
         (is (= "study-tree-too-large" (:error_type response)))
-        (is (= 3000 (:file_count response)) "the refusal names the count")
+        (is (= 2001 (:file_count response))
+            "the refusal names the count the walk reached — one past the cap")
         (is (= 2000 (:max_files response)) "and the cap")
-        (is (str/includes? (:error response) "3000"))
+        (is (true? (:observed_at_least response))
+            "and says that count is a floor, not the tree's true size")
+        (is (str/includes? (:error response) "at least 2001"))
         (is (str/includes? (:remedy response) "max_files")
             "and the remedy that raises it")
         (is (false? (:read_complete response)))
@@ -446,7 +449,12 @@
             "a halted discovery says its count is a floor, not a total")
         (is (nil? (:tree response)))
         (is (nil? (:files response))))))
-  (testing "a single oversized project still names its exact count"
+  (testing "a single oversized project stops at the cap too"
+    ;; This block used to assert the opposite — that one oversized project
+    ;; names its EXACT count — which was true only because the cap stopped
+    ;; between candidates and let a whole candidate materialise first. Under
+    ;; MCP-OP-STUDY-033 the walk stops at `cap + 1` inside the candidate, so
+    ;; the count it can honestly report is a floor.
     (with-scratch-project
       "test-fixtures/study/scratch-cap-one"
       (fn [dir] (write-scratch-project! dir 60))
@@ -455,9 +463,11 @@
                              "dir" "test-fixtures/study/scratch-cap-one"
                              "max_files" 10})]
           (is (false? (:ok response)))
-          (is (= 60 (:file_count response)))
-          (is (not (str/includes? (:error response) "at least"))
-              "nothing was left unwalked, so the count is exact"))))))
+          (is (= 11 (:file_count response))
+              "the walk stops one file past the cap")
+          (is (true? (:observed_at_least response)))
+          (is (str/includes? (:error response) "at least")
+              "so the count it reports is a floor, and the receipt says so"))))))
 
 ;; @spec MCP-OP-STUDY-015
 (deftest ls-tree-outlines-only-the-files-the-receipt-can-carry
@@ -1510,9 +1520,11 @@
             (is (false? (:ok response)))
             (is (= "study-tree-too-large" (:error_type response)))
             (is (= 10 (:max_files response)))
-            (is (<= @calls 11)
+            (is (<= @calls 12)
                 (str "a cap of 10 must not canonicalise 3000 files: "
-                     @calls " calls"))
+                     @calls " calls. The bound is cap+1 walk entries plus one "
+                     "per build file discovery confined (here, the project's "
+                     "own deps.edn)"))
             (is (= 11 (:file_count response))
                 "the walk stops one file past the cap, which is what proves it")
             (is (true? (:observed_at_least response))
