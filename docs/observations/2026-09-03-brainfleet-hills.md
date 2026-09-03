@@ -605,3 +605,15 @@ another setup hour.
 ## 7. Verdict (Fable, 22:05Z)
 
 Both cohorts run TONIGHT (Gene: "prove it was worth it"; 50% functional floor). Sol's objection is honored the cheap way: each arm server is built from the tip MERGED LOCALLY with current origin/main so it carries a6df86ee, and the attestation records tip sha, main sha and the merge sha as read back from the server, with a deviation line "not a reviewed sha". Opus's finding is honored: E3 rebuilds gen-fanout/rescore-FAN into git under bench/fanout on bridge/fanout-fixtures-in-git, sabotages the scorer six ways, and hand-drives alias_migration at the tip before any arm; the cohort follows only if PF-1..6 are green. E6-Lb runs first (nothing to rebuild), group-sequential, 0/3 stops. Wall is reported but void above load 8; the primary pass lines are counts. Sol's hill 3 (real-repo q5z anchor) and Opus's hill 4 (gate as a harness hook) are the next two after these land. Nobody picked one; all three said the product problem is now ROUTING, not capability.
+
+## 8. The mayor's chime-in (/tmp/mayor-2210.txt, read 22:06Z) and where it lands
+
+The mayor's three survivors of Gene's 2026-09-02 routing ruling: (a) the six measured winners;
+(b) the READ/discovery path ("every order-of-magnitude win tonight is on the READ side");
+(c) the GATE ("the ONLY square that works WITH the native-default ruling"). Its fleet-state ask:
+cap new launches until the drain is under four; spend builders on census and fold-diff.
+**Fable's ruling stands** — E6 measures exactly (b) by free choice, and Gene's own words
+tonight outrank the cap: "prove it was worth it", "target 50% functional". The gate square (c)
+is the fleet's shared next hill after E3/E6: Opus's hill 4 (gate as a harness hook) and Sol's
+hill 4 (gate sensitivity on seeded hazards) are the same square from two sides. The drain ask
+is honored the way the mayor asked at 2230Z: one integration branch, composed here.
