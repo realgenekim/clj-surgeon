@@ -13,6 +13,12 @@ never repairs arguments, never interprets a result for the driver, and never edi
 file.  It only meters.  It carries a self-firing wall cap and an idle stop.
 
 Meters, and why each exists:
+  kind=header   the FIRST record of every stream: `schema_version`, and the identity
+                of the rollout this run is bound to (st_dev, st_ino, session id).
+                `kind=rollout-bound` repeats it when the rollout is only discovered
+                after the driver announces its session.  The scorer REFUSES a stream
+                carrying neither -- provenance travels with the evidence, or a later
+                scorer is assuming the repair it is measuring.
   kind=return   one model turn.  `n` is the return ordinal -- what makes "was
                 ls-tree called within the first 3 returns" answerable.
   kind=call     one tool call, nested inside the return that was open when it
@@ -46,6 +52,14 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+
+# The version of the watch-stream contract this watcher writes.  It is the FIRST
+# record of every stream, and it carries the identity of the rollout the run was bound
+# to.  Sol round three, finding (e): a scorer that cannot tell WHICH watcher wrote a
+# stream is assuming the repair it is measuring -- Sol copied a pre-repair split-brain
+# artifact into the current scorer and got rc 0 and `sources.agree=true` over evidence
+# that was two different files.  Provenance travels with the stream or it does not exist.
+WATCH_SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # test-call recognition, matched at command position
@@ -420,6 +434,10 @@ class Tailer:
             return self.rotation
         return None
 
+    def identity(self) -> tuple[int | None, int | None]:
+        """(st_dev, st_ino) of the inode this tailer is bound to, or (None, None)."""
+        return self.dev, self.ino
+
     def snapshot(self) -> bytes:
         """The whole file AS THIS WATCHER HOLDS IT -- from its own fd, never by path."""
         if self.handle is None:
@@ -637,7 +655,7 @@ def main() -> int:
 
     t0 = time.time()
     state = {"returns": 0, "seq": 0, "open": {}, "last_event": t0, "last_scan": 0.0,
-             "make_unresolved": []}
+             "make_unresolved": [], "bound": False}
 
     def emit(record: dict) -> None:
         record = {"t": utcnow(),
@@ -645,6 +663,47 @@ def main() -> int:
                   **record}
         sink.write(json.dumps(record, sort_keys=False) + "\n")
         sink.flush()
+
+    def emit_binding(kind: str, dev, ino, session, how) -> None:
+        """The rollout identity this run is metered against, written into the stream.
+
+        `header` is the first record of every stream; `rollout-bound` follows it when
+        the rollout is discovered later (a codex session id is announced by the driver
+        after the watcher starts).  The scorer takes the last of them as the identity
+        and refuses any stream carrying neither.
+        """
+        emit({"kind": kind, "schema_version": WATCH_SCHEMA_VERSION,
+              "watcher": "anvil-arms/watch.py", "arm": arm.name,
+              "rollout_path": str(rollout_path), "rollout_dev": dev,
+              "rollout_ino": ino, "session_id": session, "rollout_binding": how})
+
+    def stat_ids(path: pathlib.Path):
+        try:
+            info = path.stat()
+            return info.st_dev, info.st_ino
+        except OSError:
+            return None, None
+
+    def session_of(binding) -> str | None:
+        prefix = "session-id:"
+        if isinstance(binding, str) and binding.startswith(prefix):
+            return binding[len(prefix):]
+        return None
+
+    # THE FIRST RECORD OF EVERY STREAM.  Written before any event, so a stream that
+    # stops after one line still says which contract it was written under.
+    header_dev, header_ino = stat_ids(rollout_path)
+    emit_binding("header", header_dev, header_ino, None,
+                 "capture-stdout" if args.capture_stdout else None)
+
+    def note_binding() -> None:
+        """Announce the bound inode ONCE, the moment the tailer actually has one."""
+        if tailer is None or tailer.ino is None or state["bound"]:
+            return
+        state["bound"] = True
+        dev, ino = tailer.identity()
+        emit_binding("rollout-bound", dev, ino, session_of(rollout_binding),
+                     rollout_binding)
 
     def handle(event: dict) -> None:
         state["last_event"] = time.time()
@@ -925,6 +984,7 @@ def main() -> int:
                         tailer = Tailer(found)
                 if tailer is not None:
                     pump_lines(tailer.read_lines())
+                    note_binding()
                     if tailer.check_rotation():
                         abort_reason = "rollout-rotated"
                         break
@@ -958,6 +1018,7 @@ def main() -> int:
                         pump_lines(rest.split("\n"))
                 elif tailer is not None:
                     pump_lines(tailer.read_lines())
+                    note_binding()
                     if tailer.check_rotation():
                         abort_reason = "rollout-rotated"
                 break
@@ -1015,6 +1076,7 @@ def main() -> int:
             rollout_path, rollout_binding = found, how
             tailer = Tailer(found)
             pump_lines(tailer.read_lines())
+            note_binding()
             if tailer.check_rotation():
                 abort_reason = "rollout-rotated"
                 rotation_detail = tailer.rotation

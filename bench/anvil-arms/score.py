@@ -22,9 +22,15 @@ already paid for:
     directory still holds, because a refusal that leaves the old answer standing
     is not a refusal.
 
+  * A STREAM MUST SAY WHICH WATCHER WROTE IT.  `watch.jsonl` opens with a header
+    record carrying `schema_version` and the bound rollout identity (st_dev, st_ino,
+    session id).  A stream without both is `watch-schema-unsupported`: rc 3, no
+    receipt.  A scorer cannot infer the instrument from the reading, and an old
+    split-brain artifact is syntactically indistinguishable from a repaired one.
+
 Exit codes: 0 scored; 2 no attestation or attest_ok=false; 3 missing/empty/invalid
-rollout or watch, zero returns, or ANY watcher abort (no receipt written, any stale
-one removed); 4 missing watch.jsonl.
+rollout or watch, an unsupported watch schema, zero returns, or ANY watcher abort (no
+receipt written, any stale one removed); 4 missing watch.jsonl.
 """
 from __future__ import annotations
 
@@ -172,7 +178,7 @@ def validate_watch(records: list[dict]) -> None:
         elif kind == "end":
             ended = True
             end_record = rec
-        elif kind != "abort":
+        elif kind not in ("abort", "header", "rollout-bound"):
             raise StreamError(f"unknown-record-kind watch:{lineno} kind={kind!r}")
     if sorted(returns) != list(range(1, len(returns) + 1)):
         raise StreamError(f"return-ordinals-not-dense-from-1 "
@@ -195,6 +201,51 @@ def validate_watch(records: list[dict]) -> None:
     if not isinstance(end_record.get("wall_s"), (int, float)):
         raise StreamError(f"watch-unterminated (the final `end` carries no wall: "
                           f"wall_s={end_record.get('wall_s')!r})")
+
+
+WATCH_SCHEMA_MIN = 2
+PROVENANCE_KEYS = ("rollout_dev", "rollout_ino", "session_id")
+
+
+def watch_provenance(records: list[dict]) -> dict:
+    """The schema and the bound rollout identity this stream was written under.
+
+    Sol round three, finding (e).  The watcher was repaired to bind its rollout by
+    inode and to abort on rotation; Sol then copied a round-TWO split-brain artifact,
+    written BEFORE that repair, into the repaired scorer.  It returned rc 0 and a
+    receipt reading `sources.agree=true` over evidence that is two different files.
+    Every syntactic check passed, because the old stream is syntactically perfect --
+    what it lacks is any statement about WHICH watcher produced it.
+
+    A scorer cannot infer the instrument from the reading.  So the stream carries its
+    own provenance in its first record, and anything without it is refused rather than
+    assumed to be current.  Raises StreamError, whose text begins
+    `watch-schema-unsupported`, and no receipt is ever written from such a stream.
+    """
+    header = records[0] if records else {}
+    if header.get("kind") != "header":
+        raise StreamError(
+            "watch-schema-unsupported (this stream has no header record, so nothing "
+            "in it says which watcher wrote it; a stream written before the "
+            "inode-binding repair is syntactically identical to one written after it)")
+    version = header.get("schema_version")
+    if not isinstance(version, int) or version < WATCH_SCHEMA_MIN:
+        raise StreamError(
+            f"watch-schema-unsupported (schema_version={version!r}; this scorer reads "
+            f"schema_version >= {WATCH_SCHEMA_MIN} only)")
+    missing = [key for key in PROVENANCE_KEYS if key not in header]
+    if missing:
+        raise StreamError(
+            f"watch-schema-unsupported (the header carries no inode-binding "
+            f"provenance: missing {missing})")
+    identity = {key: header.get(key) for key in PROVENANCE_KEYS}
+    for rec in records:
+        if rec.get("kind") == "rollout-bound":
+            # the rollout was discovered after the driver announced its session; the
+            # LAST binding record is the one the run was actually metered against
+            identity.update({k: rec.get(k) for k in PROVENANCE_KEYS if k in rec})
+    identity["schema_version"] = version
+    return identity
 
 
 def abort(arm: pathlib.Path, code: int, reason: str) -> int:
@@ -273,6 +324,10 @@ def score(arm: pathlib.Path, args) -> int:
         validate_watch(watch)
     except StreamError as exc:
         return abort(arm, 3, f"malformed-watch {exc}")
+    try:
+        rollout_identity = watch_provenance(watch)
+    except StreamError as exc:
+        return abort(arm, 3, f"{exc} {watch_path}")
     if not watch:
         return abort(arm, 3, f"empty-watch {watch_path}")
     wcalls = [w for w in watch if w.get("kind") == "call"]
@@ -310,6 +365,15 @@ def score(arm: pathlib.Path, args) -> int:
         return abort(arm, 3, f"watch-abort:{','.join(stopped)} {watch_path} "
                              f"(the watcher stopped this run; run.json carries it as "
                              f"the terminal fact and no receipt is written)")
+    if rollout_identity["rollout_dev"] is None or rollout_identity["rollout_ino"] is None:
+        # The run completed with no abort, so the watcher claims it metered something --
+        # but it never bound an inode, which is the only thing that makes "the bytes I
+        # metered" and "the bytes retained" the same file.
+        return abort(arm, 3, f"watch-schema-unsupported (the run reports no abort and "
+                             f"the stream never bound a rollout inode: "
+                             f"{ {k: rollout_identity[k] for k in PROVENANCE_KEYS} }) "
+                             f"{watch_path}")
+
     if not wreturns:
         return abort(arm, 3, f"zero-metered-returns {watch_path} "
                              f"(the rollout shows {raw['returns']} returns; the meter shows none)")

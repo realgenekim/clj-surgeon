@@ -1676,16 +1676,22 @@ python3 - "$A1/watch.jsonl" > "$WORK/case35c.out" 2>&1 <<'PY35C'
 import json, sys
 recs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 head = recs[0] if recs else {}
+# the identity the SCORER computes: the header, overridden by any later binding record
+ident = {k: head.get(k) for k in ("rollout_dev", "rollout_ino", "session_id")}
+for r in recs:
+    if r.get("kind") == "rollout-bound":
+        ident.update({k: r.get(k) for k in ident if k in r})
 checks = [
     ("case35c the first record is a header", head.get("kind") == "header"),
     ("case35c the header names schema_version 2", head.get("schema_version") == 2),
     ("case35c the header carries the bound rollout identity",
      all(k in head for k in ("rollout_dev", "rollout_ino", "session_id"))),
     ("case35c the identity is BOUND, not empty",
-     isinstance(head.get("rollout_dev"), int) and isinstance(head.get("rollout_ino"), int)),
+     isinstance(ident.get("rollout_dev"), int) and isinstance(ident.get("rollout_ino"), int)),
 ]
 for label, cond in checks:
-    print(("ok   " if cond else "FAIL ") + label + ("" if cond else f" head={head}"))
+    print(("ok   " if cond else "FAIL ") + label
+          + ("" if cond else f" head={head} identity={ident}"))
 sys.exit(0)
 PY35C
 cat "$WORK/case35c.out"
