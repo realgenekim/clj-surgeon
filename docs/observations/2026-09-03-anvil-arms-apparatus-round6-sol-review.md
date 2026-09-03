@@ -90,3 +90,33 @@ grep -c '^FAIL case' "$f"
 Fix case 45 to validate the exact tally pattern and matching output-file operand, with a case-ID boundary such as `( |$)`.
 
 Checkout restored clean at `54f3b50`; no review test processes remain; port 7909 is free.
+
+---
+
+# Round 9 — Sol re-check at 59ed16a (2026-09-03T12:19Z)
+
+Verdict: **NO-GO for 59ed16a**; cohort-ready GO stays at **23a7643**. Round-eight mutations all red now (items 2–6), but a static regex over the script source cannot distinguish inert text from executed code: an exact tally line inside a quoted heredoc is accepted (false green, "386 passed, 0 failed" over a visible FAIL) and a semantically equivalent double-quoted/spaced tally is rejected (false failure). Round 10 moves the tally to a runtime function.
+
+## Sol, verbatim
+
+## NO-GO
+
+The round-eight defects are fixed, but the new heredoc attack produces a genuine false-green: the raw-source regex treats an inert tally string as executable tally logic.
+
+1. [self-test.sh:2441](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2441) — Baseline, rc 0: `anvil-arms self-test: 386 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview9/baseline)` ([witness](/home/forge/tmp/arms/solreview9/baseline.log:454)).
+
+2. [self-test.sh:1821](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:1821) — Missing case35d tallies, rc 1: `anvil-arms self-test: 383 passed, 1 failed  (workdir /home/forge/tmp/arms/solreview9/missing-tally)` ([witness](/home/forge/tmp/arms/solreview9/missing-tally.log:454)).
+
+3. [self-test.sh:1822](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:1822) — Injected counted FAIL, rc 1: `anvil-arms self-test: 386 passed, 1 failed  (workdir /home/forge/tmp/arms/solreview9/injected-counted-fail)` ([witness](/home/forge/tmp/arms/solreview9/injected-counted-fail.log:455)).
+
+4. [self-test.sh:2418](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2418) — Orphan case99, rc 1: `anvil-arms self-test: 384 passed, 2 failed  (workdir /home/forge/tmp/arms/solreview9/orphan-case99)` ([witness](/home/forge/tmp/arms/solreview9/orphan-case99.log:454)).
+
+5. [self-test.sh:2411](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2411) — `^FAIL case35` over `FAIL case35d x`, rc 1: `anvil-arms self-test: 384 passed, 3 failed  (workdir /home/forge/tmp/arms/solreview9/suffix-case35-case35d)` ([witness](/home/forge/tmp/arms/solreview9/suffix-case35-case35d.log:455)).
+
+6. [self-test.sh:2398](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2398) — Wrong case35d FAIL-tally operand, rc 1: `anvil-arms self-test: 384 passed, 2 failed  (workdir /home/forge/tmp/arms/solreview9/wrong-file-case35d)`; it names `file operand "$WORK/case35d.out" exactly` ([witness](/home/forge/tmp/arms/solreview9/wrong-file-case35d.log:452)).
+
+7. [self-test.sh:2381](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2381) — Semantically equivalent double-quoted/spaced tally is rejected: false failure, rc 1, `anvil-arms self-test: 385 passed, 1 failed  (workdir /home/forge/tmp/arms/solreview9/noncanonical-valid-tally)` ([witness](/home/forge/tmp/arms/solreview9/noncanonical-valid-tally.log:454)).
+
+8. [self-test.sh:2380](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2380) — Blocking: an exact tally line inside an inert quoted heredoc is accepted; visible `FAIL case35d heredoc-probe` still yields rc 0 and `anvil-arms self-test: 386 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview9/heredoc-commented-tally)` ([FAIL witness](/home/forge/tmp/arms/solreview9/heredoc-commented-tally.log:395), [false-green summary](/home/forge/tmp/arms/solreview9/heredoc-commented-tally.log:455)).
+
+Every mutation was restored with `git checkout`. The checkout is clean at `59ed16a`, no review test process remains, and port 7909 is free.
