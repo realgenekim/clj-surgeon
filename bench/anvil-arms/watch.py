@@ -48,6 +48,7 @@ import json
 import os
 import pathlib
 import re
+import resource
 import shlex
 import signal
 import subprocess
@@ -183,6 +184,11 @@ def command_position_tokens(script: str) -> list[list[str]]:
 
 
 MAX_MAKE_DEPTH = 4          # a target may reach a runner through another target
+
+# How often the main loop takes a /proc descendant snapshot (Sol round four: named so
+# the receipt can report the meter's own cost against the interval it actually ran
+# at, not a number quoted from memory of the source).
+DESCENDANT_SCAN_INTERVAL_S = 0.25
 
 
 def load_make_map(path) -> dict | None:
@@ -571,8 +577,14 @@ def set_child_subreaper() -> str:
 
     `prctl(PR_SET_CHILD_SUBREAPER, 1)` rewrites it in our favour instead: an orphan
     below this process re-parents to the WATCHER, not to init, so it stays inside the
-    subtree the final scan walks and inside the set the reap may signal.  It is
-    inherited by the driver, applies to every descendant forked after this call, and
+    subtree the final scan walks and inside the set the reap may signal.  Sol round
+    four: this comment previously said the setting "is inherited by the driver" --
+    it is not, and the implementation never relies on that claim.  The flag is set
+    HERE, on this watcher process, once, before the driver is even forked; the driver
+    itself carries no subreaper flag of its own and does not need one.  Reparenting
+    on Linux climbs the ancestor chain to the NEAREST process that has the flag set,
+    which is this watcher regardless of how many generations of descendants the
+    driver forks.  So it applies to every descendant forked after this call, and it
     needs no privileges.  The per-poll walk stays as belt and braces.
     """
     try:
@@ -717,8 +729,9 @@ def main() -> int:
         rollout_path.write_text("")
 
     t0 = time.time()
+    cpu0 = resource.getrusage(resource.RUSAGE_SELF)
     state = {"returns": 0, "seq": 0, "open": {}, "last_event": t0, "last_scan": 0.0,
-             "make_unresolved": [], "bound": False}
+             "make_unresolved": [], "bound": False, "scans": 0}
 
     def emit(record: dict) -> None:
         record = {"t": utcnow(),
@@ -1054,8 +1067,9 @@ def main() -> int:
 
             done = proc.poll() is not None
             now = time.time()
-            if now - state["last_scan"] >= 0.25:
+            if now - state["last_scan"] >= DESCENDANT_SCAN_INTERVAL_S:
                 state["last_scan"] = now
+                state["scans"] += 1
                 record_descendants()
             if (codex_home is not None and tailer is None
                     and now - t0 > args.zero_return_window):
@@ -1155,6 +1169,15 @@ def main() -> int:
     end_dt = parse_utc(end_utc)
     wall_s = round((end_dt - start_dt).total_seconds(), 1) if end_dt else None
 
+    # Sol round four, item 3: the meter's OWN cost, MEASURED -- never assumed from the
+    # scan interval alone, because how much CPU a scan actually costs depends on how
+    # many descendants there are to walk.  RUSAGE_SELF is this PROCESS's own
+    # user+system time, so it is exactly the watcher's overhead and nothing the driver
+    # or its children did.
+    cpu1 = resource.getrusage(resource.RUSAGE_SELF)
+    watcher_cpu_s = round((cpu1.ru_utime - cpu0.ru_utime) +
+                          (cpu1.ru_stime - cpu0.ru_stime), 3)
+
     # If a rollout was discovered elsewhere, land a copy in the arm directory so the
     # receipt and the rollout live together.
     if rollout_path.resolve() != (arm / "rollout.jsonl").resolve():
@@ -1191,6 +1214,9 @@ def main() -> int:
         "calls_without_output": incomplete,
         "unresolved_make_targets": unresolved_targets,
         "watch_jsonl": str(watch_path),
+        "watcher_cpu_s": watcher_cpu_s,
+        "scans": state["scans"],
+        "scan_interval_ms": int(DESCENDANT_SCAN_INTERVAL_S * 1000),
     }
 
     if abort_reason and abort_reason.split(":")[0] in ("rollout-rotated",

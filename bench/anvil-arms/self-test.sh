@@ -1961,9 +1961,14 @@ import json, sys
 path = sys.argv[1]
 recs = [json.loads(l) for l in open(path) if l.strip()]
 header = dict(recs[0])
+# record 0 is emitted before binding, so rollout_ino is None there, not a number --
+# an unconditional `+ 1` on that crashes this fixture script and silently leaves the
+# stream unmodified, which is worse than a wrong assertion: it looks green.
 header.update({"schema_version": 999, "session_id": "not-the-real-session",
-               "rollout_ino": header.get("rollout_ino", 0) + 1})
-recs.append(header)
+               "rollout_ino": (header.get("rollout_ino") or 0) + 1})
+# mid-stream, not appended past the `end` record -- this must reproduce
+# duplicate-header, not the unrelated (and also correct) record-after-end refusal.
+recs.insert(1, header)
 open(path, "w").write("".join(json.dumps(r) + "\n" for r in recs))
 PY39A
 score11 "$D" case39a 3 'SCORE-ABORT malformed-watch duplicate-header'
@@ -2041,6 +2046,55 @@ print(f"ok   case39c duplicate/misplaced watch-header refusal ({5-len(fails)}/5)
 sys.exit(1 if fails else 0)
 PY39C
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
+echo "== case 40: the METER'S OWN COST is measured and lands in the receipt =="
+# Sol round four, item 3 (watch.py:1017): Sol measured 2.52 watcher CPU seconds over
+# a 61.479s run at the 250ms scan interval -- about 4.1% of one core -- and it never
+# appeared anywhere the receipt could show it.  A cohort run had no way to see what
+# running the meter itself was costing the box.  Now run.json (and, pass-through,
+# receipt.json's `meter`) carries `watcher_cpu_s` (RUSAGE_SELF, this process only),
+# `scans` (a count of the periodic /proc walk, not every incidental one), and
+# `scan_interval_ms` (the interval actually used, not a number quoted from memory).
+#
+# The driver here is a plain `sleep` -- no rollout, so the run aborts zero-returns --
+# chosen to run long enough (well over one 250ms scan) with nothing else to measure,
+# so a nonzero scan count and a nonzero-or-honestly-zero CPU figure are both a clean
+# read on the meter alone.
+A40="$WORK/st-P-N-40"; mkdir -p "$A40"
+git clone -q --no-hardlinks "$BASE_REPO" "$A40/worktree"
+printf '%s\n' "$BASE_SHA" > "$A40/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A40/prompt.md"
+EXP=st RUNG=P SLOT=40 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A40" N - "" > /dev/null 2>&1
+python3 "$HERE/watch.py" --arm "$A40" --zero-return-window 0.6 --poll 0.1 \
+  -- bash -c 'sleep 0.9' > "$WORK/case40.out" 2>&1
+rc40=$?
+want "case40 watch rc (zero-returns: nothing to tail, only the meter ran)" 4 "$rc40"
+scans=$(jqf "$A40/run.json" scans)
+case "$scans" in ''|MISSING|null|*[!0-9]*) bad "case40 scans is not a computed integer: $scans";;
+  0) bad "case40 scans=0 over a 0.9s run at a 250ms interval — the scan never fired";;
+  *) ok "case40 run.json recorded $scans scan(s)";; esac
+interval=$(jqf "$A40/run.json" scan_interval_ms)
+want "case40 scan_interval_ms is the interval actually used" 250 "$interval"
+cpu=$(jqf "$A40/run.json" watcher_cpu_s)
+case "$cpu" in ''|MISSING|null|*[!0-9.]*) bad "case40 watcher_cpu_s is not a computed number: $cpu";;
+  *) ok "case40 run.json recorded watcher_cpu_s=$cpu (computed, not hand-typed)";; esac
+
+# receipt.json never gets written on a zero-returns abort (Sol round two, item 3 --
+# an abort is terminal), so the pass-through into `meter` is proved against case1's
+# receipt instead: the same three fields, computed, from a run that DID score.
+if [ -s "$A1/receipt.json" ]; then
+  scans1=$(jqf "$A1/receipt.json" meter.scans)
+  case "$scans1" in ''|MISSING|null|*[!0-9]*) bad "case40 receipt meter.scans not computed: $scans1";;
+    *) ok "case40 receipt.json meter.scans=$scans1 (pass-through from run.json)";; esac
+  interval1=$(jqf "$A1/receipt.json" meter.scan_interval_ms)
+  want "case40 receipt meter.scan_interval_ms" 250 "$interval1"
+  cpu1=$(jqf "$A1/receipt.json" meter.watcher_cpu_s)
+  case "$cpu1" in ''|MISSING|null|*[!0-9.]*) bad "case40 receipt meter.watcher_cpu_s not computed: $cpu1";;
+    *) ok "case40 receipt.json meter.watcher_cpu_s=$cpu1 (pass-through from run.json)";; esac
+else
+  bad "case40 case1's receipt.json is missing — cannot prove the pass-through"
+fi
 
 # --- the shell-error trap fires here, before any verdict is printed ---------------
 exec 2>&3 3>&-

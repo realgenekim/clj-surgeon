@@ -434,6 +434,20 @@ def score(arm: pathlib.Path, args) -> int:
     if wall_s is None:
         notes.append("wall-unverified: no run.json completion stamp")
 
+    # Sol round four, item 3 (watch.py:1017): the meter's OWN cost -- Sol measured
+    # 2.52 watcher CPU seconds over a 61.479s run, about 4.1% of one core, at the
+    # 250ms scan interval -- never appeared in the receipt, so a cohort run had no
+    # way to see what running the meter itself was costing the box. run.json now
+    # carries the three raw numbers (RUSAGE_SELF delta, the scan count, the interval
+    # actually used); this is a pass-through, not a recomputation, because only the
+    # watcher process itself can measure its own CPU time.
+    watcher_cpu_s = run.get("watcher_cpu_s")
+    scans = run.get("scans")
+    scan_interval_ms = run.get("scan_interval_ms")
+    if watcher_cpu_s is None or scans is None or scan_interval_ms is None:
+        notes.append("watcher-cost-unverified: run.json carries no "
+                     "watcher_cpu_s/scans/scan_interval_ms")
+
     meter = {
         "wall_s": wall_s if wall_s is not None else UNV,
         "returns": metered["returns"],
@@ -443,6 +457,9 @@ def score(arm: pathlib.Path, args) -> int:
         "in_run_test_s": round(sum(test_elapsed) / 1000.0, 1) if test_elapsed else 0.0,
         "tool_exec_s": round(sum(elapsed) / 1000.0, 1) if elapsed else 0.0,
         "self_reported_toolcalls": self_reported if self_reported is not None else UNV,
+        "watcher_cpu_s": watcher_cpu_s if watcher_cpu_s is not None else UNV,
+        "scans": scans if scans is not None else UNV,
+        "scan_interval_ms": scan_interval_ms if scan_interval_ms is not None else UNV,
         "sources": {"rollout": raw, "watch": metered,
                     "agree": raw == {k: metered[k] for k in raw}},
     }
