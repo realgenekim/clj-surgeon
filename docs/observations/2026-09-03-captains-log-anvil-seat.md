@@ -370,6 +370,39 @@ Reds worth recording: `pool_size 0` HUNG the tool forever (a zero-thread claypoo
 
 ## 04:47Z — ratchets Sol re-review: GO-WITH-FIX — 7 of 8 prior items CLOSED (preorder spans, MINIMAL policy, discards/meta, schema, wildcard note, pinned examples, cosmetics); PARTIAL: a multiline dispatch string still presents on two lines; NEW: the candidate catalog advertises `changes` on its projected edit_clojure while the handler now refuses it. Tightening audit clean (no production caller sends `changes` to edit_clojure). Round 3 launched (Sonnet). Verdict filed `ratchets-rereview.md`.
 
+## 04:48Z — the memory battery exists and main is RED (measurement half only; no op was changed)
+
+`make memory-battery` at 4ec01da: one JVM at `-Xmx512m`, 5 reps, N = 100/1,000/10,000, four arms,
+continuous 5 ms heap sampler, exit 0/1/2/3. **Exit 1.** `cli-ls-tree` fails `peak-over-budget` at
+N=1,000 (301 MB vs a 248 MB budget) and N=10,000 (433 MB) and `peak-scales-with-n` (433 vs 333);
+`workspace-sources-read-all` fails `peak-scales-with-n` (204 vs 105). No OOM anywhere, and every
+bounded result hashed identically to the `-Xmx4g` reference at every N. `reserved-peak ≤ 192 MiB` is
+reported UNMEASURED for all four arms — no operation has an admission accountant, and the sampled
+process-wide peak is not substituted for it, so the verdict prints `(INCOMPLETE)`.
+
+Retention (`held_mb`, after-GC with the result still referenced) is dead linear: ls-tree 9.4 KB/file,
+read-all 4.1 KB/file (= **1.01 heap bytes per source byte** — the instrument calibrating itself against a
+`sorted-map` of compact ASCII strings), rename full-match 1.0 KB/file. Peak above ~200 MB is GC
+scheduling, not live data (ls-tree peaks at 433 MB holding 94 MB). Table:
+`docs/observations/2026-09-03-memory-battery-baseline.md`. Generator: 10,000 files in 973 ms, 40.5 MB.
+
+Two honest limits, both in the baseline doc. (1) Sol's published lines do NOT catch a *small-constant*
+O(N) receipt: `rename-ns-plan-full-match` retains 1.0 KB/file, unambiguously linear, and passes
+everything, because 8.8 MB of growth fits inside 224 MB of headroom and `retained-scales-with-n` is
+measured after the result is released and so only sees leaks. Flagged for the kernel builder; this
+battery implements Sol's constants verbatim and invents none. (2) The narrow rename arm alone would have
+reported a false `ok` — its prefix matches 100 of 10,000 files — so a full-match arm was added. Every
+future arm needs the query that makes its result grow with N.
+
+LID: `MCP-OP-MEM-001` (per-op memory/work receipt block) and `MCP-OP-MEM-011` (the battery as release
+gate), both `[ ]` active gaps in `docs/intent/memory-boundedness/`, wired into
+`audit-current-repository` (`:ok true`). Witness is a millisecond test in the fast suite that feeds
+hand-written numbers to the pure verdict function AND asserts `memory-battery` exists in the Makefile,
+carries `@spec MCP-OP-MEM-011`, and is absent from the transitive target closure of
+test/test-fast/mcp-test/runtests. Delete the target → fast suite red; delete the witness → contract
+audit red. `make test` gains only `memory-battery-self-test` (ms-scale).
+
+Pre-existing RED found in passing, NOT mine: `agent-routing-test/terminal-response-routing-is-conditional-on-complete-user-work` fails 5 assertions on main — `resources/clj-surgeon-agent-routing.md` no longer contains any `terminal_response` text (removed by 01f0739, the routing-plate rewrite) and the test was not updated.
 ## 04:48Z — vision.md: added "When the work is delegated" under How we work (Gene: "we inspect the results, we analyze its telemetry, caring just as much about its methods and timings as if we did the work ourselves") — a delegated run is a measured arm: brief = pre-registration, report = claim, its telemetry = a free adoption arm, its friction = our ledger, executed re-derivation before the queue, same squares.
 
 ## 04:49Z — kondo f8a9ef9 MERGED into main by surgeon1 (acda1b3, "merge main"); my push was rejected non-fast-forward, rebased, pushed. Gene asked for the HOW of delegated-work inspection from the actual history; an Opus history-mining agent is writing `delegation-techniques-the-how.md`.
@@ -419,3 +452,40 @@ Reds worth recording: `pool_size 0` HUNG the tool forever (a zero-thread claypoo
 ## 06:13Z — arms apparatus round 2 pushed 6c1cf0a (598139c → 22 commits): "anvil-arms self-test: 162 passed, 0 failed"; test-fast 702/5912/0. Every one of Sol's 12 items red-first: malformed/duplicate/reversed/truncated streams → typed abort, no receipt, stale receipts deleted; no-result tool call → incomplete-run; `make verify` metered via a `make -n` map hashed into the attestation; driver in its own session, group reaped (orphans 0); health JSON bound field-by-field to independent witnesses; per-arm CODEX_HOME bound by the session id codex announces (glob latch deleted); governing prose hashed (the "three→four edits" drift now fails --check); cohort aborts on first ATTEST-MISMATCH, n<1 refused; stop-server signals only the recorded pid with matching /proc start time; roots outside ~/tmp/arms refused. Discrimination check: Sol's good arms still score byte-identical. Note for a real cohort: COHORT_PORTS must name only ports the cohort holds (7908 was held by a reviewer server → native arms correctly refused). Sol round-2 review running.
 
 ## 06:15Z — rf2 round 4 pushed 965d49e: ONE discovery kernel (`extract/discover-workspace-sources`) feeds :extract, :extract!, the MCP plan route and the MCP apply route; `read-all` no longer walks; the w9 MCP witness went from `{:ok true}` + a rewritten `.git/hooks/caller.clj` (RED, verbatim in the commit) to `caller-path-in-skipped-tree`, byte-identical, link intact, no target — with a parity test asserting identical source sets and refusal types on both entrances. Prune rule: refuse only under a canonical pruned prefix that is NOT an ancestor of a path the walk read (kills the `out -> src` false refusal); `:unreadable` is a typed, counted, non-harmless skip; pre-write confinement applies the prune check; dry-run reports instead of refusing. EXTRACT-037 now says an entrance that builds its own universe is a defect even when its tests pass. Merge repair: main's kondo fix added a call that the requalify reference test now correctly rewrites (10 → 11). Gates at zero. Opus round-4 re-check running.
+## 06:22Z — memory battery round 2: Sol's eight instrument fixes landed, and the new hard line is RED
+
+Sol's executed instrument review (GO-WITH-FIX as tooling) closed in eight commits on
+`bridge/memory-battery`, each with a witness that failed first, ms-scale, in the self-test — never in
+`make test`. What the instrument could not do before: report an unobserved line as anything but a pass
+(`PASS (INCOMPLETE)`, exit 0 — now a third terminal state, INCOMPLETE, exit 4); check that the corpus on
+disk is the corpus it claims (one deleted file was invisible; verification is now byte counts plus content
+digests, with unexpected files a refusal); bind output parity to the experiment that produced it (any
+`reference-hashes.edn` was accepted from a root shared across worktrees); gate what a result costs to hold;
+tell result retention from a leak; or distinguish a measurement from a requirement.
+
+Verbatim from the run at `a9d2d4b` (`docs/observations/2026-09-03-memory-battery-baseline.md`, round 2):
+`FAIL held-scales-with-n {:op :cli-ls-tree, :profile :default, :observed 94.0, :limit 11.5, :small-n-observed 9.5, :slack-mb 2.0}`,
+`{:op :workspace-sources-read-all, :observed 41.0, :limit 6.4}`,
+`{:op :rename-ns-plan-full-match, :observed 9.9, :limit 3.0}`. All three passed round 1 on the same numbers;
+nothing was looking at them. `rename-ns-plan-narrow` stays flat at 0.1 MB — the walk is bounded, the plan is not.
+`grow_mb` <= 0.4 MB everywhere (nothing leaks), no OOM, and output parity holds on every arm.
+
+The attestation fired twice unprompted: the existing reference was refused `unattested-reference`, and after a
+commit touched `src/`, the rebuilt one was refused again as `stale-reference {:fields [:src-digest]}`. Both
+would previously have been used silently for parity.
+
+The three cheap adversarial arms Sol asked for paid off on their first run. `cli-ls-tree` peaks at **386.4 MB
+on ONE 1.9 MiB file** and **285.7 MB on ONE 111 KB, 300-deep file**, against a 248 MB budget — corpora 20x and
+364x smaller than the 10,000-file tree. Heap sized by a file's shape, not the repository's size; no tree-scale
+arm could have surfaced it. At -Xmx4g the same nested arm peaked at 1,322 MB.
+
+The peak lines are now TREND, reported and never gated: Sol re-ran an identical cell and it moved 274.8 ->
+246.5 MB, crossing the verdict line on unchanged work. Across three runs the held values reproduced to 0.3 MB
+while peak moved by tens — the measured case for which instrument may hold a gate. The docs' "about 410 MiB at
+512m" was also wrong arithmetic on the wrong term of the min; the enforced figure is start + 224 ~= 248 MiB.
+
+`make test-fast` after merging origin/main: "Ran 726 tests containing 6050 assertions. 0 failures, 0 errors."
+Lock note: per the coordinator, the full battery keeps the exclusive `suite.lock`; unit suites moved to
+`suite-run` lanes, so unit suites now run concurrently with a battery — `wall_ms` is a trend column, the heap
+columns are per-JVM and unaffected. Recorded in `docs/memory-battery.md`.
+

@@ -113,7 +113,9 @@
           (io/file root
                    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md")
           (io/file root
-                   "docs/intent/read-path-memory/read-path-memory-specs.md")]]
+                   "docs/intent/read-path-memory/read-path-memory-specs.md")
+          (io/file root
+                   "docs/intent/memory-boundedness/memory-boundedness-specs.md")]]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources
