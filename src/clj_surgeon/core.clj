@@ -477,6 +477,86 @@
 
 ;; @spec MCP-OP-CENSUS-019
 ;; @spec MCP-OP-CENSUS-024
+;; @spec MCP-OP-CENSUS-014
+(defn- denied-ancestor
+  "The nearest EXISTING ancestor directory of `path` this process may neither
+   read nor traverse, or nil.
+
+   Sol's round-fifteen item 9. `fs/exists?` is false of a readable file under a
+   `chmod 000` parent, because the stat cannot get through the parent — so the
+   entrance answered `:file-not-found`, \"name a source that exists\", about a
+   file that is right there. That is the `file-not-found`/`file-not-readable`
+   confusion commit 1038893 was written to end, reproduced by moving the
+   permission bit one directory up. The two remedies differ, so the two answers
+   must, and the refusal has to name the DIRECTORY whose bit must change rather
+   than the file whose bits are already fine."
+  [path]
+  (loop [dir (fs/parent (fs/absolutize path))]
+    (when dir
+      (if (fs/exists? dir)
+        (when-not (and (fs/readable? dir) (fs/executable? dir))
+          (str dir))
+        (recur (fs/parent dir))))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(defn census-source-refusal
+  "THE ONE FENCE every path this op reads passes through, before any open.
+
+   nil when the path may be opened; otherwise the typed refusal it earns, the
+   cause, and — when a directory in the path is what may not be read — that
+   directory.
+
+   Sol's round-fifteen items 1, 2, 5 and 7, blocking. Round fourteen asked the
+   readability question in the `:file` branch of the entrance and nowhere else,
+   so the `:dir` WALK — the ordinary invocation — still handed every path the
+   discovery kernel found straight to `slurp`:
+
+     :dir <tree with a chmod-000 source>
+       {:error \"…/denied.clj (Permission denied)\", :error-type :invalid-arguments}
+
+   untyped, no anchor, no remedy, and `:invalid-arguments` is in neither
+   declared refusal set, so both enumeration witnesses were blind to it. A rule
+   that lives in one branch is a rule the other branches break.
+
+   It asks the SAME questions, in the same order, that `mcp-paths/
+   resolve-source-path` asks at the other entrance, because the two entrances
+   answering one tree differently is the defect class this closes:
+
+   - existence FIRST, and when the answer is \"not there\", whether an ancestor
+     directory is what this process may not read;
+   - REGULARITY next, FOLLOWING links, so a FIFO, a socket, or a directory
+     named `*.clj` is refused BEFORE any open. `fs/readable?` is true of a
+     named pipe and `slurp` blocks on one forever with no writer: one FIFO
+     anywhere under `:dir` wedged the census for thirty seconds with zero bytes
+     on stdout and no diagnostic. Asked AFTER existence so a path that is not
+     there is still reported as missing;
+   - READABILITY last, so a directory is reported as a directory rather than as
+     a permission problem, and before anything opens it."
+  [path]
+  (let [given (str path)
+        absolute (str (fs/absolutize given))]
+    (cond
+      (not (fs/exists? absolute))
+      (if-let [parent (denied-ancestor absolute)]
+        {:error-type :file-not-readable
+         :cause :parent-denied
+         :parent parent
+         :error (str given " cannot be read: the directory " parent
+                     " may not be read by this process")}
+        {:error-type :file-not-found
+         :error (str given " does not exist")})
+
+      (not (fs/regular-file? absolute))
+      {:error-type :file-not-a-regular-file
+       :cause :not-a-regular-file
+       :error (str given " is not a regular file")}
+
+      (not (fs/readable? absolute))
+      {:error-type :file-not-readable
+       :cause :permission-denied
+       :error (str given " exists but cannot be read")})))
+
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-028
 ;; @spec MCP-OP-CENSUS-032
@@ -529,15 +609,22 @@
        :else
        (reduce
          (fn [acc p]
-           (let [source (slurp p)]
-             (if (relation-census/defines-arms? source)
-               (update acc :inputs conj {:file (relative p)
-                                         :source source})
-               (cond-> acc
-                 declared?
-                 (update :declared into
-                         (relation-census/source-declared-names source))))))
-         {:scanned (count paths)
+           ;; The fence, on EVERY member, before the open. Stopping at the
+           ;; first refusable path is what the MCP entrance's `collect-inputs`
+           ;; does, for the same reason: nothing after it can be trusted
+           ;; either, and the refusal names the one the walk tripped on.
+           (if-let [refused (census-source-refusal p)]
+             (reduced (assoc acc :unreadable (assoc refused :file (relative p))))
+             (let [source (slurp p)
+                   acc (update acc :scanned inc)]
+               (if (relation-census/defines-arms? source)
+                 (update acc :inputs conj {:file (relative p)
+                                           :source source})
+                 (cond-> acc
+                   declared?
+                   (update :declared into
+                           (relation-census/source-declared-names source)))))))
+         {:scanned 0
           :inputs []
           :declared #{}
           :oversized-skipped (vec (:oversized discovered))
@@ -619,6 +706,11 @@
                          (str/split (str doors) #",") nil)
                        relation-census/default-doors)
         want-declared? (boolean doors)
+        ;; The entrance's own fence call, DELAYED: MCP-OP-CENSUS-016 requires
+        ;; the shape pass to touch nothing, and a `let` binding is forced
+        ;; before the first `cond` branch is tested.
+        named-refusal (delay (when (string? file)
+                               (census-source-refusal file)))
         scan (delay (census-sources dir file {:declared? want-declared?}))
         ;; ONE fact bundle, published by EVERY receipt shape below that got as
         ;; far as a scan — success, no-fold-arms-found and every refusal. The
@@ -655,59 +747,73 @@
       ;; was there, and the `java.nio.file.NoSuchFileException` surfaced
       ;; through the launcher as a bare `:invalid-arguments` whose entire
       ;; payload was the path — no type to branch on, no anchor, no remedy.
+      ;; Round fourteen added the readability question beside it, and Sol's
+      ;; round-fifteen items 1/2/5/7 found the ANSWER living in this branch
+      ;; alone while the `:dir` walk three frames down still read whatever it
+      ;; was handed. So the questions moved into `census-source-refusal`, the
+      ;; one fence BOTH the named `:file` and every walk-discovered member now
+      ;; pass through, and this branch is that fence applied to the one path
+      ;; the caller named.
       ;;
       ;; It cannot live in the pure shape pass: existence is a filesystem
       ;; question and MCP-OP-CENSUS-016 requires that pass to touch nothing.
-      ;; It must not live inside `census-sources` either, because that is a
-      ;; SHARED kernel three frames down that knows nothing about anchors or
-      ;; continuations — which is exactly how the throw escaped untyped. The
-      ;; entrance is where every other filesystem refusal this op makes is
-      ;; decided, and it is where this one belongs.
       ;;
       ;; No continuation, and that is the honest answer: the file this op was
       ;; given IS the request, so the request minus it is not a request.
-      (and (string? file) (not (fs/exists? file)))
-      {:ok false
-       :error-type :file-not-found
-       :anchor anchor
-       :error (str file " does not exist")
-       :file file
-       :remedy (str file " does not exist, and the one source this op was "
-                    "given IS the request, so the request minus it is not a "
-                    "request and no narrower command can be computed: name a "
-                    "source that exists with :file, or point :dir at a "
-                    "directory to census its tree.")}
+      ;;
+      ;; The refusals are separately NAMED rather than one name carrying a
+      ;; cause, because their remedies differ — "name a source that exists"
+      ;; against "the source is there, fix what may read it" against "that
+      ;; path is not a file at all" — and a caller who must read a second
+      ;; field to learn which remedy applies has been handed a branch dressed
+      ;; as a type. The enumeration witness drives on the type NAME, so a
+      ;; distinct name is also what makes each impossible to ship unexercised.
+      ;; `:cause` is carried BESIDE the name, never instead of it: it
+      ;; distinguishes the file's own bit from a parent directory's, which is
+      ;; a fact about what to fix and not a second remedy.
+      (some? @named-refusal)
+      (let [{:keys [error-type error cause parent]} @named-refusal]
+        (cond-> {:ok false
+                 :error-type error-type
+                 :anchor anchor
+                 :error error
+                 :file file
+                 :remedy
+                 (case error-type
+                   :file-not-found
+                   (str file " does not exist, and the one source this op was "
+                        "given IS the request, so the request minus it is not "
+                        "a request and no narrower command can be computed: "
+                        "name a source that exists with :file, or point :dir "
+                        "at a directory to census its tree.")
 
-      ;; @spec MCP-OP-CENSUS-014
-      ;; Sol's round-fourteen item 7, the CLI half. `fs/exists?` is true of a
-      ;; chmod-000 file, so the branch above let it through and it threw the
-      ;; same untyped `java.io.FileNotFoundException` out of `census-sources`
-      ;; that the missing `:file` threw before round thirteen — an
-      ;; `:invalid-arguments` whose entire payload was the path.
-      ;;
-      ;; It gets its OWN name rather than `:file-not-found` with a
-      ;; `:cause :permission-denied`. The two refusals have different
-      ;; remedies — "name a source that exists" against "the source is there,
-      ;; fix what may read it" — and a caller who must read a second field to
-      ;; learn which remedy applies has been handed a branch dressed as a
-      ;; type. The enumeration witness drives on the type NAME, so a distinct
-      ;; name is also what makes this refusal impossible to ship unexercised;
-      ;; a `:cause` on a shared name is invisible to it.
-      ;;
-      ;; No continuation, for the same reason the missing `:file` gets none:
-      ;; the file this op was given IS the request.
-      (and (string? file) (not (fs/readable? file)))
-      {:ok false
-       :error-type :file-not-readable
-       :anchor anchor
-       :error (str file " exists but cannot be read")
-       :file file
-       :remedy (str file " exists but this process may not read it, and the "
-                    "one source this op was given IS the request, so the "
-                    "request minus it is not a request and no narrower "
-                    "command can be computed: make the file readable, name a "
-                    "readable source with :file, or point :dir at a directory "
-                    "to census its tree.")}
+                   :file-not-a-regular-file
+                   (str file " is not a regular file — a directory, a named "
+                        "pipe or a socket carrying a source name is refused "
+                        "before it is opened, because reading one blocks or "
+                        "fails rather than yielding a source — and the one "
+                        "source this op was given IS the request, so no "
+                        "narrower command can be computed: name a regular "
+                        "file with :file, or point :dir at a directory to "
+                        "census its tree.")
+
+                   (if (= :parent-denied cause)
+                     (str file " is there, and the directory " parent
+                          " is what this process may not read, so the file "
+                          "cannot be reached; the one source this op was "
+                          "given IS the request, so the request minus it is "
+                          "not a request and no narrower command can be "
+                          "computed: make " parent " readable, name a "
+                          "reachable source with :file, or point :dir at a "
+                          "directory to census its tree.")
+                     (str file " exists but this process may not read it, and "
+                          "the one source this op was given IS the request, "
+                          "so the request minus it is not a request and no "
+                          "narrower command can be computed: make the file "
+                          "readable, name a readable source with :file, or "
+                          "point :dir at a directory to census its tree.")))}
+          cause (assoc :cause cause)
+          parent (assoc :parent parent)))
 
       (:oversized @scan)
       {:ok false
@@ -796,6 +902,37 @@
                  "known to fit; point :dir at a directory you know is "
                  "smaller, or census one :file at a time."))
           (facts)))
+
+      ;; @spec MCP-OP-CENSUS-014
+      ;; A member the WALK discovered that the fence refuses. It is decided
+      ;; after both bounds, exactly as the tool decides it — a tree the census
+      ;; may not finish is refused before anything is read — and it answers
+      ;; the way the tool answers the same tree: typed, naming the member by
+      ;; its project-relative path, with the walk's own figures, and with a
+      ;; remedy rather than a continuation. There is no continuation to
+      ;; compute: the path came from the WALK and not from the request, so
+      ;; there is no request to narrow.
+      (:unreadable @scan)
+      (let [{:keys [error-type error cause parent file]} (:unreadable @scan)
+            root (census-root dir)]
+        (cond-> (merge
+                  {:ok false
+                   :error-type error-type
+                   :anchor anchor
+                   :error error
+                   :file file
+                   :remedy
+                   (str file " came from the workspace walk, not from the "
+                        "request, so there is no request to narrow and no "
+                        "narrower command can be computed: remove or repair "
+                        "it under " root
+                        (when parent
+                          (str " (the directory " parent
+                               " is what this process may not read)"))
+                        ", or name a readable regular file with :file.")}
+                  (facts))
+          cause (assoc :cause cause)
+          parent (assoc :parent parent)))
 
       :else
       (let [inputs (:inputs @scan)

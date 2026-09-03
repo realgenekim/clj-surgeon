@@ -788,6 +788,13 @@
     ;; what may read it. A `:cause` field on a shared name would also be
     ;; invisible to the enumeration witness below, which drives on the name.
     :file-not-readable
+    ;; Sol's round-fifteen items 2 and 8. A FIFO, a socket, or a DIRECTORY
+    ;; carrying a source name is neither missing nor unreadable: `fs/readable?`
+    ;; is true of a named pipe, and `slurp` on one blocks forever with no
+    ;; writer. Its own name because its remedy is its own — the path is not a
+    ;; file at all — and because a name is what the enumeration witness can
+    ;; see.
+    :file-not-a-regular-file
     :invalid-pool-size
     :source-too-large
     :too-many-walk-entries

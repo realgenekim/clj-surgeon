@@ -3173,7 +3173,15 @@
                ;; drive walks `workspace`, and an unreadable entry inside it
                ;; would refuse those walks `unreadable-source-path` instead of
                ;; the refusal each one exists to probe.
-               :denied-file (io/file parent "denied/src/a/denied.clj")}]
+               :denied-file (io/file parent "denied/src/a/denied.clj")
+               ;; Sol's round-fifteen item 7: a DIRECTORY carrying a source
+               ;; name. It lives outside `workspace` for the same reason the
+               ;; denied source does — inside it the walk would simply descend
+               ;; it — and it is driven by `:file`, which is the shape that
+               ;; reached `slurp` and threw "(Is a directory)". The FIFO of the
+               ;; same class is driven by its own witness, under a deadline: a
+               ;; drive that blocks belongs nowhere near a shared fixture.
+               :dir-named-clj (io/file parent "dirfile/src/a/thing.clj")}]
     (spit-file! (io/file (:workspace trees) "src/a/one.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/two.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/three.clj") arm-source)
@@ -3182,11 +3190,12 @@
                 malformed-arm-source)
     (spit-file! (:denied-file trees) arm-source)
     (deny-reads! (:denied-file trees))
+    (.mkdirs ^java.io.File (:dir-named-clj trees))
     trees))
 
 (defn- cli-refusal-drives
   "One drive per refusal `census/cli-refusal-types` declares the op can emit."
-  [{:keys [workspace empty-ws broken denied-file]}]
+  [{:keys [workspace empty-ws broken denied-file dir-named-clj]}]
   (let [named #(.getCanonicalPath ^java.io.File %)]
     (concat
       ;; Every row of the shared table the CLI can express, driven
@@ -3247,6 +3256,13 @@
         :root workspace
         :expect-anchor (.getCanonicalPath denied-file)
         :opts {:file (.getCanonicalPath denied-file)}}
+       ;; Sol's round-fifteen item 7: a path that is not a regular file,
+       ;; enumerated so it cannot ship unexercised either.
+       {:label :file-not-a-regular-file
+        :error-type :file-not-a-regular-file
+        :root workspace
+        :expect-anchor (.getCanonicalPath ^java.io.File dir-named-clj)
+        :opts {:file (.getCanonicalPath ^java.io.File dir-named-clj)}}
        {:label :no-fold-arms-found
         :error-type :no-fold-arms-found
         :root empty-ws
