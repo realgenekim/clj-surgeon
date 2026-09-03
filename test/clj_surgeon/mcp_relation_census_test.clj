@@ -1427,6 +1427,28 @@
                     (str label " continuation does not name the workspace: "
                          command))))))
 
+        (testing "a workspace too long to carry leaves a remedy, not a truncated call"
+          ;; MCP-OP-CENSUS-014's other half, at the CLI: a continuation that
+          ;; does not fit the shared bound is not shortened into a call
+          ;; naming a different directory — there is no such call, so the
+          ;; refusal says so. Without this the branch ships unexercised, and
+          ;; an unexercised refusal branch is where the last four rounds'
+          ;; findings have lived.
+          (let [long-dir (str "/" (apply str (repeat census/max-next-call-bytes
+                                                     "d")))
+                refusal (core/run-relation-census
+                          {:dir long-dir :threads "not-a-number"})]
+            (is (= :invalid-pool-size (:error-type refusal)))
+            (is (= long-dir (:absolute (:anchor refusal)))
+                "the refusal stopped naming the workspace it was given")
+            (is (not (contains? refusal :next-command))
+                (str "a continuation over the " census/max-next-call-bytes
+                     "-byte bound was handed back anyway: "
+                     (pr-str (:next-command refusal))))
+            (is (string? (:remedy refusal)))
+            (is (not (str/includes? (str (:remedy refusal)) "<"))
+                "the remedy carries a placeholder")))
+
         (testing "the JVM CLI op agrees with the bb subprocess"
           (let [refusal (core/run-relation-census
                           {:dir named :doors "conj"})]
