@@ -248,18 +248,26 @@
                               (read-string (slurp (str build-file))))
     (catch Exception _e ["src"])))
 
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-clj-files
-  "Find all .clj/.cljs/.cljc files under a directory using system find."
+  "Find all .clj/.cljs/.cljc files under a directory using system find.
+
+   NUL-delimited: a source path may contain a newline, and str/split-lines
+   turned one real path into two fictional ones that then failed to parse and
+   were silently dropped (Andon pull inb-d27b79, 2026-09-03). The -name
+   alternation is parenthesised because -print0 would otherwise bind to the
+   last -name only."
   [dir]
-  (when (fs/directory? dir)
+  (when (existing-directory? dir)
     (try
       (let [result (babashka.process/shell
                      {:out :string :err :string :continue true}
-                     "find" (str dir)
-                     "-name" "*.clj" "-o" "-name" "*.cljs" "-o" "-name" "*.cljc")]
+                     "find" (find-start-token dir)
+                     "(" "-name" "*.clj"
+                     "-o" "-name" "*.cljs"
+                     "-o" "-name" "*.cljc" ")" "-print0")]
         (when (zero? (:exit result))
-          (->> (str/split-lines (str/trim (:out result)))
-               (remove str/blank?))))
+          (seq (nul-separated-paths (:out result)))))
       (catch Exception _e nil))))
 
 (defn- discover-projects

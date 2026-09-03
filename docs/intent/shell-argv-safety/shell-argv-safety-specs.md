@@ -15,7 +15,7 @@ required), `[x]` implemented (implementation and test witnesses required),
 
 - [x] **MCP-OP-SHELL-ARGV-002**: When the `:ls-tree` entrance receives a `:dir` that does not resolve to an existing directory, clj-surgeon shall return the typed refusal `:workspace-root-not-a-directory` before project discovery starts.
 
-- [ ] **MCP-OP-SHELL-ARGV-003**: When clj-surgeon consumes the output of an external file-discovery command, clj-surgeon shall delimit that output with NUL so that a path containing a newline is returned as one intact path.
+- [x] **MCP-OP-SHELL-ARGV-003**: When clj-surgeon consumes the output of an external file-discovery command, clj-surgeon shall delimit that output with NUL so that a path containing a newline is returned as one intact path.
 
 ## Misreadings these requirements exist to forbid
 
