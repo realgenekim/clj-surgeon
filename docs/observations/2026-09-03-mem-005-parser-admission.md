@@ -102,9 +102,18 @@ is the witness that the string/regex/char/comment handling is right.
 | cell | -Xmx | before | after |
 |---|---|---|---|
 | nested cold | 512m | StackOverflowError, 42 ms, **the whole scan dies** | refused `max_parse_depth` (limit 150, observed 601), 19 ms, peak 44.6 MB |
-| nested warm | 512m | completed, peak **312.4 MB**, 827 ms | refused, 4 ms, peak 52.5 MB |
+| nested warm | 512m | completed, peak **312.4 MB**, 827 ms | refused, 4 ms, peak **52.5–134.8 MB** |
 | giant | 128m | **OutOfMemoryError** | refused `max_parse_nodes`, 65 ms, peak 52.6 MB |
 | giant | 512m | completed, peak **339.9 MB**, 1,364 ms | refused, 76 ms, peak 65.9 MB |
+
+The nested-warm peak is stated as a RANGE because the single figure did not
+reproduce. This run measured 52.5 MB; Opus's independent green re-run on
+2026-09-03, on a box under load 6–9, measured **134.8 MB** for the same cell
+with the same -Xmx, while the other three cells landed within noise (45.9 /
+60.1 / 59.8 MB against 44.6 / 52.6 / 65.9). The verdict is identical either
+way — 2.3x under the 247.8 MB budget and 2.3x below the 312.4 MB pre-fix
+figure — but a published cell that does not reproduce on a loaded box is a
+figure, not a receipt, and it is restated as the range that does.
 
 After the fix the peaks are the JVM's own baseline (44–66 MB), not the file's
 shape. Refusal latency on the two 111 KB cells is **19 ms and 4 ms**, both under
@@ -160,21 +169,52 @@ The three `held-scales-with-n` HARD failures and the remaining `peak` trends on
 the default corpus are unchanged and are not MEM-005's subject: they are the
 retain-everything shapes MEM-002/003/004 own.
 
-## 5. An honest gap this measurement exposes
+## 5. The gap this measurement exposed, and its correction
 
-`rename-ns-plan-full-match` and `rename-ns-plan-narrow` still peak at 298.8 and
-306.9 MB on the giant file, still over budget, still `trend`. MEM-005 does not
-reach them: `clj-surgeon.rename` parses through `clj-surgeon.analyze`, which
-calls `rewrite-clj.zip/of-string` directly — a **third tree constructor** outside
-the two outline entries this intent wires.
+As first published, this section reported that `rename-ns-plan-full-match` and
+`rename-ns-plan-narrow` still peak at 298.8 and 306.9 MB on the giant file
+because `clj-surgeon.analyze` calls `rewrite-clj.zip/of-string` directly — a
+**third tree constructor** outside the two outline entries — and argued for
+leaving it ungated, on the ground that "a refusal is only safe where the caller
+turns it into a named, counted, per-file skip … gating `analyze` today would
+convert an operation that COMPLETES into one that throws."
 
-It was left ungated deliberately, and the reason is the same one that makes the
-control work on the outline path: a refusal is only safe where the caller turns
-it into a **named, counted, per-file skip**. `ls-tree` has that surface now;
-`rename`'s planner does not, so gating `analyze` today would convert an
-operation that completes into one that throws. Extending admission to
-`analyze/zip-of-string` should ship together with a skip surface in the rename
-planner, and belongs to whichever lane owns that receipt.
+**The doctrine is right and the factual premise was wrong.** Opus's executed
+review measured `analyze/string->zloc` on the shape in question: it does not
+complete, it throws `StackOverflowError` — an `Error` no caller handles.
+Gating it swaps an uncatchable Error for a typed `ExceptionInfo`, which is
+strictly better for every caller even with no receipt to carry it. And the
+review found a **fourth** ungated constructor this section never mentioned:
+`clj-surgeon.structural-lens/find-subforms` / `find-file`, reached from the MCP
+read surface at `mcp_inspect.clj:530` and the CLI `:find-subform` op at
+`core.clj:737` — the read path's own `find_subforms` verb, which is a gap in
+this leaf and not a neighbouring lane's.
+
+Both are gated now, each with the minimal skip surface the doctrine demands:
+`core/named-plan-refusal` turns the typed refusal into a named plan refusal at
+the five analyze-driven CLI ops, and `find-subforms` returns it with `:reason`,
+`:limit`, `:observed` and `:remedy` intact rather than flattened to a string.
+`show_form` was flattening it the same way and no longer does.
+
+Two further corrections to what this receipt claimed:
+
+- The estimator counted DELIMITER depth, not nesting depth. A 710-byte
+  `(def x @@@…y)` scanned at parse-depth 1, was admitted, and killed a whole
+  `ls-tree` scan — the same catastrophe, at 1/155th the size of the 111 KB
+  file above. `scan-shape` now counts every construct the reader recurses
+  into; the corpus cost over 252 sources is zero refusals and no change to the
+  deepest file (22).
+- `safe-outline` caught only `Exception`, so the scan-kill this receipt says is
+  fixed was fixed only for shapes the estimator can see. It now catches
+  `StackOverflowError` and turns it into the same named, counted skip, which
+  closes the class independent of estimator completeness.
+  `OutOfMemoryError` is deliberately still not caught: it belongs to the typed
+  resource refusal.
+
+`rename`'s own planner parses through `rewrite-clj.zip/of-string` directly
+(`rename.clj:67,166`), NOT through `analyze`, so the two `rename-ns-plan-*`
+peaks above are still not reached by this intent. That belongs to whichever
+lane owns the rename receipt.
 
 ## 6. Unit figures for the control itself
 
