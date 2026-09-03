@@ -1398,6 +1398,23 @@ sys.exit(1 if fails else 0)
 PY22D
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
+# Found while replaying Sol's probes by hand: the self-test exports
+# PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
+# score.py directly imports watch.py and drops bench/anvil-arms/__pycache__ into the
+# checkout.  A tool that dirties the worktree it is measuring makes every later
+# `git status` ambiguous, and this repo already tracks one such .pyc by accident.
+rm -rf "$HERE/__pycache__"
+D20E=$(mk11 -20e)
+env -u PYTHONDONTWRITEBYTECODE python3 "$HERE/score.py" "$D20E" > "$WORK/case20e.out" 2>&1
+want "case20e score rc with no PYTHONDONTWRITEBYTECODE" 0 "$?"
+[ -e "$HERE/__pycache__" ] \
+  && { bad "case20e score.py wrote $HERE/__pycache__ into the source tree"; rm -rf "$HERE/__pycache__"; } \
+  || ok "case20e score.py left no __pycache__ in the apparatus"
+# prompts/__pycache__ is NOT touched here: this repo tracks one .pyc under it by
+# accident, and a test that deletes a tracked file to make its own assertion pass is a
+# worse defect than the one it is checking.
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
