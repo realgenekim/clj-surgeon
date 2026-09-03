@@ -146,6 +146,12 @@ Pre-registration to be written before any arm, per the program's own rule.
 - **Reported, never claimed:** returns saved. The honest prior is **0**, and a
   measured 0 is the finding — it separates *"agents will not choose us"* from
   *"there was nothing to choose."*
+- **Pre-flight, and it is not optional.** Assert `bb --version` and
+  `rg --version` inside the arm's own environment before the arm starts, and
+  assert that `command -v rg` resolves to the shim. The hook's interpreter is
+  babashka; a shim whose interpreter is missing is not a degraded route, it is
+  an outage on the agent's only discovery path, and it would look exactly like
+  an agent that stopped using `rg`.
 - **The apparatus ratchet that ships with it:** the route log makes the
   connection witness unnecessary for the read side — a record with
   `served_by surgeon` is proof, per invocation and bound to the arm's own run
