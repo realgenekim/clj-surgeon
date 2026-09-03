@@ -24,7 +24,7 @@
 (def max-source-bytes census/max-source-bytes)
 (def max-receipt-bytes 4096)
 (def max-listed-sites 12)
-(def max-listed-files 12)
+(def max-listed-files census/max-listed-files)
 (def max-listed-unrecognised 5)
 
 ;; @spec MCP-OP-CENSUS-009
@@ -392,6 +392,10 @@
                                   {:count (count oversized)
                                    :files (vec (take max-listed-files oversized))
                                    :maximum census/max-source-bytes})
+             ;; A list bounded in silence is a list that reads as complete.
+             :oversized_skipped_omitted (when (seq oversized)
+                                          (max 0 (- (count oversized)
+                                                    max-listed-files)))
              :files (:files merged)
              :arms (:arms merged)
              :sites (:sites merged)

@@ -661,8 +661,14 @@
                            :oversized-skipped
                            (when (seq skipped)
                              {:count (count skipped)
-                              :files (vec (take 12 skipped))
+                              :files (vec (take relation-census/max-listed-files
+                                                skipped))
                               :maximum relation-census/max-source-bytes})
+                           ;; A list bounded in silence reads as complete.
+                           :oversized-skipped-omitted
+                           (when (seq skipped)
+                             (max 0 (- (count skipped)
+                                       relation-census/max-listed-files)))
                            :skipped-outside-root
                            (when (pos? (:skipped-outside-root @scan 0))
                              (:skipped-outside-root @scan))
