@@ -198,3 +198,24 @@ one commit; my suites and a re-review after.
 ## 03:32Z — the Prolog gate runs on Anvil: `make mcp-operation-oracle` on main → "mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]", EXIT 0 (MCP-OP-ORACLE-001), on the user-local swipl 10. The swipl gap is closed; `make mcp-test` is whole on this box from here.
 
 ## 03:35Z — q5z round complete (23ea871, nine commits on 2753f23): the ruling landed as an inversion of MCP-OP-ALIAS-040 (the over-declared expect.files MUST reach discovery and return found_files + an executable next_call; 8 red assertions on the anchor shape, green), ceilings untouched, `plan!` docstring says expect.files is deliberately not a read bound. My suites running incl. the full `make mcp-test` (oracle on). Port decision (Gene: kill 7888 or use another port?): use another port — 7888 on Anvil is the fleet's, named in the curtain-call seats' repo configs and the acid arms; forge runs 7906+ (7906 up with telemetry); one session restart binds this seat's MCP tools to it. Asked the mayor, via the wishlist, for what 7888 runs and who depends on it, for the port table.
+
+## 03:38Z — the mayor's port table and provisioning status (/tmp/ports.txt), verified on the box
+
+7888 on Anvil: java, user surgeon, checkout `/srv/fleet/shared-tools/clj-surgeon-e7f72e2` (sha e7f72e2,
+2026-08-25 — eight days and many commits behind main), bound 127.0.0.1, telemetry under surgeon's state;
+dev-a/b/c each carry two configs naming it and all three have live agents (3, 6, 6). Not an orphan; the
+no-kill call was right and is now measured. Listener map: 7889 cohort, 7890 cclsp, 7891/7892 bisect,
+7893 shipped-build, 7894/7895 cohort, **7906 mine (up, telemetry), 7907–7910 reserved for my branch
+servers and hand-drives**. Ruling: bind only inside that range; ask before anything outside it. Written
+into kiloclaw docs/provisioning-a-constellation-seat.md. Retiring 7888 later flips only when dev-a/b/c are
+retired or repointed — Gene's fleet decision.
+Provisioning: maven creds DONE and proven from here (`maven-r inbox list` → 307 open items; the mayor
+shimmed `clj` → `clojure` in `~/bin` because rlwrap is absent); `~/bin` scripts DONE (9 files) with PATH and
+XDG_RUNTIME_DIR pinned in .bashrc; check-prompt-plate cron hourly at :41; repo-watchstander HELD (a fresh
+bridge-cos on Buster would double the alerts — leave it there); beads: the mayor's call — inbox is the
+one store, mirror as beads only on merge; phone channel CLOSED (seat=bridge is special: only that name
+reaches Gene's page; Buster keeps it); codex auth still needs Gene interactively (401 confirmed again).
+Inbox brought current from this seat: inb-a0f37e, d8a635, 06d376, ace545, 11a6ae, a97614, 3cb0f4,
+3a9818 (fold-diff not ready for the production run until its fix round + re-review), c973d2; S9 filed as
+inb-0817fe. The session's MCP binding to 7888 gets fixed by one restart from the connector directory when
+the lanes are at a safe point; the mayor will not restart me from outside while six agents are live.

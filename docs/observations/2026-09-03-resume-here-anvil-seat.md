@@ -141,3 +141,14 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - Environment: swipl 10 + plunit at `~/.local/bin/swipl` (micromamba env `~/opt/mamba/envs/swipl`); `~/opt/claude-skills`; `~/.claude/CLAUDE.md` (seat header + imports); `~/src/the-gene-maven`; connector deps installed; seat-local `.mcp.json` → 7906 (uncommitted). Wishlist for the mayor: docs/observations/2026-09-03-anvil-seat-wishlist-for-mayor.md; Gene drives it; his restart command is in that file.
 - q5z round landed (cc4e38c…0f01440); ruling: drop the pre-read expect.files bound (anchor idiom); builder aaa35fb0f121fdb9a resumed for one commit; then my suites → push → re-review.
 - rf2 round three a59ea3ce2a6b2a7fc running (re-review items 1–7). Still running: census, study, fold-diff, template-upsert, ratchets fix rounds. Oracle proof on main running (`~/tmp/oracle-main.log`) → PASS; the full `make mcp-test` runs here now.
+
+## RESUME DELTA 2026-09-03T03:38Z — provisioning mostly done
+
+- Missing now: ONLY codex auth (Gene, interactive) → Sol. Everything else landed: maven (`maven-r`/`maven-w`
+  work), `~/bin`, XDG in .bashrc (new shells), check-prompt-plate cron, swipl, doctrine, port table.
+- Ports: 7906 mine (up, telemetry); 7907–7910 mine for branch servers/hand-drives; never anything else.
+  7888 = fleet's production Surgeon at e7f72e2 with dev-a/b/c live on it.
+- No phone channel on this seat by ruling (seat=bridge lives on Buster). Gene: terminal. Mayor: log + inbox.
+- Session restart (binds MCP tools to 7906): `cd ~/src/marvin-voice-remote/channel-connector && claude --resume
+  b623492c-458d-4156-a14d-a041f5a37e7c` — do it at a safe point (no live builders).
+- Inbox current as of 03:38Z; S9 = inb-0817fe.
