@@ -3255,3 +3255,11 @@ same project key + `claude --resume`; then memory (60 files), doctrine import, s
 Detail in the Anvil brief and the inbox item. The seat inventory as measured: 60 memory files,
 `~/.claude.json` + `~/.claude/settings.json` + the connector's `.mcp.json` carry the MCP config,
 20 scripts in `~/bin`, 8 secret files, 4 crons.
+
+## 01:04Z — seat tarball pre-staged for the move (no secrets)
+
+`~/src/seat-move/bridge-seat-20260903T0104Z.tar.gz` (25 MB, sha256 4241b28e…, 600): the transcript,
+the 60 memory files, global CLAUDE.md + settings.json, the connector's `.mcp.json`, eight `~/bin`
+scripts, the crontab. Excluded on inspection: `~/.claude.json` (carries `oauthAccount`), every secret,
+gh hosts.yml — skiff mints those as files. Mayor told on the channel; inb-20c591 carries the path.
+
