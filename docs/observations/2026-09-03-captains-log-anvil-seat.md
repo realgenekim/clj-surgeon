@@ -174,3 +174,21 @@ Ratchets fix round (a90f9ebd74d4100af) launched on the ratchets worktree.
 ## 03:25Z — Anvil environment: swipl 10 + plunit installed user-locally (micromamba), claude-skills + global CLAUDE.md + the-gene-maven in place, connector deps installed, .mcp.json repointed off 7888; wishlist for the mayor filed (docs/observations/2026-09-03-anvil-seat-wishlist-for-mayor.md) with Gene's restart command.
 
 ## 03:26Z — rf2 re-review GO-WITH-FIX: probes closed, but skips can lie about completeness and the cap remedy is broken from the CLI; round three launched (items 1–7). Verdict filed.
+
+## 03:28Z — q5z fix round landed (cc4e38c…0f01440); one bound reverted by ruling
+
+Seven items, each red first against a real probe: 14 tracked `.cpcache/*` removed and a repository-hygiene
+gate added to `make test`; the walk no longer follows links (a cycle had recursed forty `loop/` segments
+deep and pulled a file from a directory linked out of the root); ceilings `max-scope-files` 2000 and
+`max-source-bytes` 2 MiB (the red run slurped a 2 MiB file, COMMITTED, and mutated twelve namespaces);
+a symlinked defining file is now a typed refusal (the red run retired the link and left `vendor/store.clj`
+as a second live definition); `:ok`/`:committed`/`next_action` and the ✓ summary derive from the kernel's
+computed commit (a stubbed non-commit had published a green receipt over an unwritten tree); the
+retire-failure rollback deletes the undo receipt; `:retired_to` is project-relative and detail files
+prune to 20. Suites: test-fast 734/6257 (baseline five); mcp JVM 410/4598 (baseline one).
+**Ruling:** the round's third bound — a pre-read refusal when `expect.files` exceeds the files in scope —
+removed the verb's self-correcting field behaviour (the anchor: declared 176, found 171, refusal carried
+`found_files` + an executable `next_call`, the agent re-sent it verbatim, one return). Dropped; the two
+ceilings stay; the over-declared tests are restored as witnesses of the idiom. Builder resumed for that
+one commit; my suites and a re-review after.
+
