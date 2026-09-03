@@ -493,13 +493,62 @@
 
       :else {:ok false})))
 
-(defn- compile-command-for
-  "Pure: the exact command a reader can run, matching what the apply runs."
-  ([namespaces] (compile-command-for namespaces nil))
+(def ^:private classpath-placeholder
+  "The token standing for the resolved classpath in the published argv.
+
+  The compile check is two processes: the first PRINTS a classpath and the
+  second consumes it, so a receipt written before either has run has to name
+  the second's third argument somehow. Nothing ever substitutes a shell
+  variable here -- no element of either vector reaches a shell."
+  "$CLASSPATH")
+
+;; @spec MCP-OP-EXTRACT-025
+(defn compile-argv-for
+  "Pure: the two argv VECTORS the compile check executes, in order.
+
+  Vectors, never a shell string. The alias and the namespace names are
+  workspace-controlled text: a `;` inside an alias turns a printed shell string
+  into a command that executes when a reader pastes it, and the rf2 red team
+  created a file that way. As argv each is exactly one token and `ProcessBuilder`
+  consults no shell, so the record a receipt publishes and the record the apply
+  runs are the same object."
+  ([namespaces] (compile-argv-for namespaces nil))
   ([namespaces aliases]
-   (str "CP=$(" (str/join " " (classpath-args-for aliases))
-        ") && java -cp \"$CP\" clojure.main -e \""
-        (compile-expr-for namespaces) "\"")))
+   [(vec (classpath-args-for aliases))
+    ["java" "-cp" classpath-placeholder "clojure.main" "-e"
+     (compile-expr-for namespaces)]]))
+
+;; @spec MCP-OP-EXTRACT-025
+(defn shell-quote-token
+  "Pure: one POSIX-shell word that reproduces `s` byte for byte.
+
+  Single quotes, with an embedded single quote spliced as backslash-escaped:
+  inside single quotes a POSIX shell interprets nothing at all, so there is no
+  escape sequence left to get wrong."
+  [s]
+  (str "'" (str/replace (str s) "'" "'\\''") "'"))
+
+;; @spec MCP-OP-EXTRACT-025
+(defn- compile-command-shell
+  "Pure: a pasteable rendering of the SAME two argv vectors, every token
+  shell-quoted. A convenience for a reader at a prompt; `:command` stays the
+  executable record."
+  ([namespaces] (compile-command-shell namespaces nil))
+  ([namespaces aliases]
+   (let [[classpath-argv run-argv] (compile-argv-for namespaces aliases)]
+     (str "CP=$(" (str/join " " (map shell-quote-token classpath-argv)) ")"
+          " && "
+          (str/join " " (map #(if (= classpath-placeholder %)
+                                "\"$CP\""
+                                (shell-quote-token %))
+                             run-argv))))))
+
+;; @spec MCP-OP-EXTRACT-025
+(defn- compile-command-fields
+  "Pure: the two command keys a receipt publishes for one compile check."
+  [namespaces aliases]
+  {:command (compile-argv-for namespaces aliases)
+   :command_shell (compile-command-shell namespaces aliases)})
 
 ;; @spec MCP-OP-EXTRACT-019
 (defn- project-build-file
@@ -520,8 +569,8 @@
   [{:keys [namespaces root timeout-ms aliases touched-files]
     :or {timeout-ms 30000}}]
   (let [aliases (normalize-aliases aliases)
-        printed (compile-command-for namespaces aliases)
-        base (cond-> {:namespaces (vec namespaces) :command printed}
+        base (cond-> (merge {:namespaces (vec namespaces)}
+                            (compile-command-fields namespaces aliases))
                (seq aliases) (assoc :aliases aliases))
         run! (fn [argv ms]
                (try
@@ -575,13 +624,13 @@
                      (let [candidates (candidate-compile-aliases root)]
                        (cond-> {:candidate-aliases (vec candidates)}
                          (seq candidates)
-                         (assoc :command (compile-command-for
-                                           namespaces [(first candidates)])
-                                :guessed true
-                                :declare-instead
-                                (str "declare the right one in "
-                                     ".clj-surgeon.edn as "
-                                     "{:compile {:aliases [\"<alias>\"]}}"))))))))))))
+                         (-> (merge (compile-command-fields
+                                      namespaces [(first candidates)]))
+                             (assoc :guessed true
+                                    :declare-instead
+                                    (str "declare the right one in "
+                                         ".clj-surgeon.edn as "
+                                         "{:compile {:aliases [\"<alias>\"]}}")))))))))))))
 
 ;; @spec MCP-OP-EXTRACT-018
 (defn target-outline
@@ -660,12 +709,13 @@
                       ;; the dry run prints the command the apply will RUN,
                       ;; aliases included; a preview whose command differs from
                       ;; the one that executes is a second thing to learn
-                      (cond-> {:checked false
-                               :status :not-run
-                               :will-check (boolean (:_will-check plan))
-                               :namespaces namespaces
-                               :command (compile-command-for
-                                          namespaces (:_compile-aliases plan))}
+                      (cond-> (merge
+                                {:checked false
+                                 :status :not-run
+                                 :will-check (boolean (:_will-check plan))
+                                 :namespaces namespaces}
+                                (compile-command-fields
+                                  namespaces (:_compile-aliases plan)))
                         (seq (:_compile-aliases plan))
                         (assoc :aliases (:_compile-aliases plan))))
          :new-file-preview (:_target-outline plan)

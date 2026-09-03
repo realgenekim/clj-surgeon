@@ -1289,7 +1289,7 @@
                                     :alias "moved"}))]
           (is (false? (:checked compiled)))
           (is (true? (:will-check compiled)))
-          (is (str/includes? (:command compiled) "clojure.main -e")))
+          (is (= "clojure.main" (nth (second (:command compiled)) 3))))
         (finally (delete-recursive! root))))))
 
 ;; @spec MCP-OP-EXTRACT-019
@@ -1397,7 +1397,7 @@
                                         :to (.getPath target)
                                         :alias "moved"})
               compiled (:compile result)]
-          (is (str/includes? (:command compiled) "clojure -Spath -A:app/test")
+          (is (= ["clojure" "-Spath" "-A:app/test"] (first (:command compiled)))
               (str "the printed command must carry the alias: "
                    (:command compiled)))
           (is (= ["app/test"] (:aliases compiled)))
@@ -1590,3 +1590,103 @@
             (is (= before-real (slurp real))
                 "so the link's real target is untouched — today's behaviour")))
         (finally (delete-recursive! root))))))
+
+(defn- stub-bin!
+  "A directory whose `clojure` and `java` record their argv, one token per line,
+  and print a fake classpath. A `;` that reaches a shell shows up as a `PWNED`
+  file; a `;` that stays inside one argv token shows up in the log."
+  [dir log]
+  (.mkdirs dir)
+  (doseq [program ["clojure" "java"]]
+    (let [f (io/file dir program)]
+      (spit f (str "#!/bin/sh\n"
+                   "for a in \"$@\"; do printf '%s\\n' \"$a\" >> '"
+                   (.getPath log) "'; done\n"
+                   "echo stub-classpath\n"))
+      (.setExecutable f true))))
+
+(defn- run-argv!
+  "Execute one argv vector with ProcessBuilder — no shell anywhere — in `cwd`,
+  with `bin` first on PATH."
+  [argv cwd bin]
+  (let [pb (ProcessBuilder. ^java.util.List (vec (map str argv)))]
+    (.directory pb cwd)
+    (.put (.environment pb) "PATH"
+          (str (.getPath bin) ":" (System/getenv "PATH")))
+    (.redirectErrorStream pb true)
+    (let [process (.start pb)
+          out (slurp (.getInputStream process))]
+      (.waitFor process)
+      out)))
+
+;; @spec MCP-OP-EXTRACT-025
+(deftest the-published-compile-command-is-the-argv-that-runs
+  (let [hostile "x; touch PWNED; echo"
+        root (create-caller-project!)
+        source (io/file root "src" "app" "core.clj")
+        target (io/file root "src" "app" "moved.clj")
+        bin (io/file root "stub-bin")
+        log (io/file root "argv.log")
+        pwned (io/file root "PWNED")
+        logged #(set (str/split-lines (if (.exists log) (slurp log) "")))]
+    (try
+      (stub-bin! bin log)
+      (let [preview (extract/plan {:file (.getPath source)
+                                   :forms '[moved-one moved-two]
+                                   :to (.getPath target)
+                                   :alias "moved"
+                                   :compile-alias hostile})
+            command (get-in preview [:compile :command])
+            shell (get-in preview [:compile :command_shell])]
+
+        (testing "the receipt publishes the two argv VECTORS, never a shell string"
+          (is (vector? command)
+              (str ":command must be argv, got " (pr-str command)))
+          (is (= 2 (count command)))
+          (is (every? vector? command))
+          (is (= ["clojure" "-Spath" (str "-A:" hostile)] (first command))
+              "the workspace-controlled alias is exactly ONE argv token")
+          (is (= ["java" "-cp" "$CLASSPATH" "clojure.main" "-e"]
+                 (vec (take 5 (second command))))))
+
+        (testing "executing the published argv creates nothing"
+          ;; argv[0] is resolved to the recording stub -- ProcessBuilder looks
+          ;; a bare program name up in the PARENT process's PATH, not in the
+          ;; environment it is handed -- and every other token is published
+          ;; verbatim.
+          (doseq [argv command]
+            (run-argv! (-> (replace {"$CLASSPATH" "stub-classpath"} argv)
+                           (assoc 0 (.getPath (io/file bin (first argv)))))
+                       root bin))
+          (is (not (.exists pwned))
+              "argv is handed to exec, never parsed by a shell")
+          (is (contains? (logged) (str "-A:" hostile))
+              "and the alias reached the program as a single argument"))
+
+        (testing ":command_shell quotes every token, so a reader can paste it"
+          (.delete log)
+          (is (string? shell))
+          (run-argv! ["bash" "-c" shell] root bin)
+          (is (not (.exists pwned))
+              "the quoting function is what makes the pasteable form safe")
+          (is (contains? (logged) (str "-A:" hostile))
+              "and the alias still arrives whole through the shell"))
+
+        (testing "the unquoted interpolation this replaces DOES execute"
+          (.delete log)
+          (run-argv! ["bash" "-c" (str "CP=$(clojure -Spath -A:" hostile
+                                       ") && echo done")]
+                     root bin)
+          (is (.exists pwned)
+              "the shape the receipt used to publish is the reachable one")))
+      (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-025
+(deftest shell-quoting-round-trips-every-token
+  (doseq [token ["plain" "with space" "x; touch PWNED" "it's" "$(id)" "`id`"
+                 "a'b'c" "--flag=\"v\"" "*" "\\" ""]]
+    (let [quoted (extract/shell-quote-token token)
+          out (:out (shell/sh "bash" "-c" (str "printf %s " quoted)))]
+      (is (= token out)
+          (str "quoting " (pr-str token) " as " (pr-str quoted)
+               " produced " (pr-str out))))))
