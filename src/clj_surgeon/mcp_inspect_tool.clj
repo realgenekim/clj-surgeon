@@ -444,7 +444,17 @@
                       (recur (inc n) (dissoc candidate :fits?))
                       best)))))))))))
 
+;; @spec MCP-OP-STUDY-023
 (defn- ls-tree-next-call
+  "One continuation, carrying EVERY field the request carried unless an
+  override replaces it.
+
+  `:limit` was the one field left out, so a caller who spelled the default
+  (`limit 4096`) made the self-returning continuation reappear: the identical-
+  call check compared a request that named its limit against a continuation
+  that did not, saw two different calls, and served back the call that had
+  just failed. A field a request supplies is part of that request's identity
+  whether or not it happens to equal a default."
   [params overrides]
   {:tool "inspect_clojure"
    :arguments (merge (cond-> {:mode "ls-tree"}
@@ -452,6 +462,7 @@
                        (:grep params) (assoc :grep (:grep params))
                        (:ns_grep params) (assoc :ns_grep (:ns_grep params))
                        (:format params) (assoc :format (:format params))
+                       (:limit params) (assoc :limit (:limit params))
                        (:max_files params) (assoc :max_files (:max_files params)))
                      overrides)})
 

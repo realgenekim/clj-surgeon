@@ -696,6 +696,35 @@
       (is (= "." (get-in response [:next_call :arguments :dir])))
       (is (= "correct_request" (:next_action response))))))
 
+;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-023
+(deftest spelling-a-default-does-not-bring-the-self-returning-call-back
+  ;; The identical-call check compares the proposed continuation against the
+  ;; arguments of the call just made. `ls-tree-next-call` never carried
+  ;; `:limit` while `ls-tree-request-arguments` kept it, so a caller who
+  ;; spelled the default — `limit 4096`, exactly what the receipt reports back
+  ;; — made the two differ, and the refusal served an executable call that was
+  ;; the request that had just failed.
+  (doseq [request [{"mode" "ls-tree" "dir" "." "grep" absent-pattern "limit" 4096}
+                   {"mode" "ls-tree" "dir" "." "grep" absent-pattern
+                    "limit" 4096 "format" "names"}
+                   {"mode" "ls-tree" "dir" "." "grep" absent-pattern
+                    "limit" 4096 "max_files" 2000}]]
+    (testing (pr-str request)
+      (let [response (run request)]
+        (is (false? (:ok response)))
+        (is (= "no-clojure-files" (:error_type response)))
+        (is (nil? (:next_call response))
+            "the continuation IS the call just made, default spelled or not")
+        (is (= "narrow_scope" (:next_action response))))))
+  (testing "and a continuation that really can advance still carries the limit"
+    (let [response (run {"mode" "ls-tree" "dir" "docs/intent/study-ops"
+                         "limit" 4096})]
+      (is (false? (:ok response)))
+      (is (= "." (get-in response [:next_call :arguments :dir])))
+      (is (= 4096 (get-in response [:next_call :arguments :limit]))
+          "a continuation that drops a supplied field is a different call"))))
+
 ;; @spec MCP-OP-STUDY-006
 (deftest ls-tree-refuses-a-flag-shaped-grep-or-ns-grep-over-the-wire
   ;; A pattern beginning with '-' (e.g. "--pre=/bin/sh") would otherwise
