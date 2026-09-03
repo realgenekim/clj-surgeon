@@ -666,6 +666,56 @@
   [^File f]
   (try (Files/deleteIfExists (.toPath f)) (catch Exception _ false)))
 
+(defn- sidecar-temp!
+  "A temporary beside a sidecar, carrying `payload`, or nil.
+
+   The name starts with a dot so neither `broken-lock-files` nor
+   `broken-at-files` can ever select it: a working file that answered one of
+   those prefixes would be listed, counted and retired as evidence in its own
+   right."
+  ^File [^File side payload]
+  (try
+    (let [^File tmp (File/createTempFile ".LOCK-brk-" ".tmp" (.getParentFile side))]
+      (try (spit tmp (pr-str payload)) tmp
+           (catch Exception cause (delete-quietly! tmp) (throw cause))))
+    (catch Exception _ nil)))
+
+(defn- create-sidecar!
+  "Write a sidecar ONLY if that name is free, and say which happened:
+   `:created`, `:name-taken`, or `:failed`.
+
+   `Files/createLink` from a fully written temporary, for the same two reasons
+   the LOCK itself is written that way: it is create-if-absent IN THE KERNEL,
+   so claiming the name is the kernel's own refusal rather than a stat this
+   code performs, and no reader can ever observe a half-written sidecar."
+  [^File side payload]
+  (if-let [^File tmp (sidecar-temp! side payload)]
+    (try
+      (Files/createLink (.toPath side) (.toPath tmp))
+      :created
+      (catch java.nio.file.FileAlreadyExistsException _ :name-taken)
+      (catch Exception _ :failed)
+      (finally (delete-quietly! tmp)))
+    :failed))
+
+(defn- replace-sidecar!
+  "Overwrite a sidecar in one step, or return nil having changed nothing.
+
+   `spit` TRUNCATES before it writes, so a process killed mid-write left a
+   zero-length sidecar that `break-phase` read as no marker at all and
+   `read-broken-at-ms` read as `:unreadable` - a partially written file
+   presenting as a state the kernel has a rule for. An atomic rename over the
+   name means the sidecar is always exactly one whole map or the other."
+  [^File side payload]
+  (when-let [^File tmp (sidecar-temp! side payload)]
+    (try
+      (Files/move (.toPath tmp) (.toPath side)
+                  ^"[Ljava.nio.file.CopyOption;"
+                  (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                          StandardCopyOption/REPLACE_EXISTING]))
+      true
+      (catch Exception _ (delete-quietly! tmp) nil))))
+
 (defn- stamp-broken-at!
   "Write the break's OWN creation time into the tombstone's sidecar, and
    return it - or NIL when that write did not happen.
@@ -685,13 +735,11 @@
    did not happen."
   [^File tomb]
   (let [now (System/currentTimeMillis)]
-    (try
-      (spit (broken-at-file tomb)
-            (pr-str {:tombstone (.getName tomb)
-                     :broken-at (str (java.time.Instant/ofEpochMilli now))
-                     :broken-at-ms now}))
-      now
-      (catch Exception _ nil))))
+    (when (replace-sidecar! (broken-at-file tomb)
+                            {:tombstone (.getName tomb)
+                             :broken-at (str (java.time.Instant/ofEpochMilli now))
+                             :broken-at-ms now})
+      now)))
 
 (defn- touch-tombstone!
   "Give the tombstone's own inode the break's creation time, and return it.
@@ -747,18 +795,31 @@
    break that happened, billed it for a day as evidence of one, and refused
    every later break by that txid for a name recording nothing.
 
-   Written immediately after `Files/createLink`, so it covers the whole window
-   including the recheck; cleared by `stamp-broken-at!` BEFORE the unlink, so
-   a crash between the unlink and the stamp can never leave a completed break
-   wearing this marker. A crash before the marker is written is still caught
-   by the inode rule, which is why both survive."
+   Written BEFORE `Files/createLink`, not after it. After it there was a
+   window - two statements wide, and reachable without any crash because
+   `spit` truncates before it writes - in which a tombstone existed with NO
+   marker: typed by the inode rule alone while the LOCK was there, and
+   re-typed as a break that happened the moment the wrongly-broken holder
+   released its own claim. Claiming the marker first means that from the
+   instant the link exists its marker is already on disk, and what an
+   interruption before the link leaves is a marker with no tombstone - an
+   ORPHAN SIDECAR, which this branch lists, counts and retires.
+
+   `create-sidecar!` rather than a write, so the name is claimed by the same
+   create-if-absent primitive the break uses: a sidecar already there belongs
+   to another break's evidence, and overwriting it would turn that break's
+   stamp into this one's marker. Returns `:created`, `:name-taken` or
+   `:failed`, all three of which the caller acts on.
+
+   Cleared by `stamp-broken-at!` BEFORE the unlink, so a crash between the
+   unlink and the stamp can never leave a completed break wearing this
+   marker - and a stamp write that FAILS now refuses the unlink rather than
+   leaving one."
   [^File tomb]
-  (try
-    (spit (broken-at-file tomb)
-          (pr-str {:tombstone (.getName tomb)
-                   :phase :linked
-                   :linked-at-ms (System/currentTimeMillis)}))
-    (catch Exception _ nil)))
+  (create-sidecar! (broken-at-file tomb)
+                   {:tombstone (.getName tomb)
+                    :phase :linked
+                    :linked-at-ms (System/currentTimeMillis)}))
 
 (defn- break-phase
   "What a tombstone's own sidecar says about the break that made it: `:linked`
@@ -1079,39 +1140,11 @@
       (catch Exception cause
         {:broken false :cause :break-failed :message (.getMessage cause)}))))
 
-(defn- break-by-link!
-  "Claim the tombstone NAME first, and unlink the LOCK only once it is held.
-
-   The order is the whole fix. A break used to rename the LOCK onto the
-   tombstone name and check afterwards, which made the name guard a
-   check-then-act in front of `rename(2)`: two breakers sharing one txid -
-   and `begin!` takes `:txid` verbatim from its caller - destroyed the judged
-   claim 13 times in 4,000 races, with BOTH handed the same tombstone name for
-   a claim only one of them owned.
-
-   `Files/createLink` is create-if-absent IN THE KERNEL: `link(2)` fails
-   EEXIST, and that refusal is the atomic guard, not a stat this code performs
-   itself. It also never moves the LOCK, so between the link and the unlink
-   the claim is in TWO places rather than none - a third acquirer cannot land
-   in a gap that no longer exists, and the whole displacement class goes with
-   it. What was a restore is now simply unlinking our own extra link.
-
-   THE RESIDUAL, exactly. Unlinking the LOCK side is a stat of its (device,
-   inode) followed by `unlink(2)`, because POSIX has no unlink-if-inode: a
-   claim that replaces the LOCK between those two syscalls is removed. That
-   window contains no I/O and is entered only after the linked claim has been
-   proved to be the judged one. A crash inside it leaves a tombstone that is a
-   second link to the LIVE LOCK, which `recover!` resolves - as one of its
-   `:interrupted-breaks` - rather than reporting as a break that happened. The
-   tombstone's own `:phase :linked` marker says so too, and outlives that
-   inode."
-  [transactions-dir ^File lock ^File tomb claim opts]
+(defn- break-by-link-finish!
+  "Everything after the tombstone name is held: prove the linked file is the
+   judged claim, record the break, and unlink the LOCK."
+  [^File lock ^File tomb claim opts]
   (try
-    (Files/createLink (.toPath tomb) (.toPath lock))
-    ;; the window opens HERE, and the marker that says so is the tombstone's
-    ;; own: the LOCK it shares an inode with can be released out from under
-    ;; this state, and inferring the state from that neighbour loses it
-    (mark-break-linked! tomb)
     (let [linked-content (try (slurp tomb) (catch Exception _ nil))]
       (if (and (some? (:content claim))
                (= (:content claim) linked-content)
@@ -1158,14 +1191,88 @@
              :cause :holder-changed
              :restored true
              :restore-path :lock-never-left})))
-    (catch java.nio.file.FileAlreadyExistsException _
-      {:broken false :cause :tombstone-exists :tombstone (.getName tomb)})
     (catch java.nio.file.NoSuchFileException _
       {:broken false :cause :lock-vanished})
-    (catch UnsupportedOperationException _
-      (break-by-move! transactions-dir lock tomb claim opts))
     (catch Exception cause
       {:broken false :cause :break-failed :message (.getMessage cause)})))
+
+(defn- break-by-link!
+  "Claim the tombstone NAME first, and unlink the LOCK only once it is held.
+
+   The order is the whole fix. A break used to rename the LOCK onto the
+   tombstone name and check afterwards, which made the name guard a
+   check-then-act in front of `rename(2)`: two breakers sharing one txid -
+   and `begin!` takes `:txid` verbatim from its caller - destroyed the judged
+   claim 13 times in 4,000 races, with BOTH handed the same tombstone name for
+   a claim only one of them owned.
+
+   `Files/createLink` is create-if-absent IN THE KERNEL: `link(2)` fails
+   EEXIST, and that refusal is the atomic guard, not a stat this code performs
+   itself. It also never moves the LOCK, so between the link and the unlink
+   the claim is in TWO places rather than none - a third acquirer cannot land
+   in a gap that no longer exists, and the whole displacement class goes with
+   it. What was a restore is now simply unlinking our own extra link.
+
+   THE RESIDUAL, exactly. Unlinking the LOCK side is a stat of its (device,
+   inode) followed by `unlink(2)`, because POSIX has no unlink-if-inode: a
+   claim that replaces the LOCK between those two syscalls is removed. That
+   window contains no I/O and is entered only after the linked claim has been
+   proved to be the judged one. A crash inside it leaves a tombstone that is a
+   second link to the LIVE LOCK, which `recover!` resolves - as one of its
+   `:interrupted-breaks` - rather than reporting as a break that happened. The
+   tombstone's own `:phase :linked` marker says so too, and outlives that
+   inode.
+
+   THE MARKER IS CLAIMED BEFORE THE NAME. Written after the link, it left a
+   two-statement window in which a tombstone existed with no marker at all -
+   typed by the inode rule alone, and re-typed as a break that happened the
+   moment the wrongly-broken holder released its own claim. Written first,
+   every state this function can be interrupted in is one both typing rules
+   can see: a marker with no tombstone (an orphan sidecar, which the sweep
+   lists and retires), or a tombstone that has always had its marker."
+  [transactions-dir ^File lock ^File tomb claim opts]
+  (let [^File side (broken-at-file tomb)]
+    (case (mark-break-linked! tomb)
+      ;; this break's evidence name is already in use. Overwriting it would
+      ;; turn another break's stamp into this one's marker - the forgery
+      ;; finding 1 exists for, performed by the kernel itself - so refuse
+      ;; BEFORE the LOCK is touched.
+      :name-taken
+      (if (.isFile tomb)
+        {:broken false :cause :tombstone-exists :tombstone (.getName tomb)}
+        {:broken false :cause :evidence-unrecordable
+         :evidence :sidecar-name-taken
+         :sidecar (.getName side)})
+
+      ;; nothing can record that this break began, so it does not begin
+      :failed {:broken false :cause :evidence-unrecordable}
+
+      ;; :created - the marker is on disk, so the window the link below opens
+      ;; contains no state either typing rule can miss
+      (let [linked (try
+                     ;; the seam a witness needs to observe the ORDER, and to
+                     ;; interrupt a break before it has claimed any name
+                     (when-let [hook (:before-link opts)] (hook tomb))
+                     (Files/createLink (.toPath tomb) (.toPath lock))
+                     :linked
+                     (catch java.nio.file.FileAlreadyExistsException _
+                       :tombstone-exists)
+                     (catch java.nio.file.NoSuchFileException _ :lock-vanished)
+                     (catch UnsupportedOperationException _ :unsupported)
+                     (catch Exception cause
+                       {:broken false :cause :break-failed
+                        :message (.getMessage cause)}))]
+        (if-not (= :linked linked)
+          ;; the name was never claimed, so the marker records nothing that
+          ;; happened: take it back rather than leave an orphan behind
+          (do (delete-quietly! side)
+              (case linked
+                :tombstone-exists {:broken false :cause :tombstone-exists
+                                   :tombstone (.getName tomb)}
+                :lock-vanished {:broken false :cause :lock-vanished}
+                :unsupported (break-by-move! transactions-dir lock tomb claim opts)
+                linked))
+          (break-by-link-finish! lock tomb claim opts))))))
 
 (def ^:private break-refusal-causes
   "The break outcomes that are a REFUSAL with an owner rather than a failure.

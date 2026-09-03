@@ -2992,3 +2992,86 @@
               (str "and the half-made evidence is not left behind: "
                    (pr-str (map #(.getName ^java.io.File %) tombs)))))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-break-claims-its-marker-before-it-claims-the-name
+  (testing "Opus round 7, finding 2, probes AW1 and AZ. The marker was written
+            AFTER `Files/createLink`, so between those two statements a break
+            left a tombstone with NO marker: typed `:interrupted-break` while
+            the LOCK was there by the inode rule alone, and re-typed
+            `:kind :broken-lock :status :lock-broken` the moment the
+            wrongly-broken holder released its own claim - round six's defect,
+            narrowed to one `spit` rather than eliminated. Reachable without a
+            crash in a two-statement window, too, because `spit` TRUNCATES
+            before it writes: a process killed mid-write left a zero-length
+            marker that `break-phase` read as absent.
+
+            The order is the fix. The marker is claimed FIRST, with the same
+            create-if-absent primitive the break itself uses, so from the
+            instant the tombstone link exists its marker is already on disk
+            and the window contains no state neither typing rule can see. What
+            an interruption before the link leaves is a marker with no
+            tombstone - an ORPHAN SIDECAR, which this branch already lists,
+            counts and retires. And both sidecar writes are atomic renames
+            rather than truncating `spit`s, so a partially written marker is
+            not a state on disk at all."
+    (let [ws (workspace! "marker-before-link" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          observed (atom nil)
+          sidecar (fn [^java.io.File tomb]
+                    (io/file dir (str "LOCK.broken-at."
+                                      (subs (.getName tomb)
+                                            (count "LOCK.broken.")))))]
+      (try
+        (plant-lock! ws {:txid "CRASHED-HOLDER"
+                         :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (let [result (journal/recover!
+                       (:root ws)
+                       (assoc opts :before-link
+                              (fn [^java.io.File tomb]
+                                (let [side (sidecar tomb)]
+                                  (reset! observed
+                                          {:marker (when (.isFile side)
+                                                     (:phase (read-string (slurp side))))
+                                           :sidecar-bytes (when (.isFile side) (.length side))
+                                           :tombstone-present (.exists tomb)})))))
+              tomb-name (:tombstone (:lock-broken result))]
+          (is (= :linked (:marker @observed))
+              (str "the marker is on disk BEFORE the name is claimed: "
+                   (pr-str @observed)))
+          (is (false? (:tombstone-present @observed))
+              (str "and the tombstone is not there yet, so there is no instant "
+                   "at which a link exists without its marker: "
+                   (pr-str @observed)))
+          (is (pos? (long (:sidecar-bytes @observed 0)))
+              (str "written whole, never truncated-then-filled: "
+                   (pr-str @observed)))
+          (is (string? tomb-name)
+              (str "and the break still completes: " (pr-str result)))
+          (let [side (sidecar (io/file dir ^String tomb-name))]
+            (is (number? (:broken-at-ms (read-string (slurp side))))
+                (str "with the marker replaced by the break's own stamp: "
+                     (slurp side)))))
+
+        ;; and what an interruption in that window leaves is not a break
+        (let [ghost (io/file dir "LOCK.broken-at.GHOST")]
+          (spit ghost (pr-str {:tombstone "LOCK.broken.GHOST"
+                               :phase :linked
+                               :linked-at-ms (System/currentTimeMillis)}))
+          (let [row (first (filter #(= "LOCK.broken-at.GHOST" (:txid %))
+                                   (journal/retained-transactions (:root ws) opts)))]
+            (is (= :orphan-sidecar (:kind row))
+                (str "a marker with no tombstone is an orphan sidecar, which "
+                     "this branch lists: " (pr-str row))))
+          (let [late (journal/recover!
+                       (:root ws)
+                       (assoc opts :now-ms (+ (System/currentTimeMillis)
+                                              (* 25 60 60 1000))))]
+            (is (= 1 (:pruned (:orphan-sidecars (:broken-locks late))))
+                (str "counts, and retires on the published retention: "
+                     (pr-str (:broken-locks late))))
+            (is (not (.exists ghost)))))
+        (finally (cleanup! ws))))))
