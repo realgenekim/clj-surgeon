@@ -136,6 +136,74 @@
           (is (= (slurp p1) (bytes-of p1))))
         (finally (cleanup! ws))))))
 
+;; @spec MCP-OP-MEM-007
+;; @spec MCP-OP-MEM-014
+(deftest a-writer-that-lands-before-the-pre-image-recheck-is-refused
+  (testing "Sol's injection, moved to the only place the transaction can still
+            refuse: the staged bytes are already copied into the target's own
+            directory, and the writer lands BEFORE the pre-image recheck. The
+            expensive half of publication is outside the window, so this is
+            detected and nothing is written."
+    (let [ws (workspace! "recheck-window" 3)
+          paths (sort (:paths ws))
+          victim (first paths)]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn paths)
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn victim)
+              _ (journal/stage! txn victim "(ns f0) (def v :ours)\n")
+              receipt (journal/commit!
+                        txn {:before-recheck
+                             (fn [path]
+                               (when (= path victim)
+                                 (spit victim "(ns f0) (def v :theirs)\n")))})]
+          (is (false? (:ok receipt)))
+          (is (= :txn-conflict (:error-type receipt)))
+          (is (= victim (:path receipt)))
+          (is (= 0 (:files-written receipt))
+              "the racing writer is detected before the rename, not after it")
+          (is (= "(ns f0) (def v :theirs)\n" (bytes-of victim))
+              "the other writer's bytes survive; this transaction wrote none"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+;; @spec MCP-OP-MEM-014
+(deftest the-residual-recheck-to-rename-window-is-reported-not-hidden
+  (testing "atomic rename is not compare-and-swap. A writer that ignores the
+            publish lock and lands INSIDE the recheck-to-rename window is
+            overwritten. The kernel does not pretend otherwise: the window's
+            bound is named in the contract and carried in every receipt."
+    (let [ws (workspace! "commit-window" 2)
+          paths (sort (:paths ws))
+          victim (first paths)]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn paths)
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn victim)
+              _ (journal/stage! txn victim "(ns f0) (def v :ours)\n")
+              receipt (journal/commit!
+                        txn {:in-commit-window
+                             (fn [path]
+                               (when (= path victim)
+                                 (spit victim "(ns f0) (def v :theirs)\n")))})]
+          (is (:ok receipt) "the window is real: the write inside it is not caught")
+          (is (= "(ns f0) (def v :ours)\n" (bytes-of victim))
+              "and the racing bytes are lost, which is what the receipt must say")
+          (is (= [:recheck-digest :journal-write-begin :rename]
+                 (get-in receipt [:commit-window :ops]))
+              "the receipt names every operation inside the window")
+          (is (false? (get-in receipt [:commit-window :staging-copy-inside]))
+              "the staged bytes are copied into the target directory BEFORE the
+               window opens, so no byte copying happens inside it")
+          (is (pos? (get-in receipt [:commit-window :max-ns]))
+              "the widest observed window is measured, not asserted")
+          (is (some #(str/includes? % "recheck")
+                    (:does-not-promise (journal/contract)))
+              "the contract states the window it cannot close"))
+        (finally (cleanup! ws))))))
+
 ;; ------------------------------------------------- MCP-OP-MEM-012 retention
 
 ;; @spec MCP-OP-MEM-012

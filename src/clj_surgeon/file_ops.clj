@@ -33,6 +33,38 @@
         (when (.exists tmp)
           (.delete tmp))))))
 
+(defn prepare-publish!
+  "Copy `source-file` into `file`'s OWN directory and return the temporary.
+
+   This is the EXPENSIVE half of publication, and it is a separate verb so a
+   caller that must recheck the target immediately before replacing it can do
+   the copying BEFORE the recheck. Everything that remains between a recheck
+   and the replacement is then one rename. The temporary carries the target's
+   current permissions, so the rename preserves them."
+  ^java.io.File [file source-file]
+  (let [target (io/file file)
+        parent (.getParentFile (.getAbsoluteFile target))
+        tmp (java.io.File/createTempFile ".clj-surgeon-publish-" ".tmp" parent)]
+    (try
+      (Files/copy (.toPath (io/file source-file))
+                  (.toPath tmp)
+                  ^"[Ljava.nio.file.CopyOption;"
+                  (into-array CopyOption [StandardCopyOption/REPLACE_EXISTING]))
+      (preserve-existing-permissions! target tmp)
+      tmp
+      (catch Throwable cause
+        (.delete tmp)
+        (throw cause)))))
+
+(defn publish-prepared!
+  "Rename a prepared temporary over `file`. One atomic rename and nothing else."
+  [file ^java.io.File tmp]
+  (Files/move (.toPath tmp)
+              (.toPath (io/file file))
+              ^"[Ljava.nio.file.CopyOption;"
+              (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                      StandardCopyOption/REPLACE_EXISTING])))
+
 (defn atomic-publish!
   "Atomically replace `file` with the contents of `source-file`.
 
@@ -43,18 +75,9 @@
    observable replacement is still one atomic rename and the target's
    permissions survive it."
   [file source-file]
-  (let [target (io/file file)
-        parent (.getParentFile (.getAbsoluteFile target))
-        tmp (java.io.File/createTempFile ".clj-surgeon-publish-" ".tmp" parent)
-        options (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
-                                        StandardCopyOption/REPLACE_EXISTING])]
+  (let [tmp (prepare-publish! file source-file)]
     (try
-      (Files/copy (.toPath (io/file source-file))
-                  (.toPath tmp)
-                  ^"[Ljava.nio.file.CopyOption;"
-                  (into-array CopyOption [StandardCopyOption/REPLACE_EXISTING]))
-      (preserve-existing-permissions! target tmp)
-      (Files/move (.toPath tmp) (.toPath target) options)
+      (publish-prepared! file tmp)
       (finally
         (when (.exists tmp)
           (.delete tmp))))))

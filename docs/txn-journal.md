@@ -23,6 +23,24 @@ race, and it does not make a multi-file commit instantaneously atomic to an
 unrelated reader. `(txn-journal/contract)` returns this statement in full, and
 every receipt carries a compact `:isolation` form of it.
 
+**The residual commit window.** An atomic rename replaces; it does not
+compare-and-swap. The pre-image recheck and the rename are two syscalls, so
+there is a window between them that no POSIX filesystem lets us close. The
+kernel narrows it and then names it rather than hiding it:
+
+- the staged bytes are copied into the TARGET's own directory **before** the
+  window opens, so the expensive half of publication is outside it;
+- the recheck and the rename are taken under an advisory `PUBLISH.lock` on the
+  workspace state root, which excludes any writer that asks for it;
+- what remains inside is a digest recheck, one `write-begin` fsync and one
+  rename — `(:commit-window (txn-journal/contract))` names them, and every
+  commit receipt carries the same map with the widest observed `:max-ns`;
+- a writer that does not take the publish lock and lands inside that window is
+  **overwritten**, not detected. The pinned pre-image journal is its recovery.
+
+A writer that lands anywhere EARLIER — after the staged copy, before the
+recheck — is refused with `:txn-conflict` and zero writes.
+
 What it guarantees:
 
 - every edit was planned against the pre-image digest recorded in the manifest;
@@ -78,8 +96,10 @@ replacement is still one atomic rename, and the target's permissions survive it.
 4. `stage!` — write the future bytes to a staging file. Nothing is retained.
 5. `seal-read-set!` — close the manifest, freeze the membership digest.
 6. `revalidate!` — re-hash the WHOLE read set and re-derive scope membership.
-7. `commit!` — for each staged path in sorted order: recheck its pre-image
-   digest, fsync `write-begin`, rename, fsync `write-done`, read back and verify.
+7. `commit!` — for each staged path in sorted order: copy the staged bytes into
+   the target's own directory; then, under the workspace publish lock, recheck
+   its pre-image digest, fsync `write-begin` and rename; then release the lock,
+   fsync `write-done`, read back and verify.
 8. `rollback!` / `recover!` — restore the pinned bytes and verify each digest.
 
 ## Recovery
@@ -152,6 +172,7 @@ witness:
 | claim snapshot isolation | contract statement | RED |
 | ignore the requested journal quota | quota one past | RED |
 | skip the pre-write recheck | write-set drift | RED |
+| copy the staged bytes inside the window | writer before the recheck | RED |
 | count only matching walk entries | walk-entry ceiling | RED |
 | drop deep files silently | depth bound | RED |
 | ignore the per-file cap | per-file ceiling | RED |

@@ -2,11 +2,15 @@
   "A disk-journaled transaction: hashes and spans resident, bytes on disk.
 
    The contract is OPTIMISTIC SERIALIZABILITY with conflict detection and exact
-   rollback. It is not snapshot isolation. A writer that ignores the project
-   lock can still land between this transaction's revalidation and its rename;
-   what the journal guarantees is that such a race is DETECTED at read-back and
-   that every path is restored to the exact pre-image bytes pinned before the
-   first mutation. See `contract`.
+   rollback. It is not snapshot isolation. An atomic rename is not a
+   compare-and-swap: the pre-image recheck and the rename are two syscalls, and
+   a writer that does not take the publish lock can land between them. That
+   RESIDUAL WINDOW is bounded to a digest recheck, one journal fsync and one
+   rename - the staged bytes are copied into the target's
+   own directory BEFORE the window opens - it is measured into every receipt,
+   and the pinned pre-image journal is its recovery. Everything earlier than the
+   window is detected and refused; a write inside it is overwritten, and the
+   contract says so rather than claiming it was prevented. See `contract`.
 
    The memory posture is the reason the machinery exists. The transaction value
    retains, per open transaction, a bounded set of write-set records and one
@@ -26,11 +30,26 @@
    [clojure.string :as str])
   (:import
    (java.io File FileOutputStream)
-   (java.nio.file Files LinkOption StandardCopyOption CopyOption)
+   (java.nio.channels FileChannel)
+   (java.nio.file Files LinkOption OpenOption StandardCopyOption StandardOpenOption CopyOption)
    (java.nio.file.attribute PosixFilePermissions)
    (java.security MessageDigest)))
 
 ;; ------------------------------------------------------------ the contract
+
+(def commit-window
+  "What is left between a path's pre-image recheck and its replacement.
+
+   This is the honest statement of what optimistic serializability costs. The
+   window cannot be closed on a POSIX filesystem - rename replaces, it does not
+   compare-and-swap - so the kernel narrows it instead and names its bound:
+   the staged bytes are already in the target's own directory, so no byte
+   copying happens inside, and what remains is two stats, one fsync and one
+   rename, taken under the workspace publish lock."
+  {:ops [:recheck-digest :journal-write-begin :rename]
+   :staging-copy-inside false
+   :lock :workspace-publish-lock
+   :residual "a writer that does not take the publish lock and lands inside this window is overwritten; the pinned pre-image journal is the recovery"})
 
 (defn contract
   ;; @spec MCP-OP-MEM-014
@@ -45,11 +64,16 @@
              :unpinned-write]
    :guarantees ["Every edit was planned against the pre-image digest recorded in the manifest."
                 "No path is knowingly overwritten unless it still holds that digest."
+                "The recheck and the rename are taken under the workspace publish lock."
                 "Exact rollback bytes are durable before any path is changed."
                 "A crash leaves a journal from which every begun path is restored and verified."]
+   :commit-window commit-window
    :does-not-promise ["A simultaneous repository snapshot against a writer that ignores the lock."
                       "Instantaneous atomicity of a multi-file commit to an unrelated reader."
-                      "Protection against a writer that ignores the lock and races the rename; such a write is detected at read-back and rolled over, not prevented."]})
+                      "Protection against a writer that ignores the lock and races the rename; such a write is detected at read-back and rolled over, not prevented."
+                      (str "Exclusion of a writer that does not take the publish lock and lands inside the residual recheck-to-rename window: "
+                           "an atomic rename is not a compare-and-swap, so such a write is OVERWRITTEN rather than detected. "
+                           "The window holds no byte copying and is measured into every receipt; the pinned pre-image journal is its recovery.")]})
 
 (def ^:private compact-isolation
   {:isolation :optimistic-serializability
@@ -117,6 +141,19 @@
   [target source-file]
   (file-ops/atomic-publish! target source-file))
 
+(defn prepare-publish!
+  "Copy a staged path's future bytes into the TARGET's own directory.
+
+   The expensive half of publication, done before the pre-image recheck so the
+   recheck-to-rename window holds no byte copying."
+  ^File [target source-file]
+  (file-ops/prepare-publish! target source-file))
+
+(defn publish-prepared!
+  "Rename a prepared temporary over `target`. One atomic rename, nothing else."
+  [target prepared]
+  (file-ops/publish-prepared! target prepared))
+
 (defn- copy-file!
   [source target]
   (Files/copy (.toPath (io/file source))
@@ -173,6 +210,29 @@
 (defn- release-lock!
   [transactions-dir]
   (Files/deleteIfExists (.toPath (lock-file transactions-dir))))
+
+(defn- publish-lock-file
+  ^File [transactions-dir]
+  (io/file transactions-dir "PUBLISH.lock"))
+
+(defn- with-publish-lock*
+  "Run `f` while holding the workspace's advisory publish lock.
+
+   An OS advisory lock (`flock` semantics through `FileChannel/lock`) on the
+   workspace's own state root, taken around the pre-image recheck and the
+   rename. It excludes any writer that ASKS for it - a second clj-surgeon
+   transaction, a cooperating editor - and it cannot exclude one that does not.
+   That is the whole of what an advisory lock buys, and the residual window is
+   documented rather than papered over."
+  [txn f]
+  (let [file (publish-lock-file (:transactions-dir txn))]
+    (with-open [channel (FileChannel/open
+                          (.toPath file)
+                          ^"[Ljava.nio.file.OpenOption;"
+                          (into-array OpenOption [StandardOpenOption/CREATE
+                                                  StandardOpenOption/WRITE]))]
+      (let [lock (.lock channel)]
+        (try (f) (finally (.release lock)))))))
 
 ;; ------------------------------------------------------------------- begin
 
@@ -617,6 +677,42 @@
      :isolation compact-isolation
      :paths restored}))
 
+(defn- publish-one!
+  "Prepare, recheck and rename ONE staged path.
+
+   The order is the whole point. Copying the staged bytes into the target's own
+   directory happens FIRST, outside the publish lock and outside the window,
+   because it is the only expensive step. The digest recheck, the `write-begin`
+   fsync and the rename then happen together under the publish lock, so a
+   cooperating writer cannot land between them and a non-cooperating one has
+   only two stats, one fsync and one rename to hit.
+
+   Returns {:ok true :window-ns n}, {:conflict :digest :actual-hash h}, or
+   {:failed cause}."
+  [txn path {:keys [h0 staging prepare-fn publish-fn before-recheck in-commit-window]}]
+  (let [prepared (try {:tmp (prepare-fn path staging)}
+                      (catch Exception cause {:failed cause}))]
+    (if (:failed prepared)
+      prepared
+      (let [^File tmp (:tmp prepared)]
+        (try
+          (when before-recheck (before-recheck path))
+          (with-publish-lock* txn
+            (fn []
+              (let [opened (System/nanoTime)
+                    current (sha256-file path)]
+                (if (not= current h0)
+                  {:conflict :digest :actual-hash current}
+                  (do
+                    (when in-commit-window (in-commit-window path))
+                    (append-journal! txn (str "write-begin\t" path "\t" h0))
+                    (try
+                      (publish-fn path tmp)
+                      {:ok true :window-ns (- (System/nanoTime) opened)}
+                      (catch Exception cause {:failed cause})))))))
+          (finally
+            (when (.exists tmp) (.delete tmp))))))))
+
 (defn commit!
   ;; @spec MCP-OP-MEM-006
   ;; @spec MCP-OP-MEM-007
@@ -630,8 +726,10 @@
    back and verified. Any failure rolls every begun path back to its pinned
    bytes and verifies the restoration."
   ([txn] (commit! txn {}))
-  ([txn {:keys [publish-fn before-publish after-publish]
-         :or {publish-fn publish-file!}}]
+  ([txn {:keys [prepare-fn publish-fn before-publish before-recheck
+                in-commit-window after-publish]
+         :or {prepare-fn prepare-publish!
+              publish-fn publish-prepared!}}]
    (let [state (:state txn)
          staged (:staged @state)
          pinned (:pinned @state)
@@ -651,7 +749,7 @@
                (assoc validation :files-written 0))
            (let [paths (sort (keys staged))]
              (append-journal! txn (str "commit-begin\t" (count paths)))
-             (loop [remaining paths written 0]
+             (loop [remaining paths written 0 window-ns 0]
                (if (empty? remaining)
                  (do (finish! txn :committed)
                      {:ok true
@@ -659,6 +757,7 @@
                       :txid (:txid txn)
                       :files-written written
                       :read-set-files (:read-set-count @state)
+                      :commit-window (assoc commit-window :max-ns window-ns)
                       :reserved {:journal-bytes (:journal-bytes @state)
                                  :journal-bytes-peak (:journal-bytes-peak @state 0)
                                  :journal-bytes-max (get-in txn [:limits :max-journal-bytes])
@@ -667,54 +766,60 @@
                       :isolation compact-isolation})
                  (let [path (first remaining)
                        {:keys [result-hash staging]} (get staged path)
-                       h0 (get-in pinned [path :sha256])]
-                   (when before-publish (before-publish path))
-                   (let [current (sha256-file path)]
-                     (if (not= current h0)
-                       (let [restored (rollback-written! txn)]
-                         (finish! txn :rolled-back)
-                         (merge (conflict path h0 current)
-                                {:files-written written
+                       h0 (get-in pinned [path :sha256])
+                       _ (when before-publish (before-publish path))
+                       outcome (publish-one! txn path
+                                             {:h0 h0
+                                              :staging staging
+                                              :prepare-fn prepare-fn
+                                              :publish-fn publish-fn
+                                              :before-recheck before-recheck
+                                              :in-commit-window in-commit-window})]
+                   (cond
+                     (:conflict outcome)
+                     (let [restored (rollback-written! txn)]
+                       (finish! txn :rolled-back)
+                       (merge (conflict path h0 (:actual-hash outcome))
+                              {:conflict (:conflict outcome)
+                               :files-written written
+                               :rolled-back (every? #(= :verified (:status %)) restored)
+                               :recovery restored}))
+
+                     (:failed outcome)
+                     (let [^Exception cause (:failed outcome)
+                           restored (rollback-written! txn)]
+                       (finish! txn :rolled-back)
+                       (refusal :txn-write-failed
+                                (str "Writing " path " failed: " (.getMessage cause))
+                                {:path path
+                                 :files-written written
+                                 :cause-error-type (:error-type (ex-data cause))
                                  :rolled-back (every? #(= :verified (:status %)) restored)
-                                 :recovery restored}))
-                       (let [published
-                             (try
-                               (append-journal! txn (str "write-begin\t" path "\t" h0))
-                               (publish-fn path staging)
-                               (swap! state update :written conj path)
-                               (append-journal! txn (str "write-done\t" path "\t" result-hash))
-                               (when after-publish (after-publish path))
-                               {:ok true}
-                               (catch Exception cause
-                                 {:ok false :cause cause}))]
-                         (if-not (:ok published)
+                                 :recovery restored
+                                 :next_call nil}))
+
+                     :else
+                     (do
+                       (swap! state update :written conj path)
+                       (append-journal! txn (str "write-done\t" path "\t" result-hash))
+                       (when after-publish (after-publish path))
+                       (let [actual (sha256-file path)]
+                         (if (= actual result-hash)
+                           (recur (rest remaining) (inc written)
+                                  (max window-ns (:window-ns outcome 0)))
                            (let [restored (rollback-written! txn)]
                              (finish! txn :rolled-back)
-                             (refusal :txn-write-failed
-                                      (str "Writing " path " failed: "
-                                           (.getMessage ^Exception (:cause published)))
+                             (refusal :txn-read-back-mismatch
+                                      (str "The bytes read back from " path
+                                           " are not the bytes this transaction wrote")
                                       {:path path
-                                       :files-written written
-                                       :cause-error-type (:error-type (ex-data (:cause published)))
+                                       :expected-hash result-hash
+                                       :actual-hash actual
+                                       :files-written (inc written)
                                        :rolled-back (every? #(= :verified (:status %)) restored)
                                        :recovery restored
-                                       :next_call nil}))
-                         (let [actual (sha256-file path)]
-                           (if (= actual result-hash)
-                             (recur (rest remaining) (inc written))
-                             (let [restored (rollback-written! txn)]
-                               (finish! txn :rolled-back)
-                               (refusal :txn-read-back-mismatch
-                                        (str "The bytes read back from " path
-                                             " are not the bytes this transaction wrote")
-                                        {:path path
-                                         :expected-hash result-hash
-                                         :actual-hash actual
-                                         :files-written (inc written)
-                                         :rolled-back (every? #(= :verified (:status %)) restored)
-                                         :recovery restored
-                                         :next_call nil
-                                         :remedy "Another writer that does not hold the project lock raced this rename; the contract detects that rather than preventing it."}))))))))))))))))))
+                                       :next_call nil
+                                       :remedy "Another writer that does not hold the project lock raced this rename; the contract detects that rather than preventing it."}))))))))))))))))
 
 ;; ---------------------------------------------------------------- recovery
 
