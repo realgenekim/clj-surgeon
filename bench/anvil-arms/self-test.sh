@@ -489,6 +489,68 @@ c16b=$(cat "$A16B/fake-driver-child.pid" 2>/dev/null)
 [ -n "$c16b" ] && kill -0 "$c16b" 2>/dev/null && { bad "case16b orphan $c16b"; kill -9 "$c16b" 2>/dev/null; } \
   || ok "case16b no orphan left behind"
 
+echo "== case 17: prose drift in the governing sections fails --check =="
+# Sol, item 9: fence lookup scanned from a loose heading to EOF, and only the FENCES
+# were part of the source contract.  Changing B.4.4 from "exactly three edits" to
+# "exactly four edits" produced byte-identical prompts and a passing check -- the doc
+# and the installed prompts disagreed about what the prompts ARE, silently.
+DOCSRC="$HERE/../../docs/observations/2026-09-04-e3-e6-prestaged.md"
+[ -s "$DOCSRC" ] && ok "case17 the pre-registration doc is readable" \
+  || bad "case17 cannot read $DOCSRC"
+DOC17="$WORK/doc17-clean.md";  cp "$DOCSRC" "$DOC17"
+DOC17M="$WORK/doc17-mutated.md"
+python3 - "$DOCSRC" "$DOC17M" <<'PY17'
+import sys, pathlib
+src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+text = src.read_text()
+old = "exactly three edits"
+assert text.count(old) == 1, f"expected one {old!r}, found {text.count(old)}"
+dst.write_text(text.replace(old, "exactly four edits"))
+PY17
+[ $? -eq 0 ] && ok "case17 mutated B.4.4 prose: three edits -> four" || bad "case17 could not mutate the doc"
+
+python3 "$HERE/prompts/build-prompts.py" --check --doc "$DOC17" > "$WORK/case17ctl.out" 2>&1
+want "case17 control (unmutated copy) rc" 0 "$?"
+
+python3 "$HERE/prompts/build-prompts.py" --check --doc "$DOC17M" > "$WORK/case17.out" 2>&1
+want "case17 mutated-prose rc" 3 "$?"
+grep -q 'PROMPT-DRIFT' "$WORK/case17.out" \
+  && ok "case17 prose drift is loud: $(head -n1 "$WORK/case17.out")" \
+  || { bad "case17 prose changed and --check still passed"; cat "$WORK/case17.out"; }
+
+grep -q '^[0-9a-f]\{64\}  section:B.4.4$' "$HERE/prompts/MANIFEST.sha256" \
+  && ok "case17 the manifest hashes B.4.4's governing prose" \
+  || { bad "case17 MANIFEST.sha256 carries no section prose hashes"; cat "$HERE/prompts/MANIFEST.sha256"; }
+
+echo "== case 17b: a section's fences are bounded by the NEXT heading =="
+python3 - "$HERE" "$DOCSRC" <<'PY17B'
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / "prompts"))
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    "bp", str(pathlib.Path(sys.argv[1]) / "prompts" / "build-prompts.py"))
+bp = importlib.util.module_from_spec(spec); spec.loader.exec_module(bp)
+doc = pathlib.Path(sys.argv[2]).read_text()
+fails = []
+# B.4.4 owns exactly two fences; a fence lookup that runs to EOF would find many more
+blocks = bp.fences_in(bp.section(doc, "### B.4.4 "))
+if len(blocks) != 2:
+    fails.append(f"B.4.4 has {len(blocks)} fences inside its own section, expected 2")
+# asking for a fence the section does not own must FAIL, not reach into the next one
+try:
+    bp.fence_in_section(doc, "### B.4.4 ", which=3)
+    fails.append("fence #3 of B.4.4 resolved — the lookup escaped the section")
+except bp.BuildError:
+    pass
+if bp.section(doc, "### B.4.2 ").count("### B.4.3") != 0:
+    fails.append("the B.4.2 section bleeds into B.4.3")
+for f in fails:
+    print(f"FAIL case17b {f}")
+print(f"ok   case17b section bounds hold ({3-len(fails)}/3)")
+sys.exit(1 if fails else 0)
+PY17B
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
