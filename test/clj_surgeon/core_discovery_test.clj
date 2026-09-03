@@ -15,7 +15,9 @@
    the injection and the drop, so both are witnessed here."
   (:require
    [babashka.fs :as fs]
+   [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (def ^:private find-build-files
@@ -42,6 +44,19 @@
     (spit (str (fs/path project "src" "core.clj"))
           "(ns core)\n(defn f [] 1)\n")
     project))
+
+(defn- run-cli-ls-tree
+  "The `:ls-tree` op through the REAL CLI, in a babashka subprocess, returning
+   `{:exit :out :err}`.
+
+   A subprocess and not an in-process call: the empty-result branch of
+   `run-ls-tree` calls `(System/exit 1)`, which would take this suite down with
+   it (that exit is pre-existing and owed separately — inb-eca3b1). Testing
+   delivery, not identity."
+  [& args]
+  (let [src (str (fs/absolutize "src"))]
+    (apply proc/shell {:out :string :err :string :continue true}
+           "bb" "-cp" src "-m" "clj-surgeon.core" ":op" "ls-tree" args)))
 
 ;; @spec MCP-OP-SHELL-ARGV-001
 (deftest hostile-dir-never-reaches-a-shell-from-find-build-files
@@ -131,4 +146,41 @@
               "the ordinary project is discovered through rg/grep")
           (is (contains? files "b\nad/src/core.clj")
               "the newline-named project is discovered through rg/grep too"))
+        (finally (fs/delete-tree sandbox))))))
+
+;; @spec MCP-OP-SHELL-ARGV-002
+(deftest an-empty-scan-names-what-it-searched-instead-of-throwing
+  (testing "a directory holding no Clojure file"
+    (let [sandbox (fresh-sandbox)]
+      (try
+        (let [{:keys [exit out err]} (run-cli-ls-tree ":dir" (str sandbox)
+                                                      ":format" ":edn")
+              both (str out err)]
+          (is (= 1 exit)
+              (str "an empty scan is a failed scan, not a crash; stderr: " err))
+          (is (str/includes? out "No Clojure files found under")
+              "it says what it did not find")
+          (is (str/includes? out (str sandbox))
+              "and names the directory it searched")
+          (is (not (str/includes? both "Wrong number of args"))
+              "the empty branch must not call its :format value as a function:
+               `run-ls-tree` destructured a binding named `format`, shadowing
+               clojure.core/format, so the message call became (:edn s d g)")
+          (is (not (str/includes? out ":invalid-arguments"))
+              "an empty scan is not an argument error; the shadowed-`format`
+               throw was caught at the CLI top level and rendered as one"))
+        (finally (fs/delete-tree sandbox)))))
+
+  (testing "a :grep that matches nothing names the pattern too"
+    (let [sandbox (fresh-sandbox)]
+      (try
+        (make-project! sandbox "ok")
+        (let [{:keys [exit out err]} (run-cli-ls-tree ":dir" (str sandbox)
+                                                      ":grep" "zzz-no-such-symbol")
+              both (str out err)]
+          (is (= 1 exit) (str "stderr: " err))
+          (is (str/includes? out "matching 'zzz-no-such-symbol'")
+              "a scan narrowed by :grep says which narrowing found nothing")
+          (is (not (str/includes? both "Wrong number of args")))
+          (is (not (str/includes? out ":invalid-arguments"))))
         (finally (fs/delete-tree sandbox))))))
