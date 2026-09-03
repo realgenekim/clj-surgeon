@@ -1947,6 +1947,44 @@
           (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(deftest a-stamp-mints-no-sidecar-for-a-tombstone-that-is-not-there
+  (testing "Opus round 8, finding 1, the other half - probe E4, where 40
+            orphan sidecars were minted beside 0 tombstones in one storm.
+            `stamp-broken-at!` writes a DIFFERENT file from the one it stamps,
+            and it never looked at the one it stamps: handed a tombstone that
+            was already gone it happily created `LOCK.broken-at.<name>` next
+            to nothing, so the resolve that lied about keeping the evidence
+            also MANUFACTURED the orphan it would report tomorrow. The sweep
+            lists and retires those, so the accumulation is bounded - but a
+            bucket a correct call fills is not a bucket, it is a leak with a
+            broom behind it."
+    (let [ws (workspace! "stamp-absent" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          lock (io/file dir "LOCK")
+          absent (io/file dir "LOCK.broken.NEVER-WAS")
+          present (io/file dir "LOCK.broken.HERE")]
+      (try
+        (plant-lock! ws {:txid "ghost-sb" :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (is (nil? (@#'journal/stamp-broken-at! absent))
+            "a stamp for a file that is not there is not a stamp")
+        (is (not (.isFile (io/file dir "LOCK.broken-at.NEVER-WAS")))
+            (str "and it mints no sidecar beside a tombstone that is not "
+                 "there: "
+                 (pr-str (sort (mapv (fn [^java.io.File f] (.getName f))
+                                     (vec (.listFiles dir)))))))
+        ;; and the ordinary case is untouched: a tombstone that IS there is
+        ;; stamped exactly as before
+        (Files/createLink (.toPath present) (.toPath lock))
+        (let [stamped (@#'journal/stamp-broken-at! present)]
+          (is (number? stamped)
+              (str "a tombstone that is on disk is still stamped: "
+                   (pr-str stamped)))
+          (is (.isFile (io/file dir "LOCK.broken-at.HERE"))
+              "and its sidecar is written"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
 (deftest a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break
   (testing "Opus round 5, finding 4. A crash between `Files/createLink` and
             the unlink leaves a tombstone that is a second link to the LIVE

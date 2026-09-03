@@ -738,14 +738,25 @@
    overwrites, so the completed break wore the marker of an interrupted one
    and the next recovery reverted it - the path by which a real break's
    evidence was deleted. A break the kernel could not record is a break that
-   did not happen."
+   did not happen.
+
+   AND IT NEVER STAMPS A TOMBSTONE THAT IS NOT THERE. Writing a DIFFERENT file
+   from the one it stamps is what makes it safe to call on a second link to a
+   live LOCK - and it is also why it never looked at the file it was stamping:
+   handed a tombstone a concurrent revert had already removed, it created
+   `LOCK.broken-at.<name>` next to nothing and reported a time. That write is
+   where the orphans came from, 40 of them beside 0 tombstones in one measured
+   storm. The sweep lists and retires orphan sidecars, so the accumulation was
+   bounded - but a bucket a CORRECT call fills is not a bucket, it is a leak
+   with a broom behind it."
   [^File tomb]
-  (let [now (System/currentTimeMillis)]
-    (when (replace-sidecar! (broken-at-file tomb)
-                            {:tombstone (.getName tomb)
-                             :broken-at (str (java.time.Instant/ofEpochMilli now))
-                             :broken-at-ms now})
-      now)))
+  (when (.isFile tomb)
+    (let [now (System/currentTimeMillis)]
+      (when (replace-sidecar! (broken-at-file tomb)
+                              {:tombstone (.getName tomb)
+                               :broken-at (str (java.time.Instant/ofEpochMilli now))
+                               :broken-at-ms now})
+        now))))
 
 (defn- touch-tombstone!
   "Give the tombstone's own inode the break's creation time, and return it -
