@@ -99,6 +99,50 @@ route (pre-edit, post-edit, layering), not the tool's features. Keep native as t
 control in every cohort; a benchmark that never includes "do it without the tool" cannot
 lose and so cannot learn. Keep the caller as a variable. Acceptance is a gate, not a score.
 
+### The law of decisions, and the two-call shape (2026-09-02, evening; measured by hand at the meter)
+
+The night's numbers, in one move: extracting nine forms with sixteen external and seven internal
+call sites took native 141–152 s and 9–10 model returns to land; the rewiring verb landed the
+same bytes in **1.3 s of tool time** and one call (`docs/observations/2026-09-02-captains-log-the-big-aha-and-reset.md`,
+"what is possible"). The law that explains it: **an agent's cost is its count of decisions,
+not its count of edits.** On that task there are two decisions, which forms go where and
+whether to accept the verdict; everything between them is mechanical closure, and closure runs
+at machine speed once a verb takes the whole intent and returns a verdict a cold reader can act
+on. Three multipliers are true at once and must be quoted together: ~110× on the closure, ~4×
+on the step (a return costs the same whether it is a call or a patch), ~1.15× on the whole task
+until the gate absorbs the tail.
+
+**The shape is two calls:** a verb that takes a complete intent and computes every consequence
+(callers, requires, imports, visibility, verbatim moves), and a gate that takes the resulting
+patch, verifies it against a snapshot with the repository's own coverage statement, and commits
+or refuses with a remedy. Extract-with-rewire (`bridge/rf2-extract-rewire`) and
+`admit_clojure_patch` (`bridge/admit-gate`) are the first two instances; `alias_migration`
+(`bridge/q5z-alias-migration`) is the third and the one whose ratio should grow with the
+codebase.
+
+**The boundaries, which are part of the claim:**
+- **The win exists only under mandate.** Free-choice adoption on 2026-09-02 was 0 of 10, the
+  last with the exact one-call command named in the task's own terms. A tool's presence and name
+  are not a path; a harness that routes the write through the verb is.
+- **The receipt is the product.** A cold reader given only the receipt could not act on it twice:
+  field names carried history (`remaining-source-callers` read as work to do), 347 KB of file text
+  rode along, compile was unchecked. A receipt states the properties it guarantees, leads with
+  state (`:applied`, target, header guarantees, callers rewired, `:callers-unresolved []`,
+  `:compile {:checked true}`), is bounded (≤ 4 KB, no file contents), and every refusal carries
+  what would lift it. The naive-reader probe (a fresh model, only the receipt, "what is your
+  next call?") is the gate on this, and it is cheaper than any review.
+- **The gate's own verification is a cost where there is nothing to remove.** Rung L control:
+  gate ≈ 1.9× native on a two-minute hoist. The gate pays where native's tail is large (two JVM
+  suites on the extraction task) and costs where it is small.
+- **Wall and returns are two meters.** On suite-bound tasks the wall is the suites; stripping a
+  third of the returns moved wall by 0.4 %. Report both, always.
+
+**The target set is a catalogue, not a hunch:** every mechanical closure the tool can compute in
+under two seconds that an agent would otherwise type or read, measured on real repos and ranked
+by files-that-must-be-read × edit sites (`docs/closure-catalogue.md`). The slope experiment
+(`docs/observations/2026-09-02-slope-spec-sl1.md`) draws the curve for the alias class; the
+ladder that promotes a verb from hand-drive to battery is `docs/tweezer-loop.md`.
+
 ## What We Proved
 
 The original session proved that a Babashka CLI could outline a 2,768-line
@@ -532,3 +576,109 @@ graphs, and durable watchpoints—is collected in
 [The Code Reader/Explorer Frontier](code-reader-explorer-frontier.md). These
 are experiment candidates, not accepted features; each must earn its
 complexity against a strongest credible control.
+
+
+## What "winner" is allowed to mean (2026-09-02, after the mayor's composition finding)
+
+A measurement that an operation is fast does not establish that it is correct, and a measurement
+that it is correct does not establish that its output is usable by the next operation. Three
+defects filed today (clj-surgeon-3s5, -c37, -dk9) were in operations this document lists as
+measured winners, and two of them were winners failing on each other: `:extract!` wrote a file
+`:ls` could not read, and `require_change` refused to wire what `:extract!` had made necessary.
+They were measured on wall and churn, not on whether the output was usable afterwards.
+
+**Definition, from here on: a winner is a receipt the next verb, or the compile, accepts without
+hand repair.** The instruments already exist and were pre-registered for rf2: A = native bytes
+landing after the verb (0 means the verb's output needed nothing), B = model returns between the
+receipt and the first compile or test (0 means the receipt was terminal). A verb is promoted only
+with A = 0 and B = 0 on real bytes in its own cohort, plus equal acceptance and zero native
+fallback. Wall and churn are reported alongside, never alone. `:extract! :rewire-callers` is the
+first verb promoted under this definition (rf2, 3/3, `~/acid/receipts/rf2-score.md`); the older
+`:extract!`, `:ls` and `require_change` entries above are demoted to "fast, composition
+unproven" until the rf2 branch that fixes their composition merges and the fixes are re-measured.
+
+## How we work, so the goal is surely reached (Gene, 2026-09-03, night)
+
+The goal above is a claim about the agent's route. It is reached only by a way of working that
+keeps the claim under measurement every day. Gene, going to sleep on the first night the seat ran
+on Anvil: *"capture the magic moments of tweezering, watcher doing timings, and parallel tests going
+on anvil. And constantly watching how surgeon is or isn't used, and steering towards decisively
+winning in the squares we choose to compete against native. that's what your work should feel like."*
+
+**The loop, in order, every day:**
+
+1. **Tweezer the verbs by hand, with a watcher timing every operation.** A human or a seat drives a
+   verb one call at a time on a real repo; a separate watcher records every tool call and every
+   model return with wall time. The watcher's figure is the report, never the driver's own count
+   (a driver reported 15 returns; the watcher counted 35 in 797 s). Every refusal paid by hand goes
+   into the friction ledger with its exact text, a ratchet, and a trigger; the ledger is built,
+   not remembered.
+2. **Fan out multi-arm experiments on Anvil, locally.** Sixteen cores on this box; no ssh, no other
+   seat needed. Native is the positive control in every cohort; the variance floor is measured
+   before any comparison; every arm is attested (server sha read from the server, prompt hash,
+   worktree commit, port) or its receipt is blind. New apparatus runs one unit at a time and earns
+   its batch size by clean completions. After each result, poll Sol and Opus for interpretations
+   and next-wave experiments with a prediction and a cost each; run several in parallel; never pick
+   one by hand.
+3. **Watch how Surgeon is or isn't used, on a clock.** `make study-agent-usage` on an hourly cron
+   during any program; the collector's figures go into the log verbatim; a false zero is a
+   telemetry-root question, not a finding. Free-choice adoption is the acceptance test: a feature
+   the agent declines when the tool is optional has not shipped.
+4. **Steer toward decisively winning the chosen squares, and withdraw from the rest.** Every
+   result is judged by the square it wins or loses: the gate on the agent's own patch, fan-out
+   across N owners, questions grep answers wrong, proof before write. A square where the numbers
+   say native is at parity is not defended; it is withdrawn from, in writing, with the measurement.
+5. **Ship only what carries a receipt the next verb accepts without hand repair.** Every fix
+   reproduces its defect first (for resource failures, a subprocess at a small explicit heap that
+   asserts the failure), enters its new requirement as a linked intent with fail-first witnesses,
+   and, where the bound is a resource, is gated by a battery rather than a unit test so the fast
+   suites stay fast. Every branch gets an executed, independent red-team before the merge queue;
+   nothing merges on the builder's word.
+6. **Chronicle as you go.** The captain's log gets each moment with the quote and the number the
+   same hour; the resume note is refreshed at every material change; the morning report leads with
+   the table. LIVE feeds CHRONICLE, or the field notes are lost.
+
+**What it feels like when it is working:** one call landing what native took nine returns to land,
+a watcher's number contradicting a confident self-report, ten lanes on sixteen cores with every
+suite under one lock, a usage meter read every hour, and a square conceded on the evidence as
+readily as one is claimed.
+
+### When the work is delegated (Gene, 2026-09-03: "we inspect the results, we analyze its telemetry, caring just as much about its methods and timings as if we did the work ourselves")
+
+Most of the typing on this program is done by Opus and Sol builders and reviewers. Delegation does
+not change the loop above; it changes who holds the tweezers. The seat that delegates still owns the
+measurement, and a delegated run is treated as an arm, not a handoff:
+
+1. **The brief is the spec and the pre-registration.** It names the verify command the agent must run
+   to green, the disjoint file-set, the witness that must fail first, and the exact probe the reviewer
+   will re-run. A brief the agent could satisfy with a green suite and a narrowed promise is a bad
+   brief; the deciding test from the linked-intent skill applies to briefs too.
+2. **The report is a claim; the artifacts are the result.** Read the diff, the suite's own
+   `Ran N tests` lines, the pushed sha from `ls-remote`, the refusal shapes from the log, never the
+   summary. A receipt that cannot name its subject, its evidence source, and the causal binding is
+   `:unverified`, and an agent that says "running" is not running until the process is seen.
+3. **Its telemetry is our telemetry, and it is a free adoption arm.** Every builder has the Surgeon
+   server on a port and nobody tells it to use it. `make study-agent-usage` per agent answers which
+   verbs it called, how many returns it spent, what it refused, what it declined; that is the
+   free-choice meter, fed by work we were doing anyway. Its wall, returns, and tokens are logged next
+   to ours (a re-review costing 165k tokens and 37 minutes is a number to compare with a hand
+   red-team, not a footnote).
+4. **Its friction is our ledger.** A refusal the agent paid, a probe it could not run, a fixture the
+   content filter would not read: each becomes a ledger item with the exact text, a ratchet, and a
+   trigger, exactly as if a human had paid it.
+5. **Independent, executed re-derivation before the queue.** A second model red-teams the branch by
+   running the probes, never by reading the report; when the builder and the reviewer disagree, the
+   disagreement is the finding. Nothing enters the merge queue on the builder's word, and nothing is
+   fixed by the reviewer: suspected defects are reported by agents and fixed by the seat that owns
+   the design.
+6. **Steer by the same squares.** A delegated result is judged by the square it wins or loses, with
+   the same numbers, and it is conceded as readily. Caring about its methods and timings as if we
+   had done the work ourselves is what keeps the measurement honest when we no longer hold the tool.
+
+**The how, mined from the history (Gene: "the how, versus just why and what"):** twelve techniques
+with the exact commands, each traced to a timestamped moment, live in
+`docs/observations/2026-09-03-delegation-techniques-the-how.md`. The shape under all twelve is one
+rule: **every check reads a source that could not have been written by the thing making the claim.**
+Suite bytes, not the summary; the remote ref, not the push's exit code; the watcher's transcript,
+not the driver's memory; server telemetry, not the agent's notes. Where no such source exists, the
+honest receipt is `:unverified`, never a green.

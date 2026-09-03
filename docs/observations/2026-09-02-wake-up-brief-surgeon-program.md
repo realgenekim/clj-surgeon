@@ -140,3 +140,50 @@ change with value that does not depend on the agent choosing the tool.
   ledger's standpoint; the hold decision sits with the mayor.
 
 Full receipts: `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`.
+
+## Evening brief, 20:42Z (the day after the plane; everything measured, receipts in the big-aha log)
+
+**Headline.** A one-call structural verb beats a native agent where the model would otherwise
+have to discover many sites, and it is correct where native is not. On the synthetic fan-out
+slope (N = 5…80 requiring namespaces, plus a 240-site control), `alias_migration` was one call,
+2–3 returns, 24–27 s and 6/6 acceptance at every point; native ran 3–11 returns, 55–127 s and
+passed 2/6, failing three different ways. Wall 4.5× at scale, returns 2×, correctness decisive.
+Not the 10× on returns the slope was built to find: a competent native agent writes a generator
+at N=80 and drops to 6 returns.
+
+**The law.** An agent's cost is its count of decisions, not edits; both arms typed the same
+bytes. The control settled what native pays for: 240 sites in 5 files cost the same as 240
+sites in 80 files. Native pays for site discovery; the verb absorbs the whole site set.
+
+**The two-call shape.** Extract-with-rewire (`bridge/rf2-extract-rewire` a66b626): the rf1
+extraction in ONE call, 1.3 s, byte-identical to the reference; hand-driven to green in 8
+returns vs native's 14. The admit gate (`bridge/admit-gate` 17125fe): on the extraction task
+3/3 complete, every commit verified, refusals 24 → 2 after one field, 5 % of wall, 0.76× native
+at n=3 (n=6 queued). Alias migration (`bridge/q5z-alias-migration` 13d86bb): the slope above;
+one field-found defect on the real anchor (var-form references) being fixed.
+
+**The boundaries, all measured.** Free-choice adoption 0 of 10 with the exact command named:
+the win exists under mandate. The receipt is the product: a cold reader could not act on it
+until it led with state, was bounded (346 KB → 4 KB) and carried a checked compile. The gate's
+own verification costs ~1.9× where there is nothing to remove (rung L). Wall and returns are
+two meters. A gate a caller can turn off is the caller's gate (my own ratified waiver; fixed).
+
+**Gene's real work.** curtaincall-cfp `bridge/fold-idempotence` (a02d50a3, inb-d603ce): one
+generative property over all 121 fold arms found nine non-idempotent ones, including one inside
+the Stellman emergency fix, and closed them; the write side still takes a duplicate fact and
+double-fires sinks (bead). `bridge/safe-refactor-1` (inb-e12ff9): three extractions.
+
+**Decisions for Gene.** Merge the two curtain-call branches or not. Whether the product claim
+is "mandated verb + gate" (true) or "agents prefer it" (false). Whether the anchor's rename
+scope includes the defining file (spec hole found by the run).
+
+**Decisions for the mayor.** Five clj-surgeon branches in review: close-losers 205e13a,
+format-form-scope 62981ee, rf2-extract-rewire a66b626, q5z-alias-migration 13d86bb (+ the
+var-form fix coming), admit-gate 17125fe. Beads wanted: inb-4a51e5, inb-51135b, inb-ab0a24,
+inb-a0cb65, inb-25737f. The repo's checked-in codex config names the retired cclsp and port
+7888 (told the mayor).
+
+**Method, in one line each.** Tweezers before the woodchipper (`docs/tweezer-loop.md`, G0–G6).
+The watcher is the meter: it caught the driver undercounting twice. The caller's real bytes
+beat every review, four times today. Every fix earned a witness that failed first.
+
