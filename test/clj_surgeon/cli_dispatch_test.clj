@@ -321,3 +321,49 @@
                (str/index-of moved "(defn run-kondo")))
         (is (str/blank? err)))
       (finally (.delete tmp)))))
+
+;; ============================================================
+;; :relation-census — the CLI entrance takes the same bounds as the tool
+;; ============================================================
+
+(def ^:private census-fixture-dir
+  (str (.getAbsolutePath (io/file "test-fixtures/relation-census"))))
+
+;; @spec MCP-OP-CENSUS-019
+(deftest cli-relation-census-parses-threads-and-validates-doors
+  (testing "the registry's own example dispatches: :threads 8"
+    (let [{:keys [exit out err]} (run-cli ":op" "relation-census"
+                                          ":dir" census-fixture-dir
+                                          ":threads" "8")
+          result (edn/read-string out)]
+      (is (zero? exit) (str "stderr: " err))
+      (is (true? (:ok result)))
+      (is (pos? (get-in result [:counts :raw])))
+      (is (not (str/includes? (str out err) "ClassCastException"))
+          "the documented :threads example still throws")))
+
+  (testing ":threads 0 and :threads 4096 refuse typed on the CLI too"
+    (doseq [bad ["0" "4096" "many"]]
+      (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                        ":dir" census-fixture-dir
+                                        ":threads" bad)
+            result (edn/read-string out)]
+        (is (pos? exit) (str ":threads " bad " was accepted"))
+        (is (= :invalid-pool-size (:error-type result))))))
+
+  (testing ":doors conj refuses instead of making every conj a door"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "conj")
+          result (edn/read-string out)]
+      (is (pos? exit))
+      (is (= :unknown-door-symbol (:error-type result)))
+      (is (str/includes? (:error result) "shadows a collection write head"))))
+
+  (testing "a good door list still censuses"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "conj-once,upsert-by")
+          result (edn/read-string out)]
+      (is (zero? exit))
+      (is (true? (:ok result))))))

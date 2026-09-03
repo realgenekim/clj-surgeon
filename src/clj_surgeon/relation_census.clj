@@ -689,6 +689,34 @@
                                       "\\s"))
                      source))))
 
+;; @spec MCP-OP-CENSUS-019
+(defn parse-doors
+  "Validate a caller's identity doors against the census vocabulary.
+
+   One kernel for both entrances: the MCP tool and the CLI op. Returns the door
+   set, or a map naming the offending value and why it was refused. `declared`
+   is the set of names defined in the scanned files, or nil to skip that check."
+  [doors declared]
+  (reduce
+    (fn [acc value]
+      (let [sym (try (symbol (str/trim (str value))) (catch Throwable _ nil))]
+        (cond
+          (or (nil? sym) (str/blank? (str value)) (str/includes? (str value) " "))
+          (reduced {:invalid (str value) :why "not a symbol"})
+
+          (contains? '#{conj cons into concat} (symbol (name sym)))
+          (reduced {:invalid (str value) :why "shadows a collection write head"})
+
+          (and (some? declared)
+               (not (contains? default-doors (symbol (name sym))))
+               (not (contains? declared (symbol (name sym)))))
+          (reduced {:invalid (str value)
+                    :why "not defined in any scanned file"})
+
+          :else (conj acc (symbol (name sym))))))
+    #{}
+    doors))
+
 (defn merge-results
   "Merge per-file results, re-keyed by path. Order is by path, always."
   [results]

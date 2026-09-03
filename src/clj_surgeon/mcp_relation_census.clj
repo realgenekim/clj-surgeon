@@ -384,28 +384,6 @@
 ;; Execution
 ;; ---------------------------------------------------------------------------
 
-(defn- parse-doors
-  [doors declared]
-  (reduce
-    (fn [acc value]
-      (let [sym (try (symbol (str/trim (str value))) (catch Throwable _ nil))]
-        (cond
-          (or (nil? sym) (str/blank? (str value)) (str/includes? (str value) " "))
-          (reduced {:invalid (str value) :why "not a symbol"})
-
-          (contains? '#{conj cons into concat} (symbol (name sym)))
-          (reduced {:invalid (str value) :why "shadows a collection write head"})
-
-          (and (some? declared)
-               (not (contains? census/default-doors (symbol (name sym))))
-               (not (contains? declared (symbol (name sym)))))
-          (reduced {:invalid (str value)
-                    :why "not defined in any scanned file"})
-
-          :else (conj acc (symbol (name sym))))))
-    #{}
-    doors))
-
 ;; @spec MCP-OP-CENSUS-014
 (defn- execute-in-context!
   [{:keys [project-root]} {:keys [files doors pool_size]}]
@@ -456,7 +434,7 @@
                                                     (select-keys % [:file :source])))
                                       candidates))
                 resolved-doors (if (seq doors)
-                                 (parse-doors doors declared)
+                                 (census/parse-doors doors declared)
                                  census/default-doors)]
             (if (map? resolved-doors)
               (refusal :unknown-door-symbol

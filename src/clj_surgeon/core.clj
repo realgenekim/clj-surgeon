@@ -461,9 +461,13 @@
          (sort-by :name)
          vec)))
 
+;; @spec MCP-OP-CENSUS-019
 (defn census-sources
-  "Project-relative {:file :source} inputs that define fold arms. Pure once the
-   bytes are read: discovery is the only I/O."
+  "Project-relative {:file :source} inputs that define fold arms.
+
+   Bounded like the tool's discovery: the scan stops at `max-scanned-files` and
+   a source above `max-source-bytes` is skipped. A file the caller NAMED is
+   refused by size rather than silently dropped."
   [dir file]
   (let [root (str (fs/absolutize (or dir ".")))
         paths (if file
@@ -471,30 +475,71 @@
                 (->> (fs/glob root "**.{clj,cljc}")
                      (map str)
                      (remove #(re-find #"/(\.git|node_modules|target|\.cpcache)/" %))
-                     sort))]
-    (->> paths
-         (map (fn [p] {:file (str (fs/relativize root p)) :source (slurp p)}))
-         (filterv #(relation-census/defines-arms? (:source %))))))
+                     sort
+                     (take relation-census/max-scanned-files)))
+        too-big? #(> (fs/size %) relation-census/max-source-bytes)]
+    (if (and file (some too-big? paths))
+      {:oversized (str (fs/relativize root (first paths)))}
+      {:scanned (count paths)
+       :inputs (->> paths
+                    (remove too-big?)
+                    (map (fn [p] {:file (str (fs/relativize root p))
+                                  :source (slurp p)}))
+                    (filterv #(relation-census/defines-arms? (:source %))))})))
 
 ;; @spec MCP-OP-CENSUS-015
+;; @spec MCP-OP-CENSUS-019
 (defn run-relation-census
   "Census collection writes inside fold arms. Reads only; writes nothing."
   [{:keys [dir file doors threads]}]
-  (let [inputs (census-sources dir file)
-        doors (if doors
-                (into #{} (map (comp symbol str/trim)) (str/split (str doors) #","))
-                relation-census/default-doors)]
-    (if (empty? inputs)
+  (let [pool (when (some? threads) (relation-census/coerce-pool-size threads))
+        parsed-doors (if doors
+                       (relation-census/parse-doors
+                         (str/split (str doors) #",") nil)
+                       relation-census/default-doors)
+        scan (delay (census-sources dir file))]
+    (cond
+      (and pool (not (:ok pool)))
       {:ok false
-       :error-type :no-fold-arms-found
-       :error "No file defines defmethod fold-event arms"
-       :dir (str (fs/absolutize (or dir ".")))
-       :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
-      (let [threads (when threads (long threads))
-            result (relation-census/plan
-                     {:inputs inputs
-                      :doors doors
-                      :map-fn (if (and threads (> threads 1)) pmap map)})]
+       :error-type :invalid-pool-size
+       :error (str ":threads must be an integer between 1 and "
+                   relation-census/max-pool-size
+                   " (got " (pr-str threads) ")")
+       :next-command "clj-surgeon :op :relation-census :dir . :threads 8"}
+
+      (map? parsed-doors)
+      {:ok false
+       :error-type :unknown-door-symbol
+       :error (str "Unknown identity door " (:invalid parsed-doors) ": "
+                   (:why parsed-doors))
+       :door (:invalid parsed-doors)
+       :known-doors (vec (sort (map str relation-census/default-doors)))
+       :next-command (str "clj-surgeon :op :relation-census :dir . :doors "
+                          (str/join "," (sort (map str relation-census/default-doors))))}
+
+      (:oversized @scan)
+      {:ok false
+       :error-type :source-too-large
+       :error (str (:oversized @scan) " is larger than "
+                   relation-census/max-source-bytes " bytes")
+       :file (:oversized @scan)
+       :maximum relation-census/max-source-bytes
+       :next-command "clj-surgeon :op :relation-census :file <a source under the byte cap>"}
+
+      :else
+      (let [inputs (:inputs @scan)
+            doors parsed-doors]
+        (if (empty? inputs)
+          {:ok false
+           :error-type :no-fold-arms-found
+           :error "No file defines defmethod fold-event arms"
+           :dir (str (fs/absolutize (or dir ".")))
+           :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
+          (let [threads (when pool (:size pool))
+                result (relation-census/plan
+                         {:inputs inputs
+                          :doors doors
+                          :map-fn (if (and threads (> threads 1)) pmap map)})]
         (if-not (:ok result)
           result
           (-> result
@@ -509,7 +554,7 @@
                        "review the raw sites: each is a collection write in a fold arm with no dominating recognised guard"
                        (pos? (get-in result [:counts :unknown] 0))
                        "review the unknown sites: this census version declines to decide them"
-                       :else "none"))))))))
+                       :else "none"))))))))))
 
 (defn run-ls-tree [{:keys [dir format grep] :as _opts}]
   (when-not dir

@@ -43,6 +43,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-018**: When clj-surgeon discovers the files to census, it shall walk the workspace without following symbolic links, shall prune a skipped directory before reading it, shall stop the walk once the scanned-file cap is reached, and shall skip and count in `skipped_outside_root` every discovered path whose real location escapes the workspace root rather than refusing the census.
 
+- [x] **MCP-OP-CENSUS-019**: When clj-surgeon executes the `:relation-census` CLI op, it shall parse `:threads` through the same pool-size kernel as the MCP tool and refuse an out-of-range or non-integer value typed, shall validate `:doors` through the same door kernel and refuse a door that shadows a collection write head, and shall bound its scan by the same scanned-file and source-byte caps, refusing a named source above the byte cap.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |
