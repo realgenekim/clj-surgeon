@@ -839,6 +839,36 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-043
+(deftest a-rolled-back-retire-failure-deletes-its-undo-receipt
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        ;; the retire destination's parent directory is occupied by a file, so
+        ;; the move throws after the kernel has already committed
+        blocker (io/file workspace ".clj-surgeon" "alias-migration" "retired"
+                         "src" "acid" "fanout")]
+    (.mkdirs receipt-dir)
+    (.mkdirs (.getParentFile blocker))
+    (spit blocker "not a directory\n")
+    (try
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (lib-request workspace))
+            receipts (filter #(str/ends-with? (.getName %) ".edn")
+                             (.listFiles receipt-dir))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-retire-failed" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+
+        (testing "the rolled-back transaction leaves no undo receipt behind"
+          (is (= [] (mapv #(.getName %) receipts))))
+
+        (testing "every file is byte-identical to its pre-migration source"
+          (doseq [[relative expected] (:pre corpus)]
+            (is (= expected (slurp (io/file workspace relative))) relative))
+          (is (not (.exists (io/file workspace "src/acid/fanout/event_store.clj"))))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-042
 (deftest the-receipt-and-its-summary-report-the-kernel-s-own-committed-flag
   (let [workspace (workspace!)]

@@ -623,15 +623,22 @@
                           (catch Exception error
                             {:retire-error (.getMessage error)}))]
             (cond
+              ;; @spec MCP-OP-ALIAS-043
               (:retire-error retired)
               (let [rollback (transaction/execute-undo!
-                               {:receipt (:receipt-file result)})]
+                               {:receipt (:receipt-file result)})
+                    rolled-back? (boolean (:ok rollback))]
+                ;; the same discipline as the verification-failure branch: an
+                ;; undo receipt for a transaction that has already been undone
+                ;; would invite a second, destructive undo
+                (when rolled-back?
+                  (.delete (io/file (:receipt-file result))))
                 {:error (str "The superseded defining file could not be retired; "
                              "the alias migration was rolled back")
                  :error-type :alias-migration-retire-failed
                  :cause-error (:retire-error retired)
-                 :rolled-back (boolean (:ok rollback))
-                 :source-unchanged (boolean (:ok rollback))})
+                 :rolled-back rolled-back?
+                 :source-unchanged rolled-back?})
 
               (nil? profile)
               (cond-> result retired (assoc :retired-file retired))
