@@ -900,7 +900,8 @@
   the kernel commits; any later failure restores it before rolling back, so the
   tree is never left with two definitions or none."
   ([config project-root spec files] (commit! config project-root spec files nil))
-  ([{:keys [verification-profiles receipt-dir verify]} project-root spec files retire]
+  ([{:keys [verification-profiles receipt-dir verify attempted]}
+    project-root spec files retire]
   (.mkdirs (io/file receipt-dir))
   (let [retire-source (when retire (resolve-retire-source project-root retire))
         receipt-name (new-receipt-name)]
@@ -938,7 +939,13 @@
        :error-type (or (:error-type baseline) :verification-baseline-failed)
        :verification baseline
        :source-unchanged true}
-      (let [result (transaction/execute-mcp-change!
+      (let [;; @spec MCP-OP-ALIAS-047
+            ;; the transaction kernel's entrance, and the first write of the
+            ;; whole call: everything above this line — the retire resolution,
+            ;; the profile check, the baseline capture — can exhaust the heap
+            ;; with the tree still exactly as the caller left it
+            _ (when attempted (vreset! attempted true))
+            result (transaction/execute-mcp-change!
                      {:spec spec
                       :receipt-out (str (io/file receipt-dir receipt-name))
                       :write-refusal-context {:operation "alias_migration"
@@ -1008,9 +1015,12 @@
 (defn- execute-migration!
   "Plan, commit, and publish one O(1) alias_migration receipt.
 
-  `attempted` is set the instant the transaction kernel is entered, so the
-  heap-exhaustion guard around this function can say truthfully whether any
-  write was ever begun."
+  `attempted` is handed to `commit!`, which sets it at the transaction kernel's
+  own entrance — the first write — so the heap-exhaustion guard around this
+  function can say truthfully whether any write was ever begun. Setting it here,
+  at the CALL to `commit!`, would claim a mutation for a heap exhausted while
+  resolving the retire source or capturing a verification baseline, none of
+  which write a byte."
   [config params attempted]
   (let [validated (validate-request params)]
     (if-not (:ok validated)
@@ -1033,10 +1043,10 @@
                 spec (plan->spec plan paths destination)
                 files (mapv #(get paths (:file %)) (:files plan))
                 verify (:verify request)
-                commit (do (vreset! attempted true)
-                           (commit! (assoc config :verify verify)
-                                    (.toString root) spec files
-                                    (get-in plan [:lib-rename :file])))]
+                commit (commit! (assoc config :verify verify
+                                        :attempted attempted)
+                                (.toString root) spec files
+                                (get-in plan [:lib-rename :file]))]
             ;; @spec MCP-OP-ALIAS-042
             (if (or (:error commit) (not (:committed commit)))
               (commit-refusal plan commit)
