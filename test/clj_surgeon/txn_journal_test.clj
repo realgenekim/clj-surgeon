@@ -1715,6 +1715,103 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(deftest a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break
+  (testing "Opus round 5, finding 4. A crash between `Files/createLink` and
+            the unlink leaves a tombstone that is a second link to the LIVE
+            LOCK: same (device, inode), byte-identical content. The sweep
+            reported it as `:kind :broken-lock` - evidence of a break that
+            never happened, naming a claim that currently holds the lock - and
+            a later break by that txid was refused because the name was taken.
+            It is an INTERRUPTED break, and recovery finishes it: the holder
+            is dead by the same rule every other break obeys, so the LOCK side
+            is unlinked and the evidence stands."
+    (let [ws (workspace! "interrupted-break-finish" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          tomb (io/file dir "LOCK.broken.B-CRASH")]
+      (try
+        (plant-lock! ws {:txid "ghost-8" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [crashed (begin! ws {:txid "B-CRASH"
+                                  :before-unlink
+                                  (fn [_]
+                                    (throw (java.io.IOException.
+                                             "killed between the link and the unlink")))})]
+          (is (false? (:ok crashed))
+              (str "the break did not complete: " (pr-str crashed)))
+          (is (.isFile lock) "the LOCK is still there")
+          (is (.isFile tomb) "and so is the half-made tombstone")
+          (is (= (Files/readAttributes (.toPath lock)
+                                       java.nio.file.attribute.BasicFileAttributes
+                                       ^"[Ljava.nio.file.LinkOption;"
+                                       (into-array java.nio.file.LinkOption []))
+                 (Files/readAttributes (.toPath tomb)
+                                       java.nio.file.attribute.BasicFileAttributes
+                                       ^"[Ljava.nio.file.LinkOption;"
+                                       (into-array java.nio.file.LinkOption [])))
+              "one inode, two names - which is what makes it not a break"))
+
+        (let [row (first (filter #(contains? #{:broken-lock :interrupted-break}
+                                             (:kind %))
+                                 (journal/retained-transactions (:root ws) opts)))]
+          (is (= :interrupted-break (:kind row))
+              (str "the sweep may not call it a break that happened: "
+                   (pr-str row))))
+
+        (let [result (journal/recover! (:root ws) opts)
+              finished (:interrupted-break result)]
+          (is (some? finished)
+              (str "recovery names what it resolved: " (pr-str result)))
+          (is (= :interrupted-break-finished (:resolution finished)))
+          (is (= "LOCK.broken.B-CRASH" (:tombstone finished)))
+          (is (not (.exists lock))
+              "the holder is dead by the ordinary rule, so the break finishes")
+          (is (.isFile tomb) "and its evidence stands")
+          (is (= "ghost-8" (:txid (read-string (slurp tomb))))
+              "still the exact claim that was judged")
+          (is (nil? (:lock-broken result))
+              "recovery does not claim a break it did not perform"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest an-interrupted-break-of-a-LIVE-holders-lock-is-reverted
+  (testing "the other half of finding 4. The same half-made tombstone, but the
+            LOCK names a holder that is alive - so the break must not be
+            finished on its behalf. Recovery removes the extra link and says
+            it did; the live holder's LOCK is untouched, and no evidence of a
+            break that never happened is left behind for the sweep to bill."
+    (let [ws (workspace! "interrupted-break-revert" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          tomb (io/file dir "LOCK.broken.B-CRASH")]
+      (try
+        (plant-lock! ws {:txid "A-LIVE" :pid (.pid child) :boot-id (boot-id-now)})
+        ;; exactly what a crash between the link and the unlink leaves
+        (Files/createLink (.toPath tomb) (.toPath lock))
+        (let [result (journal/recover! (:root ws) opts)
+              reverted (:interrupted-break result)]
+          (is (some? reverted)
+              (str "recovery names what it resolved: " (pr-str result)))
+          (is (= :interrupted-break-reverted (:resolution reverted)))
+          (is (= "LOCK.broken.B-CRASH" (:tombstone reverted)))
+          (is (.isFile lock) "the live holder's LOCK is untouched")
+          (is (= "A-LIVE" (:txid (read-string (slurp lock)))))
+          (is (not (.exists tomb))
+              "and the evidence of a break that never happened is gone")
+          (is (nil? (:lock-broken result))
+              "nothing was broken"))
+        (let [rows (filter #(contains? #{:broken-lock :interrupted-break} (:kind %))
+                           (journal/retained-transactions (:root ws) opts))]
+          (is (empty? rows)
+              (str "and the sweep bills nothing for it: " (pr-str rows))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
 (deftest the-link-break-cannot-displace-a-claim-at-all
   (testing "the strictly stronger property the createLink order buys. The
             break no longer MOVES the LOCK, so between claiming the tombstone
