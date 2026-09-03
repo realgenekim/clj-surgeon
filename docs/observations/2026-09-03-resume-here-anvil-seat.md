@@ -260,3 +260,10 @@ Live builders: B3 MEM-005 (~/src/clj-surgeon-admit, RED committed, GREEN in prog
 Gene report DRAFT committed: docs/observations/2026-09-03-gene-report-night.md (refresh at the end; tables from the log).
 Rules in force unchanged (suite-run lanes; battery/memory-red exclusive; sol-yolo neutralises repo .codex/config.toml — two 7888 contacts reported on inb-1165ce).
 Next on wake: file newest verdicts; when lanes go quiet or at ~08:30Z, refresh the Gene report and this note.
+
+## RESUME DELTA (fifth refresh; see the commit time) — night orders, final third
+GO (seven) unchanged: kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated on Gene); rf2 965d49e; read-path-memory 2aa648a; memory-battery 5534e94 (tooling). fold-diff: production read GO PINNED at 2b56a484 (inb-3a9818, Sol's conditions); branch tip d5b9e132 needs round 5 (own-copy fallback) before it replaces the pin.
+Live: Sol q5z round 7 (f4d196b). Builders: study round 5 (length-scaled budget term; ~/src/clj-surgeon-study), census round 5 (refusal evidence, entry bound, exhaustion; ~/src/clj-surgeon-census), B1 kernel round 2 (~/src/clj-surgeon-txn), MEM-005 round 2 (prefix depth, Error catch, 4th constructor; ~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms; previous builder wedged, stopped 07:41Z), fold-diff round 5 (~/src/curtaincall-cfp-folddiff).
+Gene report DRAFT at docs/observations/2026-09-03-gene-report-night.md — refresh at ~08:30Z from the captain's log (every number verbatim with its entry time).
+Sol content filter refuses: rf2, study, MEM-005 branches → Opus fallback each time (recorded per lane). sol-yolo neutralises repo .codex/config.toml (two 7888 contacts reported on inb-1165ce at 06:05Z and 06:57Z).
+Inbox: inb-1165ce (night orders, seven GO notes, incidents), inb-3a9818 (fold-diff production read GO with conditions), inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07c5e7 (MEM-005 follow-ups).
