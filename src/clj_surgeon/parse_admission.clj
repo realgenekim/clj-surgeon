@@ -176,7 +176,8 @@
    next atom, or at the delimiter that closes the form they wrapped. Counting
    only delimiters admitted a 710-byte `@`-tower at depth 1 that then exhausted
    the reader's stack. Delimiters inside strings, regex literals, character
-   literals and comments are text, never structure.
+   literals and comments are text, never structure. and so is a `#!` shebang line — the reader takes
+   it as a line comment, and this repository has 20 files that start with one.
 
    It is an ESTIMATE and reads about 11% low against rewrite-clj's own count
    (19,528 against 21,996 for `intent_transaction.clj`), because a whitespace
@@ -212,6 +213,17 @@
 
             ;; line comment: to end of line
             (== c SEMICOLON)
+            (let [j (long (loop [j i]
+                      (if (and (< j n)
+                               (not (== NEWLINE (int (.charAt source j)))))
+                        (recur (inc j))
+                        j)))]
+              (recur j (inc nodes) ddepth pdepth pending max-depth stack))
+
+            ;; `#!` — the reader treats a shebang as a line comment, anywhere
+            (and (== c HASH)
+                 (< (inc i) n)
+                 (== BANG (int (.charAt source (inc i)))))
             (let [j (long (loop [j i]
                       (if (and (< j n)
                                (not (== NEWLINE (int (.charAt source j)))))
