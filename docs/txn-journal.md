@@ -239,11 +239,18 @@ receipt refcount, and whether the row may be evicted.
   only. A tombstone that IS the live LOCK — one inode, two names, which is what
   a crash between the break's link and its unlink leaves — is `:kind
   :interrupted-break :status :lock-break-interrupted`, because it is evidence of
-  a break that never happened. There is NO row for a file that vanished between
-  the listing and the stat, and none for a zero-length one: `lastModified` of a
-  missing file is 0, which reads as infinitely old and bills `:bytes 0`, and
-  822 of 9,831 rows were of exactly that kind under concurrency. An absent file
-  is absent, which is neither an age nor a zero.
+  a break that never happened. There is NO row for a file that VANISHED between
+  the listing and the stat: `lastModified` of a missing file is 0, which reads
+  as infinitely old and bills `:bytes 0`, and 822 of 9,831 rows were of exactly
+  that kind under concurrency. An absent file is absent, which is neither an age
+  nor a zero. A PRESENT zero-length tombstone is a different fact and gets its
+  own row, `:status :empty-evidence` — the break's own receipt names that file
+  and the prune counts it in `:remaining`, so a listing that denied it made
+  three verbs disagree about one file. Telling the two apart takes ONE stat, not
+  two: size and times come from a single `Files/readAttributes`, which throws
+  for a file that is gone rather than reporting zeroes for it. Every tombstone
+  row also carries `:stamp` — `:ok`, `:absent` or `:unreadable` — saying how its
+  own creation stamp read.
 
 ## Recovery
 

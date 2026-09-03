@@ -1982,7 +1982,14 @@
             `:bytes 0`: a file that vanishes between the listing and the stat
             produced a row with an epoch-sized age for a file that was gone -
             822 of 9,831 rows under concurrency. An ABSENT file is absent, not
-            a zero and not infinitely old, and no row may describe one."
+            a zero and not infinitely old, and no row may describe one.
+
+            The rule is about ABSENCE, not about zero bytes: a file caught
+            between its create and its write is PRESENT and zero-length, and
+            since round 6's finding 3 it gets a row typed
+            `:status :empty-evidence` - which is exactly the shape a lister
+            racing this churn sees, and exactly what the break's own receipt
+            and the prune's `:remaining` already said about it."
     (let [ws (workspace! "tombstone-absent-rows" 2)
           dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
           opts {:state-home (:state-home ws)}
@@ -2013,8 +2020,10 @@
             (str "the sweep must actually read the directory while files are "
                  "vanishing, or it proves nothing: " (count @rows) " rows"))
         (let [ghosts (remove #(and (number? (:age-ms %))
+                                   (not (neg? (long (:age-ms %))))
                                    (< (long (:age-ms %)) 1000000000000)
-                                   (pos? (long (:bytes % 0))))
+                                   (or (pos? (long (:bytes % 0)))
+                                       (= :empty-evidence (:status %))))
                              @rows)]
           (is (zero? (count ghosts))
               (str "no row may bill a file that is not there: " (count ghosts)

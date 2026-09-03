@@ -690,6 +690,34 @@
       (catch Exception _ nil))
     now))
 
+(defn- evidence-stat
+  "The size and the age basis of one piece of break evidence, from ONE stat,
+   or nil when the file is not there.
+
+   Two separate reads made a file that VANISHED indistinguishable from a
+   present empty one: `lastModified` of a missing file is 0, which reads as
+   infinitely old, and `.length` of a missing file is 0 as well - so the row
+   that billed `:bytes 0` against an epoch-sized age was the same shape a
+   present zero-length file has. The old listing hid that by dropping every
+   zero-byte row; once a present empty tombstone is a row of its own (round
+   6, finding 3), the two must be told apart at the source.
+   `Files/readAttributes` throws `NoSuchFileException` for a file that is
+   gone, and binds the size to the SAME observation as the times, so a row
+   that says `:bytes 0` means it."
+  [^File f]
+  (try
+    (let [attrs (Files/readAttributes (.toPath f)
+                                      "unix:size,lastModifiedTime,ctime"
+                                      ^"[Ljava.nio.file.LinkOption;"
+                                      (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
+          mtime (.toMillis ^FileTime (get attrs "lastModifiedTime"))
+          ctime (some-> ^FileTime (get attrs "ctime") (.toMillis))]
+      {:bytes (long (get attrs "size"))
+       ;; the newest of mtime and ctime, for the reason `lock-age-basis-ms`
+       ;; states: mtime is settable and survives a copy, ctime is not
+       :basis (max (long mtime) (long (or ctime mtime)))})
+    (catch Exception _ nil)))
+
 (defn- evidence-basis
   "The stamp a piece of break evidence is retired against, and how its own
    sidecar read: `{:basis ms :stamp :ok|:absent|:unreadable}`, or nil when the
@@ -712,14 +740,17 @@
    not a time: the file falls back to its OWN basis and the row says
    `:stamp :unreadable`, which is a typed fact rather than a silent one."
   [^File f ^File side now]
-  (when-let [basis (lock-age-basis-ms f)]
-    (let [raw (read-broken-at-ms side)]
-      (cond
-        (nil? raw) {:basis (long basis) :stamp :absent}
-        (= :unreadable raw) {:basis (long basis) :stamp :unreadable}
-        (>= (long raw) (+ (long now) (long broken-lock-stamp-tolerance-ms)))
-        {:basis (long basis) :stamp :unreadable}
-        :else {:basis (max (long basis) (long raw)) :stamp :ok}))))
+  (when-let [stat (evidence-stat f)]
+    (let [basis (long (:basis stat))
+          raw (read-broken-at-ms side)]
+      (merge
+        (select-keys stat [:bytes])
+        (cond
+          (nil? raw) {:basis basis :stamp :absent}
+          (= :unreadable raw) {:basis basis :stamp :unreadable}
+          (>= (long raw) (+ (long now) (long broken-lock-stamp-tolerance-ms)))
+          {:basis basis :stamp :unreadable}
+          :else {:basis (max basis (long raw)) :stamp :ok})))))
 
 (defn- evidence-age
   "How old a piece of break evidence is and how its stamp read, or `:absent`.
@@ -734,7 +765,8 @@
   [^File f ^File side now]
   (if-let [found (evidence-basis f side now)]
     {:age-ms (max 0 (- (long now) (long (:basis found))))
-     :stamp (:stamp found)}
+     :stamp (:stamp found)
+     :bytes (long (:bytes found))}
     :absent))
 
 (defn- tombstone-age
@@ -2201,21 +2233,25 @@
                :evictable (:evictable lease false)
                :lease (:lease lease)
                :bytes (dir-bytes d)}))
-       ;; A file that vanished between the listing and the stat is ABSENT,
-       ;; and a zero-length one carries no claim: neither is evidence, and a
-       ;; row for one bills bytes that are not there against an age no clock
-       ;; produced. `lastModified` of a missing file is 0, which the old row
-       ;; read as infinitely old - 822 of 9,831 rows under concurrency.
+       ;; A file that vanished between the listing and the stat is ABSENT:
+       ;; `lastModified` of a missing file is 0, which the old row read as
+       ;; infinitely old and billed `:bytes 0` - 822 of 9,831 rows under
+       ;; concurrency. A PRESENT zero-length one is a different fact and gets
+       ;; a row: the break's own receipt names it and the prune counts it in
+       ;; `:remaining`, so a listing that denied it made three verbs disagree
+       ;; about one file. It carries no claim, and says so in its status.
        (concat
          (for [^File f (broken-lock-files transactions)
                :let [aged (tombstone-age f now)
-                     bytes (.length f)]
-               :when (and (map? aged) (pos? (long bytes)))]
+                     bytes (:bytes aged 0)]
+               :when (map? aged)]
            (let [interrupted? (= (.getName f) (when interrupted
                                                 (.getName ^File interrupted)))]
              {:txid (.getName f)
               :kind (if interrupted? :interrupted-break :broken-lock)
-              :status (if interrupted? :lock-break-interrupted :lock-broken)
+              :status (cond interrupted? :lock-break-interrupted
+                            (zero? (long bytes)) :empty-evidence
+                            :else :lock-broken)
               :receipt-refs 0
               :evictable false
               :retired-by :txn/recover
@@ -2237,7 +2273,7 @@
             :age-ms (:age-ms aged)
             :stamp (:stamp aged)
             :retention-ms broken-lock-retention-ms
-            :bytes (.length f)}))))))
+            :bytes (:bytes aged)}))))))
 
 (defn undo!
   ;; @spec MCP-OP-MEM-006
