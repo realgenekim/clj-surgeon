@@ -347,3 +347,17 @@ State of the lanes right now (all builders/reviewers are subagents of the Anvil 
 Unchanged GOs for the mayor (see the merge-queue doc): receipt-ratchets c5ef7ca, rf2 965d49e, study 4480e3d, memory-battery 5534e94, read-path-memory b7ef23d, q5z f51ceae, parser-admission 52c5d85, template-upsert 25b98a83 (order-gated on Gene), apparatus 23a7643. No merges observed from the mayor as of this delta; consolidated order stands on inb-1165ce. E3/E6 prerequisite "apparatus GO" satisfied; still waiting on the q5z/read-path/parser-admission merges.
 
 Sol lanes: launched via ~/bin/sol-yolo with a background waiter loop per lane; verdicts land in /home/forge/tmp/sol/<lane>-sol-review.md, EXIT line in <lane>-sol.log. Usage watch unchanged all night (96/49/47). Heartbeat cron every 10 min, usage watch hourly at :23. Load ~4–6 on 16 cores, ~20 GB free.
+
+## RESUME DELTA 19:05Z — after the weekly-limit outage (13:03–19:03Z)
+
+The seat's Claude weekly limit (resets 19:00 UTC) killed three subagents and silenced the main loop for six hours; Sol kept working. Relaunched at 19:03Z from committed state. Gene's nine-hour night window (from ~04:00Z) is over; he has not written since. Lanes now:
+
+| lane | tip on origin | status | running now |
+|---|---|---|---|
+| census | 772b29f | HELD — Sol r11 NO-GO (post-scan `:dir .`; unescaped `:next-command` = injection syntax; oversized pool_size throws) | Opus r12 builder in ~/src/clj-surgeon-census |
+| MEM-003 | 0914a37 (origin) / 3cedd44 (local, r6 four items committed, gates NOT run) | Opus r5 GO-WITH-FIX; r6 = docs + assertion + 2 small fixes | Sonnet gates-only agent on 3cedd44 → push → Opus confirm → GO |
+| kernel | 9aa5baa | r6 pushed; Opus r6 re-check was killed after item 1 | fresh Opus r6 re-check in ~/tmp/sol/txn6-wt |
+| fold-diff | b223f64e (production pin 347fe6d3) | r9 pushed; Sol refused the brief; Opus review killed after attack (a) | fresh Opus r9 review in ~/tmp/sol/folddiff9-wt |
+| apparatus | **77e6237 GO cohort-ready** (Sol r10) | CLOSED | — |
+
+Ten GOs unmerged; no merges observed from the mayor all night. Gene report at 2f05a46 (13:00Z). Usage watch unchanged 96/49/47.
