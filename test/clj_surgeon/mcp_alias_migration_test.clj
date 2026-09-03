@@ -1917,13 +1917,193 @@
                    (:error_type result))
                 (pr-str result))
             (is (= "post-write" (:phase result)))
-            (is (true? (:source_unchanged result))
-                "the redirected receipt was detected but the tree was not restored")
+            ;; @spec MCP-OP-ALIAS-056
+            ;; `source_unchanged` is the ROLLBACK's answer, not a constant.
+            ;; The assertion this replaced read `(is (true? (:source_unchanged
+            ;; result)))` and could never fire, because `commit-refusal`
+            ;; synthesised the value it asserted from the absence of a
+            ;; `:committed` key. The two fields are pinned to each other here,
+            ;; and the failing-undo witness below is the one that moves them.
+            (is (true? (:rolled_back result))
+                "the redirect was rolled back, so the caller is told so")
+            (is (= (:rolled_back result) (:source_unchanged result))
+                "source_unchanged disagreed with the rollback that produced it")
+            (is (zero? (:files_still_migrated result)))
             (testing "and the tree agrees with the refusal"
               (doseq [[relative expected] (:pre corpus)]
                 (is (= expected (slurp (io/file workspace relative))) relative))))))
       (finally
         (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; round seven: what a post-write refusal owes the caller about the tree
+
+(defn- post-write-redirect!
+  "Run one migration whose receipt directory becomes a link to the detail
+  directory AFTER the post-create guard has answered — the round-six race —
+  with `undo` standing in for the transaction kernel's rollback."
+  [workspace details receipts undo]
+  (let [guard alias-migration/receipt-detail-collision?
+        real-undo transaction/execute-undo!
+        calls (atom 0)]
+    (with-redefs [alias-migration/receipt-detail-collision?
+                  (fn [project-root receipt-dir receipt-name]
+                    (let [answer (guard project-root receipt-dir receipt-name)]
+                      (when (= 2 (swap! calls inc))
+                        (.delete ^java.io.File receipts)
+                        (Files/createSymbolicLink (.toPath ^java.io.File receipts)
+                                                  (.toPath ^java.io.File details)
+                                                  (make-array FileAttribute 0)))
+                      answer))
+                  transaction/execute-undo! (or undo real-undo)]
+      (alias-migration/execute! (config workspace receipts)
+                                (request workspace)))))
+
+(defn- still-migrated
+  "The `:pre` files whose bytes on disk are no longer their pre-migration bytes."
+  [workspace]
+  (into (sorted-set)
+        (keep (fn [[relative expected]]
+                (when-not (= expected (slurp (io/file workspace relative)))
+                  relative)))
+        (:pre corpus)))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-post-write-refusal-whose-rollback-failed-reports-a-migrated-tree
+  ;; The refusal that detects a redirected receipt rolls the transaction back
+  ;; — and when that rollback FAILS the verb used to publish
+  ;; `source_unchanged: true` and the sentence "the alias migration was rolled
+  ;; back" over twelve files that were still migrated, with the orphan receipt
+  ;; named nowhere. `commit-refusal` computed the field as
+  ;; `(not (:committed commit))` over a map that carries no `:committed` key,
+  ;; so it was a constant no failing rollback could move.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (let [result (post-write-redirect!
+                     workspace details receipts
+                     (fn [_] {:ok false :error "injected rollback failure"}))
+            migrated (still-migrated workspace)]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-receipt-published-elsewhere" (:error_type result))
+            (pr-str result))
+        (is (= "post-write" (:phase result)))
+        (is (false? (:rolled_back result))
+            "the rollback failed and the caller was not told")
+        (is (false? (:source_unchanged result))
+            "twelve files are still migrated and source_unchanged said true")
+        (is (= 12 (:files_still_migrated result)))
+        (is (= (count migrated) (:files_still_migrated result))
+            (str "the published count disagrees with the tree: " (vec migrated)))
+        (is (string? (:receipt_file result))
+            "the orphan receipt was left behind and never named")
+        (is (.exists (io/file (str (:receipt_file result))))
+            (str "receipt_file does not name a file that exists: "
+                 (:receipt_file result)))
+        (is (str/includes? (str (:error result)) "rollback FAILED")
+            (str "the prose still claims a rollback that failed: "
+                 (:error result))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-post-write-refusal-whose-rollback-succeeded-reports-a-restored-tree
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (let [result (post-write-redirect! workspace details receipts nil)]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "post-write" (:phase result)))
+        (is (true? (:rolled_back result)))
+        (is (true? (:source_unchanged result)))
+        (is (= 0 (:files_still_migrated result)))
+        (is (empty? (still-migrated workspace)))
+        (is (not (str/includes? (str (:error result)) "FAILED"))
+            (pr-str (:error result))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-receipt-resolved-onto-a-name-without-edn-is-refused-not-reported-ok
+  ;; `canonical-receipt-path` resolves the receipt NAME before staging, so a
+  ;; link already sitting on the destination name is followed rather than
+  ;; replaced by the atomic rename. When the link points at a non-`.edn` name
+  ;; INSIDE the proved directory, the parent comparison agrees and the verb
+  ;; reported ok over a receipt `execute-undo!` refuses to read — an
+  ;; unrecoverable transaction published as a success.
+  (let [workspace (workspace!)
+        receipts (io/file workspace "receipts")
+        victim (io/file receipts "victim.txt")]
+    (.mkdirs receipts)
+    (symlink! (io/file receipts "pinned.edn") victim)
+    (try
+      (let [result (with-redefs [alias-migration/new-receipt-name
+                                 (fn [] "pinned.edn")]
+                     (alias-migration/execute! (config workspace receipts)
+                                               (request workspace)))]
+        (is (false? (:ok result))
+            (str "a receipt published under a name execute-undo! refuses was "
+                 "reported ok: " (pr-str result)))
+        (is (= "alias-migration-receipt-published-elsewhere" (:error_type result))
+            (pr-str result))
+        (is (= "post-write" (:phase result)))
+        (is (false? (:rolled_back result))
+            "the undo cannot read a receipt without .edn, so it did not roll back")
+        (is (false? (:source_unchanged result)))
+        (is (= 12 (:files_still_migrated result)))
+        (is (str/ends-with? (str (:receipt_file result)) "victim.txt")
+            (pr-str (:receipt_file result))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-control-directory-outside-the-workspace-root-is-still-refused
+  ;; Containment answers only about the workspace root, so a LINKED git
+  ;; worktree — whose real control directory is `<main>/.git/worktrees/<name>`,
+  ;; outside the root — published a receipt into git's per-worktree ref
+  ;; storage with ok=true. A control segment is refused wherever it appears,
+  ;; and every control-directory refusal names the directory it found.
+  (let [linked (workspace!)
+        rooted (workspace!)
+        main (temp-dir)
+        gitdir (io/file main ".git" "worktrees" "wt" "refs" "heads")]
+    (.mkdirs gitdir)
+    (try
+      (let [outside (alias-migration/execute!
+                      (config linked gitdir) (request linked))
+            inside (alias-migration/execute!
+                     {:project-root (.getPath rooted)
+                      :receipt-dir ".git/refs/heads"}
+                     (request rooted))]
+        (testing "the linked worktree's real control directory"
+          (is (false? (:ok outside)) (pr-str outside))
+          (is (= "alias-migration-receipt-dir-in-control-directory"
+                 (:error_type outside))
+              (pr-str outside))
+          (is (= ".git" (:control_directory outside))
+              "the control directory the guard found is not on the wire")
+          (is (empty? (filter (fn [^java.io.File file]
+                                (str/ends-with? (.getName file) ".edn"))
+                              (or (seq (.listFiles gitdir)) [])))
+              "a receipt was published into git's per-worktree ref storage"))
+        (testing "and the in-root form names it too"
+          (is (false? (:ok inside)) (pr-str inside))
+          (is (= "alias-migration-receipt-dir-in-control-directory"
+                 (:error_type inside))
+              (pr-str inside))
+          (is (= ".git" (:control_directory inside)) (pr-str inside)))
+        (doseq [workspace [linked rooted]]
+          (doseq [[relative expected] (:pre corpus)]
+            (is (= expected (slurp (io/file workspace relative))) relative))))
+      (finally
+        (delete-tree! linked)
+        (delete-tree! rooted)
+        (delete-tree! main)))))
+
 
 ;; @spec MCP-OP-ALIAS-056
 (deftest two-concurrent-receipt-directory-creations-record-disjoint-sets
