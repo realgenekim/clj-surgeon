@@ -35,12 +35,14 @@ Exit codes: 0 metered; 2 usage / unattested arm; 4 zero returns; 5 idle or wall 
 6 incomplete run (a tool call whose result never arrived, or a `make` target the
 attest-time map does not resolve); 7 the rollout could not be
 bound to THIS driver's own announced session; 8 the bound rollout was ROTATED --
-replaced or truncated -- while the run was being metered.
+replaced or truncated -- while the run was being metered, or its binding could not be
+re-checked at all (`rollout-stat-failed:<ERRNO>`).
 The driver's own exit status is recorded in run.json, never conflated with these.
 """
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -394,6 +396,9 @@ class Tailer:
         self.ino = None
         self.dev = None
         self.rotation: str | None = None
+        # which typed abort this tailer is asking for: `rollout-rotated`, or
+        # `rollout-stat-failed:<ERRNO>` when the binding itself could not be READ
+        self.abort_kind: str | None = None
 
     def read_lines(self) -> list[str]:
         if self.handle is None:
@@ -409,6 +414,21 @@ class Tailer:
         *lines, self.buffer = self.buffer.split("\n")
         return [ln for ln in lines if ln.strip()]
 
+    def _stat_failed(self, exc: OSError, where: str) -> str:
+        """A stat that ERRORED is not a stat that said `no rotation`.
+
+        Sol round three, finding (c): both of these were swallowed and read as "the
+        binding still holds".  On NFS an ESTALE means exactly the opposite -- the fd
+        no longer refers to a file this watcher can reason about -- and every count
+        taken after it describes bytes nobody re-checked.  Typed, fail closed, rc 8.
+        """
+        name = errno.errorcode.get(exc.errno, str(exc.errno)) if exc.errno else "UNKNOWN"
+        self.abort_kind = f"rollout-stat-failed:{name}"
+        self.rotation = (f"{where} failed on {self.path}: {name} ({exc.strerror or exc}); "
+                         f"the binding to inode {self.dev}:{self.ino} could not be "
+                         f"re-checked, so nothing after this point is metered evidence")
+        return self.rotation
+
     def check_rotation(self) -> str | None:
         """A typed reason the bound path no longer names the bound inode, or None."""
         if self.handle is None or self.ino is None:
@@ -416,19 +436,22 @@ class Tailer:
         try:
             live = self.path.stat()
         except FileNotFoundError:
+            self.abort_kind = "rollout-rotated"
             self.rotation = f"unlinked (inode {self.ino} is no longer at {self.path})"
             return self.rotation
-        except OSError:
-            return None
+        except OSError as exc:
+            return self._stat_failed(exc, "stat()")
         if (live.st_ino, live.st_dev) != (self.ino, self.dev):
+            self.abort_kind = "rollout-rotated"
             self.rotation = (f"inode-changed at {self.path} "
                              f"({self.dev}:{self.ino} -> {live.st_dev}:{live.st_ino})")
             return self.rotation
         try:
             bound = os.fstat(self.handle.fileno())
-        except OSError:
-            return None
+        except OSError as exc:
+            return self._stat_failed(exc, "fstat()")
         if live.st_size < bound.st_size:
+            self.abort_kind = "rollout-rotated"
             self.rotation = (f"truncated in place at {self.path} "
                              f"({bound.st_size} -> {live.st_size} bytes)")
             return self.rotation
@@ -986,7 +1009,7 @@ def main() -> int:
                     pump_lines(tailer.read_lines())
                     note_binding()
                     if tailer.check_rotation():
-                        abort_reason = "rollout-rotated"
+                        abort_reason = tailer.abort_kind or "rollout-rotated"
                         break
 
             done = proc.poll() is not None
@@ -1020,7 +1043,7 @@ def main() -> int:
                     pump_lines(tailer.read_lines())
                     note_binding()
                     if tailer.check_rotation():
-                        abort_reason = "rollout-rotated"
+                        abort_reason = tailer.abort_kind or "rollout-rotated"
                 break
             time.sleep(args.poll)
     finally:
@@ -1078,7 +1101,7 @@ def main() -> int:
             pump_lines(tailer.read_lines())
             note_binding()
             if tailer.check_rotation():
-                abort_reason = "rollout-rotated"
+                abort_reason = tailer.abort_kind or "rollout-rotated"
                 rotation_detail = tailer.rotation
             retained = tailer.snapshot()
             tailer.close()
@@ -1130,18 +1153,21 @@ def main() -> int:
         "watch_jsonl": str(watch_path),
     }
 
-    if abort_reason == "rollout-rotated":
-        # The bound path stopped naming the bound inode.  Everything after that point
-        # was written to a file this watcher never read, so no count here describes one
-        # session: refuse, and keep the bytes actually metered as the retained evidence.
+    if abort_reason and abort_reason.split(":")[0] in ("rollout-rotated",
+                                                       "rollout-stat-failed"):
+        # Either the bound path stopped naming the bound inode, or the binding could
+        # not be RE-CHECKED at all (Sol round three, finding (c): an ESTALE was read as
+        # "no rotation").  Both mean the same thing: no count after this point
+        # describes one session.  Refuse, and keep the bytes actually metered as the
+        # retained evidence.
         detail = (rotation_detail or "the bound rollout was replaced mid-run") + \
                  "; the metered bytes are retained from the watcher's own fd"
-        emit({"kind": "abort", "error_type": "rollout-rotated", "detail": detail,
+        emit({"kind": "abort", "error_type": abort_reason, "detail": detail,
               "returns": state["returns"]})
-        run["abort"] = "rollout-rotated"
+        run["abort"] = abort_reason
         (arm / "run.json").write_text(json.dumps(run, indent=2) + "\n")
         sink.close()
-        print(f"WATCH-ABORT rollout-rotated arm={arm.name} rollout={rollout_path} "
+        print(f"WATCH-ABORT {abort_reason} arm={arm.name} rollout={rollout_path} "
               f"driver_rc={driver_rc} detail={detail}", file=sys.stderr)
         return 8
 
