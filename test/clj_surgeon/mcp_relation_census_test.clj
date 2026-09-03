@@ -248,6 +248,23 @@
       (is (= "unknown-fields" (:reason result)))
       (is (= ["threads"] (:unknown result)))))
 
+  (testing "the accepted list names every field the tool accepts"
+    ;; Sol's round-nine item 6. The accepted list is what a caller retries
+    ;; with, so a field missing from it reads as a field the tool rejects —
+    ;; and workspace_root is not only accepted, it is the field that decides
+    ;; which tree gets censused. The authority is the published schema, not
+    ;; a hand-kept list, so the assertion compares against the schema's own
+    ;; properties.
+    (let [result (run {:files [fixture] :threads 8})]
+      (is (= (vec (sort (keys (:properties census-tool/census-tool-schema))))
+             (:accepted result))
+          (str "the refusal advertises " (pr-str (:accepted result))
+               " but the tool accepts "
+               (pr-str (vec (sort (keys (:properties
+                                          census-tool/census-tool-schema)))))))
+      (is (some #{"workspace_root"} (:accepted result))
+          "the accepted list omits the routing field the caller may supply")))
+
   (testing "the effective pool is capped at the box and the receipt says so"
     (let [result (run {:files [fixture] :pool_size 64})
           effective (min 64 (.availableProcessors (Runtime/getRuntime)))]
