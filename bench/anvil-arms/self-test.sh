@@ -1542,6 +1542,105 @@ cat "$WORK/case33.out"
 PASS=$((PASS + $(grep -c '^ok   case33' "$WORK/case33.out")))
 FAIL=$((FAIL + $(grep -c '^FAIL case33' "$WORK/case33.out")))
 
+echo "== case 34: a grandchild forked BETWEEN scans does not escape the reap =="
+# Sol round three, finding (b).  The descendant walk ran once a second.  A child spawned
+# after the initial scan forked a grandchild and exited before the next one, so the
+# grandchild re-parented to init, left the process group via setsid, and survived the
+# watcher -- while run.json reported `descendants_recorded=1, orphans_after_reap=0`.  A
+# reported zero that is not TRUE is the worst kind of number: it terminates the search.
+#
+# Without sudo the fix is `prctl(PR_SET_CHILD_SUBREAPER, 1)` in the watcher before the
+# driver is spawned: an orphan then re-parents to the WATCHER, so the final /proc walk
+# and the reap can both see it.  The per-poll walk stays as belt and braces at 250 ms.
+mkdir -p "$WORK/case34"
+python3 - "$HERE" "$WORK/case34" > "$WORK/case34.out" 2>&1 <<'PY34'
+import datetime, json, os, pathlib, signal, subprocess, sys, time
+sys.dont_write_bytecode = True
+here, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+
+DRIVER = r'''
+import json, os, pathlib, signal, sys, time
+rollout, escaped = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+with rollout.open("a") as h:
+    h.write(json.dumps({"timestamp": "2026-09-03T00:00:00Z",
+                        "payload": {"type": "message", "role": "assistant"}}) + "\n")
+    h.flush(); os.fsync(h.fileno())
+# let the watcher's first scan see a driver with NO children, then fork and vanish
+# between scans -- the grandchild re-parents away and the /proc walk never sees it
+time.sleep(0.30)
+child = os.fork()
+if child == 0:
+    grandchild = os.fork()
+    if grandchild == 0:
+        os.setsid()
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        escaped.write_text(str(os.getpid()) + "\n")
+        time.sleep(30)
+        os._exit(0)
+    os._exit(0)
+os.waitpid(child, 0)
+time.sleep(30)
+'''
+
+def alive(pid):
+    try:
+        raw = pathlib.Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
+        return False
+    _, _, tail = raw.rpartition(")")
+    fields = tail.split()
+    return bool(fields) and fields[0] != "Z"
+
+passed = failed = 0
+def check(label, cond, detail=""):
+    global passed, failed
+    if cond:
+        passed += 1; print(f"ok   case34 {label}")
+    else:
+        failed += 1; print(f"FAIL case34 {label} {detail}")
+
+arm = root / "arm"
+arm.mkdir(parents=True, exist_ok=True)
+start = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+(arm / "attest.json").write_text(json.dumps({"attest_ok": True, "start_utc": start}) + "\n")
+driver_py = root / "fast-fork-driver.py"
+driver_py.write_text(DRIVER)
+escaped = arm / "escaped.pid"
+cmd = [sys.executable, str(here / "watch.py"), "--arm", str(arm),
+       "--idle-timeout", "2.0", "--zero-return-window", "5.0", "--max-wall", "8.0",
+       "--poll", "0.05", "--", sys.executable, str(driver_py),
+       str(arm / "rollout.jsonl"), str(escaped)]
+out = root / "watch.out"
+with out.open("w") as sink:
+    subprocess.run(cmd, text=True, stdout=sink, stderr=subprocess.STDOUT,
+                   env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"), timeout=40)
+run = json.loads((arm / "run.json").read_text())
+escaped_pid = int(escaped.read_text().strip())
+survived = alive(escaped_pid)
+try:
+    check(f"the grandchild that forked between scans is dead (pid {escaped_pid})", not survived,
+          f"run={ {k: run.get(k) for k in ('abort','descendants_recorded','orphans_after_reap','orphan_pids','child_subreaper')} }")
+    check("descendants_recorded includes the escaped grandchild",
+          escaped_pid in (run.get("descendant_pids") or []),
+          f"descendant_pids={run.get('descendant_pids')}")
+    check("orphans_after_reap 0 is TRUE, not merely reported",
+          run.get("orphans_after_reap") == 0 and not survived,
+          f"orphans_after_reap={run.get('orphans_after_reap')} alive={survived}")
+    check("the watcher set itself as child subreaper",
+          run.get("child_subreaper") == "ok", f"got {run.get('child_subreaper')!r}")
+finally:
+    if alive(escaped_pid):
+        try:
+            os.kill(escaped_pid, signal.SIGKILL)
+        except OSError:
+            pass
+print(f"case34 {passed} passed, {failed} failed")
+sys.exit(1 if failed else 0)
+PY34
+cat "$WORK/case34.out"
+PASS=$((PASS + $(grep -c '^ok   case34' "$WORK/case34.out")))
+FAIL=$((FAIL + $(grep -c '^FAIL case34' "$WORK/case34.out")))
+
 echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
 # Found while replaying Sol's probes by hand: the self-test exports
 # PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
