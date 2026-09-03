@@ -102,3 +102,5 @@ histories.
 ## 02:26Z — `bridge/lens-followups` pushed at 7359b8f9 (my run 1055 tests, 13163 assertions, 0 failures). Stacked on settings-lens; for Gene's merge list after fold → store → lens (inb-ace545 closes when the mayor can update the inbox).
 
 ## 02:28Z — census red-team: GO-WITH-FIX, four blocking (schema-only bounds, read-before-filter + uncapped requested files, symlink abort + unpruned walk, CLI crash on its own example). Verdict filed; fix round launched.
+
+## 02:30Z — lane: executed red-team of the fold-diff tool (before the mayor runs it against production) and the three lens/template branches (aceddb474ac916ded). Five background items: census fix round, ratchets, study security round, rf2+q5z red-team, this one.
