@@ -18,7 +18,7 @@ lanes own their own rows in their own leaves.
 
 - [x] **MCP-OP-MEM-015**: When clj-surgeon outlines a source file, it shall parse the file once and shall not construct per-form source text that the outline does not return.
 - [x] **MCP-OP-MEM-005**: Before allocating a full rewrite-clj tree, clj-surgeon shall reject inputs whose lexical node estimate or nesting depth exceeds the server parser ceiling.
-- [ ] **MCP-OP-MEM-003**: When `ls-tree` scans a repository, it shall consume and discard each outline while retaining no more than the active worker set and the bounded output encoder.
+- [x] **MCP-OP-MEM-003**: When `ls-tree` scans a repository, it shall consume and discard each outline while retaining no more than the active worker set and the bounded output encoder.
 
 ## Falsifiers
 

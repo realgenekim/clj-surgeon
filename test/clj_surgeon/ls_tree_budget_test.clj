@@ -209,11 +209,11 @@
    retained set. This is the path `run-ls-tree` used before the budget, kept
    here as the differential oracle."
   [dir output-format]
-  (let [projects (#'core/discover-projects dir)
-        projects (#'core/outline-all-files projects)]
+  (let [abs (str (fs/absolutize dir))
+        projects (#'core/outline-all-files (#'core/discover-projects abs))]
     (if (= :edn output-format)
-      (core/format-ls-tree-edn projects (str (fs/absolutize dir)))
-      (core/format-ls-tree-text projects (str (fs/absolutize dir))))))
+      (core/format-ls-tree-edn projects abs)
+      (core/format-ls-tree-text projects abs))))
 
 ;; @spec MCP-OP-MEM-003
 (deftest under-the-ceiling-the-streamed-result-equals-the-batch-result

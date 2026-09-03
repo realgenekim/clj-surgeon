@@ -25,6 +25,7 @@
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.rename :as rename]
+   [clj-surgeon.result-budget :as budget]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
@@ -456,6 +457,179 @@
                                {:count (count refused) :files refused}}})
       entries)))
 
+
+;; ============================================================
+;; The bounded output budget — streaming encode (MCP-OP-MEM-003)
+;; ============================================================
+
+(def ^:private outline-pool-size
+  "Files outlined concurrently. This is `pmap`'s own degree of parallelism,
+   kept identical so bounding the OUTPUT does not quietly change how much
+   parser peak the scan carries — that is MCP-OP-MEM-008's subject, not this
+   row's."
+  (+ 2 (.availableProcessors (Runtime/getRuntime))))
+
+;; @spec MCP-OP-MEM-003
+(def outline-window-size
+  "How many outlines the bounded materialiser may hold in flight: `4 x pool`.
+
+   The scan is consumed one window at a time, so the outlines resident at any
+   moment are the active worker set plus at most one window — never the vector
+   of all outlines. Public because the retained-heap witness gates on
+   `ceiling + window`, and a bound nobody can read is a bound nobody can check."
+  (* 4 outline-pool-size))
+
+(defn- rel-path
+  [root-path f]
+  (str (fs/relativize root-path (fs/path f))))
+
+(defn- candidate-seq
+  "Every candidate `[project-index file]` in result order, lazily. Holds no
+   outline and no source: the path strings already live in `projects`."
+  ;; @spec MCP-OP-MEM-003
+  [projects]
+  (for [[pidx project] (map-indexed vector projects)
+        f (:files project)]
+    [pidx f]))
+
+(defn- manifest-summary
+  "Count and digest the ordered candidate manifest in ONE pass, retaining no
+   row: each candidate's `<relative-path>\t<size>\t<mtime>` line is folded
+   into a SHA-256 and dropped. This is what a continuation cursor is bound to,
+   so that a page taken after the tree changed refuses instead of interleaving
+   records from two different repositories."
+  ;; @spec MCP-OP-MEM-003
+  [projects dir]
+  (let [root (fs/path dir)
+        md (budget/digest-start)
+        total (reduce (fn [n [_ f]]
+                        (let [file (java.io.File. (str f))]
+                          (budget/digest-candidate! md
+                                                    (rel-path root f)
+                                                    (.length file)
+                                                    (.lastModified file))
+                          (inc n)))
+                      0
+                      (candidate-seq projects))]
+    {:total total :digest (budget/digest-hex md)}))
+
+(defn- stream-outlines!
+  "Outline `candidates` and hand each `[project-index file outline]` to
+   `consume!` IN ORDER, dropping it immediately afterwards.
+
+   Candidates are taken one window of `outline-window-size` at a time and
+   materialised through the same bounded `pmap` the batch path used, then
+   consumed eagerly. Nothing accumulates: this function returns nil, and the
+   only thing that grows with the scan is whatever `consume!` chose to keep."
+  ;; @spec MCP-OP-MEM-003
+  [candidates consume!]
+  (loop [xs (seq candidates)]
+    (when xs
+      (let [window (vec (take outline-window-size xs))]
+        (doseq [result (pmap (fn [[pidx f]] [pidx f (safe-outline f)]) window)]
+          (consume! result))
+        (recur (seq (drop outline-window-size xs)))))))
+
+(defn- admission-refusal-row
+  [rel result]
+  {:file rel
+   :reason (:reason result)
+   :limit (:limit result)
+   :observed (:observed result)
+   :remedy (:remedy result)})
+
+(defn- refused?
+  [result]
+  (= :parser_admission_refused (:refusal result)))
+
+(defn- text-encoder
+  "Streaming text encoder. Appends one file's outline at a time and drops it.
+
+   A project header carries that project's form total, which is not known until
+   its last file is encoded, so the header is INSERTED at the recorded index
+   once the project closes. The bytes are identical to the batch formatter's
+   and nothing but the encoded output is retained."
+  ;; @spec MCP-OP-MEM-003
+  [root-path projects multi-project?]
+  (let [sb (StringBuilder.)
+        state (volatile! {:pidx nil :start 0 :files 0 :forms 0
+                          :total-files 0 :total-forms 0 :refused []})
+        close-project!
+        (fn []
+          (let [{:keys [pidx start files forms]} @state]
+            (when (and pidx multi-project?)
+              (.insert sb (int start)
+                       (format "── %s (%d files, %d forms)\n\n"
+                               (:name (nth projects pidx)) files forms)))))]
+    {:emit!
+     (fn [[pidx f result]]
+       (when (not= pidx (:pidx @state))
+         (close-project!)
+         (vswap! state assoc :pidx pidx :start (.length sb) :files 0 :forms 0))
+       (let [rel (rel-path root-path f)
+             forms (or (:form-count result) 0)]
+         (.append sb (format-file-text result rel))
+         (.append sb "\n")
+         (vswap! state (fn [st]
+                         (cond-> (-> st
+                                     (update :files inc)
+                                     (update :forms + forms)
+                                     (update :total-files inc)
+                                     (update :total-forms + forms))
+                           (refused? result)
+                           (update :refused conj
+                                   (admission-refusal-row rel result)))))))
+     :finish!
+     (fn [receipt]
+       (close-project!)
+       (let [{:keys [total-files total-forms refused]} @state]
+         (.append sb (format "── total: %d files, %d forms\n"
+                             total-files total-forms))
+         ;; @spec MCP-OP-MEM-005
+         (when (seq refused)
+           (.append sb (format "── parser_admission_refused: %d file(s)\n"
+                               (count refused)))
+           (doseq [{:keys [file reason limit observed]} refused]
+             (.append sb (format "   %s  %s limit %d, observed %d\n"
+                                 file
+                                 (admission/public-ceiling-name reason)
+                                 limit observed))))
+         (when receipt
+           (.append sb (budget/continuation-text receipt))))
+       (str sb))}))
+
+(defn- edn-encoder
+  "Streaming EDN encoder. Each outline is projected to its record and dropped;
+   the retained vector is the bounded output, never the outline set."
+  ;; @spec MCP-OP-MEM-003
+  [root-path]
+  (let [entries (volatile! (transient []))
+        refused (volatile! [])]
+    {:emit!
+     (fn [[_ f result]]
+       (let [rel (rel-path root-path f)]
+         (vswap! entries conj! (-> result
+                                   (assoc :file rel)
+                                   (dissoc :forward-refs)))
+         (when (refused? result)
+           (vswap! refused conj (admission-refusal-row rel result)))))
+     :finish!
+     (fn [receipt]
+       (let [records (persistent! @entries)
+             rows @refused
+             ;; @spec MCP-OP-MEM-005
+             trailer (cond-> {}
+                       (seq rows)
+                       (assoc :parser_admission_refused
+                              {:count (count rows) :files rows})
+
+                       receipt
+                       (assoc :result_ceiling (:result_ceiling receipt)))]
+         (if (seq trailer)
+           (conj records (cond-> {:receipt trailer}
+                           receipt (assoc :next_call (:next_call receipt))))
+           records)))}))
+
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
   [file-path stop-at]
@@ -515,25 +689,81 @@
          (sort-by :name)
          vec)))
 
-(defn run-ls-tree [{:keys [dir format grep] :as _opts}]
+(defn run-ls-tree
+  "Map namespaces across a directory tree.
+
+   The result is BOUNDED (MCP-OP-MEM-003). Every candidate is walked, but the
+   encoder keeps at most `:max-results` records — a request may lower the
+   server cap `clj-surgeon.result-budget/max-result-records` and may never
+   raise it. A scan at or under the ceiling is encoded whole and is identical
+   to the unbounded path; past it the caller gets one of two TYPED answers and
+   never a silent truncation: a continuation carrying `:next_call` with a
+   cursor bound to the candidate manifest, or, when the caller asked for a
+   complete result with `:complete true`, a refusal naming the ceiling, the
+   observed count, and what fits."
+  ;; @spec MCP-OP-MEM-003
+  [{:keys [dir grep max-results cursor complete] :as opts}]
   (when-not dir
     (println "Error: :dir is required for :ls-tree")
     (System/exit 1))
-  (let [dir (str (fs/absolutize dir))
+  (let [output-format (:format opts)
+        abs (str (fs/absolutize dir))
         projects (if grep
                    ;; Fast path: rg first, skip expensive directory globbing
-                   (let [hits (grep-tree grep dir)]
-                     (discover-projects-grep hits dir))
+                   (let [hits (grep-tree grep abs)]
+                     (discover-projects-grep hits abs))
                    ;; Full scan: discover all projects
-                   (discover-projects dir))]
+                   (discover-projects abs))]
     (if (empty? projects)
       (do (println (format "No Clojure files found under %s%s"
-                           dir (when grep (str " matching '" grep "'"))))
+                           abs (if grep (str " matching '" grep "'") "")))
           (System/exit 1))
-      (let [projects (outline-all-files projects)]
-        (if (= format :edn)
-          (format-ls-tree-edn projects dir)
-          (format-ls-tree-text projects dir))))))
+      (let [requested (budget/parse-ceiling max-results)
+            ceiling (budget/resolve-ceiling max-results)
+            {:keys [total digest]} (manifest-summary projects abs)
+            parsed-cursor (when (some? cursor) (budget/parse-cursor cursor))
+            request {:dir dir
+                     :ceiling ceiling
+                     :output-format output-format
+                     :digest digest
+                     :total total}
+            render (fn [receipt]
+                     (if (= :edn output-format)
+                       receipt
+                       (budget/refusal-text receipt)))]
+        (cond
+          (= :invalid requested)
+          (render (budget/invalid-ceiling-refusal
+                    (assoc request :requested max-results)))
+
+          (and (some? cursor) (nil? parsed-cursor))
+          (render (budget/invalid-cursor-refusal (assoc request :token cursor)))
+
+          (and parsed-cursor
+               (not= digest (:manifest-digest parsed-cursor)))
+          (render (budget/stale-cursor-refusal
+                    (assoc request :cursor-digest (:manifest-digest
+                                                    parsed-cursor))))
+
+          :else
+          (let [offset (long (or (:offset parsed-cursor) 0))
+                remaining (max 0 (- total offset))
+                over? (> remaining ceiling)]
+            (if (and complete over?)
+              (render (budget/ceiling-refusal request))
+              (let [returned (min ceiling remaining)
+                    receipt (when over?
+                              (budget/continuation
+                                (assoc request :offset offset :returned returned)))
+                    candidates (->> (candidate-seq projects)
+                                    (drop offset)
+                                    (take returned))
+                    encoder (if (= :edn output-format)
+                              (edn-encoder (fs/path abs))
+                              (text-encoder (fs/path abs) projects
+                                            (> (count projects) 1)))]
+                (stream-outlines! candidates (:emit! encoder))
+                ((:finish! encoder) receipt)))))))))
 
 ;; ============================================================
 ;; Ops registry — single source of truth for dispatch + help
@@ -859,9 +1089,13 @@
                        :desc      "Map namespaces across a directory tree"
                        :args      {:dir    {:required true :desc "Root directory to scan"}
                                    :grep   {:desc "Filter pattern (regex) — uses ripgrep"}
-                                   :format {:desc ":edn for machine-readable (default: text)"}}
+                                   :format {:desc ":edn for machine-readable (default: text)"}
+                                   :max-results {:desc "Records this result may hold; lowers the server cap (1000), never raises it"}
+                                   :cursor {:desc "Continuation cursor copied verbatim from a previous result's :next_call"}
+                                   :complete {:desc "true to refuse rather than continue when the result does not fit"}}
                        :examples  ["clj-surgeon :op :ls-tree :dir ."
-                                   "clj-surgeon :op :ls-tree :dir ~/src.local/ :grep \"postgres|jdbc\""]
+                                   "clj-surgeon :op :ls-tree :dir ~/src.local/ :grep \"postgres|jdbc\""
+                                   "clj-surgeon :op :ls-tree :dir ~/src.local/ :max-results 200"]
                        :category  :read}
 
     :mv               {:handler run-mv

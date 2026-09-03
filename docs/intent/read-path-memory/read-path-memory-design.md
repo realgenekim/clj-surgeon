@@ -1,6 +1,6 @@
 # Read-Path Memory Bounds
 
-Status: draft LLD; `MCP-OP-MEM-015` and `MCP-OP-MEM-005` implemented.
+Status: draft LLD; `MCP-OP-MEM-015`, `MCP-OP-MEM-005` and `MCP-OP-MEM-003` implemented.
 
 ## Context
 
@@ -223,7 +223,7 @@ The adversarial `giant` file is 532,424 nodes — 2.66x over.
 
 # Bounded `ls-tree` output budget (`MCP-OP-MEM-003`)
 
-Status: registered 2026-09-03; active gap until the streaming encoder lands.
+Status: implemented 2026-09-03.
 
 ## Context
 

@@ -163,8 +163,8 @@
    output budget, and it is the oracle the streaming encoder must reproduce
    byte for byte."
   [dir output-format]
-  (let [projects (#'core/outline-all-files (#'core/discover-projects dir))
-        abs (str (fs/absolutize dir))]
+  (let [abs (str (fs/absolutize dir))
+        projects (#'core/outline-all-files (#'core/discover-projects abs))]
     (if (= :edn output-format)
       (core/format-ls-tree-edn projects abs)
       (core/format-ls-tree-text projects abs))))
