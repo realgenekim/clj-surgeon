@@ -3885,6 +3885,179 @@
       (finally (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-fourteen review, item 7, blocking: a source the PROCESS CANNOT
+;; READ was not the same thing as a source that is not there.
+;;
+;; `mcp-paths/resolve-source-path` tested that the resolved path was inside the
+;; fence and was a REGULAR FILE, and stopped there. A chmod-000 file passes
+;; both: it exists, it is regular, its real path is under the root. So the
+;; resolver returned `:ok true`, `collect-inputs` reached `slurp`, and the
+;; `java.io.FileNotFoundException (Permission denied)` escaped the census
+;; entirely and was caught three frames up by `exhaustion-refusal`. Measured
+;; before the fix, against `files ["src/app/folds.clj" "src/app/denied.clj"]`:
+;;
+;;   error_type "census-adapter-failure"
+;;   exhausted  false
+;;   remedy     "The census ran out of a runtime resource part-way through…"
+;;   next_call  (absent)
+;;
+;; Three separate lies in one receipt. The type says the ADAPTER broke, when
+;; the adapter did exactly what it should and one named file is unreadable.
+;; The remedy says a runtime resource ran out, which invites the caller to
+;; retry smaller against a permission bit that will refuse identically at any
+;; size. And the good source the caller also named is dropped: the continuation
+;; that the missing-file case computes — the request minus the entries that
+;; cannot be read — was never computed at all, because the branch that computes
+;; it was never reached.
+;;
+;; A path the process cannot read and a path that is not there are the SAME
+;; fact to a continuation: a name the next call must not carry. The resolver is
+;; where that is decided for every entry, so the readability question belongs
+;; there, beside the regularity question, and not in a `try` around `slurp`.
+;;
+;; At the CLI the same file reached `census-sources` and threw untyped, exactly
+;; as the missing `:file` did in round thirteen. It gets its own type rather
+;; than reusing `:file-not-found` with a cause field: the two refusals have
+;; DIFFERENT remedies — "name a source that exists" versus "the source is
+;; there, fix what may read it" — and a caller that must read a second field
+;; to learn which remedy applies has been handed a branch, not a type. The
+;; enumeration witness drives on the type name, so a distinct name is also what
+;; makes this refusal impossible to ship unexercised.
+;; ---------------------------------------------------------------------------
+
+(defn- deny-reads!
+  "Make `file` unreadable to every user, returning it."
+  ^java.io.File [^java.io.File file]
+  (.setReadable file false false)
+  file)
+
+(defn- allow-reads!
+  "Restore owner-readable permissions on `file`, whatever the test did to it."
+  [^java.io.File file]
+  (when (.exists file)
+    (.setReadable file true true)))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+(deftest a-source-the-process-cannot-read-is-a-typed-refusal-on-both-entrances
+  (let [root (temp-dir)
+        arm "src/app/folds.clj"
+        denied "src/app/denied.clj"
+        denied-too "src/app/denied_two.clj"
+        denied-file (io/file root denied)
+        denied-too-file (io/file root denied-too)]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (spit-file! denied-file arm-source)
+      (spit-file! denied-too-file arm-source)
+      (deny-reads! denied-file)
+      (deny-reads! denied-too-file)
+      (let [named (.getCanonicalPath root)
+            denied-path (str named "/" denied)
+            here (fn [params]
+                   (census-tool/execute-request! {:project-root named} params))]
+
+        (testing "the fixture is genuinely unreadable to this process"
+          ;; The liveness check for the whole witness. A process running as
+          ;; root reads a chmod-000 file, so without this assertion every
+          ;; probe below would pass by censusing a file it was supposed to be
+          ;; refused, and the witness would be green and blind.
+          (is (false? (.canRead denied-file))
+              "this process can still read the chmod-000 fixture")
+          (is (false? (.canRead denied-too-file))
+              "this process can still read the chmod-000 fixture"))
+
+        (testing "the tool types the denied source instead of blaming the adapter"
+          (let [result (here {:files [arm denied]
+                              :doors ["upsert-by"]
+                              :pool_size 1})]
+            (is (false? (:ok result)))
+            (is (not= "census-adapter-failure" (:error_type result))
+                (str "a permission bit was reported as an adapter crash: "
+                     (pr-str (select-keys result
+                                          [:error_type :error :exhausted
+                                           :remedy]))))
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "the denied source is not the typed refusal the missing "
+                     "one earns: " (pr-str result)))
+            (is (not (contains? result :exhausted))
+                (str "the refusal claims a resource-exhaustion fact about a "
+                     "permission bit: " (pr-str (:exhausted result))))
+            (is (= denied (:file result))
+                (str "the refusal does not name the source it could not read: "
+                     (pr-str result)))))
+
+        (testing "the continuation is the request MINUS the denied entry"
+          (let [result (here {:files [arm denied]
+                              :doors ["upsert-by"]
+                              :pool_size 1})]
+            (is (= {:tool "relation_census"
+                    :workspace_root named
+                    :files [arm]
+                    :doors ["upsert-by"]
+                    :pool_size 1}
+                   (:next_call result))
+                (str "the continuation is not the request minus the entries "
+                     "it could not read: " (pr-str (:next_call result))))
+            (is (= [denied] (:files_removed result))
+                (str "the refusal does not name what it removed: "
+                     (pr-str (:files_removed result))))
+            (is (= 0 (:files_removed_omitted result)))))
+
+        (testing "every named source denied leaves no request to make"
+          (let [result (here {:files [denied denied-too]})]
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "the all-denied list is not the typed refusal the "
+                     "all-missing one earns: " (pr-str result)))
+            (is (not (contains? result :next_call))
+                (str "the refusal hands back a call that replays into itself: "
+                     (pr-str (:next_call result))))
+            (is (string? (:remedy result))
+                "the refusal offers neither a continuation nor a remedy")
+            (is (not (str/includes? (str (:remedy result)) "ran out"))
+                (str "the remedy invites a smaller retry against a permission "
+                     "bit: " (pr-str (:remedy result))))
+            (is (= [denied denied-too] (:files_removed result))
+                (str "the refusal does not name both denied sources: "
+                     (pr-str (:files_removed result))))))
+
+        (testing "the JVM CLI types the denied :file instead of throwing"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census {:file denied-path}))]
+            (is (nil? (:threw result))
+                (str "the entrance threw instead of refusing: "
+                     (pr-str result)))
+            (is (false? (:ok result)))
+            (is (= :file-not-readable (:error-type result))
+                (str "the denied source is not a typed refusal: "
+                     (pr-str result)))
+            (is (= denied-path (:file result))
+                (str "the refusal does not name the path it could not read: "
+                     (pr-str result)))
+            (is (= denied-path (:absolute (:anchor result)))
+                (str "the refusal does not name the workspace the caller "
+                     "named: " (pr-str (:anchor result))))
+            (is (string? (:remedy result))
+                "the refusal offers neither a continuation nor a remedy")
+            (is (not (contains? result :next-command))
+                (str "a continuation was offered for a file that is the whole "
+                     "request: " (pr-str (:next-command result))))
+            (is (not (contains? result :next-command-argv)))))
+
+        (testing "the babashka CLI answers identically"
+          (let [result (bb-cli ":op" "relation-census" ":file" denied-path)]
+            (is (= :file-not-readable (:error-type result))
+                (str "the bb entrance answered " (pr-str result)))
+            (is (= denied-path (:file result)))
+            (is (string? (:remedy result)))
+            (is (not (contains? result :next-command))))))
+      (finally
+        (allow-reads! denied-file)
+        (allow-reads! denied-too-file)
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
 ;;
 ;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
