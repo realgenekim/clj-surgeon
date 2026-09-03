@@ -300,3 +300,7 @@ Follow-ups since the ninth refresh: inb-c95f37 (alias_migration deletions count 
 GO (nine) unchanged. Live: Sol apparatus round 4 (895eed0), Sol fold-diff round 5 (885f58b3), Sol census round 7 (5eee690); Opus kernel round 3 (eb22036). Builders: MEM-005 round 3 (~/src/clj-surgeon-admit), MEM-003 round 2 (~/src/clj-surgeon-stream).
 Follow-ups since the tenth refresh: inb-2c5b2a (publish-lock retrofit obligation, ~15 writer sites).
 Gene report refresh: launch the refresh agent at ~10:20Z (tables from the captain's log, numbers verbatim with entry times), commit by ~10:35Z; final at ~13:00Z.
+
+## RESUME DELTA (twelfth refresh; commit time is the timestamp) — after the 429
+At ~09:55Z the seat's Claude session limit (429, "resets 10am (UTC)") killed four subagents; codex/Sol lanes unaffected. All relaunched at 10:04Z from committed state. Live: Opus MEM-005 round-3 re-check (52c5d85), Opus kernel round-3 re-check (eb22036), arms round 5 (~/src/clj-surgeon-arms at 895eed0), MEM-003 round 2 (~/src/clj-surgeon-stream from its RED 98775cb), census round 8 (~/src/clj-surgeon-census at 5eee690: doors items schema-validated), fold-diff round 7 (~/src/curtaincall-cfp-folddiff at 885f58b3: witness independence, required-var guard, DATA_DIR under Postgres). Gene report refresh agent launched 10:06Z (rewrites docs/observations/2026-09-03-gene-report-night.md); final refresh ~13:00Z.
+GO (nine) unchanged; fold-diff production read GO at 347fe6d3 stands; none of the nine has merged yet (origin/main checked 09:44Z).
