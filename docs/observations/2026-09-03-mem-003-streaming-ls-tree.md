@@ -351,3 +351,88 @@ be re-invented:
   it and loosen the retention bound by the same factor. It was left at `4 x pool`
   because the number that matters is retention at 10,000 files, and the wall
   there improved 6.4x.
+
+---
+
+# Addendum, 2026-09-03 (later the same day) — Sol's NO-GO, and what §8 above now gets wrong
+
+Everything above §7 stands: the retention result reproduced independently
+(1,000-file held 9.5/9.5 MB, 10,000-file 9.3/9.6 MB, retained-batch control
+93.45 MB versus 9.35 MB streamed). Sol's executed review nonetheless returned
+**NO-GO on cursor integrity**, and two of its twelve findings were silent wrong
+results rather than refusals. This addendum is appended rather than edited into
+the text above, because that text is the record of what was believed at the
+time. **Section 8 item 3 is now actively wrong guidance and the study-ops lane
+must not follow it.**
+
+## What was wrong
+
+1. **The cursor digest was stat-based, not content-based** (finding 1, BLOCKER).
+   Replacing a file's bytes while preserving path, size and mtime was accepted,
+   and page 2 served the changed namespace. A cursor minted against a different
+   root with matching stats was likewise served.
+2. **Offsets were neither authenticated nor range-checked** (finding 2, BLOCKER).
+   A forged offset of 99 on a three-record tree returned an empty vector with no
+   receipt — which every caller reads as a complete result.
+3. **Every continuation page re-walked the whole manifest** (finding 7): two
+   1,000-record pages over the 10,000-file corpus took 1,305 ms and 661 ms, each
+   folding all 10,000 stat rows.
+4. **Concurrency exceeded the declared pool** (findings 6 and 9): 32-33 outlines
+   active against a documented 18-worker pool, because `pmap` realises its input
+   32 at a time and the chunk size — not the pool constant — set concurrency.
+5. **40-digit numeric fields threw `NumberFormatException`** instead of the
+   documented typed refusals (finding 3).
+
+## What §8 item 3 should say instead
+
+Not "a cursor bound to a manifest digest via `digest-start` /
+`digest-candidate!` / `digest-hex`" — **those functions no longer exist.** The
+study-ops lane must adopt the **pinned immutable manifest snapshot** in
+`clj-surgeon.ls-tree-snapshot`:
+
+- `snapshot/write-snapshot!` on the first page that needs a cursor — ordered
+  candidate rows, each with the SHA-256 of its **content**, written streaming
+  and addressed by the SHA-256 of the canonical root path;
+- `budget/cursor-token` / `parse-cursor` for the `<cursor-id>:<offset>:<mac>`
+  grammar, with `snapshot/mac` keyed on the snapshot's private secret — **never**
+  on the published manifest digest, which would let any holder of a receipt mint
+  any offset;
+- all **four** typed refusals, not one: `:invalid-result-cursor` (not ours),
+  `:unknown-result-cursor` (not this root, or gone), `:result-cursor-out-of-range`
+  (ours, position absent), `:stale-result-cursor` (ours, and a pinned file's
+  content moved — naming the path);
+- `snapshot/read-rows` for the page's own slice, so a page does **no** discovery.
+
+The point Sol's finding makes for that lane is sharper than the original: over
+MCP the gap between two pages can be arbitrarily long, so a cursor that cannot
+detect a content change is not merely imprecise there — it is the primary
+failure mode.
+
+## Measured after the repair
+
+| | before (Sol) | after |
+|---|---:|---:|
+| page 1 over 10,000 files, `:max-results 1000` | 1,305 ms | 565 ms |
+| page 2 | 661 ms | **152 ms** |
+| manifest rows folded per page | 10,000 | **1,000** |
+| tree walks on page 2 | 1 | **0** |
+| max concurrent outlines vs declared pool of 18 | 33 | **18** |
+
+The row-fold count is the number that matters: page cost was `O(pages x N)` and
+is now `O(page)`. Wall time follows it, but wall time alone cannot distinguish a
+faster walk from no walk, which is why the witness counts calls.
+
+The price is stated in the LLD and repeated here: **a continuation is a snapshot
+read, not a live one.** Files created after the pin never appear on later pages,
+and a file whose bytes moved refuses when its own page is served. Every digest
+is taken at issue time rather than lazily per page — the lazy variant would pin
+a changed file's *new* bytes and call them unchanged, which is finding 1 moved
+later in the sequence.
+
+## Gap this addendum does NOT close
+
+§9's second bullet stands and has been promoted into the EARS: **discovery still
+retains an N-sized path collection**, roughly 1.2 MB at 10,000 files. The
+requirement now names the *CLI `ls-tree` encoder* rather than `ls-tree`, because
+the earlier wording claimed a bound the code does not hold (finding 12). A green
+battery line at 10,000 files is not "`ls-tree` is bounded in N."
