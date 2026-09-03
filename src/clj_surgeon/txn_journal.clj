@@ -828,6 +828,40 @@
   [^File tomb now]
   (evidence-age tomb (broken-at-file tomb) now))
 
+(defn- interrupted-break-entries
+  "Every tombstone whose break may not have completed, paired with what the
+   LOCK can still say about it: `[file :corroborated]` or
+   `[file :uncorroborated-marker]`.
+
+   The two rules are not equal evidence and must not be collapsed into one
+   boolean. The (device, inode) rule is CORROBORATION BY THE KERNEL: a
+   tombstone that shares the present LOCK's inode is a second link to a claim
+   that is still there, which is the one state a completed break can never be
+   in, because a completed break unlinks the LOCK. The `:phase :linked` marker
+   is a CLAIM BY THE BREAKER, written into a file any writer of the
+   transactions directory can write - the same threat model the forgeable
+   stamp was fixed for.
+
+   So when the marker matches and the LOCK does NOT - it is gone, or it names
+   a different inode - nothing can corroborate it, and the two states it
+   cannot tell apart are a break that never happened and a break that did.
+   Measured: one hand-written sidecar beside a genuine break made `recover!`
+   revert it, unlink the evidence and return `:broken-locks {:found 0}`. Round
+   six's worst forgery kept a file for ever, which is fail-safe; that one
+   removed it. Evidence is never deleted on an uncorroborated match: the
+   marker-only case is stamped and KEPT, typed so a reader can see the marker
+   was not believed."
+  [transactions-dir]
+  (let [^File lock (lock-file transactions-dir)
+        key (lock-file-key lock)]
+    (into []
+          (keep (fn [^File f]
+                  (cond
+                    (and key (= key (lock-file-key f))) [f :corroborated]
+                    (= :linked (break-phase f)) [f :uncorroborated-marker]
+                    :else nil)))
+          (broken-lock-files transactions-dir))))
+
 (defn- interrupted-break-files
   "EVERY tombstone whose break never completed.
 
@@ -851,12 +885,7 @@
    published as `:kind :broken-lock` - false evidence of a break, naming the
    claim that currently holds the lock - until a second `recover!` ran."
   [transactions-dir]
-  (let [^File lock (lock-file transactions-dir)
-        key (lock-file-key lock)]
-    (filterv (fn [^File f]
-               (or (= :linked (break-phase f))
-                   (and key (= key (lock-file-key f)))))
-             (broken-lock-files transactions-dir))))
+  (mapv (fn [entry] (nth entry 0)) (interrupted-break-entries transactions-dir)))
 
 (defn- prune-broken-locks!
   "Retire the tombstones older than `broken-lock-retention-ms`, and count them.
@@ -2300,8 +2329,10 @@
          dir (io/file transactions)
          now (long (or now-ms (System/currentTimeMillis)))
          ;; a tombstone whose break never completed is not one that happened
-         interrupted (into #{} (map #(.getName ^File %))
-                           (interrupted-break-files transactions))]
+         interrupted (into {}
+                           (map (fn [entry]
+                                  [(.getName ^File (nth entry 0)) (nth entry 1)]))
+                           (interrupted-break-entries transactions))]
      (into
        (vec (for [^File d (sort-by #(.getName ^File %)
                                    (seq (or (.listFiles dir) (make-array File 0))))
@@ -2327,12 +2358,19 @@
                :let [aged (tombstone-age f now)
                      bytes (:bytes aged 0)]
                :when (map? aged)]
-           (let [interrupted? (contains? interrupted (.getName f))]
+           ;; the two typing rules are not equal evidence. Sharing the
+           ;; PRESENT LOCK's inode is corroboration by the kernel and types an
+           ;; interrupted break; a `:phase :linked` marker the LOCK cannot
+           ;; confirm is a claim by the breaker that any directory writer can
+           ;; forge, so the file is typed as the break it may well be and the
+           ;; status says the marker was not believed.
+           (let [cls (get interrupted (.getName f))]
              {:txid (.getName f)
-              :kind (if interrupted? :interrupted-break :broken-lock)
-              :status (cond interrupted? :lock-break-interrupted
-                            (zero? (long bytes)) :empty-evidence
-                            :else :lock-broken)
+              :kind (if (= :corroborated cls) :interrupted-break :broken-lock)
+              :status (case cls
+                        :corroborated :lock-break-interrupted
+                        :uncorroborated-marker :uncorroborated-marker
+                        (if (zero? (long bytes)) :empty-evidence :lock-broken))
               :receipt-refs 0
               :evictable false
               :retired-by :txn/recover
@@ -2499,20 +2537,35 @@
      becomes a break that happened.
    - the LOCK is still that same claim and its holder is ALIVE: REVERT. The
      extra link goes, the claim is untouched.
-   - the LOCK is gone, or names a different inode: the claim this link was
-     taken from is no longer the lock, so there is no break to finish on
-     anybody's behalf and nothing that could be evidence of one. REVERT.
+   - the LOCK is gone, or names a different inode: nothing corroborates the
+     `:phase :linked` marker that put this file here, and the two states it
+     cannot tell apart are a break that never happened and a break that DID.
+     KEEP it, stamped with its own creation time and typed
+     `:marker-uncorroborated`.
 
-   Either way the line names the tombstone it acted on and says what became
-   of it - `:evidence :retained` for a finish, `:evidence :removed` for a
-   revert - because a receipt naming a file that is not there, with no word
-   about why, is the shape this kernel has had to fix twice.
+   Every line names the tombstone it acted on and says what became of it -
+   `:evidence :retained` for a finish and for an uncorroborated marker,
+   `:evidence :removed` for a revert - because a receipt naming a file that is
+   not there, with no word about why, is the shape this kernel has had to fix
+   twice.
 
-   That third case is the one the inode rule could not even see. It is also
-   what makes two interrupted breaks over one claim resolve correctly: the
-   first finishes it, and the rest find the LOCK gone and revert - exactly one
-   break may be evidence, and a second tombstone of the same claim is a
-   duplicate rather than a second break."
+   THE REVERT IS THE NARROW CASE, and it used to be the wide one. It deleted
+   the sidecar and the tombstone whenever the LOCK could not confirm the
+   match, which made the marker the first mechanism on this branch whose
+   FORGERY DESTROYED EVIDENCE: one hand-written `:phase :linked` sidecar
+   dropped beside a genuine break - by any writer of the transactions
+   directory, or by a stamp write that failed and said nothing - and the next
+   `recover!` reverted a completed break, unlinked its evidence and returned
+   `:broken-locks {:found 0}`. Round six's worst forgery kept a file for ever,
+   which is fail-safe; that one removed it, in the directory whose whole
+   purpose is bounded, counted, KEPT evidence. So the revert now happens only
+   where the kernel itself corroborates the match - the LOCK is present and IS
+   the linked claim, which a completed break can never leave - and a marker
+   nobody can corroborate keeps its file. The cost is a duplicate tombstone
+   where two interrupted breaks over one claim used to leave one: the first
+   finishes it and the rest are kept as uncorroborated, retired on the
+   ordinary published retention rather than deleted on a claim we cannot
+   check."
   [transactions-dir ^File tomb break-legacy-lock now-ms]
   (let [^File lock (lock-file transactions-dir)
         same-claim? (boolean (when-let [key (lock-file-key lock)]
@@ -2525,7 +2578,8 @@
                      (or (not= cause :legacy-format)
                          (and break-legacy-lock
                               (legacy-lock-dead? lock holder now-ms)))))]
-    (if dead?
+    (cond
+      dead?
       (do (Files/deleteIfExists (.toPath lock))
           (stamp-tombstone! tomb)
           {:tombstone (.getName tomb)
@@ -2534,20 +2588,41 @@
            :evidence :retained
            :holder-txid (:txid holder)
            :holder-cause cause})
+
+      ;; the LOCK is present and IS the claim this file is a second link to,
+      ;; which is corroboration by the kernel: a completed break unlinks the
+      ;; LOCK, so it can never be in this state. Dropping our extra link
+      ;; cannot destroy a break that happened.
+      same-claim?
       (do (Files/deleteIfExists (.toPath ^File (broken-at-file tomb)))
           (Files/deleteIfExists (.toPath tomb))
-          (cond-> {:tombstone (.getName tomb)
-                   :resolution :interrupted-break-reverted
-                   ;; and this line names a file this call DELETED, which is
-                   ;; said rather than left for a reader to discover: a
-                   ;; receipt must name its subject, and a name whose file is
-                   ;; gone must say why it is gone
-                   :evidence :removed
-                   :holder-txid (:txid holder)
-                   :holder-live (boolean (and claim (nil? cause)))
-                   :lock-present (.isFile lock)}
-            (not same-claim?)
-            (assoc :cause :lock-is-no-longer-the-linked-claim))))))
+          {:tombstone (.getName tomb)
+           :resolution :interrupted-break-reverted
+           ;; and this line names a file this call DELETED, which is
+           ;; said rather than left for a reader to discover: a
+           ;; receipt must name its subject, and a name whose file is
+           ;; gone must say why it is gone
+           :evidence :removed
+           :holder-txid (:txid holder)
+           :holder-live (boolean (and claim (nil? cause)))
+           :lock-present (.isFile lock)})
+
+      ;; a `:phase :linked` marker alone, with no LOCK to confirm it. The
+      ;; marker is a claim by the breaker and a claim any directory writer can
+      ;; forge is not evidence - but neither is it grounds to delete evidence.
+      ;; Stamp it so it is retired on the ordinary retention rather than on
+      ;; the age it inherited from the claim, and keep it.
+      :else
+      (let [stamped (stamp-tombstone! tomb)]
+        {:tombstone (.getName tomb)
+         :resolution :interrupted-break-uncorroborated
+         ;; the file this line names is on disk when the call returns
+         :evidence :retained
+         :cause :marker-uncorroborated
+         :stamp (if stamped :ok :unrecorded)
+         :holder-txid (:txid holder)
+         :holder-live (boolean (and claim (nil? cause)))
+         :lock-present (.isFile lock)}))))
 
 (defn recover!
   ;; @spec MCP-OP-MEM-013

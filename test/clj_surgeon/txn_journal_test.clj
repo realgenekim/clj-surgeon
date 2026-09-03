@@ -2715,7 +2715,21 @@
             by that txid with `:tombstone-exists`, and `recover!` reports
             `{:found 1 :remaining 1}` with no resolution at all. State
             inferred from a neighbour dies with the neighbour: an interrupted
-            break must be typed by its OWN marker."
+            break must be typed by its OWN marker.
+
+            REVISED at round 8, finding 1. Round seven closed this by
+            REVERTING on the marker alone, and that made the marker the first
+            mechanism on this branch whose forgery DELETED evidence: this
+            state and a COMPLETED break wearing a hand-written `:phase
+            :linked` sidecar are the same bytes on disk, so a rule that
+            deletes one deletes the other. The marker still types the file -
+            it is never silently re-typed as a break that happened, and
+            recovery still names it and says what it did - but with no LOCK to
+            corroborate it the resolution is UNCORROBORATED: stamped with its
+            own creation time and KEPT, on the ordinary published retention.
+            A duplicate tombstone that retires in a day is the price of never
+            deleting a real break's evidence on a claim any directory writer
+            can forge."
     (let [ws (workspace! "interrupted-after-release" 2)
           child (.start (ProcessBuilder. ["sleep" "30"]))
           dir (journal/transactions-dir (:root ws) (:state-home ws))
@@ -2745,25 +2759,38 @@
         (is (not (.exists lock)))
 
         (let [after (row)]
-          (is (= :interrupted-break (:kind after))
-              (str "the type must survive the holder it was inferred from: "
-                   (pr-str after)))
-          (is (= :lock-break-interrupted (:status after))))
+          (is (= :uncorroborated-marker (:status after))
+              (str "the marker still types it - it is never silently re-typed "
+                   "as a break that happened: " (pr-str after)))
+          (is (= :broken-lock (:kind after))
+              (str "but with no LOCK to corroborate it, the file is typed as "
+                   "the break it may well be: " (pr-str after))))
 
         (let [result (journal/recover! (:root ws) opts)
               resolved (first (:interrupted-breaks result))]
           (is (= 1 (count (:interrupted-breaks result)))
-              (str "recovery resolves it rather than billing it: "
+              (str "recovery resolves it rather than passing over it: "
                    (pr-str result)))
           (is (= "LOCK.broken.BRK-INTERRUPTED" (:tombstone resolved)))
-          (is (= :interrupted-break-reverted (:resolution resolved))
-              (str "the claim it was linked from is gone, so the break never "
-                   "happened and its evidence is not evidence: "
+          (is (= :interrupted-break-uncorroborated (:resolution resolved))
+              (str "the claim it was linked from is gone, so nothing can "
+                   "corroborate the marker - and a marker any directory "
+                   "writer can forge is not grounds to delete evidence: "
                    (pr-str resolved)))
-          (is (not (.exists tomb)))
-          (is (zero? (:found (:broken-locks result)))
-              (str "and nothing is billed for a day as a break that happened: "
+          (is (= :retained (:evidence resolved)) (pr-str resolved))
+          (is (.isFile tomb) "the evidence is kept")
+          (is (= 1 (:found (:broken-locks result)))
+              (str "counted, on the ordinary published retention: "
                    (pr-str (:broken-locks result)))))
+
+        (let [late (journal/recover!
+                     (:root ws)
+                     (assoc opts :now-ms (+ (System/currentTimeMillis)
+                                            (* 25 60 60 1000))))]
+          (is (= 1 (:pruned (:broken-locks late)))
+              (str "and it retires like any other evidence rather than "
+                   "accumulating: " (pr-str (:broken-locks late))))
+          (is (not (.exists tomb))))
         (finally
           (.destroyForcibly child)
           (.waitFor child)
@@ -2828,3 +2855,86 @@
           (.destroyForcibly child)
           (.waitFor child)
           (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-completed-break-wearing-a-linked-marker-keeps-its-evidence
+  (testing "Opus round 7, finding 1, probes FORGE and AI. The `:phase :linked`
+            marker is a CLAIM BY THE BREAKER, and any writer of the
+            transactions directory can write one - the same threat model the
+            forgeable stamp was fixed for one commit earlier. Dropped beside a
+            COMPLETED break it made `recover!` type real evidence as an
+            interrupted break and REVERT it: the sidecar and the tombstone
+            both unlinked, `:broken-locks {:found 0}`, and a break that
+            genuinely happened erased from the directory whose whole purpose
+            is bounded, counted, KEPT evidence. Round six's worst forgery kept
+            a file for ever - fail-safe; this one removed it. A marker the
+            LOCK cannot corroborate - the LOCK gone, or naming a different
+            inode - is UNCORROBORATED: the evidence is stamped with its own
+            creation time and KEPT, typed so a reader can see the marker was
+            not believed, and retired on the ordinary retention. The revert is
+            reserved for a match the inode rule confirms."
+    (let [ws (workspace! "marker-uncorroborated" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          row (fn [name] (first (filter #(= name (:txid %))
+                                        (journal/retained-transactions
+                                          (:root ws) opts))))]
+      (try
+        (plant-lock! ws {:txid "CRASHED-HOLDER"
+                         :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (let [broken (:lock-broken (journal/recover! (:root ws) opts))
+              tomb-name (:tombstone broken)
+              tomb (io/file dir ^String tomb-name)
+              side (io/file dir (str "LOCK.broken-at."
+                                     (subs tomb-name (count "LOCK.broken."))))]
+          (is (string? tomb-name)
+              (str "a REAL break happened: " (pr-str broken)))
+          (is (not (.exists lock)) "the stale claim is gone")
+          (is (.isFile tomb) "and its evidence is on disk")
+
+          ;; one hand-written sidecar - a directory writer's forgery, and
+          ;; exactly what a swallowed stamp failure used to leave behind
+          (spit side (pr-str {:tombstone tomb-name
+                              :phase :linked
+                              :linked-at-ms (System/currentTimeMillis)}))
+
+          (is (= :broken-lock (:kind (row tomb-name)))
+              (str "a marker no LOCK corroborates does not make real evidence "
+                   "an interrupted break: " (pr-str (row tomb-name))))
+          (is (= :uncorroborated-marker (:status (row tomb-name)))
+              (str "and the row says the marker was not believed: "
+                   (pr-str (row tomb-name))))
+
+          (let [result (journal/recover! (:root ws) opts)
+                resolved (first (filter #(= tomb-name (:tombstone %))
+                                        (:interrupted-breaks result)))]
+            (is (.isFile tomb)
+                (str "the break's own evidence survives the forgery: "
+                     (pr-str result)))
+            (is (some? resolved)
+                (str "recovery names what it did with it: " (pr-str result)))
+            (is (= :interrupted-break-uncorroborated (:resolution resolved))
+                (pr-str resolved))
+            (is (= :retained (:evidence resolved))
+                (str "and says the file is still there: " (pr-str resolved)))
+            (is (= :marker-uncorroborated (:cause resolved))
+                (pr-str resolved))
+            (is (= 1 (:found (:broken-locks result)))
+                (str "it is billed as the break it is: "
+                     (pr-str (:broken-locks result))))
+            (is (= 1 (:remaining (:broken-locks result)))
+                (pr-str (:broken-locks result))))
+
+          ;; and it is not permanent: the resolve stamps it, so it retires on
+          ;; the ordinary published retention like any other break's evidence
+          (let [late (journal/recover!
+                       (:root ws)
+                       (assoc opts :now-ms (+ (System/currentTimeMillis)
+                                              (* 25 60 60 1000))))]
+            (is (= 1 (:pruned (:broken-locks late)))
+                (str "retained on the NORMAL retention, not for ever: "
+                     (pr-str (:broken-locks late))))
+            (is (not (.exists tomb)))))
+        (finally (cleanup! ws))))))
