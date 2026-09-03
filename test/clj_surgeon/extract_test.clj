@@ -1966,3 +1966,41 @@
         (finally
           (.setWritable locked true false)
           (delete-recursive! root))))))
+
+;; @spec MCP-OP-EXTRACT-031
+(deftest an-alias-that-is-not-a-symbol-refuses-on-every-path
+  (let [root (create-caller-project!)
+        src (io/file root "src" "app")
+        source (io/file src "core.clj")
+        before (slurp source)]
+    (try
+      (testing "with rewiring ON, the caller rewriter refuses"
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "a b"
+                                        :compile-check false})]
+          (is (= :invalid-rewire-alias (:error-type result)))
+          (is (= before (slurp source)))))
+
+      (testing "with rewiring OFF, the alias still never reaches a require"
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "a b"
+                                        :rewire-callers false
+                                        :compile-check false})]
+          (is (= :invalid-rewire-alias (:error-type result))
+              (str "this path wrote `[app.moved :as a b :refer [...]]`: "
+                   (pr-str (select-keys result [:error-type :applied]))))
+          (is (= before (slurp source)))
+          (is (not (.exists (io/file src "moved.clj"))))))
+
+      (testing "an ordinary alias still applies"
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (true? (:applied result)) (pr-str (:error result)))))
+      (finally (delete-recursive! root)))))

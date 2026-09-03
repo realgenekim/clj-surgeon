@@ -24,6 +24,32 @@
 ;; Parsing helpers
 ;; ============================================================
 
+
+;; @spec MCP-OP-EXTRACT-031
+(def ^:private simple-symbol-pattern
+  "What an ns alias may be: one simple Clojure symbol.
+
+  The rewriter builds every qualified token as `(symbol (str alias \"/\" var))`,
+  so an alias was only ever checked for being non-blank and `\"a b\"` produced the
+  token `a b/moved` -- source that no longer parses, written into a caller file
+  under a success receipt. Rejected here: whitespace, `/` (an alias is not
+  namespaced), the reader's delimiters and dispatch characters, and a leading
+  digit."
+  #"[a-zA-Z*+!_?<>=&%$-][a-zA-Z0-9*+!_?<>=&%$.'-]*")
+
+;; @spec MCP-OP-EXTRACT-031
+(defn invalid-alias?
+  "True when `alias` cannot be used as an ns alias.
+
+  Public because the alias reaches a caller's `:require` on paths that never
+  call the rewriter -- `rewire-callers false` writes `[target :as <alias>
+  :refer [...]]` straight into the source header -- and one predicate is one
+  rule."
+  [alias]
+  (or (not (string? alias))
+      (str/blank? alias)
+      (nil? (re-matches simple-symbol-pattern alias))))
+
 (defn- parse
   "Zipper on the first top-level form, or nil when the source will not parse."
   [source]
@@ -260,7 +286,7 @@
 
    Typed refusals, all {:ok false :error-type ... :error <message>}:
      :invalid-rewire-source  source was not a string
-     :invalid-rewire-alias   alias was not a non-blank string
+     :invalid-rewire-alias   alias was not one simple Clojure symbol
      :invalid-rewire-owners  owners was not a sequence of maps
      :unparseable-source     source does not parse (also carries :owner)
      :unknown-rewire-owner   an owner is not defined in the source (:owner)
@@ -274,9 +300,13 @@
     {:ok false :error-type :invalid-rewire-source
      :error "source must be a string"}
 
-    (or (not (string? alias)) (str/blank? alias))
+    ;; @spec MCP-OP-EXTRACT-031
+    (invalid-alias? alias)
     {:ok false :error-type :invalid-rewire-alias
-     :error "alias must be a non-blank string"}
+     :error (str "alias must be one simple Clojure symbol -- no whitespace, "
+                 "no `/`, no reader delimiter, no leading digit -- and every "
+                 "qualified token is built from it")
+     :alias alias}
 
     (not (and (sequential? owners) (every? map? owners)))
     {:ok false :error-type :invalid-rewire-owners
@@ -404,7 +434,7 @@
 
    Typed refusals, all {:ok false :error-type ... :error <message>}:
      :invalid-rewire-source   :source missing or not a string
-     :invalid-rewire-alias    :alias missing or blank
+     :invalid-rewire-alias    :alias is not one simple Clojure symbol
      :invalid-rewire-target   :target-ns missing or blank
      :unparseable-source      the caller source does not parse
      :no-ns-form              no top-level ns form
@@ -424,9 +454,13 @@
     {:ok false :error-type :invalid-rewire-source
      :error "source must be a string"}
 
-    (or (not (string? alias)) (str/blank? alias))
+    ;; @spec MCP-OP-EXTRACT-031
+    (invalid-alias? alias)
     {:ok false :error-type :invalid-rewire-alias
-     :error "alias must be a non-blank string"}
+     :error (str "alias must be one simple Clojure symbol -- no whitespace, "
+                 "no `/`, no reader delimiter, no leading digit -- and it is "
+                 "written into this caller's require")
+     :alias alias}
 
     (or (nil? target-ns) (str/blank? (str target-ns)))
     {:ok false :error-type :invalid-rewire-target

@@ -1052,6 +1052,19 @@
                   form-names
                   (set (map #(str (:name %)) matched)))]
     (cond
+      ;; @spec MCP-OP-EXTRACT-031
+      ;; Checked here, not only in the rewriter: with `rewire-callers false`
+      ;; the alias never reaches the rewriter and goes straight into the source
+      ;; header as `[target :as <alias> :refer [...]]`.
+      (and (some? alias) (extract-rewire/invalid-alias? alias))
+      {:error (str "alias must be one simple Clojure symbol -- no whitespace, "
+                   "no `/`, no reader delimiter, no leading digit -- and it is "
+                   "written into a namespace require")
+       :error-type :invalid-rewire-alias
+       :alias alias
+       :source-unchanged true
+       :target-unchanged true}
+
       (seq missing)
       {:error (str "Forms not found: " (str/join ", " (sort missing)))}
 

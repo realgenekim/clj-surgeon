@@ -407,3 +407,43 @@
     (testing "the :refer-bearing clojure.test entry neither refuses nor changes"
       (is (str/includes? (:source result)
                          "[clojure.test :refer [deftest is testing]]")))))
+
+;; @spec MCP-OP-EXTRACT-031
+(deftest an-alias-that-is-not-a-symbol-refuses
+  (let [source (str "(ns app.only-moved\n"
+                    "  (:require\n"
+                    "   [app.core :as core]))\n\n"
+                    "(defn go [x] (core/moved x))\n")]
+    (testing "qualify-owner-call-sites refuses a non-symbol alias"
+      (doseq [bad ["a b" "a/b" "" "  " "[x]" "a\nb" "1st" "a;b" "a(b"]]
+        (let [result (rewire/qualify-owner-call-sites
+                       "(defn owner [] (moved 1))"
+                       [{:owner "owner" :moved-vars ["moved"]}]
+                       bad)]
+          (is (false? (:ok result)) (str "admitted " (pr-str bad)))
+          (is (= :invalid-rewire-alias (:error-type result))
+              (str "and refused it typed: " (pr-str bad)))
+          (is (nil? (:source result)) "no refusal carries a source"))))
+
+    (testing "requalify-caller refuses one too"
+      (let [result (rewire/requalify-caller
+                     {:source source
+                      :old-alias "core"
+                      :old-ns "app.core"
+                      :target-ns "app.moved"
+                      :alias "a b"
+                      :moved-vars ["moved"]})]
+        (is (false? (:ok result)))
+        (is (= :invalid-rewire-alias (:error-type result)))
+        (is (nil? (:source result)))))
+
+    (testing "ordinary aliases still pass"
+      (doseq [good ["moved" "app.moved" "str" "a->b" "s'" "*x*" "core-2"]]
+        (let [result (rewire/requalify-caller
+                       {:source source
+                        :old-alias "core"
+                        :old-ns "app.core"
+                        :target-ns "app.moved"
+                        :alias good
+                        :moved-vars ["moved"]})]
+          (is (true? (:ok result)) (str "refused a valid alias: " (pr-str good))))))))
