@@ -359,6 +359,87 @@
             (recur stack (conj! files (.getPath entry)) skipped skipped-dirs
                    (inc seen))))))))
 
+;; @spec MCP-OP-EXTRACT-038
+(def ^:private legal-namespace-segment
+  #"[\p{Alpha}*+!_?<>=&%$][\p{Alnum}*+!_?<>=&%$'-]*")
+
+;; @spec MCP-OP-EXTRACT-038
+(defn- legal-namespace-name?
+  "Pure: true when every dot-separated segment is a legal Clojure name segment."
+  [candidate]
+  (let [s (str candidate)]
+    (and (seq s)
+         (every? #(re-matches legal-namespace-segment %)
+                 (str/split s #"\." -1)))))
+
+;; @spec MCP-OP-EXTRACT-038
+(defn- target-inside-root?
+  "True when `to` -- which does not exist yet -- lands inside `root`.
+
+  Resolved through its nearest EXISTING ancestor and real-pathed, so a
+  symlinked parent cannot present a destination that only lexically looks
+  confined."
+  [root to]
+  (try
+    (let [real-root (mcp-paths/real-root root)
+          no-follow (make-array java.nio.file.LinkOption 0)
+          lexical (.normalize
+                    (.toAbsolutePath
+                      (java.nio.file.Paths/get (str to)
+                                               (make-array String 0))))
+          existing (loop [candidate (.getParent lexical)]
+                     (cond
+                       (nil? candidate) nil
+                       (java.nio.file.Files/exists candidate no-follow) candidate
+                       :else (recur (.getParent candidate))))]
+      (boolean
+        (and existing
+             (.startsWith (.toRealPath existing no-follow) real-root))))
+    (catch Exception _ false)))
+
+;; @spec MCP-OP-EXTRACT-038
+(defn- target-destination-refusal
+  "Nil, or one typed refusal for a `:to` this extraction must not write.
+
+  POSTURE, stated because it was never decided: `:to` is CONFINED to the
+  project root derived from `:file`. An extraction repairs ONE workspace -- it
+  rewires that workspace's callers, compiles that workspace's namespaces, and
+  writes an undo receipt against those files -- so a destination outside it is
+  not a narrower version of the same operation, it is a write into a tree this
+  verb proved nothing about and cannot rewire. It was accepted before this
+  check: `:to /outside/pwn.clj` returned `{:applied true}`.
+
+  A destination whose derived namespace is not a legal Clojure name is refused
+  for the reason a bad alias is refused: every emitted libspec and every
+  qualified token in every rewired caller is built from that name."
+  [root to target-ns]
+  (cond
+    (not (target-inside-root? root to))
+    {:ok false
+     :error (str "The extraction destination is outside the project root this "
+                 "extraction repairs: " to)
+     :error-type :target-outside-project-root
+     :path (str to)
+     :root (str root)
+     :remedy (str "choose a destination under " root
+                  ", or run the extraction from the workspace that owns it")
+     :source-unchanged true
+     :target-unchanged true}
+
+    (not (legal-namespace-name? target-ns))
+    {:ok false
+     :error (str "The extraction destination derives the namespace "
+                 (pr-str (str target-ns))
+                 ", which is not a legal Clojure namespace name.")
+     :error-type :invalid-target-namespace
+     :path (str to)
+     :target-ns (str target-ns)
+     :remedy (str "choose a destination whose path segments are legal Clojure "
+                  "name segments; every rewired caller's libspec and every "
+                  "qualified token is built from this name")
+     :source-unchanged true
+     :target-unchanged true}))
+
 ;; @spec MCP-OP-EXTRACT-035
 (defn- link-escape-refusal
   "One typed refusal naming the LINK that carries Clojure sources out of the
@@ -1778,10 +1859,17 @@
             target-ns (file-path->ns-name to source-paths)
             project-root (project-root-for-source file source-paths)
             source-canonical-path (.getCanonicalPath (io/file file))
+            ;; @spec MCP-OP-EXTRACT-038
+            ;; Decide the destination BEFORE reading the workspace: a refused
+            ;; :to is refused without scanning a repository for callers it
+            ;; would never have rewired.
+            target-refusal (target-destination-refusal project-root to
+                                                       target-ns)
             ;; @spec MCP-OP-EXTRACT-029
-            walked (walk-workspace-sources (io/file project-root)
-                                           (mcp-paths/real-root project-root)
-                                           cap byte-cap)
+            walked (when-not target-refusal
+                     (walk-workspace-sources (io/file project-root)
+                                             (mcp-paths/real-root project-root)
+                                             cap byte-cap))
             ;; @spec MCP-OP-EXTRACT-024
             ;; @spec MCP-OP-EXTRACT-037
             ;; Confine the read set at the moment the walk produces it -- this
@@ -1808,6 +1896,9 @@
               (into (sorted-map)
                     (map (fn [path] [path (slurp path)]) discovered)))]
         (cond
+          ;; @spec MCP-OP-EXTRACT-038
+          target-refusal target-refusal
+
           ;; @spec MCP-OP-EXTRACT-029
           over-cap
           {:ok false

@@ -2273,6 +2273,69 @@
                    (pr-str (select-keys result [:error :refusal])))))
         (finally (delete-recursive! base))))))
 
+;; @spec MCP-OP-EXTRACT-038
+(deftest the-destination-is-confined-and-must-name-a-legal-namespace
+  (testing "the reviewer's probe: :to /outside/pwn.clj. The POSTURE is that
+            :to is confined to the project root derived from :file -- an
+            extraction writes into the workspace it is repairing, and nothing
+            about the caller rewire makes sense outside it"
+    (let [root (create-caller-project!)
+          outside (io/file (str (.getPath root) "-outside"))
+          pwn (io/file outside "pwn.clj")]
+      (try
+        (.mkdirs outside)
+        (doseq [op [":extract" ":extract!"]]
+          (let [result (cli! (concat
+                               [":op" op
+                                ":file" (.getPath (io/file root "src" "app" "core.clj"))
+                                ":forms" "[moved-one moved-two]"
+                                ":to" (.getPath pwn)
+                                ":alias" "moved"]
+                               (when (= ":extract!" op)
+                                 [":compile-check" "false"])))]
+            (is (= :target-outside-project-root (:error-type result))
+                (str op " must refuse a destination outside the root: "
+                     (pr-str (select-keys result [:error-type :error :applied]))))
+            (is (str/includes? (str (:path result)) "pwn.clj")
+                "and name the destination")
+            (is (str/includes? (str (:root result)) (.getPath root))
+                "and the root it is confined to")
+            (is (not (true? (:applied result))))))
+        (is (not (.exists pwn)) "nothing was written outside the root")
+        (finally (delete-recursive! root) (delete-recursive! outside)))))
+
+  (testing "a destination inside the root whose derived namespace is not a
+            legal Clojure name refuses before anything is written"
+    (let [root (create-caller-project!)]
+      (try
+        (doseq [bad ["src/app/9lives.clj" "src/app/a b.clj" "src/app/x[y].clj"]]
+          (let [to (io/file root bad)
+                result (extract/plan
+                         {:file (.getPath (io/file root "src" "app" "core.clj"))
+                          :forms '[moved-one moved-two]
+                          :to (.getPath to)
+                          :alias "moved"})]
+            (is (= :invalid-target-namespace (:error-type result))
+                (str bad " -> "
+                     (pr-str (select-keys result [:error-type :error :target-ns]))))
+            (is (seq (str (:target-ns result)))
+                "and the refusal shows the name it derived")
+            (is (not (.exists to)))))
+        (finally (delete-recursive! root)))))
+
+  (testing "an ordinary destination inside the root is unaffected"
+    (let [root (create-caller-project!)]
+      (try
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "sub" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:applied result)) (pr-str (:error result)))
+          (is (= "app.sub.moved" (:target-ns result))))
+        (finally (delete-recursive! root))))))
+
 ;; @spec MCP-OP-EXTRACT-030
 (deftest verification-flags-are-derived-from-the-checks
   (testing "a forced read-back mismatch flips :read-back false"
