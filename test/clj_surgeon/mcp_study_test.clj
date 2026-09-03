@@ -10,6 +10,7 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parallel :as parallel]
@@ -1481,3 +1482,42 @@
                     "── total: 100 files; 0 shown, 100 omitted"]
                    lines)
                 "a project counted by project_count appears in the body at every limit")))))))
+
+;; @spec MCP-OP-STUDY-033
+;; @spec MCP-OP-STUDY-021
+(deftest the-cap-stops-the-walk-inside-one-oversized-project
+  ;; MCP-OP-STUDY-021 said `max_files` is applied DURING accumulation and
+  ;; stops the walk. It stopped the walk BETWEEN candidates: a whole candidate
+  ;; project was walked and canonicalised before its count was compared to the
+  ;; cap. One project of 3000 files at `max_files 10` therefore ran the full
+  ;; `find` and called `real-path-within` — one `toRealPath` syscall each —
+  ;; 3001 times to refuse at a cap of 10, and then reported `3000` as an exact
+  ;; total. The cap has to stop the accumulation itself, and a count taken at
+  ;; the cap is a FLOOR, which the receipt must say out loud.
+  (with-scratch-project
+    "test-fixtures/study/scratch-cap-inside"
+    (fn [dir] (write-scratch-project! dir 3000))
+    (fn []
+      (let [calls (atom 0)
+            real-path-within mcp-paths/real-path-within]
+        (with-redefs [mcp-paths/real-path-within
+                      (fn [& args]
+                        (swap! calls inc)
+                        (apply real-path-within args))]
+          (let [response (run {"mode" "ls-tree"
+                               "dir" "test-fixtures/study/scratch-cap-inside"
+                               "max_files" 10})]
+            (is (false? (:ok response)))
+            (is (= "study-tree-too-large" (:error_type response)))
+            (is (= 10 (:max_files response)))
+            (is (<= @calls 11)
+                (str "a cap of 10 must not canonicalise 3000 files: "
+                     @calls " calls"))
+            (is (= 11 (:file_count response))
+                "the walk stops one file past the cap, which is what proves it")
+            (is (true? (:observed_at_least response))
+                "a count taken at the cap is a floor, and the receipt says so")
+            (is (str/includes? (:error response) "at least")
+                "and the message says so too")
+            (is (str/includes? (:error response) "11"))
+            (is (empty? (output-schema-violations response)))))))))
