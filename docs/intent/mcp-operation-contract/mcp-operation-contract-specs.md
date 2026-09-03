@@ -158,6 +158,7 @@ These requirements define the project-owned exact-verifier fusion contract.
 - [x] **MCP-OP-FIELD-002**: When an extraction request supplies no `require_policy` or an unaccepted one, on the `inspect_clojure` planning surface and on the `apply_clojure_changes` write surface alike, the `invalid-require-policy` refusal shall name the field, list its accepted values, echo what it received, and state that the field is required and never defaulted. The visible summary shall show the field and its accepted values. clj-surgeon shall not substitute a default for a field its published schema declares required, and shall not refuse it through a generic refusal that cannot name those values.
 - [x] **MCP-OP-FIELD-003**: When a `match` request whose pattern uses `_` as a standalone wildcard returns zero matches, or fewer than its declared expectation, the result shall carry the note that each `_` matches exactly one subtree and that a longer form needs a longer pattern. A pattern without a standalone `_` shall carry no such note.
 - [x] **MCP-OP-FIELD-005**: clj-surgeon shall decide whether a `match` pattern uses a standalone `_` wildcard from the parsed pattern, not from its bytes. An `_` inside a string literal or inside one symbol shall not count as a wildcard, and a wildcard whose only neighbour is a comma shall.
+- [x] **MCP-OP-FIELD-006**: Every minimal request shape clj-surgeon publishes shall be one the live validators accept at that path. Where no registered example covers a path's complete required set, the refusal shall omit `minimal_request` rather than show a shape clj-surgeon cannot stand behind.
 
 # #Matched-But-Unaddressed Reporting
 
@@ -281,6 +282,7 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-FIELD-002` | An omitted required field may be silently defaulted to `minimal` because that is the common case, or one surface's refusal is enough when the other route refuses first with a generic reason. | Omitted `require_policy` on the plan route ; an unaccepted value on the plan route ; omitted on the apply route ; unaccepted on the apply route ; the published schema still lists the field as required ; the apply refusal leaves every byte unchanged. |
 | `MCP-OP-FIELD-003` | Every miss deserves the wildcard note, or `_` inside a symbol counts as a wildcard. | Zero matches with a standalone `_` ; fewer than expected with `_` ; zero matches with no `_` ; a pattern containing `foo_bar` only. |
 | `MCP-OP-FIELD-005` | Whitespace around `_` in the pattern text is a reliable test. | `(f "a _ b")` ; `[a,_]` ; `foo_bar` ; `(f _)` ; a pattern that does not parse. |
+| `MCP-OP-FIELD-006` | A published example shape stays valid on its own, and every registered path's example covers that path's required set. | Each registered example embedded in a complete request ; a `forms` request omitting `forms` and `expect` ; a path the table does not register ; a new example added without a validator carrier. |
 
 # #Deferred Surface
 

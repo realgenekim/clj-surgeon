@@ -2146,6 +2146,64 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest expect-matched-count-too-low-refuses-before-any-write
+  ;; @spec MCP-OP-MATCHED-002
+  ;; @spec MCP-OP-FIELD-006
+  (let [[workspace source-file] (folds-workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              {"changes" [(folds-change "flag0")]
+               "expect_matched"
+               {"file" "src/folds.clj"
+                "file_hash" (structural-lens/source-hash folds-file-source)
+                "match" folds-guard-pattern
+                "count" 17}})]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "expect-matched-stale" (:error_type result)))
+        (is (= "match_count" (:mismatch result)))
+        (is (= 17 (:expected_match_count result)))
+        (is (= 19 (:actual_match_count result)))
+        (is (true? (:source_unchanged result)))
+        (is (= folds-file-source (slurp source-file))
+            "a basis that undercounts leaves every byte unchanged")
+        (is (not (.exists receipt-dir))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest expect-matched-invalid-pattern-refuses-before-any-write
+  ;; @spec MCP-OP-MATCHED-003
+  ;; @spec MCP-OP-FIELD-006
+  (let [[workspace source-file] (folds-workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (try
+      (doseq [[label pattern]
+              [["two forms in one pattern" "(a) (b)"]
+               ["an unbalanced pattern" "(if-let [slug"]]]
+        (testing label
+          (let [result
+                (mcp-tool/execute-request!
+                  {:project-root (.getPath workspace)
+                   :receipt-dir (.getPath receipt-dir)}
+                  {"changes" [(folds-change "flag0")]
+                   "expect_matched"
+                   {"file" "src/folds.clj"
+                    "file_hash" (structural-lens/source-hash folds-file-source)
+                    "match" pattern
+                    "count" 19}})]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "expect-matched-invalid-pattern" (:error_type result)))
+            (is (= "src/folds.clj" (:file result)))
+            (is (true? (:source_unchanged result)))
+            (is (= folds-file-source (slurp source-file))
+                "an unusable pattern leaves every byte unchanged")
+            (is (not (.exists receipt-dir))))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest omitting-expect-matched-leaves-the-receipt-unchanged
   ;; @spec MCP-OP-MATCHED-003
   (let [[workspace _source-file] (folds-workspace!)]

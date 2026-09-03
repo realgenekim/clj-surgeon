@@ -86,10 +86,14 @@
   (mapv #(if (integer? %) :index %) (vec path)))
 
 ;; @spec MCP-OP-FIELD-001
+;; @spec MCP-OP-FIELD-006
 (defn- minimal-request-shape
   "The smallest valid object at `path`, restricted to that path's required
    fields. Returns nil when no example covers every required field, so the
-   refusal never shows a shape it cannot stand behind."
+   refusal never shows a shape it cannot stand behind.
+
+   Every registered example is pinned to the live validators by test, so an
+   example that stops validating fails the suite rather than the caller."
   [path required]
   (when-let [example (get minimal-request-examples (example-path path))]
     (let [shape (into (sorted-map) (select-keys example (vec required)))]
@@ -97,6 +101,7 @@
         shape))))
 
 ;; @spec MCP-OP-FIELD-001
+;; @spec MCP-OP-FIELD-006
 (defn- missing-fields-evidence
   [path required missing]
   (cond-> {:missing (vec missing)

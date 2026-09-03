@@ -10,6 +10,14 @@ is cut.
 
 ### Fixed
 
+- The published minimal request shapes are now pinned to the live validators:
+  every registered example is embedded in a complete request and validated,
+  and adding an example without a validator carrier fails the suite. A
+  refusal at a path no example covers is witnessed to omit `minimal_request`
+  rather than show a shape clj-surgeon cannot stand behind. The
+  `expect_matched` count-too-low and unusable-pattern routes gained
+  end-to-end witnesses proving no byte and no receipt directory moves.
+
 - The `_` wildcard note is now decided from the parsed `match` pattern rather
   than its bytes. An underscore inside a string literal produced a spurious
   note, and a wildcard whose only neighbour was a comma (`[a,_]`) was

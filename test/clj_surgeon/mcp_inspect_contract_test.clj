@@ -608,3 +608,56 @@
       (let [result (get-in (run "(missing_thing 1)" nil) [:results 0])]
         (is (= 0 (:match_count result)))
         (is (nil? (:note result)))))))
+
+;; ---------------------------------------------------------------------------
+;; The minimal-shape table is a promise about the live validators. Nothing
+;; pinned it to them: an example could drift out of validity, or cover a path
+;; whose required set it does not satisfy, and no test would notice.
+;; ---------------------------------------------------------------------------
+
+(def ^:private minimal-example-carriers
+  "For each registered example path, a complete request embedding that example."
+  {[] identity
+   ["expect"]
+   (fn [example]
+     {"requests" [{"id" "r1" "operation" "outline" "file" "src/example.clj"}]
+      "expect" example})
+   ["requests" :index]
+   (fn [example]
+     {"requests" [example] "expect" {"requests" 1 "files" 1}})
+   ["requests" :index "expect"]
+   (fn [example]
+     {"requests" [{"id" "r1" "operation" "forms" "file" "src/example.clj"
+                   "forms" ["f"] "expect" example}]
+      "expect" {"requests" 1 "files" 1}})})
+
+(deftest minimal-request-examples-are-accepted-by-the-live-validator
+  ;; @spec MCP-OP-FIELD-006
+  (let [examples @#'inspect/minimal-request-examples]
+    (is (= (set (keys examples)) (set (keys minimal-example-carriers)))
+        "every registered example must be exercised against the validator")
+    (doseq [[path example] examples]
+      (testing (pr-str path)
+        (let [request ((get minimal-example-carriers path) example)
+              result (inspect/validate-inspect-params request)]
+          (is (:ok result) (pr-str result)))))))
+
+(deftest a-refusal-with-no-standing-minimal-shape-shows-none
+  ;; @spec MCP-OP-FIELD-006
+  (testing "a forms request omitting forms and expect has no covering example"
+    (let [result (inspect/validate-inspect-params
+                   {"requests" [{"id" "r1" "operation" "forms"
+                                 "file" "src/example.clj"}]
+                    "expect" {"requests" 1 "files" 1}})]
+      (is (false? (:ok result)))
+      (is (= :missing-fields (:reason result)))
+      (is (= ["requests" 0] (:path result)))
+      (is (= ["expect" "forms"] (:missing result)))
+      (is (= ["expect" "file" "forms" "id" "operation"] (:required result)))
+      (is (not (contains? result :minimal_request)))))
+  (testing "and a path the table does not register shows none either"
+    (let [evidence (#'inspect/missing-fields-evidence
+                     ["requests" 0 "snapshot_guards"] #{"file" "hash"} ["hash"])]
+      (is (= ["hash"] (:missing evidence)))
+      (is (= ["file" "hash"] (:required evidence)))
+      (is (not (contains? evidence :minimal_request))))))
