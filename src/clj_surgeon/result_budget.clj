@@ -277,6 +277,36 @@
    :remedy "rescan from the start; the last page carries no :next_call"
    :next_call (next-call request)})
 
+;; @spec MCP-OP-MEM-003
+(defn unconfined-row-refusal
+  "The receipt for a pinned manifest one of whose rows names a path OUTSIDE
+   the root it was taken of — absolute, or escaping through `..`.
+
+   It NAMES the path, as `:stale-result-cursor` does, because the caller's
+   next question is always WHICH row. It is a fifth typed answer rather than
+   one of the four cursor refusals because it states a different fact: the
+   token was well formed, this server minted it, its offset is in range and
+   its snapshot verified. What failed is the MANIFEST's claim to be a manifest
+   of this root.
+
+   No legitimate scan can produce such a row — `rel-path` relativizes files
+   discovered under the root — so this is reachable only through a manifest
+   rewritten under the state root. It refuses rather than reads: before this
+   receipt existed a `..` row ENCODED a namespace from outside the scan root
+   with no signal at all, and an absolute row threw
+   `IllegalArgumentException` out of an operation whose whole promise is a
+   typed receipt and never a throw."
+  [{:keys [path] :as request}]
+  {:error-type :unconfined-manifest-row
+   :error (format "pinned manifest row %s is not inside the scanned root"
+                  (pr-str path))
+   :limit {:kind :manifest-row :requested path}
+   :complete false
+   :source-unchanged true
+   :remedy (str "rescan from the start; this cursor's pinned manifest is not "
+                "a manifest of this root")
+   :next_call (next-call request)})
+
 ;; ============================================================
 ;; Text rendering — the same receipts, in the text encoding
 ;; ============================================================

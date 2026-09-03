@@ -744,10 +744,17 @@
 
 (defn- pinned-candidates
   "The `[project-index absolute-path]` pairs a page will outline, taken from
-   the PINNED manifest rows rather than from a fresh walk of the tree."
+   the PINNED manifest rows rather than from a fresh walk of the tree.
+
+   Resolved by `snapshot/row-file` — the SAME resolver the staleness check
+   uses. It used to be `fs/path` here against `io/file` there, so the file
+   that was verified and the file that was read could differ. Callers reach
+   this only after `unconfined-row` has refused any row that escapes the root,
+   and a fresh scan's rows are relativized under the root by construction, so
+   every row here resolves."
   ;; @spec MCP-OP-MEM-003
   [abs rows]
-  (mapv (fn [{:keys [x p]}] [x (str (fs/path abs p))]) rows))
+  (mapv (fn [{:keys [x p]}] [x (str (snapshot/row-file abs p))]) rows))
 
 (defn- encode-page
   "Outline `candidates` through the streaming encoder and return the encoded
@@ -823,7 +830,7 @@
 (defn- run-pinned-page
   "A page served from a pinned manifest snapshot.
 
-   Four typed refusals guard it, and each names a DIFFERENT fact about the
+   Five typed refusals guard it, and each names a DIFFERENT fact about the
    caller's cursor: `:invalid-result-cursor` — this server did not mint that
    token; `:unknown-result-cursor` — it did, but not for this root, the
    snapshot is gone, the bytes filed under it no longer PROVE the manifest
@@ -831,6 +838,11 @@
    `:result-cursor-out-of-range` — it did, and the position
    is not in the manifest; `:stale-result-cursor` — it did, and a file this
    page must serve no longer holds its pinned content.
+
+   A fifth refusal states a fact about the MANIFEST rather than the cursor:
+   `:unconfined-manifest-row` — the token is good, the snapshot verified, and
+   one of the rows this page would serve names a path outside the scanned
+   root. It names that path and reads nothing.
 
    The snapshot is resolved by `verified-snapshot`, so the page re-folds the
    rows on disk to their own address before it serves a single record. The
@@ -864,6 +876,7 @@
               over? (> remaining ceiling)
               slice (min ceiling remaining)
               rows (snapshot/read-rows abs cursor-id offset slice)
+              unconfined (snapshot/unconfined-row abs rows)
               stale (snapshot/stale-row abs rows)
               request (assoc base :digest (:digest snap) :total total
                              :offset offset)]
@@ -874,6 +887,12 @@
             ;; whole budget exists to refuse, so it refuses instead.
             (not= slice (count rows))
             (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
+
+            ;; Confinement, before staleness and before any candidate is
+            ;; built: a row that escapes the root is never opened.
+            unconfined
+            (render (budget/unconfined-row-refusal
+                      (assoc base :path (:path unconfined))))
 
             stale
             (render (budget/stale-cursor-refusal (merge base stale)))

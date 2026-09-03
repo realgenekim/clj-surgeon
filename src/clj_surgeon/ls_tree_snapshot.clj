@@ -82,6 +82,7 @@
    [clojure.string :as str])
   (:import
    (java.io File)
+   (java.nio.file Paths)
    (java.security MessageDigest)))
 
 ;; ============================================================
@@ -443,15 +444,60 @@
         (into [] (comp (drop offset) (take limit) (map edn/read-string))
               (line-seq r))))))
 
+(defn row-file
+  "The file a manifest row's path names, or `nil` when that row is not
+   CONFINED to `root`.
+
+   ONE resolver, used by everything that turns a row into a file: the
+   staleness check and the encoder's candidate list. They used to disagree —
+   `io/file` at the check, `fs/path` at the read — so the file that was
+   VERIFIED and the file that was READ could be different files, and an
+   absolute row passed the check and then threw
+   `IllegalArgumentException: ... is not a relative path` out of the operation
+   from the read side. A boundary enforced by two resolvers is not a boundary.
+
+   Confinement is LEXICAL: the row path must be relative, and `root/p`
+   normalized must still lie under `root` normalized. It deliberately does NOT
+   resolve symlinks. Measured on this branch: `discover-projects` FOLLOWS a
+   symlinked `.clj` whose target is outside the root and encodes it on a fresh
+   scan, so a realpath check here would refuse a page for a tree the fresh
+   scan encodes whole — a page-1/page-2 divergence introduced by the guard
+   itself. The guard therefore refuses what discovery can NEVER produce (an
+   absolute path, a `..` escape) and defers to discovery on what it can.
+   `a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered` pins
+   that choice so it cannot be changed by accident."
+  ^File [root p]
+  (when (string? p)
+    (try
+      (let [base (.normalize (.toAbsolutePath (.toPath (io/file (str root)))))
+            child (Paths/get p (into-array String []))]
+        (when-not (.isAbsolute child)
+          (let [resolved (.normalize (.resolve base child))]
+            (when (and (.startsWith resolved base) (not= resolved base))
+              (.toFile resolved)))))
+      (catch Exception _ nil))))
+
+(defn unconfined-row
+  "The first row of `rows` whose path is not confined to `root`, as
+   `{:path p}` — or `nil` when every row resolves inside it.
+
+   Checked BEFORE staleness and before any candidate is built, so an
+   unconfined row is never opened: the refusal costs no read at all."
+  [root rows]
+  (some (fn [{:keys [p]}] (when-not (row-file root p) {:path p})) rows))
+
 (defn stale-row
   "The first row of `rows` whose pinned content no longer matches the file on
    disk, as `{:path :pinned :observed}` — or `nil` when every row still holds.
 
    `:observed` is `nil` for a file that has been deleted, which reads as
-   exactly what it is in the refusal."
+   exactly what it is in the refusal — and for an unconfined row, which is
+   never opened here; `unconfined-row` names that case properly and runs
+   first."
   [root rows]
   (some (fn [{:keys [p h]}]
-          (let [now (content-digest (io/file (str root) p))]
+          (let [f (row-file root p)
+                now (when f (content-digest f))]
             (when (not= h now)
               {:path p :pinned h :observed now})))
         rows))
