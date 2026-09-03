@@ -206,10 +206,19 @@
         next-call (when carriable?
                     (cond-> {:tool "relation_census" :pool_size 8}
                       (string? asked-root) (assoc :workspace_root asked-root)))
-        refuse (fn [reason message data]
-                 (refusal :invalid-mcp-request message next-call
+        ;; `uncomputable` is a row that can offer no continuation AT ALL,
+        ;; whatever `workspace_root` said — the not-decodable row is the
+        ;; first: what it would carry is the corrupted spelling of a path
+        ;; whose real bytes are gone, which names a different directory or
+        ;; none. It gets the row's own remedy and no `next_call` key, exactly
+        ;; as MCP-OP-CENSUS-014 requires of every refusal from which no
+        ;; narrower call can be computed.
+        refuse (fn [reason message data & [uncomputable]]
+                 (refusal :invalid-mcp-request message
+                          (when-not uncomputable next-call)
                           (merge {:reason (name reason)}
-                                 (when-not carriable?
+                                 (when uncomputable {:remedy uncomputable})
+                                 (when (and (not uncomputable) (not carriable?))
                                    {:remedy
                                     (str "workspace_root must be a JSON "
                                          "string; the value this request "
@@ -252,7 +261,9 @@
     (if violated
       (refuse (:mcp violated)
               ((:mcp-message violated) req)
-              ((:mcp-data violated) req))
+              ((:mcp-data violated) req)
+              (when (= :uncomputable (:mcp-fix violated))
+                ((:mcp-remedy violated) req)))
       ;; Every reachable non-integer refuses above, so what is left is either
       ;; absent or an in-range integer. Sol's round-eleven item 9 found the
       ;; old `:else` block's second `pool-size-not-an-integer` branch had no

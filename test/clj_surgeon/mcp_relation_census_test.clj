@@ -1187,6 +1187,11 @@
 ;; unimplemented.
 ;; ---------------------------------------------------------------------------
 
+(def ^:private undecodable-probe-path
+  "A path argument carrying U+FFFD — what a raw 0xff byte in a filename looks
+   like once the runtime has decoded argv and the original byte is gone."
+  "/tmp/clj-surgeon-census-not-decodable/root\ufffd")
+
 (def ^:private shape-rule-probes
   "For each row of the shared table: a request violating THAT row and no row
    before it, spelled for each entrance that can express it."
@@ -1195,6 +1200,10 @@
 
    [:dir :type]
    {:cli {:dir ""}}
+
+   [:paths :not-decodable]
+   {:mcp {:workspace_root undecodable-probe-path}
+    :cli {:dir undecodable-probe-path}}
 
    [:doors :container-type]
    {:mcp {:doors "conj-once"} :cli {:doors [1]}}
@@ -2927,8 +2936,16 @@
                  ;; blank :dir would have meant — the cwd — which is the
                  ;; point of that refusal rather than an exception to this
                  ;; rule.
-                 :expect-anchor (when (= :dir (:field rule))
-                                  (System/getProperty "user.dir"))
+                 ;; Two rows REPLACE the anchor with the value they are
+                 ;; refusing, so their refusals name what that value would
+                 ;; have meant — the cwd for a blank :dir, the undecodable
+                 ;; string itself for a path that did not survive argv. That
+                 ;; is the point of those refusals, not an exception to this
+                 ;; rule.
+                 :expect-anchor (case (:field rule)
+                                  :dir (System/getProperty "user.dir")
+                                  :paths undecodable-probe-path
+                                  nil)
                  :opts (merge {:dir (named workspace)} (:cli probe))})
               [{:label :unknown-door-symbol-after-the-scan
                 :error-type :unknown-door-symbol
@@ -3359,7 +3376,12 @@
                                               :continue true}
                                              "bash" (.getPath script))
               result (try (edn/read-string out) (catch Exception _ {::out out}))]
-          (is (zero? exit) (str "the fixture script failed: " (pr-str out)))
+          ;; A refusal exits 1, like every other CLI refusal; what this
+          ;; assertion is for is that the script RAN and produced a receipt
+          ;; at all, rather than dying in the shell before bb started.
+          (is (map? result)
+              (str "the fixture script produced no receipt (exit " exit "): "
+                   (pr-str out)))
           (is (false? (:ok result))
               (str "a census of a path that did not decode reported success: "
                    (pr-str result)))

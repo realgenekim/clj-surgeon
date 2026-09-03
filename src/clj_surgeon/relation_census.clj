@@ -278,6 +278,17 @@
       :mcp {:entrance :mcp
             :params params
             :unknown (unknown (into mcp-census-fields mcp-routing-fields))
+            ;; The PATH-valued arguments, in the order this entrance would
+            ;; use them. Only their decodability is checked here; where they
+            ;; point is still `workspace/resolve-request`'s question, and
+            ;; answering it would mean the filesystem work this pass runs
+            ;; before. `workspace_root` is the tool's only path argument:
+            ;; `files` entries are project-relative names resolved through
+            ;; the fence, not anchors.
+            :paths (if (string? (:workspace_root params))
+                     [{:argument "workspace_root"
+                       :value (:workspace_root params)}]
+                     [])
             ;; The tool has no `:dir`. Its anchor is `workspace_root`, a
             ;; ROUTING field this pass deliberately does not validate: checking
             ;; it would mean resolving it, which is the filesystem work this
@@ -297,6 +308,13 @@
              {:entrance :cli
               :params params
               :unknown (unknown (into cli-census-fields cli-dispatch-fields))
+              ;; Both of the CLI's ANCHOR arguments. `cli-anchor` prefers
+              ;; `:file` when one is named, so both can decide where a census
+              ;; points and both must be decodable.
+              :paths (into []
+                           (comp (filter (comp string? second))
+                                 (map (fn [[k v]] {:argument (str k) :value v})))
+                           [[:dir (:dir params)] [:file file]])
               :dir {:present? (contains? params :dir)
                     :value (:dir params)}
               :doors {:present? (some? doors)
@@ -307,6 +325,72 @@
                       :entries (when (some? file) [file])}
               :pool-size {:present? (some? (:threads params))
                           :value (:threads params)}}))))
+
+(def replacement-character
+  "U+FFFD: what a decoder writes when the bytes it was handed were not text
+   in the encoding it was told to use."
+  "\ufffd")
+
+(defn argv-encoding
+  "The encoding the runtime used to decode this process's arguments.
+
+   Named in every not-decodable refusal, because it is the setting that
+   decides whether a given filename survives the trip into the process at
+   all, and the caller cannot see it from outside."
+  []
+  (or (System/getProperty "sun.jnu.encoding")
+      (System/getProperty "file.encoding")
+      "unknown"))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+(defn undecodable-path
+  "The first path argument of `req` whose value carries U+FFFD, or nil.
+
+   Sol's round-twelve item 2: a directory whose name ended in the raw byte
+   `0xff` was handed to the CLI, and the census answered `no-fold-arms-found`
+   with `files-scanned 0` about a path that does not exist. The raw byte is
+   NOT detectable here — the JVM decodes argv before `-main` runs, so this
+   process only ever holds the decoded string — and it is not recoverable
+   either, because the replacement is lossy: every undecodable byte becomes
+   this one character. So there is nothing to canonicalise, nothing to carry
+   into a continuation, and no way to name the directory the caller meant.
+
+   What IS detectable is the replacement character, and this is where it is
+   detected. A path that LEGITIMATELY contains U+FFFD is caught by the same
+   test, and that is a stated cost rather than an oversight: after decoding
+   the two are the same character, and a refusal that explains itself is
+   worth more than a census of the wrong directory that nothing can detect."
+  [req]
+  (first (filter #(and (string? (:value %))
+                       (str/includes? (:value %) replacement-character))
+                 (:paths req))))
+
+(defn not-decodable-message
+  "What a not-decodable refusal says it found."
+  [{:keys [argument value]}]
+  (str argument " did not decode as text: it carries U+FFFD, the replacement "
+       "character this runtime writes for bytes that are not valid "
+       (argv-encoding) " (got " (pr-str value) ")"))
+
+(defn not-decodable-remedy
+  "Why no continuation exists for a path that did not decode, and what to do.
+
+   It states the rule's cost out loud. A caller whose directory really is
+   named with a U+FFFD in it is refused by this rule too, and is owed the
+   reason rather than left to guess."
+  [{:keys [argument]}]
+  (str "The bytes " argument " was given did not decode as " (argv-encoding)
+       " text; they reached this process as U+FFFD, and that replacement is "
+       "lossy — every undecodable byte becomes the same character — so the "
+       "path the caller meant cannot be reconstructed, named, or carried "
+       "into a continuation, and none is offered. Rename the target to a "
+       "name valid in " (argv-encoding) ", or start the process with "
+       "-Dsun.jnu.encoding set to the encoding the name is actually in. A "
+       "path that legitimately CONTAINS U+FFFD is refused by this rule too: "
+       "after decoding, a real U+FFFD and a decoding failure are the same "
+       "character, and this refusal prefers a refusal it can explain to a "
+       "census of the wrong directory it cannot detect."))
 
 (def ^:private known-door-list
   (delay (str/join "," (sort (map str default-doors)))))
@@ -402,6 +486,40 @@
                        "of the workspace the caller named, so no narrower "
                        "command can be computed: retry with :dir naming a "
                        "directory, or name one source with :file."))}
+
+   ;; @spec MCP-OP-CENSUS-014
+   ;; Decodability, asked of every PATH argument, on both entrances — and
+   ;; asked HERE, ahead of doors, files and threads, for the reason the row
+   ;; above it is here: an anchor that did not survive the trip into the
+   ;; process cannot produce a faithful continuation for any later row.
+   ;;
+   ;; This is the ONE thing the tool's shape pass checks about
+   ;; `workspace_root`, and it does not break the rule the row above states.
+   ;; Deciding WHERE a path points means resolving it — the filesystem work
+   ;; this pass runs before. Deciding whether the caller's argument is text
+   ;; at all is a string inspection that touches nothing.
+   {:field :paths
+    :violation :not-decodable
+    :predicate (fn [req] (nil? (undecodable-path req)))
+    :mcp :workspace-root-not-decodable
+    :mcp-message (fn [req] (not-decodable-message (undecodable-path req)))
+    :mcp-data (fn [req]
+                {:argument (:argument (undecodable-path req))
+                 :encoding (argv-encoding)})
+    ;; NO continuation, at either entrance. A continuation carries the path
+    ;; the caller named, and the bytes of that path are gone: what could be
+    ;; carried is the corrupted spelling, which names a different directory
+    ;; or none at all. That is the silent retarget MCP-OP-CENSUS-014 forbids,
+    ;; so the refusal offers a remedy instead.
+    :mcp-fix :uncomputable
+    :mcp-remedy (fn [req] (not-decodable-remedy (undecodable-path req)))
+    :cli :dir-not-decodable
+    :cli-message (fn [req] (not-decodable-message (undecodable-path req)))
+    :cli-data (fn [req]
+                {:argument (:argument (undecodable-path req))
+                 :encoding (argv-encoding)})
+    :cli-fix :uncomputable
+    :cli-remedy (fn [req] (not-decodable-remedy (undecodable-path req)))}
 
    {:field :doors
     :violation :container-type
@@ -628,6 +746,7 @@
    anchor to name."
   #{:unknown-arguments
     :dir-not-a-string
+    :dir-not-decodable
     :doors-not-a-string
     :too-many-doors
     :unknown-door-symbol
