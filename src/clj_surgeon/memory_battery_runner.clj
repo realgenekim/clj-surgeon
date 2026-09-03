@@ -189,6 +189,9 @@
         peak-bytes (.get ^AtomicLong (:peak sampler))
         committed-peak-bytes (.get ^AtomicLong (:committed-peak sampler))
         result-hash (when (:ok outcome) (hash-result (aget box 0)))
+        ;; the operation's OWN admission accountant, read out of the result
+        ;; before it is released. A bounded number, not a retained receipt.
+        reserved-peak-mb (when (:ok outcome) (battery/reserved-peak-mb (aget box 0)))
         ;; retained while the result is still referenced: what a receipt costs
         _ (quiesce!)
         held-bytes (used-bytes)
@@ -211,6 +214,7 @@
             ;; behind for good — the leak/cache figure, and the one gated.
             :heap-after-release-start-mb (bytes->mb (max 0 (- after-bytes start-bytes)))
             :heap-after-gc-mb (bytes->mb after-bytes)
+            :heap-reserved-peak-mb reserved-peak-mb
             :result-hash result-hash})))
 
 (defn- aggregate
@@ -233,12 +237,13 @@
      :heap-held-after-release-mb (apply max (map :heap-held-after-release-mb readings))
      :heap-after-release-start-mb (apply max (map :heap-after-release-start-mb readings))
      :heap-after-gc-mb (apply max (map :heap-after-gc-mb readings))
-     ;; No admission accountant exists on this branch, so no operation can
-     ;; report an attributable reserved peak. Left absent on purpose: the
-     ;; verdict then reports :reserved-peak-over-budget as UNMEASURED rather
-     ;; than passing it on the sampled process-wide number, which is a
-     ;; different quantity.
-     :heap-reserved-peak-mb nil
+     ;; The operation's OWN admission accountant, worst over the reps. It is
+     ;; never derived from :heap-used-peak-mb: the sampled process-wide peak is
+     ;; a different quantity from a different instrument. An operation with no
+     ;; accountant contributes nothing, and the verdict then reports
+     ;; :reserved-peak-over-budget as UNMEASURED rather than passing it.
+     :heap-reserved-peak-mb (when-let [vs (seq (keep :heap-reserved-peak-mb readings))]
+                              (apply max vs))
      :oom? (boolean (some :oom? readings))
      :errors (vec (keep :error readings))
      :result-hash (cond
@@ -500,9 +505,11 @@
                                   sample-interval-ms
                                   " ms; it is not a post-GC delta and is not "
                                   "attributable to a single operation. "
-                                  "heap-reserved-peak-mb is absent because no "
-                                  "operation on this branch has an admission "
-                                  "accountant.")
+                                  "heap-reserved-peak-mb is the operation's OWN "
+                                  "admission accountant, read from its :reserved "
+                                  "block; an arm whose operation reports no such "
+                                  "block leaves it absent and the verdict renders "
+                                  "that line UNMEASURED.")
                              :ops (mapv #(select-keys % [:id :entrance :site :note]) ops)
                              :arms (mapv vec arms)
                              :trees (into {} (for [[k m] manifests]

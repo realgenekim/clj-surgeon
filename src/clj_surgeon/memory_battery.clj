@@ -199,6 +199,42 @@
 
       :else [:pass])))
 
+(def ^:private mib (* 1024.0 1024.0))
+
+(defn bytes->mb
+  "Bytes as MiB, rounded to a tenth. Public because the runner and the kernel's
+   own witnesses read the same number through it."
+  ^double [^long b]
+  (/ (Math/round (/ (double b) mib 0.1)) 10.0))
+
+;; @spec MCP-OP-MEM-001
+(defn reserved-peak-mb
+  "The ATTRIBUTABLE reserved peak an operation reported, in MiB, or nil.
+
+  Read from the operation's own admission block — `:reserved` (the shape the
+  streaming reader and the transaction journal emit) or `:resources` — and from
+  nowhere else. It is deliberately blind to `:heap-used-peak-mb`: the sampled
+  process-wide peak is a different quantity from a different instrument, and
+  reading it here would make the 192 MiB line unfalsifiable.
+
+  nil means the operation reports no accountant, which the verdict renders as
+  UNMEASURED. Zero is a measurement, not an absence.
+
+  Ported from bridge/txn-journal at the 2026-09-03 integration: the battery lane
+  and the kernel lane each carried a copy of this file, and the battery lane's
+  copy — the reviewed one, kept here — never read the accountant, so
+  `reserved-check` below reported UNMEASURED for ever with nothing to fail. The
+  kernel lane's `the-battery-reads-this-receipts-reservation-block` is the
+  witness that binds the two namespaces, and it fails without this."
+  [result]
+  (when (map? result)
+    (let [block (or (:reserved result) (:resources result))
+          observed (when (map? block)
+                     (or (:heap-reserved-peak-bytes block)
+                         (:reserved-peak-bytes block)))]
+      (when (number? observed)
+        (bytes->mb observed)))))
+
 (defn- reserved-check
   "Sol's `reserved_peak <= 192 MiB` line. Reserved peak is the admission
   accountant's attributable figure, which is a different quantity from the
