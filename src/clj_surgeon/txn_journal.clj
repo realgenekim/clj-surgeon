@@ -32,7 +32,7 @@
    (java.io File FileOutputStream)
    (java.nio.channels FileChannel)
    (java.nio.file Files LinkOption OpenOption StandardCopyOption StandardOpenOption CopyOption)
-   (java.nio.file.attribute PosixFilePermissions)
+   (java.nio.file.attribute BasicFileAttributes PosixFilePermissions)
    (java.security MessageDigest)))
 
 ;; ------------------------------------------------------------ the contract
@@ -127,6 +127,52 @@
          extra))
 
 ;; ------------------------------------------------------------------- files
+
+(defn path-identity
+  "The NOFOLLOW type and filesystem identity of `path`.
+
+   Read with `NOFOLLOW_LINKS`, so a symbolic link reports ITSELF rather than
+   what it points at, and `fileKey` is the (device, inode) pair on every
+   filesystem that has one. Two files can hold identical bytes and still not be
+   the same file; a content digest cannot tell them apart and this can."
+  [path]
+  (try
+    (let [attrs (Files/readAttributes
+                  (.toPath (io/file path))
+                  BasicFileAttributes
+                  ^"[Ljava.nio.file.LinkOption;"
+                  (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))]
+      {:kind (cond
+               (.isSymbolicLink attrs) :symlink
+               (.isRegularFile attrs) :regular
+               (.isDirectory attrs) :directory
+               :else :other)
+       :file-key (str (.fileKey attrs))})
+    (catch Exception _ {:kind :absent :file-key nil})))
+
+(defn- hex
+  [^bytes bs]
+  (apply str (map #(format "%02x" (bit-and 0xff %)) bs)))
+
+(defn- scope-membership-digest
+  "Fold a scope walk into ONE digest over path, type and file identity.
+
+   Membership is a SET, and a count is not a set: `[a b]` and `[c d]` have the
+   same count and are different scopes. The digest is order-sensitive by
+   construction, so the walk must yield a deterministic ascending order - an
+   unstable walk reads as a changed scope, which is fail-closed. The kernel
+   retains only the digest and the count; what the caller's walk itself holds
+   is the caller's business."
+  [walk]
+  (let [digest (MessageDigest/getInstance "SHA-256")]
+    (loop [entries (seq (walk)) n 0]
+      (if-not entries
+        {:digest (hex (.digest digest)) :files n}
+        (let [path (first entries)
+              {:keys [kind file-key]} (path-identity path)]
+          (.update digest (.getBytes (str path "\t" (name kind) "\t" file-key "\n")
+                                     "UTF-8"))
+          (recur (next entries) (inc n)))))))
 
 (defn- posix-mode
   [path]
@@ -356,22 +402,35 @@
 
 (defn seal-read-set!
   ;; @spec MCP-OP-MEM-007
-  "Close the manifest and freeze the scope-membership digest."
+  "Close the manifest and freeze both membership digests.
+
+   Two different memberships are sealed here. The READ-SET digest covers every
+   entry recorded through `record-read!`. The SCOPE digest covers the walk the
+   transaction was opened with, and it is what makes an equal-count swap of
+   scope members - `[a b]` planned, `[c d]` observed - a conflict."
   [txn]
   (let [state (:state txn)
         ^FileOutputStream stream (:manifest-stream @state)
         ^MessageDigest digest (:membership-digest @state)
-        membership (apply str (map #(format "%02x" (bit-and 0xff %)) (.digest digest)))]
+        membership (hex (.digest digest))
+        walk (:scope-walk @state)
+        scope (when walk (scope-membership-digest walk))]
     (sync-stream! stream)
     (.close stream)
     (swap! state assoc :sealed? true :membership-digest-hex membership
+           :scope-digest-hex (:digest scope) :scope-files (:files scope)
            :manifest-stream nil :membership-digest nil)
-    (append-journal! txn (str "sealed\t" (:read-set-count @state) "\t" membership))
+    (append-journal! txn (str "sealed\t" (:read-set-count @state) "\t" membership
+                              "\t" (:digest scope) "\t" (:files scope)))
     (write-state! txn :sealed {:read-set-files (:read-set-count @state)
-                               :membership-digest membership})
-    {:ok true
-     :read-set-files (:read-set-count @state)
-     :membership-digest membership}))
+                               :membership-digest membership
+                               :scope-digest (:digest scope)
+                               :scope-files (:files scope)})
+    (cond-> {:ok true
+             :read-set-files (:read-set-count @state)
+             :membership-digest membership}
+      scope (assoc :scope-digest (:digest scope)
+                   :scope-files (:files scope)))))
 
 ;; ---------------------------------------------------------------- retention
 
@@ -593,14 +652,15 @@
    Every file whose facts influenced the plan is checked, not only the files
    about to be written: a caller or alias that shaped the plan can live in a
    file the transaction never touches. When the transaction was opened with a
-   `:scope-walk`, membership is re-derived so an ADDED file - which could
-   introduce a new caller - is a conflict too."
+   `:scope-walk`, membership is re-derived and compared against the digest
+   sealed at plan time - not against its COUNT - so an ADDED file, a REMOVED
+   file, and a swap that leaves the count unchanged are all conflicts."
   [txn]
   (let [state @(:state txn)]
     (if-not (:sealed? state)
       (refusal :txn-not-sealed "The read set must be sealed before revalidation" {})
       (let [walk (:scope-walk state)
-            walked (when walk (vec (walk)))
+            walked (when walk (scope-membership-digest walk))
             result
             (reduce
               (fn [acc [path expected]]
@@ -619,16 +679,19 @@
         (cond
           (not (:ok result)) result
 
-          (and walked (not= (count walked) (:checked result)))
+          (and walked (not= (:digest walked) (:scope-digest-hex state)))
           (refusal :txn-scope-membership-changed
-                   (str "The scope holds " (count walked) " files; " (:checked result)
-                        " were planned against")
-                   {:planned-files (:checked result)
-                    :observed-files (count walked)
+                   (str "The scope this plan was sealed against is not the scope on disk: "
+                        (:scope-files state) " files planned, " (:files walked) " observed")
+                   {:conflict :scope-membership
+                    :planned-files (:scope-files state)
+                    :observed-files (:files walked)
+                    :planned-digest (:scope-digest-hex state)
+                    :observed-digest (:digest walked)
                     :files-written 0
                     :next_call {:op :txn/begin
                                 :scope {:replan "re-plan against the current scope"}}
-                    :remedy "Re-plan: files entered or left the scope after planning."})
+                    :remedy "Re-plan: the set of files in the scope is not the set that shaped this plan."})
 
           :else result)))))
 

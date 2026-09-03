@@ -94,8 +94,12 @@ replacement is still one atomic rename, and the target's permissions survive it.
 3. `pin!` — copy a path's exact pre-image bytes into `objects/<digest>`. No path
    may be written until this has succeeded for it.
 4. `stage!` — write the future bytes to a staging file. Nothing is retained.
-5. `seal-read-set!` — close the manifest, freeze the membership digest.
-6. `revalidate!` — re-hash the WHOLE read set and re-derive scope membership.
+5. `seal-read-set!` — close the manifest, freeze the read-set membership digest
+   and, when the transaction carries a `:scope-walk`, the scope-membership digest
+   over path, NOFOLLOW type and file identity.
+6. `revalidate!` — re-hash the WHOLE read set and re-derive the scope-membership
+   DIGEST, comparing it with the one sealed at plan time. A count is not a set:
+   `[a b]` planned against `[c d]` observed is a conflict at equal count.
 7. `commit!` — for each staged path in sorted order: copy the staged bytes into
    the target's own directory; then, under the workspace publish lock, recheck
    its pre-image digest, fsync `write-begin` and rename; then release the lock,
@@ -167,6 +171,7 @@ witness:
 | defeat the pin guard | unpinned write | RED |
 | defeat read-set revalidation | read-only drift | RED |
 | defeat read-set revalidation | scope membership | RED |
+| compare member counts instead of the digest | equal-count scope swap | RED |
 | defeat pre-image restoration | crash between renames | RED |
 | park a repository-wide read-set map in the transaction | retention | RED |
 | claim snapshot isolation | contract statement | RED |

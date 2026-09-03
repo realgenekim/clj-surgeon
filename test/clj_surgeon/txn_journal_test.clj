@@ -472,6 +472,38 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-007
+(deftest a-scope-that-swaps-members-without-changing-its-count-refuses
+  (testing "Sol's witness: membership [a b] planned, membership [c d] observed,
+            equal count. A count is not a set. The sealed membership digest is
+            what the transaction planned against, and it is what is compared."
+    (let [ws (workspace! "scope-swap" 4)
+          paths (sort (:paths ws))
+          [a b c d] paths
+          swapped? (atom false)]
+      (try
+        (let [h0 (mapv bytes-of paths)
+              walk (fn [] (if @swapped? [c d] [a b]))
+              txn (begin! ws {:scope-walk walk})
+              _ (record-scope! txn [a b])
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn a)
+              _ (journal/stage! txn a "(ns f0) (def v :new)\n")
+              _ (reset! swapped? true)
+              receipt (journal/commit! txn)]
+          (is (false? (:ok receipt)))
+          (is (= :txn-scope-membership-changed (:error-type receipt)))
+          (is (= :scope-membership (:conflict receipt))
+              "the refusal names the conflict class, not only its code")
+          (is (not= (:planned-digest receipt) (:observed-digest receipt))
+              "the sealed digest is what disagrees; the counts are equal")
+          (is (= 2 (:planned-files receipt)))
+          (is (= 2 (:observed-files receipt))
+              "equal counts: only the digest can tell these two scopes apart")
+          (is (= 0 (:files-written receipt)))
+          (is (= h0 (mapv bytes-of paths)) "no byte of the workspace changed"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
 (deftest a-write-set-file-that-drifts-after-revalidation-refuses-before-its-write
   (testing "the write set is rechecked immediately before each replacement"
     (let [ws (workspace! "write-set-drift" 4)
