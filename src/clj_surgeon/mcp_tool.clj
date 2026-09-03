@@ -1003,18 +1003,28 @@
                                 (if (some? change-index) change-index "unknown")
                                 (if change-id (str " · " change-id) "")
                                 (if field (str " · field " field) "")))
+          ;; @spec MCP-OP-FIELD-002
+          named-field-line (when (and field (seq (:accepted result)))
+                             (format "  field %s accepts: %s%s\n"
+                                     field
+                                     (str/join ", " (:accepted result))
+                                     (if (contains? result :actual)
+                                       (str " · received "
+                                            (pr-str (:actual result)))
+                                       "")))
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
                            (:rolled-back result))]
       (format (str operation "\n"
                    "  refused · %s%s · %s\n"
-                   "%s\n"
+                   "%s%s\n"
                    "%s\n"
                    "→ %s")
               reason
               (if path (str " at " (pr-str path)) "")
               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
               (or change-line "")
+              (or named-field-line "")
               (if source-safe?
                 "✓ source unchanged"
                 "⚠ source state requires structured receipt review")

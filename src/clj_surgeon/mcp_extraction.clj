@@ -107,7 +107,9 @@
     (refusal :invalid-require-policy
              "extraction.require_policy must be minimal or copy-all"
              {:field "extraction.require_policy"
+              :path ["extraction" "require_policy"]
               :accepted ["minimal" "copy-all"]
+              :actual (some-> require-policy name)
               :require-policy require-policy
               :remedy (str "extraction.require_policy is required and is never "
                            "defaulted. Send \"minimal\" to copy only the requires "

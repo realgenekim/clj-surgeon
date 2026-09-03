@@ -114,6 +114,7 @@
     :invalid-canonical-effect-input
     :invalid-create-files
     :invalid-created-source
+    :invalid-require-policy
     :duplicate-path
     :unknown-arguments})
 
@@ -501,8 +502,13 @@
       (validate-fields! params #{"workspace_root" "extraction" "verify"}
                         #{"extraction"} [])
       (let [raw (field params "extraction")]
+        ;; @spec MCP-OP-FIELD-002
+        ;; require_policy is deliberately absent from the required set checked
+        ;; here: a generic missing-fields refusal cannot name the field's
+        ;; accepted values, and the kernel's invalid-require-policy branch can.
+        ;; Omission and an unaccepted value therefore reach the same refusal.
         (validate-fields! raw extraction-fields
-                          #{"file" "to" "forms" "require_policy"}
+                          #{"file" "to" "forms"}
                           ["extraction"])
         (let [file (clojure-source-path! (field raw "file") ["extraction" "file"])
               to (clojure-source-path! (field raw "to") ["extraction" "to"])
@@ -522,12 +528,8 @@
                                  (count (distinct public-forms))))
                   (refuse! :duplicate-form ["extraction" "public_forms"]
                            "Public form names must be unique"))
-              require-policy (nonblank-string!
-                               (field raw "require_policy")
-                               ["extraction" "require_policy"])
-              _ (when-not (#{"minimal" "copy-all"} require-policy)
-                  (refuse! :invalid-enum ["extraction" "require_policy"]
-                           "require_policy must be minimal or copy-all"))
+              require-policy (when (present? raw "require_policy")
+                               (field raw "require_policy"))
               raw-callers (or (field raw "caller_changes") [])
               _ (when-not (vector? raw-callers)
                   (refuse! :expected-array ["extraction" "caller_changes"]
@@ -568,7 +570,8 @@
               verify (when (present? params "verify")
                        (nonblank-string! (field params "verify") ["verify"]))
               normalized {:file file :to to :forms forms
-                          :require-policy (keyword require-policy)
+                          :require-policy (when (string? require-policy)
+                                            (keyword require-policy))
                           :caller-changes callers
                           :ignored-caller-files ignored
                           :expect expect}
@@ -578,7 +581,8 @@
                            source-hash (assoc :source-hash source-hash))
               validation (mcp-extraction/validate-request normalized)]
           (when-not (:ok validation)
-            (refuse! (:error-type validation) ["extraction"]
+            (refuse! (:error-type validation)
+                     (or (:path validation) ["extraction"])
                      (:error validation) validation))
           (when (and verify (not (#{"fast" "full" "exact"} verify)))
             (refuse! :invalid-enum ["verify"]
@@ -1173,6 +1177,8 @@
       (contains? result :path) (assoc :path (:path result))
       (contains? result :unknown) (assoc :unknown (:unknown result))
       (contains? result :allowed) (assoc :allowed (:allowed result))
+      ;; @spec MCP-OP-FIELD-002
+      (contains? result :accepted) (assoc :accepted (:accepted result))
       (contains? result :missing) (assoc :missing (:missing result))
       ;; @spec MCP-OP-MATCHED-002
       ;; @spec MCP-OP-MATCHED-003

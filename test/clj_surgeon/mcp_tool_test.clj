@@ -996,6 +996,62 @@
       (finally
         (delete-tree! workspace)))))
 
+
+;; ---------------------------------------------------------------------------
+;; A refusal that names its own field has to reach the write surface too. The
+;; kernel's `invalid-require-policy` branch was unreachable from
+;; apply_clojure_changes: the contract refused `invalid-enum` or `missing-fields`
+;; first, and neither named the accepted values.
+;; ---------------------------------------------------------------------------
+
+(defn- require-policy-refusal
+  [workspace extraction]
+  (mcp-tool/execute-request!
+    {:project-root (.getPath workspace)
+     :receipt-dir (.getPath (io/file workspace "receipts"))}
+    {:extraction extraction}))
+
+(deftest apply-route-require-policy-refusal-names-its-own-field
+  ;; @spec MCP-OP-FIELD-002
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/demo/views.clj")
+        original "(ns demo.views)\n\n(defn- helper [] 1)\n\n(defn shown [] (helper))\n"]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (doseq [[label extraction]
+              [["an unaccepted value"
+                {:file "src/demo/views.clj"
+                 :to "src/demo/format.clj"
+                 :forms ["helper"]
+                 :require_policy "MINIMAL"}]
+               ["an omitted value"
+                {:file "src/demo/views.clj"
+                 :to "src/demo/format.clj"
+                 :forms ["helper"]}]]]
+        (testing label
+          (let [result (require-policy-refusal workspace extraction)]
+            (is (false? (:ok result)))
+            (is (= "invalid-require-policy" (:error_type result)))
+            (is (= "extraction.require_policy" (:field result)))
+            (is (= ["minimal" "copy-all"] (:accepted result)))
+            (is (str/includes? (:remedy result)
+                               "required and is never defaulted"))
+            (is (true? (:source_unchanged result)))
+            (testing "the visible summary names the field and its values"
+              (let [summary (mcp-tool/concise-summary
+                              (assoc result :elapsed_ms 0.0))]
+                (is (str/includes?
+                      summary
+                      "field extraction.require_policy accepts: minimal, copy-all"))
+                (is (str/includes? summary "required and is never defaulted"))))
+            (testing "no byte moved and no receipt directory appeared"
+              (is (= original (slurp source-file)))
+              (is (not (.exists (io/file workspace "src/demo/format.clj"))))
+              (is (not (.exists (io/file workspace "receipts"))))))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest direct-change-runs-the-declared-verification-profile
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")

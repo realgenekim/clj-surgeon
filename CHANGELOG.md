@@ -10,6 +10,15 @@ is cut.
 
 ### Fixed
 
+- `invalid-require-policy` now reaches `apply_clojure_changes`. The refusal
+  that names the field, lists `minimal` and `copy-all`, echoes what it
+  received, and states the field is never defaulted used to be unreachable
+  from the write surface: the request contract refused `invalid-enum` or
+  `missing-fields` first, and neither named the accepted values. Both an
+  omitted and an unaccepted `require_policy` now produce the same named
+  refusal on both routes, and the visible summary shows the field and its
+  values.
+
 - A published dispatch vocabulary is now bounded by characters as well as by
   arm count, and each entry is rendered as one comment-free line. Sixty long
   dispatch spellings used to produce kilobytes of refusal evidence, and a
