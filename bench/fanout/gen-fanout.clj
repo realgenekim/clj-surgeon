@@ -1,18 +1,27 @@
 #!/usr/bin/env bb
 ;; gen-fanout.clj — the sl1 fan-out rung generator, pure and deterministic.
 ;;
-;;   bb bench/fanout/gen-fanout.clj --n 21 --seed 7 --out /home/forge/tmp/arms/e3/fanout
+;;   bb bench/fanout/gen-fanout.clj --n 21 --seed 7 --k 6 --out /home/forge/tmp/arms/e3/fanout
 ;;
 ;; Emits, under --out:
 ;;   repo-<N>/        the PRE state: 100 namespaces under src/, N of which require
 ;;                    acid.fanout.store and use its var find-event at exactly 3 sites
 ;;   canonical-<N>/   the POST state, produced by rendering the SAME data structure
 ;;                    with post?=true — the oracle is DERIVED, never hand-written
-;;   manifest-<N>.edn targets, old/new alias per file, site count, and the sha256 of
-;;                    every protected (decoy) region
+;;   manifest-<N>.edn targets, old/new alias per file, site count, the sha256 of
+;;                    every protected (decoy) region, :k, :old-alias-histogram and
+;;                    :collisions (see below)
+;;
+;; --k K is the IRREGULARITY knob: the number of DISTINCT old aliases used across
+;; the N target namespaces (1..6, since old-alias-pool has 6 entries).  It also caps
+;; the prebind pattern at (min 4 K), so K=1 puts every target on pattern 0 — zero
+;; prebinds blocked, one uniform new alias, the shape a single sed closes — while
+;; K>=4 reproduces the original unconstrained mod-4 cycle.  Default K=6 is today's
+;; shape (SIX distinct old aliases, per-file new-alias policy, 30 collisions at
+;; N=21/seed=7); omitting --k is byte-identical to passing --k 6.
 ;;
 ;; Determinism: one LCG, one seed, one traversal order.  Re-running with the same
-;; --n/--seed writes byte-identical trees; bench/fanout/sabotage-FAN.sh proves it.
+;; --n/--seed/--k writes byte-identical trees; bench/fanout/sabotage-FAN.sh proves it.
 ;;
 ;; Nesting: targets are the first N of ONE seeded permutation of 0..99, so the N=5
 ;; target set is a subset of N=10 is a subset of N=21 …  The slope is the same files
@@ -86,13 +95,19 @@
   (or (first (remove blocked alias-policy))
       (throw (ex-info "alias policy exhausted" {:blocked blocked}))))
 
-(defn make-spec [rng i target-ordinal]
+(defn make-spec
+  "alias-k is the --k knob: the number of DISTINCT old aliases in play across the
+   target set (1..(count old-alias-pool)).  It also caps the prebind pattern
+   (min 4 alias-k), so at alias-k=1 every target lands on pattern 0 — zero
+   prebinds blocked, one uniform new alias, the shape closable by a single sed.
+   At alias-k>=4 the pattern is the original unconstrained mod-4 cycle."
+  [rng i target-ordinal alias-k]
   (let [target? (some? target-ordinal)
         cljc?   (zero? (mod i 10))
-        pattern (when target? (mod target-ordinal 4))
+        pattern-mod (min 4 alias-k)
+        pattern (when target? (mod target-ordinal pattern-mod))
         [pre blocked] (if target? (prebinds-for pattern) [[] #{}])
-        old-alias (when target? (nth old-alias-pool (mod target-ordinal
-                                                        (count old-alias-pool))))
+        old-alias (when target? (nth old-alias-pool (mod target-ordinal alias-k)))
         extra-n (+ 1 (rnd rng 3))
         extras  (mapv (fn [k] (format "[%s :as u%d]"
                                       (nth util-libs (mod (+ i k) (count util-libs)))
@@ -106,6 +121,7 @@
      :target-ordinal target-ordinal
      :old-alias old-alias
      :new-alias (when target? (pick-new-alias blocked))
+     :alias-collisions (when target? (count blocked))
      :prebinds pre
      :extras extras
      :ns-doc? (zero? (mod i 3))
@@ -286,11 +302,14 @@
   (spit! root "bin/fan-test" fan-test-sh)
   (.setExecutable (io/file root "bin/fan-test") true false))
 
-(defn manifest [n seed specs]
+(defn manifest [n seed alias-k specs]
   {:n n :seed seed :total-namespaces total-ns
+   :k alias-k
    :old {:lib old-lib :var old-var}
    :new {:lib new-lib :var new-var}
    :alias-policy alias-policy
+   :old-alias-histogram (frequencies (keep :old-alias specs))
+   :collisions (reduce + (keep :alias-collisions specs))
    :targets (vec (for [s (filter :target? specs)]
                    {:file (:file s) :ns (:ns-name s)
                     :old-alias (:old-alias s) :new-alias (:new-alias s)
@@ -301,19 +320,24 @@
                                        :text (:text d)}))}))
    :non-targets (vec (map :file (remove :target? specs)))})
 
-(defn build [n seed]
+(defn build [n seed alias-k]
   (let [rng (make-rng seed)
         perm (shuffle-det rng (range total-ns))
         target-set (into {} (map-indexed (fn [ord i] [i ord]) (take n perm)))
         rng2 (make-rng (+ seed 991))]
-    (mapv (fn [i] (make-spec rng2 i (get target-set i))) (range total-ns))))
+    (mapv (fn [i] (make-spec rng2 i (get target-set i) alias-k)) (range total-ns))))
 
 (defn -main [& args]
   (let [m (apply hash-map args)
         n (Integer/parseInt (get m "--n" "21"))
         seed (Integer/parseInt (get m "--seed" "7"))
+        k (Integer/parseInt (get m "--k" "6"))
         out (get m "--out" "/home/forge/tmp/arms/e3/fanout")
-        specs (build n seed)
+        _ (when-not (<= 1 k (count old-alias-pool))
+            (throw (ex-info (format "--k must be between 1 and %d (old-alias-pool size), got %d"
+                                    (count old-alias-pool) k)
+                             {:k k :max (count old-alias-pool)})))
+        specs (build n seed k)
         repo (str out "/repo-" n)
         canon (str out "/canonical-" n)]
     (doseq [d [repo canon]]
@@ -322,10 +346,13 @@
     (emit-tree! repo specs false)
     (emit-tree! canon specs true)
     (spit (str out "/manifest-" n ".edn")
-          (with-out-str (pp/pprint (manifest n seed specs))))
-    (println (format "gen-fanout: n=%d seed=%d namespaces=%d targets=%d out=%s"
-                     n seed total-ns (count (filter :target? specs)) out))
+          (with-out-str (pp/pprint (manifest n seed k specs))))
+    (println (format "gen-fanout: n=%d seed=%d k=%d namespaces=%d targets=%d out=%s"
+                     n seed k total-ns (count (filter :target? specs)) out))
     (println (format "gen-fanout: alias histogram %s"
-                     (pr-str (frequencies (keep :new-alias specs)))))))
+                     (pr-str (frequencies (keep :new-alias specs)))))
+    (println (format "gen-fanout: old-alias histogram %s collisions=%d"
+                     (pr-str (frequencies (keep :old-alias specs)))
+                     (reduce + (keep :alias-collisions specs))))))
 
 (apply -main *command-line-args*)
