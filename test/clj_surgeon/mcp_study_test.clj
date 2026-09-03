@@ -2060,3 +2060,102 @@
               "the abridged names payload must still parse as JSON")
           (is (< (count (json/parse-string payload true)) (:returned fitted))
               "and it must carry fewer whole entries than the receipt"))))))
+
+;; ============================================================
+;; EVERY mode's text carries the rows, not a count (O2 round 2)
+;; ============================================================
+;; Reviewer findings 6, 7, 8 (2026-09-03): O2 fixed `ls-tree` and left the same
+;; defect standing on eight other modes, all from one function. `deps` /
+;; `topo` / `ls-deps` / `ls-extract` rendered `request-1: deps · 27 of 27 rows`
+;; — a COUNT where the rows were — `outline` named only the first and last of
+;; 28 forms, and `forms` rendered `131 source characters` instead of the source
+;; a caller asked for. A truncated result carried `next_call` in
+;; `structuredContent` and offered the text only `next action
+;; raise_limit_or_narrow_scope`.
+
+(defn- summary-of
+  [response]
+  (inspect-tool/inspect-summary (assoc response :elapsed_ms 1.0)))
+
+(defn- evidence-rows
+  "The rows a text block renders, in rendered order. Row lines are the only
+   lines that carry the `· ` row marker at four-space indent, so a source body
+   or a notice can never be mistaken for one."
+  [text]
+  (into []
+        (keep #(second (re-matches #"^    · (.*)$" %)))
+        (str/split-lines text)))
+
+;; @spec MCP-OP-STUDY-041
+(deftest deps-text-carries-every-row-the-receipt-carries
+  (let [response (one "deps" {"limit" 16384})
+        result (result-of response)
+        text (summary-of response)]
+    (is (= 27 (:returned result)))
+    (is (= (count (:deps result)) (count (evidence-rows text)))
+        (format "TEXT rendered %d rows for a receipt of %d"
+                (count (evidence-rows text)) (count (:deps result))))
+    (doseq [row (:deps result)]
+      (is (str/includes? text (:name row))
+          (format "TEXT must name %s" (:name row))))
+    (testing "and a row's dependencies travel with it"
+      (is (str/includes? text "forms-from-rcond")))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest a-truncated-result-spells-its-continuation-in-the-text
+  (let [response (one "deps" {"limit" 200})
+        result (result-of response)
+        text (summary-of response)]
+    (is (true? (:truncated result)))
+    (is (some? (:next_call result)) "the receipt carries a continuation")
+    (is (str/includes? text "next call:")
+        "and the text must spell it — a text-only client sees no next_call")
+    (is (str/includes? text "\"limit\":16384")
+        "including the argument that makes it advance")))
+
+;; @spec MCP-OP-STUDY-041
+(deftest topo-text-carries-the-order-not-its-size
+  (let [response (one "topo" {"limit" 16384})
+        result (result-of response)
+        text (summary-of response)]
+    (doseq [name (get-in result [:topo :sorted])]
+      (is (str/includes? text name) (format "TEXT must name %s" name)))
+    (doseq [name (get-in result [:topo :cycles])]
+      (is (str/includes? text name) (format "TEXT must name cycle %s" name)))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest ls-deps-and-ls-extract-text-carry-their-trees
+  (let [tree-text (summary-of (one "ls-deps" {"form" "extraction-closure"
+                                              "limit" 16384}))
+        closure (one "ls-extract" {"form" "extraction-closure" "limit" 16384})
+        closure-text (summary-of closure)]
+    (is (str/includes? tree-text "intra-ns-deps")
+        "the dependency tree's members, not a count of one row")
+    (is (str/includes? tree-text "free-symbols-in-form"))
+    (doseq [form (get-in (result-of closure) [:closure :forms])]
+      (is (str/includes? closure-text (:name form))))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest outline-text-carries-every-form-and-its-line-range
+  (let [response (one "outline" {})
+        forms (get-in (result-of response) [:outline :forms])
+        text (summary-of response)]
+    (is (= 28 (count forms)))
+    (is (= (count forms) (count (evidence-rows text)))
+        (format "TEXT rendered %d rows for an outline of %d forms"
+                (count (evidence-rows text)) (count forms)))
+    (doseq [form forms]
+      (is (str/includes? text (:name form)))
+      (is (str/includes? text (str (:line form)))
+          (format "%s must carry its line range" (:name form))))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest forms-text-carries-the-source-a-caller-asked-for
+  (let [response (one "forms" {"forms" ["reader-cond?"] "expect" {"forms" 1}
+                               "include_source" true})
+        form (first (:forms (result-of response)))
+        text (summary-of response)]
+    (is (= 131 (count (:source form))))
+    (is (str/includes? text "(defn- reader-cond? [zloc]")
+        "include_source asks for the source; the text must carry it")
+    (is (str/includes? text "reader-cond?@37-39"))))
