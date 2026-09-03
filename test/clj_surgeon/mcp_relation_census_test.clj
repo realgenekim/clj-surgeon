@@ -4272,3 +4272,67 @@
       (is (= 1 (:files_scanned result))
           (str "the post-scan refusal lost its discovery facts: "
                (pr-str result))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-fourteen review, item 9, blocking: the 512-byte continuation
+;; ceiling was enforced at ONE of the tool's construction sites.
+;;
+;; `narrowing-continuation` measures what it builds, and both bound refusals
+;; go through it. Seven other sites — the shape pass, the door refusal, the
+;; unreadable and oversized narrowings, the arm-less file list, the plan
+;; failure, and the uninitialised-server refusal — each spelled a map into
+;; `refusal`'s `next-call` argument directly, and nothing measured any of
+;; them. Measured before the fix, an unknown-field refusal on a 600-character
+;; `workspace_root`:
+;;
+;;   next_call  {"tool":"relation_census","pool_size":8,"workspace_root":"aaa…"}
+;;   rendered   661 UTF-8 bytes, against a 512-byte ceiling
+;;
+;; A ceiling that lives in one branch is not a ceiling, it is that branch's
+;; habit. The bound exists because a continuation is a thing a caller reads,
+;; pastes and execs, and it has to hold wherever the continuation was built —
+;; so there is ONE constructor, every site goes through it, and a candidate
+;; that cannot fit becomes a remedy naming the bytes it measured.
+;; ---------------------------------------------------------------------------
+
+(def ^:private long-root
+  "A workspace root of 600 ASCII characters, Sol's exact probe.
+
+   Every character is one UTF-8 byte, so this is not the multibyte question
+   round twelve answered — it is the plainer one the tool never asked: a
+   continuation nobody measured."
+  (str "/" (apply str (repeat 599 \a))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+(deftest a-shape-refusal-on-a-long-root-measures-its-continuation
+  (testing "the probe is Sol's: a 600-character root"
+    (is (= 600 (count long-root))))
+
+  (let [result (run {:workspace_root long-root :bogus 1})]
+    (is (false? (:ok result)))
+    (is (= "unknown-fields" (:reason result))
+        (str "the probe did not reach the unknown-field row: " (pr-str result)))
+
+    (testing "the continuation it emits fits the ceiling it publishes"
+      (when-let [next-call (:next_call result)]
+        (let [bytes (census/utf8-byte-count (json/generate-string next-call))]
+          (is (<= bytes census/max-next-call-bytes)
+              (str "the refusal emitted a " bytes
+                   "-byte continuation under a " census/max-next-call-bytes
+                   "-byte ceiling: " (json/generate-string next-call))))))
+
+    (testing "a continuation that cannot fit is replaced by a remedy naming the bytes"
+      (is (not (contains? result :next_call))
+          (str "a 600-character root cannot be carried inside "
+               census/max-next-call-bytes " bytes: "
+               (pr-str (:next_call result))))
+      (is (string? (:remedy result))
+          "the refusal offers neither a continuation nor a remedy")
+      (is (str/includes? (str (:remedy result))
+                         (str census/max-next-call-bytes))
+          (str "the remedy does not name the ceiling it compared against: "
+               (pr-str (:remedy result))))
+      (is (re-find #"\b66\d\b" (str (:remedy result)))
+          (str "the remedy does not name the value it measured: "
+               (pr-str (:remedy result)))))))
