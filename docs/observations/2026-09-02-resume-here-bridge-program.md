@@ -1,3 +1,5 @@
+> **2026-09-03: the seat moved to forge@anvil.** Read `docs/observations/2026-09-03-resume-here-anvil-seat.md` for host facts, missing tools and boundaries; this file remains the program state.
+
 # RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 12:25Z; read the UPDATE blocks bottom-up, the newest supersedes)
 
 STANDING ORDERS (memory files): headlines first (table: arm, wall, correct? + one learning + one
@@ -318,4 +320,463 @@ inb-51135b, inb-ab0a24. Gene: merge curtain-call `bridge/safe-refactor-1` (inb-e
 
 **First action after compaction.** Read the task notifications / the three agents' output files
 listed above, then follow the "on report" lines. Log every receipt with `date -u` headers.
+
+
+## RESUME DELTA 2026-09-02T18:11Z
+
+- 7894 GREEN at 2cc52fa (receipt `~/acid/receipts/7894-start.edn`). rs1 launched 18:08:05Z (3 native,
+  strip prompt). GO-Z6 created; chain-z6 runs z6 → z7 → z8 after rs1. Monitor b30yfi3as relays
+  rs1/z6/z7/z8/chain/restart lines (old z3/z4/rf1 monitor stopped).
+- Formatter branch `bridge/format-form-scope` pushed 62981ee, handed to mayor.
+- Slope program: spec committed `docs/observations/2026-09-02-slope-spec-sl1.md`; q5z builder on
+  ~/src/clj-surgeon-q5z (`bridge/q5z-alias-migration`); FAN apparatus installer on Anvil
+  (gen-fan.py, rescore-FAN.sh, mkprompt-FAN.sh, rung FAN, chain-sl1 on GO-SL1 needing 7895
+  attested == ~/acid/Q5Z-SHA). On q5z report: my suites, commit, push; install a server on 7895
+  from the branch (copy restart-7894-at.sh's pattern to a restart-7895-at.sh, root
+  ~/acid/surgeon-q5z), write Q5Z-SHA, touch GO-SL1.
+- rf2 builder on ~/src/clj-surgeon-rf2: on report, suites, commit, push; server on 7896; rf2 = R3
+  "N C N|C N C" n=3 first (kill-or-promote per a40fc3e readout), strip prompts both arms.
+- rs1 scoring when done: returns and wall vs rf1 native (22.0 / 326.5 s) against Sol 285–305 s
+  and Opus 255–275 s; log; it re-bases the rf2 target.
+
+
+## RESUME DELTA 2026-09-02T18:30Z
+
+- Gene ratified TWEEZERS BEFORE THE WOODCHIPPER: `docs/tweezer-loop.md` (G0–G6; watcher = meter,
+  stopwatch + expectation; cold shadow; batteries only for claims). Session 1 done on
+  `bridge/tweezer-1` 92dc72c (pushed): driver receipt in the big-aha log (ce3e941); watcher
+  records at `docs/observations/2026-09-02-tweezer-session-1-watch.md` on that branch (watcher
+  agent's close pending). nREPL of that tree on port 40179 (may be gone after a reboot).
+- rs1 scored (returns −35 %, wall flat; ac52f51). z6 running (12/16 done, gate ≈ native so far);
+  z7, z8 chained. Monitor b30yfi3as.
+- rf2 builder got the exact root causes from the session. q5z builder and FAN installer still
+  running. Next per protocol: when rf2 lands → my suites → commit/push → G1 hand-drive of the
+  rewiring verb at the REPL (same task) → G2 naive-reader → G5 cold shadow → then its n=3
+  cohort. q5z → hand-drive at N=5 → slope.
+- Inbox beads wanted: inb-4a51e5, inb-51135b, inb-ab0a24, plus the new target-ns one (id in
+  this commit's log line).
+
+
+## RESUME DELTA 2026-09-02T18:50Z
+
+- `bridge/rf2-extract-rewire` pushed at 57e3ca0 (base 837fabbe): extract! rewires callers, `:ls`
+  non-fatal, expected_shape refusals; my G1 drive one call byte/form-identical to the reference;
+  follow-up in flight: receipt states header guarantees (commit as a follow-up when reported).
+  G2 naive-reader running; G5 cold shadow next (one agent, tool present, not mandated).
+- Gate sessions: in-process gate server on 7899 from the nREPL (port 40671) in ~/src/clj-surgeon
+  (admit-gate); one false `require-removed` refusal fixed live; a verified commit in 21 s; the
+  proper fix is being built on the branch by the gate agent (witnesses named).
+- Tweezer sessions 1–2 on `bridge/tweezer-1` (702808a): meter says s1 35/797 s, s2 8/293 s.
+  Protocol fixes: close sessions with a marker FILE (`.tweezer/session-<n>.closed`), never a
+  shared cell. rf2 benchmark: 14.3 returns / 328 s stripped native.
+- z6 scored (rung M speed claim withdrawn, fix holds); z7 running (gate 281 vs native 429/749 in
+  wave one); z8 chained. q5z builder + anchor chain (repo-R now on Anvil) still running; when q5z
+  lands: suites, commit, push, checkout at ~/acid/surgeon-q5z, server 7895 via a restart-7895-at.sh
+  clone of the 7894 script, Q5Z-SHA, hand-drive at N=5, then GO-SL1.
+
+
+## RESUME DELTA 2026-09-02T19:07Z
+
+- admit-gate pushed at f5965ad (hazard notes + lifted_by); in-process gate on 7899 reloaded.
+  After z8 done: `bash ~/acid/restart-7894-at.sh f5965ad`, `echo f5965ad > ~/acid/GATE-SHA`.
+- rf2: 57e3ca0 pushed; follow-up in the worktree (receipt v2 + bound + in-verb compile) awaiting the
+  builder's report → my suites → commit/push → tell mayor the sha → G2 third pass on the apply
+  receipt → G5b result (running: verb named in task terms, not mandated; G5 plain was 0/1).
+- q5z: suites green on the verb; lib-only extension for anchor R being built → suites → commit/push
+  → Anvil: `git clone` the branch to ~/acid/surgeon-q5z, clone restart-7894-at.sh into
+  restart-7895-at.sh (root surgeon-q5z, port 7895), Q5Z-SHA, hand-drive at N=5 on
+  ~/acid/fan/repo-5 (G1), then GO-SL1 and GO-SL1R.
+- z7 scoring (two Z diffs touch 1 and 0 files: check abandonment); z8 running (control not flat:
+  gate 250/254/337 vs native 118/126/175).
+- Tweezer worktrees: ~/src/clj-surgeon-tweezer (nREPL 40179), ~/src/clj-surgeon-g5, -g5b, -g2,
+  -rf2-scratch (scratch; prune when done).
+
+
+## RESUME DELTA 2026-09-02T19:27Z
+
+- admit-gate f5965ad WITHDRAWN again: z8 showed 3 of 6 commits at partial on rung L; fix from
+  z8's real payloads in progress (gate agent). After it lands: my suites → commit/push →
+  `restart-7894-at.sh <sha>` → GATE-SHA → re-submit → re-run z7 (rung R3 gate) on the fixed gate.
+- rf2: follow-up (receipt allowlist ≤ 4 KB, in-verb compile) in the worktree, my suites running →
+  commit/push → `echo <sha> > ~/acid/RF2-SHA` → rung R3b installer (running) → `touch ~/acid/GO-RF2`.
+- q5z 6b5252c pushed; 7895 serves it; G1 at N=5 FAILED on the wire (adapter arity); fix in
+  progress → suites → commit/push → `restart-7895-at.sh <sha>` → Q5Z-SHA → redo G1 at N=5
+  (`~/acid/wt/q5z-hand-5`, `~/acid/receipts/q5z-mcp-call.py`, `rescore-FAN.sh <wt> 5`) → GO-SL1,
+  GO-SL1R.
+- Closure catalogue agent running → `docs/closure-catalogue.md` → commit + tech-tree pointer.
+- Docs updated: vision.md "The law of decisions", CLAUDE.md evening amendments, tweezer-loop fixes.
+
+
+## RESUME DELTA 2026-09-02T19:45Z
+
+- admit-gate 17125fe pushed and re-submitted (verify-none hole closed, ADMIT-118..120); GATE-SHA =
+  17125fe; 7894 restarting at it (check `~/acid/receipts/7894-restart-4.log` GREEN). Next: z7b
+  (chain armed by the installer on GO-Z7B) = gate vs native on R3 with strip prompts.
+- rf2 bcec265 pushed; RF2-SHA pinned; rung R3b + chain-rf2 being installed → `touch ~/acid/GO-RF2`.
+- q5z wire fix in the worktree (suites running) → commit/push → `restart-7895-at.sh <sha>` →
+  Q5Z-SHA → G1 redo at N=5 (`~/acid/wt/q5z-hand-5` recreate from repo-5; `q5z-mcp-call.py`;
+  `rescore-FAN.sh <wt> 5`) → GO-SL1, GO-SL1R.
+- Catalogue committed (9cf12f0); vision/CLAUDE/tweezer docs updated; memory: a-gate-a-caller-can-turn-off.
+
+
+## RESUME DELTA 2026-09-02T19:48Z
+
+- z7b RUNNING (chain-z7b, launched 19:47:11Z; gate 17125fe; strip prompts). When `z7b done`:
+  score via the scorer agent (rung R3 shape: rescore-R3.sh over the runner's z7b-g*-*.diff, admit
+  columns, executed suites, readout vs rs1 14.3 / 328 s). Monitor bvo62eeqc relays z7b/rf2/sl1.
+- rf2 cohort (R3b) armed (chain-rf2 pid 2578322 on GO-RF2) but BLOCKED on the verb's compile
+  command (omits the test alias). Builder fixing (`.clj-surgeon.edn {:compile {:aliases [...]}}`,
+  candidate aliases on undeclared). On report: my suites → commit/push → `echo <sha> > ~/acid/RF2-SHA`
+  → `git -C ~/acid/surgeon-rf2 fetch && checkout <sha>` → `bash ~/acid/rf2-probe.sh && python3
+  ~/acid/rf2-record-compile.py` (expect :ok true) → `touch ~/acid/GO-RF2`.
+- q5z 40b26b1: G1 oracle fails on alias choice (my brief counted locals as collisions). Builder
+  fixing. On report: suites → commit/push → `restart-7895-at.sh <sha>` → Q5Z-SHA → G1 pass 3
+  (recreate `~/acid/wt/q5z-hand-5`, call, `rescore-FAN.sh <wt> 5`, expect VERDICT=PASS) →
+  `touch ~/acid/GO-SL1` and `touch ~/acid/GO-SL1R` (chains pid 2577460 / 2577653; both take the
+  cohort lock, so they serialise).
+- Four chains armed: sl1, sl1r, rf2, z7b (running). Lock: ~/acid/.cohort-lock.
+
+
+## RESUME DELTA 2026-09-02T20:03Z
+
+- ALL GO files created: GO-Z7B (running since 19:47Z), GO-RF2, GO-SL1, GO-SL1R. Chains take
+  `~/acid/.cohort-lock` in turn. Monitor bvo62eeqc relays z7b/rf2/sl1-*/sl1-R/chain-next lines.
+  When each `<run> done` lands: score via the scorer agent (z7b: R3 shape vs rs1 14.3/328 s; rf2:
+  readout `~/acid/receipts/rf2-readout.sh` bytes_beyond_verb + returns after receipt, per a40fc3e;
+  sl1-N: `sl1-<N>-score.txt` written by the chain, then the slope table returns vs N and ratio
+  monotone check per the spec's falsifiers; sl1-R: rescore-FAN-R predicates).
+- Branch shas: admit-gate 17125fe; rf2 a66b626 (RF2-SHA); q5z 13d86bb (Q5Z-SHA, 7895); all in the
+  mayor's queue; bridge merges nothing.
+- curtain-call: fold-idempotence builder running (branch bridge/fold-idempotence, worktree
+  ~/src/curtaincall-cfp-fold); on report: my kaocha unit run → push branch → inbox item for Gene
+  (merge is his) → close session 3 by `touch ~/src/curtaincall-cfp/.tweezer/session-3.closed`
+  → watcher's file → log. Follow-up bead: write-side idempotency key in the store's append path.
+
+
+## RESUME DELTA 2026-09-02T20:15Z
+
+- Session 3 CLOSED (curtain-call fold-idempotence): branch `bridge/fold-idempotence` a02d50a3
+  pushed; Gene's decision inb-d603ce; watcher receipt in docs/observations; tech-tree T3.
+- z7b done (walls Z 257 324 411 vs N 344 552 402; all diffs 5 files); scorer running
+  (`~/acid/receipts/z7b-score.md`). On receipt: log + tell mayor; if refusals < 20 % and every
+  commit complete, the gate's claim on R3 stands at n=3 and the next step is n=6.
+- Cohorts queued on the lock after z7b: rf2 (readout rf2-readout.sh), sl1-5..80 + sl1-C
+  (chain writes sl1-<N>-score.txt), sl1-R (rescore-FAN-R). Score each as it lands; the slope
+  table (returns vs N, ratio monotone) is the sl1 readout; falsifiers in the slope spec.
+- Nothing else in flight on the bridge; all builders idle. Mayor queue: five branches.
+
+
+## RESUME DELTA 2026-09-02T20:24Z
+
+- z7b scored (e49f95c): gate 3/3 complete on R3, 0.76× wall direction, refusals 24→2. Next for the
+  gate: n=6 on R3 (re-arm chain-z7b as z7c with "N Z N Z N Z|Z N Z N Z N" when the box is free).
+- Slope: sl1-5 done (T PASS 25 s; N FAIL p2 55 s, diagnosis queued to the scorer); chain-sl1
+  re-armed (pid 3363906) for 10 20 40 80 C; waiting on the lock with chain-rf2. Anchor sl1-R
+  failed at boot (repo-local cclsp MCP config); installer fixing + re-arming chain-sl1r.
+- Score as they land: sl1-<N>-score.txt (chain), rf2 readout, sl1-R.
+- All five branches in the mayor's queue; curtain-call fold-idempotence with Gene (inb-d603ce).
+
+
+## RESUME DELTA 2026-09-02T20:35Z
+
+- Slope sl1 DONE on walls (T flat 24–27 s at N=5..80 and C; N 55→127); scorer running the full
+  slope table from the twelve worktrees (`~/acid/receipts/sl1-score.md`; score files
+  `sl1-<N>-score.txt` written by my background rescore, `ALL-SCORED` marks the end).
+- sl1-R (anchor) RUNNING after the repo-MCP neutralisation; rf2 queued (chain re-armed after the
+  7888-comment preflight trip); z7c armed on GO-Z7C behind them. All on the cohort lock.
+- On each `<run> done`: scorer (rf2 readout per a40fc3e; sl1-R per rescore-FAN-R; z7c per z7b's shape
+  at n=6). Then: log, tell mayor, tech tree, and the wake-up brief for Gene.
+
+
+## RESUME DELTA 2026-09-02T20:42Z
+
+- Slope sl1 SCORED (5546471): tool 6/6, native 2/6, native's cost = site discovery; flagship 2/5.
+- Anchor sl1-R: both arms failed; tool = var-form reference miss (q5z builder fixing on
+  ~/src/clj-surgeon-q5z; on report: suites → commit/push → restart-7895-at.sh <sha> → Q5Z-SHA →
+  re-arm chain-sl1r after the installer's spec amendment); native = spec hole (installer amending
+  R-SPEC/rescore-FAN-R).
+- rf2 (mandated rewiring extract, R3b) RUNNING; z7c (gate n=6) armed behind it. On `rf2 done`:
+  scorer with ~/acid/receipts/rf2-readout.sh (bytes_beyond_verb, returns after receipt) per
+  a40fc3e; on `z7c done`: scorer per z7b's shape at n=6.
+- Wake-up brief evening edition committed (cb8c92f) and filed to Gene's inbox.
+
+
+## RESUME DELTA 2026-09-02T20:58Z
+
+- rf2 DONE on walls (C 243 vs N 336, no overlap); scorer running the pre-registered readout →
+  `~/acid/receipts/rf2-score.md`; then log + mayor + Gene report §2.
+- z7c (gate n=6) next on the lock; score per z7b's shape when `z7c done`.
+- Anchor: spec amended (R-SPEC/R-BASE/rescore-FAN-R, allowance of six path-fixture tests); native
+  PASSES; chain-sl1r UN-ARMED until 7895 restarts at the q5z fix sha (the builder is extending
+  site discovery to binding-vector and quoted fully-qualified symbols). On the q5z report: suites
+  → commit/push → `restart-7895-at.sh <sha>` → Q5Z-SHA → archive nothing (sl1-R name is free) →
+  `setsid nohup bash ~/acid/chain-sl1r.sh` and `touch ~/acid/GO-SL1R` if absent.
+- Gene report skill: `skills/gene-report/SKILL.md` (trigger "Gene report"); instance
+  `docs/observations/2026-09-02-gene-peek-report.md`; regenerate after rf2/z7c scores.
+
+
+## RESUME DELTA 2026-09-02T21:13Z
+
+- **Sol's design review of the curtain-call fold refactor** is logged (961186b): lens first
+  (`settings` / `update-settings`, no path fn), tagged identity `[:person-id id]` / `[:name normalised]`,
+  characterization (replay equality) before every edit, ordered commits, NO-GO list for Gene's
+  product decisions. Session 4 (the lens over 19 owners as one Surgeon transaction, watcher on)
+  starts after the fold builder's round two lands. Fold builder a8fea285fa6efe9e5 has the tagged
+  identity rule; store builder a93309b7f3a7f903b is building STORE-IDEM.
+- **q5z class fix** came back from agent a7a9731a5e97c7b4c UNCOMMITTED in `~/src/clj-surgeon-q5z`
+  on 13d86bb (binding/with-redefs LHS are sites; quoted fully-qualified symbols migrate with
+  `:require-mode :qualified-only`; `::alias/k` typed refusal; string_mentions count; ALIAS-029..035).
+  Anchor scratch: 171 files, 1872 sites, kondo delta 0, only the six r4-allowed failures. My
+  independent suites run in the background (`~/tmp/q5z-test-fast.log`, `~/tmp/q5z-mcp-test.log`).
+  Next: commit + push → `restart-7895-at.sh <sha>` → Q5Z-SHA → `setsid nohup bash ~/acid/chain-sl1r.sh`.
+- **rf2 readout** (`~/acid/receipts/rf2-readout.txt`): verb arms bytes_beyond_verb=0, returns 5–6;
+  native arms 7–13 returns, 1–23 bytes off in mcp_exact_verify.clj. Scorer adba3f32e11ed3105 still
+  writing rf2-score.md.
+- **z7c** (gate n=6 on R3) preflight green at 21:09:54Z, running under chain-z7c.
+
+
+## RESUME DELTA 2026-09-02T21:29Z
+
+- **rf2 SCORED — clean win** (log 75573fa; `~/acid/receipts/rf2-score.md`): C 243 s vs N 336 s, no
+  overlap, A=B=0 in 3/3, five promotion criteria PASS. Product claim now has an Anvil receipt.
+- **q5z fix committed 2753f23** (pushed, branch only). Anvil `surgeon-q5z` checked out at it;
+  `restart-7895-at.sh 2753f23` ran inside a hung ssh (pid 381392 on Anvil); monitor b4c9a1whi
+  waits for it, then checks ready.edn git-sha == 2753f23, Q5Z-SHA, and chain-sl1r. If Q5Z-SHA
+  still reads 13d86bb after the pid exits: `echo 2753f23 > ~/acid/Q5Z-SHA` and
+  `setsid nohup bash ~/acid/chain-sl1r.sh` (GO-SL1R exists; chain preflight fails closed).
+- **The finder** (log 75573fa): 14 `inspect_clojure` match patterns over curtain-call folds.clj
+  found task-chase double-append (~721); sent to the fold builder a8fea285fa6efe9e5 (round two,
+  with the tagged identity). Census verb idea filed inb-f5ee92.
+- **Store branch** `bridge/store-idempotency` 70c823cf UNPUSHED (worktree
+  `~/src/curtaincall-cfp-store`): my review found the forever key refuses re-announce after
+  unannounce; builder a93309b7f3a7f903b is applying the generation-key fix; Sol red-team of the
+  diff running (`scratchpad/fold-review/sol-store-review.md`, waiter bfg99t98m); my own unit run
+  of 70c823cf in `~/tmp/store-unit.log` (waiter bs1ruu5m0). Push only after both.
+- **z7c** running on Anvil (chain-z7c, gate n=6 on R3). Score per z7b shape when `chain-z7c … done`.
+- Gene report regeneration after z7c.
+
+
+## RESUME DELTA 2026-09-02T21:57Z
+
+- **Gene report regenerated** (a40b3f6, inb-600289): rf2 win, z7c FLAT at n=6 on wall (Z 339 vs N 348 s
+  from z7c.log end lines; acceptance 12/12 PASS), fold round two, store NO-GO round, finder false positive.
+- **z7c scorer** agent acb7ca2bc88bb917d writing `~/acid/receipts/z7c-score.md` (returns, gate completeness).
+- **sl1-R** queued on the cohort lock behind z7c's post-scoring (chain-sl1r armed, Q5Z-SHA 2753f23, 7895 attested).
+- **Fold branch f115cc2d pushed** (my unit run 1016/12599/0); inb-d603ce updated; merge is Gene's.
+- **Store branch 3aac4338** (rebased on f115cc2d; nine Sol items + generational key inside the lock;
+  participation keeps key AND projection check because domain/speakers.clj writes via append-all!).
+  My unit run: see `~/tmp/store-unit-2.log`. Sol second review: `scratchpad/fold-review/sol-store2-review.md`
+  (waiter bq9sdz222). Push on both green, then inbox item for Gene; Postgres paths are UNVERIFIED on this box
+  (documented as owner work; a PG-backed revision refuses to boot without the index).
+- Session 4 (lens over 19 owners as one Surgeon transaction, watcher on) after fold+store land.
+
+
+## RESUME DELTA 2026-09-02T22:17Z
+
+- **z7c SCORED** (`~/acid/receipts/z7c-score.md`, log 0260e72): gate wall-neutral at n=6 (0.975×, p 0.79);
+  z7b's 0.76× WITHDRAWN (slow native arm); correctness 6/6, verify none never used. Tech tree E1 and
+  the Gene report corrected. Standing claim: gate = correctness, verb (rf2) = speed.
+- **sl1-R finished** (T 228 s, N 283 s, both "1007 tests, 2 failures"); chain-next.log claims
+  "scored -> sl1-R-score.txt pass" but the file and the .diff files do not exist — scorer agent
+  a94d9638a217446d3 is establishing whether that "pass" is a false green, then writing
+  `~/acid/receipts/sl1-R-score.md`. Log + Gene report §2 row when it lands.
+- **Store branch f568d595** (my run 1038/12872/0): Sol round three GO-WITH-FIX single-instance
+  (`scratchpad/fold-review/sol-store3-review.md`, log ae8efb6). Round four (last) with builder
+  a93309b7f3a7f903b: exact constraint-name extraction; comparable-body domain refusal. Then my
+  `bin/kaocha unit` in `~/src/curtaincall-cfp-store` → push `bridge/store-idempotency` → inbox item
+  for Gene naming owner work (index install + real pg_get_indexdef; max-instances=1 precondition).
+- Gene report printed in the terminal at his request; regenerate after sl1-R and the store push.
+- Then session 4 (the lens over 19 owners, watcher on) on a worktree stacked on fold+store.
+
+
+## RESUME DELTA 2026-09-02T22:29Z
+
+- **sl1-R SCORED** (`~/acid/receipts/sl1-R-score.md`, log 1cb0ae3): both PASS r1–r7; T 228 s / 9 actions /
+  322k tokens vs N 283 s / 13 / 499k (0.81× / 0.69× / 0.64×); the fixed verb loads the tree (r3 190 ns);
+  native's one suite run was RED at load and it shipped a hand fix unverified. n=1.
+- **Apparatus false green fixed on Anvil** (v5 + v3 + chain-sl1r.sh, backups kept, `bash -n` green):
+  `":!.cpcache"` dropped from the runner's `git add` + `DIFF-FAILED rc=` log line; acceptance line names
+  `rescore-FAN-R.sh` for R; chain aborts on empty diff glob / empty score file and prints
+  `scored= passed= failed=`. NOTE: all earlier FAN runs have no `.diff` receipts (scored from worktrees).
+- **Store branch PUSHED** 96387535 (`bridge/store-idempotency`, my run 1040/12908/0); inb-70711c for
+  Gene's merge after fold (inb-d603ce). Owner work: index install + real pg_get_indexdef;
+  precondition max-instances=1.
+- **Gene report** updated (§2 anchor win, §3 first attempt, §5 false green, §8, §9 inb-70711c) and
+  §4a storyboards added (d1e9b5f). Storyboards + pmap position in the log (add37af).
+- **Next, awaiting Gene's word:** session 4 — the settings lens over 19 owners on a worktree stacked
+  on store 96387535, characterization witness first, one Surgeon transaction, watcher on
+  (Sol's ordered commits, log 961186b). No cohort running on Anvil; cohort lock free.
+
+
+## RESUME DELTA 2026-09-02T22:34Z
+
+- **Autonomy for the day** (Gene: "No word needed. Use best judgement." / "I'm busy all day today. Keep
+  going!" / "Or get sol opinion."). Running: session-4 step A builder aac78b909147d4a88 on
+  `~/src/curtaincall-cfp-lens` (bridge/settings-lens @ 96387535; characterization + lens, no call
+  sites); census builder ae28eeb3c06c1aeb1 on `~/src/clj-surgeon-census` (bridge/census-verb @ 8ac4332);
+  Sol plan opinion `scratchpad/fleet/sol-plan-s4-census-answer.md` (waiter bjuuwssgr).
+- **Step B (after A + Sol):** two arms: (1) me driving ONE `apply_clojure_changes` transaction over the
+  19 owners on the lens worktree via bridge 7888, Sonnet watcher per docs/tweezer-loop.md (marker
+  `.tweezer/session-4.closed`, six fields, 60-min cap, stopwatch), (2) Opus native arm on a second
+  worktree `~/src/curtaincall-cfp-lens-native` (branch bridge/settings-lens-native from the step-A
+  sha). Gate: characterization digest + `bin/kaocha unit` 0 failures. Push the correct tree; inbox for Gene.
+- Never git stash in any curtain-call worktree (parallel agents share the stash).
+
+
+## RESUME DELTA 2026-09-02T22:50Z
+
+- THREE builders on Buster: lens step A aac78b909147d4a88 (`~/src/curtaincall-cfp-lens`); census
+  ae28eeb3c06c1aeb1 (`~/src/clj-surgeon-census`, re-specced per Sol: five classes incl. `:unknown`,
+  four-condition guard rule, evidence fields); study ops aa962e1fb576e0072 (`~/src/clj-surgeon-study`,
+  `bridge/study-ops-mcp` from b2177ad; Gene's nudge via the mayor; clj-surgeon-0me; inb-f403aa updated).
+- Sol's plan opinion applied (log b2177ad): step B = dry plans first, native production default,
+  Surgeon arm research, no auto-winner; census not an enforcement gate.
+- Merge-queue note: census and study-ops both touch the MCP schema/tool files → rebase the second.
+- Gene asked "Where are they running": all on Buster; Anvil idle, lock free.
+
+
+## RESUME DELTA 2026-09-02T23:02Z
+
+- **Session 4 dry plan, Surgeon side DONE** (log a39206c): 4 calls, one 16-arm transaction on the
+  scratch worktree `~/src/curtaincall-cfp-lens-scratch` (detached 55d1fd3f; safe to delete after the
+  comparison), zero outside churn, projection gate green, tripwire 19→3 / 24→6. Artifact:
+  `~/src/curtaincall-cfp-lens/.plan/surgeon-settings-lens.patch`. Marker `.tweezer/session-4.closed`
+  written 23:01:49Z; watcher a4647e8ebb78985fc writes `.tweezer/session-4-watch.md` (copy to
+  docs/observations/2026-09-02-tweezer-session-4-watch.md when it lands).
+- **Step A pushed** (`bridge/settings-lens` 55d1fd3f, my run 1050/13097/0).
+- Running: native dry plan a7ef75d64e2a9fd85 on `~/src/curtaincall-cfp-lens-native` (writes
+  `.plan/native-settings-lens.patch` + `.plan/native-plan.md`, not applied); LENS-003 builder
+  ae6df9a536b15e3f4 on the lens worktree (identity no-op in update-settings, fails-first); census
+  ae28eeb3c06c1aeb1; study ops aa962e1fb576e0072. Suites serialised via `flock ~/tmp/suite.lock`.
+- **Next:** comparison receipt (cardinality, churn, preconditions, decisions, wall) Surgeon vs native
+  → log + Gene report; then the REAL migration commit on `bridge/settings-lens` after LENS-003 lands
+  (either plan; Gene merges; no auto-winner), tripwire numbers updated in the same commit, all three
+  excluded arms handled (export.generated stays; the two conditional arms migrate once LENS-003 is in).
+- Buster load ~3.2/4 cores; Gene asked about farming to Anvil — declined mid-build, farm if OOM.
+
+
+## RESUME DELTA 2026-09-02T23:06Z
+
+- **Session 4 comparison receipt DONE** (`docs/observations/2026-09-02-session-4-comparison-receipt.md`,
+  6406768): Surgeon 16/19 arms, 0 outside churn, gate green; native 18/19, 149 outside lines, found the
+  24th write (`speaker.reminder-schedule-configured`, slug-keyed). Nomination: Surgeon transaction for the
+  migration commit after LENS-003; Gene decides. vision.md now defines "winner" by composition (47c1eee).
+- Running: LENS-003 builder ae6df9a536b15e3f4 (lens worktree); 23j builder ac9d2922b2d295e87 on
+  `~/src/clj-surgeon-rf2` (target-ns from workspace_root; witness on the wire); census ae28eeb3c06c1aeb1;
+  study ops aa962e1fb576e0072. Watcher session 4 closed (receipt filed).
+- **Migration commit plan (after LENS-003):** on `~/src/curtaincall-cfp-lens`, re-run the 16-change
+  `apply_clojure_changes` (same finds/replaces as the scratch; the transcript holds them; also
+  `.plan/surgeon-settings-lens.patch` is the equivalent patch), then a second transaction for
+  `event.speaker-unannounced` + `event.announced-speaker-adopted` (form-for-form, no hoisting), then a
+  delegated test edit: tripwire numbers, the `(= arm-count guards)` assertion, a row for the 24th write;
+  gate `flock ~/tmp/suite.lock bin/kaocha unit` 0 failures; push; inbox item for Gene. `export.generated`
+  stays. Native patch stays on `bridge/settings-lens-native` (push it as the specimen).
+- Mayor's beads: 23j mine (in progress); 3s5/c37/dk9 fixed on rf2 a66b626 (close on merge); oni P2.
+
+
+## RESUME DELTA 2026-09-02T23:12Z
+
+- **Channel rule:** replies to Gene go to seat "bridge" (memory `reply-seat-bridge-until-requested`).
+- **Merge ruling** (log 2972f73): curtain-call main auto-deploys to live Postgres → no blind merges.
+  Owner ops routed to the mayor (Gene: "You can ask mayor to run curtain call and do nrepl ops to
+  check Postgres"): inb-3a9818 — (1) create `store_events_idempotency_key` from the REPL + paste
+  `pg_get_indexdef`; (2) run `make fold-diff-checkpoint` from `bridge/fold-diff-tool` (builder
+  acaae1bcfa4441c72, worktree `~/src/curtaincall-cfp-folddiff` from 96387535) and paste the diff.
+  Merge order: fold after (2) reviewed, store after (1) + paste. Announce the branch to the mayor on
+  seat bridge when it lands.
+- **Census verb landed** `bridge/census-verb` f325529+7244141 (fifth tool; q5z not on main); my suites
+  running (`~/tmp/census-{test-fast,mcp-test}.log`, waiter bdv1wx2gk); push after green; mayor queue.
+- Running: LENS-003 ae6df9a536b15e3f4 (then the migration commit on the lens worktree: 16-change
+  transaction from the transcript / `.plan/surgeon-settings-lens.patch`, second transaction for the two
+  conditional arms, tripwire test edit delegated, gate, push, inbox); 23j ac9d2922b2d295e87 on rf2;
+  study ops aa962e1fb576e0072.
+
+
+## RESUME DELTA 2026-09-02T23:20Z
+
+- **Migration applied on `~/src/curtaincall-cfp-lens`** (uncommitted folds.clj on a8af3393): two Surgeon
+  transactions (16 + 2 edits), guards 19→1, paths 25→4, focused gate green except the tripwire
+  numbers. Builder a0ad6890cb421cb67 is editing the tripwire test + registering LENS-004 + committing
+  ("LENS-004: migrate 18 fold arms …"). After its report: my own `flock ~/tmp/suite.lock bin/kaocha
+  unit` → push `bridge/settings-lens` → inbox item for Gene (stacked on store; merge after store).
+- Census pushed (7244141). Scratch worktree removed (patch saved in `.plan/`).
+- Running: 23j ac9d2922b2d295e87 (rf2 worktree), study ops aa962e1fb576e0072, fold-diff acaae1bcfa4441c72.
+- Owed to the mayor on seat bridge: the fold-diff branch name + make target; census + study-ops +
+  rf2(+23j) branches for the queue.
+
+
+## RESUME DELTA 2026-09-02T23:37Z
+
+- **Session 4 COMPLETE**: `bridge/settings-lens` aebb7b9a pushed (LENS-001..004; my unit 1053/13134/0);
+  inb-554636 for Gene's merge after fold + store. Native specimen `bridge/settings-lens-native` 74a3d7e6.
+- **rf2 pushed** at 5e6cdd2 (23j witnessed; closes 23j/3s5/c37/dk9 on merge). **Census pushed** 7244141.
+- Running (cap: two builders): study ops aa962e1fb576e0072, fold-diff acaae1bcfa4441c72. When fold-diff
+  lands: push `bridge/fold-diff-tool`, tell the mayor the make target on seat bridge (inb-3a9818).
+- Gene floated an Anvil Claude seat; position sent (second seat, not a move); brief pre-staged at
+  `docs/observations/2026-09-02-anvil-builder-seat-brief.md`. If he starts it, hand it the two builds
+  named there via inbox.
+- Then: regenerate the Gene report (skill `skills/gene-report/SKILL.md`).
+
+## RESUME DELTA 2026-09-02T23:42Z
+
+- **fold-diff tool pushed** `bridge/fold-diff-tool` f2d8f6eb (my unit 1052/13017/0); mayor has the commands
+  (inb-3a9818 + seat bridge). Waiting on the mayor's paste: index `pg_get_indexdef` + fold-diff output.
+- **Study ops built** b3c17bb on `bridge/study-ops-mcp` (inside inspect_clojure; `ls-tree` as a mode);
+  my suites running (`~/tmp/study-{test-fast,mcp-test}.log`, waiter bh7hkujz2); push after the baseline-
+  only failure check (5 routing + 1 exact-profile), then tell the mayor; then Gene report §8 rows
+  (fold-diff, study ops) + tech tree E6 "BUILT, adoption unmeasured".
+- No builders running. Load ~1.2. Cap: two builders + one suite.
+- Open for Gene: fold/store/lens merge order; four decisions in the report §9; the Anvil `forge` seat.
+- Next candidate builds (if Gene starts the Anvil seat, hand these over; else run here one at a time):
+  receipt ratchets from the friction ledger; lens follow-ups (program-speaker-updated, reminder-schedule).
+
+
+## RESUME DELTA 2026-09-02T23:45Z — day queue COMPLETE; nothing running
+
+- All branches pushed and verified. clj-surgeon (mayor's queue): rf2 5e6cdd2, census 7244141, study ops
+  b3c17bb, q5z 2753f23, admit-gate 17125fe, close-losers 205e13a, format-form-scope 62981ee.
+  curtain-call (Gene's merges, in order): fold f115cc2d (inb-d603ce) → store 96387535 (inb-70711c) →
+  settings-lens aebb7b9a (inb-554636); tools: fold-diff f2d8f6eb (mayor runs it, inb-3a9818); specimen
+  settings-lens-native 74a3d7e6.
+- Waiting on: the mayor's `pg_get_indexdef` paste + fold-diff output; Gene's four decisions (report §9);
+  whether the Anvil `forge` seat is created (brief: docs/observations/2026-09-02-anvil-builder-seat-brief.md).
+- Routing: answer Gene in the surface he wrote from (memory reply-seat-bridge-until-requested).
+- Held builds, in priority: (1) receipt ratchets from the friction ledger (log 8392477); (2) lens
+  follow-ups (program-speaker-updated onto the lens; reminder-schedule guard); (3) E6 ls-tree free-choice
+  cohort on Anvil (needs the study branch on a cohort server + FAN-style prompts). Start (1) only when the
+  mayor has merged census or study ops (schema-file conflicts) or on the Anvil seat.
+- Gene report current at bc967f6 (§8/§9/§10). Captain's log current through bc967f6.
+
+
+## RESUME DELTA 2026-09-02T23:54Z — the prosecution list (Gene: "Make sure all suggestions and areas to explore are in a trusted place where they'll be prosecuted at the right time.")
+
+Every open suggestion is a maven inbox item with an owner and a trigger (bd has no database on the
+bridge for either repo, so the inbox is the trusted store):
+S1 inb-a0f37e ls-tree names-only rendering (before E6)
+S2 inb-0a6315 tree-level requirers-of-ns op on the alias-migration discovery kernel (after q5z merges)
+S3 inb-d8a635 make mcp-serve honours MCP_PORT (next touch)
+S4 inb-11a6ae outline emits defmethod dispatch; owner refusal names the defmethod owner form (after census+study merge)
+S5 inb-a97614 unaddressed_matches in transaction receipts (same trigger)
+S6 inb-3cb0f4 refusals name the missing field; match receipts explain `_` arity (same trigger)
+S7 inb-c973d2 E6 free-choice adoption cohort for the study ops on Anvil (after S1)
+S8 inb-78e75c contract: "two public tools" invariant stale — Gene's ruling before census merges
+C1 inb-ace545 lens follow-ups: program-speaker-updated onto the lens; reminder-schedule guard (after the three merges)
+C2 inb-041b28 announce UI has no unannounce control — product decision then route+witness (after store deploys)
+C3 inb-06d376 comms.template-saved hand-rolled upsert (census :unknown) — fixture first (after fold merges)
+A1 inb-c06fd8 regenerate the missing sl1 .diff receipts from the Anvil worktrees (next quiet hour)
+Plus the standing ones: inb-d603ce / inb-70711c / inb-554636 (Gene's merges), inb-3a9818 (mayor's
+production ops), inb-f5ee92 (census verb, now built), inb-f403aa (study ops, now built), inb-600289
+(the Gene report). Session 5 closed; watcher a9fa65891683c1c40 writes `.tweezer/session-5-watch.md`
+(copy to docs/observations when it lands). Anvil builder seat = tester (brief amended).
+
+## RESUME DELTA 2026-09-02T23:55Z
+
+- Session 5 watcher receipt filed (f32076a): verdict MIXED; E6 (inb-c973d2) gated on S1 + S2.
+- **Prosecuting S1 (inb-a0f37e) + S3 (inb-d8a635) now**: builder a72e392109a38e858 on
+  `~/src/clj-surgeon-study` (bridge/study-ops-mcp @ b3c17bb): names-only ls-tree rendering as the
+  default (+ ns_grep), and `make mcp-serve` honouring MCP_PORT. After its report: my suites under the
+  lock → push → note the mayor → mark inb-a0f37e / inb-d8a635 attempted. Then S2 (tree-level
+  requirers) waits for q5z to merge.
+- Still pending on others: the mayor's production paste (inb-3a9818); Gene's merges and rulings
+  (inb-78e75c contract; inb-041b28 product); whether Gene starts the tester@anvil seat.
 
