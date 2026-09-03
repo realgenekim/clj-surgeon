@@ -16,6 +16,7 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.ls-tree-snapshot :as snapshot]
    [clj-surgeon.result-budget :as budget]
+   [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -874,3 +875,54 @@
             (is (contains? #{:invalid-result-cursor :unknown-result-cursor}
                            (:error-type r))
                 (str "expected a typed refusal, got " (pr-str (:error-type r))))))))))
+
+;; ============================================================
+;; ROUND FOUR — the SERVE path verifies, measures, and confines
+;;
+;; Round three closed forgery, the stat-preserving byte swap and the
+;; concurrent-pin race. Opus's executed round-three review then found that
+;; every one of those guards sits on the REUSE path, and the SERVE path
+;; trusts the same bytes on the strength of their filename. The witnesses
+;; below are that review's reproductions, each asserting the fact its item
+;; names.
+;; ============================================================
+
+(defn- rows-lines
+  "The pinned rows of `cursor-id` as a vector of lines."
+  [dir cursor-id]
+  (vec (str/split-lines (slurp (rows-path dir cursor-id)))))
+
+(defn- write-rows!
+  "Replace the pinned rows of `cursor-id` with `lines`."
+  [dir cursor-id lines]
+  (spit (rows-path dir cursor-id) (str (str/join "\n" lines) "\n")))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-page-is-served-only-from-rows-that-still-prove-their-id
+  (with-project [dir fixture-count "ls-tree-budget-serve-verify"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (cursor-of page-1)
+          cursor-id (:cursor-id (budget/parse-cursor cursor))
+          pinned (rows-lines dir cursor-id)
+          ;; Substitute the row at position 6 — the SECOND record page 2
+          ;; serves — with the row for mod001, keeping its position so the
+          ;; manifest still LOOKS well formed. This is Opus's reproduction:
+          ;; the served page came back [m06 m01 m08 m09 m10], m01 silently
+          ;; standing in for m07, and the caller got no signal.
+          row-1 (edn/read-string (nth pinned 1))]
+      (is (= 5 (count (entry-files page-1))) "page 1 is the honest page")
+      (write-rows! dir cursor-id (assoc pinned 6 (pr-str (assoc row-1 :i 6))))
+      (is (not= pinned (rows-lines dir cursor-id))
+          "the witness actually tampered with the pinned rows")
+      (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                 :cursor cursor})]
+        (is (map? r)
+            (str "rows that no longer re-fold to the id they are filed under "
+                 "must REFUSE on the serve path, not only on the reuse path; "
+                 "served instead: " (pr-str (entry-files r))))
+        (is (= :unknown-result-cursor (:error-type r))
+            (str "expected a typed refusal, got " (pr-str (:error-type r))))
+        (is (false? (:complete r)))
+        (is (true? (:source-unchanged r)))
+        (is (not (str/includes? (pr-str r) "mod001.clj"))
+            "and the substituted file is never encoded")))))
