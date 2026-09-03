@@ -536,7 +536,15 @@
      :dir (str dir)
      :next-action "pass_an_existing_directory_path"}))
 
-(defn run-ls-tree [{:keys [dir format grep] :as _opts}]
+(defn run-ls-tree
+  "Outline every Clojure project under :dir.
+
+   The `:format` value is bound as `output-format`, NOT destructured as
+   `format`: a binding named `format` shadows clojure.core/format for the whole
+   body, so the empty-result branch below called the caller's :format VALUE as
+   a function (`ArityException: Wrong number of args (3) passed to: :edn`).
+   Never name a local after a core fn this body calls."
+  [{:keys [dir grep] output-format :format :as _opts}]
   (when-not dir
     (println "Error: :dir is required for :ls-tree")
     (System/exit 1))
@@ -553,11 +561,14 @@
                        ;; Full scan: discover all projects
                        (discover-projects dir))]
         (if (empty? projects)
+          ;; NOTE (inb-eca3b1): calling System/exit from inside a library
+          ;; operation is owed a separate fix; the exit-1 contract is unchanged
+          ;; here, only the message that precedes it.
           (do (println (format "No Clojure files found under %s%s"
-                               dir (when grep (str " matching '" grep "'"))))
+                               dir (if grep (str " matching '" grep "'") "")))
               (System/exit 1))
           (let [projects (outline-all-files projects)]
-            (if (= format :edn)
+            (if (= output-format :edn)
               (format-ls-tree-edn projects dir)
               (format-ls-tree-text projects dir))))))))
 
