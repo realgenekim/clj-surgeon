@@ -106,3 +106,31 @@ histories.
 ## 02:30Z — lane: executed red-team of the fold-diff tool (before the mayor runs it against production) and the three lens/template branches (aceddb474ac916ded). Five background items: census fix round, ratchets, study security round, rf2+q5z red-team, this one.
 
 ## 02:30Z — rf2 NO-GO (caller writes escape the root via a directory symlink, witnessed; shell-string `:command` in receipts executes); q5z GO-WITH-FIX (confinement correct; 14 .cpcache files committed; no caps; symlink cycle). Verdicts filed (docs/observations/2026-09-03-rf2-q5z-redteam.md); fix rounds launched. Of the three 'ready' branches red-teamed tonight, none was mergeable as it stood.
+
+## 02:38Z — the three receipt ratchets landed on `bridge/receipt-ratchets` (0434aae, 29090e9, ece8c1c)
+
+From the friction ledger, each with a red-first witness and the field case reproduced verbatim:
+1. The outline emits `dispatch` with the exact source spelling for every `defmethod`; the owner refusal on
+   a multimethod says "117 defmethod arms share the name fold-event", shows the exact owner form to send
+   (`{kind: "defmethod", name: "fold-event", dispatch: "\"event.3\""}`) and a bounded dispatch
+   vocabulary (40/117, truncated). A caller who reads the outline first never pays the refusal.
+2. `apply_clojure_changes` accepts an OPTIONAL `expect_matched {file match file_hash count}` copied
+   from a match receipt and returns `matched_count`, `addressed_matches`, `unaddressed_matches`
+   [{line hash}] (bounded 20), with a visible "⚠ 3 of 19 matched sites not addressed (pre-image lines
+   118, 125, 132)"; stale basis → `expect-matched-stale` with a `mismatch` discriminator, bytes unchanged.
+   No server-side state (the branch's `basis` lease was rejected for exactly that reason); "addressed" is
+   the intersection of pre-image spans against the transaction's own frozen pre-image. The builder also
+   found and fixed a double basis computation (~0.6 s on the 1235-line field file).
+3. `missing-fields` names the field and prints the minimal valid shape; `invalid-require-policy` names the
+   field and its two values (deliberately NOT defaulted: the field is `:required` in the published schema,
+   and a silent `minimal` would hand a `copy-all` caller a smaller require list without saying so); a
+   `match` miss with `_` carries "each `_` matches exactly one subtree; a longer form needs a longer pattern".
+EARS MCP-OP-DISPATCH-001..003, MATCHED-001..003, FIELD-001..003. Suites: test-fast 712/5970 (baseline
+five), mcp JVM half 387/4020 (baseline one); intent audit ok. Tempted-not-done, reported: letting
+`inspect_clojure`'s `forms` accept the defmethod owner map (an arm can be written by an address it cannot
+be read by — a contract change, filed as the next ratchet candidate); the same minimal-shape refusal on
+apply; near-miss-by-prefix on a match miss; owner names in `unaddressed_matches` (receipt size).
+**Host gap, now stated three times:** `make mcp-test` cannot run on Anvil — its first prerequisite shells
+`swipl`, absent; the `MCP-OP-ORACLE-001` Prolog gate is unverified on this box. Morning item for the mayor.
+My own suites running under the lock; push after.
+
