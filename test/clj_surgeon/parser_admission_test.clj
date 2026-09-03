@@ -40,6 +40,13 @@
   [n]
   (str "(ns fixture.dense)\n(def v [" (str/join " " (range n)) "])\n"))
 
+(defn- prefix-tower
+  "A source whose single form carries `n` consecutive reader-macro prefixes.
+   `(def x @@@ ... @y)` — no structural delimiter deepens past the `def` list,
+   yet the reader recurses once per prefix."
+  [prefix n]
+  (str "(def x " (str/join (repeat n prefix)) "y)\n"))
+
 (defn- repo-sources
   "Every Clojure-family source under src/ and test/, as [path source] pairs."
   []
@@ -176,6 +183,54 @@
         (is (some? e))
         (is (= :parser_admission_refused (:refusal (ex-data e))))
         (is (str/includes? (ex-message e) "max_parse_depth"))))))
+
+;; ------------------------------------------------------------------
+;; nesting is EVERY construct that makes the reader recurse
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-005
+(deftest reader-macro-prefixes-count-as-nesting
+  (testing "a run of N prefixes is N nesting levels, per prefix family"
+    ;; Every one of these makes the rewrite-clj reader allocate a wrapping node
+    ;; and recurse into its child. A delimiter-only estimate scores them ZERO.
+    (doseq [p ["'" "`" "~" "~@" "@" "^" "#'" "#_" "#=" "#?" "#?@"]]
+      (let [src (prefix-tower p 40)]
+        (is (<= 40 (depth-of src))
+            (str "prefix " (pr-str p) " contributed "
+                 (- (depth-of src) 1) " of 40 nesting levels")))))
+  (testing "prefixes unwind at the next atom"
+    (is (= 1 (depth-of "(def a 'x 'y 'z)"))
+        "three SEPARATE one-prefix forms are one level, not three")
+    (is (= 2 (depth-of "(def a '(x))"))
+        "a quoted list is the quote's level plus the list's"))
+  (testing "prefixes unwind at a closing delimiter"
+    (is (= (depth-of "(a) (b)") (depth-of "'(a) (b)") )
+        "a quote consumed by its list does not leak past the close")
+    (is (zero? (:delimiter-balance (admission/scan-shape "'(a) `[b] ~@{c 1}")))
+        "prefix accounting never disturbs the delimiter balance")))
+
+;; @spec MCP-OP-MEM-005
+(deftest a-prefix-tower-is-refused-before-it-overflows-the-reader
+  (testing "the 710-byte @-tower that killed the whole ls-tree scan"
+    ;; Measured on anvil 2026-09-03 with the delimiter-only estimator: this file
+    ;; scanned at parse-depth 1, was ADMITTED, and threw StackOverflowError out
+    ;; of the reader — an Error, so `core/safe-outline` did not catch it and the
+    ;; scan died. 155x smaller than the 111 KB file that motivated the control.
+    (let [src (prefix-tower "@" 700)
+          calls (atom 0)
+          real z/of-string]
+      (is (= 710 (count src)))
+      (is (< (:max-parse-depth admission/default-ceilings) (depth-of src))
+          (str "the tower scans at depth " (depth-of src)
+               ", at or under the shipped ceiling "
+               (:max-parse-depth admission/default-ceilings)))
+      (let [t0 (System/nanoTime)
+            r (with-redefs [z/of-string (fn [& args] (swap! calls inc) (apply real args))]
+                (admission/refusal "tower.clj" src admission/default-ceilings))
+            ms (/ (- (System/nanoTime) t0) 1e6)]
+        (is (= :max-parse-depth (:reason r)))
+        (is (zero? @calls) "no tree constructor was invoked")
+        (is (< ms 50.0) (str "refusal took " ms " ms"))))))
 
 ;; ------------------------------------------------------------------
 ;; the shipped defaults, against real corpora
