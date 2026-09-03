@@ -37,19 +37,44 @@
         (assoc (refusal "workspace_root could not be canonicalized" value)
                :cause (.getMessage error))))))
 
+(defn workspace-id
+  "Return the stable digest that names one canonical workspace root."
+  [canonical-workspace-root]
+  (let [digest (.digest (MessageDigest/getInstance "SHA-256")
+                        (.getBytes ^String canonical-workspace-root "UTF-8"))]
+    (apply str (map #(format "%02x" (bit-and 0xff (int %))) digest))))
+
+(defn state-dir
+  "Return the deterministic local-state directory for one workspace.
+
+   Every durable per-workspace artefact - receipts, transaction journals,
+   pre-image objects, projection caches - hangs off this one root, so a
+   workspace's state is found, quota'd and cleaned in one place. `state-home`
+   overrides the user home the directory hangs from, which is what test
+   isolation needs; it is not a request parameter."
+  ([workspace-root] (state-dir workspace-root nil))
+  ([workspace-root state-home]
+   (let [{:keys [ok workspace-root] :as resolved} (canonical-root workspace-root)]
+     (when-not ok
+       (throw (ex-info (:error resolved) resolved)))
+     (str (io/file (or state-home (System/getProperty "user.home"))
+                   ".local" "state" "clj-surgeon" "workspaces"
+                   (workspace-id workspace-root))))))
+
 (defn receipt-dir
   "Return the deterministic local-state receipt directory for one workspace."
   [workspace-root]
-  (let [{:keys [ok workspace-root] :as resolved} (canonical-root workspace-root)]
-    (when-not ok
-      (throw (ex-info (:error resolved) resolved)))
-    (let [digest (.digest (MessageDigest/getInstance "SHA-256")
-                          (.getBytes ^String workspace-root "UTF-8"))
-          workspace-id (apply str (map #(format "%02x" (bit-and 0xff (int %)))
-                                       digest))]
-      (str (io/file (System/getProperty "user.home")
-                    ".local" "state" "clj-surgeon" "workspaces"
-                    workspace-id "receipts")))))
+  (str (io/file (state-dir workspace-root) "receipts")))
+
+(defn transactions-dir
+  "Return the deterministic local-state transaction directory for one workspace.
+
+   Transaction journals, their sorted manifests and their pre-image object
+   store live beside the receipts rather than in a project-local directory, so
+   a mutation never writes bookkeeping into the tree it is mutating."
+  ([workspace-root] (transactions-dir workspace-root nil))
+  ([workspace-root state-home]
+   (str (io/file (state-dir workspace-root state-home) "transactions"))))
 
 (defn router
   "Create one shared, lazy, canonical-root context router."

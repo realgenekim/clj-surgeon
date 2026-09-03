@@ -33,6 +33,32 @@
         (when (.exists tmp)
           (.delete tmp))))))
 
+(defn atomic-publish!
+  "Atomically replace `file` with the contents of `source-file`.
+
+   `atomic-write!` takes a string; a transaction journal holds its future
+   bytes in a staging FILE that may live on another filesystem, where
+   ATOMIC_MOVE is not available. Publication therefore copies the staging file
+   into the target's own directory first and renames from there, so the
+   observable replacement is still one atomic rename and the target's
+   permissions survive it."
+  [file source-file]
+  (let [target (io/file file)
+        parent (.getParentFile (.getAbsoluteFile target))
+        tmp (java.io.File/createTempFile ".clj-surgeon-publish-" ".tmp" parent)
+        options (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                        StandardCopyOption/REPLACE_EXISTING])]
+    (try
+      (Files/copy (.toPath (io/file source-file))
+                  (.toPath tmp)
+                  ^"[Ljava.nio.file.CopyOption;"
+                  (into-array CopyOption [StandardCopyOption/REPLACE_EXISTING]))
+      (preserve-existing-permissions! target tmp)
+      (Files/move (.toPath tmp) (.toPath target) options)
+      (finally
+        (when (.exists tmp)
+          (.delete tmp))))))
+
 (defn atomic-create!
   ;; @spec MCP-OP-EDIT-035
   "Atomically publish new UTF-8 source or throw without replacing any target.

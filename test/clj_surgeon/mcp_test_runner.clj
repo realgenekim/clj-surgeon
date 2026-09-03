@@ -35,6 +35,7 @@
    [clj-surgeon.mcp-workspace-test]
    [clj-surgeon.mcp-write-refusal-test]
    [clj-surgeon.quoted-var-refs-test]
+   [clj-surgeon.txn-journal-test]
    [clj-surgeon.workspace-onboarding-test]
    [clojure.test :refer [run-tests]]))
 
@@ -77,5 +78,6 @@
           'clj-surgeon.mcp-server-test
           'clj-surgeon.mcp-semantic-client-test
           'clj-surgeon.quoted-var-refs-test
+          'clj-surgeon.txn-journal-test
           'clj-surgeon.workspace-onboarding-test)]
     (System/exit (+ (:fail result) (:error result)))))
