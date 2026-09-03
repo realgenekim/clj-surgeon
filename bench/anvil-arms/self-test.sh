@@ -88,6 +88,17 @@ WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "$ARMS_ROOT_BASE/selftest.XXXXXX")}
 CLEAN=${ANVIL_ARMS_SELFTEST_KEEP:-0}
 PASS=0; FAIL=0
 
+# THE SHELL-ERROR TRAP.  Sol round three, finding (5): a backticked word inside a
+# double-quoted case header EXECUTED -- `self-test.sh: line 941: end: command not
+# found` was printed by a run that reported "288 passed, 0 failed".  A suite that
+# prints a shell error and calls itself green is measuring nothing about the line that
+# failed, and the same quoting bug in a case that ASSERTS something would pass while
+# executing the wrong command.  So the suite's own stderr is captured and any
+# `command not found` in it is a FAILURE, not a log line.  fd 3 keeps the real stderr
+# so it can be restored and shown at the end.
+STDERR_LOG="$WORK/self-test.stderr"
+exec 3>&2 2>"$STDERR_LOG"
+
 ok   () { PASS=$((PASS+1)); printf 'ok   %s\n' "$1"; }
 bad  () { FAIL=$((FAIL+1)); printf 'FAIL %s\n' "$1"; }
 want () { # want <label> <expected> <actual>
@@ -1802,6 +1813,28 @@ cat "$WORK/case36.out"
 PASS=$((PASS + $(grep -c '^ok   case36' "$WORK/case36.out")))
 FAIL=$((FAIL + $(grep -c '^FAIL case36' "$WORK/case36.out")))
 
+echo "== case 37: a backticked word in a case header EXECUTES; the trap catches it =="
+# The exact line Sol saw fire (self-test.sh:941, `case 25: ... no final `end` ...`),
+# reproduced in a throwaway script so the trap has a positive control: without it, a
+# green suite and a shell error are indistinguishable to anyone reading the summary.
+printf '%s\n' 'echo "== case 25: a watch stream with no final `end` is unterminated =="' \
+  > "$WORK/backtick-probe.sh"
+bash "$WORK/backtick-probe.sh" > "$WORK/backtick-probe.out" 2> "$WORK/backtick-probe.err"
+grep -q 'command not found' "$WORK/backtick-probe.err" \
+  && ok "case37 the old header form executes a command (positive control for the trap)" \
+  || { bad "case37 the positive control did not reproduce the shell error"; \
+       cat "$WORK/backtick-probe.err"; }
+want "case37 and the word is eaten out of the printed header" \
+     "== case 25: a watch stream with no final  is unterminated ==" \
+     "$(cat "$WORK/backtick-probe.out")"
+# the same header, correctly quoted, prints its backticks and executes nothing
+printf '%s\n' 'echo "== case 25: a watch stream with no final \`end\` is unterminated =="' \
+  > "$WORK/backtick-fixed.sh"
+bash "$WORK/backtick-fixed.sh" > "$WORK/backtick-fixed.out" 2> "$WORK/backtick-fixed.err"
+[ -s "$WORK/backtick-fixed.err" ] \
+  && { bad "case37 the escaped form still wrote to stderr"; cat "$WORK/backtick-fixed.err"; } \
+  || ok "case37 the escaped form executes nothing"
+
 echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
 # Found while replaying Sol's probes by hand: the self-test exports
 # PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
@@ -1818,6 +1851,21 @@ want "case20e score rc with no PYTHONDONTWRITEBYTECODE" 0 "$?"
 # prompts/__pycache__ is NOT touched here: this repo tracks one .pyc under it by
 # accident, and a test that deletes a tracked file to make its own assertion pass is a
 # worse defect than the one it is checking.
+
+# --- the shell-error trap fires here, before any verdict is printed ---------------
+exec 2>&3 3>&-
+SHELL_ERRORS=$(grep -c 'command not found' "$STDERR_LOG" 2>/dev/null || true)
+SHELL_ERRORS=${SHELL_ERRORS:-0}
+if [ "$SHELL_ERRORS" -eq 0 ]; then
+  ok "the suite executed no unintended command (no 'command not found' on its stderr)"
+else
+  bad "the suite executed $SHELL_ERRORS unintended command(s) — its own shell errors:"
+  grep -n 'command not found' "$STDERR_LOG" >&2
+fi
+if [ "$FAIL" -ne 0 ] && [ -s "$STDERR_LOG" ]; then
+  echo "--- suite stderr (tail) ---------------------------------------------------" >&2
+  tail -40 "$STDERR_LOG" >&2
+fi
 
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
