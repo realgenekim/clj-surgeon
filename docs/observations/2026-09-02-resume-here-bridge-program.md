@@ -1,3 +1,5 @@
+> **2026-09-03: the seat moved to forge@anvil.** Read `docs/observations/2026-09-03-resume-here-anvil-seat.md` for host facts, missing tools and boundaries; this file remains the program state.
+
 # RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 12:25Z; read the UPDATE blocks bottom-up, the newest supersedes)
 
 STANDING ORDERS (memory files): headlines first (table: arm, wall, correct? + one learning + one
