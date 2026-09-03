@@ -75,3 +75,17 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 ## RESUME DELTA 02:02Z
 
 - Lane 5: ac6a55658002e3ef2 template-upsert (`~/src/curtaincall-cfp-tmpl`). Gated and NOT started: S2 (q5z merge), E6 (S1), C2 (Gene's product call), A1 (tester account), inbox notes (maven creds).
+
+## RESUME DELTA 2026-09-03T02:20Z
+
+- **Study-ops branch is NO-GO** (docs/observations/2026-09-03-study-ops-redteam-NO-GO.md): 12 items,
+  1–4 blocking (rg flag injection via `grep`; read-eval on deps.edn; symlink escape; unbounded pre-parse).
+  Security round runs on `~/src/clj-surgeon-study` AFTER the S1/S3 builder (a7b68e5d3a6c673f5) reports
+  and stops; then an independent re-review; only then back in the queue. Item 2 is pre-existing on main.
+- Running: ratchets a02f87b29b2d27eff (`~/src/clj-surgeon-ratchets`); lens follow-ups a62066cb655ae61ab
+  (`~/src/curtaincall-cfp-lens2`); red-teams a45426b8de19c383b (census 7244141) and af2fbde760adead45
+  (rf2 5e6cdd2 + q5z 2753f23) — their verdicts decide whether those branches stay in the queue.
+- Lane 5 DONE: `bridge/template-upsert` bd483802+619d3192 (`~/src/curtaincall-cfp-tmpl`); my unit run
+  waiter b7sl1zgqh (`~/tmp/tmpl-unit.log`); push when green; a merge note for Gene (nil-id collide→append).
+- Doctrine: CLAUDE.md "Fence review scope" (ab40192); memory security-boundary-review-before-merge widened.
+
