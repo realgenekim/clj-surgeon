@@ -234,9 +234,13 @@
    expired, pruned, never written, minted against a DIFFERENT root, or filed
    under bytes that no longer PROVE the manifest they are filed as.
 
-   Snapshots are addressed by the canonical root path, so a cursor is not
-   portable between roots however alike two trees look. Serving it from
-   whatever the current root happens to contain is the first blocker.
+   Snapshots are addressed by the canonical root path TWICE — the directory
+   they are filed under, and the seed of the manifest digest itself — so a
+   cursor is not portable between roots however alike two trees look, twins
+   included. Serving it from whatever the current root happens to contain is
+   the first blocker; refusing it as a FORGERY, which is what a content-only
+   address did once the twin had been scanned, is a true refusal with a false
+   receipt.
 
    The last cause is the round-three finding: a snapshot is verified before it
    is SERVED, not only before it is reused, so rows that no longer re-fold to
@@ -320,7 +324,12 @@
 (defn invalid-cursor-refusal
   "The receipt for a `:cursor` this server did not issue. Ignoring it and
    starting from the top would hand the caller page 1 while it believed it had
-   page 2 — a silently wrong result, which is worse than a refusal."
+   page 2 — a silently wrong result, which is worse than a refusal.
+
+   It means ONLY that. A cursor minted here against a different root — even an
+   identical twin checkout — is `:unknown-result-cursor`, because the root is
+   bound into the manifest address; this receipt is never printed about a
+   token this server minted."
   [{:keys [token] :as request}]
   {:error-type :invalid-result-cursor
    :error (str ":cursor is not a continuation cursor: " (pr-str token))

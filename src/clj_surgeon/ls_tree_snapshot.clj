@@ -25,17 +25,24 @@
       A byte swap under a preserved stat is caught because nothing about the
       stat is load-bearing any more.
 
-   2. THE SNAPSHOT IS ADDRESSED BY ROOT. Snapshots live under the workspace
-      state root keyed by the SHA-256 of the canonical root path, so a cursor
+   2. THE SNAPSHOT IS ADDRESSED BY ROOT, TWICE. Snapshots live under the
+      workspace state root keyed by the SHA-256 of the canonical root path,
+      AND the canonical root seeds the manifest digest itself, so a cursor
       from another root does not resolve at all: `:unknown-result-cursor`.
+      The second binding is not redundant. Two identical checkouts fold to one
+      CONTENT digest, so with a content-only address a foreign cursor resolved
+      to the twin's meta and refused `:invalid-result-cursor` — a forgery
+      receipt about a token this server had minted. A refusal is not enough;
+      the receipt has to be true.
 
    3. A PAGE READS ONLY ITS SLICE. Page 2 does no discovery, no glob and no
       tree walk; it seeks `offset` lines into the pinned row file and takes
       `limit`. That closes the `O(pages x N)` re-walk the same review found.
 
-   4. A SNAPSHOT IS ADDRESSED BY WHAT IT CONTAINS. `cursor-id` IS the manifest
-      digest — folded over every row's position, project, path and CONTENT
-      digest under `manifest-version`. The first shape of this namespace minted
+   4. A SNAPSHOT IS ADDRESSED BY WHAT IT CONTAINS, AND WHERE. `cursor-id` IS
+      the manifest digest — folded over every row's position, project, path
+      and CONTENT digest, seeded with `manifest-version` and the canonical
+      root. The first shape of this namespace minted
       the id from `UUID/randomUUID`, which named the SCAN rather than the tree,
       and the memory battery caught it: five reps of one operation over one
       corpus produced four distinct output hashes (`nondeterministic:4`),
@@ -168,11 +175,37 @@
    It seeds the snapshot digest, so changing the row projection changes every
    id and no snapshot written under an older shape is ever reused under a
    newer one. A projection version that is not IN the address is a migration
-   nobody can detect."
-  1)
+   nobody can detect.
 
-(def ^:private digest-header
-  (str "clj-surgeon/ls-tree-manifest/v" manifest-version "\n"))
+   v2 binds the CANONICAL ROOT into the address (see `digest-header`), which
+   changes every id, so every v1 snapshot becomes unaddressable at once and
+   ages out under the TTL rather than being read under a projection that no
+   longer describes it."
+  2)
+
+(defn- digest-header
+  "What seeds the manifest digest: the projection version AND the canonical
+   root the manifest was taken of.
+
+   The root is in the ADDRESS, not merely in the directory the snapshot is
+   filed under, because a receipt made a promise the address could not keep.
+   `:unknown-result-cursor` says a cursor minted against another root does not
+   resolve at all — but two identical checkouts fold to one content digest, so
+   once the twin had been scanned the cursor resolved to the TWIN's meta and
+   fell through to the mac check, refusing `:invalid-result-cursor`: the
+   remedy text for a forgery, printed about a token this server minted.
+
+   Binding the root makes the promise true by construction rather than by
+   luck: twins now have different addresses, so a foreign cursor finds no
+   meta and is `unknown`, and `:invalid-result-cursor` goes back to meaning
+   only what it says — this server did not mint that token.
+
+   The price is that `:manifest_digest` no longer identifies tree CONTENT
+   across roots: two identical checkouts report different digests. That is the
+   right trade for a cursor, whose whole job is to answer WHICH repository
+   page 2 is a page of."
+  [root]
+  (str "clj-surgeon/ls-tree-manifest/v" manifest-version "\n" (canonical root) "\n"))
 
 (defn- row-identity
   "The canonical identity of one manifest row, as folded into the snapshot
@@ -246,7 +279,7 @@
 
 (declare read-meta)
 
-(defn- rows-digest
+(defn rows-digest
   "Re-fold `[digest row-count]` from a pinned rows file on disk, or `nil` when
    it cannot be read, a line is not a row, or the rows are out of order.
 
@@ -254,12 +287,17 @@
    file sitting under that address is a CLAIM about its content; re-folding it
    before serving is the whole difference between content-addressed and
    name-addressed. Streaming, one line at a time: verifying a manifest must
-   not cost what building it would."
-  [^File f]
+   not cost what building it would.
+
+   PUBLIC as the one place the manifest address is computed from bytes on
+   disk. A witness that needs a snapshot which PASSES verification must fold
+   its address the way the implementation does, not the way a test author
+   remembers it doing."
+  [root ^File f]
   (when (.isFile f)
     (try
       (let [md (MessageDigest/getInstance "SHA-256")]
-        (.update md (.getBytes digest-header "UTF-8"))
+        (.update md (.getBytes ^String (digest-header root) "UTF-8"))
         (with-open [r (io/reader f)]
           (let [n (reduce
                     (fn [n line]
@@ -291,7 +329,7 @@
    filename again on exactly the path a caller reads."
   [root cursor-id]
   (when-let [m (read-meta root cursor-id)]
-    (let [[d n] (rows-digest (rows-file root cursor-id))]
+    (let [[d n] (rows-digest root (rows-file root cursor-id))]
       (when (and (= manifest-version (:v m))
                  (= cursor-id (:cursor-id m))
                  (= cursor-id (:digest m))
@@ -341,7 +379,7 @@
     (prune! dir)
     (let [tmp-rows (io/file dir (str "build-" (random-hex64) ".rows.tmp"))
           md (doto (MessageDigest/getInstance "SHA-256")
-               (.update (.getBytes digest-header "UTF-8")))
+               (.update (.getBytes ^String (digest-header root) "UTF-8")))
           total (with-open [w (io/writer tmp-rows)]
                   (reduce
                     (fn [n {:keys [pidx path abs]}]
