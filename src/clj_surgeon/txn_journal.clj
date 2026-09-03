@@ -20,6 +20,7 @@
    Adopted by no verb yet. This is the kernel; adoption is a separate build."
   (:require
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-workspace :as workspace]
    [clojure.java.io :as io]
    [clojure.string :as str])
@@ -209,6 +210,9 @@
             (.mkdirs staging)
             (let [txn {:txid txid
                        :workspace-root root
+                       ;; resolved once: confinement must not cost a realpath
+                       ;; syscall per pinned file
+                       :real-root (mcp-paths/real-root root)
                        :transactions-dir transactions
                        :dir (.getCanonicalPath dir)
                        :objects-dir (.getCanonicalPath objects)
@@ -394,6 +398,35 @@
                                (update :journal-bytes-peak (fnil max 0) used)))))
           {:ok true}))))
 
+;; ------------------------------------------------------------- confinement
+
+(defn- confined-path
+  "Resolve `path` as a workspace-relative source path, or return a refusal.
+
+   The journal takes absolute paths, so the path is relativised against the
+   transaction's canonical root and handed to the SAME `mcp-paths` resolver every
+   other write surface uses. A path outside the root relativises to segments
+   containing `..`, which that resolver already rejects, so this adds no second
+   confinement rule - it routes to the existing one."
+  [txn path]
+  (let [root (or (:real-root txn) (mcp-paths/real-root (:workspace-root txn)))
+        absolute (.toPath (io/file (.getCanonicalPath (io/file path))))]
+    (if-not (.startsWith absolute root)
+      (refusal :txn-path-outside-workspace
+               (str path " is outside the transaction's workspace root")
+               {:path (str path)
+                :workspace-root (.toString root)
+                :next_call nil})
+      (let [relative (.toString (.relativize root absolute))
+            resolved (mcp-paths/resolve-source-path root relative)]
+        (if (:ok resolved)
+          {:ok true :path (:path resolved)}
+          (refusal :txn-path-outside-workspace
+                   (or (:error resolved) "The path is refused by workspace confinement")
+                   {:path (str path)
+                    :cause-error-type (:error_type resolved)
+                    :next_call nil}))))))
+
 ;; --------------------------------------------------------------------- pin
 
 (defn pin!
@@ -403,11 +436,16 @@
    No path may be written until this has succeeded for it. The object is named
    by its own digest, so pinning the same bytes twice costs one copy."
   [txn path]
-  (let [path (.getCanonicalPath (io/file path))
+  (let [confined (confined-path txn path)
+        path (or (:path confined) (.getCanonicalPath (io/file path)))
         file (io/file path)]
-    (if-not (.isFile file)
+    (cond
+      (not (:ok confined)) confined
+
+      (not (.isFile file))
       (refusal :txn-pin-target-missing (str "Cannot pin a missing file: " path)
                {:path path :next_call nil})
+      :else
       (let [bytes (Files/size (.toPath file))
             admitted (admit-journal-bytes! txn bytes path :pin)]
         (if-not (:ok admitted)
@@ -428,18 +466,24 @@
   ;; @spec MCP-OP-MEM-012
   "Write a path's future bytes to a staging file. Nothing is retained in heap."
   [txn path content]
-  (let [path (.getCanonicalPath (io/file path))
+  (let [confined (confined-path txn path)
+        path (or (:path confined) (.getCanonicalPath (io/file path)))
         state (:state txn)
         bytes (count (.getBytes ^String content "UTF-8"))
         staged (:staged @state)
         limit (get-in txn [:limits :max-staged-files])]
-    (if (and (not (contains? staged path)) (>= (count staged) limit))
+    (cond
+      (not (:ok confined)) confined
+
+      (and (not (contains? staged path)) (>= (count staged) limit))
       (refusal :txn-staged-files-too-many
                (str "The write set reached its ceiling of " limit " files at " path)
                {:path path :max-files limit
                 :observed-at-least (inc (count staged))
                 :next_call {:op :txn/begin
                             :scope {:narrow-to "fewer files to modify in one transaction"}}})
+
+      :else
       (let [admitted (admit-journal-bytes! txn bytes path :stage)]
         (if-not (:ok admitted)
           admitted

@@ -308,6 +308,32 @@
         (is (= h0 (mapv bytes-of paths)) "zero writes reached the workspace"))
       (finally (cleanup! ws)))))
 
+;; ------------------------------------------- MCP-OP-MEM-006 confinement
+
+;; @spec MCP-OP-MEM-006
+(deftest a-path-outside-the-workspace-can-be-neither-pinned-nor-staged
+  (testing "the journal takes absolute paths, so confinement is not implied by
+            the caller: pin and stage route to the same mcp-paths resolver every
+            other write surface uses"
+    (let [ws (workspace! "confinement" 2)
+          outside (workspace! "confinement-outside" 1)
+          victim (first (:paths outside))]
+      (try
+        (let [before (bytes-of victim)
+              txn (begin! ws {})
+              pinned (journal/pin! txn victim)
+              staged (journal/stage! txn victim "(ns evil)\n")
+              inside (journal/pin! txn (first (sort (:paths ws))))]
+          (is (false? (:ok pinned)))
+          (is (= :txn-path-outside-workspace (:error-type pinned)))
+          (is (false? (:ok staged)))
+          (is (= :txn-path-outside-workspace (:error-type staged)))
+          (is (:ok inside) "a path inside the workspace is still admitted")
+          (is (= 0 (journal/staged-file-count txn)))
+          (is (= before (bytes-of victim)))
+          (journal/rollback! txn))
+        (finally (cleanup! ws) (cleanup! outside))))))
+
 ;; ------------------------------------------- MCP-OP-MEM-007 lock + read set
 
 ;; @spec MCP-OP-MEM-007
