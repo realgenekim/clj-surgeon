@@ -3061,3 +3061,128 @@
                    "; the workspace the caller named holds 1 and the replay "
                    "cwd holds 2"))))
       (finally (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eleven review, item 5 (blocking, security boundary): generated
+;; CLI commands are not shell-safe.
+;;
+;; `:dir "space root"` produced
+;;   clj-surgeon :op :relation-census :dir /tmp/census12-sol-fx/space root :threads 8
+;; whose replay returned `:invalid-arguments` — the workspace split into two
+;; arguments and the pair count went odd. And a root containing
+;; `;printf INJECTED` was interpolated VERBATIM, producing command-injection
+;; syntax in a string whose entire purpose is to be pasted into a shell.
+;;
+;; A continuation is an EXECUTABLE PROMISE. MCP-OP-CENSUS-014 already forbids
+;; a caption in an argument position because a caption is unexecutable; an
+;; unquoted path is the same defect one turn later — it executes, and it
+;; executes something else. The path is not attacker-supplied in the ordinary
+;; case, but it IS caller-supplied, and a refusal handed to an agent to replay
+;; is exactly where a caller-supplied string becomes a command.
+;;
+;; The witness replays the RENDERED STRING through a real `bash -c`, not
+;; through an argv vector, because the string is what a human or an agent
+;; pastes. The shim on PATH records the argv bash actually produced, so the
+;; assertion is not "it seemed to work" but "bash split this into exactly the
+;; tokens the continuation meant" — and a canary file in the replay's own cwd
+;; proves nothing else ran.
+;; ---------------------------------------------------------------------------
+
+(def ^:private injected-roots
+  "Six workspace names, each hostile to a different shell metacharacter."
+  [{:label :space :name "space root"}
+   {:label :single-quote :name "quote'root"}
+   {:label :double-quote :name "double\"root"}
+   {:label :semicolon :name "semi;touch canary"}
+   {:label :command-substitution :name "dollar$(touch canary)"}
+   {:label :newline :name "new\nline"}])
+
+(defn- shell-shim!
+  "A `clj-surgeon` on PATH that records the argv bash handed it, NUL-separated,
+   then runs the real CLI."
+  [dir]
+  (let [bin (io/file dir "bin")
+        shim (io/file bin "clj-surgeon")]
+    (.mkdirs bin)
+    (spit shim
+          (str "#!/usr/bin/env bash\n"
+               ": > \"$CENSUS_ARGV_LOG\"\n"
+               "for a in \"$@\"; do printf '%s\\0' \"$a\" >> "
+               "\"$CENSUS_ARGV_LOG\"; done\n"
+               "exec bb -cp " repo-root "/src -m clj-surgeon.core \"$@\"\n"))
+    (.setExecutable shim true)
+    (.getPath bin)))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(deftest a-cli-continuation-is-shell-safe
+  (let [parent (temp-dir)
+        replay-cwd (io/file parent "replay-cwd")
+        canary (io/file replay-cwd "canary")]
+    (try
+      (.mkdirs replay-cwd)
+      (let [bin (shell-shim! parent)]
+        (doseq [[index {:keys [label name]}] (map-indexed vector injected-roots)]
+          (let [root (io/file parent name)
+                source (str "f" index ".clj")
+                argv-log (io/file parent (str "argv-" index ".log"))]
+            (spit-file! (io/file root "src/app" source) arm-source)
+            (let [real (.getCanonicalPath root)
+                  refusal (core/run-relation-census
+                            {:dir real :threads "not-a-number"})
+                  command (:next-command refusal)
+                  argv (:next-command-argv refusal)]
+
+              (testing (str label ": the refusal anchors on the root it was given")
+                (is (= :invalid-pool-size (:error-type refusal)))
+                (is (= real (:absolute (:anchor refusal)))))
+
+              (testing (str label ": the continuation carries an argv vector")
+                (is (vector? argv)
+                    (str label ": no argv vector was published: "
+                         (pr-str (select-keys refusal
+                                              [:next-command
+                                               :next-command-argv]))))
+                (is (some #{real} argv)
+                    (str label ": the argv vector does not carry the root: "
+                         (pr-str argv))))
+
+              (let [{:keys [out exit]}
+                    (proc/shell
+                      {:out :string :err :string :continue true
+                       :dir (.getPath replay-cwd)
+                       :extra-env {"PATH" (str bin ":" (System/getenv "PATH"))
+                                   "CENSUS_ARGV_LOG" (.getPath argv-log)}}
+                      "bash" "-c" (str command))
+                    produced (when (.exists argv-log)
+                               (vec (remove str/blank?
+                                            (str/split (slurp argv-log)
+                                                       #"\u0000"))))
+                    replay (try (edn/read-string out) (catch Exception _ nil))]
+
+                (testing (str label ": bash splits the rendered string as meant")
+                  (is (zero? exit)
+                      (str label ": the rendered continuation did not run "
+                           "(exit " exit "): " (pr-str command)))
+                  (is (= (vec (rest argv)) produced)
+                      (str label ": bash produced " (pr-str produced)
+                           " from " (pr-str command)
+                           "; the continuation meant "
+                           (pr-str (vec (rest argv))))))
+
+                (testing (str label ": the replay censuses the root by real path")
+                  (is (true? (:ok replay))
+                      (str label ": the replay refused: " (pr-str replay)))
+                  (is (= 1 (:files replay))
+                      (str label ": the replay censused "
+                           (pr-str (:files replay)) " file(s)"))
+                  (is (contains? (:by-file replay) (str "src/app/" source))
+                      (str label ": the replay censused the WRONG root — "
+                           "expected src/app/" source ", got "
+                           (pr-str (keys (:by-file replay)))))))))))
+
+      (testing "nothing but the census ran: the canary was never created"
+        (is (not (.exists canary))
+            (str "an injected root executed a second command: "
+                 (.getPath canary) " exists")))
+      (finally (delete-tree! parent)))))
