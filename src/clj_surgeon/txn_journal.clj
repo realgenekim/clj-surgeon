@@ -169,6 +169,11 @@
        :file-key (str (.fileKey attrs))})
     (catch Exception _ {:kind :absent :file-key nil})))
 
+(defn- identity-token
+  "A path's NOFOLLOW identity rendered as one tab-free journal token."
+  [identity]
+  (str (name (:kind identity :absent)) "|" (:file-key identity)))
+
 (defn- hex
   [^bytes bs]
   (apply str (map #(format "%02x" (bit-and 0xff (long %))) bs)))
@@ -405,8 +410,8 @@
    transaction, a cooperating editor - and it cannot exclude one that does not.
    That is the whole of what an advisory lock buys, and the residual window is
    documented rather than papered over."
-  [txn f]
-  (let [file (publish-lock-file (:transactions-dir txn))]
+  [transactions-dir f]
+  (let [file (publish-lock-file transactions-dir)]
     (with-open [channel (FileChannel/open
                           (.toPath file)
                           ^"[Ljava.nio.file.OpenOption;"
@@ -1035,7 +1040,7 @@
       (let [^File tmp (:tmp prepared)]
         (try
           (when before-recheck (before-recheck path))
-          (with-publish-lock* txn
+          (with-publish-lock* (:transactions-dir txn)
             (fn []
               (let [opened (System/nanoTime)
                     current (sha256-file path)
@@ -1148,7 +1153,12 @@
                      :else
                      (do
                        (swap! state update :written conj path)
-                       (append-journal! txn (str "write-done\t" path "\t" result-hash))
+                       ;; H1: what this commit LEFT BEHIND. `undo!` rechecks
+                       ;; the target against it before republishing H0, so a
+                       ;; write that landed after the commit is refused rather
+                       ;; than clobbered.
+                       (append-journal! txn (str "write-done\t" path "\t" result-hash
+                                                 "\t" (identity-token (path-identity path))))
                        (when after-publish (after-publish path))
                        (let [actual (sha256-file path)]
                          (if (= actual result-hash)
@@ -1178,27 +1188,10 @@
         (vec (line-seq reader)))
       [])))
 
-(defn- restore-from-journal!
-  "Restore every path a journal recorded as BEGUN, from its own pinned objects.
-
-   The single restoration primitive: crash recovery and a deliberate `undo!` of
-   a committed receipt are the same act read from the same lines. Only
-   `write-begin` paths are touched - a pinned path the transaction never wrote
-   is not this journal's business, and republishing it would clobber a write
-   somebody else made."
-  [dir]
-  (let [lines (journal-lines dir)
-        pins (reduce (fn [acc line]
-                       (let [[op path digest] (str/split line #"\t")]
-                         (if (= "pin" op) (assoc acc path digest) acc)))
-                     {}
-                     lines)
-        begun (vec (distinct
-                     (keep (fn [line]
-                             (let [[op path] (str/split line #"\t")]
-                               (when (= "write-begin" op) path)))
-                           lines)))
-        restored
+(defn- restore-begun!
+  "Republish every begun path from its pinned object and verify each."
+  [dir pins begun]
+  (let [restored
         (mapv (fn [path]
                 (let [digest (get pins path)
                       object (io/file dir "objects" digest)]
@@ -1215,15 +1208,93 @@
                       {:path path :status :restore-failed :error (.getMessage e)}))))
               (reverse begun))]
     ;; remove any staging temporary a dead process left inside the tree
-    (doseq [line lines]
-      (let [[op path] (str/split line #"\t")]
-        (when (= "write-begin" op)
-          (doseq [^File sibling (.listFiles (.getParentFile (io/file path)))]
-            (when (str/starts-with? (.getName sibling) ".clj-surgeon-publish-")
-              (Files/deleteIfExists (.toPath sibling)))))))
+    (doseq [path begun]
+      (doseq [^File sibling (.listFiles (.getParentFile (io/file path)))]
+        (when (str/starts-with? (.getName sibling) ".clj-surgeon-publish-")
+          (Files/deleteIfExists (.toPath sibling)))))
     {:txid (.getName (io/file dir))
      :paths restored
      :ok (every? #(= :verified (:status %)) restored)}))
+
+(defn- undo-conflicts
+  "Paths whose CURRENT state is not the state the commit left behind (H1).
+
+   `undo!` is a WRITE, and a write that does not recheck clobbers whatever
+   landed after the commit. Crash recovery cannot ask this question - a killed
+   transaction left the tree part-written on purpose - so only a deliberate
+   undo of a COMMITTED receipt makes it."
+  [posts begun]
+  (vec (keep (fn [path]
+               (let [post (get posts path)]
+                 (cond
+                   (nil? post)
+                   {:path path :conflict :no-recorded-result}
+
+                   (not (.isFile (io/file path)))
+                   {:path path :conflict :missing :expected-hash (:sha256 post)}
+
+                   :else
+                   (let [current (sha256-file path)
+                         token (identity-token (path-identity path))]
+                     (cond
+                       (not= current (:sha256 post))
+                       {:path path :conflict :digest
+                        :expected-hash (:sha256 post) :actual-hash current}
+
+                       (and (:identity-token post)
+                            (not= token (:identity-token post)))
+                       {:path path :conflict :identity
+                        :expected-identity (:identity-token post)
+                        :actual-identity token}
+
+                       :else nil)))))
+             begun)))
+
+(defn- restore-from-journal!
+  "Restore every path a journal recorded as BEGUN, from its own pinned objects.
+
+   The single restoration primitive: crash recovery and a deliberate `undo!` of
+   a committed receipt are the same act read from the same lines. Only
+   `write-begin` paths are touched - a pinned path the transaction never wrote
+   is not this journal's business, and republishing it would clobber a write
+   somebody else made.
+
+   It runs under the workspace PUBLISH lock, the same lock the commit path
+   takes, whenever the caller knows which workspace this journal belongs to.
+   `undo!` additionally passes `:expect-post-commit?`, which rechecks every
+   begun path's digest AND identity against what the commit recorded as H1 and
+   refuses the WHOLE undo, with zero writes, if any path moved."
+  ([dir] (restore-from-journal! dir {}))
+  ([dir {:keys [transactions-dir expect-post-commit?]}]
+   (let [lines (journal-lines dir)
+        pins (reduce (fn [acc line]
+                       (let [[op path digest] (str/split line #"\t")]
+                         (if (= "pin" op) (assoc acc path digest) acc)))
+                     {}
+                     lines)
+        posts (reduce (fn [acc line]
+                        (let [[op path digest token] (str/split line #"\t")]
+                          (if (= "write-done" op)
+                            (assoc acc path {:sha256 digest :identity-token token})
+                            acc)))
+                      {}
+                      lines)
+        begun (vec (distinct
+                     (keep (fn [line]
+                             (let [[op path] (str/split line #"\t")]
+                               (when (= "write-begin" op) path)))
+                           lines)))
+        restore!
+        (fn []
+          (let [conflicts (when expect-post-commit?
+                            (seq (undo-conflicts posts (reverse begun))))]
+            (if conflicts
+              {:txid (.getName (io/file dir)) :conflicts (vec conflicts)
+               :paths [] :ok false}
+              (restore-begun! dir pins begun))))]
+     (if transactions-dir
+       (with-publish-lock* transactions-dir restore!)
+       (restore!)))))
 
 ;; ------------------------------------------------------- retained journals
 
@@ -1290,7 +1361,13 @@
 
    This is what makes a commit receipt a receipt: the transaction directory
    outlives the commit precisely so its answer can be reversed and the
-   reversal verified against the digest pinned before the first write."
+   reversal verified against the digest pinned before the first write.
+
+   Undo is a WRITE, and it goes through the same publish lock and the same
+   recheck discipline as the commit that created it: it takes the workspace
+   PUBLISH lock, and it refuses - with zero writes - any path whose current
+   digest or identity is not what the commit recorded as H1. Republishing H0
+   over a later writer's bytes is not an undo, it is a silent clobber."
   ([workspace-root txid] (undo! workspace-root txid {}))
   ([workspace-root txid {:keys [state-home]}]
    (let [dir (journal-dir workspace-root txid state-home)]
@@ -1300,8 +1377,23 @@
                      "; its pre-images cannot be republished")
                 {:txid txid :next_call nil
                  :remedy "A journal that was forgotten or evicted cannot be undone. Retain it until the receipt no longer needs to be reversible."})
-       (let [result (restore-from-journal! (.getCanonicalPath dir))]
-         (assoc result :isolation compact-isolation :undone true))))))
+       (let [result (restore-from-journal!
+                      (.getCanonicalPath dir)
+                      {:transactions-dir (transactions-dir workspace-root state-home)
+                       :expect-post-commit? true})
+             conflicts (:conflicts result)]
+         (if (seq conflicts)
+           (refusal :txn-undo-conflict
+                    (str "The current bytes of " (:path (first conflicts))
+                         " are not the bytes this commit left behind; undoing"
+                         " would clobber a write that landed after it")
+                    {:txid txid
+                     :path (:path (first conflicts))
+                     :conflicts conflicts
+                     :files-written 0
+                     :next_call nil
+                     :remedy "Another writer changed the target after the commit. Reconcile that change first, or forget! this journal deliberately; the pre-images are still here."})
+           (assoc result :isolation compact-isolation :undone true)))))))
 
 (defn- presents-receipt?
   "True when the caller handed back the very commit receipt this journal is the
@@ -1419,7 +1511,9 @@
                                                            (:status (read-string (slurp state)))))))))
                               (.listFiles dir)))
          results (mapv (fn [^File d]
-                         (let [result (restore-from-journal! (.getCanonicalPath d))
+                         (let [result (restore-from-journal!
+                                        (.getCanonicalPath d)
+                                        {:transactions-dir transactions})
                                status (if (:ok result) :rolled-back :restore-failed)]
                            (spit (io/file d "state.edn")
                                  (pr-str {:txid (.getName d) :status status

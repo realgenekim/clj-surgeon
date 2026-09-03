@@ -93,6 +93,37 @@
     (.waitFor process)
     (.pid process)))
 
+(defn- hold-publish-lock!
+  "Spawn a SEPARATE JVM holding this workspace's PUBLISH.lock for `hold-ms`.
+
+   Returns once the child has actually taken the lock, so the caller's clock
+   starts when the contention is real rather than when the process was asked
+   for."
+  [{:keys [root state-home]} hold-ms]
+  (let [command [(str (io/file (System/getProperty "java.home") "bin" "java"))
+                 "-cp" (System/getProperty "java.class.path")
+                 "clojure.main" "-m" "clj-surgeon.txn-lock-child"
+                 (journal/transactions-dir root state-home)
+                 (str hold-ms)]
+        process (.start (ProcessBuilder. ^java.util.List (vec command)))
+        ^java.io.BufferedReader reader (io/reader (.getInputStream process))]
+    (loop [line (.readLine reader)]
+      (cond
+        (nil? line) (throw (ex-info "the lock child died before it held the lock" {}))
+        (= "HELD" line) process
+        :else (recur (.readLine reader))))))
+
+(defn- commit-one-change!
+  "Commit one edit to `path` and return {:receipt r :h0 s}."
+  [ws path future-source]
+  (let [h0 (bytes-of path)
+        txn (begin! ws {})]
+    (record-scope! txn (:paths ws))
+    (journal/seal-read-set! txn)
+    (journal/pin! txn path)
+    (journal/stage! txn path future-source)
+    {:receipt (journal/commit! txn) :h0 h0}))
+
 ;; ------------------------------------------------- MCP-OP-MEM-006 ceilings
 
 ;; @spec MCP-OP-MEM-006
@@ -850,6 +881,61 @@
             (is (= :txn-journal-missing (:error-type after))
                 "an evicted receipt says it cannot be undone rather than
                  pretending it can")))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-006
+;; @spec MCP-OP-MEM-007
+(deftest undo-refuses-a-target-another-writer-changed-after-the-commit
+  (testing "Opus round 2, blocker 3: `undo!` wrote with NEITHER the publish
+            lock NOR any recheck. It is a live user-facing operation, not a
+            startup path - the one writer inside the kernel that ignored the
+            kernel's own lock. Undo is a write, and a write that does not
+            recheck clobbers whatever landed after the commit."
+    (let [ws (workspace! "undo-conflict" 2)
+          path (first (sort (:paths ws)))]
+      (try
+        (let [{:keys [receipt h0]} (commit-one-change! ws path "(ns f0) (def v :new)\n")
+              txid (:txid receipt)
+              opts {:state-home (:state-home ws)}
+              h1 (bytes-of path)]
+          (is (:ok receipt))
+          (spit path "SOMEBODY-ELSE\n")
+          (let [refused (journal/undo! (:root ws) txid opts)]
+            (is (false? (:ok refused)))
+            (is (= :txn-undo-conflict (:error-type refused)))
+            (is (= path (:path refused)) "the refusal names the path it would have clobbered")
+            (is (= :digest (:conflict (first (:conflicts refused)))))
+            (is (= 0 (:files-written refused)))
+            (is (= "SOMEBODY-ELSE\n" (bytes-of path))
+                "the other writer's bytes survive; undo! wrote nothing"))
+          (spit path h1)
+          (let [undone (journal/undo! (:root ws) txid opts)]
+            (is (:ok undone) "once the target is back at H1 the undo is safe again")
+            (is (= h0 (bytes-of path)))))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+(deftest undo-waits-for-the-publish-lock-another-process-holds
+  (testing "the other half of blocker 3: undo! took 2.5 ms straight through a
+            lock another JVM was holding. It must go through the same publish
+            lock the commit path takes."
+    (let [ws (workspace! "undo-lock" 2)
+          path (first (sort (:paths ws)))]
+      (try
+        (let [{:keys [receipt h0]} (commit-one-change! ws path "(ns f0) (def v :new)\n")
+              txid (:txid receipt)
+              opts {:state-home (:state-home ws)}
+              child (hold-publish-lock! ws 1500)
+              started (System/nanoTime)
+              undone (journal/undo! (:root ws) txid opts)
+              elapsed-ms (quot (- (System/nanoTime) started) 1000000)]
+          (is (:ok receipt))
+          (is (:ok undone))
+          (is (>= elapsed-ms 900)
+              (str "undo! must WAIT for the publish lock; it returned after "
+                   elapsed-ms " ms"))
+          (is (= h0 (bytes-of path)))
+          (.waitFor child))
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-006
