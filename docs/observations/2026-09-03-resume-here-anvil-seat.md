@@ -331,3 +331,19 @@ Next on each report: push → Sol (census, apparatus, fold-diff, MEM-003 cursor 
 
 ## RESUME DELTA (eighteenth refresh; commit time is the timestamp)
 Live: Sol apparatus round 6 cohort-readiness review (8017789). Builders: kernel round 4, census round 9, MEM-003 round 3, fold-diff round 8 (worktrees as before). GO (ten) unchanged; production fold-diff read GO at 347fe6d3.
+
+## RESUME DELTA 12:05Z (from eb56891)
+
+State of the lanes right now (all builders/reviewers are subagents of the Anvil seat session; if you are reading this after compaction, their results arrive as task notifications — do NOT relaunch a lane that is listed as running until you have checked its worktree HEAD against the sha here):
+
+| lane | branch | tip on origin | status | next |
+|---|---|---|---|---|
+| census | clj-surgeon bridge/census-verb | 48c64ac | HELD (Sol r10 NO-GO: CLI validator only `threads`; CLI continuation `:dir .` retargets) | Opus r11 builder in ~/src/clj-surgeon-census → push → Sol r11 re-check |
+| MEM-003 | clj-surgeon bridge/streaming-ls-tree | 281e13b | HELD (Opus r4 GO-WITH-FIX: two-open race 89/400 SERVED-WRONG; symlinked dir escapes lexical confinement) | Opus r5 builder in ~/src/clj-surgeon-stream → push → Opus r5 re-check (Sol filter refuses this lane) |
+| kernel | clj-surgeon bridge/txn-journal | ec93bd1 | HELD (Opus r4 GO-WITH-FIX: restore check-then-act 129/29,012 clobbered; finish-after-throw un-commits) | Opus r5 builder in ~/src/clj-surgeon-txn → push → Opus r5 re-check |
+| apparatus | clj-surgeon bridge/anvil-arms-apparatus | 54f3b50 (tip) / **23a7643 GO cohort-ready** | Sol r8 NO-GO on the tip's case-45 meta-ratchet (wrong-file operand false green) | Sonnet r9 builder in ~/src/clj-surgeon-arms → push → Sol r9 confirm |
+| fold-diff | curtaincall-cfp bridge/fold-diff-tool | 17fa3183 (tip) / **347fe6d3 production GO** | Sol r8 NO-GO at the tip (scan fails open via bindings; crash exit 1; precedence) | Opus r9 builder in ~/src/curtaincall-cfp-folddiff → push → Sol r9 re-check |
+
+Unchanged GOs for the mayor (see the merge-queue doc): receipt-ratchets c5ef7ca, rf2 965d49e, study 4480e3d, memory-battery 5534e94, read-path-memory b7ef23d, q5z f51ceae, parser-admission 52c5d85, template-upsert 25b98a83 (order-gated on Gene), apparatus 23a7643. No merges observed from the mayor as of this delta; consolidated order stands on inb-1165ce. E3/E6 prerequisite "apparatus GO" satisfied; still waiting on the q5z/read-path/parser-admission merges.
+
+Sol lanes: launched via ~/bin/sol-yolo with a background waiter loop per lane; verdicts land in /home/forge/tmp/sol/<lane>-sol-review.md, EXIT line in <lane>-sol.log. Usage watch unchanged all night (96/49/47). Heartbeat cron every 10 min, usage watch hourly at :23. Load ~4–6 on 16 cores, ~20 GB free.
