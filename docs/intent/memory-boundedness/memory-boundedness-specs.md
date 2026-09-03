@@ -61,6 +61,11 @@ In the requirements below:
 
 MCP-OP-MEM-001:
 
+- "A receipt that is too big can be truncated with a continuation." A read-only
+  projection may paginate; a mutation receipt that hides work that was done may
+  not. (Witnessed by the streaming reader's record and byte ceilings in
+  `clj-surgeon.scope-stream`, whose `@spec MCP-OP-MEM-001` markers belong to
+  THIS leaf: the transaction-kernel leaf carries no MEM-001 row.)
 - "Report the peak and call it this operation's peak." A sampled process-wide
   peak is not attributable to one operation. Under concurrency it must be
   labelled process-wide, and the attributable figure must come from the
@@ -92,6 +97,13 @@ MCP-OP-MEM-011:
   still referenced, and is bounded by the peak line.
 - "Run the battery in `make test` so nobody forgets it." It is minutes-scale and
   needs a dedicated bounded JVM; wiring it into a fast gate gets it disabled.
+
+## Falsifiers
+
+| Requirement | Falsifying observation |
+|---|---|
+| MCP-OP-MEM-001 | A receipt is silently truncated, grows without a ceiling, or reports no attributable reserved peak for an operation that has an admission accountant. |
+| MCP-OP-MEM-011 | A pass line is reported as satisfied without having been observed, or the battery is made green by raising `-Xmx` rather than by bounding the operation. |
 
 ## Boundaries
 

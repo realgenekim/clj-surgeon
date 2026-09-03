@@ -25,14 +25,25 @@ Reserved ids are not gaps to fill opportunistically. They name work Sol
 sequenced ahead of adoption, and taking one for something else would make the
 plan unreadable.
 
-- [x] **MCP-OP-MEM-001**: When a tree-scale operation terminates, clj-surgeon shall report its work and its attributable reserved peak in a bounded receipt, and shall refuse rather than truncate a receipt that would exceed its configured record or byte ceiling.
+**MCP-OP-MEM-001 is deliberately NOT registered in this leaf.** One requirement
+gets one authority, and MEM-001's is
+[`../memory-boundedness/memory-boundedness-specs.md`](../memory-boundedness/memory-boundedness-specs.md),
+owned by the memory-battery build. This leaf previously carried a second,
+checked copy of it; two spec files stating the same id, one `[x]` and one `[ ]`,
+is a contract that cannot be audited - a maintainer reading either one would be
+reading a statement the other contradicts.
 
-  This row belongs to the memory-battery build, which owns MEM-001. It is
-  recorded here because the kernel carries two of its clauses - the streaming
-  reader's request-lowerable receipt ceiling with a server cap, and the
-  accountant's attributable reserved peak - and the traceability contract needs
-  the id registered wherever the witnesses live. On merge, fold this row into
-  the battery's own and keep one.
+The kernel does carry two of MEM-001's clauses - the streaming reader's
+request-lowerable receipt ceiling under a server cap, and the accountant's
+attributable reserved peak that the battery's `:journal-scope-stream` arm
+measures - so kernel sources carry `@spec MCP-OP-MEM-001` and
+`@spec MCP-OP-MEM-011` markers. The two rows below keep those markers
+traceable WITHOUT restating the requirements: a deferred row states nothing and
+demands no witness, it only says where the statement lives.
+
+- [D] **MCP-OP-MEM-001**: Deferred to `../memory-boundedness/memory-boundedness-specs.md`, which owns the sole statement. Witnessed from this build by `scope_stream.clj`'s receipt ceilings and reservation block.
+
+- [D] **MCP-OP-MEM-011**: Deferred to `../memory-boundedness/memory-boundedness-specs.md`, which owns the sole statement. Witnessed from this build by the battery arm that reads this kernel's reservation block.
 
 - [x] **MCP-OP-MEM-006**: When a mutation is staged, clj-surgeon shall pin each write-set pre-image and future file durably by digest AND by NOFOLLOW type and file identity before live mutation, shall refuse a parent-traversal segment, a relative path, or an absolute path not named under the workspace root on the RAW path before canonicalisation, and shall not retain repository-wide original or future source maps; and when the transaction ends it shall RETAIN that pre-image journal after a commit until an explicit `forget!` or a quota-driven `evict!` that no receipt reference blocks, and shall never delete the journal of a restoration that did not verify.
 
@@ -66,7 +77,6 @@ plan unreadable.
 | MEM-013 | "A finished transaction's journal is garbage." A committed receipt is undoable only while its pre-images exist, and a FAILED restoration's journal is the only material that can repair the tree. |
 | MEM-014 | "Hashing every file at validation time gives us a snapshot." It does not. A writer that ignores the lock can land between validation and rename. |
 | MEM-014 | "Detected therefore prevented." The racing write is detected at read-back and rolled over; the receipt must not imply it was excluded. |
-| MEM-001 | "A receipt that is too big can be truncated with a continuation." A read-only projection may paginate; a mutation receipt that hides work that was done may not. |
 | MEM-020 | "The aggregate byte ceiling can be checked from the directory entries." A file that grows during the walk must be stopped against the remaining budget, from bytes actually read. |
 | MEM-020 | "Walk entries means matching files." Then an include glob conceals an unbounded walk. |
 | MEM-020 | "The reservation is the largest file's parse." The walk also holds every discovered path for the whole stream; with many small files that list is the larger term and was invisible. |
@@ -86,7 +96,6 @@ plan unreadable.
 
 | Requirement | Falsifying observation |
 |---|---|
-| MCP-OP-MEM-001 | A receipt is silently truncated, grows without a ceiling, or reports no attributable reserved peak. |
 | MCP-OP-MEM-006 | A staged path is written without a durable pinned pre-image, or a path containing a `..` segment is pinned or staged, or a path whose NOFOLLOW type or file identity changed after pinning is written, or a committed receipt cannot be undone because its journal was deleted, or a transaction retains a repository-wide original or future source map. |
 | MCP-OP-MEM-007 | A transaction commits after a file that shaped its plan changed, or after the scope gained, lost or SWAPPED a member, or without holding the lock; or bytes are copied into the target directory INSIDE the recheck-to-rename window; or a receipt omits that window. |
 | MCP-OP-MEM-012 | Recording N read-set entries makes the transaction value's per-path record count or retained string bytes grow with N. |
