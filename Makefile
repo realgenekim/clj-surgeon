@@ -193,7 +193,7 @@ mcp-smoke:
 	bb test/mcp_stdio_smoke.clj
 
 mcp-serve:
-	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full
+	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :port '$(MCP_PORT)' :telemetry :full
 
 mcp-serve-benchmark:
 	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
