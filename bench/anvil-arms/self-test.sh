@@ -2348,6 +2348,48 @@ if [ "$FAIL" -ne 0 ] && [ -s "$STDERR_LOG" ]; then
   tail -40 "$STDERR_LOG" >&2
 fi
 
+echo "== case 45: every caseNN.out with ok/FAIL lines is actually tallied into PASS/FAIL =="
+# Round eight.  The python-heredoc cases (33, 34, 35c, 35d, 36, ...) print their OWN
+# `ok   caseNN ...` / `FAIL caseNN ...` lines into $WORK/caseNN.out; those lines are
+# invisible to $PASS/$FAIL unless an explicit line elsewhere in this script does
+# `grep -c '^FAIL caseNN' "$WORK/caseNN.out"` (and the matching ok line) to fold them
+# in.  A case added without that tally line can print FAIL and the suite still reports
+# "N passed, 0 failed", rc 0 -- a witness that cannot fail.  Two independent checks:
+#
+#   (a) every $WORK/caseNN.out that actually carries an ok/FAIL-prefixed line has a
+#       tally line in the script text naming that exact case id;
+#   (b) the FAIL total the script's own tally lines compute is not smaller than a
+#       plain global recount of every `^FAIL case...` line across every .out file --
+#       so a tally line that exists but undercounts (wrong file, wrong id) is caught
+#       too, not just a tally line that is missing outright.
+untallied45=0
+global_fail45=0
+tallied_fail45=0
+for f in "$WORK"/case*.out; do
+  [ -e "$f" ] || continue
+  base=$(basename "$f" .out)   # e.g. "case35d" -- already carries the "case" prefix
+  if grep -Eq '^(ok   |FAIL )case' "$f" 2>/dev/null; then
+    if grep -qF "grep -c '^FAIL ${base}'" "$HERE/self-test.sh"; then
+      # (b) re-run the SAME command the script's own tally line names, on the SAME
+      # file -- not a second author of the logic, the tally's own arithmetic.
+      tc=$(grep -c "^FAIL ${base}" "$f" 2>/dev/null || true)
+      tallied_fail45=$((tallied_fail45 + ${tc:-0}))
+    else
+      bad "${base}.out has ok/FAIL lines but no tally line in self-test.sh"
+      untallied45=$((untallied45 + 1))
+    fi
+  fi
+  gc=$(grep -c '^FAIL case' "$f" 2>/dev/null || true)
+  global_fail45=$((global_fail45 + ${gc:-0}))
+done
+[ "$untallied45" -eq 0 ] \
+  && ok "case45 every caseNN.out with ok/FAIL lines has a tally line in self-test.sh"
+if [ "$global_fail45" -gt "$tallied_fail45" ]; then
+  bad "case45 global FAIL recount ($global_fail45) exceeds what the tally lines counted ($tallied_fail45) -- a FAIL line exists that no tally line's own arithmetic reaches"
+else
+  ok "case45 the tally lines' own FAIL count ($tallied_fail45) covers every FAIL case line on disk ($global_fail45)"
+fi
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
