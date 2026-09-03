@@ -1230,10 +1230,14 @@
    :structured? true
    :tool-fn #'handle-edit-clojure})
 
+;; @spec MCP-OP-ALIAS-042
 (defn alias-migration-summary
-  "Render one compact visible summary whose length is constant in N."
+  "Render one compact visible summary whose length is constant in N.
+
+  The committed block is gated on the receipt's own `:committed`, so the visible
+  check marks and the structured receipt can never disagree."
   [result]
-  (if (:ok result)
+  (if (and (:ok result) (true? (:committed result)))
     (format (str "alias_migration\n"
                  "  %s files · %s sites · aliases %s · %s collisions resolved · %s\n\n"
                  "\u2713 atomic commit complete\n"

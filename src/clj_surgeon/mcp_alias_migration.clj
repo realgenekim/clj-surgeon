@@ -439,14 +439,21 @@
      :new_file new-file
      :retired_to (:retired-file commit)}))
 
+;; @spec MCP-OP-ALIAS-042
 (defn receipt
-  "Render one receipt whose length is constant in the number of namespaces."
+  "Render one receipt whose length is constant in the number of namespaces.
+
+  `:ok` and `:committed` are the kernel's own computed `:committed`, never a
+  literal: the tool tells agents its receipt is terminal evidence and not to
+  re-read the files, so a claim of commit that the kernel did not make would be
+  unfalsifiable at the caller."
   [plan commit details-path]
-  (let [totals (:totals plan)]
+  (let [totals (:totals plan)
+        committed? (true? (:committed commit))]
     (merge
-      {:ok true
+      {:ok committed?
        :operation "alias_migration"
-       :committed true
+       :committed committed?
        :files (:files totals)
        :sites (:sites totals)
        :refer_sites (:refer-sites totals)
@@ -455,7 +462,7 @@
        :string_mentions (count (:string-mentions totals))
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
-       :next_action "none"}
+       :next_action (if committed? "none" "review_receipt")}
       (verification-summary (:verification commit) (:verify-requested commit))
       (select-keys commit [:undo_receipt :receipt_hash]))))
 
@@ -689,7 +696,8 @@
                 commit (commit! (assoc config :verify verify)
                                 (.toString root) spec files
                                 (get-in plan [:lib-rename :file]))]
-            (if (:error commit)
+            ;; @spec MCP-OP-ALIAS-042
+            (if (or (:error commit) (not (:committed commit)))
               (commit-refusal plan commit)
               (receipt plan
                        (-> commit

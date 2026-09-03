@@ -839,6 +839,64 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-042
+(deftest the-receipt-and-its-summary-report-the-kernel-s-own-committed-flag
+  (let [workspace (workspace!)]
+    (try
+      (let [validated (alias-migration/validate-request (request workspace))
+            planned (alias-migration/plan! (.getPath workspace) (:request validated))
+            plan (:plan planned)]
+        (is (:ok planned) (pr-str planned))
+
+        (testing "a committed transaction is reported as committed"
+          (let [receipt (assoc (alias-migration/receipt
+                                 plan {:committed true} "details.edn")
+                               :elapsed_ms 1)]
+            (is (true? (:ok receipt)))
+            (is (true? (:committed receipt)))
+            (is (= "none" (:next_action receipt)))
+            (is (str/includes? (mcp-tool/alias-migration-summary receipt)
+                               "\u2713 atomic commit complete"))))
+
+        (testing "a transaction the kernel did not commit claims nothing"
+          (let [receipt (assoc (alias-migration/receipt
+                                 plan {:committed false} "details.edn")
+                               :elapsed_ms 1)]
+            (is (false? (:ok receipt)))
+            (is (false? (:committed receipt)))
+            (is (not= "none" (:next_action receipt)))
+            (is (not (str/includes? (mcp-tool/alias-migration-summary receipt)
+                                    "\u2713"))
+                "the summary printed a check mark for an uncommitted transaction"))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-042
+(deftest a-kernel-result-that-did-not-commit-refuses-instead-of-publishing-a-receipt
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (with-redefs [transaction/execute-mcp-change!
+                    (fn [_opts]
+                      {:ok true
+                       :committed false
+                       :receipt-file (.getPath (io/file receipt-dir "none.edn"))
+                       :receipt-hash "0"})]
+        (let [result (execute! workspace)]
+          (is (false? (:ok result)) (pr-str result))
+          (is (not (true? (:committed result))))
+          (is (true? (:source_unchanged result)))
+          (is (not (str/includes?
+                     (mcp-tool/alias-migration-summary
+                       (assoc result :elapsed_ms 1))
+                     "atomic commit complete")))))
+      (testing "no byte was written"
+        (doseq [[relative expected] (:pre corpus)]
+          (is (= expected (slurp (io/file workspace relative))) relative)))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-041
 (deftest a-symlinked-defining-file-refuses-instead-of-retiring-the-link
   (let [workspace (workspace!)
