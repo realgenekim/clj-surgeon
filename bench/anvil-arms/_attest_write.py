@@ -127,6 +127,33 @@ def main() -> int:
                f"port-out-of-cohort-range({port_raw})")
         refuse(attest["port_pid"] == UNV, "port-pid-unverified")
         refuse(attest["healthz"] == UNV, "healthz-unverified")
+        # The health document must be ABOUT THIS SERVER.  Sol, item 6: it was checked
+        # only for parseability, so a document reporting ok=false for pid 999 on port 1
+        # serving /wrong/project attested ok=true.  Each field is bound to an
+        # independently observed witness: the pid to the one `ss` saw owning the port,
+        # the port to the one this arm was handed, the project root to this arm's
+        # worktree.  Any disagreement is ATTEST-MISMATCH, never a note.
+        health = attest["healthz"]
+        if attest["healthz"] != UNV and not isinstance(health, dict):
+            refuse(True, f"healthz-not-an-object({type(health).__name__})")
+        elif isinstance(health, dict):
+            refuse(health.get("ok") is not True,
+                   f"healthz-not-ok({health.get('ok')!r})")
+            health_pid = health.get("pid")
+            refuse(attest["port_pid"] != UNV and health_pid != attest["port_pid"],
+                   f"healthz-pid-ne-port-pid({health_pid}!={attest['port_pid']})")
+            health_port = health.get("port")
+            refuse(port != UNV and health_port != port,
+                   f"healthz-port-ne-arm-port({health_port}!={port})")
+            health_root = health.get("project-root", health.get("project_root"))
+            refuse(health_root is None, "healthz-project-root-missing")
+            refuse(
+                health_root is not None
+                and attest["worktree"] != UNV
+                and os.path.realpath(str(health_root))
+                != os.path.realpath(str(attest["worktree"])),
+                f"healthz-project-root-ne-worktree({health_root})",
+            )
         refuse(attest["ready_project_root"] == UNV, "ready-project-root-unverified")
         refuse(
             attest["ready_project_root"] != UNV
