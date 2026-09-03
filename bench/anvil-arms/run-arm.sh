@@ -155,8 +155,14 @@ fi
 # --- 5. drive + meter -------------------------------------------------------------
 case "$DRIVER" in
   sol)
-    WATCH_ARGS+=(--rollout-glob "$HOME/.codex/sessions/**/rollout-*.jsonl")
-    DRIVER_CMD=("$HOME/bin/sol-yolo" "$A/worktree" "$A/prompt.md" "$URL" "$A/driver-report.md")
+    # A CODEX_HOME PRIVATE TO THIS ARM, and a rollout bound to the session codex
+    # announces about itself.  The old form globbed $HOME/.codex/sessions and took the
+    # newest file, which mis-binds any concurrent codex session on this box and writes
+    # outside the arm root besides.
+    mkdir -p "$A/codex-home"
+    WATCH_ARGS+=(--codex-home "$A/codex-home")
+    DRIVER_CMD=(env "CODEX_HOME=$A/codex-home"
+                "$HOME/bin/sol-yolo" "$A/worktree" "$A/prompt.md" "$URL" "$A/driver-report.md")
     ;;
   claude)
     WATCH_ARGS+=(--capture-stdout)

@@ -26,13 +26,13 @@ Meters, and why each exists:
                 `start_utc`; it is never hand-typed and never self-reported.
 
 Exit codes: 0 metered; 2 usage / unattested arm; 4 zero returns; 5 idle or wall cap;
-6 incomplete run (a tool call whose result never arrived).
+6 incomplete run (a tool call whose result never arrived); 7 the rollout could not be
+bound to THIS driver's own announced session.
 The driver's own exit status is recorded in run.json, never conflated with these.
 """
 from __future__ import annotations
 
 import argparse
-import glob
 import hashlib
 import json
 import os
@@ -342,18 +342,52 @@ class Tailer:
             self.handle.close()
 
 
-def discover_rollout(pattern: str, not_before: float) -> pathlib.Path | None:
-    """The newest rollout WRITTEN AFTER this run started.
+# The session the driver announces about ITSELF -- the only identity that binds a
+# rollout to this arm.  Sol, item 8 (blocker): newest-mtime discovery selected a
+# concurrent session's rollout and then latched it permanently, and cohort seriality
+# does not prevent another Codex session from existing on a shared box.  There is no
+# mtime rule here and no glob over a shared home: each arm gets a PRIVATE CODEX_HOME
+# and the file must name the session id the driver printed.
+UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+SESSION_ID_RE = re.compile(r"session[\s_-]*id\s*[:=]?\s*(" + UUID_RE + r")", re.I)
+ROLLOUT_PATH_RE = re.compile(r"(/\S*rollout-[^\s\"'`]*\.jsonl)")
 
-    `not_before` is the watcher's own start, with no slack: a file last touched
-    before the driver launched belongs to an earlier session, and latching onto it
-    would meter somebody else's run.  Arms are serial precisely so this is decidable.
+
+class RolloutBindingError(RuntimeError):
+    pass
+
+
+def bind_rollout(codex_home: pathlib.Path,
+                 text: str) -> tuple[pathlib.Path | None, str | None]:
+    """The EXACT rollout of the session whose own output is `text`, or (None, None).
+
+    Two accepted witnesses, both spoken by the session itself: a rollout path it
+    printed, or a session id it printed that exactly one file in THIS arm's private
+    home names.  Anything else -- including "the newest file" -- is not a binding.
+    More than one candidate is an error, never a choice.
     """
-    hits = [p for p in glob.glob(pattern, recursive=True)
-            if os.path.isfile(p) and os.path.getmtime(p) >= not_before]
+    root = codex_home.resolve()
+    for match in ROLLOUT_PATH_RE.finditer(text):
+        candidate = pathlib.Path(match.group(1))
+        if not candidate.is_file():
+            continue
+        try:
+            candidate.resolve().relative_to(root)
+        except ValueError:
+            continue            # a path outside this arm's own home is not this arm's
+        return candidate, "printed-path"
+
+    match = SESSION_ID_RE.search(text)
+    if not match:
+        return None, None
+    session_id = match.group(1)
+    hits = sorted(p for p in root.glob(f"**/*{session_id}*.jsonl") if p.is_file())
+    if len(hits) > 1:
+        raise RolloutBindingError(
+            f"rollout-ambiguous session={session_id} candidates={[str(h) for h in hits]}")
     if not hits:
-        return None
-    return pathlib.Path(max(hits, key=os.path.getmtime))
+        return None, None
+    return hits[0], f"session-id:{session_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -362,8 +396,9 @@ def main() -> int:
     ap.add_argument("--arm", required=True, help="the arm directory")
     ap.add_argument("--rollout", default=None,
                     help="JSONL to tail (default <arm>/rollout.jsonl)")
-    ap.add_argument("--rollout-glob", default=None,
-                    help="discover the newest matching rollout written after start")
+    ap.add_argument("--codex-home", default=None,
+                    help="this arm's PRIVATE CODEX_HOME; the rollout is bound to the "
+                         "session id the driver announces, never to a newest-mtime glob")
     ap.add_argument("--capture-stdout", action="store_true",
                     help="the driver writes its JSONL on stdout (claude -p stream-json)")
     ap.add_argument("--make-map", default=None,
@@ -398,6 +433,10 @@ def main() -> int:
 
     make_map = load_make_map(pathlib.Path(args.make_map) if args.make_map
                              else arm / "make-targets.json")
+    codex_home = pathlib.Path(args.codex_home).resolve() if args.codex_home else None
+    if codex_home is not None:
+        codex_home.mkdir(parents=True, exist_ok=True)
+    rollout_binding: str | None = None
 
     watch_path = arm / "watch.jsonl"
     watch_path.write_text("")
@@ -515,9 +554,24 @@ def main() -> int:
     # item 5: without this the timeout signalled one pid and the executed probe left
     # `sleep 60` running under PPID 1 -- an orphan of an aborted arm that keeps working
     # inside a run nobody is metering any more.
+    driver_out_path = arm / "driver-output.log"
+    driver_out = None
+    if codex_home is not None and not args.capture_stdout:
+        # the driver announces its session on its own stdout/stderr, so the watcher
+        # must be able to read it back; bounded to the head of the file when scanned
+        driver_out = driver_out_path.open("w")
+
+    def driver_banner() -> str:
+        try:
+            with driver_out_path.open("rb") as handle:
+                return handle.read(65536).decode("utf-8", errors="replace")
+        except OSError:
+            return ""
+
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE if args.capture_stdout else None,
-                            stderr=None,
+                            stdout=(subprocess.PIPE if args.capture_stdout
+                                    else (driver_out or None)),
+                            stderr=(subprocess.STDOUT if driver_out else None),
                             text=True if args.capture_stdout else None,
                             start_new_session=True)
     try:
@@ -551,14 +605,12 @@ def main() -> int:
             pass
 
     tailer: Tailer | None = None
-    if not args.capture_stdout:
-        if args.rollout_glob:
-            tailer = None                      # discovered below
-        else:
-            tailer = Tailer(rollout_path)
+    if not args.capture_stdout and codex_home is None:
+        tailer = Tailer(rollout_path)
 
     stdout_sink = rollout_path.open("a") if args.capture_stdout else None
     abort_reason: str | None = None
+    bind_error: str | None = None
 
     def pump_lines(lines: list[str]) -> None:
         for line in lines:
@@ -580,16 +632,26 @@ def main() -> int:
                     pump_lines([line])
                     continue
             else:
-                if tailer is None and args.rollout_glob:
-                    found = discover_rollout(args.rollout_glob, t0)
+                if tailer is None and codex_home is not None:
+                    try:
+                        found, how = bind_rollout(codex_home, driver_banner())
+                    except RolloutBindingError as exc:
+                        bind_error = str(exc)
+                        abort_reason = "rollout-ambiguous"
+                        break
                     if found is not None:
                         rollout_path = found
+                        rollout_binding = how
                         tailer = Tailer(found)
                 if tailer is not None:
                     pump_lines(tailer.read_lines())
 
             done = proc.poll() is not None
             now = time.time()
+            if (codex_home is not None and tailer is None
+                    and now - t0 > args.zero_return_window):
+                abort_reason = "rollout-unbound"
+                break
             if state["returns"] == 0 and now - t0 > args.zero_return_window:
                 abort_reason = "zero-returns"
                 break
@@ -628,6 +690,22 @@ def main() -> int:
             tailer.close()
         if stdout_sink is not None:
             stdout_sink.close()
+        if driver_out is not None:
+            driver_out.close()
+
+    if codex_home is not None and tailer is None and abort_reason is None:
+        try:
+            found, how = bind_rollout(codex_home, driver_banner())
+        except RolloutBindingError as exc:
+            bind_error, found, how = str(exc), None, None
+            abort_reason = "rollout-ambiguous"
+        if found is not None:
+            rollout_path, rollout_binding = found, how
+            tailer = Tailer(found)
+            pump_lines(tailer.read_lines())
+            tailer.close()
+        elif abort_reason is None:
+            abort_reason = "rollout-unbound"
 
     incomplete = flush_open("driver-ended-before-output")
 
@@ -649,6 +727,8 @@ def main() -> int:
         "driver_pgid": driver_pgid,
         "driver_group_orphans": driver_group_orphans,
         "rollout_path": str(rollout_path),
+        "rollout_binding": rollout_binding,
+        "codex_home": str(codex_home) if codex_home else None,
         "start_utc": attest["start_utc"],
         "end_utc": end_utc,
         "wall_s": wall_s,
@@ -658,6 +738,19 @@ def main() -> int:
         "calls_without_output": incomplete,
         "watch_jsonl": str(watch_path),
     }
+
+    if abort_reason in ("rollout-unbound", "rollout-ambiguous"):
+        detail = bind_error or (
+            f"the driver never announced a session id, and no rollout under "
+            f"{codex_home} names one; nothing was metered and nothing was guessed")
+        emit({"kind": "abort", "error_type": abort_reason, "detail": detail,
+              "returns": state["returns"]})
+        run["abort"] = abort_reason
+        (arm / "run.json").write_text(json.dumps(run, indent=2) + "\n")
+        sink.close()
+        print(f"WATCH-ABORT {abort_reason} arm={arm.name} codex_home={codex_home} "
+              f"driver_rc={driver_rc} detail={detail}", file=sys.stderr)
+        return 7
 
     if state["returns"] == 0:
         emit({"kind": "abort", "error_type": "zero-returns",
