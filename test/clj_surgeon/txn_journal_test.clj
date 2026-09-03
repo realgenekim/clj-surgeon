@@ -7,6 +7,7 @@
    outcome a caller sees - bytes on disk and a typed error - never an internal
    call."
   (:require
+   [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.memory.child :as child]
    [clj-surgeon.scope-stream :as scope]
    [clj-surgeon.txn-journal :as journal]
@@ -947,6 +948,53 @@
             (is (= :txn-journal-missing (:error-type after))
                 "an evicted receipt says it cannot be undone rather than
                  pretending it can")))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+(deftest an-ordinary-atomic-write-cooperates-only-when-the-kernel-binds-it
+  (testing "Opus round 2, finding 4: `with-publish-lock*` had exactly ONE call
+            site in the whole repository, so the advisory lock excluded nobody
+            who existed and the residual window was the normal path rather
+            than the exception. Every other writer in the repo publishes
+            through `file-ops/atomic-write!`. That verb can now cooperate, and
+            the kernel is what turns it on - cooperation is per-writer, and the
+            witness proves both halves against a lock a SEPARATE process holds."
+    (let [ws (workspace! "cooperating-writes" 2)
+          path (second (sort (:paths ws)))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))]
+      (try
+        (let [child (hold-publish-lock! ws 2500)
+              unbound-start (System/nanoTime)
+              _ (file-ops/atomic-write! path "(ns f1) (def v :unbound)\n")
+              unbound-ms (quot (- (System/nanoTime) unbound-start) 1000000)
+              bound-start (System/nanoTime)
+              _ (journal/with-cooperating-writes
+                  dir
+                  (fn [] (file-ops/atomic-write! path "(ns f1) (def v :bound)\n")))
+              bound-ms (quot (- (System/nanoTime) bound-start) 1000000)]
+          (is (nil? file-ops/*publish-lock-dir*)
+              "the default is unchanged: an ordinary writer takes no lock")
+          (is (< unbound-ms 400)
+              (str "an unbound atomic-write! is a non-cooperating writer and "
+                   "does not wait; it returned after " unbound-ms " ms"))
+          (is (>= bound-ms 900)
+              (str "a bound one waits for the holder; it returned after "
+                   bound-ms " ms"))
+          (is (= "(ns f1) (def v :bound)\n" (bytes-of path)))
+          (.waitFor child))
+
+        (is (= :nested
+               (file-ops/with-publish-lock*
+                 dir
+                 (fn []
+                   (journal/with-cooperating-writes
+                     dir
+                     (fn []
+                       (file-ops/atomic-write! path "(ns f1) (def v :nested)\n")
+                       :nested)))))
+            "a cooperating write INSIDE the lock must not deadlock on itself;
+             FileChannel locks are per-JVM and re-locking throws")
+        (is (= "(ns f1) (def v :nested)\n" (bytes-of path)))
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-006

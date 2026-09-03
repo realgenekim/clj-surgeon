@@ -31,8 +31,7 @@
    [clojure.string :as str])
   (:import
    (java.io File FileOutputStream)
-   (java.nio.channels FileChannel)
-   (java.nio.file Files LinkOption OpenOption StandardCopyOption StandardOpenOption CopyOption)
+   (java.nio.file Files LinkOption StandardCopyOption CopyOption)
    (java.nio.file.attribute BasicFileAttributes PosixFilePermissions)
    (java.security MessageDigest)))
 
@@ -443,28 +442,23 @@
                                   :workspace_root nil}
                       :remedy "Wait for the holder, or run recovery if its process is gone."})))))))
 
-(defn- publish-lock-file
-  ^File [transactions-dir]
-  (io/file transactions-dir "PUBLISH.lock"))
+(defn with-cooperating-writes
+  ;; @spec MCP-OP-MEM-007
+  "Run `f` with every `file-ops/atomic-write!` on this thread cooperating.
 
-(defn- with-publish-lock*
-  "Run `f` while holding the workspace's advisory publish lock.
+   Cooperation with the publish lock is PER-WRITER, and this is the opt-in.
+   The kernel's own commit path was for a long time the only caller of the
+   lock in the whole repository, which made the advisory lock's promise -
+   \"it excludes any writer that asks for it\" - true with an empty referent.
+   Every other source-mutating path in this repo publishes through
+   `file-ops/atomic-write!`; wrapping one in this makes it a writer the
+   kernel's recheck-to-rename window actually excludes.
 
-   An OS advisory lock (`flock` semantics through `FileChannel/lock`) on the
-   workspace's own state root, taken around the pre-image recheck and the
-   rename. It excludes any writer that ASKS for it - a second clj-surgeon
-   transaction, a cooperating editor - and it cannot exclude one that does not.
-   That is the whole of what an advisory lock buys, and the residual window is
-   documented rather than papered over."
+   `transactions-dir` may be a transaction value or the directory itself."
   [transactions-dir f]
-  (let [file (publish-lock-file transactions-dir)]
-    (with-open [channel (FileChannel/open
-                          (.toPath file)
-                          ^"[Ljava.nio.file.OpenOption;"
-                          (into-array OpenOption [StandardOpenOption/CREATE
-                                                  StandardOpenOption/WRITE]))]
-      (let [lock (.lock channel)]
-        (try (f) (finally (.release lock)))))))
+  (file-ops/with-publish-lock-dir*
+    (if (map? transactions-dir) (:transactions-dir transactions-dir) transactions-dir)
+    f))
 
 ;; ------------------------------------------------------------------- begin
 
@@ -1096,7 +1090,7 @@
             pre-stable? (boolean (and pre-digest (= stat-before stat-after)))]
         (try
           (when before-recheck (before-recheck path))
-          (with-publish-lock* (:transactions-dir txn)
+          (file-ops/with-publish-lock* (:transactions-dir txn)
             (fn []
               (let [opened (System/nanoTime)
                     stat-now (path-stat path)
@@ -1355,7 +1349,7 @@
                :paths [] :ok false}
               (restore-begun! dir pins begun))))]
      (if transactions-dir
-       (with-publish-lock* transactions-dir restore!)
+       (file-ops/with-publish-lock* transactions-dir restore!)
        (restore!)))))
 
 ;; ------------------------------------------------------- retained journals

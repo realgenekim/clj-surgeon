@@ -32,8 +32,14 @@ kernel narrows it and then names it rather than hiding it:
   window opens, so the expensive half of publication is outside it;
 - the recheck and the rename are taken under an advisory `PUBLISH.lock` on the
   workspace state root, which excludes any writer that asks for it;
-- what remains inside is a digest recheck, one `write-begin` fsync and one
-  rename, plus the identity stat — `(:commit-window (txn-journal/contract))` names them, and every
+- the target's current digest is read **before** the lock is taken, with a
+  NOFOLLOW stat on each side of it, so what remains inside is one stat
+  comparison (type, `(device, inode)`, size, `mtime` and `ctime` in
+  nanoseconds), one `write-begin` fsync and one rename — the bound is O(1) in
+  the target's size. The digest is re-read inside the lock only when that stat
+  moved, and every receipt reports how often that happened in
+  `:digest-rereads`, so a fast path can never be mistaken for a skipped check.
+  `(:commit-window (txn-journal/contract))` names the operations, and every
   commit receipt carries the same map with the widest observed `:max-ns`;
 - a writer that does not take the publish lock and lands inside that window is
   **overwritten**, not detected. The pinned pre-image journal is its recovery.
@@ -55,6 +61,51 @@ What it does not promise:
 - instantaneous atomicity of a multi-file commit to an unrelated reader;
 - protection from a racing external write — that is detected and rolled over,
   not prevented.
+
+**Cooperation is PER-WRITER, and most writers in this repository do not
+cooperate yet.** An advisory lock excludes only writers that ask for it. For a
+long time the kernel's own commit path was the ONLY caller of
+`file-ops/with-publish-lock*` in the whole repository, so the clause "it
+excludes any writer that asks for it" was true with an empty referent and the
+residual window was the normal path rather than the exception.
+
+`file-ops/atomic-write!` can now take the lock, but only when a caller opts in
+by binding `file-ops/*publish-lock-dir*` — `txn-journal/with-cooperating-writes`
+is that opt-in. Unbound, which is still the default everywhere, it takes no
+lock. **These are the source-mutating sites that do NOT cooperate today**, each
+publishing through `file-ops/atomic-write!` / `atomic-create!` with no lock:
+
+| namespace | sites |
+|---|---|
+| `extract.clj` | `:543-544`, `:594`, `:674`, `:689`, `:695` |
+| `move.clj` | `:434` |
+| `structural_lens.clj` | `:1048`, `:1077`, `:1313` |
+| `mcp_change_buffer.clj` | `:1558` |
+| `mcp_extraction.clj` | `:435`, `:543` |
+| `intent_transaction.clj` | `:2186` |
+| `workspace_onboarding.clj` | `:236`, `:261`, `:383` |
+| `agent_routing.clj` | `:124` |
+| `mcp_cold_verify.clj` | `:56` |
+| `mcp_tool.clj` | `:381` |
+
+Retrofitting them belongs to the lanes that own those files, not to the kernel
+build; until it happens, read every one of them as a non-cooperating writer and
+read the residual window as the ordinary case rather than the exception.
+
+> **FOLLOW-UP, and an adoption obligation.** Retrofitting the table above is
+> not part of this kernel build and is not optional before a verb adopts the
+> kernel: an adopting verb that mutates sources through any of those sites is a
+> writer its own transaction cannot exclude. Done when every site either binds
+> `file-ops/*publish-lock-dir*` or is recorded here as deliberately
+> non-cooperating, and this table is empty or annotated.
+
+**The project `LOCK` is scoped to the STATE HOME, not to the workspace root.**
+`begin!` locks `workspace/transactions-dir root state-home`, so two
+transactions on one workspace root with two different `:state-home` values both
+acquire a lock, both reach commit, and neither excludes the other — they are
+separated only by the optimistic digest recheck, which is the design, and their
+`PUBLISH.lock` files are two different files. "The transaction lock" means one
+lock per (workspace root, state home) pair, not one per workspace.
 
 A consequence that reads like a bug until you see the rule: a transaction
 restores what IT changed and never clobbers a write it did not make. A file that

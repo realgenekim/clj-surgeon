@@ -3,7 +3,70 @@
   (:require
    [clojure.java.io :as io])
   (:import
-   (java.nio.file CopyOption Files LinkOption StandardCopyOption)))
+   (java.io File)
+   (java.nio.channels FileChannel)
+   (java.nio.file CopyOption Files LinkOption OpenOption StandardCopyOption
+                  StandardOpenOption)))
+
+;; ------------------------------------------------------- the publish lock
+
+(def ^:dynamic *publish-lock-dir*
+  "The workspace transactions directory whose `PUBLISH.lock` this thread's
+   `atomic-write!` calls must take, or nil.
+
+   Cooperation with the transaction kernel's publish lock is PER-WRITER and
+   OPT-IN, and this var is the opt-in. An advisory lock excludes only writers
+   that ask for it; before this var existed the kernel's own commit path was
+   the only caller in the repository, so the lock excluded nobody who existed
+   and the kernel's residual recheck-to-rename window was the normal path
+   rather than the exception. Binding it - see
+   `clj-surgeon.txn-journal/with-cooperating-writes` - makes every ordinary
+   atomic write on this thread a cooperating writer. Leaving it nil is the
+   default and changes nothing."
+  nil)
+
+(def ^:dynamic ^:private *publish-lock-held*
+  "The lock directory this thread already holds. `FileChannel/lock` is a
+   per-JVM view of the OS lock, so re-locking the same file inside the lock
+   throws `OverlappingFileLockException` rather than re-entering."
+  nil)
+
+(defn publish-lock-file
+  "The workspace's advisory publish lock file."
+  ^File [transactions-dir]
+  (io/file transactions-dir "PUBLISH.lock"))
+
+(defn with-publish-lock*
+  "Run `f` while holding the workspace's advisory publish lock.
+
+   An OS advisory lock (`flock` semantics through `FileChannel/lock`) on the
+   workspace's own state root. It excludes any writer that ASKS for it - a
+   second clj-surgeon transaction, a cooperating editor - and it cannot
+   exclude one that does not. That is the whole of what an advisory lock buys,
+   and the residual window is documented rather than papered over.
+
+   Re-entrant on the same thread and the same directory, because the JVM's own
+   lock table is not."
+  [transactions-dir f]
+  (if (= *publish-lock-held* (str transactions-dir))
+    (f)
+    (let [^File file (publish-lock-file transactions-dir)]
+      (.mkdirs (.getParentFile (.getAbsoluteFile file)))
+      (with-open [channel (FileChannel/open
+                            (.toPath file)
+                            ^"[Ljava.nio.file.OpenOption;"
+                            (into-array OpenOption [StandardOpenOption/CREATE
+                                                    StandardOpenOption/WRITE]))]
+        (let [lock (.lock channel)]
+          (try
+            (binding [*publish-lock-held* (str transactions-dir)] (f))
+            (finally (.release lock))))))))
+
+(defn with-publish-lock-dir*
+  "Run `f` with every `atomic-write!` on this thread taking `transactions-dir`'s
+   publish lock."
+  [transactions-dir f]
+  (binding [*publish-lock-dir* transactions-dir] (f)))
 
 (defn- preserve-existing-permissions! [target tmp]
   (when (.exists target)
@@ -18,20 +81,30 @@
         (.setExecutable tmp (.canExecute target) false)))))
 
 (defn atomic-write!
-  "Atomically replace file with UTF-8 source or throw without replacing it."
+  "Atomically replace file with UTF-8 source or throw without replacing it.
+
+   Takes the workspace publish lock when `*publish-lock-dir*` is bound, which
+   is what makes an ordinary writer a COOPERATING one for the transaction
+   kernel. Unbound - the default - it takes no lock and behaves exactly as
+   before."
   [file source]
-  (let [target (io/file file)
-        parent (.getParentFile (.getAbsoluteFile target))
-        tmp (java.io.File/createTempFile ".clj-surgeon-" ".tmp" parent)
-        options (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
-                                        StandardCopyOption/REPLACE_EXISTING])]
-    (try
-      (spit tmp source)
-      (preserve-existing-permissions! target tmp)
-      (Files/move (.toPath tmp) (.toPath target) options)
-      (finally
-        (when (.exists tmp)
-          (.delete tmp))))))
+  (let [write!
+        (fn []
+          (let [target (io/file file)
+                parent (.getParentFile (.getAbsoluteFile target))
+                tmp (java.io.File/createTempFile ".clj-surgeon-" ".tmp" parent)
+                options (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                                StandardCopyOption/REPLACE_EXISTING])]
+            (try
+              (spit tmp source)
+              (preserve-existing-permissions! target tmp)
+              (Files/move (.toPath tmp) (.toPath target) options)
+              (finally
+                (when (.exists tmp)
+                  (.delete tmp))))))]
+    (if-let [dir *publish-lock-dir*]
+      (with-publish-lock* dir write!)
+      (write!))))
 
 (defn prepare-publish!
   "Copy `source-file` into `file`'s OWN directory and return the temporary.
