@@ -273,3 +273,9 @@ Gene's nine hours end ~13:35Z. Gene report DRAFT (docs/observations/2026-09-03-g
 Live Sol reviews: census round 5 (869bbce), kernel round 2 (7c9a9b1), fold-diff round 5 (347fe6d3, curtain-call). Opus: q5z round 7 (f4d196b). Builders: study round 5 (~/src/clj-surgeon-study), MEM-005 round 2 (~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms), B4 MEM-003 streaming ls-tree (~/src/clj-surgeon-stream, based on the MEM-005 tip 8a55dbc).
 fold-diff production read: pinned GO at 2b56a484 on inb-3a9818; 347fe6d3 replaces it only after Sol confirms.
 Everything else as in the fifth refresh.
+
+## RESUME DELTA (seventh refresh; commit time is the timestamp)
+GO (eight): kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated); rf2 965d49e; read-path-memory 2aa648a; memory-battery 5534e94 (tooling); study-ops 4480e3d. fold-diff: production read GO at the tip 347fe6d3 on inb-3a9818 (keep the whole receipt); round 6 building for the verdict caveat + scan robustness.
+Live reviews: Opus kernel round 2 (7c9a9b1). Builders: MEM-005 round 2 (~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms), B4 MEM-003 streaming ls-tree (~/src/clj-surgeon-stream), q5z round 8 (~/src/clj-surgeon-q5z: constant-true source_unchanged), fold-diff round 6 (~/src/curtaincall-cfp-folddiff), census round 6 (~/src/clj-surgeon-census: streaming listing, candidate-aware narrowing, placeholders + CENSUS-014).
+Opus-first branches (Sol's filter refuses): rf2, study, MEM-005, q5z, kernel. Two 7888 contacts + the 7890 self-test observation are on inb-1165ce.
+Gene report DRAFT refreshes ~10:30Z and ~13:00Z (nine hours end ~13:35Z).
