@@ -1730,6 +1730,39 @@
           (.waitFor child)
           (cleanup! ws))))))
 
+
+;; @spec MCP-OP-MEM-013
+(deftest a-legacy-locks-age-is-the-newest-of-its-two-stamps
+  (testing "Opus round 4, finding 6: the legacy break's receipt has two halves,
+            and only ONE of them is checkable. The pid half reads the process
+            table. The age half read `lastModified` alone - and mtime is
+            settable by any process and is PRESERVED by `cp -p`, `rsync -t`,
+            `tar -x` and a restore from backup, while ctime is not: a workspace
+            restored from a snapshot presents a legacy LOCK that is old by
+            mtime and was created moments ago in this boot. The age must be
+            measured against the NEWEST of the two stamps, so that a claim is
+            old only when both of them are. And `lastModified` of a file that
+            is not there returns 0, which made an absent lock read as
+            infinitely old."
+    (let [ws (workspace! "legacy-lock-backdated" 2)
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")
+          opts {:state-home (:state-home ws) :break-legacy-lock true}]
+      (try
+        (plant-lock! ws {:txid "old-format" :pid (reaped-pid)})
+        (.setLastModified lock (- (System/currentTimeMillis)
+                                  (* 11 24 60 60 1000)))
+        (let [recovery (journal/recover! (:root ws) opts)]
+          (is (nil? (:lock-broken recovery))
+              (str "a claim whose mtime says eleven days and whose ctime says "
+                   "moments ago is not a receipt of a holder's death: "
+                   (pr-str recovery)))
+          (is (.isFile lock) "so the claim is still there"))
+        (is (false? (@#'journal/legacy-lock-dead?
+                      (io/file dir "LOCK.not-a-file") {:pid (reaped-pid)} nil))
+            "and a lock file that is not there is not infinitely old")
+        (finally (cleanup! ws))))))
+
 ;; @spec MCP-OP-MEM-014
 (deftest the-commit-window-states-its-measured-size-term-not-a-flat-bound
   (testing "Opus round 3, finding 5: the contract value, the module docstring
