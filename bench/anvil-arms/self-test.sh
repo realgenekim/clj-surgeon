@@ -20,6 +20,22 @@
 #   8  run-cohort.sh produces the mirrored order  N-1 T-1 T-2 N-2 N-3 T-3
 #   9  the four B.4 prompts still match the doc, byte for byte
 #  10  test_call is matched AT COMMAND POSITION, not anywhere in the string
+#
+# Cases 11-21 are the repairs for Sol's executed instrument review of 2026-09-03
+# (/home/forge/tmp/sol/arms-sol-review.md), each one written RED first:
+#  11  a receipt is emitted only from a stream that validates (truncated, duplicated,
+#      reversed, empty watch, attest_ok=false) and every abort deletes a stale receipt
+#  12  a tool call with no result is an incomplete-run refusal, not a receipt
+#  13  a test runner behind a non-test-named Make target is metered as a test action
+#  14  aborting the watcher reaps the driver's WHOLE process group -- no orphans
+#  15  the health JSON is validated against independent witnesses, not merely parsed
+#  16  the rollout is bound to the session the driver announces, never a newest-mtime
+#      glob; an unannounced session is refused rather than guessed
+#  17  prose drift in a governing section fails --check; sections are bounded
+#  18  the cohort STOPS on the first refused arm; n<1 is refused
+#  19  cleanup signals only the pid this invocation spawned, start time verified
+#  20  every write path is confined to the runner root and the worktree
+#  21  item 7's PASS behaviours, kept as standing witnesses
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

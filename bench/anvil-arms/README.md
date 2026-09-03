@@ -19,8 +19,10 @@ driver (`make anvil-arms-self-test`, 55 assertions, ~11 s).
 | `score.py` | A.7 + A.10 | predicates over `rollout.jsonl` + `watch.jsonl` → `receipt.json` + `receipt.md`; computed counts only |
 | `run-arm.sh` | B.6 §5 | one arm-run: attest → watch(driver) → freeze diff → score |
 | `run-cohort.sh` | B.3 / C.4 | n slots per arm, serial, **mirrored order** |
+| `stop-server.sh` | A.5 | stops **only** the server this arm-run spawned, by recorded pid **and** recorded start time |
+| `_make_targets.py` | A.10 | resolves the worktree's Make targets with `make -n` at attest time, so a test runner behind `make verify` is metered as one |
 | `fake-driver.sh` | PF-5 | a synthetic rollout, so the chain is provable with no arm-run budget |
-| `self-test.sh` | PF-5 | 10 cases; `make anvil-arms-self-test` |
+| `self-test.sh` | PF-5 | 21 cases / 162 assertions; `make anvil-arms-self-test` |
 | `prompts/` | B.4 | the four E3 arm prompts, extracted from the doc, hashed |
 
 ## The prompts are not typed by hand
@@ -65,9 +67,14 @@ bash bench/anvil-arms/run-cohort.sh \
   --worktree-src /home/forge/acid/fanout/repo-21
 ```
 
-Exit codes worth knowing: `run-arm.sh` 2 = attestation refused (no driver ran);
-`watch.py` 4 = zero returns, 5 = idle or wall cap; `score.py` 3 = missing/empty
-rollout — **and no receipt is written**.
+Exit codes worth knowing: `run-arm.sh` 2 = attestation refused, or `--root` outside
+`/home/forge/tmp/arms` (no driver ran); `watch.py` 4 = zero returns, 5 = idle or wall
+cap, 6 = incomplete run (a tool call whose result never arrived), 7 = the rollout
+could not be bound to the driver's own announced session; `score.py` 2 = no
+attestation or `attest_ok=false`, 3 = missing / empty / **invalid** rollout or watch
+stream — **and no receipt is written, and any stale one is deleted**;
+`run-cohort.sh` 64 = `--n` is not a positive integer, and it stops on the first
+refused arm with a `COHORT-ABORT` line.
 
 ## Boundaries this code enforces, not merely documents
 
@@ -143,6 +150,17 @@ carries `n` (return ordinal) and `seq` (call ordinal) so order is recoverable.
 - Print a verdict word over a missing number. A missing or empty `rollout.jsonl`, or
   one with zero assistant returns, is **exit 3 with no receipt written** — not a zero
   row. (`verdict-label-was-a-noun`.)
+- Read a stream it cannot read. Every non-empty line must be a well-formed JSON
+  object, a file with no terminating newline is a truncated record, call ids must be
+  unique with no output before its own call, and the watcher's `ms_since_start` must
+  be non-decreasing with return/call ordinals dense from 1. A duplicated or reversed
+  stream aborts instead of producing two "independent" witnesses that agree because
+  they were derived from the same corrupted bytes.
+- Score a run whose last action has no outcome. A tool call whose result never
+  arrived is `incomplete-run`: typed, nonzero, no receipt.
+- Leave the previous answer standing. Every abort **deletes** `receipt.json` and
+  `receipt.md`; a refusal that leaves a stale receipt in the directory is not a
+  refusal.
 - Resolve a disagreement silently. Returns and tool calls are re-derived twice —
   once from the raw rollout, once from the watcher — and any difference is written
   into `meter.sources` and `notes`.
