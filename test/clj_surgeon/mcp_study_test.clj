@@ -742,6 +742,34 @@
       (is (= "invalid-ns-grep-pattern" (:error_type response)))
       (is (false? (:read_complete response))))))
 
+;; @spec MCP-OP-STUDY-025
+(deftest a-rejected-pattern-is-named-but-never-handed-back
+  ;; `invalid-format` was given the drop treatment; the two pattern refusals
+  ;; were not, so their `{:dir "."}` continuation still carried the pattern
+  ;; that had just been rejected — an executable call that fails identically.
+  (doseq [[label request field]
+          [["flag-shaped grep" {"mode" "ls-tree" "dir" fixture-dir
+                                "grep" "--pre=/bin/sh"} :grep]
+           ["flag-shaped ns_grep" {"mode" "ls-tree" "dir" fixture-dir
+                                   "ns_grep" "-x"} :ns_grep]
+           ["uncompilable ns_grep" {"mode" "ls-tree" "dir" fixture-dir
+                                    "ns_grep" "("} :ns_grep]]]
+    (testing label
+      (let [response (run request)
+            rejected (get request (name field))]
+        (is (false? (:ok response)))
+        (is (= rejected (get response field))
+            "the refusal still names what was rejected")
+        (is (some? (:next_call response)))
+        (is (nil? (get-in response [:next_call :arguments field]))
+            "the continuation must not repeat the rejected pattern")
+        (is (= fixture-dir (get-in response [:next_call :arguments :dir]))
+            "and must keep the scope the caller already chose"))))
+  (testing "the same treatment invalid-format already had"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "EDN"})]
+      (is (= "EDN" (:format response)))
+      (is (nil? (get-in response [:next_call :arguments :format]))))))
+
 ;; ============================================================
 ;; Bounding
 ;; ============================================================

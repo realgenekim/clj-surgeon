@@ -569,6 +569,8 @@
 ;; @spec MCP-OP-STUDY-001
 ;; @spec MCP-OP-STUDY-006
 ;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-022
+;; @spec MCP-OP-STUDY-025
 (defn execute-ls-tree
   "Run the one study kernel over a workspace-confined directory."
   [{:keys [project-root]} params]
@@ -671,7 +673,19 @@
                              (:file-count scan) (assoc :file_count (:file-count scan))
                              (:max-files scan) (assoc :max_files (:max-files scan))
                              (:grep params) (assoc :grep (:grep params))
-                             (:ns_grep params) (assoc :ns_grep (:ns_grep params))))
+                             (:ns_grep params) (assoc :ns_grep (:ns_grep params)))
+                           ;; A rejected PATTERN gets the treatment a rejected
+                           ;; `format` already got: the corrective move is
+                           ;; known, so the continuation drops the value the
+                           ;; refusal just named instead of handing it back to
+                           ;; be sent again. Everything else keeps the
+                           ;; scan-a-parent-directory continuation.
+                           (case (:error-type scan)
+                             :invalid-grep-pattern
+                             (ls-tree-next-call (dissoc params :grep) {})
+                             :invalid-ns-grep-pattern
+                             (ls-tree-next-call (dissoc params :ns_grep) {})
+                             (ls-tree-next-call params {:dir "."})))
           (let [projects (:projects scan)
                 total (:file-count scan)
                 bounded (ls-tree-bounded projects (:path resolved)
