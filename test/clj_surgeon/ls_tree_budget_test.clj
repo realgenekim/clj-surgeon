@@ -1096,6 +1096,41 @@
         (finally (alter-var-root v (constantly real)))))))
 
 ;; @spec MCP-OP-MEM-003
+(deftest a-FINAL-page-that-encodes-nothing-refuses-instead-of-a-bare-empty-vector
+  ;; Round-five review, item (d). The witness above forces the same zero-
+  ;; encode on a MID page, where `over?` — `(> (- total offset) ceiling)` — is
+  ;; true, so `:empty-result-page`'s guard at core.clj:962 fires. `over?` is
+  ;; FALSE BY DEFINITION on every FINAL page, so the guard there structurally
+  ;; cannot fire: a forced zero-encode on the last page returns a bare `[]` —
+  ;; no records, no receipt, no refusal — which a caller reads as "complete
+  ;; result, nothing here." That is exactly the failure
+  ;; `:result-cursor-out-of-range` exists to prevent, one page later than the
+  ;; guard that prevents it. This page still has rows to encode (`remaining <=
+  ;; ceiling` and `remaining > 0`, the same "rows remained, nothing advanced"
+  ;; hazard as the mid-page witness), so the fix is symmetry, not a new case.
+  (with-project [dir fixture-count "ls-tree-budget-zero-final-page"]
+    (let [p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          p2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                :cursor (cursor-of p1)})
+          cursor (cursor-of p2)]
+      (is (some? cursor)
+          "page 2 must still carry a cursor, or this witness reaches nothing")
+      (let [v (var core/stream-outlines!)
+            real @v]
+        (alter-var-root v (constantly (fn [_candidates _consume!] nil)))
+        (try
+          (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor cursor})]
+            (is (map? r)
+                (str "a FINAL page that encoded nothing while rows remained "
+                     "must REFUSE, never a bare empty vector a caller reads "
+                     "as a complete result; got " (pr-str r)))
+            (is (= :empty-result-page (:error-type r))
+                (str "expected a typed refusal, got "
+                     (pr-str (:error-type r)) "; full result " (pr-str r))))
+          (finally (alter-var-root v (constantly real))))))))
+
+;; @spec MCP-OP-MEM-003
 (deftest a-cursor-from-a-TWIN-root-is-unknown-and-never-merely-invalid
   ;; The `:unknown-result-cursor` receipt says a cursor from ANOTHER ROOT does
   ;; not resolve at all. Two identical checkouts fold to one manifest digest,
