@@ -216,6 +216,38 @@
          :source-unchanged true
          :target-unchanged true}))))
 
+(def ^:private escape-probe-budget
+  "How many entries the escape probe examines before it gives up.
+
+  The tree behind an escaping link is OUTSIDE the workspace and nothing bounds
+  its size, so the probe is bounded and answers `true` when it cannot finish:
+  an escape it could not prove harmless is refused, never admitted."
+  20000)
+
+;; @spec MCP-OP-EXTRACT-035
+(defn- holds-clojure-sources?
+  "True when any Clojure source lives under `dir`, or the bounded probe could
+  not prove otherwise. Never follows a symlink."
+  [^java.nio.file.Path dir]
+  (loop [stack (vec (or (.listFiles (.toFile dir)) []))
+         budget (long escape-probe-budget)]
+    (cond
+      (empty? stack) false
+      (not (pos? budget)) true
+      :else
+      (let [^java.io.File entry (peek stack)
+            stack (pop stack)]
+        (cond
+          (java.nio.file.Files/isSymbolicLink (.toPath entry))
+          (recur stack (dec budget))
+
+          (.isDirectory entry)
+          (recur (into stack (or (.listFiles entry) [])) (dec budget))
+
+          (re-matches #".*\.clj[sc]?$" (.getName entry)) true
+
+          :else (recur stack (dec budget)))))))
+
 ;; @spec MCP-OP-EXTRACT-029
 (defn- walk-workspace-sources
   "Every Clojure source under `root`, WITHOUT following directory symlinks.
@@ -227,8 +259,15 @@
 
   A symbolic link is never descended. One whose real target is INSIDE the root
   is already reachable by its real path, so it is skipped rather than
-  duplicated; one that resolves OUTSIDE the root is surfaced as `:escape`, so
-  the caller refuses rather than dropping it quietly.
+  duplicated; one that resolves OUTSIDE the root and hides Clojure sources is
+  surfaced as `:escape`, so the caller refuses rather than dropping it quietly.
+
+  An escape is refused for the callers behind it, not for the link. The skip
+  list is therefore checked FIRST -- `target -> /elsewhere` is the build tree
+  the walk already declines to read, and refusing the whole extraction for a
+  tree that was never going to be read is a refusal with no defect behind it --
+  and a link to a tree with no Clojure source in it is likewise skipped and
+  NAMED rather than made fatal.
 
   A skip-list name is a build tree only at the workspace ROOT; deeper down it
   is a namespace segment. Every directory the walk declines to enter is NAMED
@@ -237,7 +276,7 @@
 
   Returns one of
   `{:files [...] :skipped-large [...] :skipped-directories [...]}`,
-  `{:escape <path>}`, or `{:over-cap <count>}`."
+  `{:escape <path> :escape-real <path>}`, or `{:over-cap <count>}`."
   [^java.io.File root real-root cap byte-cap]
   (let [no-follow (make-array java.nio.file.LinkOption 0)]
     (loop [stack (mapv (fn [entry] [entry true]) (or (.listFiles root) []))
@@ -255,34 +294,53 @@
               link? (java.nio.file.Files/isSymbolicLink path)
               real (when link?
                      (try (.toRealPath path no-follow)
-                          (catch Exception _ nil)))]
+                          (catch Exception _ nil)))
+              directory? (if link?
+                           (and real
+                                (java.nio.file.Files/isDirectory real no-follow))
+                           (.isDirectory entry))]
           (cond
+            ;; @spec MCP-OP-EXTRACT-032
+            ;; @spec MCP-OP-EXTRACT-035
+            ;; the skip list is checked BEFORE the link branch: a build tree is
+            ;; a build tree whether or not it is reached through a link, and
+            ;; `target -> /elsewhere` is not an escape this verb must refuse
+            (and directory? root-level?
+                 (contains? skipped-workspace-directories (.getName entry)))
+            (recur stack files skipped
+                   (conj! skipped-dirs {:dir (.getPath entry)
+                                        :reason :build-tree})
+                   seen)
+
             ;; a link to a directory is never descended
-            (and link? real
-                 (java.nio.file.Files/isDirectory real no-follow))
-            (if (.startsWith real real-root)
+            (and link? directory?)
+            (cond
               ;; already reachable by its real path; descending would
               ;; rediscover every source under it a second time
+              (.startsWith real real-root)
               (recur stack files skipped skipped-dirs seen)
+
+              ;; @spec MCP-OP-EXTRACT-035
+              ;; no Clojure source is behind it, so no caller is either
+              (not (holds-clojure-sources? real))
+              (recur stack files skipped
+                     (conj! skipped-dirs {:dir (.getPath entry)
+                                          :reason :link-outside-root
+                                          :resolves-to (.toString real)})
+                     seen)
+
               ;; refused by the caller, never dropped quietly
-              {:escape (.getPath entry)})
+              :else {:escape (.getPath entry) :escape-real (.toString real)})
 
             ;; a broken link points at nothing to read
             (and link? (nil? real))
             (recur stack files skipped skipped-dirs seen)
 
-            (and (not link?) (.isDirectory entry))
-            ;; @spec MCP-OP-EXTRACT-032
-            (if (and root-level?
-                     (contains? skipped-workspace-directories (.getName entry)))
-              (recur stack files skipped
-                     (conj! skipped-dirs {:dir (.getPath entry)
-                                          :reason :build-tree})
-                     seen)
-              (recur (into stack
-                           (map (fn [child] [child false]))
-                           (or (.listFiles entry) []))
-                     files skipped skipped-dirs seen))
+            (and (not link?) directory?)
+            (recur (into stack
+                         (map (fn [child] [child false]))
+                         (or (.listFiles entry) []))
+                   files skipped skipped-dirs seen)
 
             (not (re-matches #".*\.clj[sc]?$" (.getName entry)))
             (recur stack files skipped skipped-dirs seen)
@@ -300,6 +358,32 @@
             :else
             (recur stack (conj! files (.getPath entry)) skipped skipped-dirs
                    (inc seen))))))))
+
+;; @spec MCP-OP-EXTRACT-035
+(defn- link-escape-refusal
+  "One typed refusal naming the LINK that carries Clojure sources out of the
+  project root.
+
+  Routing a directory link through the file-path confinement gate refused it as
+  an `invalid-relative-source-path` -- \"Expected a project-relative .clj,
+  .cljs, .cljc, or .edn path without parent traversal\" -- which describes a
+  caller-supplied filename this verb never received, names neither the link nor
+  where it goes, and offers no remedy."
+  [root link real]
+  {:ok false
+   :error (str "A directory symlink leaves the extraction project root and the "
+               "tree behind it holds Clojure sources this extraction cannot "
+               "confine: " link " -> " real)
+   :error-type :caller-path-outside-root
+   :path (str link)
+   :resolves-to (str real)
+   :root (str root)
+   :remedy (str "point the link inside the project root, remove it, or extract "
+                "from a root that contains its target; a link to a tree with no "
+                "Clojure source in it is skipped and named in :discovery "
+                "instead of refusing")
+   :source-unchanged true
+   :target-unchanged true})
 
 ;; @spec MCP-OP-EXTRACT-024
 (defn- confine-workspace-paths
@@ -889,6 +973,18 @@
                 form-texts))}))
 
 ;; @spec MCP-OP-EXTRACT-033
+;; @spec MCP-OP-EXTRACT-035
+(def ^:private harmless-directory-skips
+  "Skip reasons that provably hide no unread caller.
+
+  `:build-tree` is the declared root exclusion: the same reasoning that refuses
+  to rewire a build copy says an unread build copy is not an outstanding
+  caller. `:link-outside-root` is only recorded after the walk PROVED the tree
+  behind the link holds no Clojure source. Any other reason is a gap by
+  default, because nothing proved what was inside it."
+  #{:build-tree :link-outside-root})
+
+;; @spec MCP-OP-EXTRACT-033
 (defn scan-gap
   "Pure: one `callers-unresolved` entry for a workspace scan that did not read
   every Clojure source, or nil when it did.
@@ -907,7 +1003,7 @@
   [discovery]
   (let [large (mapv :file (:skipped-large discovery))
         dirs (->> (:skipped-directories discovery)
-                  (remove #(= :build-tree (:reason %)))
+                  (remove #(contains? harmless-directory-skips (:reason %)))
                   (mapv :dir))]
     (when (or (seq large) (seq dirs))
       (cond-> {:file :workspace-scan
@@ -1581,8 +1677,10 @@
             ;; Confine the read set at the moment the walk produces it: this is
             ;; where a directory symlink turns a path that LOOKS like it is under
             ;; the root into one that is not.
+            ;; @spec MCP-OP-EXTRACT-035
             escape (or (when-let [escaped (:escape walked)]
-                         (confine-workspace-paths project-root [escaped]))
+                         (link-escape-refusal project-root escaped
+                                              (:escape-real walked)))
                        (confine-workspace-paths project-root discovered))
             over-cap (:over-cap walked)
             explicit-compile-aliases (not-empty (normalize-aliases compile-alias))

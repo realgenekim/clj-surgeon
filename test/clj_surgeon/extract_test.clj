@@ -2106,6 +2106,90 @@
               "and the 700 KB caller is actually rewired"))
         (finally (delete-recursive! root))))))
 
+;; @spec MCP-OP-EXTRACT-035
+(deftest a-link-out-of-the-root-is-fatal-only-when-sources-are-behind-it
+  (testing "the reviewer's probe: target -> /elsewhere, an EMPTY directory.
+            The skip list already declines to read `target`; refusing the
+            whole extraction for a tree it was never going to read is a
+            refusal with no defect behind it"
+    (let [root (create-caller-project!)
+          elsewhere (io/file (str (.getPath root) "-elsewhere"))]
+      (try
+        (.mkdirs elsewhere)
+        (symlink! (io/file root "target") (.getPath elsewhere))
+        (let [preview (extract/plan
+                        {:file (.getPath (io/file root "src" "app" "core.clj"))
+                         :forms '[moved-one moved-two]
+                         :to (.getPath (io/file root "src" "app" "moved.clj"))
+                         :alias "moved"})]
+          (is (nil? (:error-type preview))
+              (str "the DRY RUN must be able to preview this workspace: "
+                   (pr-str (select-keys preview [:error-type :error]))))
+          (is (false? (:applied preview))))
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:applied result))
+              (str "a build-tree name is skipped whether or not it is a link: "
+                   (pr-str (select-keys result [:error-type :error]))))
+          (is (some #(str/ends-with? (str (:dir %)) "/target")
+                    (get-in result [:discovery :skipped-directories]))
+              (str "and it is NAMED: " (pr-str (:discovery result))))
+          (is (true? (:complete result))
+              "a tree the walk proved holds no source is not an unread source"))
+        (finally (delete-recursive! root) (delete-recursive! elsewhere)))))
+
+  (testing "a link that is NOT a build-tree name and holds no Clojure source
+            is skipped and named, not fatal"
+    (let [root (create-caller-project!)
+          elsewhere (io/file (str (.getPath root) "-docs"))]
+      (try
+        (.mkdirs elsewhere)
+        (spit (io/file elsewhere "README.md") "no callers here\n")
+        (symlink! (io/file root "src" "app" "docs") (.getPath elsewhere))
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:applied result))
+              (str "no caller can be behind a tree with no Clojure source: "
+                   (pr-str (select-keys result [:error-type :error]))))
+          (is (some #(and (str/ends-with? (str (:dir %)) "/docs")
+                          (= :link-outside-root (:reason %)))
+                    (get-in result [:discovery :skipped-directories]))
+              (str "skipped-and-NAMED, never dropped quietly: "
+                   (pr-str (:discovery result)))))
+        (finally (delete-recursive! root) (delete-recursive! elsewhere)))))
+
+  (testing "a link that DOES hide Clojure sources still refuses, and the
+            refusal names the escape and a remedy rather than describing a
+            caller-supplied filename it never received"
+    (let [{:keys [base root]} (escaping-caller-project!)]
+      (try
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (= :caller-path-outside-root (:error-type result)))
+          (is (str/includes? (str (:path result)) "vendor")
+              "the refusal names the LINK")
+          (is (str/includes? (str (:resolves-to result)) "outside")
+              "and where it goes")
+          (is (str/includes? (str (:remedy result)) "link")
+              (str "and a remedy for the escape: " (pr-str (:remedy result))))
+          (is (not (str/includes? (pr-str result) "invalid-relative-source-path"))
+              (str "never the file-path gate's message about a project-relative "
+                   ".clj path, which describes an argument nobody supplied: "
+                   (pr-str (select-keys result [:error :refusal])))))
+        (finally (delete-recursive! base))))))
+
 ;; @spec MCP-OP-EXTRACT-030
 (deftest verification-flags-are-derived-from-the-checks
   (testing "a forced read-back mismatch flips :read-back false"
