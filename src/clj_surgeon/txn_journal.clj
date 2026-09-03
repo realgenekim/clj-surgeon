@@ -682,7 +682,8 @@
 
 (defn- create-sidecar!
   "Write a sidecar ONLY if that name is free, and say which happened:
-   `:created`, `:name-taken`, or `:failed`.
+   `:created`, `:name-taken`, `:unsupported` (no `link(2)` on this filesystem,
+   which is the caller's fallback rather than a refusal), or `:failed`.
 
    `Files/createLink` from a fully written temporary, for the same two reasons
    the LOCK itself is written that way: it is create-if-absent IN THE KERNEL,
@@ -694,6 +695,11 @@
       (Files/createLink (.toPath side) (.toPath tmp))
       :created
       (catch java.nio.file.FileAlreadyExistsException _ :name-taken)
+      ;; a filesystem with no `link(2)` at all: the caller's fallback, NOT a
+      ;; refusal. Reporting this as an unrecordable break would make the
+      ;; break-by-move path unreachable on exactly the filesystems it exists
+      ;; for.
+      (catch UnsupportedOperationException _ :unsupported)
       (catch Exception _ :failed)
       (finally (delete-quietly! tmp)))
     :failed))
@@ -808,8 +814,8 @@
    `create-sidecar!` rather than a write, so the name is claimed by the same
    create-if-absent primitive the break uses: a sidecar already there belongs
    to another break's evidence, and overwriting it would turn that break's
-   stamp into this one's marker. Returns `:created`, `:name-taken` or
-   `:failed`, all three of which the caller acts on.
+   stamp into this one's marker. Returns `:created`, `:name-taken`,
+   `:unsupported` or `:failed`, all four of which the caller acts on.
 
    Cleared by `stamp-broken-at!` BEFORE the unlink, so a crash between the
    unlink and the stamp can never leave a completed break wearing this
@@ -1262,6 +1268,11 @@
 
       ;; nothing can record that this break began, so it does not begin
       :failed {:broken false :cause :evidence-unrecordable}
+
+      ;; no `link(2)` on this filesystem, so neither the marker nor the break
+      ;; can be claimed that way: the whole break takes the documented
+      ;; check-then-act fallback, which writes its own stamp by rename
+      :unsupported (break-by-move! transactions-dir lock tomb claim opts)
 
       ;; :created - the marker is on disk, so the window the link below opens
       ;; contains no state either typing rule can miss
