@@ -187,15 +187,24 @@
 
    `:delimiter-balance` is diagnostic, never a verdict: a non-zero balance means
    unbalanced source, which the PARSER reports as a syntax error. Admission does
-   not refuse it. It counts DELIMITERS only, so prefix accounting can never
-   disturb it."
+   not refuse it, and this scan NEVER throws on it — an unmatched close is
+   recorded as a negative balance and the scan carries on, so the reader's own
+   `Unmatched delimiter` error reaches the caller unchanged. It counts
+   DELIMITERS only, so prefix accounting can never disturb it."
   [^String source]
   (let [n (.length source)]
-    ;; `ddepth` is delimiter depth and is what the balance reports. `pdepth` is
-    ;; the reader-macro levels currently open; `pending` is the innermost run of
-    ;; them, still waiting for the form it wraps. `stack` saves each open
-    ;; delimiter's `pending` so the matching close unwinds exactly those levels.
-    (loop [i 0, nodes 0, ddepth 0, pdepth 0, pending 0, max-depth 0,
+    ;; `ddepth` is the SIGNED delimiter balance and is the only thing the
+    ;; receipt reports: an unmatched close drives it negative and the scan
+    ;; carries on, so the PARSER still reports the syntax error it owns.
+    ;; `sdepth` is the structural nesting depth — the same count floored at
+    ;; zero — and is the ONLY one that may index `stack` or feed `max-depth`.
+    ;; One value cannot be both a signed balance and an array subscript: it was,
+    ;; and an ordinary extra `)` indexed the array at -1.
+    ;; `pdepth` is the reader-macro levels currently open; `pending` is the
+    ;; innermost run of them, still waiting for the form it wraps. `stack` saves
+    ;; each open delimiter's `pending` so the matching close unwinds exactly
+    ;; those levels.
+    (loop [i 0, nodes 0, ddepth 0, sdepth 0, pdepth 0, pending 0, max-depth 0,
            ^ints stack (int-array 64)]
       (if (>= i n)
         {:parse-nodes nodes
@@ -209,7 +218,7 @@
                       (if (and (< j n) (ws? (int (.charAt source j))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) ddepth pdepth pending max-depth stack))
+              (recur j (inc nodes) ddepth sdepth pdepth pending max-depth stack))
 
             ;; line comment: to end of line
             (== c SEMICOLON)
@@ -218,7 +227,7 @@
                                (not (== NEWLINE (int (.charAt source j)))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) ddepth pdepth pending max-depth stack))
+              (recur j (inc nodes) ddepth sdepth pdepth pending max-depth stack))
 
             ;; `#!` — the reader treats a shebang as a line comment, anywhere
             (and (== c HASH)
@@ -229,7 +238,7 @@
                                (not (== NEWLINE (int (.charAt source j)))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) ddepth pdepth pending max-depth stack))
+              (recur j (inc nodes) ddepth sdepth pdepth pending max-depth stack))
 
             ;; string literal, backslash escapes — an atom: it satisfies prefixes
             (== c QUOTE)
@@ -241,13 +250,13 @@
                             (== d BACKSLASH) (recur (+ j 2))
                             (== d QUOTE) (inc j)
                             :else (recur (inc j)))))))]
-              (recur j (inc nodes) ddepth (- pdepth pending) 0 max-depth stack))
+              (recur j (inc nodes) ddepth sdepth (- pdepth pending) 0 max-depth stack))
 
             ;; character literal: \a \newline \( \\ — consumes the delimiter
             (== c BACKSLASH)
             (let [j (token-end source (+ i 2) n)]
               (recur (max j (min n (+ i 2))) (inc nodes)
-                     ddepth (- pdepth pending) 0 max-depth stack))
+                     ddepth sdepth (- pdepth pending) 0 max-depth stack))
 
             ;; regex literal #"..." — its brackets are not structure
             (and (== c HASH)
@@ -261,42 +270,42 @@
                             (== d BACKSLASH) (recur (+ j 2))
                             (== d QUOTE) (inc j)
                             :else (recur (inc j)))))))]
-              (recur j (inc nodes) ddepth (- pdepth pending) 0 max-depth stack))
+              (recur j (inc nodes) ddepth sdepth (- pdepth pending) 0 max-depth stack))
 
             ;; reader-macro prefix — one nesting level, unwound by the form it wraps
             (reader-prefix-start? c)
             (let [len (prefix-length source i n)]
               (if (pos? len)
                 (let [pd (inc pdepth)]
-                  (recur (+ i len) (inc nodes) ddepth pd (inc pending)
-                         (max max-depth (+ ddepth pd)) stack))
+                  (recur (+ i len) (inc nodes) ddepth sdepth pd (inc pending)
+                         (max max-depth (+ sdepth pd)) stack))
                 ;; `#` that begins no prefix (`#(`, `#{`, a tagged literal)
                 (let [j (token-end source i n)]
                   (recur (if (> j i) j (inc i)) (inc nodes)
-                         ddepth (- pdepth pending) 0 max-depth stack))))
+                         ddepth sdepth (- pdepth pending) 0 max-depth stack))))
 
             (opens? c)
-            (let [^ints stack (if (>= ddepth (alength stack))
+            (let [^ints stack (if (>= sdepth (alength stack))
                                 (java.util.Arrays/copyOf stack (* 2 (alength stack)))
                                 stack)
-                  _ (aset stack ddepth (int pending))
-                  dd (inc ddepth)]
-              (recur (inc i) (inc nodes) dd pdepth 0
-                     (max max-depth (+ dd pdepth)) stack))
+                  _ (aset stack sdepth (int pending))
+                  sd (inc sdepth)]
+              (recur (inc i) (inc nodes) (inc ddepth) sd pdepth 0
+                     (max max-depth (+ sd pdepth)) stack))
 
             (closes? c)
             ;; unwind this level's unsatisfied prefixes, then the ones the
-            ;; closing form was itself wrapped in
-            (let [outer (if (and (pos? ddepth) (<= ddepth (alength stack)))
-                          (aget stack (dec ddepth))
-                          0)]
-              (recur (inc i) nodes (dec ddepth)
+            ;; closing form was itself wrapped in. An UNMATCHED close only drives
+            ;; the balance negative: `sdepth` floors at zero, so the stack is
+            ;; never indexed out of bounds and the scan never throws.
+            (let [outer (if (pos? sdepth) (aget stack (dec sdepth)) 0)]
+              (recur (inc i) nodes (dec ddepth) (max 0 (dec sdepth))
                      (max 0 (- pdepth pending outer)) 0 max-depth stack))
 
             :else
             (let [j (token-end source i n)]
               (recur (if (> j i) j (inc i)) (inc nodes)
-                     ddepth (- pdepth pending) 0 max-depth stack))))))))
+                     ddepth sdepth (- pdepth pending) 0 max-depth stack))))))))
 
 ;; ============================================================
 ;; The scan's own cost

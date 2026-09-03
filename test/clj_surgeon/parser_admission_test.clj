@@ -100,6 +100,105 @@
                "literal or comment in: " (pr-str (vec unbalanced)))))))
 
 ;; ------------------------------------------------------------------
+;; malformed input — the shape a structural editor meets most often
+;; ------------------------------------------------------------------
+
+(def ^:private malformed-shapes
+  "Unbalanced and truncated sources: the family the well-formed corpus and the
+   24-shape lexical attack both miss, which is exactly why a crash on one extra
+   `)` shipped past both.
+
+   Measured on anvil 2026-09-03 before this witness: the prefix stack let the
+   delimiter counter go negative on an unmatched close and then used it as the
+   array subscript for the next open, so `(a)) (b)` threw
+   `ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 64` out of
+   `scan-shape` — and out of `outline`, `run-outline`, `run-deps` and
+   `analyze/file->zloc` UNHANDLED, replacing the reader's own
+   `Unmatched delimiter: ) [at line 1, column 21]`.
+
+   A syntax error is the single most common defect a structural editing tool
+   meets. The scan's contract on all of it is: never throw, record the balance,
+   admit, and let the PARSER report the error it owns."
+  {"unmatched-open"        "(defn f [x] (inc x)\n"
+   "unmatched-open-vec"    "(def v [1 2 3)\n"
+   "unmatched-close"       "(defn f [x] (inc x)))\n(defn g [y] 1)\n"
+   "unmatched-close-bare"  ")("
+   "unmatched-close-many"  ")))((("
+   "unmatched-close-brack" "] ["
+   "unmatched-close-brace" "} {a 1}"
+   "close-at-eof"          "(def x 1)\n)\n"
+   "close-only"            ")"
+   "close-in-prefix-run"   "(def x '''))\n"
+   "close-in-prefix-run-2" "@@@)"
+   "prefix-run-at-eof"     "(def x '''"
+   "discard-at-eof"        "(def x 1) #_"
+   "discard-alone"         "#_"
+   "unterminated-string"   "(def s \"abc ((( \n(def y 2)\n"
+   "unterminated-regex"    "(def r #\"[a-z \n(def y 2)\n"
+   "unterminated-comment"  "(def x 1)\n#|"
+   "unterminated-char"     "(def c \\"
+   "meta-at-eof"           "(def x ^:a"
+   "mixed-garbage"         "(a)) [b} {c] '''@@ #_ \"unterminated\n"})
+
+(defn- fixture-sources
+  "Every checked-in fixture under `test-fixtures/`, as [path source] pairs."
+  []
+  (for [^java.io.File f (file-seq (io/file "test-fixtures"))
+        :when (.isFile f)]
+    [(.getPath f) (slurp f)]))
+
+;; @spec MCP-OP-MEM-005
+(deftest malformed-source-never-crashes-the-scan
+  (testing "one extra `)` returns the reader's error, not an internal one"
+    (let [f (doto (java.io.File/createTempFile "mem005unbalanced" ".clj")
+              .deleteOnExit)]
+      (spit f "(defn f [x] (inc x)))\n(defn g [y] 1)\n")
+      (is (= {:parse-depth 2 :delimiter-balance -1}
+             (select-keys (admission/scan-shape (slurp f))
+                          [:parse-depth :delimiter-balance]))
+          "an unmatched close is a NEGATIVE balance and the scan continues")
+      (is (nil? (admission/refusal (.getPath f) (slurp f)
+                                   admission/default-ceilings))
+          "admission does not refuse unbalanced source — the parser owns it")
+      (is (= "Unmatched delimiter: ) [at line 1, column 21]"
+             (try (outline/outline (.getPath f)) ::no-throw
+                  (catch clojure.lang.ExceptionInfo e (.getMessage e))
+                  (catch Throwable t (str (.getName (class t)) ": "
+                                          (.getMessage t)))))
+          "the reader's own error, byte-identical to the pre-branch path")))
+
+  (testing "the scan never throws on any malformed shape, or any fixture"
+    (let [corpus (concat (for [[nm src] malformed-shapes] [(str "generated:" nm) src])
+                         (fixture-sources))
+          crashed (for [[path source] corpus
+                        :let [r (try (admission/scan-shape source)
+                                     (catch Throwable t
+                                       (str (.getName (class t)) ": "
+                                            (.getMessage t))))]
+                        :when (string? r)]
+                    [path r])]
+      (is (seq corpus) "the corpus must not be empty")
+      (is (empty? crashed)
+          (str "scan-shape threw on: " (pr-str (vec crashed))))))
+
+  (testing "admission ADMITS every one, so the answer is the reader's alone"
+    ;; Admitted + unchanged reader = behaviour identical to the pre-branch path,
+    ;; by construction. Confirmed independently by a differential run of
+    ;; `outline/outline` over these 20 generated shapes and all 41 checked-in
+    ;; fixtures against `origin/main` (6c07015) on anvil 2026-09-03: 62/62
+    ;; results identical after the fix, 6/62 differing before it (five unmatched
+    ;; closes and one mixed-garbage file, each an `Index -1` where main returned
+    ;; `Unmatched delimiter`).
+    (let [refused (for [[nm src] malformed-shapes
+                        :let [r (admission/refusal (str nm ".clj") src
+                                                   admission/default-ceilings)]
+                        :when r]
+                    [nm (:reason r)])]
+      (is (empty? refused)
+          (str "malformed source must reach the parser, not a refusal: "
+               (pr-str (vec refused)))))))
+
+;; ------------------------------------------------------------------
 ;; admission AT the ceiling
 ;; ------------------------------------------------------------------
 
