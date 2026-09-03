@@ -1749,3 +1749,206 @@
         "a missing required field is rejected")
     (is (seq (object-schema-violations item-schema (assoc valid-item "extra" "x")))
         "an undeclared key is rejected (additionalProperties false)")))
+
+;; ============================================================
+;; One call must be sufficient IN THE TEXT BLOCK (O2 / PF-5)
+;; ============================================================
+;; Field evidence, E6-Lb PF-4 (`/home/forge/tmp/arms/e6/pf4/c2.json`): an
+;; `ls-tree` receipt's `content[0].text` was 146 characters — a header, a
+;; truncation notice, and an arrow — while the table of contents lived only in
+;; `structuredContent.tree`. A text-only client (codex) is handed nothing. The
+;; witnesses below assert what a text-only caller actually receives.
+
+(defn- with-tmp-project
+  "Build a throwaway project under /tmp and run `thunk` with a config rooted
+   at it. `/tmp` keeps a scratch tree out of a shared repository checkout."
+  [build! thunk]
+  (let [dir (str (fs/create-temp-dir {:prefix "o2-fx-"}))]
+    (try
+      (build! dir)
+      (thunk {:project-root dir})
+      (finally
+        (fs/delete-tree dir)))))
+
+(def ^:private toy-namespaces
+  ["alpha" "beta" "gamma" "delta" "epsilon"
+   "zeta" "eta" "theta" "iota" "kappa"])
+
+(defn- write-toy-namespace!
+  "One realistically shaped source file: an ns with two requires and three
+   top-level forms, each carrying an arglist and a multi-line span."
+  [dir index name]
+  (write-clj-file!
+    (str dir "/src/toy/" name ".clj")
+    (format "(ns toy.%s\n  (:require [clojure.string :as str]\n            [clojure.set :as set]))"
+            name)
+    ""
+    (format "(def ^:private tick-%s (System/currentTimeMillis))" name)
+    ""
+    (format "(defn start-%s\n  [opts]\n  (let [t (System/currentTimeMillis)]\n    (str/join \",\" [(:id opts) t %d])))"
+            name index)
+    ""
+    (format "(defn stop-%s\n  [state reason]\n  (set/union #{reason} (:tags state)))" name)))
+
+(defn- build-toy-project!
+  [dir n]
+  (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+  (dotimes [i n]
+    (let [base (nth toy-namespaces (mod i (count toy-namespaces)))
+          name (if (< i (count toy-namespaces)) base (str base i))]
+      (write-toy-namespace! dir i name))))
+
+(defn- text-block
+  "The exact string a text-only MCP client renders for an ls-tree result."
+  [result]
+  (inspect-tool/ls-tree-summary (assoc result :elapsed_ms 1.0)))
+
+(defn- form-row-lines
+  "Every rendered outline row — `  <line>[-<end>]: <type> <name>`. These are
+   the hit line numbers a caller reads to know where to edit."
+  [text]
+  (filterv #(re-matches #"\s+\d+(-\d+)?: \S+ \S+.*" %) (str/split-lines text)))
+
+(defn- files-named
+  [text]
+  (set (re-seq #"toy/\w+\.clj" text)))
+
+;; @spec MCP-OP-STUDY-036
+(deftest ls-tree-text-block-carries-the-rows-not-just-a-header
+  ;; RED before the fix: `content[0].text` is a 113-character header with zero
+  ;; namespaces and zero rows, while `structuredContent.tree` holds 2,064
+  ;; characters of table of contents.
+  (with-tmp-project
+    #(build-toy-project! % 10)
+    (fn [config]
+      (let [result (inspect-tool/execute-ls-tree
+                     config {:mode "ls-tree" :dir "." :format "text"})
+            text (text-block result)]
+        (is (true? (:ok result)))
+        (is (true? (:read_complete result)))
+        (is (= 10 (:file_count result)))
+        (testing "every namespace the tree carries is in the text a client sees"
+          (doseq [name toy-namespaces]
+            (is (str/includes? text (str "ns: toy." name))
+                (format "text block must name toy.%s" name))))
+        (testing "the per-form rows are in the text block"
+          (is (<= 22 (count (form-row-lines text)))
+              (format "expected >= 22 form rows in content[0].text, got %d"
+                      (count (form-row-lines text)))))
+        (testing "the requires summary travels with them"
+          (is (str/includes? text "requires: [clojure.string :as str]")))
+        (testing "and the whole text block stays inside the O2 budget"
+          (is (<= (count text) 8192)
+              (format "text block was %d characters" (count text))))))))
+
+;; @spec MCP-OP-STUDY-037
+(deftest ls-tree-default-limit-completes-a-ten-file-tree-in-one-call
+  ;; O2's pass line, on a toy tree: one call, at whatever limit the caller gets
+  ;; without asking, must return >= 22 hit line numbers across >= 10 files with
+  ;; read_complete=true in <= 8 KB of TEXT.
+  (with-tmp-project
+    #(build-toy-project! % 10)
+    (fn [config]
+      (let [result (inspect-tool/execute-ls-tree
+                     config {:mode "ls-tree" :dir "."
+                             :grep "System/currentTimeMillis"})
+            text (text-block result)]
+        (is (true? (:ok result)))
+        (is (= "text" (:format result))
+            "grep still selects the per-form view")
+        (is (true? (:read_complete result))
+            "a ten-file toy tree must be complete in one call")
+        (is (= 10 (:returned result)))
+        (is (<= 10 (count (files-named text)))
+            "at least ten distinct files named in the text block")
+        (is (<= 22 (count (form-row-lines text)))
+            "at least twenty-two hit line numbers in the text block")
+        (is (<= (count text) 8192)
+            (format "text block was %d characters" (count text)))))))
+
+;; @spec MCP-OP-STUDY-037
+(deftest ls-tree-default-limit-is-raised-to-admit-a-real-table-of-contents
+  ;; The measured defect: `format=text` at the old default of 4096 admitted
+  ;; only 2 of the 10 files of a real `src`. The default must admit a tree the
+  ;; old default truncated, and must stay inside the O2 text budget.
+  (is (= 8192 inspect-tool/ls-tree-default-limit))
+  (with-tmp-project
+    #(build-toy-project! % 25)
+    (fn [config]
+      (let [at-old (inspect-tool/execute-ls-tree
+                     config {:mode "ls-tree" :dir "." :format "text"
+                             :limit 4096})
+            at-default (inspect-tool/execute-ls-tree
+                         config {:mode "ls-tree" :dir "." :format "text"})]
+        (is (false? (:read_complete at-old))
+            "the old default truncates this tree — the raise is load-bearing")
+        (is (= 8192 (:limit at-default)))
+        (is (true? (:read_complete at-default))
+            "the raised default completes it in one call")
+        (is (= 25 (:returned at-default)))
+        (is (<= (count (text-block at-default)) 8192))))))
+
+;; @spec MCP-OP-STUDY-036
+;; @spec MCP-OP-STUDY-038
+(deftest ls-tree-text-block-appends-the-continuation-hint-when-truncated
+  ;; A truncated text block must say, IN THE TEXT, what to send next. The
+  ;; ceiling stays a typed boundary: a tree that fits returns complete, and the
+  ;; next file over returns truncated carrying the hint.
+  (with-tmp-project
+    #(build-toy-project! % 60)
+    (fn [config]
+      (let [truncated (inspect-tool/execute-ls-tree
+                        config {:mode "ls-tree" :dir "." :format "text"
+                                :limit 4096})
+            text (text-block truncated)]
+        (is (false? (:read_complete truncated)))
+        (is (= "raise_limit_or_narrow_scope" (:next_action truncated)))
+        (testing "the rows it DID fit are still rendered"
+          (is (pos? (count (form-row-lines text)))))
+        (testing "and the text names the exact continuation to send"
+          (is (str/includes? text "next call: inspect_clojure")
+              "the continuation names the tool")
+          (is (str/includes? text "limit=16384")
+              "the continuation names the raised limit")))))
+  (with-tmp-project
+    #(build-toy-project! % 90)
+    (fn [config]
+      (testing "at the ceiling the text carries the narrow-scope remedy instead"
+        (let [at-ceiling (inspect-tool/execute-ls-tree
+                           config {:mode "ls-tree" :dir "." :format "text"
+                                   :limit 16384})
+              text (text-block at-ceiling)]
+          (is (false? (:read_complete at-ceiling)))
+          (is (= "narrow_scope" (:next_action at-ceiling)))
+          (is (str/includes? text "maximum limit")
+              "the remedy is in the text, not only in structuredContent")
+          (is (not (str/includes? text "next call:"))
+              "no continuation is offered that just replays this call"))))))
+
+;; @spec MCP-OP-STUDY-038
+(deftest ls-tree-ceiling-is-a-boundary-n-fits-and-n-plus-one-does-not
+  ;; The typed boundary, witnessed at the edge rather than asserted about a
+  ;; constant: N toy files complete at the ceiling, N+1 truncate and say so.
+  (let [n (atom nil)]
+    (with-tmp-project
+      #(build-toy-project! % 77)
+      (fn [config]
+        (let [result (inspect-tool/execute-ls-tree
+                       config {:mode "ls-tree" :dir "." :format "text"
+                               :limit 16384})]
+          (reset! n (:file_count result))
+          (is (true? (:read_complete result))
+              "77 toy files (16,370 characters) fit under the 16384 ceiling")
+          (is (= 77 (:returned result))))))
+    (with-tmp-project
+      #(build-toy-project! % 78)
+      (fn [config]
+        (let [result (inspect-tool/execute-ls-tree
+                       config {:mode "ls-tree" :dir "." :format "text"
+                               :limit 16384})]
+          (is (false? (:read_complete result))
+              "the seventy-eighth does not")
+          (is (= 76 (:returned result)))
+          (is (= "narrow_scope" (:next_action result)))
+          (is (str/includes? (text-block result) "maximum limit")))))
+    (is (= 77 @n))))
