@@ -983,7 +983,8 @@
                  (range 400))
           wrong (reduce-kv (fn [n k v]
                              (if (str/starts-with? k "SERVED-WRONG") (+ n v) n))
-                           0 tally)]
+                           0 tally)
+          refusals (get tally "REFUSE:unknown-result-cursor" 0)]
       (reset! stop true)
       @swapper
       (spit rows good)
@@ -993,7 +994,11 @@
                "slice read must REFUSE, never serve a substituted candidate "
                "under a valid cursor and a full receipt; tally: " (pr-str tally)))
       (is (pos? (reduce + 0 (vals tally)))
-          "the storm actually ran"))))
+          "the storm actually ran")
+      (is (pos? refusals)
+          (str "the storm must be contended: at least one page must have "
+               "been refused, or this witness measures nothing — tally: "
+               (pr-str tally))))))
 
 ;; @spec MCP-OP-MEM-003
 (deftest a-continuation-receipt-is-measured-from-the-page-it-describes
