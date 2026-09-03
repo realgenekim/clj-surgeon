@@ -3556,3 +3556,87 @@
       (is (contains? refusal :next-command)
           (str "a continuation well inside the byte bound was refused: "
                (pr-str refusal))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-twelve review, item 10: the entrances still divide the door
+;; vocabulary between two phases.
+;;
+;; The shared table gave the `[:doors :vocabulary]` row an `:mcp-phase` of
+;; `:post-discovery`, so the tool's shape walk SKIPPED it and the CLI's did
+;; not. Sol's `doors=conj, file="", threads=bad` therefore refused
+;; `unknown-door-symbol` at the CLI and `empty-file-list` at the tool: one
+;; request, two first refusals, from a table whose entire purpose is that the
+;; two entrances cannot disagree about which shape is refused first.
+;;
+;; The divergence was defended on the grounds that the tool's refusal could
+;; then carry the discovery facts. But this row does not need a scan. It asks
+;; the SYNTACTIC half of the door question — is this name a symbol, and does
+;; it shadow a collection write head — and both halves are decided against
+;; `'#{conj cons into concat}` and `default-doors`, two compile-time sets. A
+;; pure predicate answered after a walk is not a better answer; it is the
+;; same answer, later, on an entrance the other one no longer matches.
+;;
+;; The half that genuinely needs the scan — is this door DEFINED in any file
+;; the census read — is not this row and does not move. It stays after
+;; discovery, on both entrances, and keeps its facts.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
+(deftest the-door-vocabulary-is-decided-in-one-phase-at-both-entrances
+  (testing "the vocabulary this row checks is compile-time, not discovered"
+    (is (set? census/default-doors)
+        "the door vocabulary is not a static set")
+    (is (map? (census/parse-doors ["conj"] nil))
+        (str "the syntactic door check cannot answer without a scan after "
+             "all, and the phase split was load-bearing"))
+    (is (map? (census/parse-doors ["not a symbol"] nil))
+        "the not-a-symbol half needs a scan"))
+
+  (testing "the row runs in the shape pass on BOTH entrances"
+    (is (nil? (:mcp-phase (census/shape-rule :doors :vocabulary)))
+        (str "the door-vocabulary row still declares a phase of its own on "
+             "the tool, so the tool's shape walk skips a row the CLI's "
+             "applies"))
+    (let [split (mapv (juxt :field :violation)
+                      (filter :mcp-phase census/request-shape-rules))]
+      (is (empty? split)
+          (str "these rows still split the two entrances across phases: "
+               (pr-str split)))))
+
+  (testing "one malformed request, one first refusal"
+    (let [cli (binding [*out* (java.io.StringWriter.)]
+                (core/run {:op :relation-census :dir repo-root
+                           :doors "conj" :file "" :threads "bad"}))
+          blank-file (run {:doors ["conj"] :files [""] :pool_size "bad"})
+          empty-list (run {:doors ["conj"] :files [] :pool_size "bad"})]
+      (is (= :unknown-door-symbol (:error-type cli))
+          (str "the CLI moved: " (pr-str (:error-type cli))))
+      (is (= "unknown-door-symbol" (published-mcp-name blank-file))
+          (str "the tool refused files before doors: "
+               (pr-str (published-mcp-name blank-file))))
+      (is (= "unknown-door-symbol" (published-mcp-name empty-list))
+          (str "the tool refused files before doors: "
+               (pr-str (published-mcp-name empty-list))))))
+
+  (testing "the tool's shape refusal still says what it found"
+    (let [result (run {:files [fixture] :doors ["conj"]})]
+      (is (false? (:ok result)))
+      (is (str/includes? (:error result) "shadows a collection write head")
+          (str "the refusal lost its reason: " (pr-str (:error result))))
+      (is (= "conj" (:door result))
+          (str "the refusal does not name the door: " (pr-str result)))
+      (is (contains? (set (:known_doors result)) "upsert-by")
+          (str "the refusal does not name the known doors: " (pr-str result)))
+      (is (not (contains? result :files_scanned))
+          (str "a refusal computed before any walk published a scan count: "
+               (pr-str result)))))
+
+  (testing "definedness still needs the scan, and still gets its facts"
+    (let [result (run {:files [fixture] :doors ["made-up-door"]})]
+      (is (= "unknown-door-symbol" (:error_type result))
+          (str "the post-scan door refusal moved too: " (pr-str result)))
+      (is (str/includes? (:error result) "not defined in any scanned file"))
+      (is (= 1 (:files_scanned result))
+          (str "the post-scan refusal lost its discovery facts: "
+               (pr-str result))))))
