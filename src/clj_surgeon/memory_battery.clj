@@ -207,6 +207,23 @@
   ^double [^long b]
   (/ (Math/round (/ (double b) mib 0.1)) 10.0))
 
+(defn- accountant-get
+  "Keyword lookup into an arbitrary operation result that cannot throw.
+
+  A battery arm's result is WHATEVER THE OPERATION RETURNED, and some
+  operations return a SORTED map keyed by path strings. A sorted map COMPARES
+  the key on `get`, so a keyword lookup there throws ClassCastException instead
+  of returning nil — the same class this repository already documents at
+  `core/ops-registry` (\"sorted-map COMPARES keys on contains?/get\", ed6ad99),
+  arriving from the other side. A reader of arbitrary results has to be TOTAL:
+  a map that cannot answer the question answers nil.
+
+  Found by the battery's own reference pass, which died in the JVM warm-up:
+  `class java.lang.String cannot be cast to class clojure.lang.Keyword`."
+  [m k]
+  (when (map? m)
+    (try (get m k) (catch ClassCastException _ nil))))
+
 ;; @spec MCP-OP-MEM-001
 (defn reserved-peak-mb
   "The ATTRIBUTABLE reserved peak an operation reported, in MiB, or nil.
@@ -228,10 +245,10 @@
   witness that binds the two namespaces, and it fails without this."
   [result]
   (when (map? result)
-    (let [block (or (:reserved result) (:resources result))
-          observed (when (map? block)
-                     (or (:heap-reserved-peak-bytes block)
-                         (:reserved-peak-bytes block)))]
+    (let [block (or (accountant-get result :reserved)
+                    (accountant-get result :resources))
+          observed (or (accountant-get block :heap-reserved-peak-bytes)
+                       (accountant-get block :reserved-peak-bytes))]
       (when (number? observed)
         (bytes->mb observed)))))
 

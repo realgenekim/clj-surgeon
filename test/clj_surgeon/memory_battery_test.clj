@@ -672,3 +672,28 @@
       (is (not (re-find #"memory-battery-attest\s*\\\s*\n\s*\|\|\s*\$\(MAKE\)\s*--no-print-directory\s*memory-battery-reference\s*$"
                         recipe))
           "attest failure must not unconditionally fall through to the 4g reference build"))))
+
+;; @spec MCP-OP-MEM-001
+(deftest the-accountant-reader-is-total-over-any-operation-result
+  (testing "an operation result the reader cannot interrogate answers nil, never throws"
+    ;; A sorted map COMPARES its key on `get`, so a keyword lookup into a
+    ;; string-keyed sorted map throws ClassCastException rather than returning
+    ;; nil. Some battery operations return exactly that shape (a sorted map of
+    ;; path -> content), and the reserved-peak reader runs against every result.
+    ;; This is the ed6ad99 class arriving from the other side, and it killed the
+    ;; battery's reference pass in the JVM warm-up before this guard existed.
+    (let [string-keyed (into (sorted-map) {"src/a.clj" "x" "src/b.clj" "y"})]
+      (is (nil? (battery/reserved-peak-mb string-keyed))
+          "a string-keyed sorted map is not an accountant, and is not an exception either")
+      (is (nil? (battery/reserved-peak-mb
+                  {:reserved (into (sorted-map) {"heap" 1})}))
+          "and neither is one nested inside a :reserved block")))
+  (testing "a real reservation block still reads"
+    (is (= 1.0 (battery/reserved-peak-mb
+                 {:reserved {:heap-reserved-peak-bytes (* 1024 1024)}})))
+    (is (= 2.0 (battery/reserved-peak-mb
+                 {:resources {:reserved-peak-bytes (* 2 1024 1024)}})))
+    (is (nil? (battery/reserved-peak-mb {:reserved {}}))
+        "no accountant is nil, which the verdict renders UNMEASURED")
+    (is (= 0.0 (battery/reserved-peak-mb {:reserved {:heap-reserved-peak-bytes 0}}))
+        "zero is a MEASUREMENT, not an absence")))
