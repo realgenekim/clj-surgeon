@@ -1356,17 +1356,56 @@
   #{:tombstone-exists :evidence-unrecordable})
 
 (defn- break-refusal-remedy
-  "What a caller can actually do about a refused break."
-  [cause]
-  (case cause
-    :evidence-unrecordable
+  "What a caller can actually do about a refused break.
+
+   Takes the refusal LINE and not merely its cause, because the one refusal
+   that names a FILE is the one whose remedy has to name it too. A break
+   interrupted between claiming its marker and claiming its evidence name
+   leaves an ORPHAN SIDECAR, and the next break by the same `:txid` is refused
+   for that name - repeatably, until the published retention retires it. The
+   cause it was reported under, `:evidence-unrecordable`, is shared with a
+   genuine write failure, and the shared remedy sent the owner to `chmod` and
+   `df`: the directory is neither full nor read-only, and retrying changes
+   nothing for a day. A refusal whose remedy points at the wrong cause is
+   worse than a bare cause, because the owner spends the outage looking in the
+   wrong place. House rule 17: a refusal names its owner AND what they can
+   actually do."
+  [{:keys [cause evidence sidecar]}]
+  (cond
+    (and (= :evidence-unrecordable cause) (= :sidecar-name-taken evidence))
+    (str "The break claims its own marker file before it claims the evidence "
+         "name, and that marker name was already taken: " sidecar ". It is an "
+         "ORPHAN SIDECAR - what a break interrupted between its marker and "
+         "its evidence name leaves behind - so the claim was not touched and "
+         "nothing about this directory needs fixing. Break with a different "
+         ":txid to proceed now; recovery retires the orphan on the published "
+         "retention of " broken-lock-retention-ms " ms, after which this "
+         ":txid breaks normally. Retrying with this :txid before then fails "
+         "identically.")
+
+    (= :evidence-unrecordable cause)
     (str "The break could not write the evidence file that records when it "
          "happened, so it left the claim alone: an unrecorded break is a "
          "destroyed claim with nothing on disk naming who took it. Check that "
-         "the transactions directory is writable and has space, then retry.")
+         "the transactions directory is writable and has room, then retry.")
+
+    :else
     (str "A tombstone of that name already exists, so breaking would destroy "
          "the evidence of an earlier break. Retry with a different :txid, or "
          "retire the tombstone by running recovery.")))
+
+(defn- break-refusal-line
+  "The typed line a REFUSED break is reported as, or nil.
+
+   The remedy is attached HERE, at construction, so it travels with the
+   refusal to every surface that publishes one. It used to be added by
+   `acquire-lock!`'s refusal branch alone, so the same refusal reached
+   `acquire-lock!`'s own success path and `recover!`'s receipt with no remedy
+   at all - a refusal with an owner on one surface and none on two others."
+  [outcome]
+  (when (contains? break-refusal-causes (:cause outcome))
+    (let [line (select-keys outcome [:cause :tombstone :evidence :sidecar])]
+      (assoc line :remedy (break-refusal-remedy line)))))
 
 (defn- break-lock!
   "Take EXACTLY the stale claim that was read out of the way, or nothing.
@@ -1475,10 +1514,7 @@
                                                         :break-path]))
                            broken)
                          (or (displaced-line outcome) displaced)
-                         (or (when (contains? break-refusal-causes
-                                               (:cause outcome))
-                               (select-keys outcome [:cause :tombstone]))
-                             refused-break))))
+                         (or (break-refusal-line outcome) refused-break))))
             (let [legacy? (= cause :legacy-format)]
               (refusal :txn-lock-held
                        (if legacy?
@@ -1496,10 +1532,7 @@
                          (assoc :lock-break-displaced displaced)
 
                          refused-break
-                         (assoc :lock-break-refused
-                                (assoc refused-break
-                                       :remedy (break-refusal-remedy
-                                                 (:cause refused-break))))
+                         (assoc :lock-break-refused refused-break)
 
                          legacy?
                          (assoc :holder-format :pid-only
@@ -2990,8 +3023,7 @@
            ;; nobody heard: recovery dropped it entirely, so the one verb
            ;; whose job is to clear a stale lock returned an ordinary success
            ;; having broken nothing
-           refused-break (when (contains? break-refusal-causes (:cause outcome))
-                           (select-keys outcome [:cause :tombstone]))]
+           refused-break (break-refusal-line outcome)]
        (cond-> {:ok (every? :ok results)
                 :transactions-recovered (count results)
                 :isolation compact-isolation

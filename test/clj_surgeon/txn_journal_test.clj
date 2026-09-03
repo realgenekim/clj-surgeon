@@ -1633,6 +1633,66 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(deftest a-refused-break-names-the-file-that-blocked-it-and-how-it-clears
+  (testing "Opus round 8, finding 2, probe B1. A crash between
+            `mark-break-linked!` and `Files/createLink` leaves an ORPHAN
+            SIDECAR - a marker with no tombstone - and the next break by the
+            SAME txid is refused for that name, repeatably, until the
+            published retention sweep retires it. The refusal is fail-safe
+            (the LOCK is untouched), typed, counted and self-clearing, so the
+            lockout is acceptable.
+
+            The REMEDY was not. It said `check that the transactions directory
+            is writable and has space, then retry` - the directory IS
+            writable, there IS space, and retrying fails identically for a
+            day. A refusal whose remedy points at the wrong cause is worse
+            than a bare cause, because it sends the owner to chmod and df
+            while the actual fix is one named file. House rule 17: a refusal
+            names its owner AND what they can actually do."
+    (let [ws (workspace! "sidecar-name-taken" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          lock (io/file dir "LOCK")
+          orphan (io/file dir "LOCK.broken-at.STABLE-TXID")]
+      (try
+        (plant-lock! ws {:txid "ghost-o" :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        ;; exactly what the crash leaves: the marker claimed, the evidence
+        ;; name never taken
+        (spit orphan (pr-str {:tombstone "LOCK.broken.STABLE-TXID"
+                              :phase :linked
+                              :linked-at-ms (System/currentTimeMillis)}))
+        (let [refused (begin! ws {:txid "STABLE-TXID"})
+              line (:lock-break-refused refused)
+              remedy (str (:remedy line))]
+          (is (false? (:ok refused))
+              (str "the break is refused before the LOCK is touched: "
+                   (pr-str refused)))
+          (is (= :evidence-unrecordable (:cause line))
+              (str "with the cause named: " (pr-str line)))
+          (is (= "LOCK.broken-at.STABLE-TXID" (:sidecar line))
+              (str "and the FILE that blocked it named, so the owner has "
+                   "something to act on: " (pr-str line)))
+          (is (str/includes? remedy "LOCK.broken-at.STABLE-TXID")
+              (str "the remedy names that file: " remedy))
+          (is (str/includes? remedy "recover")
+              (str "and says what clears it - recovery retiring the orphan: "
+                   remedy))
+          (is (str/includes? remedy (str journal/broken-lock-retention-ms))
+              (str "on the PUBLISHED retention, quoted rather than implied: "
+                   remedy))
+          (is (not (str/includes? remedy "writable"))
+              (str "and never sends the owner to chmod for a name collision: "
+                   remedy))
+          (is (not (str/includes? remedy "space"))
+              (str "nor to df: " remedy))
+          (is (.isFile lock) "the LOCK is untouched")
+          (is (= "ghost-o" (:txid (read-string (slurp lock))))
+              "and still names the holder it refused to break")
+          (is (not (.isFile (io/file dir "LOCK.broken.STABLE-TXID")))
+              "and no tombstone was made"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
 (defn- receipt-file-names
   "Every place a receipt NAMES a file in the transactions directory, with the
    `:evidence` word its own map carries about that file, if any.
