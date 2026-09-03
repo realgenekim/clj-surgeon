@@ -688,3 +688,155 @@ mac and refuses `:invalid-result-cursor`. It is a refusal, never a wrong
 result, and it needs both scans to pin the same unpinned tree inside the same
 few hundred milliseconds. If it is ever seen in the field the fix is a lock
 file in `cursor-dir`, not a return to entropy.
+
+---
+
+# Round FIVE — the two opens become one, and the boundary grows a parent (2026-09-03T12:37:48Z)
+
+Round four's executed review (Opus, worktree `/home/forge/tmp/sol/mem003r4-wt`
+at `281e13b`) closed all six of its round-three items and returned
+**GO-WITH-FIX** on four new ones plus a nit. This section is what was done
+about them, each RED-first.
+
+## FIX 1 — verification and the slice were two opens of one mutable file
+
+`verified-snapshot` streamed the rows file whole to check its address;
+`read-rows` then **opened it again** to take the slice. Verification and use
+were two observations of one mutable object, so the window was not a hairline:
+it was the whole fold, which is O(N) in the manifest and therefore **grows with
+the corpus**. The reviewer measured it on a real filesystem with no
+interposition at all.
+
+The witness is that harness, committed:
+`a-substituted-slice-is-never-served-under-a-live-rows-swap` — 400 page-2
+reads while a swapper renames a substituted rows file in and out of place. The
+substituted manifest has the same row COUNT and self-consistent
+`(path, content-digest)` rows, so neither the count guard nor the staleness
+check can see it.
+
+| | tally over 400 page-2 reads under a live rows swap |
+|---|---|
+| before | `{"SERVED-correct" 119, "SERVED-WRONG [mod005 mod000 mod007 mod008 mod009]" 92, "REFUSE:unknown-result-cursor" 189}` |
+| after | `{"REFUSE:unknown-result-cursor" 221, "SERVED-correct" 179}` |
+
+`fold-slice` is the fix: one pass over the rows file folds every row into the
+manifest digest, counts the rows, and cuts `[offset, offset+limit)` from the
+**same byte stream**, returning `[slice digest count]`. `verified-page`
+serves that slice only when those bytes still prove the id and the count the
+meta claims. `verified-snapshot` becomes its no-slice form for the reuse path,
+and `read-rows` is **deleted** rather than left as an API a regression can
+reach for. The fresh scan reads back through the same verified fold: it wrote
+those bytes itself, but a snapshot is a file, and a file read without proving
+its address is a filename.
+
+**How much window is left, stated precisely.** Not "atomic read of a file" —
+no such thing exists. The property is **one open, bytes as read**: the digest
+is taken over exactly the bytes the slice was cut from, so there is no second
+observation left to disagree with the first, and a torn read (a writer mutating
+the file in place under the reader) folds to a different digest and refuses.
+For the MANIFEST the window is therefore zero. What the manifest cannot speak
+for is the SOURCE FILES: `stale-row` digests them and the encoder then reopens
+them, which is a separate check-to-use gap this round did not touch and does
+not claim to have closed.
+
+## FIX 2 + 3 — the boundary resolves the PARENT; the documents say so
+
+Round four served `[m06 leaked.secret m08 m09 m10]` for the row
+`src/linkdir/secret.clj` with `src/linkdir -> OUTSIDE`, inside a snapshot
+re-folded so that it PASSED verification. The lexical premise was right about
+the LEAF and silent about the parent.
+
+`row-file` now requires the row's parent directory — or, when that directory
+is gone, its deepest existing ancestor — to resolve inside the real root,
+symlinks followed, and never resolves the final component. The split is the
+exact shape of what discovery can produce, measured both ways on this branch:
+plain `find` with no `-L` LISTS a symlinked `.clj` file whose target is
+outside the root and NEVER DESCENDS a symlinked directory.
+
+```
+src/fixt/linkfile.clj  (symlinked FILE)     -> .../r1/src/fixt/linkfile.clj
+src/linkdir/secret.clj (symlinked DIR)      -> refused
+src/gone/m01.clj       (deleted directory)  -> .../r1/src/gone/m01.clj
+../r1extra/secret.clj, "", ".", absolute     -> refused
+```
+
+A deleted directory is not an escape and is not accused of one: it resolves and
+refuses `:stale-result-cursor` naming the file, which is the true receipt.
+`specs.md:21` now requires the PARENT to resolve, the design's refusal table
+and confinement paragraph say parent-resolved/leaf-lexical and cite the `find`
+measurement, and the falsifier row carries the symlinked-directory case.
+
+## FIX 4 — the race is named in the unsafe direction
+
+The slice guard's comment and the count witness now say which direction they
+cover. **Fewer** rows than promised is the safe direction: a short page lies
+about how much was shown, never about what was shown. **Different** rows of the
+right length is the dangerous one, no count can see it, and it is closed
+upstream by the single open in `verified-page` — not here.
+
+## Item 5 — a page can never advance by zero
+
+`over?` comes from `(- total offset)` and not from `encoded`, so a page that
+encoded zero records with rows remaining minted a next cursor **at its own
+offset**. With the outline stream emptied, the page handed back the token it
+was given: `"e17427d3...:5:f965d9dd..."`, identical to the cursor presented.
+`:empty-result-page` is the sixth typed refusal, carries no cursor, and guards
+both paged branches.
+
+## Nit — "costs no read at all", made true
+
+`stale` was a sibling `let` binding, evaluated whether or not confinement
+refused, so every confined row before the offending one was digested. Counting
+`content-digest` calls with the escape at position 6: **1 read before, 0
+after**. It is a `delay` now, and the order of the `cond` is the promise.
+
+## Gates — ran-lines verbatim, each once
+
+| gate | result |
+|---|---|
+| `suite-run bb test/run_all.clj` | `Ran 776 tests containing 6315 assertions.` / `0 failures, 0 errors.` (baseline 772 / 6300) |
+| `suite-run clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/mcp-test` | `Ran 389 tests containing 3988 assertions.` / `0 failures, 0 errors.` |
+| `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` |
+| `make memory-battery-self-test` | `Ran 24 tests containing 138 assertions.` / `0 failures, 0 errors.` |
+| `make memory-battery` (once, exclusive `flock`, `MEMBAT_ROOT=/tmp/mem003r5-fx/battery`) | `verdict: FAIL (INCOMPLETE)   exit 1` — the two pre-existing whole-workspace failures, unchanged |
+
+`cli-ls-tree` rows, every cell `result-hash == reference-hash`, no
+`nondeterministic:N` anywhere, no errors:
+
+```
+     n   phase     prof reps    wall   held    ret    peak  parity
+   100  :fresh :default    1     174    1.0    0.9   188.9  ok
+   100   :warm :default    4      88    0.9    0.9   195.3  ok
+  1000  :fresh :default    1     465    9.4    9.5   284.6  ok
+  1000   :warm :default    4     579    9.4    9.5   293.3  ok
+ 10000  :fresh :default    1    1450    9.4    9.4   279.6  ok
+ 10000   :warm :default    4    1095    9.4    9.5   280.2  ok
+   100  :fresh    :cljc    1      26    0.4    0.4    58.3  ok
+   100   :warm    :cljc    4      22    0.4    0.4    89.1  ok
+     1  :fresh   :giant    1      21    0.0    0.0    34.0  ok
+     1   :warm   :giant    4      21    0.0    0.0    34.0  ok
+     1  :fresh  :nested    1       8    0.0    0.0    25.3  ok
+     1   :warm  :nested    4       8    0.0    0.0    25.8  ok
+```
+
+Held is flat at 9.4 MB from N=1,000 to N=10,000, and the warm cells fold four
+reps into one hash — the determinism claim, within one warm store, measured
+again.
+
+**The failures and trends are byte-for-byte the same SET as the base commit's
+own battery run** (`281e13b`, `/tmp/mem003r4-fx/battery`): the same two
+`held-scales-with-n` failures on `rename-ns-plan-full-match` (9.8 vs 3.0) and
+`workspace-sources-read-all` (40.8 vs 6.4), and the same eight
+`peak-over-budget` trends, differing only in sampling noise. Neither failure is
+in this lane.
+
+**One difference worth naming rather than leaving to be discovered.** The
+`giant` and `nested` result hashes differ from the round-four run
+(`75f20740`/`b3272129` there, `6b0a02dd`/`b80bd482` here) on trees `diff -r`
+proves identical. It is not this branch: running the CURRENT code against the
+round-four corpus reproduces the round-four hash exactly. The cause is the
+MEM-005 admission refusal, whose `:error` string embeds an ABSOLUTE path —
+`"parser admission refused max_parse_depth: /tmp/mem003r4-fx/.../nested.clj"` —
+so those two arms' output is a function of `MEMBAT_ROOT`. Parity never fires
+because the reference is regenerated per root, which is exactly why nobody had
+noticed. It belongs to the MEM-005 lane, not this one.
