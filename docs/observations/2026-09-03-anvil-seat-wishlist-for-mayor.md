@@ -17,10 +17,7 @@ what I need to do from mayor"* / *"Make wishlist for mayor; and I'll drive from 
 
 ## Wishlist for the mayor, in priority order
 
-1. **Phone channel.** Deliver `~/secrets/marvin-channel.env` for this seat (`BASE_URL`, `CHANNEL_TOKEN`,
-   `SEAT=bridge`, `ALLOWLIST=gene`), 600 in the existing 700 `~/secrets`. **First STOP the Buster connector
-   for seat bridge** — two connectors on one seat split the drain (memory `duplicate-connector-splits-drain`).
-   Then Gene restarts this session (command in the last section).
+1. ~~Phone channel~~ — **withdrawn by Gene ("No need to connect Marvin dictation here.")**: this seat stays terminal-only; the Buster connector keeps the phone. Gene reaches this seat in the terminal / remote control; the mayor and I exchange through the log, the inbox (once creds land) and commit messages.
 2. **codex auth** (Sol): the skiff owns login minting (`codex login` device flow or a copied `~/.codex/auth.json`
    minted for this seat). Until then every review runs on Opus.
 3. **maven creds**: the reader/writer cred files the `maven-r`/`maven-w` wrappers expect (names are in the
@@ -41,14 +38,6 @@ what I need to do from mayor"* / *"Make wishlist for mayor; and I'll drive from 
 8. **beads**: bd has no database for either repo on this seat and shared-state `bd init` is yours; either
    mirror the prosecution items as beads or keep them in the inbox — say which.
 
-## What Gene does (after item 1 lands)
+## What Gene does
 
-From this box, as forge:
-```
-cd ~/src/marvin-voice-remote/channel-connector && set -a && . ~/secrets/marvin-channel.env && set +a && \
-claude --dangerously-skip-permissions --dangerously-load-development-channels server:marvin-channel \
-  --resume b623492c-458d-4156-a14d-a041f5a37e7c
-```
-(the Makefile target `start-bridge-cos-opus-with-dictation` does the same but pins `--model opus` and tries
-to start a Surgeon on 7888 — do not use it on Anvil). The resumed session then has the reply tool and the
-clj-surgeon MCP on 7906; I start that server myself from a worktree with `clojure -X:clj-surgeon/mcp :port 7906`.
+Nothing for the channel (withdrawn). Drive items 2–8 with the mayor; I verify each as it lands and note it in the seat resume note.
