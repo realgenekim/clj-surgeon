@@ -1490,11 +1490,37 @@
 
 (def ^:private unaddressed-match-limit 20)
 
-(defn- edit-line-span
-  "Pre-image line span [start end] of one compiled edit."
-  [{:keys [line before]}]
-  (when (integer? line)
-    [line (+ line (dec (count (str/split (str before) #"\n" -1))))]))
+;; @spec MCP-OP-MATCHED-004
+(defn- preorder-subtree-ends
+  "Map one snapshot's preorder index to the last preorder index of its subtree.
+
+   Matched sites and compiled edits are numbered by the same whitespace-skipping
+   preorder walk, so this turns a site's `:address {:preorder}` into the closed
+   span an edit's `[:address :preorder]`/`:end-preorder` span is compared with.
+   Line numbers cannot do that: two sites on one line share a line span."
+  [source]
+  (persistent!
+    (reduce (fn [ends [preorder location]]
+              (assoc! ends preorder
+                      (+ preorder (node-size (z/node location)) -1)))
+            (transient {})
+            (map-indexed vector
+                         (zipper-locations
+                           (z/of-string source {:track-position? true}))))))
+
+(defn- edit-preorder-span
+  "Pre-image preorder span [start end] of one compiled edit."
+  [{:keys [address end-preorder]}]
+  (let [start (:preorder address)]
+    (when (and (integer? start) (integer? end-preorder))
+      [start end-preorder])))
+
+(defn- site-preorder-span
+  "Pre-image preorder span [start end] of one matched site."
+  [ends site]
+  (let [start (get-in site [:address :preorder])]
+    (when (integer? start)
+      [start (get ends start start)])))
 
 (defn- spans-intersect?
   [[left-start left-end] [right-start right-end]]
@@ -1503,6 +1529,7 @@
 ;; @spec MCP-OP-MATCHED-001
 ;; @spec MCP-OP-MATCHED-002
 ;; @spec MCP-OP-MATCHED-003
+;; @spec MCP-OP-MATCHED-004
 (defn matched-basis-evidence
   "Pure: one compiled transaction plus one prior-match basis in ; receipt
    evidence or one typed pre-write refusal out. Performs no I/O.
@@ -1512,7 +1539,7 @@
    pattern, and the match count. The transaction's own frozen pre-image is the
    only snapshot consulted, so the two calls are joined by the caller's hash and
    the server retains no session state between them. A site is addressed when
-   its pre-image line span intersects a compiled edit's pre-image line span."
+   its pre-image preorder span intersects a compiled edit's preorder span."
   [compiled {:keys [file file-hash match public] expected-count :count}]
   (let [source (get (:original-sources compiled) file)
         public-file (get public :file file)
@@ -1565,13 +1592,13 @@
           (let [spans (->> (:files compiled)
                            (filter #(= file (:file %)))
                            (mapcat :edits)
-                           (keep edit-line-span)
+                           (keep edit-preorder-span)
                            vec)
+                ends (preorder-subtree-ends source)
                 unaddressed
                 (->> (:matches found)
                      (remove (fn [site]
-                               (let [span [(:line site)
-                                           (or (:end-line site) (:line site))]]
+                               (when-let [span (site-preorder-span ends site)]
                                  (boolean (some #(spans-intersect? span %)
                                                 spans)))))
                      (mapv (fn [site]

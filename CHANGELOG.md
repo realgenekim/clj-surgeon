@@ -10,6 +10,13 @@ is cut.
 
 ### Fixed
 
+- `expect_matched` now decides "addressed" from preorder address spans
+  rather than pre-image line numbers. Two matched sites on one line used to
+  report "all matched sites addressed" when only one of them was edited —
+  the wrong failure direction for a receipt whose job is naming what a
+  transaction skipped. Sites nested inside an edited form still count as
+  addressed.
+
 - Restored the SCI computed-program capability boundary after the no-default
   `case` compatibility change exposed constructor shorthand and dot interop.
   Executable constructor, method, field, and explicit-dot forms now refuse

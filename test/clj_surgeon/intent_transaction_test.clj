@@ -2398,3 +2398,57 @@
                  compiled (assoc (folds-basis 19) :match "(a) (b)"))]
     (is (= :expect-matched-invalid-pattern (:error-type result)))
     (is (= "src/folds.clj" (:file result)))))
+
+;; ---------------------------------------------------------------------------
+;; Two matched sites can share one pre-image line. Line granularity called the
+;; unedited sibling "addressed" — the wrong failure direction for a receipt
+;; whose whole job is naming what the transaction skipped.
+;; ---------------------------------------------------------------------------
+
+(def ^:private one-line-source
+  "(ns one-line)\n\n(defn go [] (do (f 1) (f 2)))\n")
+
+(defn- one-line-transaction
+  [find-source replace-source]
+  (transaction/compile-transaction
+    {"src/one_line.clj" one-line-source}
+    {:changes [{:id :one-call
+                :in ["src/one_line.clj"]
+                :forms ['go]
+                :find find-source
+                :do [:replace replace-source]
+                :expect {:matches 1}}]
+     :expect {:changes 1 :edits 1 :files 1}}))
+
+(defn- one-line-basis
+  []
+  {:file "src/one_line.clj"
+   :file-hash (structural-lens/source-hash one-line-source)
+   :match "(f _)"
+   :count 2})
+
+(deftest expect-matched-separates-two-sites-that-share-one-line
+  ;; @spec MCP-OP-MATCHED-004
+  (let [compiled (one-line-transaction "(f 1)" "(g 1)")
+        _ (is (:ok compiled))
+        result (transaction/matched-basis-evidence compiled (one-line-basis))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 2 (:matched-count evidence)))
+    (is (= 1 (:addressed-matches evidence)))
+    (is (= 1 (:unaddressed-match-count evidence)))
+    (testing "the skipped sibling is the one sharing the edited line"
+      (is (= [3] (mapv :line (:unaddressed-matches evidence))))
+      (is (= [(structural-lens/source-hash "(f 2)")]
+             (mapv :hash (:unaddressed-matches evidence)))))))
+
+(deftest expect-matched-counts-sites-inside-one-edited-form-as-addressed
+  ;; @spec MCP-OP-MATCHED-004
+  (let [compiled (one-line-transaction "(do (f 1) (f 2))" "(h)")
+        _ (is (:ok compiled))
+        result (transaction/matched-basis-evidence compiled (one-line-basis))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 2 (:addressed-matches evidence)))
+    (is (= 0 (:unaddressed-match-count evidence)))
+    (is (= [] (:unaddressed-matches evidence)))))
