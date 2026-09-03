@@ -172,3 +172,5 @@ Ratchets fix round (a90f9ebd74d4100af) launched on the ratchets worktree.
 ## 03:18Z — `bridge/lens-followups` pushed at 934716dc (my run 1055 tests, 13171 assertions, 0 failures).
 
 ## 03:25Z — Anvil environment: swipl 10 + plunit installed user-locally (micromamba), claude-skills + global CLAUDE.md + the-gene-maven in place, connector deps installed, .mcp.json repointed off 7888; wishlist for the mayor filed (docs/observations/2026-09-03-anvil-seat-wishlist-for-mayor.md) with Gene's restart command.
+
+## 03:26Z — rf2 re-review GO-WITH-FIX: probes closed, but skips can lie about completeness and the cap remedy is broken from the CLI; round three launched (items 1–7). Verdict filed.
