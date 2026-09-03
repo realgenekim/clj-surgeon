@@ -34,13 +34,13 @@ plan unreadable.
   the id registered wherever the witnesses live. On merge, fold this row into
   the battery's own and keep one.
 
-- [x] **MCP-OP-MEM-006**: When a mutation is staged, clj-surgeon shall pin each write-set pre-image and future file durably by digest AND by NOFOLLOW type and file identity before live mutation, shall refuse a parent-traversal segment, a relative path, or an absolute path not named under the workspace root on the RAW path before canonicalisation, and shall not retain repository-wide original or future source maps.
+- [x] **MCP-OP-MEM-006**: When a mutation is staged, clj-surgeon shall pin each write-set pre-image and future file durably by digest AND by NOFOLLOW type and file identity before live mutation, shall refuse a parent-traversal segment, a relative path, or an absolute path not named under the workspace root on the RAW path before canonicalisation, and shall not retain repository-wide original or future source maps; and when the transaction ends it shall RETAIN that pre-image journal after a commit until an explicit `forget!` or a quota-driven `evict!` that no receipt reference blocks, and shall never delete the journal of a restoration that did not verify.
 
 - [x] **MCP-OP-MEM-007**: Before the first write, clj-surgeon shall hold the transaction lock and revalidate every file that influenced the plan, the NOFOLLOW type and file identity of every pinned path, and the SEALED SCOPE-MEMBERSHIP DIGEST it was planned against - never the member count, which cannot distinguish one set from another of the same size; and before each path's own replacement it shall copy that path's staged bytes into the path's own directory FIRST and then, while holding the workspace publish lock, recheck the path's pre-image digest AND its file identity and rename, so that no byte copying happens between the recheck and the rename. Because an atomic rename is not a compare-and-swap, a writer that does not take the publish lock and lands inside that residual recheck-to-rename window can still be overwritten; clj-surgeon shall bound that window to a digest recheck, an identity recheck, one journal fsync and one rename, shall report its measured width in the receipt, and shall keep the pinned pre-image journal as its recovery.
 
 - [x] **MCP-OP-MEM-012**: While a transaction is open, when a read-set entry is recorded, clj-surgeon shall write it to the sorted on-disk manifest and shall retain no per-path record and no source text of it in the transaction value; and when the read set is sealed it shall fold scope membership into one digest and a count rather than retaining the walked path list.
 
-- [x] **MCP-OP-MEM-013**: While an unfinished transaction journal exists, when recovery runs, clj-surgeon shall restore the pinned pre-image bytes of every path the journal recorded as begun and shall verify each restored digest against the digest pinned before the first write.
+- [x] **MCP-OP-MEM-013**: While an unfinished transaction journal exists, when recovery runs, clj-surgeon shall restore the pinned pre-image bytes of every path the journal recorded as begun, shall verify each restored digest against the digest pinned before the first write, and shall discard the journal only when every restoration verified - recording `:restore-failed` and retaining the whole journal otherwise.
 
 - [x] **MCP-OP-MEM-014**: When a transaction commits or refuses, clj-surgeon shall state its isolation as optimistic serializability with conflict detection and exact rollback, shall name the residual recheck-to-rename window it does not close and the operations inside it, and shall not claim snapshot isolation against a writer that ignores the lock.
 
@@ -63,6 +63,7 @@ plan unreadable.
 | MEM-012 | "Retention only matters for source text." A path-keyed collection that grows with the repository is the same defect at a smaller constant. |
 | MEM-013 | "Recovery can re-derive what to restore from the manifest." The manifest is the read set; only the journal knows which paths were begun. |
 | MEM-013 | "A restored file is restored." Restoration is verified against the pinned digest or it is not restoration. |
+| MEM-013 | "A finished transaction's journal is garbage." A committed receipt is undoable only while its pre-images exist, and a FAILED restoration's journal is the only material that can repair the tree. |
 | MEM-014 | "Hashing every file at validation time gives us a snapshot." It does not. A writer that ignores the lock can land between validation and rename. |
 | MEM-014 | "Detected therefore prevented." The racing write is detected at read-back and rolled over; the receipt must not imply it was excluded. |
 | MEM-001 | "A receipt that is too big can be truncated with a continuation." A read-only projection may paginate; a mutation receipt that hides work that was done may not. |
@@ -76,7 +77,7 @@ plan unreadable.
 | MEM-006 | pinned and staged bytes exactly equal the journal quota; a path naming a file inside the root through a `..` segment | a second transaction cannot open while the lock is held | the last injected write fails and every path returns to `H0` |
 | MEM-007 | exactly the maximum read-set count; a scope whose members are swapped at an unchanged count | a read-only file drifts after sealing; a writer lands after the staged copy and before the pre-image recheck; a pinned regular file becomes a symbolic link to identical bytes | a write-set file drifts between revalidation and its own rename; a writer lands inside the residual recheck-to-rename window and is overwritten, which the receipt reports |
 | MEM-012 | twenty thousand recorded entries | — | an unsorted entry is refused rather than written out of order |
-| MEM-013 | killed between pin and rename | killed between rename N and N+1 | a pre-image object is missing, which is reported, never assumed |
+| MEM-013 | killed between pin and rename | killed between rename N and N+1 | a pre-image object is missing, which is reported, never assumed, and its journal is retained rather than deleted |
 | MEM-014 | — | an external writer lands after the rename | read-back mismatch rolls the transaction back |
 | MEM-020 | exactly at each ceiling | — | one unit past each ceiling refuses before the read |
 
@@ -85,9 +86,9 @@ plan unreadable.
 | Requirement | Falsifying observation |
 |---|---|
 | MCP-OP-MEM-001 | A receipt is silently truncated, grows without a ceiling, or reports no attributable reserved peak. |
-| MCP-OP-MEM-006 | A staged path is written without a durable pinned pre-image, or a path containing a `..` segment is pinned or staged, or a path whose NOFOLLOW type or file identity changed after pinning is written, or a transaction retains a repository-wide original or future source map. |
+| MCP-OP-MEM-006 | A staged path is written without a durable pinned pre-image, or a path containing a `..` segment is pinned or staged, or a path whose NOFOLLOW type or file identity changed after pinning is written, or a committed receipt cannot be undone because its journal was deleted, or a transaction retains a repository-wide original or future source map. |
 | MCP-OP-MEM-007 | A transaction commits after a file that shaped its plan changed, or after the scope gained, lost or SWAPPED a member, or without holding the lock; or bytes are copied into the target directory INSIDE the recheck-to-rename window; or a receipt omits that window. |
 | MCP-OP-MEM-012 | Recording N read-set entries makes the transaction value's per-path record count or retained string bytes grow with N. |
-| MCP-OP-MEM-013 | A crash leaves a path holding neither its pre-image nor its verified result, or recovery reports success without verifying a digest. |
+| MCP-OP-MEM-013 | A crash leaves a path holding neither its pre-image nor its verified result, or recovery reports success without verifying a digest, or a journal whose restoration failed is deleted. |
 | MCP-OP-MEM-014 | A receipt claims snapshot isolation, omits the isolation statement, omits the residual commit window, or a racing external write goes undetected. |
 | MCP-OP-MEM-020 | A walk reads a file past a ceiling, follows a symbolic link, or retains a source after its planner callback returned. |

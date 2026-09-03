@@ -78,6 +78,7 @@ workspace's own durable state root, beside the receipts:
           objects/<sha256>       pinned pre-image bytes, content addressed
           staging/<path-id>.new  future bytes
           state.edn              {:txid :workspace-root :status ...}
+          lease.edn              why the journal is RETAINED and what references it
 
 `mcp-workspace/state-dir` resolves the root and `transactions-dir` names this
 directory; `receipt-dir` is unchanged. The staging file is published through a
@@ -107,6 +108,31 @@ replacement is still one atomic rename, and the target's permissions survive it.
    its pre-image digest and its file identity, fsync `write-begin` and rename; then release the lock,
    fsync `write-done`, read back and verify.
 8. `rollback!` / `recover!` — restore the pinned bytes and verify each digest.
+9. `undo!` / `forget!` / `evict!` — reverse a committed receipt from its retained
+   pre-images, or release the journal.
+
+## Retention: a receipt you cannot undo is not a receipt
+
+A finished transaction's journal is not garbage.
+
+| outcome | journal | why |
+|---|---|---|
+| `:committed` | **retained** | the pre-images are the only way to reverse the change the receipt describes |
+| `:rolled-back` | discarded | every path verified back at H0; nothing is left to recover from |
+| `:restore-failed` | **retained, un-evictable** | the tree is NOT at H0 and this is the only material that can repair it |
+
+Staging files are reclaimed on commit — those bytes are now the bytes in the
+tree — and the pre-image objects stay. `lease.edn` records the status, the
+receipt refcount, and whether the row may be evicted.
+
+- `undo!` republishes every path the journal recorded as BEGUN from its own
+  pinned objects and verifies each against the digest pinned before the first
+  write. A pinned path the transaction never wrote is not touched: republishing
+  it would clobber a write somebody else made.
+- `forget!` is the explicit release. It refuses a `:restore-failed` journal.
+- `evict!` is the quota-driven release. It refuses a `:restore-failed` journal
+  AND one a receipt still references; `release-receipt!` drops that reference.
+- `retained-transactions` is what a quota sweep reads.
 
 ## Recovery
 
@@ -115,7 +141,9 @@ durable; the `write-begin` lines say which paths were begun. Each begun path is
 republished from its pinned object in reverse order and verified against the
 digest that was pinned before the first write; staging temporaries the dead
 process left in the tree are removed; the lock is released. A transaction whose
-`state.edn` says `:committed` or `:rolled-back` is not a candidate.
+`state.edn` says `:committed` or `:rolled-back` is not a candidate. A recovery whose
+restoration verified deletes its journal; one that did not verify records
+`:restore-failed` and keeps everything.
 
 Two crash points are witnessed: killed between pin and rename (nothing was
 written, so nothing is restored, and the lock is freed) and killed between
@@ -175,6 +203,8 @@ witness:
 | defeat read-set revalidation | scope membership | RED |
 | compare member counts instead of the digest | equal-count scope swap | RED |
 | pin bytes without identity | file replaced by a symlink to identical bytes | RED |
+| delete the journal on commit | undo a committed receipt | RED |
+| delete the journal on a failed restore | failed restoration retention | RED |
 | defeat pre-image restoration | crash between renames | RED |
 | park a repository-wide read-set map in the transaction | retention | RED |
 | claim snapshot isolation | contract statement | RED |

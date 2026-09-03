@@ -785,28 +785,87 @@
   (let [written (:written @(:state txn))]
     (mapv #(restore-path! txn %) (reverse written))))
 
-(defn- finish!
+(defn- delete-tree!
+  [dir]
+  (doseq [file (reverse (file-seq (io/file dir)))]
+    (Files/deleteIfExists (.toPath file))))
+
+(defn- dir-bytes
+  [dir]
+  (reduce + 0 (map #(.length ^File %) (filter #(.isFile ^File %) (file-seq (io/file dir))))))
+
+(defn- write-lease!
+  "Record why this journal is retained and what still references it.
+
+   A journal is not garbage the moment its transaction ends. A committed
+   transaction's receipt is only undoable while its pre-images exist, and a
+   restoration that did NOT verify has left the tree in a state only this
+   journal can describe. The lease is the refcount a quota sweep must consult."
   [txn status]
-  (let [state @(:state txn)]
-    (when-let [^FileOutputStream stream (:manifest-stream state)]
-      (try (.close stream) (catch Exception _ nil)))
-    (append-journal! txn (name status))
-    (write-state! txn status {:finished-at (str (java.time.Instant/now))})
-    (when-let [^FileOutputStream stream (:journal-stream state)]
-      (try (.close stream) (catch Exception _ nil)))
-    (release-lock! (:transactions-dir txn))
-    (when-not (:retain-dir? state)
-      (doseq [file (reverse (file-seq (io/file (:dir txn))))]
-        (Files/deleteIfExists (.toPath file))))))
+  (spit (io/file (:dir txn) "lease.edn")
+        (pr-str {:txid (:txid txn)
+                 :status status
+                 :receipt-refs (if (= :committed status) 1 0)
+                 :evictable (not= :restore-failed status)
+                 :retained-at (str (java.time.Instant/now))
+                 :bytes (dir-bytes (:dir txn))})))
+
+(defn- reclaim-staging!
+  "Drop the staging files of a committed transaction.
+
+   Their bytes are now the bytes in the tree; the PRE-images are what a receipt
+   needs to be undoable, and those stay."
+  [txn]
+  (doseq [^File file (.listFiles (io/file (:staging-dir txn)))]
+    (Files/deleteIfExists (.toPath file))))
+
+(defn- finish!
+  "End the transaction, and decide whether its journal survives it.
+
+   Retention policy, and the reason for each row:
+
+   | outcome          | journal   | why |
+   |------------------|-----------|-----|
+   | `:committed`     | RETAINED  | a receipt that cannot be undone is not a receipt; the pre-images are the undo |
+   | `:rolled-back`   | discarded | every path verified back at H0, so there is nothing left to recover |
+   | `:restore-failed`| RETAINED  | the tree is not at H0 and this is the ONLY material that can repair it |
+
+   The third row is the one that matters. Deleting the journal of a failed
+   restoration destroys the evidence and the repair material at exactly the
+   moment both are needed."
+  ([txn status] (finish! txn status nil))
+  ([txn status restored]
+   (let [state @(:state txn)
+         failed? (boolean (seq (remove #(= :verified (:status %)) restored)))
+         status (if (and (= :rolled-back status) failed?) :restore-failed status)
+         retain? (or (contains? #{:committed :restore-failed} status)
+                     (:retain-dir? state))]
+     (when-let [^FileOutputStream stream (:manifest-stream state)]
+       (try (.close stream) (catch Exception _ nil)))
+     (append-journal! txn (name status))
+     (write-state! txn status {:finished-at (str (java.time.Instant/now))
+                               :retained retain?
+                               :restore-failed failed?})
+     (when-let [^FileOutputStream stream (:journal-stream state)]
+       (try (.close stream) (catch Exception _ nil)))
+     (release-lock! (:transactions-dir txn))
+     (if retain?
+       (do (when (= :committed status) (reclaim-staging! txn))
+           (write-lease! txn status))
+       (delete-tree! (:dir txn)))
+     {:status status :retained retain?})))
 
 (defn rollback!
   ;; @spec MCP-OP-MEM-006
   "Restore every path this transaction began writing, verify each, and end it."
   [txn]
-  (let [restored (rollback-written! txn)]
-    (finish! txn :rolled-back)
-    {:ok (every? #(= :verified (:status %)) restored)
+  (let [restored (rollback-written! txn)
+        ok (every? #(= :verified (:status %)) restored)
+        finished (finish! txn :rolled-back restored)]
+    {:ok ok
      :rolled-back true
+     :status (:status finished)
+     :retained (:retained finished)
      :isolation compact-isolation
      :paths restored}))
 
@@ -892,9 +951,10 @@
              (append-journal! txn (str "commit-begin\t" (count paths)))
              (loop [remaining paths written 0 window-ns 0]
                (if (empty? remaining)
-                 (do (finish! txn :committed)
+                 (let [finished (finish! txn :committed)]
                      {:ok true
                       :committed true
+                      :retained (:retained finished)
                       :txid (:txid txn)
                       :files-written written
                       :read-set-files (:read-set-count @state)
@@ -920,7 +980,7 @@
                    (cond
                      (:conflict-refusal outcome)
                      (let [restored (rollback-written! txn)]
-                       (finish! txn :rolled-back)
+                       (finish! txn :rolled-back restored)
                        (merge (:conflict-refusal outcome)
                               {:files-written written
                                :rolled-back (every? #(= :verified (:status %)) restored)
@@ -929,7 +989,7 @@
                      (:failed outcome)
                      (let [^Exception cause (:failed outcome)
                            restored (rollback-written! txn)]
-                       (finish! txn :rolled-back)
+                       (finish! txn :rolled-back restored)
                        (refusal :txn-write-failed
                                 (str "Writing " path " failed: " (.getMessage cause))
                                 {:path path
@@ -949,7 +1009,7 @@
                            (recur (rest remaining) (inc written)
                                   (max window-ns (:window-ns outcome 0)))
                            (let [restored (rollback-written! txn)]
-                             (finish! txn :rolled-back)
+                             (finish! txn :rolled-back restored)
                              (refusal :txn-read-back-mismatch
                                       (str "The bytes read back from " path
                                            " are not the bytes this transaction wrote")
@@ -972,7 +1032,14 @@
         (vec (line-seq reader)))
       [])))
 
-(defn- recover-transaction!
+(defn- restore-from-journal!
+  "Restore every path a journal recorded as BEGUN, from its own pinned objects.
+
+   The single restoration primitive: crash recovery and a deliberate `undo!` of
+   a committed receipt are the same act read from the same lines. Only
+   `write-begin` paths are touched - a pinned path the transaction never wrote
+   is not this journal's business, and republishing it would clobber a write
+   somebody else made."
   [dir]
   (let [lines (journal-lines dir)
         pins (reduce (fn [acc line]
@@ -1001,7 +1068,7 @@
                     (catch Exception e
                       {:path path :status :restore-failed :error (.getMessage e)}))))
               (reverse begun))]
-    ;; remove any staging temporary the dead process left inside the tree
+    ;; remove any staging temporary a dead process left inside the tree
     (doseq [line lines]
       (let [[op path] (str/split line #"\t")]
         (when (= "write-begin" op)
@@ -1012,13 +1079,142 @@
      :paths restored
      :ok (every? #(= :verified (:status %)) restored)}))
 
+;; ------------------------------------------------------- retained journals
+
+(defn transactions-dir
+  "The directory this workspace's transaction journals live in."
+  ([workspace-root] (transactions-dir workspace-root nil))
+  ([workspace-root state-home]
+   (workspace/transactions-dir workspace-root state-home)))
+
+(defn- read-edn-file
+  [file]
+  (let [f (io/file file)]
+    (when (.isFile f)
+      (try (read-string (slurp f)) (catch Exception _ nil)))))
+
+(defn- journal-dir
+  [workspace-root txid state-home]
+  (io/file (transactions-dir workspace-root state-home) txid))
+
+(defn retained-transactions
+  ;; @spec MCP-OP-MEM-006
+  "Every journal still on disk for this workspace, with its lease.
+
+   What a quota sweep reads. `:evictable false` means the row is a
+   `:restore-failed` journal: the tree is not at H0 and this is the only
+   material that can repair it."
+  ([workspace-root] (retained-transactions workspace-root {}))
+  ([workspace-root {:keys [state-home]}]
+   (let [dir (io/file (transactions-dir workspace-root state-home))]
+     (vec (for [^File d (sort-by #(.getName ^File %)
+                                 (seq (or (.listFiles dir) (make-array File 0))))
+                :when (.isDirectory d)
+                :let [lease (read-edn-file (io/file d "lease.edn"))
+                      state (read-edn-file (io/file d "state.edn"))]]
+            {:txid (.getName d)
+             :status (or (:status lease) (:status state))
+             :receipt-refs (:receipt-refs lease 0)
+             :evictable (:evictable lease true)
+             :bytes (dir-bytes d)})))))
+
+(defn undo!
+  ;; @spec MCP-OP-MEM-006
+  "Restore every path a RETAINED journal wrote, back to its pinned H0 bytes.
+
+   This is what makes a commit receipt a receipt: the transaction directory
+   outlives the commit precisely so its answer can be reversed and the
+   reversal verified against the digest pinned before the first write."
+  ([workspace-root txid] (undo! workspace-root txid {}))
+  ([workspace-root txid {:keys [state-home]}]
+   (let [dir (journal-dir workspace-root txid state-home)]
+     (if-not (.isDirectory dir)
+       (refusal :txn-journal-missing
+                (str "No retained journal for " txid
+                     "; its pre-images cannot be republished")
+                {:txid txid :next_call nil
+                 :remedy "A journal that was forgotten or evicted cannot be undone. Retain it until the receipt no longer needs to be reversible."})
+       (let [result (restore-from-journal! (.getCanonicalPath dir))]
+         (assoc result :isolation compact-isolation :undone true))))))
+
+(defn- discard-journal!
+  [workspace-root txid state-home quota-driven?]
+  (let [dir (journal-dir workspace-root txid state-home)
+        lease (read-edn-file (io/file dir "lease.edn"))
+        state (read-edn-file (io/file dir "state.edn"))
+        status (or (:status lease) (:status state))]
+    (cond
+      (not (.isDirectory dir))
+      (refusal :txn-journal-missing (str "No retained journal for " txid)
+               {:txid txid :next_call nil})
+
+      (= :restore-failed status)
+      (refusal :txn-journal-retained
+               (str "The journal of " txid " records a restoration that did not verify"
+                    " and is the only material that can repair the tree")
+               {:txid txid
+                :status status
+                :next_call nil
+                :remedy "Repair the tree from this journal - or accept the divergence deliberately - before removing it. A failed restoration is never evicted by a quota."})
+
+      (and quota-driven? (pos? (:receipt-refs lease 0)))
+      (refusal :txn-journal-referenced
+               (str "The journal of " txid " is still referenced by "
+                    (:receipt-refs lease 0) " receipt(s)")
+               {:txid txid
+                :receipt-refs (:receipt-refs lease 0)
+                :next_call {:op :txn/release-receipt :txid txid}
+                :remedy "Release the receipt's reference first, or forget! the journal explicitly."})
+
+      :else
+      (do (delete-tree! dir)
+          {:ok true :txid txid :forgotten true}))))
+
+(defn forget!
+  ;; @spec MCP-OP-MEM-006
+  "Discard a retained journal deliberately. Refuses a failed restoration."
+  ([workspace-root txid] (forget! workspace-root txid {}))
+  ([workspace-root txid {:keys [state-home]}]
+   (discard-journal! workspace-root txid state-home false)))
+
+(defn evict!
+  ;; @spec MCP-OP-MEM-006
+  "Reclaim a retained journal under quota pressure.
+
+   Stricter than `forget!` on purpose: a sweep that runs because disk is short
+   must not silently destroy a receipt somebody is still holding, and must
+   never destroy unrepaired recovery material."
+  ([workspace-root txid] (evict! workspace-root txid {}))
+  ([workspace-root txid {:keys [state-home]}]
+   (discard-journal! workspace-root txid state-home true)))
+
+(defn release-receipt!
+  ;; @spec MCP-OP-MEM-006
+  "Drop the receipt reference that keeps a committed journal out of a sweep."
+  ([workspace-root txid] (release-receipt! workspace-root txid {}))
+  ([workspace-root txid {:keys [state-home]}]
+   (let [file (io/file (journal-dir workspace-root txid state-home) "lease.edn")
+         lease (read-edn-file file)]
+     (if-not lease
+       (refusal :txn-journal-missing (str "No retained journal for " txid)
+                {:txid txid :next_call nil})
+       (do (spit file (pr-str (assoc lease :receipt-refs 0
+                                     :released-at (str (java.time.Instant/now)))))
+           {:ok true :txid txid :receipt-refs 0})))))
+
 (defn recover!
   ;; @spec MCP-OP-MEM-013
   "Roll back every unfinished transaction found for this workspace.
 
    Recovery reads only the journal: the pin lines say which pre-image bytes are
    durable, and the write-begin lines say which paths were begun. Each restored
-   path is verified against the digest that was pinned before the first write."
+   path is verified against the digest that was pinned before the first write.
+
+   A recovery whose restoration VERIFIED discards its journal, because the tree
+   is back at H0 and there is nothing left to recover from. A recovery that did
+   NOT verify keeps everything and records `:restore-failed`: deleting the only
+   material that can repair the tree, at the moment repair is needed, is how a
+   partial failure becomes a permanent one."
   ([workspace-root] (recover! workspace-root {}))
   ([workspace-root {:keys [state-home]}]
    (let [transactions (workspace/transactions-dir workspace-root state-home)
@@ -1032,12 +1228,22 @@
                                                            (:status (read-string (slurp state)))))))))
                               (.listFiles dir)))
          results (mapv (fn [^File d]
-                         (let [result (recover-transaction! (.getCanonicalPath d))]
+                         (let [result (restore-from-journal! (.getCanonicalPath d))
+                               status (if (:ok result) :rolled-back :restore-failed)]
                            (spit (io/file d "state.edn")
-                                 (pr-str {:txid (.getName d) :status :rolled-back
+                                 (pr-str {:txid (.getName d) :status status
+                                          :retained (not (:ok result))
+                                          :restore-failed (not (:ok result))
                                           :recovered-at (str (java.time.Instant/now))}))
-                           (doseq [file (reverse (file-seq d))]
-                             (Files/deleteIfExists (.toPath file)))
+                           (if (:ok result)
+                             (delete-tree! d)
+                             (spit (io/file d "lease.edn")
+                                   (pr-str {:txid (.getName d)
+                                            :status :restore-failed
+                                            :receipt-refs 0
+                                            :evictable false
+                                            :retained-at (str (java.time.Instant/now))
+                                            :bytes (dir-bytes d)})))
                            result))
                        candidates)]
      (when (seq results)

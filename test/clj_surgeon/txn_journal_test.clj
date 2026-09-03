@@ -635,6 +635,111 @@
               "the paths never begun are untouched"))
         (finally (cleanup! ws))))))
 
+;; ------------------------------------------ MCP-OP-MEM-006 pre-image lifetime
+
+(defn- transaction-dir
+  [ws txid]
+  (io/file (journal/transactions-dir (:root ws) (:state-home ws)) txid))
+
+;; @spec MCP-OP-MEM-006
+(deftest a-committed-transaction-keeps-its-pre-images-and-can-be-undone
+  (testing "Sol's adoption blocker: commit DELETED the transaction directory, so
+            the receipt named a change nobody could reverse. The pre-image
+            journal outlives the commit until something explicitly forgets it."
+    (let [ws (workspace! "undo" 3)
+          paths (sort (:paths ws))
+          [p0 p1] paths]
+      (try
+        (let [h0 (mapv bytes-of paths)
+              txn (begin! ws {})
+              _ (record-scope! txn paths)
+              _ (journal/seal-read-set! txn)
+              _ (doseq [p [p0 p1]]
+                  (journal/pin! txn p)
+                  (journal/stage! txn p (str (slurp p) ";; changed\n")))
+              receipt (journal/commit! txn)
+              dir (transaction-dir ws (:txid receipt))]
+          (is (:ok receipt))
+          (is (true? (:retained receipt))
+              "the receipt says its own recovery material was kept")
+          (is (.isDirectory dir) "the transaction directory survives the commit")
+          (is (= 2 (count (.listFiles (io/file dir "objects"))))
+              "both pinned pre-images are still on disk")
+          (is (not= (take 2 h0) (mapv bytes-of [p0 p1])) "the commit did change the tree")
+
+          (let [undone (journal/undo! (:root ws) (:txid receipt)
+                                      {:state-home (:state-home ws)})]
+            (is (:ok undone))
+            (is (= 2 (count (:paths undone))))
+            (is (every? #(= :verified (:status %)) (:paths undone))
+                "every restored path is verified against the digest pinned at H0")
+            (is (= (take 2 h0) (mapv bytes-of [p0 p1]))
+                "undo! puts the exact H0 bytes back")
+            (is (= (nth h0 2) (bytes-of (nth paths 2)))
+                "a path the transaction never wrote is not touched by undo"))
+
+          (let [forgotten (journal/forget! (:root ws) (:txid receipt)
+                                           {:state-home (:state-home ws)})]
+            (is (:ok forgotten))
+            (is (not (.exists dir))
+                "an explicit forget! is the thing that removes the journal")))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-006
+;; @spec MCP-OP-MEM-013
+(deftest a-failed-restoration-keeps-its-journal-and-refuses-eviction
+  (testing "the second half of Sol's blocker: a failed rollback deleted the only
+            material that could still repair the tree. A restoration that did
+            not verify keeps everything and refuses to be evicted."
+    (let [ws (workspace! "restore-failed" 3)
+          paths (sort (:paths ws))
+          [p0 p1] paths]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn paths)
+              _ (journal/seal-read-set! txn)
+              _ (doseq [p [p0 p1]]
+                  (journal/pin! txn p)
+                  (journal/stage! txn p (str (slurp p) ";; changed\n")))
+              txid (:txid txn)
+              dir (transaction-dir ws txid)
+              receipt (journal/commit!
+                        txn {:after-publish
+                             (fn [path]
+                               ;; the pre-image p0 needs to roll back with is
+                               ;; destroyed while the transaction is mid-flight
+                               (when (= path p0)
+                                 (doseq [object (.listFiles (io/file dir "objects"))]
+                                   (Files/delete (.toPath object)))))
+                             :publish-fn
+                             (fn [target source]
+                               (if (= target p1)
+                                 (throw (ex-info "injected" {:error-type :injected}))
+                                 (journal/publish-prepared! target source)))})]
+          (is (false? (:ok receipt)))
+          (is (= :txn-write-failed (:error-type receipt)))
+          (is (false? (:rolled-back receipt))
+              "the restoration could not be verified, and the receipt says so")
+          (is (.isDirectory dir)
+              "the journal of a failed restoration is NOT deleted: it is the only
+               material a human or a later recovery can work from")
+          (is (.isFile (io/file dir "journal.log")))
+          (is (.isFile (io/file dir "manifest.tsv")))
+          (is (= :restore-failed (:status (read-string (slurp (io/file dir "state.edn")))))
+              "the state names the failure rather than claiming a clean rollback")
+
+          (let [evicted (journal/evict! (:root ws) txid {:state-home (:state-home ws)})]
+            (is (false? (:ok evicted)))
+            (is (= :txn-journal-retained (:error-type evicted)))
+            (is (.isDirectory dir) "a quota sweep may not reclaim it"))
+
+          (let [forgotten (journal/forget! (:root ws) txid {:state-home (:state-home ws)})]
+            (is (false? (:ok forgotten)))
+            (is (= :txn-journal-retained (:error-type forgotten))
+                "not even an explicit forget! discards unrepaired recovery material")
+            (is (.isDirectory dir))))
+        (finally (cleanup! ws))))))
+
 ;; ------------------------------------------ MCP-OP-MEM-013 crash recovery
 
 (defn- crash-arm
