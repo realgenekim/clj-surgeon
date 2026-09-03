@@ -63,6 +63,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-029**: When clj-surgeon validates a `relation_census` request server-side, it shall accept for `pool_size` only a JSON integer, exactly as the schema it advertises states, and shall refuse a string, a float, a boolean, a null, or an array with reason `pool-size-not-an-integer`, the offending value, the bound, and an executable `next_call`, before any filesystem work.
 
+- [ ] **MCP-OP-CENSUS-032**: When clj-surgeon discovers the files to census, both the `relation_census` tool and the `:relation-census` CLI op shall discover through one shared kernel: they shall canonicalise the workspace root before walking it, shall never read a path whose canonical real location lies outside that canonical root, shall count every such path in `skipped_outside_root`, and shall publish the same discovery figures — `files_scanned`, `skipped_outside_root`, and `duplicates_collapsed` — for the same tree.
+
 - [x] **MCP-OP-CENSUS-030**: When a census request names the same source more than once, whether by the same string or by different strings that canonicalise to one real path, clj-surgeon shall read, classify and count that source exactly once, and shall publish `duplicates_collapsed` naming how many repeated entries it collapsed; a request with no repeated path shall publish no `duplicates_collapsed`.
 
 ## Published surfaces

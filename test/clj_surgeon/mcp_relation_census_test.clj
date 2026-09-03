@@ -6,11 +6,13 @@
    arms from curtaincall-cfp-lens at commit
    963875358a37c48ab6175ea1bea22633e4fd0306."
   (:require
+   [babashka.process :as proc]
    [cheshire.core :as json]
    [clj-surgeon.core :as core]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-relation-census :as census-tool]
    [clj-surgeon.relation-census :as census]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]])
@@ -690,3 +692,59 @@
       (is (str/includes? census-tool/census-tool-description
                          "enumerates the workspace tree")
           "the tool's own description hides that it walks a tree"))))
+
+;; ---------------------------------------------------------------------------
+;; Entrance parity: the tool and BOTH CLIs discover through one kernel
+;;
+;; Every witness below runs three entrances over one fixture — the MCP tool,
+;; the JVM CLI (`core/run-relation-census`, the op the JVM launcher dispatches
+;; to), and the babashka CLI as a real subprocess — and asserts the same
+;; discovery figures from all three. A discovery rule that lives in only one
+;; entrance is exactly the class of defect these exist to refuse.
+;; ---------------------------------------------------------------------------
+
+(defn- bb-cli
+  "Run the babashka CLI as a subprocess and read its EDN receipt."
+  [& args]
+  (let [{:keys [out err exit]}
+        (apply proc/shell {:out :string :err :string :continue true}
+               "bb" "-cp" (str repo-root "/src") "-m" "clj-surgeon.core" args)]
+    (try
+      (assoc (edn/read-string out) ::exit exit)
+      (catch Exception _
+        {::exit exit ::out out ::err err}))))
+
+(defn- census-entrances
+  "The census of one directory through all three entrances."
+  [dir]
+  {:mcp (census-tool/execute-request! {:project-root dir} {})
+   :jvm-cli (core/run-relation-census {:dir dir})
+   :bb-cli (bb-cli ":op" "relation-census" ":dir" dir)})
+
+;; @spec MCP-OP-CENSUS-032
+(deftest a-symlinked-workspace-root-is-canonicalised-by-every-entrance
+  (let [parent (temp-dir)
+        real (io/file parent "real")
+        link (io/file parent "link")]
+    (try
+      (spit-file! (io/file real "src/app/folds.clj") arm-source)
+      (Files/createSymbolicLink (.toPath link) (.toPath (io/file "real"))
+                                (make-array FileAttribute 0))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath link))]
+        (testing "the tool canonicalises the root and censuses the one arm file"
+          (is (true? (:ok mcp)) (str "refused: " (:error mcp)))
+          (is (= 1 (:files mcp)))
+          (is (= 1 (:files_scanned mcp))))
+
+        (testing "the JVM CLI canonicalises the same root"
+          (is (true? (:ok jvm-cli))
+              (str "the JVM CLI walked a symlinked root as a file: "
+                   (:error-type jvm-cli) " " (:error jvm-cli)))
+          (is (= 1 (:files jvm-cli))))
+
+        (testing "the babashka CLI canonicalises the same root"
+          (is (true? (:ok bb-cli))
+              (str "the babashka CLI walked a symlinked root as a file: "
+                   (:error-type bb-cli) " " (:error bb-cli)))
+          (is (= 1 (:files bb-cli)))))
+      (finally (delete-tree! parent)))))
