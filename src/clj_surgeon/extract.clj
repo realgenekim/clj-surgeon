@@ -506,9 +506,28 @@
               paths)))))
 
 ;; @spec MCP-OP-EXTRACT-037
+(defn- skipped-tree-prefixes
+  "The canonical real paths of the trees the walk declined to enter.
+
+  Canonical, not as recorded: a pruned entry may itself be a link -- `target ->
+  /elsewhere` -- so comparing the recorded path against a canonical caller path
+  would miss the tree it actually names. Both the entry and, for a link, its
+  target are canonicalized, because either spelling can be the one a caller's
+  real path lands under."
+  [skipped-directories]
+  (into #{}
+        (comp (mapcat (fn [{:keys [dir resolves-to]}] [dir resolves-to]))
+              (remove nil?)
+              (keep (fn [path]
+                      (try (.toString (mcp-paths/real-root path))
+                           (catch Exception _ nil)))))
+        skipped-directories))
+
+;; @spec MCP-OP-EXTRACT-037
 (defn- canonical-workspace-paths
-  "Confine every discovered path through the same gate, and collapse the ones
-  that name the SAME real file, keeping the canonical real path.
+  "Confine every discovered path through the same gate, collapse the ones that
+  name the SAME real file onto the canonical real path, and refuse any whose
+  real file lives inside a tree the walk pruned.
 
   A walk yields locations, and two locations can be one file: `alias_caller.clj
   -> caller.clj` in one directory is discovered twice, compiled into two caller
@@ -519,8 +538,18 @@
   real path makes one plan, writes the file the workspace actually compiles,
   and leaves the link a link.
 
+  But canonicalizing can also move a write INTO a tree the walk deliberately
+  never read. `alias_caller.clj -> .git/hooks/caller.clj` is discovered as an
+  ordinary in-root source, and following it to its real path put an
+  `atomic-write!` inside the repository's own metadata. The walk prunes
+  `.git`, `.cpcache`, `target`, `node_modules` and `out` precisely because
+  nothing in them is a source this verb may edit, so a caller whose real path
+  lands in one of them is a typed refusal, never a write. The dedup above is
+  unaffected: a link to a non-pruned file inside the root is still one caller
+  plan with the link preserved.
+
   Returns `{:paths [...]}` or one typed refusal."
-  [root paths]
+  [root paths skipped-directories]
   (let [real (try {:root (mcp-paths/real-root root)}
                   (catch Exception error {:error (.getMessage error)}))]
     (if-let [root-error (:error real)]
@@ -532,10 +561,21 @@
        :source-unchanged true
        :target-unchanged true}
       (let [real-root (:root real)
+            pruned (skipped-tree-prefixes skipped-directories)
+            ;; returns the pruned tree itself, so the refusal can name it
+            in-pruned-tree (fn [candidate]
+                             (some (fn [tree]
+                                     (when (or (= tree candidate)
+                                               (str/starts-with?
+                                                 candidate (str tree "/")))
+                                       tree))
+                                   pruned))
             result (reduce
                      (fn [acc path]
                        (let [resolved (mcp-paths/resolve-discovered-source-path
-                                        real-root path)]
+                                        real-root path)
+                             tree (when (:ok resolved)
+                                    (in-pruned-tree (:path resolved)))]
                          (cond
                            (not (:ok resolved))
                            (reduced
@@ -548,6 +588,28 @@
                               :root (.toString real-root)
                               :refusal (select-keys resolved
                                                     [:error_type :error])
+                              :source-unchanged true
+                              :target-unchanged true})
+
+                           ;; @spec MCP-OP-EXTRACT-037
+                           tree
+                           (reduced
+                             {:ok false
+                              :error (str "A workspace path resolves into a "
+                                          "tree this walk does not read, and "
+                                          "this extraction will not write "
+                                          "there: " path " -> "
+                                          (:path resolved))
+                              :error-type :caller-path-in-skipped-tree
+                              :path (str path)
+                              :resolves-to (:path resolved)
+                              :tree tree
+                              :root (.toString real-root)
+                              :remedy (str "point the link at a source inside "
+                                           "the workspace, or remove it; build "
+                                           "trees and repository metadata are "
+                                           "pruned because nothing in them is a "
+                                           "source this verb may edit")
                               :source-unchanged true
                               :target-unchanged true})
 
@@ -1877,7 +1939,9 @@
             ;; under the root into one that is not -- and collapse the paths
             ;; that name one file to that file's canonical real path.
             confined (when-not (:escape walked)
-                       (canonical-workspace-paths project-root (:files walked)))
+                       (canonical-workspace-paths
+                         project-root (:files walked)
+                         (:skipped-directories walked)))
             ;; @spec MCP-OP-EXTRACT-035
             escape (or (when-let [escaped (:escape walked)]
                          (link-escape-refusal project-root escaped

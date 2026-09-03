@@ -1592,40 +1592,48 @@
                    "it with a regular file and leave the real caller stale")))
         (finally (delete-recursive! root)))))
 
-  (testing "a link is admitted, and rewiring it repairs the file the workspace
-            actually compiles, even when only the link was discovered"
+  (testing "but a link whose real target is inside a tree the walk PRUNED is
+            refused, not written: .git holds the repository's own metadata,
+            and the walk skips those trees precisely because nothing in them
+            is a source this verb may edit"
     (let [root (create-caller-project!)
           src (io/file root "src" "app")
-          hidden (io/file root ".git")
-          real (io/file hidden "real_caller.clj")
-          link (io/file src "linked.clj")]
+          hooks (io/file root ".git" "hooks")
+          real (io/file hooks "caller.clj")
+          link (io/file src "alias_caller.clj")]
       (try
-        (.mkdirs hidden)
+        (.mkdirs hooks)
         (spit real (str "(ns app.real-caller\n"
                         "  (:require\n"
                         "   [app.core :as core]))\n\n"
                         "(defn go [x] (core/moved-two x))\n"))
-        ;; the walk skips /.git/, so ONLY the link is discovered
-        (symlink! link "../../.git/real_caller.clj")
-        (let [source (io/file src "core.clj")
+        (symlink! link "../../.git/hooks/caller.clj")
+        (let [before-real (slurp real)
+              source (io/file src "core.clj")
+              before-source (slurp source)
               target (io/file src "moved.clj")
               result (extract/execute! {:file (.getPath source)
                                         :forms '[moved-one moved-two]
                                         :to (.getPath target)
                                         :alias "moved"
                                         :compile-check false})]
-          (is (nil? (:error-type result))
-              (str "an in-root symlink must not refuse: "
-                   (pr-str (:error result))))
-          (is (true? (:applied result)))
-          (is (str/includes? (slurp link) "[app.moved :as moved]")
-              "the linked caller was rewired")
-          (is (str/includes? (slurp real) "[app.moved :as moved]")
-              (str "through the link, onto the real file: replacing the link "
-                   "with a regular file would leave the real caller requiring "
-                   "vars the source no longer has"))
-          (is (true? (java.nio.file.Files/isSymbolicLink (.toPath link)))
-              "and the link is still a link"))
+          (is (= :caller-path-in-skipped-tree (:error-type result))
+              (str "writing into a pruned tree is a corruption vector, not a "
+                   "rewire: "
+                   (pr-str (select-keys result [:error-type :error :applied]))))
+          (is (str/includes? (str (:path result)) "alias_caller.clj")
+              "the refusal names the link")
+          (is (str/includes? (str (:resolves-to result)) ".git/hooks/caller.clj")
+              "and the path it resolves to")
+          (is (str/includes? (str (:tree result)) ".git")
+              (str "and the pruned tree that forbids it: "
+                   (pr-str (:tree result))))
+          (is (not (true? (:applied result))))
+          (is (= before-real (slurp real))
+              "the repository's own metadata tree is byte-identical")
+          (is (= before-source (slurp source)) "and the source is unchanged")
+          (is (not (.exists target)) "and no target was created")
+          (is (true? (java.nio.file.Files/isSymbolicLink (.toPath link)))))
         (finally (delete-recursive! root))))))
 
 (defn- stub-bin!
