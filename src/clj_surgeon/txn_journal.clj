@@ -1314,6 +1314,11 @@
      (write-state! txn status {:finished-at (str (java.time.Instant/now))
                                :retained retain?
                                :restore-failed failed?})
+     ;; TERMINAL from here on. The journal and `state.edn` now record this
+     ;; transaction's outcome, and everything below is bookkeeping: nothing
+     ;; that fails past this line may revert what the record already says
+     ;; happened. `finish-after-throw!` reads this.
+     (swap! (:state txn) assoc :finished? true)
      (when-let [^FileOutputStream stream (:journal-stream state)]
        (try (.close stream) (catch Exception _ nil)))
      (release-lock! (:transactions-dir txn) (:txid txn))
@@ -1413,13 +1418,27 @@
 
    The last resort is releasing the lock alone: if the rollback or the
    bookkeeping is what failed, an unreleased lock would turn one failure into
-   a permanent one."
+   a permanent one.
+
+   PAST A TERMINAL STATUS THERE IS NOTHING TO ROLL BACK. `finish!` publishes,
+   appends its status to the journal, writes `state.edn` and releases the
+   project LOCK before its tail reclaims staging and writes the lease; an
+   ENOSPC in that tail used to reach this catch and revert every written path
+   to H0, leaving the durable record saying `:committed` and the tree saying
+   otherwise - a disagreement `recover!` will not touch, because `:committed`
+   is terminal, and `undo!` refuses as a digest conflict. Those revert writes
+   also ran after the LOCK was released, outside every lock. So past the
+   terminal flag this degrades to the bare release, which is idempotent: a
+   lock this transaction no longer names is not unlinked."
   [txn]
-  (try
-    (finish! txn :rolled-back (rollback-written! txn))
-    (catch Throwable _
-      (try (release-lock! (:transactions-dir txn) (:txid txn))
-           (catch Throwable _ nil)))))
+  (if (:finished? @(:state txn))
+    (try (release-lock! (:transactions-dir txn) (:txid txn))
+         (catch Throwable _ nil))
+    (try
+      (finish! txn :rolled-back (rollback-written! txn))
+      (catch Throwable _
+        (try (release-lock! (:transactions-dir txn) (:txid txn))
+             (catch Throwable _ nil))))))
 
 (defn commit!
   ;; @spec MCP-OP-MEM-006
