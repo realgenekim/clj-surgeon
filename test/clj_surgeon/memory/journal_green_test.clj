@@ -6,6 +6,13 @@
    disk journal completes, commits six hundred files, and produces a tree the
    unbounded reference implementation agrees with byte for byte.
 
+   The journal arm takes NO ceiling override. Every default admits this
+   workload - including the journal quota, which is derived as twice the
+   reader's aggregate ceiling precisely so that a scope the read path accepts
+   is never one the journal refuses to stage. Before that derivation this arm
+   had to raise the quota to 2 GiB to run, and "the defaults admit it" was a
+   claim nothing tested.
+
    The pass lines are the hard ones. Sampled peak used heap is reported as a
    TREND, not gated: under default G1 at a small heap it measures how close
    allocation ran to the ceiling, not what the arm retains - an eight-file

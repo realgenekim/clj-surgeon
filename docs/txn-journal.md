@@ -155,11 +155,21 @@ Request-lowerable under a server hard maximum. Exactly at the limit is admitted;
 one unit past refuses BEFORE the effect the limit bounds, with a `next_call`
 that narrows scope. A mutation receipt is refused, never truncated.
 
+One default is DERIVED rather than chosen, and the derivation is a rule a test
+enforces: a journal holds one pre-image and one future image of every byte a
+transaction stages, so `max-journal-bytes >= 2 x max-aggregate-bytes`. Until
+2026-09-03 it was 512 MiB against a 512 MiB read ceiling, which meant a scope
+the READ path admitted was one the journal refused to stage — and it is why the
+red-to-green memory arm had to override the quota to run at all. The HARD
+maxima are independent server caps: a request that raises the aggregate read
+ceiling above 2 GiB must raise the journal quota explicitly and is refused by a
+named ceiling if it does not.
+
 | limit | default | what it bounds |
 |---|---:|---|
 | `max-read-set-files` | 20,000 | files that may influence one plan |
 | `max-staged-files` | 2,000 | files one transaction may modify |
-| `max-journal-bytes` | 512 MiB | pinned plus staged bytes on disk |
+| `max-journal-bytes` | 1 GiB | pinned plus staged bytes on disk — DERIVED as 2 x `max-aggregate-bytes`, one pre-image and one future image of every admitted byte |
 | `max-walk-entries` | 200,000 | every visited entry, not only matches |
 | `max-depth` | 40 | refused per entry, never truncated |
 | `max-file-bytes` | 2 MiB | from bytes actually read |
@@ -230,6 +240,7 @@ witness:
 | do not prune skip directories | pruning | RED |
 | report no reservation | accountant | RED |
 | charge only the largest parse | discovered path list accounting | RED |
+| set the journal quota below 2x the read ceiling | derived default quota | RED |
 | remove path confinement | outside-workspace pin and stage | RED |
 | canonicalise before the lexical check | `..` traversal pin and stage | RED |
 
@@ -246,8 +257,23 @@ red, which is the right answer - the promise is made by two checks.
 
 ## Measured, 2026-09-03 on Anvil
 
-600 generated namespaces of 512 KiB, 314,772,270 bytes, every file a quarter of
-the 2 MiB per-file ceiling and the count under a third of the 2000-file ceiling.
+600 generated namespaces of 512 KiB, 314,772,270 bytes. Every DEFAULT ceiling
+admits this workload, and the arm now runs with no override at all, which is
+what makes "the defaults admit it" a claim rather than a hope:
+
+| ceiling | default | observed | |
+|---|---:|---:|---|
+| per-file bytes | 2,097,152 | 524,621 | admits |
+| aggregate bytes | 536,870,912 | 314,772,270 | admits |
+| walk entries | 200,000 | 604 | admits |
+| depth | 40 | 4 | admits |
+| work budget | 201,326,592 | 29,442,376 | admits |
+| read-set files | 20,000 | 600 | admits |
+| staged files | 2,000 | 600 | admits |
+| journal bytes | 1,073,741,824 | 629,544,540 | admits — **and did not before the quota was derived** |
+
+The last row is the whole point of the derivation. At the old 512 MiB default
+this arm refused its own workload and had to be handed a 2 GiB override.
 
 | arm | Xmx | result | wall | retained peak |
 |---|---|---|---:|---:|

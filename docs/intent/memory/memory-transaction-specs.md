@@ -64,6 +64,7 @@ demands no witness, it only says where the statement lives.
 |---|---|
 | MEM-006 | "Pinning is a copy-on-write optimisation, so it can be skipped when the file is small." Pinning is the rollback guarantee; an unpinned staged path is a refusal, not a fast path. |
 | MEM-006 | "Keeping the original source string in memory is a cheaper pre-image than a file." That is the defect this kernel exists to remove. |
+| MEM-006 | "The journal quota is a policy number." It is derived: the journal holds a pre-image AND a future image of every staged byte, so a default below twice the read path's aggregate ceiling refuses scopes the reader admits. |
 | MEM-006 | "Canonicalising the path is the confinement check." `getCanonicalPath` DELETES `..` before any rule can see it, so `<root>/src/../src/in.clj` passes a canonical-only check. The lexical refusal must come first. |
 | MEM-007 | "Revalidate the files we are about to write." A caller or alias that shaped the plan can live in a file the transaction never touches. |
 | MEM-007 | "Membership is fixed once discovery has run." A file that appears after planning can introduce a new caller, so an addition is a conflict. |

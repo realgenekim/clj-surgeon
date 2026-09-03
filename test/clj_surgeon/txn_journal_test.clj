@@ -8,6 +8,7 @@
    call."
   (:require
    [clj-surgeon.memory.child :as child]
+   [clj-surgeon.scope-stream :as scope]
    [clj-surgeon.txn-journal :as journal]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -70,6 +71,24 @@
           (sort paths)))
 
 (defn- bytes-of [path] (slurp path))
+
+;; ------------------------------------------------- MCP-OP-MEM-006 ceilings
+
+;; @spec MCP-OP-MEM-006
+(deftest the-default-journal-quota-admits-what-the-default-read-path-admits
+  (testing "Sol's finding: the RED/GREEN workload needed a 2 GiB override
+            because the DEFAULT journal quota refused it. Two default ceilings
+            that cannot both be satisfied is a ceiling set that has never been
+            derived. A journal holds one PRE-image and one FUTURE image of every
+            byte the read path admitted, so the rule is exact."
+    (let [aggregate (:max-aggregate-bytes scope/default-limits)
+          quota (:max-journal-bytes journal/default-limits)]
+      (is (>= quota (* 2 aggregate))
+          (str "the default journal quota (" quota " B) must admit two images of "
+               "the default aggregate read ceiling (" aggregate " B), or a scope "
+               "the reader accepts is one the journal refuses to stage"))
+      (is (>= (:max-journal-bytes journal/hard-limits) quota)
+          "and the default may never exceed the server hard maximum"))))
 
 ;; ------------------------------------------------- MCP-OP-MEM-014 contract
 

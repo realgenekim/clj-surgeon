@@ -27,10 +27,12 @@
 (defn run
   [root state-home checkpoint-every]
   (journal/recover! root {:state-home state-home})
-  (let [txn (journal/begin! root {:state-home state-home
-                                  :scope-walk (scope-walk root)
-                                  :max-journal-bytes (* 2 1024 1024 1024)
-                                  :max-staged-files 5000})
+  (let [;; No ceiling override. The 629 MB this arm pins and stages fits the
+        ;; DEFAULT 1 GiB journal quota, and its 600 files fit the default
+        ;; 2,000-file write set, so the red-to-green claim is about the shipped
+        ;; defaults rather than about a quota this test raised for itself.
+        txn (journal/begin! root {:state-home state-home
+                                  :scope-walk (scope-walk root)})
         digest (MessageDigest/getInstance "SHA-256")
         planned (atom 0)
         refusals (atom [])

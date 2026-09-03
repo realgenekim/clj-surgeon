@@ -85,10 +85,27 @@
 
 (def default-limits
   "Admission ceilings. A request may lower them; none may be raised past the
-   server hard maximum, which is what `hard-limits` names."
+   server hard maximum, which is what `hard-limits` names.
+
+   `max-journal-bytes` is DERIVED, not chosen. The journal holds one PRE-image
+   and one FUTURE image of every byte a transaction stages, so the rule is
+
+       max-journal-bytes >= 2 x scope-stream's max-aggregate-bytes
+
+   and at the reader's 512 MiB default that is 1 GiB. The previous 512 MiB
+   default broke the rule and was the reason the red-to-green memory arm had to
+   override it: a scope the READ path admitted was one the journal refused to
+   stage, which is a ceiling set that had never been derived rather than a
+   deliberate policy. `the-default-journal-quota-admits-what-the-default-read-path-admits`
+   is the witness.
+
+   The HARD maxima are independent server caps and are not derived from each
+   other: a request that raises the aggregate read ceiling above 2 GiB must
+   raise `max-journal-bytes` explicitly, and is refused by a named ceiling with
+   a `next_call` if it does not."
   {:max-read-set-files 20000
    :max-staged-files 2000
-   :max-journal-bytes (* 512 1024 1024)})
+   :max-journal-bytes (* 1024 1024 1024)})
 
 (def hard-limits
   {:max-read-set-files 200000
