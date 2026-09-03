@@ -1318,3 +1318,77 @@
   (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
            "transform_clojure"}
          (set (map :name (mcp-tool/all-tools))))))
+
+;; ============================================================
+;; The ns_grep match budget
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest a-catastrophic-ns-grep-pattern-refuses-inside-a-step-budget
+  ;; `ns_grep` was compiled ONCE under a guard (MCP-OP-STUDY-022) and then
+  ;; MATCHED without one. `java.util.regex` is a backtracking engine, so a
+  ;; caller-supplied pattern is caller-supplied CPU: `(.*.*.*.*.*.*)*x` over
+  ;; the 67 files of `src/` — ordinary 36-character repository paths, no
+  ;; adversarial file names needed — burned 43,589 ms through the real
+  ;; entrance and still returned `ok=true`. At the default `max_files` 2000
+  ;; the same one call is ~21 minutes; at the 20,000 ceiling, ~3.5 hours.
+  ;; Nothing on that path could stop it: `future-cancel` cannot interrupt a
+  ;; running matcher, so the bound has to live INSIDE the match.
+  (doseq [pattern ["(.*.*.*.*)*x" "(.*.*.*.*.*.*)*x"]]
+    (testing pattern
+      (let [started (System/nanoTime)
+            [response outlined] (counting-outlines
+                                  #(run {"mode" "ls-tree" "dir" "src"
+                                         "ns_grep" pattern}))
+            elapsed-ms (/ (- (System/nanoTime) started) 1e6)]
+        (is (false? (:ok response)))
+        (is (= "ns-grep-match-budget-exceeded" (:error_type response)))
+        (is (< elapsed-ms 200)
+            (str "a caller-supplied pattern must not be able to spend "
+                 "unbounded CPU in the read entrance; took " elapsed-ms " ms"))
+        (is (zero? outlined)
+            "and no file is opened before the pattern is refused")
+        (is (false? (:read_complete response)))
+        (is (true? (:source_unchanged response)))
+        (is (nil? (:tree response)))
+        (is (nil? (:files response)))
+        (is (str/includes? (str (:error response)) pattern)
+            "the refusal names the pattern it rejected")
+        (is (pos-int? (:match_budget response)))
+        (is (str/includes? (str (:error response))
+                           (str (:match_budget response)))
+            "and the budget it exceeded")
+        (is (string? (:remedy response)))
+        (is (= {:mode "ls-tree" :dir "src"}
+               (get-in response [:next_call :arguments]))
+            "the continuation drops the pattern and keeps the caller's scope")))))
+
+;; @spec MCP-OP-STUDY-031
+;; @spec MCP-OP-STUDY-012
+(deftest the-match-budget-does-not-change-which-files-ns-grep-selects
+  ;; A guard that changes the answer is a new defect. The oracle here is
+  ;; hand-written — plain `re-find` over the same scan-relative paths, with
+  ;; the same '_'/'-' equivalence MCP-OP-STUDY-012 defines — so it cannot
+  ;; agree with the kernel by construction.
+  (let [scan (study/ls-tree {:dir "src" :max-files 2000})
+        root (:dir scan)
+        rel (fn [f] (str (fs/relativize (fs/path root) (fs/path f))))
+        oracle (fn [pattern]
+                 (let [re (re-pattern pattern)]
+                   (set (for [project (:projects scan)
+                              file (:files project)
+                              :let [path (rel file)]
+                              :when (or (re-find re path)
+                                        (re-find re (str/replace path "_" "-")))]
+                          path))))]
+    (is (true? (:ok scan)))
+    (doseq [pattern ["mcp" "study" "^clj_surgeon/mcp.*tool"
+                     "(?i)inspect|study|paths|outline"
+                     "clj.surgeon.(mcp|study|core|analyze|outline|paths)"]]
+      (testing pattern
+        (let [filtered (study/filter-projects-by-ns-grep
+                         (:projects scan) root pattern)]
+          (is (seq (oracle pattern)) "the oracle must select something")
+          (is (= (oracle pattern)
+                 (set (map rel (mapcat :files filtered))))
+              "the budgeted matcher selects exactly what an unguarded one does"))))))
