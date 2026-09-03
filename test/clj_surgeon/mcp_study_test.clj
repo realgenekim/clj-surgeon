@@ -1984,3 +1984,57 @@
               (is (= "o2-witness" (:run_id (first started))))))))
       (finally
         (fs/delete-tree telemetry-dir)))))
+
+;; ============================================================
+;; The public MCP result is TEXT AND STRUCTURE TOGETHER (O2 round 2)
+;; ============================================================
+;; Field evidence (O2 re-review, 2026-09-03): rendering the ls-tree payload
+;; into the text block roughly DOUBLES the result on the wire, and
+;; `ls-tree dir=src grep=defn limit=16384` over `/home/forge/tmp/arms/e6/pf3`
+;; measured 34,042 bytes of complete public result against the 32,768-byte
+;; budget the tool declares and enforces for three other modes. `ls-tree` fell
+;; to `:else raw-result`, so nothing refused, trimmed, or warned. The fixture
+;; below reproduces that overshoot inside the repository so the bound is
+;; witnessed by CI rather than by one machine's scratch tree.
+
+(defn- public-bytes
+  [result]
+  (inspect-tool/mcp-result-byte-count
+    (inspect-tool/inspect-summary (assoc result :elapsed_ms 0.0))
+    result))
+
+;; @spec MCP-OP-STUDY-040
+(deftest ls-tree-public-result-is-bounded-by-the-declared-output-budget
+  (with-tmp-project
+    #(build-toy-project! % 78)
+    (fn [config]
+      (let [raw (inspect-tool/execute-ls-tree
+                  config {:mode "ls-tree" :dir "." :format "text"
+                          :limit 16384})
+            over (public-bytes raw)]
+        (is (< inspect-tool/max-public-result-bytes over)
+            (format (str "the fixture must actually overshoot or the witness "
+                         "proves nothing; measured %d bytes against %d")
+                    over inspect-tool/max-public-result-bytes))
+        (let [fitted (inspect-tool/enforce-result-budget raw raw)
+              text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))]
+          (is (<= (public-bytes fitted) inspect-tool/max-public-result-bytes)
+              (format "the enforced result was %d bytes" (public-bytes fitted)))
+          (testing "the overshoot is typed, not silent"
+            (is (or (false? (:ok fitted))
+                    (pos-int? (:text_evidence_limit fitted)))
+                "an over-budget result is a typed truncation or a refusal"))
+          (testing "and the text says it was abridged and what to do instead"
+            (is (str/includes? text "text abridged"))
+            (is (str/includes? text "structuredContent"))))))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest a-fitting-result-is-returned-untouched
+  (with-tmp-project
+    #(build-toy-project! % 10)
+    (fn [config]
+      (let [raw (inspect-tool/execute-ls-tree
+                  config {:mode "ls-tree" :dir "." :format "text"})]
+        (is (>= inspect-tool/max-public-result-bytes (public-bytes raw)))
+        (is (= raw (inspect-tool/enforce-result-budget raw raw))
+            "a result inside the budget is never rewritten")))))

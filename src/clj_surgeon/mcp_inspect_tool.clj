@@ -1518,7 +1518,12 @@
 
 ;; @spec MCP-OP-READ-DIAG-002
 ;; @spec MCP-OP-PREP-REQ-005
-(defn- inspect-summary
+(defn inspect-summary
+  "The exact `content[0].text` a client renders for one inspect_clojure result.
+
+  Public because the public MCP result is text AND structured content
+  together: nothing can bound the pair, and no witness can assert that the
+  text carries what the receipt carries, while the renderer is private."
   [result]
   (cond
     (and (= "verification-job" (:mode result)) (:status result))
@@ -1612,7 +1617,8 @@
 ;; @spec MCP-OP-READ-CONT-002
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-006
-(defn- enforce-result-budget
+(defn enforce-result-budget
+  "Bound the complete public MCP result — its text block included."
   [ordinary-result raw-result]
   (cond
     (:prepared_request raw-result)
