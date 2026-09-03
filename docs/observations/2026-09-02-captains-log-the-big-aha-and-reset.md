@@ -3202,3 +3202,47 @@ cohort: it does not run until S1 (names-only ls-tree, inb-a0f37e) and S2 (tree-l
 inb-0a6315) land, or the cohort would measure a tool that cannot answer the question it is for.
 Tech tree E6 stays BUILT, adoption unmeasured, now with the reason.
 
+## 2026-09-03T00:51Z — CAPTAIN'S LOG, end of the day (written 17:51 PDT, Wednesday)
+
+**What was asked.** Gene, over the day: reproduce the "faster than native" result and find where the
+math is in our favour; make the curtain-call duplicate-record class impossible with a big LID assertion
+and generalise it into a finder; get the Surgeon refactor of the fold namespace done with a watcher on;
+put ls-tree and the study ops inside the MCP kernel (the nudge, via the mayor); use best judgement all
+day, get Sol's opinion, keep the box from overloading, and put every suggestion somewhere it will be
+prosecuted. He also asked, twice, whether we were tweezering and what the friction data said.
+
+**What happened, in order.** rf2 scored: the rewiring extract verb beat stripped native on all nine
+cross-pairs, 243 s against 336 s, zero native bytes after the verb, five promotion criteria met — the
+first promoted winner under the new definition. z7c scored the gate at n=6: wall-neutral, z7b's win
+withdrawn as a slow native arm; correctness 6/6 with `verify none` never used. The q5z alias-migration
+fix went through my own suites, restarted the Anvil server, and the anchor re-ran: on the point where
+native was predicted to win, the tool won wall, actions and tokens with an identical tree, and the
+chain's own "pass" line turned out to be a hardcoded noun over an empty glob — three apparatus defects,
+fixed the same hour. Curtain-call: the fold branch went two rounds with Sol (tagged identity, Ann's
+sequence pinned, adoption no longer drops the person id), the store branch went four (the forever key
+that would have refused Ann's republish, caught in my review; the generation moved inside the lock;
+every writer claims the key; a real 32-bit collision in the witness), both pushed. Session 4 ran the
+refactor the way the doctrine says: characterization first, the lens, dry plans both ways with the
+watcher on, a comparison receipt (Surgeon 0 lines of outside churn against native's 149), then the
+migration as two Surgeon transactions, 18 arms, pushed with 1053 tests green. The census verb shipped
+with Sol's five-class rule and zero raw sites in curtain-call. The study ops reached the MCP through one
+kernel and found a never-working refusal on the way; session 5 then measured them honestly on real
+questions and came back MIXED — the tree-level questions an agent actually asks are bounded out or
+unexposed — so the adoption cohort is gated on two fixes, one of which is building now. The mayor's
+sweep turned five bead asks into a design finding: nobody had checked that the winners compose. That is
+now the definition of winner in the vision doc.
+
+**Evidence.** Anvil receipts rf2-score, z7c-score, sl1-R-score; the session-4 comparison receipt and two
+watcher files; branches fold f115cc2d, store 96387535, settings-lens aebb7b9a, fold-diff f2d8f6eb, rf2
+5e6cdd2, census 7244141, study ops b3c17bb; the Gene report at 5e44ab1; twelve prosecution items in the
+maven inbox with owners and triggers.
+
+**Why it went the way it did.** Every claim that survived today was a receipt somebody else could act
+on; every claim that died was a label. The gate's speed win died twice to slow native trios; the chain's
+"pass" died to an empty glob; my own finder positive died to a guard three lines above the match; my
+own generation fix died to Sol reading the lock boundary. What held was the anchor, the rewiring verb,
+and the refactor, because each was measured on a real repo with the output's usability as the meter.
+Tomorrow's first hour: the mayor's production paste decides the fold and store merges; the names-only
+ls-tree lands and the tree-level requirers op follows; the tester seat on Anvil takes the receipt
+ratchets. Standing rule, re-learned: answer Gene where he typed.
+
