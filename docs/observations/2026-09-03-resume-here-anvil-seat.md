@@ -89,3 +89,14 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
   waiter b7sl1zgqh (`~/tmp/tmpl-unit.log`); push when green; a merge note for Gene (nil-id collide→append).
 - Doctrine: CLAUDE.md "Fence review scope" (ab40192); memory security-boundary-review-before-merge widened.
 
+
+## RESUME DELTA 02:24Z
+
+- S1/S3 DONE on `bridge/study-ops-mcp` (8557161, 8a52931; NO-GO item 1 closed). **Security round
+  aab6a773af84935ee running in `~/src/clj-surgeon-study`** (items 2–12). After it: my suites (test-fast +
+  `clojure -M:clj-surgeon/mcp-test`; no swipl here) → push → an independent re-review (Opus) → only then
+  the branch re-enters the queue.
+- Lens follow-ups DONE (`~/src/curtaincall-cfp-lens2`, 6da4150f + 7359b8f9); my unit run waiter
+  brnogxq9w (`~/tmp/lens2-unit.log`); push when green.
+- Still running: ratchets a02f87b29b2d27eff; red-teams a45426b8de19c383b (census), af2fbde760adead45
+  (rf2+q5z).

@@ -73,3 +73,28 @@ termination — executed review before any surface enters the queue.
 For Gene's merge list, stacked on settings-lens: FOLD-IDEM-004. Inbox item inb-06d376 cannot be updated
 from this seat (no maven creds) — the mayor or the morning provisioning closes that loop.
 
+
+## 02:24Z — lanes landing: names-only ls-tree (8557161) + MCP_PORT (8a52931); lens follow-ups (6da4150f, 7359b8f9); security round launched
+
+**Study branch, S1/S3:** `format: "names"` = exactly {file, ns, form_count, line_count}, default when
+`grep` is absent; `ns_grep` filters the scan-relative PATH (the builder's first version matched the
+absolute path and `ns_grep "study"` matched every file in a checkout named clj-surgeon-study — caught by
+hand-driving the wire, pinned by a regression test); `grep` documented as file CONTENTS via ripgrep.
+NO-GO item 1 closed in the same commit: `"--"` before the pattern in both argv branches and a typed
+refusal for `^-` patterns before any subprocess (`grep "--pre=/bin/sh"` → `invalid-grep-pattern`, verified
+over the wire). Wire receipt on this repo's src: default names call 66 files / 37 returned at 4096 with a
+raising next_call; at 16384 66/66, ~7.6 KB, `read_complete true` (the old rendering could not complete
+116 files at the ceiling). `make mcp-serve` honours MCP_PORT (self-test extended); `mcp-serve-benchmark`
+has the same bug, folded into the security round. Suites: test-fast 718/5967 (baseline five);
+`clojure -M:clj-surgeon/mcp-test` 394/4347 (baseline one) — `make mcp-test`'s Prolog oracle cannot run
+here (no swipl on Anvil; environment gap, noted for the mayor). Security round (items 2–12, Opus,
+aab6a773af84935ee) now running on the same worktree.
+**Lens follow-ups (`bridge/lens-followups`):** LENS-005 moved `event.program-speaker-updated` onto the
+lens with the person check inside `f` (absent person returns `settings` itself → LENS-003 leaves state
+untouched; the `:people` writes stay hand-written under the same predicate; evaluation order preserved);
+LENS-006 corrected yesterday's premise — the reminder-schedule writer has carried `:event-id` since its
+first commit, slugs are immutable, so the slug-keyed arm migrated too, writer untouched. Tripwire:
+settings-path literals 4 → 3, slug-keyed reminder sites 1 → 0, extra update-settings calls 0 → 2, all
+red-first. Builder's unit 1055/13163/0; my run in progress; push after. Neither arm is in the
+judge-sandbox log, so the replay golden is unchanged by construction — the arms are pinned by their own
+histories.
