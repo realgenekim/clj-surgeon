@@ -40,6 +40,8 @@
    [clj-surgeon.outline-memory-test]
    [clj-surgeon.quoted-var-refs-test]
    [clj-surgeon.repository-hygiene-test]
+   [clj-surgeon.scope-stream-test]
+   [clj-surgeon.txn-journal-test]
    [clj-surgeon.workspace-onboarding-test]
    [clojure.test :refer [run-tests]]))
 
@@ -87,5 +89,7 @@
           'clj-surgeon.outline-memory-test
           'clj-surgeon.quoted-var-refs-test
           'clj-surgeon.repository-hygiene-test
+          'clj-surgeon.scope-stream-test
+          'clj-surgeon.txn-journal-test
           'clj-surgeon.workspace-onboarding-test)]
     (System/exit (+ (:fail result) (:error result)))))

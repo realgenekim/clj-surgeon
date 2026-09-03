@@ -52,7 +52,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: repository-hygiene repository-hygiene-self-test test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red anvil-arms-self-test
+.PHONY: repository-hygiene repository-hygiene-self-test test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -195,6 +195,7 @@ runtests: mcp-test
 mcp-test: mcp-operation-oracle
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
 	@$(MAKE) --no-print-directory repository-hygiene-self-test
+	@$(MAKE) --no-print-directory txn-kernel-warning-check
 	@$(MAKE) --no-print-directory mcp-heap-config-self-test
 	@$(MAKE) --no-print-directory clj-kondo-admission-path-self-test
 	@$(MAKE) --no-print-directory analyzer-contract-target-self-test
@@ -893,8 +894,33 @@ memory-battery:
 	$(MEMBAT_ENV) MEMBAT_MODE=battery \
 	  clojure -J-Xmx$(MEMBAT_XMX) -M:clj-surgeon/memory-battery
 
-# ============================================================
-# MEM-005 parser-admission red witness (heavy; NOT in make test)
+# memory-battery-self-test:
+	@# Millisecond-scale. Proves the generator is deterministic, the verdict
+	@# applies the published pass lines exactly, and the battery is absent from
+	@# every fast gate. This one IS wired into `make test`.
+	bb bench/memory_battery/generate_tree.clj --self-test
+	bb -e "(require 'clj-surgeon.memory-battery-test 'clojure.test) (let [r (clojure.test/run-tests 'clj-surgeon.memory-battery-test)] (System/exit (+ (:fail r) (:error r))))"
+
+txn-kernel-warning-check:
+	@# @spec MCP-OP-MEM-020
+	@# Warnings as errors for the transaction kernel: zero reflection, zero
+	@# boxed math. Reflective confinement ran twice per staged file and the
+	@# boxed arithmetic runs once per admitted file; neither shows up in a
+	@# passing suite. Seconds-scale, so it rides mcp-test.
+	clojure -M test/kernel_warning_check.clj
+
+test-fast:
+	bb test/run_all.clj
+
+MEMORY_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
+
+# The memory namespaces are deliberately outside test-fast and mcp-test: they
+# spawn child JVMs at explicit heap ceilings, write hundreds of megabytes of
+# synthetic scope, and cost minutes of wall. The target carries the whole
+# red-to-green history: the frozen read dies of OutOfMemoryError at -Xmx256m on
+# a 600-file scope every ceiling admits, the same arm completes when the scope
+# fits, and the same scenario at the same ceiling completes through the
+# transaction journal with output parity against the unbounded reference.
 # ============================================================
 # Isolates the memory battery's two adversarial SHAPE findings to one
 # `outline-source` call per JVM, each at an explicit -Xmx, so the defect is
@@ -908,15 +934,17 @@ memory-red:
 	  bb bench/parser_admission/red_witness.clj --root "$(PARSER_RED_ROOT)" \
 	     --expect "$(PARSER_RED_EXPECT)"
 
-memory-battery-self-test:
-	@# Millisecond-scale. Proves the generator is deterministic, the verdict
-	@# applies the published pass lines exactly, and the battery is absent from
-	@# every fast gate. This one IS wired into `make test`.
-	bb bench/memory_battery/generate_tree.clj --self-test
-	bb -e "(require 'clj-surgeon.memory-battery-test 'clojure.test) (let [r (clojure.test/run-tests 'clj-surgeon.memory-battery-test)] (System/exit (+ (:fail r) (:error r))))"
-
-test-fast:
-	bb test/run_all.clj
+memory-red-kernel:
+	@# The TRANSACTION KERNEL's OOM witness (bridge/txn-journal). It arrived as
+	@# a second target literally named `memory-red`, colliding with the
+	@# parser-admission red witness above: two different meters, one name, and
+	@# whichever recipe parsed last would have silently answered for both. Their
+	@# GO evidence even quotes different numbers -- parser-admission "memory-red
+	@# 6/6", the kernel "memory-red RED OOM -> GREEN, heap-used-peak 253-254 MB
+	@# at 256m". Renamed rather than merged, because they measure different
+	@# things. Keeps the exclusive suite.lock: it is a heap measurement.
+	@flock /home/forge/tmp/suite.lock \
+	  clojure $(MEMORY_JAVA_OPTS) -M:clj-surgeon/memory-test
 
 analyzer-contract-test:
 	@# @spec MCP-OP-ANALYZER-008

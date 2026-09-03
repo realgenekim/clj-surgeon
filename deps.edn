@@ -40,6 +40,10 @@
     org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
    :main-opts ["-m" "clj-surgeon.mcp-test-runner"]}
 
+  :clj-surgeon/memory-test
+  {:extra-paths ["test"]
+   :main-opts ["-m" "clj-surgeon.memory.memory-test-runner"]}
+
   ;; Tree-scale memory battery (MCP-OP-MEM-011). Deliberately separate from the
   ;; test aliases: `make memory-battery` is a minutes-scale measurement gate and
   ;; is never a prerequisite of test/test-fast/mcp-test. The heap flag is
