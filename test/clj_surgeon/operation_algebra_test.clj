@@ -108,11 +108,13 @@
           (mapcat #(architecture-references (get index %)))
           (callees-in-file index owner source))))
 
+(def ^:private transaction-file "src/clj_surgeon/intent_transaction.clj")
+
 (defn- runtime-architecture-inventory
-  []
-  (let [file "src/clj_surgeon/intent_transaction.clj"
-        index (top-level-form-index file)
-        refs #(architecture-references-one-frame-deeper index %)]
+  ([] (runtime-architecture-inventory
+        (top-level-form-index transaction-file)))
+  ([index]
+  (let [refs #(architecture-references-one-frame-deeper index %)]
     {:preview (refs 'plan-change)
      :commit-adapters
      (into #{}
@@ -121,7 +123,7 @@
      :commit-runtime (refs 'commit-compiled!)
      :receipt-stage (refs 'stage-receipt!)
      :receipt-publish (refs 'publish-staged-receipt!)
-     :rollback (refs 'recovery-result)}))
+     :rollback (refs 'recovery-result)})))
 
 (deftest operation-algebra-architecture-is-transport-neutral-and-bounded
   ;; @spec OP-ALG-CATALOG-001, OP-ALG-COMPILE-001, OP-ALG-EFFECT-001,
@@ -699,3 +701,76 @@
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))
+
+
+;; @spec MCP-OP-ALIAS-056
+;; @spec OP-ALG-EFFECT-003
+(defn- smuggle
+  "The same form index with one raw effect call added inside `owner`'s body."
+  [index owner injected]
+  (let [head (str "(defn- " owner)]
+    (update index owner
+            (fn [source]
+              (let [smuggled (str/replace-first source head
+                                                (str head " " injected))]
+                (when (= smuggled source)
+                  (throw (ex-info "The smuggling injection did not apply"
+                                  {:owner owner})))
+                smuggled)))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- owner-effects
+  "The effect symbols ONE owner form names, or nil when the entry is a union."
+  [inventory entry owner]
+  (let [by-owner (get inventory entry)]
+    (when (map? by-owner) (get by-owner owner))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- entry-union
+  "Every effect symbol an entry reaches, however the entry is keyed."
+  [inventory entry]
+  (let [by-owner (get inventory entry)]
+    (if (map? by-owner) (into #{} cat (vals by-owner)) by-owner)))
+
+;; @spec MCP-OP-ALIAS-056
+;; @spec OP-ALG-EFFECT-003
+(deftest the-effect-inventory-attributes-each-effect-to-the-form-that-names-it
+  ;; One frame down closed round 7's escape and opened a quieter one. The
+  ;; widening put five raw write primitives into `:commit-entry` as a single
+  ;; UNION, so a NOVEL symbol like `spit` goes red anywhere in the closure
+  ;; while a REPEATED one is invisible: `.write` added to
+  ;; `validate-complete-source!` — a helper inside the bounded entry's own one
+  ;; frame — is already in the set, inherited from `stage-receipt!`, and the
+  ;; oracle stays green. The inventory is keyed by OWNER FORM so an effect is
+  ;; attributed to the form that names it.
+  (let [index (top-level-form-index transaction-file)
+        clean (runtime-architecture-inventory index)
+        ;; `.write` is already in the entry's union, from `stage-receipt!`
+        repeated (runtime-architecture-inventory
+                   (smuggle index 'validate-complete-source!
+                            "(when nil (.write nil \"smuggled\"))"))
+        ;; round 7's own escape: a symbol the union does NOT carry
+        novel (runtime-architecture-inventory
+                (smuggle index 'receipt-source
+                         "(when nil (spit \"x\" \"smuggled\"))"))]
+    (testing "a repeated effect symbol is attributed to its own form"
+      (is (not= repeated clean)
+          (str "a raw write primitive added to a helper left the inventory "
+               "unchanged; the entry's symbols are unioned into one set"))
+      (is (contains? (set (owner-effects repeated :commit-entry
+                                         'validate-complete-source!))
+                     '.write)
+          "the smuggled write is not attributed to the form that names it")
+      (is (not (contains? (set (owner-effects clean :commit-entry
+                                              'validate-complete-source!))
+                          '.write))
+          "the unmodified helper already carries the symbol it was given"))
+    (testing "and round seven's novel symbol still moves it"
+      (is (not= novel clean))
+      (is (contains? (set (owner-effects novel :receipt-stage 'receipt-source))
+                     'spit)))
+    (testing "the union stays blind to the repeated one, which is the point"
+      (is (= (entry-union repeated :commit-entry)
+             (entry-union clean :commit-entry))
+          (str "the union over owners was expected to be identical — that is "
+               "why keying by owner is the ratchet")))))
