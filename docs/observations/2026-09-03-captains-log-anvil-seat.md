@@ -104,3 +104,5 @@ histories.
 ## 02:28Z — census red-team: GO-WITH-FIX, four blocking (schema-only bounds, read-before-filter + uncapped requested files, symlink abort + unpruned walk, CLI crash on its own example). Verdict filed; fix round launched.
 
 ## 02:30Z — lane: executed red-team of the fold-diff tool (before the mayor runs it against production) and the three lens/template branches (aceddb474ac916ded). Five background items: census fix round, ratchets, study security round, rf2+q5z red-team, this one.
+
+## 02:30Z — rf2 NO-GO (caller writes escape the root via a directory symlink, witnessed; shell-string `:command` in receipts executes); q5z GO-WITH-FIX (confinement correct; 14 .cpcache files committed; no caps; symlink cycle). Verdicts filed (docs/observations/2026-09-03-rf2-q5z-redteam.md); fix rounds launched. Of the three 'ready' branches red-teamed tonight, none was mergeable as it stood.
