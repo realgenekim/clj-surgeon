@@ -287,6 +287,34 @@
                      ddepth (- pdepth pending) 0 max-depth stack))))))))
 
 ;; ============================================================
+;; The scan's own cost
+;; ============================================================
+
+(def ^:private scan-nanos
+  "Nanoseconds spent inside `scan-shape` since the last `reset-scan-clock!`.
+
+   Measured on anvil 2026-09-03 the charge is 1.27% of the outline it precedes
+   (0.647 ms scan against 51.032 ms outline on a 126,596 B file), exactly one
+   scan per parse entry. That is small — and an unreported cost is one nobody
+   notices regressing: the first draft of `scan-shape` was 638x slower and
+   every test still passed. So a tree-scale receipt charges it.
+
+   A plain atom rather than a dynamic var on purpose: the scan runs inside
+   `pmap` workers, and a counter that depends on binding conveyance to be
+   correct is a counter that reads zero on the day the executor changes."
+  (atom 0))
+
+(defn reset-scan-clock!
+  "Zero the scan clock. A tree-scale caller does this once before its scan."
+  []
+  (reset! scan-nanos 0))
+
+(defn scan-ms
+  "Milliseconds spent in admission scans since the last reset, to 3 decimals."
+  []
+  (/ (Math/round (* 1000.0 (/ (double @scan-nanos) 1e6))) 1000.0))
+
+;; ============================================================
 ;; Admission
 ;; ============================================================
 
@@ -360,7 +388,9 @@
   ([file source] (refusal file source *ceilings*))
   ([file source ceilings]
    (let [{:keys [max-parse-nodes max-parse-depth]} ceilings
+         t0 (System/nanoTime)
          {:keys [parse-nodes parse-depth]} (scan-shape source)
+         _ (swap! scan-nanos + (- (System/nanoTime) t0))
          measured {:parse-nodes parse-nodes :parse-depth parse-depth}
          over (cond
                 (> parse-depth max-parse-depth)

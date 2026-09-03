@@ -396,6 +396,8 @@
   "Compute outlines for all files across projects, in parallel.
    Returns projects with :outlines — a vec of [file outline] pairs."
   [projects]
+  ;; @spec MCP-OP-MEM-005 — charge the admission scan against this scan only
+  (admission/reset-scan-clock!)
   (let [;; Collect all [project-idx file] pairs
         all-files (for [[pidx project] (map-indexed vector projects)
                         f (:files project)]
@@ -478,7 +480,11 @@
                                 limit observed)
                         (format "   %s  %s\n"
                                 file
-                                (admission/public-ceiling-name reason)))))))
+                                (admission/public-ceiling-name reason)))))
+        ;; @spec MCP-OP-MEM-005 — charge the control's own cost where a reader
+        ;; will see it regress. Inside the refusal block, so an ordinary scan's
+        ;; output stays byte-identical to before this control existed.
+        (.append sb (format "── resources: scan_ms %s\n" (admission/scan-ms)))))
     (str sb)))
 
 (defn format-ls-tree-edn
@@ -502,7 +508,8 @@
         refused (admission-refusals projects dir)]
     (if (seq refused)
       (conj entries {:receipt {:parser_admission_refused
-                               {:count (count refused) :files refused}}})
+                               {:count (count refused) :files refused}
+                               :resources {:scan_ms (admission/scan-ms)}}})
       entries)))
 
 (defn- find-nearest-build-file
