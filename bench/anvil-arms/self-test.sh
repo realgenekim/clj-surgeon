@@ -977,7 +977,7 @@ want "case24 control (no abort) score rc" 0 "$?"
 [ -s "$D/receipt.json" ] && ok "case24 control still produces a receipt" \
   || bad "case24 control lost its receipt — the refusal is too broad"
 
-echo "== case 25: a watch stream with no final `end` is unterminated, not scoreable =="
+echo '== case 25: a watch stream with no final `end` is unterminated, not scoreable =='
 # Sol round two, item 4: validate_watch documents "one final `end`" in its own docstring
 # and never checks for it.  Sol deleted the end record from a good stream and the scorer
 # returned 0 with a receipt.  The `end` record IS the completion stamp -- driver rc and
