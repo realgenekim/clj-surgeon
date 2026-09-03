@@ -259,6 +259,7 @@
 
 (def bb-edn "{:paths [\"src\" \"libsrc\" \"test\"]}\n")
 (def deps-edn "{:paths [\"src\" \"libsrc\" \"test\"]\n :deps {}}\n")
+(def gitignore "target/\n.cpcache/\n.clj-kondo/.cache/\n.lsp/\n.cache/\n*.log\n")
 (def fan-test-sh "#!/usr/bin/env bash\nset -euo pipefail\ncd \"$(dirname \"$0\")/..\"\nexec bb test/run_fan_tests.clj\n")
 
 ;; ------------------------------------------------------------------- emission ----
@@ -274,6 +275,7 @@
   (spit! root "test/load_all.clj" (load-all-file specs))
   (spit! root "test/run_fan_tests.clj" (run-tests-file))
   (spit! root "bb.edn" bb-edn)
+  (spit! root ".gitignore" gitignore)
   (spit! root "deps.edn" deps-edn)
   (spit! root "bin/fan-test" fan-test-sh)
   (.setExecutable (io/file root "bin/fan-test") true false))
