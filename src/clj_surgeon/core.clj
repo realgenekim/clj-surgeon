@@ -654,6 +654,10 @@
                 (-> result
                     (dissoc :all-sites :declared :unrecognised)
                     (assoc :read-complete (empty? skipped)
+                           ;; The scan the receipt claims, as a number the
+                           ;; caller can check: the tool publishes
+                           ;; `files_scanned` and the CLI published nothing.
+                           :files-scanned (:scanned @scan)
                            :oversized-skipped
                            (when (seq skipped)
                              {:count (count skipped)
