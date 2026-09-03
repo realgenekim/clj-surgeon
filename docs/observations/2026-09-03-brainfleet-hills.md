@@ -852,3 +852,49 @@ Thus 0/3 closes bare exposure on Lb—not square 3’s capability, a genuinely b
 | T tool | 3 | 49.3 | 4.00 | 4.67 | 2.33 (1.00) | +84/−84 | 3/3 |
 
 Predictions scored: Fable "≤ 0.5x at N=21; tool 2–3 returns vs native 9–10" — wall direction right (0.36×) but inside the floor, returns wrong (native 4.67, not 9–10: Sol closes fan-out fast); Opus "wall 0.65–0.85×, all six lines pass 55%" — wall better than predicted, lines failed on refusals; Sol "60–90 s saved, inside the 172 s floor" — exactly right (87.7 s). Product defect inb-b873d0. Receipt docs/observations/2026-09-04-e3-p-cohort.md (2d32482).
+
+## 14. Result poll on E3-P — Sol (recovered from the codex log; the output file was overwritten by a pointer, 22:59Z)
+
+## Interpretation (4 lines)
+
+1. **The 0.36× is a candidate signal, not yet a measured mechanism:** 87.7 s is below the 172 s floor, and T removed only 0.67 return / 0.33 non-test action, so model/driver variance can explain the wall gap.
+2. **The fan-out mechanism itself is real at the deterministic meter:** one committing call found 21 owners / 63 sites, resolved 30 collisions, landed canonical bytes 3/3, and needed zero native fallback; a 700 ms warm-server execution cannot by itself explain 87.7 s saved.
+3. **The 57% refusal is the refusal contract failing in front of a successful verb:** all four first callers made the same natural `scope.paths=["src"]` request, received the wrong domain diagnosis, and got no executable `next_call`; this is a repeatable interface tax, not stochastic closure failure.
+4. It still makes the product fail: auto-normalizing a bare directory can recover clause 1, while a corrected `next_call` alone still costs two verb calls and therefore still fails clause 1; PF-4's quoted-symbol narrowing is a separate semantic blocker for the real-repo claim.
+
+## Next-wave experiment cards
+
+Ratings below are evidence-value ratings, not a selection; all four remain independent options.
+
+### A. Scope-recovery replication — rating: **very high diagnostic value / low cost**
+
+- **Machine-scorable pass line:** First bench two request-boundary cases: `scope.paths=["src"]` must normalize to `src/**` and reach the same plan as the explicit glob; a genuinely zero-match glob must refuse with a distinct spelling/scope reason and an executable `next_call` that succeeds unchanged. Then run three fresh T arms. All three must have exactly **one total `alias_migration` call, one commit, zero refusals, zero native `.clj` fallback, +84/−84 churn, and 6/6 FAN checks green**. Report the old frozen N mean against the new T mean; wall clears only if `137.0 − mean(T) > 172 s` (it cannot be rescued by the ratio alone).
+- **Prediction:** clause 1 passes **3/3 (85% confidence)**; T mean **40 s** (central ratio **0.29×**, about **97 s saved**); probability the gap exceeds 172 s is only **5%**. Correctness remains 3/3 at **95%**. A fix that supplies only `next_call` predicts 0/3 clause-1 passes by definition.
+- **Cost:** roughly **2–3 agent-hours** for the linked request/refusal fix, witnesses, and review; **3 arm-runs / 30–45 min wall**, one serialized acceptance JVM at a time.
+- **Runs tonight on:** the q5z scope-fix successor composed with fetched `origin/main`, attested on **7907**, using the existing `bench/fanout` N=21 seed-7 fixture, exact E3-P T prompt, `sol-yolo`, and the repaired apparatus. Preserve the original three N receipts as the declared comparator; if the host/driver epoch cannot be matched, add three fresh N arms and label the cost six runs.
+- **Could be waste because:** it is almost certain to repair a deterministic count while leaving the only disputed quantity—wall—inside the floor; it validates interface hygiene, not scaling.
+
+### B. N=40 / N=80 slope replication — rating: **very high mechanism value / high syntheticity**
+
+- **Machine-scorable pass line:** At each N, obtain three valid N and three valid T runs on nested seed-7 targets. Every T run must make one committing call, refuse 0 times, use zero native fallback, and both arms must pass all six FAN checks. Define `gap_N = mean(wall_N) − mean(wall_T)`. The slope passes only if **`gap_80 > 172 s`, `gap_80 > gap_40`, T/N ≤ 0.50 at both N, and T/N ≤ 0.35 at N=80**; also report pre-write source files opened and returns so the claimed cause is site discovery rather than patch bytes.
+- **Prediction:** N=40 **175 s** versus T **55 s** (`gap_40=120 s`, 0.31×); N=80 **310 s** versus T **65 s** (`gap_80=245 s`, 0.21×). Probability the full pass line clears is **55% confidence**; probability only the N=80 172-second floor clears is **65%**. The alternative is Sol's earlier logarithmic-native case: `rg` plus a generated patch keeps N=80 below about 220 s and the level remains unresolved.
+- **Cost:** **12 arm-runs**, about **1 agent-hour** of fixture/prompt validation and **3–5 h wall**; two server ports, with all load/test JVMs serialized. A lower-cost n=1-per-point screen is legitimate for slope direction but cannot promote a wall level.
+- **Runs tonight on:** fixed q5z successor on **7907/7908**, `bench/fanout` generator/scorer at N=40 and N=80, identical caller and mirrored order, load ≤8, no concurrent timed cohorts.
+- **Could be waste because:** the generator deliberately manufactures per-file alias irregularity absent from the largest real repositories; output truncation or the model deciding to write a generator can create a driver/context threshold that looks like a product slope.
+
+### C. CFP store→event-store, 170-file anchor — rating: **highest external-validity value / semantic-fix gated**
+
+- **Machine-scorable pass line:** Freeze the pinned CFP base, exact 170-file / 2,056-site manifest, and a sabotaged oracle before arms. For three mirrored N/T pairs, both arms must pass compile/tests and exact site/alias/protected-region checks. Each T must have **one committing call, A=0 native bytes after the verb, B=0 model returns from receipt to first compile/test, zero fallback**, and a ≤4 KB receipt. Crucially, every quoted fully-qualified datum must remain fully qualified to the new namespace and an outside-namespace `requiring-resolve` oracle must pass. Speed is a win only if `mean(N) − mean(T) > 172 s`.
+- **Prediction:** the current verb scores **0/3 semantic passes (95% confidence)** because PF-4 already demonstrates narrowing. After a quoted-data-preservation fix, T correctness is **3/3 at 70% confidence**; central wall is **T 150 s versus N 255 s** (105 s saved, 0.59×), with only **20%** probability of clearing the floor.
+- **Cost:** first a **20–30 min G1** correctness hand-drive; if red, **3–5 agent-hours** for the semantic fix and witnesses; then **6 arm-runs / 2–3 h wall** with the repository suite serialized.
+- **Runs tonight on:** CFP pinned at the catalogue's store→event-store base in throwaway clones, never the working checkout; attested q5z semantic successor ∪ `origin/main` on **7907**, with N having no MCP endpoint. The cohort starts only after the G1 external-resolution check is green.
+- **Could be waste because:** this anchor is alias-uniform—the real case where `rg`/`sed` is right—so even a correct 170-file one-call result may repeat the known direction while remaining below the wall floor.
+
+### D. E3-L closability boundary control — rating: **high falsification value / medium incremental value**
+
+- **Machine-scorable pass line:** Three mirrored N/T pairs on rung L. Every T run must use exactly **one successful `require_change`** for the ten `ns` forms, make no post-receipt reread of those forms, and use native patching only for the 21 host-interop sites. Require T mean non-test actions **≤10.5**, churn inside **+47..71 / −27..41**, and both arms green at **12/82/0**, **577/7784/0**, goldens byte-identical, with exactly one remaining `System/currentTimeMillis` line. The boundary is confirmed if `|mean(T)−mean(N)| ≤172 s`; layering is separately called if T actions exceed **16.6**.
+- **Prediction:** operational pass **2/3 tool arms (65% confidence)** because `invalid-compact-relation` remains a live prior; conditional on zero refusals, T **245 s versus N 215 s** (1.14×, +30 s), both 3/3 correct, and the boundary stays inside the floor at **90% confidence**. This is what the law of decisions predicts: the verb closes ten mechanical require edits but cannot discover or decide the 21 host-interop replacements.
+- **Cost:** **6 arm-runs**, about **1 agent-hour** setup and **1.5–2.5 h wall**, with one suite JVM at a time.
+- **Runs tonight on:** `marvin-voice-remote @ ab267f9`, the frozen rung-L prompt/oracle, tool server with the composition-fixed `require_change` on **7908**, same `sol-yolo` caller and mirrored order as E3-P.
+- **Could be waste because:** it deliberately exercises a boundary already predicted by n1 and the withdrawn single-edit square; if the live refusal fires, the cohort mostly re-measures an old request grammar defect rather than closability.
+
