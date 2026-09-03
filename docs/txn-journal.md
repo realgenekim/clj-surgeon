@@ -164,7 +164,13 @@ workspace's own durable state root, beside the receipts:
                                               :pid :start-ticks :boot-id}
         LOCK.broken.<txid>       a claim a break removed OR displaced, kept as
                                  its evidence; retired by `recover!` past
-                                 `broken-lock-retention-ms`
+                                 `broken-lock-retention-ms`, measured from when
+                                 the TOMBSTONE was made, never from the claim's
+                                 own mtime
+        LOCK.broken-at.<txid>    that tombstone's creation stamp, {:tombstone
+                                 :broken-at :broken-at-ms}; prefix deliberately
+                                 shares none with `LOCK.broken.` so it is never
+                                 listed, billed or retired as a tombstone
         <txid>/
           manifest.tsv           sorted read set, streamed as it is observed
                                  path-id \t path \t bytes \t sha256 \t mode
@@ -230,7 +236,14 @@ receipt refcount, and whether the row may be evicted.
   :transaction` for journals and `:kind :broken-lock` for the `LOCK.broken.*`
   tombstones beside them; a tombstone row carries its bytes, its age and the
   verb that retires it (`:txn/recover`), because `evict!` operates on journals
-  only.
+  only. A tombstone that IS the live LOCK — one inode, two names, which is what
+  a crash between the break's link and its unlink leaves — is `:kind
+  :interrupted-break :status :lock-break-interrupted`, because it is evidence of
+  a break that never happened. There is NO row for a file that vanished between
+  the listing and the stat, and none for a zero-length one: `lastModified` of a
+  missing file is 0, which reads as infinitely old and bills `:bytes 0`, and
+  822 of 9,831 rows were of exactly that kind under concurrency. An absent file
+  is absent, which is neither an age nor a zero.
 
 ## Recovery
 
@@ -245,11 +258,22 @@ sweep can delete another transaction's prepared temporary; the lock is released
 whenever it has no live holder, including when there was nothing to recover.
 A transaction whose
 `state.edn` says `:committed` or `:rolled-back` is not a candidate. Recovery
-also retires the break tombstones older than `broken-lock-retention-ms` — after
-its own break, so it never retires the receipt it has just written — and
-reports `:broken-locks {:found … :pruned … :remaining … :retention-ms …}`. A recovery whose
-restoration verified deletes its journal; one that did not verify records
-`:restore-failed` and keeps everything.
+also retires the break tombstones older than `broken-lock-retention-ms`,
+measured against the tombstone's OWN creation stamp rather than the mtime it
+inherited from the claim it broke, and reports `:broken-locks {:found … :pruned
+… :remaining … :vanished … :interrupted … :retention-ms …}`. The ordering used
+to be the guarantee — "pruned after its own break" — and it was not one: a
+rename preserves mtime, so breaking a two-day-old crashed holder's lock produced
+`{:found 1 :pruned 1 :remaining 0}` beside a receipt naming
+`LOCK.broken.recover-…` that the same call had deleted. `:vanished` counts
+entries whose file was gone by the time it was stat'd, and they are deliberately
+not in `:found`, which they used to inflate. Recovery also resolves an
+INTERRUPTED break before it decides anything else, returning `:interrupted-break
+{:tombstone … :resolution :interrupted-break-finished | :interrupted-break-reverted}`:
+if the holder is dead by the ordinary rule the LOCK side is unlinked and the
+evidence stands, and if it is alive the extra link is removed and the LOCK is
+untouched. A recovery whose restoration verified deletes its journal; one that
+did not verify records `:restore-failed` and keeps everything.
 
 Two crash points are witnessed: killed between pin and rename (nothing was
 written, so nothing is restored, and the lock is freed) and killed between
@@ -268,36 +292,55 @@ fail-closed, and `recover!` is the remedy that clears it.
 unconditional delete is two operations, and the gap between them is reachable: a
 second transaction can break the same stale claim and acquire inside it, after
 which the first breaker deletes a LIVE holder's brand new LOCK and acquires as
-well. So a break renames the LOCK to `LOCK.broken.<txid>` and then rechecks what
-actually moved — the content and the `(device, inode)` must still be the claim
-that was judged. If they are not, the file is put back by a `link(2)`, which is
-create-if-absent in the kernel: a third acquirer that arrived in the gap is
-never overwritten. `Files/move` with no `REPLACE_EXISTING` looks like that
-guarantee and is not one — the JDK stats the target and then calls `rename(2)`,
-which replaces unconditionally, and a measured 145 of 423 third-party claims
-died in that gap.
+well. So a break CLAIMS THE TOMBSTONE NAME FIRST — `Files/createLink` from
+`LOCK` to `LOCK.broken.<txid>`, which is create-if-absent in the kernel — then
+rechecks what it linked: the content and the `(device, inode)` must still be the
+claim that was judged, and the LOCK must still name that same inode. Only then
+is the LOCK side unlinked. `Files/move` with no `REPLACE_EXISTING` looks like a
+create-if-absent guarantee and is not one — the JDK stats the target and then
+calls `rename(2)`, which replaces unconditionally, and a measured 145 of 423
+third-party claims died in that gap.
 
-The restore therefore guarantees one thing and not another: it never replaces a
-LOCK that appeared meanwhile, and it does NOT guarantee the judged claim gets
-back. When a third acquirer is there the restore refuses, the displaced claim
-stays in `LOCK.broken.<txid>`, and the outcome — `{:restored false :cause
-:holder-changed :restore-cause :lock-reappeared :tombstone …}` — is counted in
-`displaced-claims` and reported by BOTH callers: `begin!`'s refusal and
-`recover!`'s receipt carry `:lock-break-displaced`, and `begin!` writes a
-`lock-displaced` journal line. Nothing else would tell the displaced holder: its
-own `release-lock!` just finds a LOCK that does not name it and returns false.
-On a filesystem with no hard links at all the restore falls back to
-`Files/move` with `ATOMIC_MOVE` and no `REPLACE_EXISTING`, guarded by an
-existence check; that path is check-then-act and says so. ext4 never reaches it.
+The order is what buys the guarantees. Between the link and the unlink the claim
+is in TWO places rather than none, so there is no gap for a third acquirer to
+land in, nothing to restore, and no DISPLACEMENT class at all: a claim that is
+not the judged one is simply never removed, and the outcome is `{:broken false
+:cause :holder-changed :restored true :restore-path :lock-never-left}`. A
+tombstone name already on disk is `link(2)` returning EEXIST — the kernel's own
+verdict, not a stat this code performs — surfaced as the typed refusal
+`:lock-break-refused {:cause :tombstone-exists …}` by `begin!` AND by `recover!`,
+taken before the LOCK is touched, never a replacement. Under the old check-then-act
+that sentence was false: two breakers sharing one txid destroyed the judged claim
+13 times in 4,000 races and both were handed the same tombstone name.
+
+Two residuals are stated rather than claimed away. Unlinking the LOCK is a stat
+of its `(device, inode)` followed by `unlink(2)`, with no I/O between, because
+POSIX has no unlink-if-inode; a crash inside that window leaves one inode under
+two names, which `recover!` resolves as an `:interrupted-break` and the sweep
+types apart from a break that happened. And on a filesystem with no `link(2)` at
+all, `break-by-move!` is the old rename-and-restore, check-then-act in its name
+guard, with the whole displacement machinery behind it: the displaced claim stays
+in `LOCK.broken.<txid>`, `{:restored false :cause :holder-changed :restore-cause
+:lock-reappeared :tombstone …}` is counted in `displaced-claims`, and BOTH
+callers report `:lock-break-displaced` while `begin!` writes a `lock-displaced`
+journal line — nothing else would tell the displaced holder, whose own
+`release-lock!` just finds a LOCK that does not name it and returns false. ext4
+never reaches that path; `:no-hard-links true` is the seam its witnesses use.
 
 The tombstone is named for the BREAKER, and `begin!` takes the txid from its
-caller — so a name already on disk is the typed refusal `:lock-break-refused
-{:cause :tombstone-exists …}`, taken before the LOCK is touched, never a
-replacement. Tombstones are rows in `retained-transactions` (`:kind
-:broken-lock`, with the bytes they bill and their age) and `recover!` retires
-those past `broken-lock-retention-ms` (one day), returning `:broken-locks
-{:found … :pruned … :remaining … :retention-ms …}`. Evidence nothing sweeps and
-nothing counts is accumulation, not durability.
+caller. It carries its OWN creation time — the file's mtime, set once the break
+owns it, and a `LOCK.broken-at.<txid>` sidecar recording `:broken-at-ms` —
+because a link and a rename both PRESERVE the claim's mtime, so evidence
+retained on that stamp inherited the age of the thing it was evidence OF.
+Retention is measured against the newest of the sidecar stamp, the file's mtime
+and its ctime: newest, because every way that value can be wrong except one makes
+evidence look older than it is, and retiring evidence early is the failure that
+matters. Tombstones are rows in `retained-transactions` (`:kind :broken-lock`,
+with the bytes they bill and their age) and `recover!` retires those past
+`broken-lock-retention-ms` (one day). Evidence nothing sweeps and nothing counts
+is accumulation, not durability; evidence its own recovery deletes is worse than
+none, because the receipt naming it terminates the investigation it exists to
+start.
 
 `release-lock!` is scoped the same way: it unlinks the LOCK only while it still
 names the releasing transaction.
@@ -322,6 +365,37 @@ are. A lock file that is not there is absent, not infinitely old. The age half
 exists at all only because a legacy claim carries no `:acquired-at`; a
 new-format one does. New locks carry `:lock-format 2`, so
 a later build names the format rather than inferring it from absence.
+
+**Two boundaries this build states rather than fixes.**
+
+*The ctime half can be kept fresh for ever, and that is the fail-closed
+direction.* `ctime` advances on `chmod`, `chown` and `link(2)`, none of which
+touch mtime, so a watchdog that keeps `chmod`-ing a legacy LOCK holds a
+genuinely dead holder's claim unbreakable indefinitely — measured: after a
+`chmod`, `mtime age-ms = 950400004` while `ctime age-ms = 2`, so
+`basis age-ms = 2` and `legacy-lock-dead?` is false. This is NOT a liveness
+regression: under the previous mtime-only rule the same watchdog achieved the
+same thing with `touch`, and more cheaply. The change removes the forgery in the
+BREAKING direction and leaves it in the REFUSING one, which is the correct
+trade. Its bounded real cost is a workspace restored with `cp -p`, which
+presents `mtime age-ms = 950400408` beside `ctime age-ms = 403` and is therefore
+unbreakable for one hour rather than at once; `:break-legacy-lock` is the remedy
+once it passes. Nothing inside the kernel refreshes a LOCK's ctime behind the
+operator's back: `breakable-causes` excludes `:legacy-format`, so `acquire-lock!`
+never renames a legacy claim, and `recover!` reaches the break only after
+`legacy-lock-dead?` has already returned true.
+
+*The terminal record is two writes with different durability.*
+`append-journal!` fsyncs; `write-state!` is a plain `spit` with no fsync and no
+atomic rename. A crash between them leaves `journal.log` ending `committed`
+beside `state.edn` at `:sealed`, and `recover!` reverts on the `state.edn`
+authority — safe, because `state.edn` IS the authority and `:finished?` is set
+after both. Every throw injected in that window reverts to H0 with no record
+left behind: `bytes on disk "(ns f0) (def v 0)" (= H0)`, `state.edn` gone
+entirely because a rolled-back journal is not retained, `LOCK present false`,
+`next begin! ok true`. The code comment there speaks of the two writes as one
+act, which they are not. Nothing depends on the difference today; a power-loss
+requirement at adoption would.
 
 **`undo!` is a write, and behaves like one.** It takes the same publish lock as
 the commit path and rechecks every begun path's digest and NOFOLLOW identity
@@ -424,6 +498,10 @@ witness:
 | set the journal quota below 2x the read ceiling | derived default quota | RED |
 | remove path confinement | outside-workspace pin and stage | RED |
 | canonicalise before the lexical check | `..` traversal pin and stage | RED |
+| retain the tombstone on the claim's inherited mtime | break does not retire its own evidence | RED |
+| read a tombstone's age from `.lastModified` alone | sweep and prune read one clock | RED |
+| guard the tombstone name with `.exists` and rename over it | two breakers sharing a txid | RED |
+| report a tombstone that IS the live LOCK as a break | interrupted break | RED |
 
 Three of those probes are findings in their own right, and each fix is in the
 code or the tests. The first crash-recovery mutation did not go red, because
