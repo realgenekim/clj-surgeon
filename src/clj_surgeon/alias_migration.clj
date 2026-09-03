@@ -614,7 +614,13 @@
                          "alias_policy" (vec (get-in request [:to :alias-policy]))}
                   (get-in request [:to :refer-policy])
                   (assoc "refer_policy" (get-in request [:to :refer-policy])))
-           "scope" {"paths" (vec (get-in request [:scope :paths]))}
+           ;; @spec MCP-OP-ALIAS-051
+           ;; exclusions travel with EVERY composed call, not only the ones
+           ;; that add to them: an expect-mismatch next_call that forgot the
+           ;; exclusion it was just handed cannot converge, it loops
+           "scope" (cond-> {"paths" (vec (get-in request [:scope :paths]))}
+                     (seq (get-in request [:scope :exclude]))
+                     (assoc "exclude" (vec (get-in request [:scope :exclude]))))
            "expect" {"files" (get-in request [:expect :files])}}
     (:workspace-root request)
     (assoc "workspace_root" (:workspace-root request))))
@@ -649,25 +655,41 @@
 (defn excluding-call
   "The same request with one file, or several, excluded from scope.
 
-  Excluding a file the caller counted means the caller's expectation is now one
-  too high, so `expect.files` drops by the number of files this call newly
-  excludes. Exclusions the request already carried are preserved rather than
-  replaced, so a chain of these refusals converges instead of forgetting what
-  the previous one learned.
+  `requiring-status` says what the tool KNOWS about the excluded sources.
+  `:known-requiring` — the file was read and its reference to from.lib
+  established — means the caller's expectation counted it, so `expect.files`
+  drops by the number of files this call newly excludes. `:unknown` — the
+  filesystem refused the file before it was ever opened — means nothing about
+  its requiring status is knowable, and `expect.files` is left exactly as
+  declared; the refusal publishes `expect-files-unchanged-reason` beside the
+  call to say so. Decrementing there walks the count away from the truth: two
+  unread exclusions of non-requiring files drive a correct 2 down to 0, and the
+  caller then replays against a count the tool itself corrupted.
+
+  The reason rides the refusal rather than the call because the request is a
+  closed field set: an explanatory key inside `next_call` would make the replay
+  refuse as an unknown field.
+
+  Exclusions the request already carried are preserved rather than replaced, so
+  a chain of these refusals converges instead of forgetting what the previous
+  one learned.
 
   This is the shape every `alias_migration` refusal that names a file uses, the
   filesystem-boundary ones included: a refusal that names one bad file and
   offers nothing executable makes the caller compose the remedy by hand."
-  [request file-or-files]
-  (let [named (if (string? file-or-files) [file-or-files] (vec file-or-files))
-        already (set (get-in request [:scope :exclude]))
-        fresh (vec (remove already named))
-        exclude (into (vec (get-in request [:scope :exclude])) fresh)]
-    (-> (base-call request)
-        (assoc-in ["scope" "exclude"] exclude)
-        (assoc-in ["expect" "files"]
-                  (max 0 (- (or (get-in request [:expect :files]) 1)
-                            (count fresh)))))))
+  ([request file-or-files] (excluding-call request file-or-files :known-requiring))
+  ([request file-or-files requiring-status]
+   (let [named (if (string? file-or-files) [file-or-files] (vec file-or-files))
+         already (set (get-in request [:scope :exclude]))
+         fresh (vec (remove already named))
+         exclude (into (vec (get-in request [:scope :exclude])) fresh)
+         declared (or (get-in request [:expect :files]) 1)]
+     (-> (base-call request)
+         (assoc-in ["scope" "exclude"] exclude)
+         (assoc-in ["expect" "files"]
+                   (if (= :known-requiring requiring-status)
+                     (max 0 (- declared (count fresh)))
+                     declared))))))
 
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-055

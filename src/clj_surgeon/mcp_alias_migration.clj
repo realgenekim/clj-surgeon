@@ -534,7 +534,11 @@
           (refusal :alias-migration-scope-path-refused
                    (or (:error bad) "A scope path is outside the configured project root")
                    {:path (:path bad)
-                    :next_call (planner/excluding-call request (:path bad))
+                    ;; the file was refused before it was opened, so whether it
+                    ;; requires from.lib is not known and expect.files stands
+                    :next_call (planner/excluding-call request (:path bad) :unknown)
+                    :expect_files_unchanged_reason
+                    planner/expect-files-unchanged-reason
                     :remedy (str "Exclude " (:path bad) " through scope.exclude"
                                  " and resend; the next_call already does.")})
 
@@ -546,7 +550,11 @@
                     :bytes (:bytes oversized)
                     :max_bytes max-source-bytes
                     ;; @spec MCP-OP-ALIAS-051
-                    :next_call (planner/excluding-call request (:relative oversized))
+                    :next_call (planner/excluding-call request
+                                                       (:relative oversized)
+                                                       :unknown)
+                    :expect_files_unchanged_reason
+                    planner/expect-files-unchanged-reason
                     :remedy (str "Exclude " (:relative oversized)
                                  " through scope.exclude, or narrow scope.paths;"
                                  " the next_call already excludes it.")})

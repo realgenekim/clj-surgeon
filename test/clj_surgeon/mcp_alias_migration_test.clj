@@ -564,8 +564,11 @@
         oversized (io/file workspace "src/acid/fanout/huge.clj")]
     (.mkdirs receipt-dir)
     (try
-      ;; the oversized file requires from.lib, so the caller's expect.files
-      ;; counted it: excluding it must decrement that count by exactly one
+      ;; the oversized file does require from.lib — but nothing READ it, so the
+      ;; tool cannot know that, and a count corrected on a guess is worse than
+      ;; one left alone. expect.files stands; the declaration that is now one
+      ;; too high is corrected by the mismatch refusal's own next_call, one
+      ;; return later. That return is the honest price of not guessing.
       (spit oversized
             (str (requiring-source "acid.fanout.huge")
                  ";; "
@@ -589,18 +592,32 @@
             (is (= "alias_migration" (get next-call "op")))
             (is (= ["src/acid/fanout/huge.clj"]
                    (get-in next-call ["scope" "exclude"])))
-            (is (= 12 (get-in next-call ["expect" "files"]))
-                "expect.files is decremented by the one excluded file")
-            (testing "and the replay proceeds"
+            (is (= 13 (get-in next-call ["expect" "files"]))
+                "expect.files was decremented for a file nobody read")
+            (is (string? (:expect_files_unchanged_reason result))
+                "the refusal does not say why expect.files is unchanged")
+            (testing "and the replay converges in one more return"
               (let [replayed (alias-migration/execute!
                                (config workspace receipt-dir)
                                (json/parse-string (json/generate-string next-call)
                                                   true))]
-                (is (:ok replayed) (pr-str replayed))
-                (is (= 12 (:files replayed)))
-                (doseq [[relative expected] (:post corpus)]
-                  (is (= expected (slurp (io/file workspace relative)))
-                      relative)))))))
+                (is (= "alias-migration-expect-mismatch" (:error_type replayed))
+                    (pr-str replayed))
+                (is (= 12 (:found_files replayed)))
+                (let [corrected (:next_call replayed)]
+                  (is (= ["src/acid/fanout/huge.clj"]
+                         (get-in corrected ["scope" "exclude"]))
+                      "the mismatch refusal dropped the exclusion it was handed")
+                  (is (= 12 (get-in corrected ["expect" "files"])))
+                  (let [committed (alias-migration/execute!
+                                    (config workspace receipt-dir)
+                                    (json/parse-string
+                                      (json/generate-string corrected) true))]
+                    (is (:ok committed) (pr-str committed))
+                    (is (= 12 (:files committed)))
+                    (doseq [[relative expected] (:post corpus)]
+                      (is (= expected (slurp (io/file workspace relative)))
+                          relative)))))))))
       (finally
         (delete-tree! workspace)))))
 
@@ -626,15 +643,29 @@
             (is (some? next-call) "the refusal carried no executable next_call")
             (is (= ["src/acid/fanout/escape.clj"]
                    (get-in next-call ["scope" "exclude"])))
-            (is (= 12 (get-in next-call ["expect" "files"])))
+            ;; the escaping file was refused before it was opened, so whether
+            ;; it required from.lib is not knowable and expect.files stands
+            (is (= 13 (get-in next-call ["expect" "files"])))
+            (is (string? (:expect_files_unchanged_reason result)))
             (let [replayed (alias-migration/execute!
                              (config workspace receipt-dir)
                              (json/parse-string (json/generate-string next-call)
                                                 true))]
-              (is (:ok replayed) (pr-str replayed))
-              (is (= 12 (:files replayed)))
-              (doseq [[relative expected] (:post corpus)]
-                (is (= expected (slurp (io/file workspace relative))) relative))))))
+              (is (= "alias-migration-expect-mismatch" (:error_type replayed))
+                  (pr-str replayed))
+              (is (= 12 (:found_files replayed)))
+              (let [corrected (:next_call replayed)]
+                (is (= ["src/acid/fanout/escape.clj"]
+                       (get-in corrected ["scope" "exclude"])))
+                (let [committed (alias-migration/execute!
+                                  (config workspace receipt-dir)
+                                  (json/parse-string
+                                    (json/generate-string corrected) true))]
+                  (is (:ok committed) (pr-str committed))
+                  (is (= 12 (:files committed)))
+                  (doseq [[relative expected] (:post corpus)]
+                    (is (= expected (slurp (io/file workspace relative)))
+                        relative))))))))
       (finally
         (Files/deleteIfExists (.toPath escape))
         (delete-tree! workspace)
