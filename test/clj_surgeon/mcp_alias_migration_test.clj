@@ -442,6 +442,127 @@
       (finally
         (delete-tree! workspace)))))
 
+
+;; ---------------------------------------------------------------------------
+;; the refusal TEXT block carries what the structured refusal carries
+
+;; @spec MCP-OP-ALIAS-059
+(def ^:private refusal-envelope-keys
+  "Receipt keys the refusal text renders structurally rather than as facts."
+  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
+    :write_authority :next_action :next_call :remedy :elapsed_ms
+    :workspace_root :expect_files_unchanged_reason :receipt_hash
+    :undo_receipt :details_path :details_retained :details_retention})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- refusal-kinds-in-source
+  "Every refusal kind alias_migration can emit, read from the SOURCE.
+
+  Derived rather than listed, so a refusal kind added later without a text
+  witness fails this gate on the day it is written."
+  []
+  (let [text (str (slurp "src/clj_surgeon/alias_migration.clj")
+                  (slurp "src/clj_surgeon/mcp_alias_migration.clj")
+                  (slurp "src/clj_surgeon/mcp_tool.clj"))]
+    (into (sorted-set "invalid-mcp-request" "server-not-initialized")
+          (map second)
+          (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]" text))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- assert-refusal-text!
+  "The text block a text-reading client sees carries the cause, every
+  discriminating fact, the remedy, and the next_call as sendable JSON — or an
+  explicit statement that there is none."
+  [structured label]
+  (let [text (mcp-tool/alias-migration-summary structured)]
+    (is (str/includes? text (str (:error_type structured)))
+        (str label " · the text block does not name the cause"))
+    (doseq [[field value] (sort-by key structured)
+            :when (and (not (contains? refusal-envelope-keys field))
+                       (or (string? value) (number? value) (boolean? value)
+                           (and (sequential? value)
+                                (every? #(or (string? %) (number? %)) value))))]
+      (is (str/includes? text (name field))
+          (str label " · the text block drops the discriminating field "
+               (name field))))
+    (when-let [error (:error structured)]
+      (is (str/includes? text error)
+          (str label " · the text block drops the error sentence")))
+    (when-let [remedy (:remedy structured)]
+      (is (str/includes? text remedy)
+          (str label " · the text block drops the remedy")))
+    (if-let [call (:next_call structured)]
+      (let [encoded (json/generate-string call)]
+        (is (or (str/includes? text encoded)
+                (and (str/includes? text "next_call")
+                     (str/includes? text "structuredContent")
+                     (str/includes? text (str (count encoded)))))
+            (str label " · the text block drops the next_call the caller must send")))
+      (is (re-find #"next_call[^\n]*none" text)
+          (str label " · an absent next_call is omitted rather than stated")))
+    text))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest every-refusal-kind-renders-its-remedy-and-next-call-in-the-text-block
+  ;; E3-P, 2026-09-03: `content[0].text` rendered ONLY the domain sentence.
+  ;; structuredContent carried a complete, executable next_call — T-1 and T-3
+  ;; found it and converged in 3.3 s — but T-2, reading the text, sent the same
+  ;; wrong scope a second time. A refusal whose two faces disagree about what
+  ;; the caller must do next is a refusal that costs a return at random.
+  (testing "every refusal kind the source can emit"
+    (doseq [kind (refusal-kinds-in-source)]
+      (assert-refusal-text!
+        {:ok false
+         :operation "alias_migration"
+         :error_type kind
+         :error (str "one sentence stating the " kind " cause")
+         :remedy (str "Resend the next_call; it corrects " kind ".")
+         :found_files 0
+         :scanned_files 7
+         :elapsed_ms 1.25
+         :source_unchanged true
+         :next_call {"op" "alias_migration"
+                     "scope" {"paths" ["src/**"]}
+                     "expect" {"files" 21}}}
+        kind)))
+  (testing "a refusal with no computable next_call says so"
+    (let [text (assert-refusal-text!
+                 {:ok false
+                  :operation "alias_migration"
+                  :error_type "alias-migration-scope-too-deep"
+                  :error "one path is past the depth bound"
+                  :remedy "Narrow scope.paths so the walk does not reach it."
+                  :depth 65
+                  :max_depth 64
+                  :elapsed_ms 1.0
+                  :source_unchanged true
+                  :next_call nil}
+                 "no-next-call")]
+      (is (str/includes? text "65"))
+      (is (str/includes? text "Narrow scope.paths")))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest a-live-refusals-text-and-structured-receipt-do-not-disagree
+  (let [workspace (workspace!)]
+    (try
+      (doseq [[label overrides]
+              [["scope-matches-nothing" {:scope {:paths ["srk/**"]}
+                                         :expect {:files 12}}]
+               ["empty-scope" {:scope {:paths ["src/acid/fanout/n0*.clj"]}
+                               :expect {:files 0}}]
+               ["expect-mismatch" {:expect {:files 99}}]
+               ["mixed-var-spec" {:from {:lib fixture/from-lib :var nil}
+                                  :to {:lib fixture/to-lib :var fixture/to-var
+                                       :alias_policy fixture/alias-policy}}]]]
+        ;; execute! is the workspace half; mcp-operation/invoke! stamps
+        ;; elapsed_ms at the tool boundary, so it is supplied here rather than
+        ;; driving the whole MCP callback for a rendering assertion
+        (let [result (assoc (execute! workspace overrides) :elapsed_ms 1.0)]
+          (is (false? (:ok result)) (str label " did not refuse"))
+          (assert-refusal-text! result label)))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-013
 (deftest an-indirect-reference-refuses-closed-and-names-the-file
   (let [workspace (workspace!)]
