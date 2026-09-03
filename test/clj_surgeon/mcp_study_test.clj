@@ -1484,7 +1484,7 @@
                        "ns_grep" "(.*.*.*.*.*.*)*x"})]
     (is (pos? discovered))
     (is (= "ns-grep-match-budget-exceeded" (:error_type response)))
-    (is (= (* study/ns-grep-match-steps-per-file discovered)
+    (is (= (study/ns-grep-scan-budget (:projects scan) (:dir scan))
            (:match_budget response))
         "the whole pass gets one allowance of steps-per-file x files found")
     (is (empty? (output-schema-violations response))

@@ -326,3 +326,36 @@
     (is (empty? (filter #(str/ends-with? % "!") public-names))
         "a bang-suffixed public in the study kernel would be a write reachable from the read entrance")
     (is (empty? (filter #{"mv" "rename-ns" "fix-declares"} public-names)))))
+
+;; ============================================================
+;; The ns-grep per-file budget scales with path length
+;; (round-4 re-review fix 1)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-per-file-ns-grep-budget-scales-with-the-longest-path-in-the-pass
+  ;; A flat 20,000-character-per-file allowance, calibrated on this
+  ;; repository's own ~36-character paths, refused a completely honest
+  ;; `.*handler.*internal.*` over one 106-character monorepo-shaped relative
+  ;; path: `ns-grep-hit?` reads 33,566 characters testing it, well over the
+  ;; flat floor, even though the pattern is ordinary and the path contains no
+  ;; adversarial repetition. The per-file term has to scale with the longest
+  ;; path the pass will actually test, not with the length of the paths this
+  ;; repository happens to have.
+  (let [long-path (str "packages/backend/services/order-ingest/src/main/"
+                       "clojure/com/example/platform/"
+                       "dispatcher_router_service.clj")
+        dir "monorepo"
+        project {:root dir :files [(str dir "/" long-path)]}]
+    (testing "the formula: a floor for short paths, quadratic beyond it"
+      (is (= 20000 (study/ns-grep-match-steps-per-file 10))
+          "short paths keep exactly the old floor")
+      (is (= (max 20000 (* 64 (count long-path) (count long-path)))
+             (study/ns-grep-match-steps-per-file (count long-path)))))
+    (testing "an honest pattern over a long, honest path is no longer refused"
+      (is (nil? (try
+                  (study/filter-projects-by-ns-grep
+                    [project] dir ".*handler.*internal.*")
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e)))
+          "the flat floor threw ns-grep-match-budget-exceeded here before this fix"))))

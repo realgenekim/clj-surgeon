@@ -477,24 +477,59 @@
     (catch Exception _e nil)))
 
 ;; @spec MCP-OP-STUDY-031
-(def ns-grep-match-steps-per-file
-  "How many characters the regular-expression engine may READ, per discovered
-   file, while `ns-grep` filters one scan.
-
-   `java.util.regex` backtracks, so a caller-supplied pattern is
-   caller-supplied CPU. Measured through the read entrance over the 67 files
-   of this repository's `src/` — ordinary 36-character paths, no adversarial
-   file names — `(.*.*.*.*.*.*)*x` cost 43,589 ms and still returned
-   `ok=true`; each further `.*` multiplies that about six-fold. At `max-files`
-   2000 that one call is ~21 minutes, at the 20,000 ceiling ~3.5 hours.
-
-   Honest patterns are nowhere near it. Against
-   `src/clj_surgeon/mcp_inspect_tool.clj`: `mcp` reads 19 characters,
-   `^src/clj_surgeon/.*tool` reads 55, a six-way namespace alternation reads
-   91, and the same alternation over a 97-character path reads 341. 20,000 per
-   file is roughly sixty times the worst honest cost measured here and an
-   order of magnitude below the cheapest catastrophic one."
+(def ns-grep-match-steps-floor
+  "The MINIMUM per-file character-read allowance for one ns-grep pass,
+   whatever the paths involved. `java.util.regex` backtracks, so a
+   caller-supplied pattern is caller-supplied CPU; this floor is what a
+   short-path tree (this repository's own `src/`, ordinary 36-character
+   paths) gets. `(.*.*.*.*.*.*)*x` against paths that short still costs
+   335,730,084 character reads for one match — orders of magnitude over this
+   floor — while honest patterns read tens to low thousands of characters.
+   See `ns-grep-match-steps-per-file` for how a longer tree is charged."
   20000)
+
+;; @spec MCP-OP-STUDY-031
+(def ^:private ns-grep-match-steps-length-factor
+  "Quadratic coefficient applied to the longest relative path length in a
+   pass, in `ns-grep-match-steps-per-file`. See that function's docstring
+   for the measured basis."
+  64)
+
+;; @spec MCP-OP-STUDY-031
+(defn ns-grep-match-steps-per-file
+  "How many characters the regular-expression engine may READ, per file,
+   while `ns-grep` filters one scan whose longest relative path is
+   `longest-len` characters.
+
+   A flat per-file allowance miscalibrates: `.*a.*b.*`-shaped patterns cost
+   quadratically in subject length, so a constant sized for this
+   repository's own ~36-character paths refused a completely honest
+   `.*handler.*internal.*` over an ordinary monorepo path — see this
+   function's callers for the measured figures. The floor keeps short trees
+   exactly as generous as before; the quadratic term keeps long ones honest
+   without opening the door any wider than the length actually in front of
+   it."
+  ^long [longest-len]
+  (max ns-grep-match-steps-floor
+       (* ns-grep-match-steps-length-factor
+          (long longest-len) (long longest-len))))
+
+;; @spec MCP-OP-STUDY-031
+(defn ns-grep-scan-budget
+  "Pure: the total step allowance for one ns-grep pass over `projects`,
+   relative to `dir`. `ns-grep-match-steps-per-file`, evaluated at the
+   longest relative path the pass will test, times the number of files
+   discovery found — so the allowance and the work both still scale
+   linearly with the tree (adding files can never turn a passing call into
+   a failing one; a rendering path-length outlier can only ever raise the
+   allowance, never lower it)."
+  [projects dir]
+  (let [dir-path (fs/path dir)
+        rel (fn [f] (str (fs/relativize dir-path (fs/path f))))
+        files (mapcat :files projects)
+        file-count (count files)
+        longest (reduce max 0 (map (comp count rel) files))]
+    (* (ns-grep-match-steps-per-file longest) (max 1 file-count))))
 
 ;; @spec MCP-OP-STUDY-031
 (defn ns-grep-pool
@@ -565,16 +600,15 @@
    substrings included. Drops projects left with no files.
 
    The pattern is compiled ONCE here; an uncompilable one is refused by
-   `ls-tree` long before this. The whole pass shares ONE step budget, sized
-   `ns-grep-match-steps-per-file` per discovered file, so the work this filter
-   can do is bounded by the tree it was handed rather than by the pattern it
-   was given."
+   `ls-tree` long before this. The whole pass shares ONE step budget, sized by
+   `ns-grep-scan-budget` from the number of discovered files and the longest
+   relative path among them, so the work this filter can do is bounded by the
+   tree it was handed rather than by the pattern it was given."
   [projects dir pattern]
   (let [dir-path (fs/path dir)
         re (compile-pattern pattern)
         rel (fn [f] (str (fs/relativize dir-path (fs/path f))))
-        file-count (reduce + 0 (map #(count (:files %)) projects))
-        pool (ns-grep-pool (* ns-grep-match-steps-per-file (max 1 file-count)))]
+        pool (ns-grep-pool (ns-grep-scan-budget projects dir))]
     (if-not re
       []
       (->> projects
