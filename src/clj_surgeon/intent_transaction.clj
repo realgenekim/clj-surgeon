@@ -13,7 +13,9 @@
    [rewrite-clj.parser :as parser]
    [rewrite-clj.zip :as z])
   (:import
-   (java.nio.file CopyOption Files StandardCopyOption)))
+   (java.nio.file CopyOption Files OpenOption StandardCopyOption
+                  StandardOpenOption)
+   (java.util UUID)))
 
 (def transaction-version 1)
 (def receipt-version 1)
@@ -2605,7 +2607,16 @@
   [receipt]
   (str (pr-str receipt) "\n"))
 
+;; @spec MCP-OP-ALIAS-056
 (defn- stage-receipt!
+  "Write one receipt to a staging file beside its destination.
+
+  The staging file is opened CREATE_NEW: an open that FAILS when anything
+  already holds the name — a regular file, or a symlink pointing somewhere
+  else — rather than following it. No byte of a receipt is ever written through
+  a link somebody else installed, and the publish below is an ATOMIC_MOVE,
+  which renames onto the destination name and so replaces a link sitting there
+  instead of writing through it."
   [receipt-path receipt]
   (let [target (io/file receipt-path)
         parent (.getParentFile (.getAbsoluteFile target))]
@@ -2613,10 +2624,15 @@
       (refuse! :invalid-receipt-path
                "Receipt parent directory does not exist"
                {:path receipt-path}))
-    (let [staged (java.io.File/createTempFile
-                   ".clj-surgeon-receipt-" ".edn" parent)]
+    (let [staged (io/file parent (str ".clj-surgeon-receipt-"
+                                      (UUID/randomUUID) ".edn"))]
       (try
-        (spit staged (receipt-source receipt))
+        (with-open [^java.io.OutputStream out
+                    (Files/newOutputStream
+                      (.toPath staged)
+                      (into-array OpenOption [StandardOpenOption/CREATE_NEW
+                                              StandardOpenOption/WRITE]))]
+          (.write out (.getBytes ^String (receipt-source receipt) "UTF-8")))
         (validate-receipt! (edn/read-string (slurp staged)))
         staged
         (catch Exception e

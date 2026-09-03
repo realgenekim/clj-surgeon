@@ -60,10 +60,14 @@
         invoked-heads (->> (tree-seq coll? seq form)
                            (keep #(when (seq? %) (first %)))
                            (filter symbol?))
-        raw-effect-symbols #{'slurp 'spit 'Files/move
+        ;; @spec MCP-OP-ALIAS-056
+        ;; the receipt staging write moved from `spit` on a `createTempFile`
+        ;; name to an explicit CREATE_NEW open; the inventory has to KNOW that
+        ;; call, or this oracle goes blind to the one write it exists to bound
+        raw-effect-symbols #{'slurp 'spit 'Files/move 'Files/newOutputStream
                              'java.io.File/createTempFile 'System/exit}
         effect-head? #(re-find
-                        #"(?i)(^|/)(write|publish|stage|rollback|recover|format|verif|process|launch|mcp|json|exit|move|createTempFile|slurp|spit)(!|$|-)|\.delete"
+                        #"(?i)(^|/)(write|publish|stage|rollback|recover|format|verif|process|launch|mcp|json|exit|move|createTempFile|newOutputStream|slurp|spit)(!|$|-)|\.delete|\.write"
                         (str %))]
     (set (concat (filter #(str/ends-with? (str %) "!") all-symbols)
                  (filter raw-effect-symbols all-symbols)
@@ -183,13 +187,17 @@
                                 'write-source!
                                 'file-ops/atomic-create!
                                 'file-ops/atomic-write!}
+              ;; @spec MCP-OP-ALIAS-056
+              ;; the staged receipt is opened CREATE_NEW rather than spat over
+              ;; a createTempFile name, so an open that would follow a link
+              ;; somebody else installed fails instead
               :receipt-stage #{'.delete
+                               '.write
                                'refuse!
                                'slurp
-                               'spit
                                'stage-receipt!
                                'validate-receipt!
-                               'java.io.File/createTempFile}
+                               'Files/newOutputStream}
               :receipt-publish #{'publish-staged-receipt! 'Files/move}
               :rollback #{'read-source! 'write-source!}}
              (runtime-architecture-inventory))))))

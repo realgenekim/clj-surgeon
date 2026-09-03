@@ -31,6 +31,23 @@
   #{".git" ".hg" "target" "node_modules" ".cpcache" ".clj-kondo" ".lsp"
     ".clj-surgeon" ".shadow-cljs" "out"})
 
+;; @spec MCP-OP-ALIAS-056
+(def control-directories
+  "Directory names inside a workspace whose contents belong to another tool.
+
+  A receipt published into one of these is not a stray file: it is a file the
+  owning tool READS. `receipt-dir=.git/refs/heads` publishes `<uuid>.edn` into
+  git's ref namespace and `git show-ref` exits 128 on it — the workspace's own
+  tooling is broken by a verb that reported success. The version-control
+  metadata directories are here because their contents are parsed, and the
+  machine-local build caches because their contents are deleted without notice,
+  which is not where a durable undo receipt may live.
+
+  `.clj-surgeon` is deliberately ABSENT. Co-locating the receipts with the
+  detail documents is a legal configuration and stays legal; the collision
+  guard above, not this set, is what keeps the two name namespaces disjoint."
+  #{".git" ".hg" ".svn" ".jj" "target" "node_modules" ".cpcache"})
+
 ;; ---------------------------------------------------------------------------
 ;; refusals
 
@@ -898,16 +915,76 @@
                    (into [(.getFileName candidate)] remainder))))))))
 
 ;; @spec MCP-OP-ALIAS-054
+(defn- configured-receipt-file
+  "The receipt directory the caller named, read the way the caller wrote it.
+
+  An ABSOLUTE receipt-dir is a place of the caller's own choosing and is taken
+  exactly as written: the receipt directory this server ships with lives under
+  the user's state root, outside every workspace, so an external receipt
+  directory is the ORDINARY configuration and stays legal wherever it points.
+
+  ;; @spec MCP-OP-ALIAS-056
+  A RELATIVE one is read against the WORKSPACE it names, never against whatever
+  directory this process happens to have been started in. An MCP server's
+  working directory is not the caller's, and resolving a caller's relative path
+  against it names a directory nobody asked for — in a workspace at all only by
+  accident."
+  ^java.io.File [project-root receipt-dir]
+  (let [file (io/file (str receipt-dir))]
+    (if (.isAbsolute file)
+      file
+      (io/file (str project-root) (str receipt-dir)))))
+
+;; @spec MCP-OP-ALIAS-054
+;; @spec MCP-OP-ALIAS-056
 (defn receipt-dir-escapes?
-  "Whether the configured receipt directory has no decidable identity.
+  "Whether the configured receipt directory has no identity this verb may use.
 
   It has none when the part of it that does not exist yet still climbs above
   the nearest existing ancestor after normalisation: lexical `..` past a
   canonical path is not the same directory the kernel would open, and the
-  guard below cannot answer honestly about a path it cannot name. The boundary
-  refuses instead, before anything is created."
-  [receipt-dir]
-  (nil? (resolved-path receipt-dir)))
+  guard below cannot answer honestly about a path it cannot name.
+
+  It has none, either, when a RELATIVE receipt directory resolves OUTSIDE the
+  workspace root. A relative path is written against the workspace and reads as
+  a place inside it, and `toRealPath` resolves a symlink COMPONENT before the
+  normalisation above ever runs — so a link pointing out of the tree carries
+  the receipts somewhere the caller never named, and does it silently, with a
+  canonical answer to show for it. An absolute receipt directory outside the
+  workspace is an explicit choice and is not this refusal's business. The
+  boundary refuses instead, before anything is created."
+  [project-root receipt-dir]
+  (let [configured (io/file (str receipt-dir))
+        receipt (resolved-path (configured-receipt-file project-root receipt-dir))
+        root (resolved-path project-root)]
+    (boolean (or (nil? receipt)
+                 (and (not (.isAbsolute configured))
+                      root
+                      (not (.startsWith receipt root)))))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- control-directory-of
+  "The workspace control directory this resolved path lies inside, or nil.
+
+  Containment is canonical against the canonical workspace root, and what
+  remains is read segment by segment: a receipt directory OUTSIDE the workspace
+  is not this verb's business — it belongs to whoever configured it — and one
+  inside it is named by the first control segment on the way down, so a
+  directory nested any depth below `.git` answers as truthfully as `.git`
+  itself. An existing symlink component is already resolved by `resolved-path`,
+  so a link INTO `.git` is caught by the same containment as a plain path."
+  [project-root ^Path receipt]
+  (let [root (resolved-path project-root)]
+    (when (and root receipt (.startsWith receipt root))
+      (first (filter control-directories (map str (.relativize root receipt)))))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn receipt-dir-in-control-directory
+  "The workspace control directory the configured receipt directory lies in, or nil."
+  [project-root receipt-dir]
+  (control-directory-of
+    project-root
+    (resolved-path (configured-receipt-file project-root receipt-dir))))
 
 ;; @spec MCP-OP-ALIAS-054
 (defn receipt-detail-collision?
@@ -933,7 +1010,7 @@
   level. An unresolvable path is not a match here — `receipt-dir-escapes?`
   refuses it first, so this never has to guess."
   [project-root receipt-dir ^String receipt-name]
-  (let [receipt (resolved-path receipt-dir)
+  (let [receipt (resolved-path (configured-receipt-file project-root receipt-dir))
         detail (resolved-path (detail-directory project-root))]
     (boolean (and (detail-document-name? receipt-name)
                   receipt
@@ -942,32 +1019,82 @@
 
 ;; @spec MCP-OP-ALIAS-054
 (defn- create-receipt-directory!
-  "Create the receipt directory, returning what THIS call brought into being.
+  "Create the receipt directory, returning the components THIS CALL created.
 
-  The return is the directories that did not exist a moment ago, deepest
-  first, so a refusal that follows can remove exactly what this run made and
-  nothing a caller or a peer already had. `File/delete` never removes a
-  non-empty directory, so a peer that filled one in between keeps it.
+  Component by component, with `Files/createDirectory`, and a component is
+  recorded only when this call's own create RETURNED. `createDirectories`
+  answers for a whole chain and cannot say which links of it were its own, so a
+  set computed by listing what did not exist a moment ago is not a set of
+  things this call made: two calls racing the same missing chain both recorded
+  all of it, and once the directories were empty one caller's cleanup deleted
+  directories the peer was still counting as its own. `FileAlreadyExists` is
+  the peer's answer — not mine, not recorded, and so never deleted by me.
 
-  Creation goes through `Files/createDirectories`, which fails loudly, but only
-  when the path is not already a directory: a receipt directory that is a
-  symlink to a real directory is a legal configuration `createDirectories`
-  would reject outright."
-  [receipt-dir]
-  (let [file (io/file (str receipt-dir))
-        path (.toPath (.getAbsoluteFile file))
-        created (loop [candidate path
-                       acc []]
-                  (if (or (nil? candidate)
-                          (Files/exists candidate (make-array LinkOption 0)))
-                    acc
-                    (recur (.getParent candidate) (conj acc candidate))))]
-    (when-not (.isDirectory file)
-      (try
-        (Files/createDirectories path (make-array FileAttribute 0))
-        (catch java.io.IOException _ nil)
-        (catch SecurityException _ nil)))
-    created))
+  A component that already exists is left alone whatever it is: a receipt
+  directory that is a symlink to a real directory is a legal configuration, and
+  `createDirectory` would reject it outright.
+
+  The return is deepest first, so a refusal that follows removes exactly what
+  this call brought into being. `File/delete` never removes a non-empty
+  directory, so a peer that filled one in between keeps it."
+  [^java.io.File receipt-file]
+  (let [path (.toPath (.getAbsoluteFile receipt-file))
+        chain (loop [candidate path
+                     acc ()]
+                (if (nil? candidate)
+                  acc
+                  (recur (.getParent candidate) (conj acc candidate))))]
+    (reduce (fn [created ^Path component]
+              (if (Files/exists component (make-array LinkOption 0))
+                created
+                (try
+                  (Files/createDirectory component (make-array FileAttribute 0))
+                  (conj created component)
+                  (catch java.nio.file.FileAlreadyExistsException _ created)
+                  (catch java.io.IOException _ (reduced created))
+                  (catch SecurityException _ (reduced created)))))
+            ()
+            chain)))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- real-directory
+  "The directory that now exists at this path, resolved ONCE, or nil.
+
+  Every write after this goes through the path this returns and never through
+  the configured one again, so a link swapped in at a configured ANCESTOR
+  after the guards have answered cannot redirect a byte.
+
+  It narrows the window; it does not close it. The value is a path, not an open
+  directory — the JVM offers no `openat`, so the kernel resolves this string
+  afresh on every open, and an attacker who can replace a component of the REAL
+  path can still redirect the write. That attacker already owns the workspace.
+  MCP-OP-ALIAS-056 states the boundary, and `receipt-published-elsewhere?`
+  proves after the fact where the receipt actually landed, so the verb never
+  reports success over a redirected one."
+  ^Path [^java.io.File receipt-file]
+  (let [path (.toPath (.getAbsoluteFile receipt-file))]
+    (try
+      (when (Files/isDirectory path (make-array LinkOption 0))
+        (.toRealPath path (make-array LinkOption 0)))
+      (catch java.io.IOException _ nil)
+      (catch SecurityException _ nil))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- receipt-published-elsewhere?
+  "Whether the published receipt is not in the directory whose identity was proved.
+
+  The last window the OS leaves open is the receipt directory's own name. It
+  cannot be closed before the write, because a name is resolved on every open;
+  it can be DETECTED after it, and a detected one is rolled back rather than
+  reported as a success. `toRealPath` on the file that now exists names the
+  directory it actually landed in, which is the only authority on the question."
+  [^Path proved receipt-file]
+  (let [actual (try
+                 (.getParent (.toRealPath (.toPath (io/file (str receipt-file)))
+                                          (make-array LinkOption 0)))
+                 (catch java.io.IOException _ nil)
+                 (catch SecurityException _ nil))]
+    (not (and actual proved (= actual proved)))))
 
 ;; @spec MCP-OP-ALIAS-045
 ;; @spec MCP-OP-ALIAS-054
@@ -1258,19 +1385,40 @@
   ;; paths alone, and a refusal that first mkdirs the very directory it is
   ;; refusing to write in has already mutated the tree it reports untouched.
   (let [retire-source (when retire (resolve-retire-source project-root retire))
-        receipt-name (new-receipt-name)]
+        receipt-name (new-receipt-name)
+        ;; @spec MCP-OP-ALIAS-056
+        receipt-file (configured-receipt-file project-root receipt-dir)
+        control (receipt-dir-in-control-directory project-root receipt-dir)]
   (cond
     ;; @spec MCP-OP-ALIAS-054
-    (receipt-dir-escapes? receipt-dir)
-    {:error (str "The configured receipt directory cannot be canonicalized: "
-                 "the part of it that does not exist yet climbs above the "
-                 "nearest directory that does")
+    ;; @spec MCP-OP-ALIAS-056
+    (receipt-dir-escapes? project-root receipt-dir)
+    {:error (str "The configured receipt directory has no identity this verb "
+                 "may use: the part of it that does not exist yet climbs above "
+                 "the nearest directory that does, or a relative receipt "
+                 "directory resolves outside the workspace root")
      :error-type :alias-migration-receipt-dir-escapes
      :source-unchanged true
      :remedy (str "Configure receipt-dir as a path whose missing components "
-                  "descend from an existing directory; a receipt directory "
-                  "whose identity cannot be proved cannot be checked against "
-                  (.getPath (detail-directory project-root)) ".")}
+                  "descend from an existing directory, and whose relative form "
+                  "stays inside " (str project-root) "; a receipt directory "
+                  "outside the workspace is legal when it is named absolutely, "
+                  "and a relative path that leaves through a symlink is not "
+                  "the directory the caller asked for.")}
+
+    ;; @spec MCP-OP-ALIAS-056
+    control
+    {:error (str "The configured receipt directory lies inside the workspace's "
+                 control " directory, which belongs to another tool")
+     :error-type :alias-migration-receipt-dir-in-control-directory
+     :source-unchanged true
+     :control_directory control
+     :remedy (str "Configure receipt-dir outside "
+                  (str/join ", " (sort control-directories))
+                  "; a receipt published into one of these is a file the "
+                  "owning tool reads — an undo receipt in .git/refs/heads is a "
+                  "ref git cannot parse — or a file its owner deletes without "
+                  "notice.")}
 
     ;; @spec MCP-OP-ALIAS-054
     (receipt-detail-collision? project-root receipt-dir receipt-name)
@@ -1303,11 +1451,30 @@
     ;; directory. So the directory that was actually CREATED is re-proved
     ;; before a byte is written into it, and a refusal removes only what this
     ;; call made.
-    (let [created (create-receipt-directory! receipt-dir)]
-     (if (receipt-detail-collision? project-root receipt-dir receipt-name)
+    (let [created (create-receipt-directory! receipt-file)
+          ;; @spec MCP-OP-ALIAS-056
+          ;; resolved ONCE: every write below goes through this path and never
+          ;; through the configured one again
+          real-dir (real-directory receipt-file)
+          undo-creation! (fn [] (doseq [^Path path created]
+                                  (.delete (.toFile path))))]
+     (cond
+      (nil? real-dir)
       (do
-        (doseq [^Path path created]
-          (.delete (.toFile path)))
+        (undo-creation!)
+        {:error (str "No directory exists at the configured receipt directory "
+                     "after creation, so this verb cannot prove where a receipt "
+                     "would be published")
+         :error-type :alias-migration-receipt-dir-escapes
+         :phase "post-create"
+         :source-unchanged true
+         :remedy (str "Configure receipt-dir as a path this server may create "
+                      "a directory at; nothing occupying that name may be a "
+                      "regular file.")})
+
+      (receipt-detail-collision? project-root real-dir receipt-name)
+      (do
+        (undo-creation!)
         {:error (str "The receipt directory that now exists is the detail "
                      "writer's own directory; the identity checked before it "
                      "existed is not the identity it has")
@@ -1319,6 +1486,24 @@
                       ", and check what is creating symlinks there; a receipt "
                       "this verb may prune is a receipt that cannot be "
                       "trusted.")})
+
+      ;; @spec MCP-OP-ALIAS-056
+      (control-directory-of project-root real-dir)
+      (do
+        (undo-creation!)
+        {:error (str "The receipt directory that now exists lies inside the "
+                     "workspace's "
+                     (control-directory-of project-root real-dir)
+                     " directory, which belongs to another tool")
+         :error-type :alias-migration-receipt-dir-in-control-directory
+         :phase "post-create"
+         :source-unchanged true
+         :control_directory (control-directory-of project-root real-dir)
+         :remedy (str "Configure receipt-dir outside "
+                      (str/join ", " (sort control-directories))
+                      ", and check what is creating symlinks there.")})
+
+      :else
       (let [profile (selected-profile verification-profiles verify)
         baseline (when profile
                    (change-buffer/capture-verification-baseline!
@@ -1340,13 +1525,42 @@
             ;; write, which is the only moment at which the answer changes.
             result (transaction/execute-mcp-change!
                      {:spec spec
-                      :receipt-out (str (io/file receipt-dir receipt-name))
+                      ;; @spec MCP-OP-ALIAS-056
+                      ;; the PROVED path, never the configured one
+                      :receipt-out (str (.resolve real-dir ^String receipt-name))
                       :on-write-boundary (when attempted
                                            #(vreset! attempted true))
                       :write-refusal-context {:operation "alias_migration"
                                               :project-root project-root}})]
-        (if (:error result)
+        (cond
+          (:error result)
           result
+
+          ;; @spec MCP-OP-ALIAS-056
+          ;; A name is resolved on every open, so the identity proved a moment
+          ;; ago is not a guarantee about where the bytes went. Where they went
+          ;; is a fact, and it is read here from the file that now exists. A
+          ;; receipt somewhere else is rolled back, not reported as a success:
+          ;; the OS leaves the window open, and what must never happen is a
+          ;; verb reporting ok over it.
+          (receipt-published-elsewhere? real-dir (:receipt-file result))
+          (let [rollback (transaction/execute-undo!
+                           {:receipt (:receipt-file result)})
+                rolled-back? (boolean (:ok rollback))]
+            (when rolled-back?
+              (.delete (io/file (:receipt-file result))))
+            {:error (str "The undo receipt was published outside the receipt "
+                         "directory whose identity this verb proved; the alias "
+                         "migration was rolled back")
+             :error-type :alias-migration-receipt-published-elsewhere
+             :phase "post-write"
+             :rolled-back rolled-back?
+             :source-unchanged rolled-back?
+             :remedy (str "Check what is replacing " (str real-dir)
+                          " while this verb runs; a receipt this verb cannot "
+                          "locate is a receipt no undo can be trusted to find.")})
+
+          :else
           (let [retired (try
                           (when retire
                             (retire-file! project-root retire
