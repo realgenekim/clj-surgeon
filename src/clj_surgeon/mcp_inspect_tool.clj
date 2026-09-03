@@ -63,7 +63,8 @@
     "view. grep filters by file CONTENTS (ripgrep, can match comments and "
     "strings); ns_grep filters by each file's PATH/namespace instead and "
     "answers 'table of contents filtered to namespaces matching X'. "
-    "Every study receipt is bounded to 4096 payload characters by default; a "
+    "Every study receipt is bounded to `limit` payload characters — 8192 by "
+    "default for mode=ls-tree, 4096 for an atomic study operation; a "
     "larger result sets truncated=true and read_complete=false and returns an "
     "executable next_call, so raise limit up to 16384 or narrow the scope "
     "instead of re-reading. Every guarded file is verified before evaluation; "
@@ -351,8 +352,30 @@
 ;; snapshot_guards. It therefore takes the shape the contract already reserves
 ;; for whole-project reads, a top-level `mode`, exactly like plan-extraction.
 
-(def ls-tree-default-limit 4096)
-(def ls-tree-max-limit 16384)
+;; @spec MCP-OP-STUDY-037
+(def ls-tree-default-limit
+  "How many payload characters one `ls-tree` receipt carries when the caller
+  names no limit.
+
+  Raised from 4096 after the E6-Lb measurement: `format=text` is the default
+  once `grep` is present, and at 4096 a real ten-file `src` came back as 2 of
+  10 files with `read_complete=false` — the caller's first call answered
+  almost nothing, and a table of contents that needs a second call is not a
+  table of contents. 8192 admits a whole small tree (a ten-file, thirty-form
+  tree renders in 2,064 characters; twenty-five files in 5,279) while keeping
+  the text a text-only client renders inside the 8 KB one-call budget. The
+  ceiling is unchanged: a genuinely large tree still truncates and says so."
+  8192)
+
+;; @spec MCP-OP-STUDY-038
+(def ls-tree-max-limit
+  "The highest `limit` a study receipt may ask for.
+
+  A boundary, not a target: a tree whose complete rendering fits comes back
+  complete, and the next file over comes back truncated with a remedy naming
+  what to do instead. Measured on the toy fixture the witnesses use: 77 files
+  render in 16,370 characters and fit; the seventy-eighth does not."
+  16384)
 
 (def ls-tree-schema
   {:type "object"
@@ -369,7 +392,7 @@
                :description "Optional pattern matched against each file's PATH, which the Clojure require convention keeps in lockstep with its declared namespace ('_' and '-' are treated as equivalent). Narrower than grep: answers 'table of contents filtered to namespaces matching X' without matching mentions in comments or strings. Composes with grep, narrowing further."}
     "format" {:type "string" :enum ["names" "text" "edn"]
               :description "names (the default when grep is absent) is a compact table of contents — one {file, ns, form_count, line_count} row per file, sized to fit a whole tree in one bounded receipt. text (the default when grep is present) is the fuller compact per-form scanning view. edn is one fully detailed row per file. All three share the same bound/truncation contract."}
-    "limit" {:type "integer" :minimum 1 :maximum 16384 :default 4096
+    "limit" {:type "integer" :minimum 1 :maximum 16384 :default 8192
              :description "Maximum receipt payload characters. A larger tree returns truncated=true with an executable next_call."}
     "max_files" {:type "integer" :minimum 1 :maximum 20000 :default 2000
                  :description "Maximum number of source files DISCOVERY may find before refusing with study-tree-too-large. Independent of limit, which bounds the receipt: this bounds the work done before any receipt exists. Raise it only for a tree you actually intend to scan whole."}}
@@ -781,7 +804,53 @@
                      (str "The receipt is already at the maximum limit; scan a "
                           "subdirectory or add a grep pattern.")))))))))
 
+;; @spec MCP-OP-STUDY-036
+(def ^:private ls-tree-continuation-argument-order
+  "The order a continuation's arguments are spelled in the text block. A map's
+  iteration order is not a contract, and a caller retyping a continuation
+  needs the same line every time."
+  [:mode :dir :grep :ns_grep :format :limit :max_files])
+
+;; @spec MCP-OP-STUDY-036
+(defn- ls-tree-continuation-line
+  "The continuation spelled for a client that reads only text.
+
+  `next_call` is structured data. A text-only client sees `structuredContent`
+  never, so a receipt that carries its continuation only there tells such a
+  caller that it was truncated and nothing about what to send instead."
+  [result]
+  (when-let [call (:next_call result)]
+    (let [arguments (:arguments call)]
+      (str "→ next call: " (:tool call) " "
+           (str/join " "
+                     (keep (fn [key]
+                             (when (contains? arguments key)
+                               (str (name key) "=" (get arguments key))))
+                           ls-tree-continuation-argument-order))))))
+
+;; @spec MCP-OP-STUDY-036
+(defn- ls-tree-payload-text
+  "The rows the bounded receipt carries, rendered for the text block.
+
+  `text` travels as the already-rendered tree; `names` and `edn` travel as
+  data and are rendered as the compact JSON a caller would otherwise have had
+  to read out of `structuredContent`."
+  [result]
+  (cond
+    (string? (:tree result)) (str/trim (:tree result))
+    (contains? result :files) (json/generate-string (:files result))
+    :else nil))
+
+;; @spec MCP-OP-STUDY-036
 (defn ls-tree-summary
+  "The text block a client renders for one `ls-tree` result.
+
+  Field evidence (E6-Lb, PF-4): this returned a 146-character header with
+  zero rows while the whole table of contents sat in `structuredContent.tree`
+  — so an agent on a text-only client was handed the shape of an answer and
+  none of it, and had no way to know what to send next. The rows travel here
+  now, bounded by exactly the same `limit` that bounds the payload, and a
+  truncated receipt spells its continuation or its remedy in the text."
   [result]
   (if-not (:ok result)
     (format (str "inspect_clojure · ls-tree\n"
@@ -790,23 +859,31 @@
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
             (:error result)
             (:next_action result))
-    (format (str "inspect_clojure · ls-tree\n"
-                 "  %s · %d project%s · %d of %d file%s · %s\n\n"
-                 "%s\n"
-                 "→ %s")
-            (:dir result)
-            (:project_count result)
-            (if (= 1 (:project_count result)) "" "s")
-            (:returned result)
-            (:file_count result)
-            (if (= 1 (:file_count result)) "" "s")
-            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-            (if (:truncated result)
-              (format "! bounded receipt · %d file%s omitted · read_complete=false"
-                      (:omitted result)
-                      (if (= 1 (:omitted result)) "" "s"))
-              "✓ complete tree · read_complete=true")
-            (:next_action result))))
+    (let [payload (ls-tree-payload-text result)]
+      (str/join
+        "\n"
+        (remove
+          nil?
+          [(format "inspect_clojure · ls-tree\n  %s · %d project%s · %d of %d file%s · %s"
+                   (:dir result)
+                   (:project_count result)
+                   (if (= 1 (:project_count result)) "" "s")
+                   (:returned result)
+                   (:file_count result)
+                   (if (= 1 (:file_count result)) "" "s")
+                   (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+           (when (seq payload) "")
+           (when (seq payload) payload)
+           ""
+           (if (:truncated result)
+             (format "! bounded receipt · %d file%s omitted · read_complete=false"
+                     (:omitted result)
+                     (if (= 1 (:omitted result)) "" "s"))
+             "✓ complete tree · read_complete=true")
+           (ls-tree-continuation-line result)
+           (when (and (:truncated result) (:remedy result))
+             (str "→ " (:remedy result)))
+           (format "→ %s" (:next_action result))])))))
 
 (def inspect-schema
   {:type "object"
