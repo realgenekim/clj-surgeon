@@ -1002,6 +1002,75 @@
                    (pr-str result)))))
       (finally (delete-tree! root)))))
 
+;; ---------------------------------------------------------------------------
+;; Sol's round-nine finding, item 4: a refusal targeting
+;; /tmp/census10-fx/workspace handed back
+;; `next_call={tool:"relation_census",pool_size:8}`. Replaying it verbatim
+;; produced no refusal — it censused the SERVER's default root and scanned 370
+;; files. The continuation validates against the published schema and is still
+;; not a narrowing of the caller's request: a continuation may narrow WHAT is
+;; censused; it may never change WHERE.
+;;
+;; That defect was introduced by round nine's own fix. Making the shape pass
+;; run before routing left it with no canonical root to publish, and it chose
+;; to publish nothing rather than the caller's unvalidated string. The choice
+;; is wrong: the caller's own value, carried verbatim, either routes to the
+;; workspace the caller meant or refuses on that same value — both honest.
+;; Silently censusing a different tree is neither.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+(deftest a-continuation-censuses-the-workspace-the-caller-named
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      (let [target (.getCanonicalPath root)
+            ;; The server's default root is this REPO. A continuation that
+            ;; drops workspace_root retargets the census from a one-file
+            ;; fixture onto the whole repository, and succeeds while doing it.
+            refusal (census-tool/execute-request!
+                      {:project-root repo-root}
+                      {:workspace_root target :doors [1]})
+            next-call (:next_call refusal)
+            replayed (census-tool/execute-request!
+                       {:project-root repo-root}
+                       (dissoc next-call :tool))]
+
+        (testing "the request is refused on shape, before any routing"
+          (is (false? (:ok refusal)))
+          (is (= "doors-not-strings" (:reason refusal))))
+
+        (testing "the continuation carries the caller's workspace_root verbatim"
+          (is (= target (:workspace_root next-call))
+              (str "the continuation changed the target: " (pr-str next-call))))
+
+        (testing "replayed unmodified, it censuses the same workspace"
+          (is (true? (:ok replayed))
+              (str "the replay refused: " (:error replayed)))
+          (is (= target (:workspace_root replayed))
+              (str "the replay censused another tree: "
+                   (pr-str (:workspace_root replayed))))
+          (is (= 1 (:files replayed))
+              (str "the replay scanned " (:files replayed)
+                   " file(s); the workspace the caller named holds 1"))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest a-workspace-root-that-cannot-be-carried-leaves-no-continuation
+  ;; The invariant is absolute, so it decides this case too: a non-string
+  ;; workspace_root cannot be carried into a next_call the published schema
+  ;; would accept, and a next_call WITHOUT it targets a different tree. So
+  ;; there is no call to compute, and MCP-OP-CENSUS-014 already says what to
+  ;; do then — no `next_call` key at all, and a remedy saying why.
+  (let [refusal (run {:workspace_root 42 :doors [1]})]
+    (is (false? (:ok refusal)))
+    (is (= "doors-not-strings" (:reason refusal))
+        "a routing field's type beat the shape order it is not part of")
+    (is (not (contains? refusal :next_call))
+        (str "the continuation silently retargets the census: "
+             (pr-str (:next_call refusal))))
+    (is (string? (:remedy refusal)))))
+
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-032
 (deftest an-escaping-file-symlink-is-a-counted-skip-at-every-entrance
@@ -1540,6 +1609,18 @@
 ;; one the advertised contract itself would reject.
 ;; ---------------------------------------------------------------------------
 
+(defn- same-target
+  "A `workspace_root` reduced to what two calls must agree on.
+
+   A refusal computed AFTER routing publishes the canonical root; one
+   computed BEFORE routing has no canonical value and publishes the caller's
+   own string. Those name one target, so the comparison is by real path when
+   the path exists and by the string as given when it does not."
+  [value]
+  (when (string? value)
+    (let [file (io/file value)]
+      (if (.exists file) (.getCanonicalPath file) value))))
+
 (defn- schema-violations
   [schema value]
   (let [t (:type schema)]
@@ -1620,26 +1701,45 @@
       (let [here (fn [params]
                    (census-tool/execute-request!
                      {:project-root (.getPath root)} params))
-            mcp-refusals
-            {:invalid-workspace (run {:workspace_root "relative/nope"})
-             :unknown-field (run {:files [fixture] :nope 1})
-             :pool-size (run {:files [fixture] :pool_size 0})
-             :unknown-door (run {:files [fixture] :doors ["made-up-door"]})
-             :source-too-large-only (here {:files [big]})
-             :source-too-large-mixed (here {:files [big small]})
+            empty-here (fn [params]
+                         (census-tool/execute-request!
+                           {:project-root (.getPath empty-root)} params))
+            ;; label -> [entrance request]. The battery keeps the REQUEST, not
+            ;; only the answer: a continuation can only be judged against the
+            ;; call it claims to narrow, and Sol's round-nine item 4 — a
+            ;; next_call that silently retargeted the census to the server's
+            ;; default root — is invisible to a battery that has forgotten
+            ;; what was asked.
+            mcp-calls
+            {:invalid-workspace [run {:workspace_root "relative/nope"}]
+             :unknown-field [run {:files [fixture] :nope 1}]
+             :pool-size [run {:files [fixture] :pool_size 0}]
+             :unknown-door [run {:files [fixture] :doors ["made-up-door"]}]
+             :source-too-large-only [here {:files [big]}]
+             :source-too-large-mixed [here {:files [big small]}]
              :source-too-large-mixed-with-options
-             (here {:files [big small] :doors ["upsert-by"] :pool_size 1})
-             :doors-not-a-string (run {:files [fixture] :doors [1]})
+             [here {:files [big small] :doors ["upsert-by"] :pool_size 1}]
+             :doors-not-a-string [run {:files [fixture] :doors [1]}]
              ;; Sol's round-seven finding: a malformed doors item passed
              ;; server validation and was copied unchanged into the
              ;; oversized-file next_call, because that branch is reached
              ;; before parse-doors ever runs. This exact shape must now be
              ;; refused before any filesystem work, with no doors leak.
              :source-too-large-mixed-with-bad-door
-             (here {:files [big small] :doors [1] :pool_size 1})
-             :no-arms-scanned (run {:files [helpers]})
-             :no-arms-empty (census-tool/execute-request!
-                              {:project-root (.getPath empty-root)} {})}
+             [here {:files [big small] :doors [1] :pool_size 1}]
+             ;; Sol's round-nine shape: a pre-routing refusal of a request
+             ;; that named a workspace of its own.
+             :doors-not-a-string-in-a-named-workspace
+             [run {:workspace_root (.getCanonicalPath root) :doors [1]}]
+             :source-too-large-in-a-named-workspace
+             [run {:workspace_root (.getCanonicalPath root)
+                   :files [big small]}]
+             :no-arms-scanned [run {:files [helpers]}]
+             :no-arms-empty [empty-here {}]}
+            mcp-refusals (into {}
+                               (map (fn [[label [entrance params]]]
+                                      [label (entrance params)]))
+                               mcp-calls)
             cli-refusals
             {:jvm-source-too-large (core/run-relation-census
                                      {:file (str (.getPath root) "/" big)})
@@ -1776,6 +1876,23 @@
                 (is (empty? violations)
                     (str label " next_call is not executable through the "
                          "published input schema: " violations " — "
+                         (pr-str next-call)))))))
+
+        (testing "every next_call targets the workspace its request named"
+          ;; Executable is not enough. Sol's round-nine item 4: a refusal
+          ;; targeting a fixture workspace handed back
+          ;; {tool, pool_size: 8} — schema-valid, and it replays against the
+          ;; SERVER's default root, censusing a tree the caller never named
+          ;; and reporting success. A continuation may narrow WHAT is
+          ;; censused; it may never change WHERE.
+          (doseq [[label [_ params]] mcp-calls]
+            (when-let [asked (:workspace_root params)]
+              (when-let [next-call (:next_call (get mcp-refusals label))]
+                (is (= (same-target asked)
+                       (same-target (:workspace_root next-call)))
+                    (str label " continuation retargets the census: the "
+                         "request named " (pr-str asked) ", the continuation "
+                         (pr-str (:workspace_root next-call)) " — "
                          (pr-str next-call))))))))
       (finally (delete-tree! root) (delete-tree! empty-root)))))
 
