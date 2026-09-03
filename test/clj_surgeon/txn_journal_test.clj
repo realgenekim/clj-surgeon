@@ -2643,3 +2643,52 @@
                    (pr-str counted)))
           (is (not (.exists side))))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-zero-length-tombstone-is-listed-by-the-sweep-that-counts-it
+  (testing "Opus round 6, finding 3. An externally created empty LOCK - the
+            kernel never leaves one, `write-lock!` links a fully written
+            temporary into place - is broken by `recover!` on the
+            `:no-recorded-holder` cause, and the tombstone it leaves is
+            zero-length. `:lock-broken` NAMES that file, `:broken-locks`
+            counts it in `:found` and `:remaining`, and the listing dropped it
+            on `(pos? bytes)`: three verbs, one file, two of them saying it is
+            there and the third saying it is not, while MEM-013 requires the
+            evidence be visible to the same listing that reads retained
+            journals. No claim is lost - an empty LOCK carries none - what is
+            lost is agreement, and a receipt naming a file the listing denies
+            is the shape this branch keeps producing. Both count it, typed
+            `:status :empty-evidence`, because the alternative (neither names
+            it) hides the fact that a lock was broken at all; a file that
+            VANISHED between the listing and the stat still gets no row, which
+            is the rule the 822 ghost rows bought."
+    (let [ws (workspace! "empty-tombstone" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")]
+      (try
+        (.mkdirs dir)
+        (spit lock "")
+        (is (zero? (.length lock)) "a foreign, zero-length LOCK")
+        (let [result (journal/recover! (:root ws) opts)
+              named (:tombstone (:lock-broken result))
+              tomb (io/file dir ^String named)]
+          (is (string? named)
+              (str "the break names its evidence: " (pr-str result)))
+          (is (.isFile tomb))
+          (is (zero? (.length tomb)) "and that evidence is zero-length")
+          (is (= 1 (:found (:broken-locks result)))
+              (str "the prune counts it: " (pr-str (:broken-locks result))))
+          (let [row (first (filter #(= named (:txid %))
+                                   (journal/retained-transactions (:root ws) opts)))]
+            (is (some? row)
+                (str "and so does the listing, or a receipt names a file the "
+                     "sweep denies: "
+                     (pr-str (journal/retained-transactions (:root ws) opts))))
+            (is (= :broken-lock (:kind row)))
+            (is (= :empty-evidence (:status row))
+                (str "typed, because a tombstone carrying no claim is not the "
+                     "same evidence as one that does: " (pr-str row)))
+            (is (zero? (long (:bytes row))))
+            (is (number? (:age-ms row)))))
+        (finally (cleanup! ws))))))
