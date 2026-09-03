@@ -2301,3 +2301,49 @@
         (is (empty? (still-migrated workspace))))
       (finally
         (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-mid-migration-refusal-sends-the-caller-to-the-receipt-not-a-retry
+  ;; The refusal's own `remedy` reads "The tree is MID-MIGRATION: undo it by
+  ;; hand from the receipt named in receipt_file" while `next_action` told an
+  ;; automated caller to re-send a corrected request. Re-sending an alias
+  ;; migration over twelve already-migrated files is precisely the wrong next
+  ;; action, and `review_receipt` is this verb's own value for that state —
+  ;; already published by the heap guard (ALIAS-047) and by a committed
+  ;; transaction whose receipt did not land.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (let [result (post-write-redirect!
+                     workspace details receipts
+                     (fn [_] {:ok false :error "injected rollback failure"}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= 12 (count (still-migrated workspace))))
+        (is (str/includes? (str (:remedy result)) "MID-MIGRATION")
+            (pr-str (:remedy result)))
+        (is (= "review_receipt" (:next_action result))
+            "the structured field told the caller to retry over a migrated tree"))
+      (finally
+        (delete-tree! workspace)))
+    (let [workspace (workspace!)
+          details (io/file workspace ".clj-surgeon" "alias-migration")
+          receipts (io/file workspace "receipts")]
+      (.mkdirs details)
+      (try
+        (testing "and a rollback that RESTORED the tree does not point at a
+                  receipt it deleted"
+          ;; `next_action` follows `source_unchanged`, not
+          ;; `mutation_attempted`. A successful rollback deletes the orphan
+          ;; receipt — sending the caller to review a file that no longer
+          ;; exists is a false pointer, and the tree it holds is safe to send
+          ;; another request over.
+          (let [result (post-write-redirect! workspace details receipts nil)]
+            (is (false? (:ok result)) (pr-str result))
+            (is (empty? (still-migrated workspace)))
+            (is (true? (:source_unchanged result)))
+            (is (true? (:mutation_attempted result)))
+            (is (= "correct_request" (:next_action result)))))
+        (finally
+          (delete-tree! workspace))))))
