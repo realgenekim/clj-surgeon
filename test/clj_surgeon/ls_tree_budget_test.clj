@@ -706,3 +706,171 @@
            (core/no-clojure-files-message "/tmp/nowhere" nil)))
     (is (= "No Clojure files found under /tmp/nowhere matching 'defn foo'"
            (core/no-clojure-files-message "/tmp/nowhere" "defn foo")))))
+
+;; ============================================================
+;; The cursor is CONTENT-ADDRESSED — an unchanged tree scans identically
+;; and pins nothing new
+;;
+;; The memory battery caught this AFTER the pinned snapshot landed. It hashes
+;; each arm's output across five reps of an identical operation over an
+;; identical corpus, and reported
+;;
+;;     FAIL reference-mismatch {:op :cli-ls-tree, :n 10000, :phase :warm,
+;;                              :observed "nondeterministic:4"}
+;;
+;; — four distinct output hashes. Diffed line by line: 98,361 characters, ONE
+;; differing line, and it was the cursor. `snapshot/new-id` minted two random
+;; UUIDs per ceiling-binding scan, so the id named the SCAN rather than the
+;; tree. The same randomness meant an unchanged tree pinned a new 1.4 MB
+;; snapshot every scan — four identical scans left four snapshots totalling
+;; 5.4 MB, each paying a full 10,000-file content-digest pass, and nothing
+;; could tell that the tree had not moved.
+;;
+;; The repair is to address the snapshot by WHAT IT CONTAINS: the manifest
+;; digest, folded over the ordered rows and each file's content digest under a
+;; projection version. Two properties follow, and the witnesses below are one
+;; each: an unchanged tree renders identically because its id is a function of
+;; the tree, and it REUSES the pinned snapshot because the id is the only
+;; thing addressing it. The third witness holds the line the id change could
+;; have quietly crossed — the mac stays keyed on a per-snapshot secret that is
+;; never published — and the fourth says what reuse costs: a snapshot is
+;; trusted for its CONTENT, never for its filename.
+;; ============================================================
+
+(defn- cursor-of
+  "The continuation cursor of an EDN result, or nil when it carries none."
+  [result]
+  (get-in (receipt result) [:next_call :cursor]))
+
+(defn- snapshot-ids
+  "The ids of every pinned snapshot under `dir`'s state directory."
+  [dir]
+  (->> (fs/glob (str (snapshot/cursor-dir dir)) "*.edn")
+       (map #(str/replace (str (fs/file-name %)) #"\.edn$" ""))
+       sort
+       vec))
+
+(defn- rows-path
+  [dir cursor-id]
+  (str (snapshot/cursor-dir dir) "/" cursor-id ".rows"))
+
+;; @spec MCP-OP-MEM-003
+(deftest two-scans-of-an-unchanged-tree-are-byte-identical-and-pin-one-snapshot
+  (with-project [dir fixture-count "ls-tree-budget-deterministic"]
+    (let [a (core/run-ls-tree {:dir dir :max-results 5})
+          b (core/run-ls-tree {:dir dir :max-results 5})
+          a-edn (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          b-edn (core/run-ls-tree {:dir dir :format :edn :max-results 5})]
+      (is (string? a) "the text encoding is what the battery hashes")
+      (is (str/includes? a ":cursor ")
+          "the ceiling binds, so the result really does carry a cursor — a
+           witness for determinism must first prove the varying field is there")
+      (is (= a b)
+          "two scans of an unchanged tree render BYTE-IDENTICAL text, cursor
+           included; a random cursor-id differed in exactly this one line")
+      (is (= a-edn b-edn)
+          "and the EDN encoding likewise, receipt and next_call included")
+      (is (= 1 (count (snapshot-ids dir)))
+          "an unchanged tree pins ONE snapshot however often it is scanned;
+           four identical scans used to leave four snapshots")
+      (is (empty? (fs/glob (str (snapshot/cursor-dir dir)) "*.tmp"))
+          "and no build temporaries are left behind"))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-changed-tree-mints-a-new-cursor-id
+  (with-project [dir fixture-count "ls-tree-budget-content-id"]
+    (let [id-of #(:cursor-id (budget/parse-cursor
+                               (cursor-of (core/run-ls-tree
+                                            {:dir dir :format :edn
+                                             :max-results 5}))))
+          before (id-of)]
+      (is (some? before))
+      (is (= before (id-of))
+          "identity is the TREE, not the scan")
+      (spit (str dir "/src/fixt/mod003.clj") (tiny-source 903))
+      (let [after (id-of)]
+        (is (not= before after)
+            "content that moved is a different manifest and gets a different
+             id; a stat- or scan-derived id could not say so")
+        (is (= #{before after} (set (snapshot-ids dir)))
+            "the changed tree pins its OWN snapshot beside the old one, one
+             per distinct tree state")))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-receipt-holder-cannot-mint-a-cursor-for-another-offset
+  (with-project [dir fixture-count "ls-tree-budget-forge-mac"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          rc (get-in (receipt page-1) [:receipt :result_ceiling])
+          cursor (cursor-of page-1)
+          {:keys [cursor-id offset]} (budget/parse-cursor cursor)
+          published (:manifest_digest rc)
+          secret (:secret (snapshot/read-meta dir cursor-id))
+          target 10]
+      (is (= 5 offset) "the holder was issued exactly one offset")
+      (is (= cursor-id published)
+          "the cursor-id IS the published manifest digest — content-addressed,
+           and therefore no longer usable as a MAC key")
+      (is (and (string? secret) (= 64 (count secret))))
+      (is (not (str/includes? (pr-str page-1) secret))
+          "the secret is never published: not in the receipt, not in the token")
+      (testing "every mac a receipt holder could build from published material"
+        (doseq [forged [(snapshot/sha256-hex (str cursor-id ":" target ":" published))
+                        (snapshot/sha256-hex (str cursor-id ":" target))
+                        (snapshot/sha256-hex (str published ":" target))
+                        (snapshot/sha256-hex (str cursor-id target published))
+                        published
+                        cursor-id]]
+          (let [token (budget/cursor-token cursor-id target forged)
+                r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor token})]
+            (is (map? r)
+                (str "a cursor minted from published material must refuse: "
+                     token))
+            (is (= :invalid-result-cursor (:error-type r))
+                (str "expected a typed refusal, got " (pr-str (:error-type r)))))))
+      (testing "the same offset with the SERVER's key is servable — so the
+                refusals above are the mac's doing, not the offset's"
+        (let [genuine (budget/cursor-token
+                        cursor-id target (snapshot/mac cursor-id target secret))
+              r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                   :cursor genuine})]
+          (is (= 2 (count (entry-files r)))
+              (str "offset 10 of a 12-record manifest holds 2 records; got "
+                   (pr-str r))))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-snapshot-whose-rows-do-not-match-its-digest-is-rebuilt-not-trusted
+  (with-project [dir fixture-count "ls-tree-budget-corrupt"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          stale-cursor (cursor-of page-1)
+          cursor-id (:cursor-id (budget/parse-cursor stale-cursor))
+          rows (rows-path dir cursor-id)
+          pinned (slurp rows)]
+      ;; Rewrite the pinned rows so every row names the FIRST file. A snapshot
+      ;; trusted on the strength of its filename would serve mod000 five times
+      ;; as page 2 of a tree that holds twelve distinct files.
+      (spit rows (str (str/join "\n" (repeat fixture-count
+                                             (first (str/split-lines pinned))))
+                      "\n"))
+      (is (not= pinned (slurp rows)) "the witness actually corrupted the rows")
+      (let [again (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+            fresh (cursor-of again)]
+        (is (= cursor-id (:cursor-id (budget/parse-cursor fresh)))
+            "the TREE has not moved, so its content address has not moved")
+        (is (= pinned (slurp rows))
+            "the corrupt rows were REBUILT from the tree; a snapshot is trusted
+             for its content, never for its name")
+        (is (= 1 (count (snapshot-ids dir))))
+        (let [page-2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                        :cursor fresh})]
+          (is (= 5 (count (distinct (entry-files page-2))))
+              "and page 2 serves five DISTINCT files, which the corrupt
+               manifest could not have")
+          (is (= 5 (count (entry-files page-2)))))
+        (testing "the discarded snapshot's authenticator is discarded with it"
+          (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor stale-cursor})]
+            (is (map? r))
+            (is (contains? #{:invalid-result-cursor :unknown-result-cursor}
+                           (:error-type r))
+                (str "expected a typed refusal, got " (pr-str (:error-type r))))))))))
