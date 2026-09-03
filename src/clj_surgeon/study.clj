@@ -504,11 +504,13 @@
    A flat per-file allowance miscalibrates: `.*a.*b.*`-shaped patterns cost
    quadratically in subject length, so a constant sized for this
    repository's own ~36-character paths refused a completely honest
-   `.*handler.*internal.*` over an ordinary monorepo path — see this
-   function's callers for the measured figures. The floor keeps short trees
-   exactly as generous as before; the quadratic term keeps long ones honest
-   without opening the door any wider than the length actually in front of
-   it."
+   `.*handler.*internal.*` over an ordinary monorepo path. Measured basis, not
+   a guess: at length 106 (an ordinary monorepo-shaped relative path, no
+   adversarial repetition), that honest pattern reads 33,566 characters
+   testing one non-matching file; `64 x 106^2` = 719,104, a margin of about
+   21.4x. The floor keeps short trees exactly as generous as before; the
+   quadratic term keeps long ones honest without opening the door any wider
+   than the length actually in front of it."
   ^long [longest-len]
   (max ns-grep-match-steps-floor
        (* ns-grep-match-steps-length-factor

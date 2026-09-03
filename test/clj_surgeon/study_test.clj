@@ -376,3 +376,35 @@
     (is (false? (:ok response)))
     (is (= :ns-grep-match-budget-exceeded (:error-type response)))
     (is (not (str/includes? (:remedy response) "nested unbounded repetition"))
+        "the old remedy named a class the offending pattern is not even in")
+    (is (str/includes? (:remedy response) "path length")
+        "the remedy should say what actually drives the cost")
+    (is (str/includes? (str/lower-case (:remedy response)) "anchor")
+        "and suggest a concrete fix: anchoring or a literal/alternation")))
+
+;; ============================================================
+;; The per-file budget's docstring states its actual calibration
+;; (round-4 re-review fix 3)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-per-file-budget-docstring-states-the-measured-ratio-not-a-guess
+  ;; The old docstring claimed "20,000 per file is roughly sixty times the
+  ;; worst honest cost measured here" — true only of the 36-character paths
+  ;; it was measured on, and false (2.07x OVER, not 60x under) once a
+  ;; monorepo's ~106-character paths are in the pass. The replacement must
+  ;; state the actual basis (a length, a term, a ratio) rather than a claim
+  ;; that only holds for one tree's path width.
+  (let [doc (:doc (meta #'study/ns-grep-match-steps-per-file))]
+    (is (not (str/includes? doc "roughly sixty times"))
+        "the falsified absolute claim must be gone")
+    (is (not (str/includes? doc "order of magnitude below the cheapest"))
+        "so must its now-untrue companion claim")
+    (is (str/includes? doc "106")
+        "the docstring names the length it measured")
+    (is (str/includes? doc "33,566")
+        "and the honest cost measured at that length")
+    (is (str/includes? doc "719,104")
+        "and the term the new formula produces there")
+    (is (re-find #"21(\.\d+)?x" doc)
+        "and the margin between them, as a ratio — not a guess")))
