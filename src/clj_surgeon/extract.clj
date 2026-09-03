@@ -466,6 +466,17 @@
       files)))
 
 ;; @spec MCP-OP-EXTRACT-017
+;; @spec MCP-OP-EXTRACT-030
+(defn read-back-verified?
+  "Did every file this transaction wrote read back byte-identical?
+
+  `expected` is [[path content] ...]; `reader` is the only I/O and is passed in
+  so the answer is a computed comparison rather than a constant. The receipt's
+  `:read-back` used to be the literal `true`, which is a claim no evidence
+  supports: a flag that cannot be false is not a verification, it is a label."
+  [expected reader]
+  (every? (fn [[path content]] (= content (reader path))) expected))
+
 (defn private-plan-field?
   "Pure: a compiled-plan key that is the executor's working state, never output.
 
@@ -1552,6 +1563,9 @@
             ;; A delay, so the confinement check runs exactly where the cond
             ;; forces it -- after every staleness fence and before the first
             ;; write -- and runs once.
+            ;; @spec MCP-OP-EXTRACT-030
+            verified (volatile! {:parsed false :atomic-write false
+                                 :read-back false})
             caller-escape (delay (confine-workspace-paths
                                    (:_project-root p)
                                    (map :file caller-plans)))
@@ -1608,17 +1622,33 @@
           (do
             (.mkdirs (.getParentFile (.getAbsoluteFile target-file)))
             (try
-              (file-ops/atomic-write! target-file new-content)
-              (file-ops/atomic-write! source-file updated-source)
-              (doseq [{:keys [file source]} caller-plans]
-                (file-ops/atomic-write! (io/file file) source))
-              (when-not (and (= new-content (slurp target-file))
-                             (= updated-source (slurp source-file))
-                             (every? (fn [{:keys [file source]}]
-                                       (= source (slurp (io/file file))))
-                                     caller-plans))
-                (throw (ex-info "Extraction read-back verification failed"
-                                {:error-type :extraction-read-back-failed})))
+              ;; @spec MCP-OP-EXTRACT-030
+              ;; Every flag the receipt publishes under :verified is computed
+              ;; here, in the order the transaction earns it. `verified` starts
+              ;; with all three false and is raised one step at a time, so a
+              ;; failure carries exactly what HAD been proved when it happened.
+              (let [expected-bytes
+                    (into [[(.getPath target-file) new-content]
+                           [(.getPath source-file) updated-source]]
+                          (map (fn [{:keys [file source]}] [file source])
+                               caller-plans))]
+                (vreset! verified (assoc @verified
+                                         :parsed (true? (:ok candidates))))
+                (file-ops/atomic-write! target-file new-content)
+                (file-ops/atomic-write! source-file updated-source)
+                (doseq [{:keys [file source]} caller-plans]
+                  (file-ops/atomic-write! (io/file file) source))
+                (vreset! verified (assoc @verified :atomic-write true))
+                (vreset! verified
+                         (assoc @verified
+                                :read-back
+                                (read-back-verified?
+                                  expected-bytes
+                                  (fn [path] (slurp (io/file path))))))
+                (when-not (:read-back @verified)
+                  (throw (ex-info "Extraction read-back verification failed"
+                                  {:error-type :extraction-read-back-failed
+                                   :verified @verified}))))
               (let [receipt-file (publish-receipt! receipt-out receipt)
                     ;; @spec MCP-OP-EXTRACT-019
                     ;; The last step of the transaction: compile what was
@@ -1679,9 +1709,9 @@
                               (structural-lens/source-hash updated-source)
                               :target-result-hash
                               (structural-lens/source-hash new-content)
-                              :parsed true
-                              :atomic-write true
-                              :read-back true}
+                              :parsed (:parsed @verified)
+                              :atomic-write (:atomic-write @verified)
+                              :read-back (:read-back @verified)}
                    :source-require-added (boolean (seq source-referred-forms))}
                   (:discovery p) (assoc :discovery (:discovery p))
 
@@ -1727,6 +1757,8 @@
                                (.delete receipt-file)))]
                   (throw (ex-info "Extraction commit failed and was rolled back"
                                   {:error-type :extraction-commit-failed
+                                   ;; @spec MCP-OP-EXTRACT-030
+                                   :verified @verified
                                    :source-restored source-restored?
                                    :callers-restored callers-restored?
                                    :target-removed target-removed?

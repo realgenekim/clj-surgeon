@@ -1913,3 +1913,56 @@
                         :max-workspace-files 5000})]
           (is (true? (:applied result)) (pr-str (:error result)))))
       (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-030
+(deftest verification-flags-are-derived-from-the-checks
+  (testing "a forced read-back mismatch flips :read-back false"
+    (let [expected [["a.clj" "(ns a)"] ["b.clj" "(ns b)"]]]
+      (is (true? (extract/read-back-verified? expected
+                                              (into {} expected))))
+      (is (false? (extract/read-back-verified?
+                    expected
+                    (assoc (into {} expected) "b.clj" "(ns b) ;; not what we wrote")))
+          "the flag is COMPUTED from the bytes, not asserted as a literal")
+      (is (false? (extract/read-back-verified?
+                    expected (constantly nil)))
+          "a file that reads back as nothing is not verified either")))
+
+  (testing "a write that could not happen reports :atomic-write false"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")
+          locked (io/file root "src" "locked")]
+      (try
+        (.mkdirs locked)
+        (spit (io/file locked "caller.clj")
+              (str "(ns app.locked\n"
+                   "  (:require\n"
+                   "   [app.core :as core]))\n\n"
+                   "(defn go [x] (core/moved-two x))\n"))
+        (.delete (io/file src "mixed.clj"))
+        (.delete (io/file src "only_moved.clj"))
+        ;; the caller's directory admits no temp file, so atomic-write! throws
+        (.setWritable locked false false)
+        (let [thrown (try
+                       (extract/execute!
+                         {:file (.getPath (io/file src "core.clj"))
+                          :forms '[moved-one moved-two]
+                          :to (.getPath (io/file src "moved.clj"))
+                          :alias "moved"
+                          :compile-check false})
+                       nil
+                       (catch clojure.lang.ExceptionInfo error error))
+              data (some-> thrown ex-data)
+              verified (or (:verified data)
+                           (some-> thrown ex-cause ex-data :verified))]
+          (is (some? thrown) "the transaction must fail, not claim success")
+          (is (some? verified)
+              (str "the refusal must carry the flags it actually proved: "
+                   (pr-str data)))
+          (is (false? (:atomic-write verified))
+              "a write that threw is not an atomic-write that happened")
+          (is (false? (:read-back verified))
+              "and nothing was read back"))
+        (finally
+          (.setWritable locked true false)
+          (delete-recursive! root))))))
