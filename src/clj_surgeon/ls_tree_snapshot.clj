@@ -33,6 +33,28 @@
       tree walk; it seeks `offset` lines into the pinned row file and takes
       `limit`. That closes the `O(pages x N)` re-walk the same review found.
 
+   4. A SNAPSHOT IS ADDRESSED BY WHAT IT CONTAINS. `cursor-id` IS the manifest
+      digest — folded over every row's position, project, path and CONTENT
+      digest under `manifest-version`. The first shape of this namespace minted
+      the id from `UUID/randomUUID`, which named the SCAN rather than the tree,
+      and the memory battery caught it: five reps of one operation over one
+      corpus produced four distinct output hashes (`nondeterministic:4`),
+      differing in exactly one line of 98,361 characters — the cursor. The same
+      randomness pinned a new 1.4 MB snapshot on every scan of a tree that had
+      not moved. Content-addressing makes an unchanged tree scan IDENTICALLY
+      and REUSE its snapshot, and a changed tree get a new id by construction.
+
+   A REUSED SNAPSHOT IS VERIFIED, NEVER ASSUMED. A file sitting under a
+   content address is a CLAIM about its content; reuse re-folds the rows on
+   disk and takes the snapshot only when they still prove the id they are
+   filed under. Corrupt, truncated, or tampered is a MISS, and a miss rebuilds.
+
+   THE MAC IS NOT KEYED ON THE ID. Content-addressing PUBLISHES the id: it is
+   the receipt's `:manifest_digest`. Keying the authenticator on it — which an
+   earlier brief specified as `sha256(cursor-id || offset || snapshot-digest)`
+   — would let any holder of a receipt mint a cursor for any offset. The key
+   stays a per-snapshot random secret written only inside the snapshot file.
+
    MEMORY. Nothing here retains a row. The snapshot is WRITTEN streaming — one
    row rendered, digested, written and dropped — and READ streaming, a
    transducer over `line-seq` that keeps only the slice a page will encode.
@@ -102,10 +124,15 @@
 (defn- meta-file ^File [root cursor-id] (io/file (cursor-dir root) (str cursor-id ".edn")))
 (defn- rows-file ^File [root cursor-id] (io/file (cursor-dir root) (str cursor-id ".rows")))
 
-(defn- new-id
+(defn- random-hex64
   "128 bits of `UUID/randomUUID` entropy twice over, rendered as 64 hex
    characters — the same shape as the digests beside it, so one `id-pattern`
-   guards every identifier this namespace accepts from a caller."
+   guards every identifier this namespace accepts from a caller.
+
+   This mints SECRETS and build temporaries. It no longer mints cursor ids: an
+   id that names the scan rather than the tree makes an unchanged tree scan
+   differently every time, and pins a new snapshot for a manifest it already
+   holds."
   []
   (str (str/replace (str (java.util.UUID/randomUUID)) "-" "")
        (str/replace (str (java.util.UUID/randomUUID)) "-" "")))
@@ -134,6 +161,30 @@
       (hex (.digest md)))
     (catch Exception _ nil)))
 
+(def manifest-version
+  "The PROJECTION version of a pinned manifest: which fields a row carries and
+   what identity is folded from them.
+
+   It seeds the snapshot digest, so changing the row projection changes every
+   id and no snapshot written under an older shape is ever reused under a
+   newer one. A projection version that is not IN the address is a migration
+   nobody can detect."
+  1)
+
+(def ^:private digest-header
+  (str "clj-surgeon/ls-tree-manifest/v" manifest-version "\n"))
+
+(defn- row-identity
+  "The canonical identity of one manifest row, as folded into the snapshot
+   digest: position, project index, path, CONTENT digest.
+
+   Size and mtime are deliberately ABSENT. Stat is not identity here — that
+   was Sol's first blocker — and a digest that folded mtime would hand a
+   touched-but-unchanged tree a new id, a new snapshot, and a different
+   cursor, which is the nondeterminism this addressing exists to remove."
+  [{:keys [i x p h]}]
+  (str i "\t" x "\t" p "\t" h "\n"))
+
 ;; ============================================================
 ;; The cursor MAC
 ;; ============================================================
@@ -144,7 +195,14 @@
    Keyed on the snapshot's per-snapshot SECRET, which is written into the
    snapshot and NEVER returned to a caller. Keying it on the published
    manifest digest instead would let any holder of a receipt mint any offset —
-   which is the second blocker, not a fix for it."
+   which is the second blocker, not a fix for it.
+
+   That deviation from the original brief became MORE load-bearing, not less,
+   once the id was content-addressed: `cursor-id` now IS the manifest digest,
+   so a mac keyed on either of them is a mac keyed on material printed in the
+   receipt. The witness is `a-receipt-holder-cannot-mint-a-cursor-for-another-
+   offset`, which builds every mac derivable from a receipt and requires each
+   one to refuse."
   [cursor-id offset secret]
   (sha256-hex (str cursor-id ":" offset ":" secret)))
 
@@ -159,66 +217,158 @@
   (* 24 60 60 1000))
 
 (defn- prune!
-  "Best-effort removal of snapshots past their TTL. Failure is silent on
-   purpose: housekeeping must never turn a good read into a refusal."
+  "Best-effort removal of snapshots past their TTL, and of build temporaries a
+   crashed write left behind. Failure is silent on purpose: housekeeping must
+   never turn a good read into a refusal."
   [^File dir]
   (try
     (let [now (System/currentTimeMillis)]
       (doseq [^File f (or (.listFiles dir) [])
               :let [nm (.getName f)]
               :when (and (.isFile f)
-                         (str/ends-with? nm ".edn")
                          (> (- now (.lastModified f)) snapshot-ttl-ms))]
-        (let [id (subs nm 0 (- (count nm) 4))]
-          (.delete f)
-          (.delete (io/file dir (str id ".rows"))))))
+        (cond
+          ;; A `.tmp` is never addressable, so age is the only thing that can
+          ;; be said about it. Sweeping it here is why an interrupted write
+          ;; leaks nothing permanent.
+          (str/ends-with? nm ".tmp") (.delete f)
+          (str/ends-with? nm ".edn") (let [id (subs nm 0 (- (count nm) 4))]
+                                        (.delete f)
+                                        (.delete (io/file dir (str id ".rows")))))))
     (catch Exception _ nil)))
+
+(defn- touch!
+  "Best-effort TTL refresh, so a snapshot that is being REUSED does not expire
+   on the clock of the scan that first wrote it. Silent on failure, like
+   `prune!`: housekeeping must never turn a good read into a refusal."
+  [^File f]
+  (try (.setLastModified f (System/currentTimeMillis)) (catch Exception _ nil)))
+
+(declare read-meta)
+
+(defn- rows-digest
+  "Re-fold `[digest row-count]` from a pinned rows file on disk, or `nil` when
+   it cannot be read, a line is not a row, or the rows are out of order.
+
+   This is what makes REUSE safe. A snapshot is addressed by its content, so a
+   file sitting under that address is a CLAIM about its content; re-folding it
+   before serving is the whole difference between content-addressed and
+   name-addressed. Streaming, one line at a time: verifying a manifest must
+   not cost what building it would."
+  [^File f]
+  (when (.isFile f)
+    (try
+      (let [md (MessageDigest/getInstance "SHA-256")]
+        (.update md (.getBytes digest-header "UTF-8"))
+        (with-open [r (io/reader f)]
+          (let [n (reduce
+                    (fn [n line]
+                      (let [row (edn/read-string line)]
+                        (when-not (and (map? row) (= n (:i row)) (string? (:p row)))
+                          (throw (ex-info "not a manifest row" {:at n})))
+                        (.update md (.getBytes (row-identity row) "UTF-8"))
+                        (inc n)))
+                    0
+                    (line-seq r))]
+            [(hex (.digest md)) n])))
+      (catch Exception _ nil))))
+
+(defn- verified-snapshot
+  "The snapshot filed under `cursor-id` for `root` — but ONLY when its own
+   bytes still prove it: this projection version, this root, this id, a secret
+   present, and rows on disk that re-fold to exactly the id they are filed
+   under with the row count the meta claims.
+
+   Anything else is a MISS and gets rebuilt from the tree. A corrupt,
+   truncated, half-written or tampered snapshot must never be served on the
+   strength of its filename: that would make the address a name again, and the
+   caller cannot tell the difference from the outside."
+  [root cursor-id]
+  (when-let [m (read-meta root cursor-id)]
+    (let [[d n] (rows-digest (rows-file root cursor-id))]
+      (when (and (= manifest-version (:v m))
+                 (= cursor-id (:cursor-id m))
+                 (= cursor-id (:digest m))
+                 (= (canonical root) (:root m))
+                 (string? (:secret m))
+                 (= cursor-id d)
+                 (= (:total m) n))
+        m))))
 
 (defn write-snapshot!
   "Pin `rows` — a LAZY seq of `{:pidx :path :abs}` in result order — and return
    `{:cursor-id :digest :total :secret}`.
 
-   Every row is stat'd, content-digested, rendered, folded into the snapshot
-   digest, written and DROPPED. Nothing accumulates, so this costs one block
-   buffer of heap at N = 10 and at N = 10,000 alike.
+   The snapshot is CONTENT-ADDRESSED: `cursor-id` IS the manifest digest,
+   folded over every row's position, project, path and content digest under
+   `manifest-version`. Two consequences, and both are the point:
+
+   - An unchanged tree scans to the SAME cursor, so the result is
+     deterministic. A random id made two scans of one corpus differ in exactly
+     one line, which the memory battery reported as `nondeterministic:4`.
+   - An unchanged tree REUSES its snapshot — after verifying it — so the state
+     directory holds one snapshot per distinct TREE STATE rather than one per
+     scan. Four identical scans used to leave four 1.4 MB snapshots.
+
+   Every row is content-digested, rendered, folded, written and DROPPED.
+   Nothing accumulates: this costs one block buffer of heap at N = 10 and at
+   N = 10,000 alike, and the digest cannot be known before the last row, which
+   is why the rows are built under a temporary name and renamed into place.
 
    The meta file is written LAST and renamed into place, so a snapshot is
    either complete or absent: a crash mid-write leaves rows nobody can address,
    and the cursor that would have named them resolves to
-   `:unknown-result-cursor` rather than to a truncated manifest."
+   `:unknown-result-cursor` rather than to a truncated manifest. A REBUILD over
+   a snapshot that failed verification removes the meta first, so the id is
+   unaddressable while its bytes are being replaced rather than briefly
+   addressable with the wrong ones.
+
+   The MAC secret stays per-snapshot, random, and written ONLY into the
+   snapshot file. Content-addressing publishes the id — it is the receipt's
+   `:manifest_digest` — which is exactly why the mac may not be keyed on it.
+   A rebuild mints a FRESH secret: the discarded snapshot's authenticator is
+   discarded with it, so cursors minted against bytes that failed verification
+   refuse rather than being honoured against bytes nobody verified."
   [{:keys [root projects rows]}]
   (let [dir (cursor-dir root)]
     (.mkdirs dir)
     (prune! dir)
-    (let [cursor-id (new-id)
-          md (MessageDigest/getInstance "SHA-256")
-          total (with-open [w (io/writer (rows-file root cursor-id))]
+    (let [tmp-rows (io/file dir (str "build-" (random-hex64) ".rows.tmp"))
+          md (doto (MessageDigest/getInstance "SHA-256")
+               (.update (.getBytes digest-header "UTF-8")))
+          total (with-open [w (io/writer tmp-rows)]
                   (reduce
                     (fn [n {:keys [pidx path abs]}]
-                      (let [f (io/file (str abs))
-                            line (pr-str {:i n :x pidx :p path
-                                          :s (.length f)
-                                          :m (.lastModified f)
-                                          :h (content-digest abs)})]
-                        (.update md (.getBytes (str line "\n") "UTF-8"))
-                        (.write w line)
+                      (let [row {:i n :x pidx :p path :h (content-digest abs)}]
+                        (.update md (.getBytes (row-identity row) "UTF-8"))
+                        (.write w (pr-str row))
                         (.write w "\n")
                         (inc n)))
                     0
                     rows))
-          digest (hex (.digest md))
-          secret (new-id)
-          tmp (io/file dir (str cursor-id ".edn.tmp"))]
-      (spit tmp (pr-str {:v 1
-                         :cursor-id cursor-id
-                         :root (canonical root)
-                         :created (System/currentTimeMillis)
-                         :digest digest
-                         :total total
-                         :secret secret
-                         :projects (mapv #(select-keys % [:name :root]) projects)}))
-      (.renameTo tmp (meta-file root cursor-id))
-      {:cursor-id cursor-id :digest digest :total total :secret secret})))
+          cursor-id (hex (.digest md))]
+      (if-let [existing (verified-snapshot root cursor-id)]
+        (do (.delete tmp-rows)
+            (touch! (meta-file root cursor-id))
+            {:cursor-id cursor-id
+             :digest cursor-id
+             :total (:total existing)
+             :secret (:secret existing)})
+        (let [secret (random-hex64)
+              tmp (io/file dir (str cursor-id ".edn.tmp"))]
+          (.delete (meta-file root cursor-id))
+          (.delete (rows-file root cursor-id))
+          (.renameTo tmp-rows (rows-file root cursor-id))
+          (spit tmp (pr-str {:v manifest-version
+                             :cursor-id cursor-id
+                             :root (canonical root)
+                             :created (System/currentTimeMillis)
+                             :digest cursor-id
+                             :total total
+                             :secret secret
+                             :projects (mapv #(select-keys % [:name :root]) projects)}))
+          (.renameTo tmp (meta-file root cursor-id))
+          {:cursor-id cursor-id :digest cursor-id :total total :secret secret})))))
 
 ;; ============================================================
 ;; Reading a snapshot

@@ -286,8 +286,7 @@ The remedy is PINNING rather than re-deriving. The first page that needs a
 cursor writes an immutable snapshot under the workspace state root
 (`~/.local/state/clj-surgeon/workspaces/<sha256 of canonical root>/ls-tree-cursors/<cursor-id>.edn`
 plus a `.rows` file): the ordered candidate list, and for every candidate its
-path, size, mtime and the SHA-256 of its CONTENT. Later pages are served FROM
-that snapshot. Four facts a caller's cursor can carry become four typed
+path and the SHA-256 of its CONTENT. Later pages are served FROM that snapshot. Four facts a caller's cursor can carry become four typed
 refusals, and each names a DIFFERENT fact:
 
 | the fact about the caller's cursor | the refusal |
@@ -299,8 +298,13 @@ refusals, and each names a DIFFERENT fact:
 
 The MAC is `sha256(cursor-id ‖ offset ‖ snapshot-secret)`, keyed on a
 per-snapshot secret that is written into the snapshot and NEVER returned to a
-caller. Keying it on the published manifest digest instead would let any holder
-of a receipt mint any offset, which is finding 2 rather than a fix for it.
+caller. Keying it on the published manifest digest instead — which an earlier
+brief specified as `sha256(cursor-id ‖ offset ‖ snapshot-digest)` — would let
+any holder of a receipt mint any offset, which is finding 2 rather than a fix
+for it. **That boundary became load-bearing rather than incidental once the id
+was content-addressed (below): `cursor-id` now IS the published manifest
+digest, so a mac keyed on either is a mac keyed on material the receipt
+prints.**
 `:result-cursor-out-of-range` is deliberately distinct from
 `:invalid-result-cursor`: one says the token was not ours, the other says the
 token was ours and the position is not there. Before the range check a genuine
@@ -315,7 +319,63 @@ digested, written and dropped — and read streaming, a transducer over
 buffer plus the page, at N = 10 and at N = 10,000 alike. The meta file is
 written last and renamed into place, so a snapshot is complete or absent; a
 crash mid-write leaves rows nobody can address and a cursor that resolves to
-`:unknown-result-cursor` rather than to a truncated manifest.
+`:unknown-result-cursor` rather than to a truncated manifest, and its build
+temporary is swept by the same TTL prune.
+
+## Cursor ADDRESSING: content, not entropy (amended 2026-09-03)
+
+The pinned snapshot above shipped with a random `cursor-id` — two
+`UUID/randomUUID` values per ceiling-binding scan — and the memory battery
+rejected it on its next run:
+
+```
+FAIL reference-mismatch {:op :cli-ls-tree, :n 10000, :phase :warm,
+                         :observed "nondeterministic:4", :limit "f1bcbdb9…"}
+```
+
+Four distinct output hashes across five reps of one operation over one corpus.
+Diffed line by line: **98,361 characters, exactly ONE differing line, and it is
+the cursor.** Every one of the 1,000 records was byte-identical. The id named
+the SCAN, not the tree — and the design it replaced, whose cursor was
+`<offset>:<manifest-digest>`, had been deterministic for exactly that reason.
+
+The second consequence was measured alongside it: an unchanged tree got a NEW
+snapshot per scan. Four identical scans left four snapshots totalling 5.4 MB,
+each paying a full 10,000-file content-digest pass, and nothing could detect
+that the tree had not moved.
+
+**`cursor-id` is now the manifest digest** — SHA-256 folded, in result order,
+over each row's `position ⇥ project-index ⇥ path ⇥ content-digest`, seeded with
+`manifest-version`. Four properties follow, and each is a witness in
+`clj-surgeon.ls-tree-budget-test`:
+
+| property | why it holds |
+|---|---|
+| an unchanged tree scans BYTE-IDENTICALLY, cursor included | the id is a function of the tree, and the reused snapshot carries the same secret, so the mac is the same too |
+| an unchanged tree pins ONE snapshot however often it is scanned | the id is the only thing addressing a snapshot, so a scan of an unmoved tree finds its own |
+| a changed tree gets a new id | content moved ⇒ a different fold, by construction |
+| a receipt holder still cannot mint a cursor for another offset | the mac's key is the per-snapshot secret, and publishing the id publishes nothing about it |
+
+Two boundaries this addressing draws explicitly:
+
+- **Stat is not in the address.** Size and mtime were dropped from the manifest
+  row: they are not identity (that was finding 1), and folding mtime would give
+  a touched-but-unchanged tree a new id, a new snapshot, and a different
+  cursor — reintroducing the nondeterminism at one remove.
+- **A reused snapshot is VERIFIED, never assumed.** A file sitting under a
+  content address is a *claim* about its content. Reuse re-folds the rows on
+  disk and accepts the snapshot only when they still prove the id they are
+  filed under, the meta names this root, this id and this projection version,
+  and the row count matches. Anything else is a MISS: the snapshot is rebuilt
+  from the tree, with a FRESH secret, so a cursor minted against bytes that
+  failed verification refuses rather than being honoured against bytes nobody
+  verified. Without that check, content-addressing would be name-addressing
+  with a longer filename.
+
+What content-addressing does NOT buy: the pinning scan still pays one content
+pass over the corpus, because the address cannot be known before the last row
+is folded. The saving is in stored state (one snapshot per distinct tree state
+rather than one per scan) and in determinism, not in the pinning scan's wall.
 
 **Every digest is taken AT ISSUE TIME, not lazily when a page is served.** The
 cheaper variant — digest each file only when its own page is read, so the
