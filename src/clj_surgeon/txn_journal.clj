@@ -483,14 +483,14 @@
 
    A bare `deleteIfExists` deletes whoever's claim it finds. That is how one
    transaction's ordinary `finish!` removes a DIFFERENT live transaction's
-   lock, which turns a lost race into a shared lock nobody notices."
-  ([transactions-dir] (Files/deleteIfExists (.toPath (lock-file transactions-dir))))
-  ([transactions-dir txid]
-   (let [^File lock (lock-file transactions-dir)]
-     (if (or (nil? txid)
-             (= txid (:txid (read-holder lock))))
-       (Files/deleteIfExists (.toPath lock))
-       false))))
+   lock, which turns a lost race into a shared lock nobody notices. There is
+   deliberately no unguarded arity: an unconditional delete left in reach is a
+   defect waiting for its next caller."
+  [transactions-dir txid]
+  (let [^File lock (lock-file transactions-dir)]
+    (if (= txid (:txid (read-holder lock)))
+      (Files/deleteIfExists (.toPath lock))
+      false)))
 
 (defn- break-lock!
   "Take EXACTLY the stale claim that was read out of the way, or nothing.
