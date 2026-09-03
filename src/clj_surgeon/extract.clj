@@ -140,6 +140,97 @@
                       (or (source-paths-in-root root) ["src" "test" "dev"])))
 
 
+(def ^:private skipped-workspace-directories
+  "Directory names a source walk never descends.
+
+  Build output and vendored trees are not the workspace's own source. `target/`
+  in particular holds COPIES of the very files being rewired, and rewiring a
+  copy is rewriting build output under a receipt that claims a caller was
+  repaired; `.cpcache/` and `node_modules/` are cost with no callers in them."
+  #{"target" ".cpcache" "node_modules" "out" ".git"})
+
+(def ^:private default-max-workspace-files
+  "How many Clojure sources a workspace may hold before discovery refuses.
+
+  The walk slurps every source it keeps, so an unbounded workspace is an
+  unbounded read. Refusing above a stated cap is a plan; discovering how large
+  a repository is by running out of heap is not."
+  2000)
+
+(def ^:private max-workspace-file-bytes
+  "The largest source discovery will slurp. Larger files are skipped and named
+  in the receipt rather than read: a caller nobody can hand-edit is not the
+  caller this verb is for, and reading it costs the whole file."
+  (* 512 1024))
+
+;; @spec MCP-OP-EXTRACT-029
+(defn- walk-workspace-sources
+  "Every Clojure source under `root`, WITHOUT following directory symlinks.
+
+  `file-seq` follows them: one `app/loop -> app` made the walk rediscover every
+  source once per level until the kernel's symlink limit stopped it, and each
+  rediscovery was a separate caller plan writing the same file again. This walk
+  classifies each entry with NOFOLLOW and descends only into real directories.
+
+  A symbolic link is never descended. One whose real target is INSIDE the root
+  is already reachable by its real path, so it is skipped rather than
+  duplicated; one that resolves OUTSIDE the root is surfaced as `:escape`, so
+  the caller refuses rather than dropping it quietly.
+
+  Returns one of `{:files [...] :skipped-large [...]}`, `{:escape <path>}`, or
+  `{:over-cap <count>}`."
+  [^java.io.File root real-root cap]
+  (let [no-follow (make-array java.nio.file.LinkOption 0)]
+    (loop [stack (apply list (or (.listFiles root) []))
+           files (transient [])
+           skipped (transient [])
+           seen 0]
+      (if (empty? stack)
+        {:files (persistent! files) :skipped-large (persistent! skipped)}
+        (let [^java.io.File entry (first stack)
+              stack (rest stack)
+              path (.toPath entry)
+              link? (java.nio.file.Files/isSymbolicLink path)
+              real (when link?
+                     (try (.toRealPath path no-follow)
+                          (catch Exception _ nil)))]
+          (cond
+            ;; a link to a directory is never descended
+            (and link? real
+                 (java.nio.file.Files/isDirectory real no-follow))
+            (if (.startsWith real real-root)
+              ;; already reachable by its real path; descending would
+              ;; rediscover every source under it a second time
+              (recur stack files skipped seen)
+              ;; refused by the caller, never dropped quietly
+              {:escape (.getPath entry)})
+
+            ;; a broken link points at nothing to read
+            (and link? (nil? real))
+            (recur stack files skipped seen)
+
+            (and (not link?) (.isDirectory entry))
+            (recur (if (contains? skipped-workspace-directories (.getName entry))
+                     stack
+                     (into stack (or (.listFiles entry) [])))
+                   files skipped seen)
+
+            (not (re-matches #".*\.clj[sc]?$" (.getName entry)))
+            (recur stack files skipped seen)
+
+            (> (inc seen) (long cap))
+            {:over-cap (inc seen)}
+
+            (> (.length entry) (long max-workspace-file-bytes))
+            (recur stack files
+                   (conj! skipped {:file (.getPath entry)
+                                   :bytes (.length entry)})
+                   (inc seen))
+
+            :else
+            (recur stack (conj! files (.getPath entry)) skipped
+                   (inc seen))))))))
+
 ;; @spec MCP-OP-EXTRACT-024
 (defn- confine-workspace-paths
   "Refuse the FIRST workspace path that resolves outside the project root.
@@ -399,7 +490,9 @@
    ;; :log is deliberately absent: an action queue -- create-file, nine
    ;; remove-form entries, add-require -- restating what :new-file-preview and
    ;; :header already state as the resulting STATE.
-   :source-require-added :rewire-callers :verified :receipt-file :undo])
+   :source-require-added :rewire-callers :verified :receipt-file :undo
+   ;; @spec MCP-OP-EXTRACT-029
+   :discovery])
 
 (defn- compile-expr-for
   "Pure: the expression that requires every touched namespace."
@@ -932,7 +1025,7 @@
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
            public-forms derive-required-public-forms doc alias rewire-callers
-           project-root compile-aliases compile-config-file]
+           project-root compile-aliases compile-config-file discovery]
     :or {workspace-sources {} require-policy :minimal public-forms []
          derive-required-public-forms false rewire-callers true}}]
   (let [lines (vec (str/split-lines source))
@@ -1250,6 +1343,8 @@
            :_compile-aliases (normalize-aliases compile-aliases)
            ;; @spec MCP-OP-EXTRACT-027
            :_compile-config-file compile-config-file
+           ;; @spec MCP-OP-EXTRACT-029
+           :discovery discovery
            :_target-outline (assoc (target-outline (:ns-form header-result)
                                                    publicized-texts)
                                    :lines (count (str/split-lines new-file-content)))
@@ -1321,7 +1416,7 @@
   Returns the compiled plan unreshaped, for the executor; `plan` is the
   reader-facing dry run built on top of it."
   [{:keys [file forms to source-paths require-policy public public-forms doc
-           alias rewire-callers compile-alias]
+           alias rewire-callers compile-alias max-workspace-files]
     :as opts
     :or {require-policy :minimal rewire-callers true}}]
   (try
@@ -1329,26 +1424,47 @@
           target-ns (file-path->ns-name to source-paths)
           project-root (project-root-for-source file source-paths)
           source-canonical-path (.getCanonicalPath (io/file file))
+          cap (or max-workspace-files default-max-workspace-files)
+          ;; @spec MCP-OP-EXTRACT-029
+          walked (walk-workspace-sources (io/file project-root)
+                                         (mcp-paths/real-root project-root)
+                                         cap)
           discovered
-          (->> (file-seq (io/file project-root))
-               (filter #(.isFile %))
-               (filter #(re-matches #".*\.clj[sc]?$" (.getName %)))
-               (remove #(= source-canonical-path (.getCanonicalPath %)))
-               (remove #(str/includes? (.getPath %) "/.git/"))
-               (mapv #(.getPath %)))
+          (->> (:files walked)
+               (remove #(= source-canonical-path
+                           (.getCanonicalPath (io/file %))))
+               vec)
           ;; @spec MCP-OP-EXTRACT-024
           ;; Confine the read set at the moment the walk produces it: this is
           ;; where a directory symlink turns a path that LOOKS like it is under
           ;; the root into one that is not.
-          escape (confine-workspace-paths project-root discovered)
+          escape (or (when-let [escaped (:escape walked)]
+                       (confine-workspace-paths project-root [escaped]))
+                     (confine-workspace-paths project-root discovered))
+          over-cap (:over-cap walked)
           explicit-compile-aliases (not-empty (normalize-aliases compile-alias))
           declared-compile (declared-compile-config project-root)
           workspace-sources
-          (when-not escape
+          (when-not (or escape over-cap)
             (into (sorted-map)
                   (map (fn [path] [path (slurp path)]) discovered)))]
-      (if escape
-        escape
+      (cond
+        ;; @spec MCP-OP-EXTRACT-029
+        over-cap
+        {:ok false
+         :error (str "This workspace holds more than " cap
+                     " Clojure sources; discovery reads every one of them.")
+         :error-type :workspace-file-cap-exceeded
+         :cap cap
+         :seen over-cap
+         :remedy (str "extract from a smaller root, or raise the cap with "
+                      ":max-workspace-files <n>")
+         :source-unchanged true
+         :target-unchanged true}
+
+        escape escape
+
+        :else
         (compile-plan
           {:file file
            :source source
@@ -1375,7 +1491,11 @@
            (not (or (contains? opts :public) (contains? opts :public-forms)))
            :doc doc
            :alias alias
-           :rewire-callers rewire-callers})))
+           :rewire-callers rewire-callers
+           ;; @spec MCP-OP-EXTRACT-029
+           :discovery (let [large (:skipped-large walked)]
+                        (cond-> {:files (count (:files walked))}
+                          (seq large) (assoc :skipped-large (vec large))))})))
     (catch Exception error
       {:ok false
        :error-type :extraction-snapshot-failed
@@ -1563,6 +1683,8 @@
                               :atomic-write true
                               :read-back true}
                    :source-require-added (boolean (seq source-referred-forms))}
+                  (:discovery p) (assoc :discovery (:discovery p))
+
                   receipt-file (assoc :receipt-file receipt-file)
 
                   (false? (:ok compile-result))

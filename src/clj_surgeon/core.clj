@@ -585,6 +585,7 @@
                                    :source-paths   {:desc "EDN vector of source roots used to derive the target namespace name"}
                                    :compile-check  {:desc "true (default) compiles the touched namespaces as the last step of the transaction and reports the result. That REQUIRES them, which executes this workspace's code in a bounded subprocess as you; pass false for a repository you did not author and the receipt reports :status :not-run rather than claiming a verification"}
                                    :compile-alias  {:desc "Optional deps.edn alias for the compile check's classpath, e.g. :test"}
+                                   :max-workspace-files {:desc "Raise the cap on how many Clojure sources discovery will read (default 2000); above it the extraction refuses rather than reading an unbounded workspace"}
                                    :receipt-out    {:desc "Optional new .edn path for a guarded inverse receipt"}}
                        :workflow  ["Run :extract first. Review target-requires, omitted-target-requires, remaining-source-callers, callers-to-review, and authority-labeled quoted-var-references. Unsupported require shapes refuse instead of copying or dropping unproved dependencies."
                                    "Application compiles both complete files from one source snapshot, parses them, hash-fences the source, writes atomically, and verifies read-back."

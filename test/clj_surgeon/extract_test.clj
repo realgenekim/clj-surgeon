@@ -1808,3 +1808,108 @@
                      touched)]
         (is (= :unverified (:ok result)))
         (is (= :classpath-incomplete (:reason result)))))))
+
+;; @spec MCP-OP-EXTRACT-029
+(deftest discovery-does-not-follow-directory-symlinks
+  (testing "an in-root symlink CYCLE yields each source exactly once"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")]
+      (try
+        (.delete (io/file src "mixed.clj"))
+        ;; app/loop -> app : file-seq walks this until the kernel's symlink
+        ;; limit stops it, discovering every source ~40 times over
+        (symlink! (io/file src "loop") "../app")
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file src "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file src "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:applied result))
+              (str "the cycle must not refuse: " (pr-str (:error result))))
+          (is (= 1 (count (:external-callers-rewired result)))
+              (str "each caller is discovered ONCE, not once per cycle level: "
+                   (pr-str (mapv :file (:external-callers-rewired result))))))
+        (finally (delete-recursive! root)))))
+
+  (testing "a build directory is never read, so a stale copy cannot be rewired"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")
+          stale (io/file root "target" "app" "only_moved.clj")]
+      (try
+        (.mkdirs (.getParentFile stale))
+        (spit stale (slurp (io/file src "only_moved.clj")))
+        (let [before (slurp stale)
+              result (extract/execute!
+                       {:file (.getPath (io/file src "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file src "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:applied result)))
+          (is (= before (slurp stale))
+              "target/ holds COPIES; rewiring one is rewriting build output")
+          (is (not-any? #(str/includes? (str (:file %)) "target/")
+                        (:external-callers-rewired result)))
+          (is (= 3 (get-in result [:discovery :files]))
+              (str "the receipt states how much of the workspace was read: "
+                   (pr-str (:discovery result)))))
+        (finally (delete-recursive! root))))))
+
+;; @spec MCP-OP-EXTRACT-029
+(deftest a-source-too-large-to-read-is-skipped-and-named
+  (let [root (create-caller-project!)
+        huge (io/file root "src" "app" "generated.clj")]
+    (try
+      (spit huge (str "(ns app.generated)\n;; "
+                      (apply str (repeat (* 600 1024) \x)) "\n"))
+      (let [result (extract/execute!
+                     {:file (.getPath (io/file root "src" "app" "core.clj"))
+                      :forms '[moved-one moved-two]
+                      :to (.getPath (io/file root "src" "app" "moved.clj"))
+                      :alias "moved"
+                      :compile-check false})
+            skipped (get-in result [:discovery :skipped-large])]
+        (is (true? (:applied result)))
+        (is (= 1 (count skipped))
+            (str "a file too large to slurp is NAMED, never dropped quietly: "
+                 (pr-str (:discovery result))))
+        (is (str/ends-with? (str (:file (first skipped))) "generated.clj"))
+        (is (> (long (:bytes (first skipped))) (* 512 1024))))
+      (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-029
+(deftest discovery-refuses-above-its-file-cap
+  (let [root (create-caller-project!)
+        bulk (io/file root "src" "bulk")]
+    (try
+      (.mkdirs bulk)
+      (dotimes [i 3000]
+        (spit (io/file bulk (str "f" i ".clj")) (str "(ns bulk.f" i ")\n")))
+      (let [before (slurp (io/file root "src" "app" "core.clj"))
+            result (extract/execute!
+                     {:file (.getPath (io/file root "src" "app" "core.clj"))
+                      :forms '[moved-one moved-two]
+                      :to (.getPath (io/file root "src" "app" "moved.clj"))
+                      :alias "moved"
+                      :compile-check false})]
+        (is (= :workspace-file-cap-exceeded (:error-type result))
+            (str "an unbounded walk is a resource, not a plan: "
+                 (pr-str (select-keys result [:error-type :applied]))))
+        (is (number? (:cap result)) "the refusal names the cap")
+        (is (str/includes? (str (:remedy result)) "max-workspace-files")
+            "and names how to raise it")
+        (is (= before (slurp (io/file root "src" "app" "core.clj")))
+            "nothing was written")
+        (is (not (.exists (io/file root "src" "app" "moved.clj")))))
+
+      (testing "raising the cap admits the same workspace"
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false
+                        :max-workspace-files 5000})]
+          (is (true? (:applied result)) (pr-str (:error result)))))
+      (finally (delete-recursive! root)))))
