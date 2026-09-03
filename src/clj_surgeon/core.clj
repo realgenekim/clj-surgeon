@@ -224,6 +224,16 @@
    `open(2)` on a FIFO BLOCKS: a scan of that tree returned nothing, forever,
    and survived SIGTERM.
 
+   Output is NUL-DELIMITED (`-print0`, split on `\\u0000`), not line-delimited.
+   `find`'s default is one path per LINE, so a file whose NAME CONTAINS A
+   NEWLINE — legal on this filesystem — printed as two lines for one file: an
+   absolute fragment and a bare relative leftover. The relative fragment is
+   not under the scanned root, so it reached `rel-path`'s `fs/relativize` and
+   threw `IllegalArgumentException` out of the whole operation instead of a
+   typed receipt (Opus, 2026-09-03). A NUL cannot appear inside a POSIX
+   filename, so it is the only delimiter `find -print0` and this parse can
+   trust.
+
    Three details, each of which was a trap:
 
    - `-type f` ALONE is wrong. It is false for a symlink (there is no `-L`
@@ -250,9 +260,10 @@
                      "find" (str dir)
                      "(" "-name" "*.clj" "-o" "-name" "*.cljs"
                          "-o" "-name" "*.cljc" ")"
-                     "(" "-type" "f" "-o" "(" "-type" "l" "-xtype" "f" ")" ")")]
+                     "(" "-type" "f" "-o" "(" "-type" "l" "-xtype" "f" ")" ")"
+                     "-print0")]
         (when (zero? (:exit result))
-          (->> (str/split-lines (str/trim (:out result)))
+          (->> (str/split (:out result) #"\u0000")
                (remove str/blank?))))
       (catch Exception _e nil))))
 
