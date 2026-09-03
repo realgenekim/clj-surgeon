@@ -191,6 +191,15 @@ known size rather than passing inside 224 MiB of headroom.
 outside `make test-fast` and `make mcp-test`: it spawns child JVMs at explicit
 heap ceilings, writes 300 MB of synthetic scope, and costs minutes of wall.
 
+`make txn-kernel-warning-check` compiles both kernel namespaces with
+`*warn-on-reflection*` and `*unchecked-math* :warn-on-boxed` and fails on ANY
+warning. It rides `make mcp-test`. Reflection and boxed math are invisible in a
+passing suite, and the sites are not cold: workspace confinement reflected
+twice per staged file, journal cleanup reflected per artifact, and the reader's
+arithmetic boxed once per admitted file and once per digest byte. Both
+namespaces carry `(set! *warn-on-reflection* true)` so an ordinary load says so
+too.
+
 The unit witnesses are in `make mcp-test`
 (`clj-surgeon.txn-journal-test`, `clj-surgeon.scope-stream-test`). Fail-first was
 established per guard by mutating the implementation and re-running the single

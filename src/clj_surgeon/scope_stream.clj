@@ -29,6 +29,8 @@
    (java.nio.file FileVisitOption FileVisitResult Files LinkOption Path SimpleFileVisitor)
    (java.nio.file.attribute BasicFileAttributes)))
 
+(set! *warn-on-reflection* true)
+
 (def default-limits
   "Admission ceilings a request may lower. None may be raised past `hard-limits`.
 
@@ -75,7 +77,7 @@
    files look free."
   [relatives]
   (reduce (fn [total ^String relative]
-            (+ total path-entry-overhead-bytes (* 2 (count relative))))
+            (+ (long total) (long path-entry-overhead-bytes) (* 2 (count relative))))
           0
           relatives))
 
@@ -84,7 +86,8 @@
 
 (defn- limits-for
   [request]
-  (reduce-kv (fn [acc k v] (assoc acc k (min (get request k v) (get hard-limits k v))))
+  (reduce-kv (fn [acc k v] (assoc acc k (min (long (get request k v))
+                                             (long (get hard-limits k v)))))
              {}
              default-limits))
 
@@ -106,7 +109,8 @@
    difference between 'exactly at the ceiling' and 'one past it' a fact rather
    than an inference from the directory entry."
   [^Path path cap]
-  (let [buffer (byte-array 65536)
+  (let [cap (long cap)
+        buffer (byte-array 65536)
         out (ByteArrayOutputStream.)]
     (with-open [in (Files/newInputStream path (make-array java.nio.file.OpenOption 0))]
       (loop [total 0]
@@ -129,23 +133,29 @@
    terminates on the first entry that breaches a bound rather than dropping it
    silently, because a dropped file leaves the found count lying."
   [^Path root {:keys [max-walk-entries max-depth skip-dirs extensions]}]
-  (let [entries (volatile! 0)
+  (let [max-walk-entries (long max-walk-entries)
+        max-depth (long max-depth)
+        ;; a one-slot long array, so counting every visited entry costs no
+        ;; boxing on a walk that may visit two hundred thousand of them
+        entries (long-array 1)
+        count-entry! (fn ^long [] (aset entries 0 (inc (aget entries 0))))
+        seen (fn ^long [] (aget entries 0))
         found (volatile! (transient []))
         refused (volatile! nil)
-        depth-of (fn [^Path p] (.getNameCount (.relativize root p)))
+        depth-of (fn ^long [^Path p] (.getNameCount (.relativize root p)))
         visitor
         (proxy [SimpleFileVisitor] []
-          (preVisitDirectory [dir attrs]
-            (vswap! entries inc)
+          (preVisitDirectory [^Path dir attrs]
+            (count-entry!)
             (cond
-              (> @entries max-walk-entries)
+              (> (long (seen)) max-walk-entries)
               (do (vreset! refused
                            (refusal :scope-walk-entries-exceeded
                                     (str "The walk reached its ceiling of " max-walk-entries
                                          " visited entries at " (str dir))
                                     {:path (str dir)
                                      :max-entries max-walk-entries
-                                     :observed-at-least @entries
+                                     :observed-at-least (seen)
                                      :next_call {:op :scope/stream
                                                  :scope {:narrow-to "a subtree with fewer entries"}}}))
                   FileVisitResult/TERMINATE)
@@ -153,7 +163,7 @@
               (and (not= dir root) (contains? skip-dirs (str (.getFileName dir))))
               FileVisitResult/SKIP_SUBTREE
 
-              (> (depth-of dir) max-depth)
+              (> (long (depth-of dir)) max-depth)
               (do (vreset! refused
                            (refusal :scope-too-deep
                                     (str (str dir) " is " (depth-of dir)
@@ -169,21 +179,21 @@
               :else FileVisitResult/CONTINUE))
 
           (visitFile [^Path file ^BasicFileAttributes attrs]
-            (vswap! entries inc)
+            (count-entry!)
             (cond
-              (> @entries max-walk-entries)
+              (> (long (seen)) max-walk-entries)
               (do (vreset! refused
                            (refusal :scope-walk-entries-exceeded
                                     (str "The walk reached its ceiling of " max-walk-entries
                                          " visited entries at " (str file))
                                     {:path (str file)
                                      :max-entries max-walk-entries
-                                     :observed-at-least @entries
+                                     :observed-at-least (seen)
                                      :next_call {:op :scope/stream
                                                  :scope {:narrow-to "a subtree with fewer entries"}}}))
                   FileVisitResult/TERMINATE)
 
-              (> (depth-of file) max-depth)
+              (> (long (depth-of file)) max-depth)
               (do (vreset! refused
                            (refusal :scope-too-deep
                                     (str (str file) " is " (depth-of file)
@@ -215,12 +225,12 @@
                       FileVisitResult/CONTINUE)))))
 
           (visitFileFailed [file _exception]
-            (vswap! entries inc)
+            (count-entry!)
             FileVisitResult/CONTINUE))]
     (Files/walkFileTree root #{} Integer/MAX_VALUE visitor)
     (or @refused
         {:ok true
-         :walk-entries @entries
+         :walk-entries (seen)
          :relatives (vec (sort (persistent! @found)))})))
 
 ;; ------------------------------------------------------------------ stream
@@ -249,7 +259,13 @@
       walked
       (let [{:keys [max-file-bytes max-aggregate-bytes work-budget-bytes parse-factor
                     max-receipt-records max-receipt-bytes]} limits
-            held (path-list-bytes (:relatives walked))]
+            max-file-bytes (long max-file-bytes)
+            max-aggregate-bytes (long max-aggregate-bytes)
+            work-budget-bytes (long work-budget-bytes)
+            parse-factor (long parse-factor)
+            max-receipt-records (long max-receipt-records)
+            max-receipt-bytes (long max-receipt-bytes)
+            held (long (path-list-bytes (:relatives walked)))]
         (if (> held work-budget-bytes)
           ;; The list of discovered paths is itself reserved work. Refusing it
           ;; here, before the first source is read, is the difference between
@@ -301,7 +317,10 @@
                       ;; the aggregate budget has left, so a file that grew
                       ;; since discovery is stopped against the REMAINING budget
                       cap (min max-file-bytes (- max-aggregate-bytes aggregate))
-                      {:keys [bytes truncated? source]} (read-bounded canonical cap)]
+                      read (read-bounded canonical cap)
+                      truncated? (:truncated? read)
+                      source (:source read)
+                      bytes (long (:bytes read))]
                   (cond
                     (and truncated? (> bytes max-file-bytes))
                     (refusal :scope-source-too-large
@@ -347,7 +366,7 @@
                                  :source source}
                           result (plan-fn entry)
                           record (when collect (collect (dissoc entry :source) result))
-                          record-size (if record (count (pr-str record)) 0)]
+                          record-size (long (if record (count (pr-str record)) 0))]
                       (cond
                         (and record (>= (count records) max-receipt-records))
                         (refusal :scope-receipt-too-large

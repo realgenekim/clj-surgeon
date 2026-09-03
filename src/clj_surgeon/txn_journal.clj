@@ -35,6 +35,8 @@
    (java.nio.file.attribute BasicFileAttributes PosixFilePermissions)
    (java.security MessageDigest)))
 
+(set! *warn-on-reflection* true)
+
 ;; ------------------------------------------------------------ the contract
 
 (def commit-window
@@ -100,7 +102,7 @@
   [^String value]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256")
                         (.getBytes value "UTF-8"))]
-    (apply str (map #(format "%02x" (bit-and 0xff %)) digest))))
+    (apply str (map #(format "%02x" (bit-and 0xff (long %))) digest))))
 
 (defn sha256-file
   "Lowercase hex SHA-256 of a file, read in bounded chunks and never retained."
@@ -113,7 +115,7 @@
           (when (pos? read)
             (.update digest buffer 0 read)
             (recur)))))
-    (apply str (map #(format "%02x" (bit-and 0xff %)) (.digest digest)))))
+    (apply str (map #(format "%02x" (bit-and 0xff (long %))) (.digest digest)))))
 
 ;; ----------------------------------------------------------------- refusals
 
@@ -152,7 +154,7 @@
 
 (defn- hex
   [^bytes bs]
-  (apply str (map #(format "%02x" (bit-and 0xff %)) bs)))
+  (apply str (map #(format "%02x" (bit-and 0xff (long %))) bs)))
 
 (defn- scope-membership-digest
   "Fold a scope walk into ONE digest over path, type and file identity.
@@ -230,12 +232,12 @@
 ;; -------------------------------------------------------------------- lock
 
 (defn- lock-file
-  [transactions-dir]
+  ^File [transactions-dir]
   (io/file transactions-dir "LOCK"))
 
 (defn- acquire-lock!
   [transactions-dir txid]
-  (let [lock (lock-file transactions-dir)]
+  (let [^File lock (lock-file transactions-dir)]
     (try
       (Files/createFile (.toPath lock)
                         (make-array java.nio.file.attribute.FileAttribute 0))
@@ -309,7 +311,8 @@
                 objects (io/file dir "objects")
                 staging (io/file dir "staging")
                 limits (reduce-kv (fn [acc k v]
-                                    (assoc acc k (min (get opts k v) (get hard-limits k v))))
+                                    (assoc acc k (min (long (get opts k v))
+                                                      (long (get hard-limits k v)))))
                                   {}
                                   default-limits)]
             (.mkdirs objects)
@@ -366,8 +369,9 @@
   [txn path-or-entry]
   (let [{:keys [path bytes sha256 mode] :as entry} (read-entry path-or-entry)
         state (:state txn)
-        {:keys [sealed? last-path read-set-count]} @state
-        limit (get-in txn [:limits :max-read-set-files])]
+        {:keys [sealed? last-path]} @state
+        read-set-count (long (:read-set-count @state))
+        limit (long (get-in txn [:limits :max-read-set-files]))]
     (cond
       sealed?
       (refusal :txn-read-set-sealed
@@ -458,12 +462,13 @@
   (walk-value
     (:state txn)
     (fn [acc value]
-      (cond
-        (and (map? value) (contains? value :path)) (inc acc)
-        (and (map? value) (seq value)
-             (every? #(and (string? %) (str/starts-with? % "/")) (keys value)))
-        (+ acc (count value))
-        :else acc))
+      (let [acc (long acc)]
+        (cond
+          (and (map? value) (contains? value :path)) (inc acc)
+          (and (map? value) (seq value)
+               (every? #(and (string? %) (str/starts-with? % "/")) (keys value)))
+          (+ acc (count value))
+          :else acc)))
     0))
 
 (defn retained-content-bytes
@@ -477,16 +482,17 @@
   (walk-value
     (:state txn)
     (fn [acc value]
-      (if (and (string? value) (> (count value) retained-string-limit))
-        (+ acc (count value))
-        acc))
+      (let [acc (long acc)]
+        (if (and (string? value) (> (count value) (long retained-string-limit)))
+          (+ acc (count value))
+          acc)))
     0))
 
 (defn manifest-line-count
   "Lines in the on-disk read-set manifest, counted without holding it."
   [txn]
   (with-open [reader (io/reader (io/file (:manifest-path txn)))]
-    (reduce (fn [n _] (inc n)) 0 (line-seq reader))))
+    (reduce (fn [n _] (inc (long n))) 0 (line-seq reader))))
 
 (defn staged-file-count [txn] (count (:staged @(:state txn))))
 (defn journal-bytes [txn] (:journal-bytes @(:state txn)))
@@ -497,8 +503,9 @@
   "Reserve `bytes` of journal quota, or refuse before anything is copied."
   [txn bytes path kind]
   (let [state (:state txn)
-        limit (get-in txn [:limits :max-journal-bytes])
-        used (:journal-bytes @state)]
+        bytes (long bytes)
+        limit (long (get-in txn [:limits :max-journal-bytes]))
+        used (long (:journal-bytes @state))]
     (if (> (+ used bytes) limit)
       (refusal :txn-journal-quota-exceeded
                (str "Pinned and staged bytes would reach " (+ used bytes)
@@ -511,7 +518,7 @@
                             :scope {:narrow-to "fewer files to modify, or a higher explicit journal quota"}}
                 :remedy "Stage fewer files in one transaction, or raise max-journal-bytes."})
       (do (swap! state (fn [st]
-                         (let [used (+ (:journal-bytes st) bytes)]
+                         (let [used (+ (long (:journal-bytes st)) bytes)]
                            (-> st
                                (assoc :journal-bytes used)
                                (update :journal-bytes-peak (fnil max 0) used)))))
@@ -558,12 +565,13 @@
                          (str raw " is not absolute; the journal takes absolute paths"
                               " named under the workspace's real root"))
 
-      (not (.startsWith (.toPath file) root))
+      (not (.startsWith (.toPath file) ^java.nio.file.Path root))
       (outside-workspace raw root :outside-root
                          (str raw " is not named under the transaction's workspace root"))
 
       :else
-      (let [absolute (.toPath (io/file (.getCanonicalPath file)))]
+      (let [^java.nio.file.Path root root
+            ^java.nio.file.Path absolute (.toPath (io/file (.getCanonicalPath file)))]
         (if-not (.startsWith absolute root)
           (outside-workspace raw root :outside-root
                              (str path " is outside the transaction's workspace root"))
@@ -627,7 +635,7 @@
         state (:state txn)
         bytes (count (.getBytes ^String content "UTF-8"))
         staged (:staged @state)
-        limit (get-in txn [:limits :max-staged-files])]
+        limit (long (get-in txn [:limits :max-staged-files]))]
     (cond
       (not (:ok confined)) confined
 
@@ -787,7 +795,7 @@
 
 (defn- delete-tree!
   [dir]
-  (doseq [file (reverse (file-seq (io/file dir)))]
+  (doseq [^File file (reverse (file-seq (io/file dir)))]
     (Files/deleteIfExists (.toPath file))))
 
 (defn- dir-bytes
@@ -1007,7 +1015,7 @@
                        (let [actual (sha256-file path)]
                          (if (= actual result-hash)
                            (recur (rest remaining) (inc written)
-                                  (max window-ns (:window-ns outcome 0)))
+                                  (max window-ns (long (:window-ns outcome 0))))
                            (let [restored (rollback-written! txn)]
                              (finish! txn :rolled-back restored)
                              (refusal :txn-read-back-mismatch
@@ -1094,7 +1102,7 @@
       (try (read-string (slurp f)) (catch Exception _ nil)))))
 
 (defn- journal-dir
-  [workspace-root txid state-home]
+  ^File [workspace-root txid state-home]
   (io/file (transactions-dir workspace-root state-home) txid))
 
 (defn retained-transactions
@@ -1157,7 +1165,7 @@
                 :next_call nil
                 :remedy "Repair the tree from this journal - or accept the divergence deliberately - before removing it. A failed restoration is never evicted by a quota."})
 
-      (and quota-driven? (pos? (:receipt-refs lease 0)))
+      (and quota-driven? (pos? (long (:receipt-refs lease 0))))
       (refusal :txn-journal-referenced
                (str "The journal of " txid " is still referenced by "
                     (:receipt-refs lease 0) " receipt(s)")
