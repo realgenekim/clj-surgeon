@@ -411,6 +411,24 @@
   (when (.exists file)
     (.setReadable file true true)))
 
+(defn- deny-traversal!
+  "chmod 000 a DIRECTORY: neither listable nor traversable, for every user.
+
+   `deny-reads!` clears only the read bit, which leaves a directory
+   traversable — a file inside it still opens, so it does not reproduce the
+   denied-PARENT shape at all."
+  ^java.io.File [^java.io.File dir]
+  (.setExecutable dir false false)
+  (.setReadable dir false false)
+  dir)
+
+(defn- allow-traversal!
+  "Restore owner read+execute on a directory, whatever the test did to it."
+  [^java.io.File dir]
+  (when (.exists dir)
+    (.setExecutable dir true true)
+    (.setReadable dir true true)))
+
 ;; @spec MCP-OP-CENSUS-018
 (deftest discovery-prunes-skipped-directories-and-skips-escaping-paths
   (let [parent (temp-dir)
@@ -4126,6 +4144,293 @@
         (allow-reads! denied-file)
         (allow-reads! denied-too-file)
         (delete-tree! root)))))
+;; ---------------------------------------------------------------------------
+;; Sol's round-fifteen review, items 1/2/5/7 (blocking): round fourteen fenced
+;; the CLI's single-`:file` branch and left the `:dir` WALK — the ordinary
+;; invocation — reading whatever the discovery kernel handed it.
+;;
+;;   $ bb -m clj-surgeon.core :op :relation-census :dir <tree with a chmod-000 source>
+;;   {:error "…/denied.clj (Permission denied)", :error-type :invalid-arguments}
+;;
+;; Untyped, no anchor, no remedy, no continuation — and `:invalid-arguments` is
+;; in neither `cli-refusal-types` nor `mcp-refusal-types`, so both enumeration
+;; witnesses are blind to it. The tool, given the SAME tree, answers
+;; `unreadable-source-path` naming the member and saying what to do.
+;;
+;; Two more shapes reach the same bare `(slurp p)`:
+;;
+;;   - a FIFO named `*.clj`. `fs/readable?` is true of a named pipe and `slurp`
+;;     BLOCKS on it with no writer: 30 seconds, zero bytes, EXIT 124, no
+;;     diagnostic. One named pipe anywhere under `:dir` wedges the census. The
+;;     tool refuses the same path in milliseconds, before any open.
+;;   - a readable file under a chmod-000 PARENT. `fs/exists?` is false, because
+;;     it cannot stat through the parent, so the entrance answers
+;;     `:file-not-found` — "name a source that exists" — about a file that is
+;;     right there. This is the `file-not-found`/`file-not-readable` confusion
+;;     commit 1038893 was written to end, reproduced by moving the permission
+;;     bit one directory up.
+;;
+;; So the rule is not "the `:file` branch asks the readability question"; it is
+;; that EVERY path this op reads — the `:file` the caller named and every
+;; member the walk discovered alike — passes through ONE fence before any open,
+;; and that fence asks the same four questions the tool's resolver asks:
+;; existence, regular-file (FOLLOWED), readable, and — when the answer is "not
+;; there" — whether an ancestor directory is what this process may not read.
+;; ---------------------------------------------------------------------------
+
+(defn- bounded
+  "Run `thunk` on a DAEMON thread under a deadline; `::timeout` when it blocks.
+
+   The defect under test is an entrance that blocks forever on a named pipe,
+   and a witness that simply calls it would hang the suite rather than fail it.
+   The thread is a daemon precisely so the FAILING run still exits: a blocked
+   `slurp` on a FIFO does not answer an interrupt, so the thread cannot be
+   reclaimed and must instead be made unable to hold the JVM open."
+  [ms thunk]
+  (let [answer (promise)]
+    (doto (Thread.
+            ^Runnable
+            (fn []
+              (deliver answer
+                       (try (thunk)
+                            (catch Throwable t
+                              {:ok false
+                               :threw (.getName (class t))
+                               :error (.getMessage t)})))))
+      (.setDaemon true)
+      (.start))
+    (deref answer ms ::timeout)))
+
+(defn- bb-cli-bounded
+  "The babashka CLI as a subprocess under a deadline, killed if it blocks.
+
+   `bb-cli` blocks on `proc/shell`; a FIFO drive through it never returns. This
+   starts the process, waits `ms`, and force-destroys the process IT started."
+  [ms & args]
+  (let [started (apply proc/process {:out :string :err :string}
+                       "bb" "-cp" (str repo-root "/src")
+                       "-m" "clj-surgeon.core" args)
+        ^Process handle (:proc started)]
+    (if (.waitFor handle ms java.util.concurrent.TimeUnit/MILLISECONDS)
+      (let [{:keys [out exit]} @started]
+        (try (assoc (edn/read-string out) ::exit exit)
+             (catch Exception _ {::exit exit ::out out})))
+      (do (.destroyForcibly handle)
+          (.waitFor handle 5 java.util.concurrent.TimeUnit/SECONDS)
+          ::timeout))))
+
+(defn- mkfifo!
+  "A named pipe at `path`, or nil when this box has no mkfifo."
+  [path]
+  (let [{:keys [exit]} (proc/shell {:out :string :err :string :continue true}
+                                   "mkfifo" (str path))]
+    (when (zero? exit) (str path))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+(deftest every-path-the-census-reads-passes-one-fence-before-any-open
+  (let [parent (temp-dir)
+        arm "src/app/folds.clj"
+        denied "src/app/denied.clj"
+        dirfile "src/app/dirfile.clj"
+        inner "src/app/locked/inner.clj"
+        denied-tree (io/file parent "denied-tree")
+        plain (io/file parent "plain")
+        denied-file (io/file denied-tree denied)
+        locked-dir (io/file plain "src/app/locked")
+        inner-file (io/file plain inner)]
+    (try
+      (spit-file! (io/file denied-tree arm) arm-source)
+      (spit-file! denied-file arm-source)
+      (spit-file! (io/file plain arm) arm-source)
+      (spit-file! inner-file arm-source)
+      (.mkdirs (io/file plain dirfile))
+      (deny-reads! denied-file)
+      (deny-traversal! locked-dir)
+      (let [denied-root (.getCanonicalPath denied-tree)
+            plain-root (.getCanonicalPath plain)
+            declared (into census/cli-refusal-types census/mcp-refusal-types)]
+
+        (testing "the fixtures are genuinely refused to this process"
+          ;; The liveness check for the whole witness: a process running as
+          ;; root reads a chmod-000 file and lists a chmod-000 directory, and
+          ;; every probe below would then pass by censusing what it was
+          ;; supposed to refuse.
+          (is (false? (.canRead denied-file))
+              "this process can still read the chmod-000 fixture")
+          (is (false? (.canRead locked-dir))
+              "this process can still read the chmod-000 parent"))
+
+        (testing "the :dir walk types a chmod-000 member instead of throwing"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census {:dir denied-root}))]
+            (is (nil? (:threw result))
+                (str "the walk threw instead of refusing: " (pr-str result)))
+            (is (false? (:ok result)))
+            (is (not= :invalid-arguments (:error-type result))
+                (str "a permission bit escaped the op untyped: "
+                     (pr-str result)))
+            (is (contains? declared (:error-type result))
+                (str "the walk refused " (pr-str (:error-type result))
+                     ", which no declared refusal set contains"))
+            (is (= :file-not-readable (:error-type result))
+                (str "the denied member is not the typed refusal the denied "
+                     ":file earns: " (pr-str result)))
+            (is (= denied (:file result))
+                (str "the refusal does not name the member it could not "
+                     "read: " (pr-str result)))
+            (is (= denied-root (:absolute (:anchor result)))
+                (str "the refusal lost the workspace the caller named: "
+                     (pr-str (:anchor result))))
+            (is (string? (:remedy result))
+                "the refusal offers neither a continuation nor a remedy")))
+
+        (testing "the babashka :dir walk answers identically"
+          (let [result (bb-cli ":op" "relation-census" ":dir" denied-root)]
+            (is (= :file-not-readable (:error-type result))
+                (str "the bb entrance answered " (pr-str result)))
+            (is (= denied (:file result)))
+            (is (string? (:remedy result)))))
+
+        (testing "the tool, given the same tree, answers the same way"
+          (let [result (census-tool/execute-request!
+                         {:project-root denied-root} {})]
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "the tool answered " (pr-str result)))
+            (is (= denied (:file result)))))
+
+        (testing "a directory named *.clj is refused, not opened"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census
+                            {:file (str plain-root "/" dirfile)}))]
+            (is (nil? (:threw result))
+                (str "the entrance threw instead of refusing: "
+                     (pr-str result)))
+            (is (not= :invalid-arguments (:error-type result))
+                (str "a directory named *.clj escaped the op untyped: "
+                     (pr-str result)))
+            (is (= :file-not-a-regular-file (:error-type result))
+                (str "a directory named *.clj is not typed as one: "
+                     (pr-str result)))
+            (is (= (str plain-root "/" dirfile) (:file result)))
+            (is (string? (:remedy result)))))
+
+        (testing "a readable file under a denied PARENT names the parent"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census
+                            {:file (str plain-root "/" inner)}))]
+            (is (nil? (:threw result)))
+            (is (not= :file-not-found (:error-type result))
+                (str "a file that IS there was refused as missing: "
+                     (pr-str result)))
+            (is (= :file-not-readable (:error-type result))
+                (str "the denied parent is not typed as unreadable: "
+                     (pr-str result)))
+            (is (= :parent-denied (:cause result))
+                (str "the refusal does not say WHY it cannot be read: "
+                     (pr-str result)))
+            (is (str/includes? (str (:error result))
+                               (.getCanonicalPath locked-dir))
+                (str "the refusal names the path but not the parent that is "
+                     "what must change: " (pr-str (:error result))))
+            (is (str/includes? (str (:remedy result))
+                               (.getCanonicalPath locked-dir))
+                (str "the remedy does not name the parent: "
+                     (pr-str (:remedy result)))))))
+      (finally
+        (allow-reads! denied-file)
+        (allow-traversal! locked-dir)
+        (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(deftest a-named-pipe-is-refused-before-any-open-on-both-entrances
+  (let [parent (temp-dir)
+        arm "src/app/folds.clj"
+        pipe "src/app/pipe.clj"
+        tree (io/file parent "fifo-tree")
+        pipe-path (str (.getCanonicalPath tree) "/" pipe)]
+    (try
+      (spit-file! (io/file tree arm) arm-source)
+      (.mkdirs (.getParentFile (io/file pipe-path)))
+      (if-not (mkfifo! pipe-path)
+        (is false "this box has no mkfifo, so the FIFO witness cannot run")
+        (let [root (.getCanonicalPath tree)
+              declared (into census/cli-refusal-types census/mcp-refusal-types)]
+
+          (testing "the fixture is a named pipe that fs/readable? admits"
+            (is (true? (Files/isReadable (.toPath (io/file pipe-path))))
+                "the fixture is not readable, so it does not reproduce")
+            (is (false? (Files/isRegularFile (.toPath (io/file pipe-path))
+                                             (make-array java.nio.file.LinkOption 0)))
+                "the fixture is a regular file, so it does not reproduce"))
+
+          ;; Warm the fence path so the timing assertion measures the fence
+          ;; and not class loading.
+          (core/run-relation-census {:file (str root "/does-not-exist.clj")})
+
+          (testing "a :file FIFO is refused, not opened"
+            (let [started (System/nanoTime)
+                  result (bounded 5000
+                                  #(core/run-relation-census
+                                     {:file pipe-path}))
+                  elapsed (/ (- (System/nanoTime) started) 1e6)]
+              (is (not= ::timeout result)
+                  (str "the entrance blocked on a named pipe for 5 s: "
+                       pipe-path))
+              (when (not= ::timeout result)
+                (is (contains? declared (:error-type result))
+                    (str "the FIFO refused " (pr-str (:error-type result))
+                         ", which no declared refusal set contains"))
+                (is (= :file-not-a-regular-file (:error-type result))
+                    (str "a named pipe is not typed as a non-regular file: "
+                         (pr-str result)))
+                (is (< elapsed 100.0)
+                    (str "the refusal took " elapsed
+                         " ms, which is an open and not a stat")))))
+
+          (testing "a :dir walk over a FIFO is refused, not wedged"
+            (let [result (bounded 5000
+                                  #(core/run-relation-census {:dir root}))]
+              (is (not= ::timeout result)
+                  (str "one named pipe wedged the whole :dir census: " root))
+              (when (not= ::timeout result)
+                (is (= :file-not-a-regular-file (:error-type result))
+                    (str "the walk answered " (pr-str result)))
+                (is (= pipe (:file result))
+                    (str "the refusal does not name the member: "
+                         (pr-str result))))))
+
+          (testing "the babashka :dir walk is refused, not wedged"
+            (let [result (bb-cli-bounded 30000 ":op" "relation-census"
+                                         ":dir" root)]
+              (is (not= ::timeout result)
+                  "the babashka entrance blocked on a named pipe for 30 s")
+              (when (not= ::timeout result)
+                (is (= :file-not-a-regular-file (:error-type result))
+                    (str "the bb entrance answered " (pr-str result))))))
+
+          (testing "the tool refuses the same three shapes through files"
+            (let [here (fn [params]
+                         (census-tool/execute-request!
+                           {:project-root root} params))]
+              (doseq [[label params] [[:fifo {:files [arm pipe]}]
+                                      [:denied-absent {:files [arm "src/app/nope.clj"]}]]]
+                (let [result (bounded 5000 #(here params))]
+                  (is (not= ::timeout result)
+                      (str label " blocked the tool"))
+                  (when (not= ::timeout result)
+                    (is (= "unreadable-source-path" (:error_type result))
+                        (str label " answered " (pr-str result)))
+                    (is (= {:tool "relation_census"
+                            :workspace_root root
+                            :files [arm]}
+                           (:next_call result))
+                        (str label " lost the readable remainder: "
+                             (pr-str (:next_call result)))))))))))
+      (finally
+        (delete-tree! parent)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
