@@ -140,3 +140,27 @@ My own suites running under the lock; push after.
 ## 02:54Z — `bridge/receipt-ratchets` pushed at ece8c1c (my suites: test-fast 712/5970 baseline five; mcp JVM 387/4020 baseline one). Per the fence-review doctrine it does not enter the queue until an executed review says GO — Opus review a62ad08979fc4afbc running (expect_matched pattern cost and confinement, refuse-before-write on every route, vocabulary size, dispatch spelling edge cases, schema drift, contract). Eight lanes in flight.
 
 ## 03:06Z — ratchets review GO-WITH-FIX: line-granular 'addressed' over-claims (wrong direction), vocabulary unbounded in bytes and leaks comments, one refusal unreachable on its route, schema advertises what it refuses. Verdict filed; fix round launched on the ratchets worktree.
+
+## 03:08Z — rf2 fix round landed (f8613ba…5ccb4f0, EXTRACT-024..031); `.cpcache/` ignored on main (ef5a538)
+
+All eight NO-GO items, one commit each, each red against the reviewer's own probe: the directory-symlink
+escape now refuses `caller-path-outside-root` with the outside file byte-identical (the builder reproduced
+the HIGH finding verbatim first); `:command` is the two argv vectors actually executed, `:command_shell`
+a quoted form round-tripped through bash with 11 hostile tokens, the old interpolation shown to create
+PWNED; the compile check states `:runs-workspace-code true` and names the opt-out; the config walk is
+bounded at the root with `:config-file` in the receipt; attribution by project-relative path (and a
+silent pre-existing bug: the old regex excluded `/`, so the common `(clj_surgeon/extract.clj:12:3)` shape
+never matched); discovery walks without following links, skips build trees, refuses above a raisable file
+cap, skips and NAMES oversized files; `:verified` flags derived; the alias must be one simple symbol — and
+hand-driving the other mode found a ninth hole the review did not name: with `:rewire-callers false` the
+bad alias went straight into the header; closed and witnessed in both modes. Suites: test-fast 744/6301
+(baseline five); mcp JVM 385/4071 (baseline one; the builder's own baseline measurement was contaminated by
+an in-flight edit and is confirmed by the final, stated as such). Builder's process defect, self-caught:
+`git add -A` swept 142 `.cpcache/` files into the commits; it rewrote its own eight commits with
+filter-branch (base 5e6cdd2 intact, merge-base verified, 8 files / 0 cpcache tracked). Two rounds hit
+this tonight, so `.cpcache/` is now ignored on main. Tempted-not-done, reported: `:file`/`:to` are not
+confined (only caller plans, as specified); the undo receipt's `:command` is still a shell-ish string;
+`find-config-file`'s one-arity walk still serves `load-project-aliases`/`outline`; an out-of-root directory
+symlink anywhere under the root now refuses EVERY extraction in that repo (fail visibly, as mandated —
+worth a second look before a monorepo). My suites running; push after; then an independent re-review.
+Ratchets fix round (a90f9ebd74d4100af) launched on the ratchets worktree.

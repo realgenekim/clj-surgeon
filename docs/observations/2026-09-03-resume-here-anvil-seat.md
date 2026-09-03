@@ -121,3 +121,13 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - curtain-call fix rounds launched from docs/observations/2026-09-03-folddiff-lens-redteam.md: fold-diff aa14abf5d75ba48e8 (`~/src/curtaincall-cfp-folddiff`, 7 fixes incl. both sides as REFS); template-upsert abd7fc65de9301f76 (`~/src/curtaincall-cfp-tmpl`, raw-id identity); lens-followups ab73fea07362149df (`~/src/curtaincall-cfp-lens2`, slug cross-check). settings-lens aebb7b9a is GO as measured.
 - clj-surgeon fix rounds still running: census a4fe4601c68f5db01, study aab6a773af84935ee, rf2 abd835410547b9851, q5z aaa35fb0f121fdb9a. Ratchets suites: waiter b61xhgakh.
 - Merge order for Gene (curtain-call): fold → store → settings-lens → template-upsert (after fix) → lens-followups (after fix); goldens re-run at each step. The fold-diff tool runs against production only after its fix round.
+
+## RESUME DELTA 2026-09-03T03:08Z
+
+- rf2 fix round DONE (5ccb4f0, 8 commits on 5e6cdd2); my suites waiter bwxaqew6c (`~/tmp/rf2-*.log`);
+  push when only the baseline six fail; then an Opus re-review before the queue.
+- Ratchets: review GO-WITH-FIX filed; fix round a90f9ebd74d4100af running on `~/src/clj-surgeon-ratchets`.
+- Running: census a4fe4601c68f5db01, study aab6a773af84935ee, q5z aaa35fb0f121fdb9a, fold-diff
+  aa14abf5d75ba48e8, template-upsert abd7fc65de9301f76 (waiting on its suite), lens-followups ab73fea07362149df.
+- Rule for every builder prompt from now on: NEVER `git add -A`; `.cpcache/` is ignored on main (ef5a538)
+  but branches cut earlier lack the ignore line.
