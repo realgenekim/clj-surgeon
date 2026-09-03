@@ -1709,3 +1709,49 @@
           "the pages concatenate to the fresh scan even when the root is
            spelled with `..`")
       (is (nil? (cursor-of p3))))))
+
+;; ============================================================
+;; A newline inside a source-file NAME (Opus, round seven, item (c))
+;; ============================================================
+
+;; @spec MCP-OP-MEM-003
+(deftest a-filename-containing-a-newline-is-discovered-once-not-split-into-two-candidates
+  ;; `core/find-clj-files` shells `find` and parses its output with
+  ;; `str/split-lines`. `find` prints one path per line, so a file literally
+  ;; named `we<LF>ird.clj` prints as TWO lines: an absolute fragment ending
+  ;; ".../src/fixt/we" and a bare relative "ird.clj" — one file, two
+  ;; candidates. The relative fragment is not under `root-path`, so it never
+  ;; reaches a record: `rel-path`'s `(fs/relativize root-path (fs/path f))`
+  ;; throws `IllegalArgumentException: 'other' is different type of Path`
+  ;; before the unbounded scan can return anything at all — an untyped throw
+  ;; out of an operation whose contract is a typed receipt, the same failure
+  ;; class `read-path-memory-specs.md` already names as defeated, one line
+  ;; further up the pipeline.
+  (let [dir (str (fs/create-temp-dir {:prefix "ls-tree-budget-newline-name"}))
+        src (str dir "/src/fixt")
+        weird-name (str "we" \newline "ird.clj")]
+    (try
+      (fs/create-dirs src)
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (spit (str src "/mod000.clj") (tiny-source 0))
+      (spit (str src "/mod001.clj") (tiny-source 1))
+      (spit (str src "/" weird-name) "(ns fixt.weird)\n(defn f [x] x)\n")
+      (let [whole (core/run-ls-tree {:dir dir :format :edn})]
+        (is (vector? whole)
+            (str "the unbounded scan must return a records vector, never "
+                 "throw, for a source file whose name contains a newline; "
+                 "got " (pr-str whole)))
+        (is (= 3 (count (entry-files whole)))
+            (str "exactly three candidates — the newline-named file counted "
+                 "ONCE, not split into a phantom second candidate; got "
+                 (pr-str (entry-files whole))))
+        (is (some #(= (str "src/fixt/" weird-name) %) (entry-files whole))
+            (str "the newline-named file is discovered under its real, "
+                 "whole name; got " (pr-str (entry-files whole))))
+        (let [p1 (core/run-ls-tree {:dir dir :format :edn :max-results 2})
+              p2 (core/run-ls-tree {:dir dir :format :edn :max-results 2
+                                    :cursor (cursor-of p1)})]
+          (is (= (entry-records whole)
+                 (into (entry-records p1) (entry-records p2)))
+              "the paged walk equals the unbounded scan record for record")))
+      (finally (fs/delete-tree dir)))))
