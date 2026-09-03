@@ -2520,3 +2520,32 @@
             (pr-str (:error result))))
       (finally
         (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-control-directory-outside-the-workspace-is-not-called-the-workspaces
+  ;; The guard that made this refusal reachable is precisely the one for a
+  ;; control directory that is NOT the workspace's: a linked worktree's real
+  ;; `.git` lives under the MAIN repository, outside the root. Calling it "the
+  ;; workspace's .git" sends the reader to look in the wrong tree for a
+  ;; directory the refusal has already named in `control_directory`.
+  (let [workspace (workspace!)
+        main (temp-dir)
+        gitdir (io/file main ".git" "worktrees" "wt" "refs" "heads")]
+    (.mkdirs gitdir)
+    (try
+      (let [result (alias-migration/execute! (config workspace gitdir)
+                                             (request workspace))
+            message (str (:error result))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-receipt-dir-in-control-directory"
+               (:error_type result)))
+        (is (= ".git" (:control_directory result)))
+        (is (not (str/includes? message "workspace's"))
+            (str "the refusal calls another repository's control directory "
+                 "the workspace's: " message))
+        (is (str/includes? message ".git")
+            (str "the refusal no longer names the directory it found: "
+                 message)))
+      (finally
+        (delete-tree! workspace)
+        (delete-tree! main)))))
