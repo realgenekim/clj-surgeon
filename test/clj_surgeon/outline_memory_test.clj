@@ -26,11 +26,16 @@
    -Xmx1g, min of five calls after three warm-ups:
 
      two-parse path with a per-form `:source` string : 62,686,992 B = 1303.3x
-     single-parse path with no discarded `:source`   : 37,642,088 B =  782.6x
+     single-parse path with no discarded `:source`   : 38,201,624 B =  794.3x
      parse + walk alone (the irreducible node tree)  : 36,078,320 B =  750.1x
 
-   The ceiling is the single-parse measurement plus 25% headroom
-   (782.6 x 1.25 = 978.3), rounded to 980. It is deliberately far above the
+   The single-parse row above is the gate's own five-sample minimum
+   (superseding an earlier three-sample reading of 782.6x taken the same
+   day, before the gate below was corrected to actually run five samples).
+   The ceiling stays at the value set from that earlier reading —
+   782.6 x 1.25 = 978.3, rounded to 980 — because 794.3x remains
+   comfortably under it; this re-measurement is not a rebaseline. It is
+   deliberately far above the
    `30x` figure a reader might expect: a rewrite-clj node tree costs ~48x the
    source in retained bytes and ~750x in transient allocation, and this intent
    does not promise to replace that parser."
@@ -69,7 +74,7 @@
   (testing "outline-source builds no per-form source text it does not return"
     (let [source @fixture-source
           bytes @fixture-bytes
-          allocated (min-allocation 3 3
+          allocated (min-allocation 3 5
                                     #(outline/outline-source
                                        fixture-path source))
           ratio (double (/ allocated bytes))]
