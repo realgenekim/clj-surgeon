@@ -2108,6 +2108,60 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(deftest the-sweep-counts-corroborated-and-uncorroborated-interrupted-breaks-apart
+  (testing "Opus round 8, finding 4, probe A5. `:interrupted` was ONE count
+            over two rules that are not equal evidence. Sharing the present
+            LOCK's inode is CORROBORATION BY THE KERNEL - the one state a
+            completed break can never be in. A `:phase :linked` marker is a
+            CLAIM BY THE BREAKER, written into a file any writer of the
+            transactions directory can write. Four hand-dropped sidecars read
+            `:interrupted 4`, indistinguishable from four genuine crashes
+            mid-break, so the standing count could not tell an operator
+            whether the kernel had corroborated anything at all. Round seven
+            split `:orphan-sidecars` and `:unreadable-stamps` out on exactly
+            this argument."
+    (let [ws (workspace! "interrupted-split" 2)
+          child (.start (ProcessBuilder. ["sleep" "60"]))
+          transactions (journal/transactions-dir (:root ws) (:state-home ws))
+          dir (io/file transactions)
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")]
+      (try
+        (plant-lock! ws {:txid "A-LIVE" :pid (.pid child)
+                         :boot-id (boot-id-now)})
+        ;; two the KERNEL corroborates: a second link to the live LOCK
+        (doseq [n ["C-0" "C-1"]]
+          (Files/createLink (.toPath (io/file dir (str "LOCK.broken." n)))
+                            (.toPath lock)))
+        ;; two nothing corroborates: a tombstone of their own, wearing a
+        ;; marker any directory writer can drop
+        (doseq [n ["U-0" "U-1" "U-2"]]
+          (spit (io/file dir (str "LOCK.broken." n))
+                (pr-str {:txid (str "ghost-" n)}))
+          (spit (io/file dir (str "LOCK.broken-at." n))
+                (pr-str {:tombstone (str "LOCK.broken." n) :phase :linked})))
+        (let [bucket (@#'journal/prune-broken-locks! transactions nil)]
+          (is (= 2 (:interrupted-corroborated bucket))
+              (str "the kernel corroborated two of them: " (pr-str bucket)))
+          (is (= 3 (:interrupted-uncorroborated bucket))
+              (str "and three are a claim by a breaker that nothing can "
+                   "confirm: " (pr-str bucket)))
+          (is (nil? (:interrupted bucket))
+              (str "the one number that could not tell them apart is gone: "
+                   (pr-str bucket))))
+        ;; and the split travels in the receipt, not only in a private sweep
+        (let [counted (:broken-locks (journal/recover! (:root ws) opts))]
+          (is (contains? counted :interrupted-corroborated)
+              (str "the receipt publishes the corroborated count: "
+                   (pr-str counted)))
+          (is (contains? counted :interrupted-uncorroborated)
+              (str "and the uncorroborated one: " (pr-str counted))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
 (deftest a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break
   (testing "Opus round 5, finding 4. A crash between `Files/createLink` and
             the unlink leaves a tombstone that is a second link to the LIVE

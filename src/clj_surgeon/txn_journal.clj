@@ -1041,6 +1041,16 @@
    retired by nothing; it is retired here on the SAME published retention, and
    counted, because a bucket nothing sweeps is accumulation whatever its size.
 
+   `:interrupted-corroborated` and `:interrupted-uncorroborated` are that
+   discipline applied to EVIDENCE QUALITY. They used to be one `:interrupted`,
+   and four hand-dropped `:phase :linked` sidecars read `:interrupted 4` -
+   indistinguishable from four genuine crashes mid-break, so the standing
+   count could not tell an operator whether the kernel had corroborated
+   anything at all. Sharing the present LOCK's inode is corroboration BY THE
+   KERNEL: the one state a completed break can never be in. The marker is a
+   claim by the breaker, written into a file any writer of the transactions
+   directory can write. One number over both is a number about neither.
+
    `:unreadable-stamps` is that discipline applied to a CONDITION rather than
    a file. A stamp `broken-lock-stamp-tolerance-ms` or more ahead of the clock
    is correctly refused as a time, but the fact was typed per row and counted
@@ -1055,8 +1065,14 @@
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
         ;; a tombstone whose break never completed is not a break that
-        ;; happened: retiring it here would resolve it silently
-        live (interrupted-break-files transactions-dir)
+        ;; happened: retiring it here would resolve it silently. The two
+        ;; typing rules are counted APART, because they are not equal
+        ;; evidence: sharing the present LOCK's inode is corroboration by the
+        ;; kernel, and a `:phase :linked` marker is a claim by the breaker
+        ;; that any writer of this directory can drop.
+        entries (interrupted-break-entries transactions-dir)
+        live (mapv (fn [entry] (nth entry 0)) entries)
+        classes (frequencies (map (fn [entry] (nth entry 1)) entries))
         ;; read BEFORE the tombstone prune, so a sidecar this call deletes
         ;; alongside its own tombstone is never counted as an orphan
         orphans (mapv (fn [^File f] [f (evidence-age f f now)])
@@ -1094,7 +1110,8 @@
      :pruned (:pruned tombs)
      :remaining (:remaining tombs)
      :vanished (:vanished tombs)
-     :interrupted (long (count live))
+     :interrupted-corroborated (long (get classes :corroborated 0))
+     :interrupted-uncorroborated (long (get classes :uncorroborated-marker 0))
      :orphan-sidecars (select-keys sidecars [:found :pruned :remaining])
      :unreadable-stamps unreadable
      :retention-ms broken-lock-retention-ms}))

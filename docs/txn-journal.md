@@ -276,7 +276,8 @@ A transaction whose
 also retires the break tombstones older than `broken-lock-retention-ms`,
 measured against the tombstone's OWN creation stamp rather than the mtime it
 inherited from the claim it broke, and reports `:broken-locks {:found … :pruned
-… :remaining … :vanished … :interrupted … :orphan-sidecars {…}
+… :remaining … :vanished … :interrupted-corroborated …
+:interrupted-uncorroborated … :orphan-sidecars {…}
 :unreadable-stamps … :retention-ms …}`. The ordering used
 to be the guarantee — "pruned after its own break" — and it was not one: a
 rename preserves mtime, so breaking a two-day-old crashed holder's lock produced
@@ -286,8 +287,9 @@ entries whose file was gone by the time it was stat'd, and they are deliberately
 not in `:found`, which they used to inflate. Recovery also resolves EVERY
 INTERRUPTED break before it decides anything else, returning
 `:interrupted-breaks [{:tombstone … :resolution :interrupted-break-finished |
-:interrupted-break-reverted | :interrupted-break-uncorroborated
-:evidence :retained | :removed} …]` — a vector,
+:interrupted-break-reverted | :interrupted-break-uncorroborated |
+:interrupted-break-vanished
+:evidence :retained | :removed | :vanished} …]` — a vector,
 because the listing used to type the first of them and publish the rest as
 breaks that happened, and a second `recover!` was needed to clear each one.
 If the LOCK is still that claim and its holder is dead by the ordinary rule the
