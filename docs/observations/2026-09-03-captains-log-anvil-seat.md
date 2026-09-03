@@ -297,3 +297,16 @@ consult continues in parallel for reconciliation. Provisioning final: 1 phone ch
 stays on Buster by Gene's ruling — Buster is mission critical, migration is a later decision); 6 ports
 DONE; 7 GCP deferred; 8 beads = inbox. Reviews from here route to Sol (high) first, Opus for the
 filter-refused class and as the second voice.
+
+## 04:09Z — Gene: "When fixing, add LID (see skill) to add new requirements in"
+
+Rule for the memory work (and every fix round from here): new requirements enter as linked intents per
+`~/opt/claude-skills/linked-intent-testing/SKILL.md` (Jess Szmajda's LID as practiced here): a registry
+entry with a stable id, an EARS-form intent, `:boundaries` naming what it does NOT promise, witness tests
+that FAIL FIRST and are linked by id, and the contract test that makes an evaporated promise loud. For
+memory: a new prefix `MCP-OP-MEM-001..` — the aggregate byte ceiling, the walk bound, the depth refusal,
+the per-op `heap_used_mb` receipt, retention (hashes + spans resident, source re-read under a hash check),
+pool size as a function of a memory budget, and the memory-vs-N battery pass line. The deciding test in the
+skill applies: could a maintainer silently narrow it with every test green? A ceiling can be raised by one
+constant with no test noticing — so the witness asserts the behaviour AT the ceiling, not the constant.
+Builder prompts for the memory rounds carry this clause verbatim.

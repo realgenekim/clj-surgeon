@@ -177,3 +177,13 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - Sol WORKS here (genekkanban pool): `codex exec -m gpt-5.6-sol -c model_reasoning_effort="high" --skip-git-repo-check --sandbox read-only -o out.md "…" </dev/null`. Reviews route to Sol first; Opus for filter-refused (symlink/confinement fixtures) and as the second voice.
 - Nothing missing now except by ruling: no phone channel; repo-watchstander stays on Buster; GCP deferred.
 - Running: Sol memory design answer (`~/tmp/sol/memory-sol-answer.md`, waiter bm3owhhzt); Opus memory consult a2d936e48f3423a0c; fold-diff production re-review; rf2/q5z/study round threes; census; template-upsert; ratchets; kondo-path test.
+
+## RESUME DELTA 2026-09-03T04:09Z
+
+- Gene's rule: memory fixes (and all fix rounds) add LID intents via `~/opt/claude-skills/linked-intent-testing`
+  (registry id, EARS, boundaries, fail-first linked witnesses, contract test) — memory prefix `MCP-OP-MEM-`.
+  Builder-prompt clause: "New requirements enter as linked intents per the linked-intent-testing skill
+  (read it first): registry entry with a stable id + EARS + boundaries, witnesses that fail first and are
+  linked by id; a ceiling's witness asserts behaviour AT the ceiling, never the constant."
+- Memory plan: reconcile Sol (`~/tmp/sol/memory-sol-answer.md`) and Opus (a2d936e48f3423a0c) answers →
+  ordered builds, smallest measurable win first, each with its MEM intent and a heap receipt.
