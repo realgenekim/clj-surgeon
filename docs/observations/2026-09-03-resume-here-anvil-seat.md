@@ -203,3 +203,11 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - Memory program: B1 kernel a2b6bbcbdc96b2925 (`~/src/clj-surgeon-txn`, TDD: OOM repro first, `make memory-red`); battery a0e2b73e06754ebf3 (`~/src/clj-surgeon-membat`, `make memory-battery`, MEM-001, red baseline on main); Sol YOLO answer waiter b7qt28zev (`~/tmp/sol/memory-sol-answer-2.md`); Opus consult a2d936e48f3423a0c. Reconcile Sol+Opus → fold numbers into B2 (adoption in alias_migration + extract after their rounds).
 - Review/fix lanes: fold-diff production re-review a94e2e37c80843f35 (gates the mayor's run; inb-3a9818 says DO NOT RUN YET); rf2 r3 a59ea3ce2a6b2a7fc (ruling: no writes into skipped trees via links) → my suites → push → re-check; census a4fe4601c68f5db01; template-upsert abd7fc65de9301f76; ratchets a90f9ebd74d4100af; q5z r3 a4f713cb01afc03cb; study r3 acffa7722710273de; kondo-path af5a3aed64de01ebb.
 - Load ~8/16, 18 GB free, forge JVM RSS ~9.6 GB. Sol-yolo PR: realgenekim/claude-skills#1.
+
+## RESUME DELTA 2026-09-03T04:26Z
+
+- Memory: Sol's measured design filed (2026-09-03-memory-design-sol-answer-2.md: 45 heap bytes per source byte = the node tree; lifetime + concurrency are the win; state root is `~/.local/state/clj-surgeon/workspaces/<digest>/`; MEM-001..011 plan with at-the-ceiling witnesses). B1 (a2b6bbcbdc96b2925) and the battery (a0e2b73e06754ebf3) re-briefed with the state root and id numbering (battery: 001 + 011; kernel: 006, 007, 012–014). Opus consult a2d936e48f3423a0c still measuring; reconcile → B2.
+- Census fix round complete ef545c5; my suites waiter b75uqudhe (`~/tmp/census/my-*.log`); push → Sol re-review (Opus for the symlink item if the filter refuses).
+- Also pending my suites: ratchets 49f6e12 (b1q8ixsp0, `~/tmp/ratchets2-*.log`), kondo f8a9ef9 (bvjc78bi1, `~/tmp/kondo-mcp-test.log`).
+- Running: fold-diff production re-review; rf2 r3 ruling commit; template-upsert; q5z r3; study r3; routing-doc.
+- Builder logs now go under `~/tmp/<lane>/` (a sibling lane overwrote a shared log).
