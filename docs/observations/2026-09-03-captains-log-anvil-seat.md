@@ -432,3 +432,41 @@ Pre-existing RED found in passing, NOT mine: `agent-routing-test/terminal-respon
 ## 05:30Z — ratchets round-3 Sol re-check: GO-WITH-FIX. Both round-2 defects CLOSED (multiline string → one physical line, reader value equal; split-catalog `changes+expect` → :public-schema-denied, mutation-attempted=false); string values with backslashes/quotes/\u03bb round-trip; teaching-text audit clean (no live prompt or skill teaches `changes` on edit_clojure). Open: a `:regex` leaf with a raw newline still presents on two lines. Also: the branch must absorb origin/main (baseline now zero) before the mayor's gates. Round 4 launched (Sonnet): regex escaping witness + merge main + three gates at zero.
 
 ## 05:31Z — arms apparatus Sol review: NO-GO for a real cohort (self-test 55/0 reproduced; the happy path is fine). P0s: score.py skips malformed lines and emits receipts from truncated/duplicated/reversed streams with sources.agree=true; rc 3 leaves a stale receipt; empty watch.jsonl → rc 0; a tool call with no result is a citeable receipt; the driver is not in its own process group (orphaned `sleep 60` under PPID 1); health JSON accepted with ok:false and a wrong project_root; newest-mtime rollout latch bound a foreign session (blocker — per-arm CODEX_HOME + exact path); prompt check passed after the doc's governing prose changed; run-cohort continued past ATTEST-MISMATCH and n=0 exits success; cleanup may signal a pid it did not start; write paths outside the runner root. Exactly the instrument-lies class the night orders name. Round 2 launched (Opus) with fail-first self-test cases per item.
+
+## 06:22Z — memory battery round 2: Sol's eight instrument fixes landed, and the new hard line is RED
+
+Sol's executed instrument review (GO-WITH-FIX as tooling) closed in eight commits on
+`bridge/memory-battery`, each with a witness that failed first, ms-scale, in the self-test — never in
+`make test`. What the instrument could not do before: report an unobserved line as anything but a pass
+(`PASS (INCOMPLETE)`, exit 0 — now a third terminal state, INCOMPLETE, exit 4); check that the corpus on
+disk is the corpus it claims (one deleted file was invisible; verification is now byte counts plus content
+digests, with unexpected files a refusal); bind output parity to the experiment that produced it (any
+`reference-hashes.edn` was accepted from a root shared across worktrees); gate what a result costs to hold;
+tell result retention from a leak; or distinguish a measurement from a requirement.
+
+Verbatim from the run at `a9d2d4b` (`docs/observations/2026-09-03-memory-battery-baseline.md`, round 2):
+`FAIL held-scales-with-n {:op :cli-ls-tree, :profile :default, :observed 94.0, :limit 11.5, :small-n-observed 9.5, :slack-mb 2.0}`,
+`{:op :workspace-sources-read-all, :observed 41.0, :limit 6.4}`,
+`{:op :rename-ns-plan-full-match, :observed 9.9, :limit 3.0}`. All three passed round 1 on the same numbers;
+nothing was looking at them. `rename-ns-plan-narrow` stays flat at 0.1 MB — the walk is bounded, the plan is not.
+`grow_mb` <= 0.4 MB everywhere (nothing leaks), no OOM, and output parity holds on every arm.
+
+The attestation fired twice unprompted: the existing reference was refused `unattested-reference`, and after a
+commit touched `src/`, the rebuilt one was refused again as `stale-reference {:fields [:src-digest]}`. Both
+would previously have been used silently for parity.
+
+The three cheap adversarial arms Sol asked for paid off on their first run. `cli-ls-tree` peaks at **386.4 MB
+on ONE 1.9 MiB file** and **285.7 MB on ONE 111 KB, 300-deep file**, against a 248 MB budget — corpora 20x and
+364x smaller than the 10,000-file tree. Heap sized by a file's shape, not the repository's size; no tree-scale
+arm could have surfaced it. At -Xmx4g the same nested arm peaked at 1,322 MB.
+
+The peak lines are now TREND, reported and never gated: Sol re-ran an identical cell and it moved 274.8 ->
+246.5 MB, crossing the verdict line on unchanged work. Across three runs the held values reproduced to 0.3 MB
+while peak moved by tens — the measured case for which instrument may hold a gate. The docs' "about 410 MiB at
+512m" was also wrong arithmetic on the wrong term of the min; the enforced figure is start + 224 ~= 248 MiB.
+
+`make test-fast` after merging origin/main: "Ran 726 tests containing 6050 assertions. 0 failures, 0 errors."
+Lock note: per the coordinator, the full battery keeps the exclusive `suite.lock`; unit suites moved to
+`suite-run` lanes, so unit suites now run concurrently with a battery — `wall_ms` is a trend column, the heap
+columns are per-JVM and unaffected. Recorded in `docs/memory-battery.md`.
+

@@ -203,6 +203,30 @@ claim them from this battery's output.
 
 ---
 
+## Running it on a shared box
+
+On Anvil the full battery holds the **exclusive** `/home/forge/tmp/suite.lock`;
+unit suites (`make test-fast`, `make memory-battery-self-test`) run under
+`/home/forge/bin/suite-run`, which spreads them across three separate lanes.
+So the battery no longer queues behind unit suites — **but unit suites do run
+concurrently with it.**
+
+What that means when reading a table:
+
+- **`wall_ms` is a trend column, not a measurement.** Other JVMs are competing
+  for the same 16 cores; wall time moves with the box's load and is comparable
+  only between runs taken under similar conditions.
+- **The heap columns are per-JVM and stay sound.** `peak_mb`, `held_mb`,
+  `excl_mb`, `grow_mb` and `afterGC_mb` are read from *this* JVM's own heap, so
+  a neighbouring suite cannot inflate them. `peak_mb` is still process-wide
+  *within this JVM* — that is the caveat that makes it a trend line — but it is
+  not contaminated by other processes.
+- **`oom`, output parity and the two cross-N retention lines are unaffected**,
+  which is another reason they are the hard ones.
+
+Record the host load in the receipt's surrounding notes when a run is close to a
+line, and re-run before calling a single crossing a regression.
+
 ## Why it is not in `make test`
 
 Two reasons, and both are load-bearing:
