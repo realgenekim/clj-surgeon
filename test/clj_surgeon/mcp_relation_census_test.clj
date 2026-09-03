@@ -1222,3 +1222,36 @@
           "no continuation and no remedy: the caller is told nothing")
       (is (not (str/includes? wire "<"))
           (str "the exhaustion receipt carries a placeholder: " wire)))))
+
+;; @spec MCP-OP-CENSUS-033
+(deftest the-entry-narrowing-fits-under-both-bounds
+  (let [choose (requiring-resolve
+                 'clj-surgeon.census-discovery/entry-narrowing-subtree)]
+    (is (some? choose) "the discovery kernel exposes no entry-narrowing rule")
+    (when choose
+      (testing "the subtree with the most entries that still fits wins"
+        (is (= "src/b"
+               (choose {:subtree-entries {"" 50001 "src" 50001
+                                          "src/a" 1000 "src/b" 4000}
+                        :subtree-counts {}
+                        :partial-dirs #{"" "src"}}))))
+
+      (testing "a subtree that would trip the CANDIDATE ceiling is not offered"
+        (is (= "src/a"
+               (choose {:subtree-entries {"" 50001 "src" 50001
+                                          "src/a" 1000 "src/b" 4000}
+                        :subtree-counts {"src/b" (inc census/max-scanned-files)}
+                        :partial-dirs #{"" "src"}}))
+            "the narrowing replays straight into the other refusal"))
+
+      (testing "a subtree the walk did not finish is never offered"
+        (is (nil? (choose {:subtree-entries {"" 50001 "src" 50001
+                                             "src/b" 50000}
+                           :subtree-counts {}
+                           :partial-dirs #{"" "src" "src/b"}}))))
+
+      (testing "a subtree over the entry bound never wins"
+        (is (nil? (choose {:subtree-entries {"" 50001 "src" 50001
+                                             "src/a" (inc census/max-walk-entries)}
+                           :subtree-counts {}
+                           :partial-dirs #{"" "src"}})))))))
