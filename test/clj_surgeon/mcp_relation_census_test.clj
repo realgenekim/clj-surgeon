@@ -2558,3 +2558,74 @@
         (is (= :invalid-pool-size (:error-type result))
             (str ":threads " (pr-str value) " refused as "
                  (pr-str (:error-type result)) ": " (pr-str result)))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eleven review, item 7: duplicate `:file` flags are silently
+;; collapsed.
+;;
+;; `clj-surgeon :op :relation-census :file one.clj :file two.clj` censused
+;; `two.clj` alone and reported `:ok true` with `files-scanned 1`. The caller
+;; asked about two sources and was told, in a receipt that claims completeness,
+;; about one — with no refusal, no warning, and no count they could reconcile
+;; against what they asked for.
+;;
+;; This is the same failure MCP-OP-CENSUS-019 already names for an argument
+;; the op does not accept: an argument that is silently DROPPED tells the
+;; caller a bound was applied that never existed. A repeated flag is one
+;; argument dropped, and the last-one-wins rule that drops it is invisible in
+;; the receipt. The CLI grammar has no repeated flags, so a repeat is a
+;; malformed request, not a list.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-019
+(deftest a-repeated-cli-flag-is-refused-and-never-silently-collapsed
+  (testing "the parser refuses a repeated flag, naming it"
+    (doseq [[args flag]
+            [[[":op" "relation-census" ":file" "a.clj" ":file" "b.clj"] ":file"]
+             [[":op" "relation-census" ":dir" "a" ":dir" "b"] ":dir"]
+             [[":op" "relation-census" ":dir" "a" ":doors" "x" ":doors" "y"]
+              ":doors"]
+             [[":op" "relation-census" ":dir" "a" ":threads" "2" ":threads" "4"]
+              ":threads"]
+             [[":op" "a" ":op" "b"] ":op"]]]
+      (let [outcome (try {::opts (core/parse-args args)}
+                         (catch Exception e
+                           {::data (ex-data e) ::message (ex-message e)}))]
+        (is (nil? (::opts outcome))
+            (str (pr-str args) " was parsed rather than refused: "
+                 (pr-str (::opts outcome))))
+        (is (= :duplicate-argument (:error-type (::data outcome)))
+            (str (pr-str args) " refused as "
+                 (pr-str (:error-type (::data outcome)))))
+        (is (= flag (:argument (::data outcome)))
+            (str (pr-str args) " did not name the repeated flag: "
+                 (pr-str (::data outcome))))
+        (is (str/includes? (str (::message outcome)) flag)
+            (str "the message does not name " flag ": "
+                 (pr-str (::message outcome)))))))
+
+  (testing "a request with no repeat still parses"
+    (is (= {:op "relation-census" :dir "a" :file "b.clj" :threads "2"}
+           (core/parse-args [":op" "relation-census" ":dir" "a"
+                             ":file" "b.clj" ":threads" "2"]))))
+
+  (testing "the babashka entrance refuses the repeat instead of censusing one file"
+    (let [parent (temp-dir)
+          one (io/file parent "src/app/one.clj")
+          two (io/file parent "src/app/two.clj")]
+      (try
+        (spit-file! one arm-source)
+        (spit-file! two arm-source)
+        (let [result (bb-cli-in parent ":op" "relation-census"
+                                ":file" (.getPath one)
+                                ":file" (.getPath two))]
+          (is (not (true? (:ok result)))
+              (str "the repeat was censused as a complete request: "
+                   (pr-str result)))
+          (is (= :duplicate-argument (:error-type result))
+              (str "the bb entrance refused as "
+                   (pr-str (:error-type result)) ": " (pr-str result)))
+          (is (= ":file" (:argument result))
+              (str "the bb refusal does not name the repeated flag: "
+                   (pr-str result))))
+        (finally (delete-tree! parent))))))
