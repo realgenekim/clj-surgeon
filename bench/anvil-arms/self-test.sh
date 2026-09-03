@@ -434,6 +434,61 @@ attest15 case15d "{\"ok\":true,\"pid\":$$,\"port\":1,\"project-root\":\"$WT15\"}
 attest15 case15e "{\"ok\":false,\"pid\":999,\"project_root\":\"/wrong/project\",\"port\":1}" \
          2 'healthz-not-ok'
 
+echo "== case 16: the rollout is bound to THIS session, never to the newest file =="
+# Sol, item 8 (BLOCKER): newest-mtime discovery selected rollout-other-session.jsonl and
+# then latched it permanently.  Cohort seriality does not stop another Codex session from
+# existing, so the binding must come from the session's OWN announced id, inside a
+# CODEX_HOME private to this arm.
+A16="$WORK/st-P-N-16"; mkdir -p "$A16"
+git clone -q --no-hardlinks "$BASE_REPO" "$A16/worktree"
+printf '%s\n' "$BASE_SHA" > "$A16/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A16/prompt.md"
+EXP=st RUNG=P SLOT=16 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A16" N - "" > /dev/null 2>&1
+CH16="$A16/codex-home"
+env CODEX_HOME="$CH16" python3 "$HERE/watch.py" --arm "$A16" --codex-home "$CH16" \
+  --zero-return-window 30 --poll 0.2 \
+  -- env CODEX_HOME="$CH16" bash "$HERE/fake-driver.sh" "$A16" codexsession \
+  > "$WORK/case16.out" 2>&1
+want "case16 watch rc" 0 "$?"
+want "case16 returns metered (3 = this session, 9 = the decoy)" 3 "$(jqf "$A16/run.json" returns)"
+want "case16 calls metered"  2 "$(jqf "$A16/run.json" calls)"
+rp16=$(jqf "$A16/run.json" rollout_path)
+case "$rp16" in
+  *11111111-2222-3333-4444-555555555555*) ok "case16 bound to this session's rollout: $(basename "$rp16")";;
+  *) bad "case16 bound to the wrong rollout: $rp16";;
+esac
+want "case16 binding is by session id, not mtime" "session-id:11111111-2222-3333-4444-555555555555" \
+     "$(jqf "$A16/run.json" rollout_binding)"
+want "case16 the codex home is this arm's own" "$CH16" "$(jqf "$A16/run.json" codex_home)"
+[ -f "$CH16/sessions/2026/09/03/rollout-2026-09-03T05-00-01-99999999-8888-7777-6666-555555555555.jsonl" ] \
+  && ok "case16 the decoy existed and was newer, and was not metered" \
+  || bad "case16 the decoy was never written — the test proves nothing"
+
+echo "== case 16b: a driver that never announces a session is UNBOUND, not guessed =="
+A16B="$WORK/st-P-N-16b"; mkdir -p "$A16B"
+git clone -q --no-hardlinks "$BASE_REPO" "$A16B/worktree"
+printf '%s\n' "$BASE_SHA" > "$A16B/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A16B/prompt.md"
+EXP=st RUNG=P SLOT=16b MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A16B" N - "" > /dev/null 2>&1
+CH16B="$A16B/codex-home"
+mkdir -p "$CH16B/sessions/2026/09/03"
+cp "$CH16/sessions/2026/09/03/rollout-2026-09-03T05-00-00-11111111-2222-3333-4444-555555555555.jsonl" \
+   "$CH16B/sessions/2026/09/03/rollout-someone-elses.jsonl"
+python3 "$HERE/watch.py" --arm "$A16B" --codex-home "$CH16B" \
+  --zero-return-window 3 --poll 0.2 \
+  -- bash "$HERE/fake-driver.sh" "$A16B" hang > "$WORK/case16b.out" 2>&1
+want "case16b watch rc" 7 "$?"
+grep -q 'WATCH-ABORT rollout-unbound' "$WORK/case16b.out" \
+  && ok "case16b typed refusal: rollout-unbound" \
+  || { bad "case16b latched a rollout it was never told about"; cat "$WORK/case16b.out"; }
+[ -e "$A16B/receipt.json" ] && bad "case16b a receipt was written for an unbound rollout" \
+  || ok "case16b no receipt.json written"
+c16b=$(cat "$A16B/fake-driver-child.pid" 2>/dev/null)
+[ -n "$c16b" ] && kill -0 "$c16b" 2>/dev/null && { bad "case16b orphan $c16b"; kill -9 "$c16b" 2>/dev/null; } \
+  || ok "case16b no orphan left behind"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"

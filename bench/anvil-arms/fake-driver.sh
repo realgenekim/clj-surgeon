@@ -10,6 +10,8 @@
 #   pf5   3 model returns, 2 tool calls, one of them a test call  (the PF-5 shape)
 #   rich  adds an MCP verb call, a typed refusal carrying next_call, a native
 #         apply_patch landing .clj bytes, and an inspect_clojure ls-tree at return 2
+#   codexsession a codex-shaped session under a private CODEX_HOME, plus a DECOY
+#           rollout from another session with a newer mtime
 #   partial   a call whose result never arrives before the driver exits
 #   makeverify a kaocha run reached through `make verify` (a non-test-named target)
 #   zero  a rollout with tool calls and NO assistant return (the abort path)
@@ -82,6 +84,35 @@ case "$FIXTURE" in
     out '"c1"' '"42 tests, 416 assertions, 0 failures."'
     ret '"Done.\n\nTOOLCALLS: 1"'
     printf 'TOOLCALLS: 1\n' > "$A/driver-report.md"
+    ;;
+
+  codexsession)
+    # A codex-shaped session: it announces its own session id, writes ITS rollout under
+    # its private CODEX_HOME, and a DECOY rollout from another session lands in the same
+    # home afterwards, so the decoy always has the newer mtime.  Sol, item 8 (blocker):
+    # newest-mtime discovery selected the decoy and then latched it permanently.
+    SID=${FAKE_SESSION_ID:-11111111-2222-3333-4444-555555555555}
+    DECOY_SID=99999999-8888-7777-6666-555555555555
+    : "${CODEX_HOME:?codexsession fixture requires CODEX_HOME}"
+    D="$CODEX_HOME/sessions/2026/09/03"
+    mkdir -p "$D"
+    echo "OpenAI Codex (research preview)"
+    echo "session id: $SID"
+    echo "workdir: $A/worktree"
+    R="$D/rollout-2026-09-03T05-00-00-$SID.jsonl"
+    : > "$R"
+    ret '"Reading the tree."'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"rg -n pattern src/\"]}"' '"c1"'
+    out '"c1"' '"src/a.clj:12"'
+    ret '"Running the focused suite."'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"bin/kaocha --focus x\"]}"' '"c2"'
+    out '"c2"' '"42 tests, 416 assertions, 0 failures."'
+    ret '"Done.\n\nTOOLCALLS: 2"'
+    # the decoy, written LAST so its mtime is newest
+    DEC="$D/rollout-2026-09-03T05-00-01-$DECOY_SID.jsonl"
+    R="$DEC"; : > "$R"
+    for _ in 1 2 3 4 5 6 7 8 9; do ret '"a concurrent session nobody asked this arm to meter"'; done
+    printf 'TOOLCALLS: 2\n' > "$A/driver-report.md"
     ;;
 
   zero)
