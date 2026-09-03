@@ -461,14 +461,62 @@
          (sort-by :name)
          vec)))
 
+;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-028
+(defn- census-candidates
+  "Bounded discovery for the CLI: the same walk the MCP tool performs.
+
+   `fs/walk-file-tree` runs under both babashka and the JVM, so the CLI prunes
+   skipped directories before reading them and STOPS at the ceiling. It never
+   enumerates the whole tree and takes a prefix: a truncated scan published as
+   a complete census is exactly the failure this walk exists to refuse.
+
+   A source above `max-source-bytes` is collected by name instead of read, so
+   the receipt can say what it did not look at."
+  [root]
+  (let [found (atom [])
+        oversized (atom [])
+        exceeded (atom false)]
+    (fs/walk-file-tree
+      root
+      {:pre-visit-dir
+       (fn [dir _attrs]
+         (if (and (not= (str dir) (str root))
+                  (contains? relation-census/skipped-directories
+                             (str (fs/file-name dir))))
+           :skip-subtree
+           :continue))
+       :visit-file
+       (fn [path _attrs]
+         (if-not (re-find relation-census/source-name-pattern
+                          (str (fs/file-name path)))
+           :continue
+           (cond
+             (> (fs/size path) relation-census/max-source-bytes)
+             (do (swap! oversized conj (str path)) :continue)
+
+             (>= (count @found) relation-census/max-scanned-files)
+             (do (reset! exceeded true) :terminate)
+
+             :else
+             (do (swap! found conj (str path)) :continue))))
+       :visit-file-failed (fn [_path _error] :continue)})
+    {:paths (vec (sort @found))
+     :oversized-skipped (vec (sort @oversized))
+     :exceeded? @exceeded
+     :observed (cond-> (count @found) @exceeded inc)}))
+
 ;; @spec MCP-OP-CENSUS-019
 ;; @spec MCP-OP-CENSUS-024
+;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-028
 (defn census-sources
   "Project-relative {:file :source} inputs that define fold arms.
 
-   Bounded like the tool's discovery: the scan stops at `max-scanned-files` and
-   a source above `max-source-bytes` is skipped. A file the caller NAMED is
-   refused by size rather than silently dropped.
+   Bounded like the tool's discovery: the walk STOPS at `max-scanned-files` and
+   reaching that ceiling is reported as `:exceeded?` with nothing read, and a
+   discovered source above `max-source-bytes` is skipped by name rather than in
+   silence. A file the caller NAMED is refused by size instead.
 
    `declared?` also collects the top-level names of the files that define no
    arms — a door commonly lives in a helper namespace that defines none — and
@@ -476,28 +524,35 @@
   ([dir file] (census-sources dir file {}))
   ([dir file {:keys [declared?]}]
   (let [root (str (fs/absolutize (or dir ".")))
+        discovered (when-not file (census-candidates root))
         paths (if file
                 [(str (fs/absolutize file))]
-                (->> (fs/glob root "**.{clj,cljc}")
-                     (map str)
-                     (remove #(re-find #"/(\.git|node_modules|target|\.cpcache)/" %))
-                     sort
-                     (take relation-census/max-scanned-files)))
-        too-big? #(> (fs/size %) relation-census/max-source-bytes)]
-    (if (and file (some too-big? paths))
-      {:oversized (str (fs/relativize root (first paths)))}
+                (:paths discovered))
+        relative #(str (fs/relativize root %))]
+    (cond
+      (and file (> (fs/size (first paths)) relation-census/max-source-bytes))
+      {:oversized (relative (first paths))}
+
+      ;; The ceiling is answered before a single source is read.
+      (:exceeded? discovered)
+      {:exceeded? true :observed (:observed discovered)}
+
+      :else
       (reduce
         (fn [acc p]
           (let [source (slurp p)]
             (if (relation-census/defines-arms? source)
-              (update acc :inputs conj {:file (str (fs/relativize root p))
+              (update acc :inputs conj {:file (relative p)
                                         :source source})
               (cond-> acc
                 declared?
                 (update :declared into
                         (relation-census/source-declared-names source))))))
-        {:scanned (count paths) :inputs [] :declared #{}}
-        (remove too-big? paths))))))
+        {:scanned (count paths)
+         :inputs []
+         :declared #{}
+         :oversized-skipped (mapv relative (:oversized-skipped discovered))}
+        paths)))))
 
 ;; @spec MCP-OP-CENSUS-021
 (defn census-plan-pool
@@ -562,6 +617,25 @@
        :maximum relation-census/max-source-bytes
        :next-command "clj-surgeon :op :relation-census :file <a source under the byte cap>"}
 
+      ;; The same ceiling semantics as the MCP entrance: a tree the census may
+      ;; not finish is refused with nothing read, never truncated into success.
+      (:exceeded? @scan)
+      {:ok false
+       :error-type :too-many-candidate-files
+       :error (str "This directory holds more than "
+                   relation-census/max-scanned-files
+                   " candidate Clojure sources (" (:observed @scan)
+                   " seen before the walk stopped). The census reads at most "
+                   relation-census/max-scanned-files
+                   " and will not report a truncated tree as a complete census")
+       :maximum relation-census/max-scanned-files
+       :fits relation-census/max-scanned-files
+       :observed (:observed @scan)
+       :observed-at-least true
+       :files-read 0
+       :read-complete false
+       :next-command "clj-surgeon :op :relation-census :dir <a narrower subtree>"}
+
       :else
       (let [inputs (:inputs @scan)
             doors parsed-doors]
@@ -599,10 +673,17 @@
 
               :else
               (let [unrecognised (relation-census/unrecognised-summary
-                                   (:unrecognised result) 5)]
+                                   (:unrecognised result) 5)
+                    skipped (:oversized-skipped @scan)]
                 (-> result
                     (dissoc :all-sites :declared :unrecognised)
-                    (assoc :pool-size pool-size
+                    (assoc :read-complete (empty? skipped)
+                           :oversized-skipped
+                           (when (seq skipped)
+                             {:count (count skipped)
+                              :files (vec (take 12 skipped))
+                              :maximum relation-census/max-source-bytes})
+                           :pool-size pool-size
                            :pool-size-requested (when (and threads
                                                           (> threads pool-size))
                                                   threads)

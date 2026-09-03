@@ -40,6 +40,15 @@
   "Discovery stops after this many candidate sources."
   4000)
 
+(def skipped-directories
+  "Directories both entrances prune before reading them."
+  #{".git" "node_modules" "target" ".cpcache" ".clj-kondo" ".lsp" ".shadow-cljs"
+    ".calva" "out" "dist" ".idea"})
+
+(def source-name-pattern
+  "The file names both entrances treat as candidate Clojure sources."
+  #"\.clj[cs]?$")
+
 ;; @spec MCP-OP-CENSUS-016
 (defn coerce-pool-size
   "Pure pool-size kernel shared by the MCP tool and the CLI op.

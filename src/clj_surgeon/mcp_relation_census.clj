@@ -196,13 +196,11 @@
 ;; Discovery
 ;; ---------------------------------------------------------------------------
 
-(def ^:private skipped-directories
-  #{".git" "node_modules" "target" ".cpcache" ".clj-kondo" ".lsp" ".shadow-cljs"
-    ".calva" "out" "dist" ".idea"})
+(def ^:private skipped-directories census/skipped-directories)
 
 (defn- source-name?
   [^Path path]
-  (boolean (re-find #"\.clj[cs]?$" (str (.getFileName path)))))
+  (boolean (re-find census/source-name-pattern (str (.getFileName path)))))
 
 (defn- escapes-root?
   "Does this entry's real location lie outside the canonical root?"
