@@ -161,3 +161,64 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 ## RESUME DELTA 2026-09-03T03:43Z
 
 - Study pushed 212b045; re-review a4bf90d6d86f75204 running — the NO-GO doc stands until it says GO. q5z re-review acb7e66e0b6224894 running. Fix rounds: rf2 round three, census, fold-diff, template-upsert, ratchets.
+
+## RESUME DELTA 2026-09-03T03:59Z — eight lanes
+
+- Re-reviews: study a4bf90d6d86f75204, fold-diff a94e2e37c80843f35 (production gate). Fix rounds: rf2 round three a59ea3ce2a6b2a7fc, census a4fe4601c68f5db01, template-upsert abd7fc65de9301f76, ratchets a90f9ebd74d4100af, q5z round three a4f713cb01afc03cb (`~/src/clj-surgeon-q5z`), kondo-path test af5a3aed64de01ebb (`~/src/clj-surgeon-kondo`, branch bridge/kondo-path-test from main).
+- Verdict docs on main now: study-ops NO-GO, census GO-WITH-FIX, rf2-q5z, rf2-rereview, q5z-rereview, folddiff-lens, ratchets. Queue frozen until GO verdicts.
+
+## RESUME DELTA 2026-09-03T04:02Z
+
+- Study: re-review GO-WITH-FIX (docs/observations/2026-09-03-study-ops-rereview.md; NO-GO doc marked superseded); round three acffa7722710273de running on `~/src/clj-surgeon-study` (items 1–11; blockers 1–4). After: my suites (full mcp-test) → push → a short re-check → queue.
+- Still running: fold-diff production re-review a94e2e37c80843f35; rf2 round three; census; template-upsert; ratchets; q5z round three; kondo-path test. Eight lanes.
+
+## RESUME DELTA 2026-09-03T04:05Z — Sol live; provisioning closed
+
+- Sol WORKS here (genekkanban pool): `codex exec -m gpt-5.6-sol -c model_reasoning_effort="high" --skip-git-repo-check --sandbox read-only -o out.md "…" </dev/null`. Reviews route to Sol first; Opus for filter-refused (symlink/confinement fixtures) and as the second voice.
+- Nothing missing now except by ruling: no phone channel; repo-watchstander stays on Buster; GCP deferred.
+- Running: Sol memory design answer (`~/tmp/sol/memory-sol-answer.md`, waiter bm3owhhzt); Opus memory consult a2d936e48f3423a0c; fold-diff production re-review; rf2/q5z/study round threes; census; template-upsert; ratchets; kondo-path test.
+
+## RESUME DELTA 2026-09-03T04:09Z
+
+- Gene's rule: memory fixes (and all fix rounds) add LID intents via `~/opt/claude-skills/linked-intent-testing`
+  (registry id, EARS, boundaries, fail-first linked witnesses, contract test) — memory prefix `MCP-OP-MEM-`.
+  Builder-prompt clause: "New requirements enter as linked intents per the linked-intent-testing skill
+  (read it first): registry entry with a stable id + EARS + boundaries, witnesses that fail first and are
+  linked by id; a ceiling's witness asserts behaviour AT the ceiling, never the constant."
+- Memory plan: reconcile Sol (`~/tmp/sol/memory-sol-answer.md`) and Opus (a2d936e48f3423a0c) answers →
+  ordered builds, smallest measurable win first, each with its MEM intent and a heap receipt.
+
+## RESUME DELTA 2026-09-03T04:17Z
+
+- Memory build brief clauses (Gene): (1) LID intents MCP-OP-MEM- for every new requirement; (2) the no-OOM proof is `make memory-battery` (100/1k/10k files, -Xmx512m, numeric pass lines), NOT in the fast suites; fast suites keep only ms-scale admission/ceiling/receipt witnesses; battery = merge gate for MEM changes, linked by intent id. Decision card sent (A keep in-memory snapshot / B disk-pinned pre-image / C tiers; recommend B); awaiting Gene's letter; tier-1 (read verbs) is authorised and starts when study round three + census land.
+
+## RESUME DELTA 2026-09-03T04:19Z — Gene chose B; memory program is GO
+
+- B1 kernel build on `~/src/clj-surgeon-txn` (`bridge/txn-journal`) launching now; B2 adoption after q5z r3 / rf2 r3 land. Battery build a0e2b73e06754ebf3 on `~/src/clj-surgeon-membat`.
+- rf2 round three landed (70836c0…5839b52) with one ruling sent back (no writes into skipped trees via links → typed refusal); my suites + push after that commit.
+- Sol YOLO memory answer waiter b7qt28zev; Opus consult a2d936e48f3423a0c; fold-diff production re-review a94e2e37c80843f35; census, template-upsert, ratchets, q5z r3, study r3, kondo lanes running.
+
+## RESUME DELTA 2026-09-03T04:21Z — ten lanes; memory program B1 running
+
+- Memory program: B1 kernel a2b6bbcbdc96b2925 (`~/src/clj-surgeon-txn`, TDD: OOM repro first, `make memory-red`); battery a0e2b73e06754ebf3 (`~/src/clj-surgeon-membat`, `make memory-battery`, MEM-001, red baseline on main); Sol YOLO answer waiter b7qt28zev (`~/tmp/sol/memory-sol-answer-2.md`); Opus consult a2d936e48f3423a0c. Reconcile Sol+Opus → fold numbers into B2 (adoption in alias_migration + extract after their rounds).
+- Review/fix lanes: fold-diff production re-review a94e2e37c80843f35 (gates the mayor's run; inb-3a9818 says DO NOT RUN YET); rf2 r3 a59ea3ce2a6b2a7fc (ruling: no writes into skipped trees via links) → my suites → push → re-check; census a4fe4601c68f5db01; template-upsert abd7fc65de9301f76; ratchets a90f9ebd74d4100af; q5z r3 a4f713cb01afc03cb; study r3 acffa7722710273de; kondo-path af5a3aed64de01ebb.
+- Load ~8/16, 18 GB free, forge JVM RSS ~9.6 GB. Sol-yolo PR: realgenekim/claude-skills#1.
+
+## RESUME DELTA 2026-09-03T04:26Z
+
+- Memory: Sol's measured design filed (2026-09-03-memory-design-sol-answer-2.md: 45 heap bytes per source byte = the node tree; lifetime + concurrency are the win; state root is `~/.local/state/clj-surgeon/workspaces/<digest>/`; MEM-001..011 plan with at-the-ceiling witnesses). B1 (a2b6bbcbdc96b2925) and the battery (a0e2b73e06754ebf3) re-briefed with the state root and id numbering (battery: 001 + 011; kernel: 006, 007, 012–014). Opus consult a2d936e48f3423a0c still measuring; reconcile → B2.
+- Census fix round complete ef545c5; my suites waiter b75uqudhe (`~/tmp/census/my-*.log`); push → Sol re-review (Opus for the symlink item if the filter refuses).
+- Also pending my suites: ratchets 49f6e12 (b1q8ixsp0, `~/tmp/ratchets2-*.log`), kondo f8a9ef9 (bvjc78bi1, `~/tmp/kondo-mcp-test.log`).
+- Running: fold-diff production re-review; rf2 r3 ruling commit; template-upsert; q5z r3; study r3; routing-doc.
+- Builder logs now go under `~/tmp/<lane>/` (a sibling lane overwrote a shared log).
+
+## RESUME DELTA 2026-09-03T04:34Z — NIGHT ORDERS IN FORCE
+Gene is asleep for ~9 h from 2026-09-03T04:34Z. Read `2026-09-03-night-orders-anvil.md` (goals + mayor help) and
+`2026-09-03-merge-queue-for-mayor.md`; keep `/tmp/anvil-pulse.txt` fresh (cron heartbeat every 10 min:
+read new `/tmp/mayor-*.txt`, honour `/tmp/anvil-halt.txt`). Live lanes at this write: ratchets Sol
+re-review (~/tmp/sol/ratchets-sol-review.md), census suites (~/tmp/census/my-*.log), rf2 r3, q5z r3,
+study r3, template-upsert fix, fold-diff r3, battery, B1 kernel, routing-doc fix. Opus memory consult
+LANDED (`2026-09-03-memory-design-opus-answer.md`): the node tree is 48× source, zippers add 1.2% — the
+zipper premise was wrong; outline double-parses (76 MB garbage per 52 KB file); aggregate-bytes ceiling
+is the missing control that explains the alias_migration OOM. Next: reconcile with Sol-2, launch B2
+read-path lane.
