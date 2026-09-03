@@ -12,6 +12,7 @@
   (:require
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clj-surgeon.relation-census :as relation-census]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -412,6 +413,99 @@
             "the raw per-call vector must not leak into the CLI receipt"))
       (finally
         (doseq [f (reverse (file-seq dir))] (.delete f))))))
+
+(def ^:private census-arm-source
+  "(defmethod fold-event \"e\" [state event]\n  (update state :xs conj (:x event)))\n")
+
+(def ^:private census-filler-source
+  "(ns app.filler)\n(def x 1)\n")
+
+(defn- census-temp-dir
+  []
+  (io/file (System/getProperty "java.io.tmpdir")
+           (str "clj-surgeon-census-cli-" (System/nanoTime))))
+
+(defn- delete-census-tree!
+  [dir]
+  (doseq [f (reverse (file-seq dir))] (.delete f)))
+
+(defn- build-census-tree!
+  "A workspace holding exactly `n` candidate Clojure sources, one with arms."
+  [dir n]
+  (let [arm (io/file dir "src/app/folds.clj")]
+    (.mkdirs (.getParentFile arm))
+    (spit arm census-arm-source)
+    (doseq [d (range (inc (quot (dec n) 100)))]
+      (.mkdirs (io/file dir (format "src/filler/d%02d" d))))
+    (doseq [i (range (dec n))]
+      (spit (io/file dir (format "src/filler/d%02d/f%04d.clj" (quot i 100) i))
+            census-filler-source))))
+
+;; @spec MCP-OP-CENSUS-027
+(deftest cli-relation-census-refuses-at-the-scanned-file-ceiling
+  (let [dir (census-temp-dir)]
+    (try
+      (build-census-tree! dir relation-census/max-scanned-files)
+      (testing "exactly the ceiling is censused and completion is claimed"
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (zero? exit) (str "the CLI refused AT the ceiling: " (:error result)))
+          (is (true? (:ok result)))
+          (is (true? (:read-complete result)))
+          (is (= 1 (:files result)))))
+
+      (testing "one candidate past the ceiling refuses typed before any read"
+        (spit (io/file dir "src/filler/one_too_many.clj") census-filler-source)
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (pos? exit)
+              "the CLI published a truncated tree as a complete census")
+          (is (= :too-many-candidate-files (:error-type result)))
+          (is (= 0 (:files-read result)))
+          (is (= relation-census/max-scanned-files (:maximum result)))
+          (is (= relation-census/max-scanned-files (:fits result)))
+          (is (= (inc relation-census/max-scanned-files) (:observed result)))
+          (is (true? (:observed-at-least result)))
+          (is (nil? (:counts result)))
+          (is (str/includes? (str (:next-command result)) "relation-census"))))
+      (finally (delete-census-tree! dir)))))
+
+;; @spec MCP-OP-CENSUS-028
+(deftest cli-relation-census-names-the-source-it-was-too-large-to-read
+  (let [dir (census-temp-dir)
+        padded (fn [bytes]
+                 (str census-arm-source
+                      (apply str (repeat (- bytes (count census-arm-source) 1) \;))
+                      "\n"))]
+    (try
+      (.mkdirs (io/file dir "src/app"))
+      (spit (io/file dir "src/app/folds.clj") census-arm-source)
+      (spit (io/file dir "src/app/at_cap.clj")
+            (padded relation-census/max-source-bytes))
+      (testing "a source of exactly max-source-bytes is read and censused"
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (zero? exit) (str "refused: " (:error result)))
+          (is (true? (:read-complete result)))
+          (is (= 2 (:files result)))))
+
+      (testing "one byte over the cap is named and completion is withheld"
+        (spit (io/file dir "src/app/over_cap.clj")
+              (padded (inc relation-census/max-source-bytes)))
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (zero? exit) (str "refused: " (:error result)))
+          (is (false? (:read-complete result))
+              "the CLI dropped a source and still claimed completion")
+          (is (= 1 (get-in result [:oversized-skipped :count])))
+          (is (= ["src/app/over_cap.clj"]
+                 (get-in result [:oversized-skipped :files])))
+          (is (= 2 (:files result)))))
+      (finally (delete-census-tree! dir)))))
 
 ;; @spec MCP-OP-CENSUS-024
 (deftest cli-relation-census-confirms-doors-against-every-scanned-file
