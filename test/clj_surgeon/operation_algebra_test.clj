@@ -270,6 +270,9 @@
                 slurp
                 stage-receipt!
                 validate-receipt!},
+              ;; main's :expect-matched basis check; documented pure ("Performs
+              ;; no I/O"), so it names no architecture effect of its own.
+              matched-basis-evidence #{},
               observe-change-result #{},
               publish-staged-receipt! #{publish-staged-receipt! Files/move},
               refuse! #{refuse!},
