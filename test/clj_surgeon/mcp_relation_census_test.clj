@@ -890,6 +890,22 @@
       (is (false? (:ok result)))
       (is (= :invalid-pool-size (:error-type result))))))
 
+;; @spec MCP-OP-CENSUS-029
+(deftest a-malformed-doors-entry-beats-too-many-files-and-an-invalid-workspace-root
+  (testing "doors beats too-many-files"
+    (let [result (run {:files (vec (repeat 513 fixture)) :doors [1]})]
+      (is (false? (:ok result)))
+      (is (= "invalid-mcp-request" (:error_type result)))
+      (is (= "doors-not-strings" (:reason result))
+          (str "too-many-files won instead: " (pr-str result)))))
+
+  (testing "doors beats an unresolvable workspace_root"
+    (let [result (run {:workspace_root "relative/nope" :doors [1]})]
+      (is (false? (:ok result)))
+      (is (= "invalid-mcp-request" (:error_type result)))
+      (is (= "doors-not-strings" (:reason result))
+          (str "invalid-workspace-root won instead: " (pr-str result))))))
+
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-032
 (deftest an-escaping-file-symlink-is-a-counted-skip-at-every-entrance
