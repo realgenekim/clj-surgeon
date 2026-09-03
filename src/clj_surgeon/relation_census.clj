@@ -45,6 +45,15 @@
   #{".git" "node_modules" "target" ".cpcache" ".clj-kondo" ".lsp" ".shadow-cljs"
     ".calva" "out" "dist" ".idea"})
 
+(def max-listed-files
+  "The largest number of file names either entrance lists in one receipt.
+
+   The bound belongs here, next to the other shared bounds, because a receipt
+   that lists twelve of twenty names is only honest if the entrance that
+   listed them also says how many it left out — and both entrances must mean
+   the same twelve."
+  12)
+
 (def source-name-pattern
   "The file names both entrances treat as candidate Clojure sources."
   #"\.clj[cs]?$")

@@ -419,6 +419,8 @@
           (is (true? (:ok result)) (str "refused: " (:error result)))
           (is (true? (:read_complete result)))
           (is (nil? (:oversized_skipped result)))
+          (is (nil? (:oversized_skipped_omitted result))
+              "a census that skipped nothing has nothing to omit")
           (is (= 2 (:files result)))
           (is (contains? (set (keys (:by_file result))) "src/app/at_cap.clj")
               "the source at the cap was not censused")))
@@ -434,6 +436,8 @@
           (is (= 1 (get-in result [:oversized_skipped :count])))
           (is (= ["src/app/over_cap.clj"]
                  (get-in result [:oversized_skipped :files])))
+          (is (= 0 (:oversized_skipped_omitted result))
+              "a complete list must SAY it is complete, not leave it inferred")
           (is (= 2 (:files result)) "the skipped source was censused anyway")))
       (finally (delete-tree! root)))))
 
@@ -852,3 +856,42 @@
       (is (= (:files mcp) (:files jvm-cli) (:files bb-cli)))
       (is (= (:arms mcp) (:arms jvm-cli) (:arms bb-cli)))
       (is (= (:counts mcp) (:counts jvm-cli) (:counts bb-cli))))))
+
+;; @spec MCP-OP-CENSUS-028
+(deftest an-oversized-list-that-was-truncated-says-how-many-it-left-out
+  (let [root (temp-dir)
+        listed census/max-listed-files
+        total (inc listed)]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      (doseq [i (range total)]
+        (spit-file! (io/file root (format "src/app/over%02d.clj" i))
+                    (padded-source (inc census/max-source-bytes))))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+        (testing "the tool lists the bound and names the omission"
+          (is (true? (:ok mcp)) (str "refused: " (:error mcp)))
+          (is (false? (:read_complete mcp)))
+          (is (= total (get-in mcp [:oversized_skipped :count])))
+          (is (= listed (count (get-in mcp [:oversized_skipped :files]))))
+          (is (= (- total listed) (:oversized_skipped_omitted mcp))
+              "the receipt listed 12 of 13 names and said nothing about the 13th"))
+
+        (testing "the JVM CLI lists the SAME bound and names the omission"
+          (is (true? (:ok jvm-cli)) (str "refused: " (:error jvm-cli)))
+          (is (false? (:read-complete jvm-cli)))
+          (is (= total (get-in jvm-cli [:oversized-skipped :count])))
+          (is (= listed (count (get-in jvm-cli [:oversized-skipped :files])))
+              "the CLI hard-coded a listing bound of its own")
+          (is (= (- total listed) (:oversized-skipped-omitted jvm-cli))))
+
+        (testing "the babashka CLI answers identically"
+          (is (true? (:ok bb-cli)) (str "refused: " (:error bb-cli)))
+          (is (= total (get-in bb-cli [:oversized-skipped :count])))
+          (is (= listed (count (get-in bb-cli [:oversized-skipped :files]))))
+          (is (= (- total listed) (:oversized-skipped-omitted bb-cli))))
+
+        (testing "the three entrances name the same files in the same order"
+          (is (= (get-in mcp [:oversized_skipped :files])
+                 (get-in jvm-cli [:oversized-skipped :files])
+                 (get-in bb-cli [:oversized-skipped :files])))))
+      (finally (delete-tree! root)))))
