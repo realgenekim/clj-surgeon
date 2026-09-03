@@ -11,6 +11,7 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-relation-census :as census-tool]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.relation-census :as census]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -826,6 +827,68 @@
                    (:error-type bb-cli) " " (:error bb-cli)))
           (is (= 1 (:files bb-cli)))))
       (finally (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eight finding: `doors=[1]` was refused only AFTER
+;; `workspace/resolve-request` had already `stat`ed the workspace root
+;; (`newfstatat` observed by isolated tracing, before the typed refusal).
+;; These witnesses instrument the filesystem primitives each entrance's own
+;; entrance code touches — the routing resolver's stat/realpath and the
+;; source reader — and assert ZERO calls to either before a shape violation
+;; refuses. The bb CLI runs as a real subprocess (`babashka.process`), so its
+;; syscalls cannot be counted in-process; it is asserted for behavioural
+;; parity only, alongside the JVM CLI witness that runs the identical op
+;; function `core/run-relation-census` in-process and IS instrumented.
+;; ---------------------------------------------------------------------------
+
+(defn- counting
+  "Wrap `f` to count calls into `counter`, still calling the real `f`."
+  [counter f]
+  (fn [& args]
+    (swap! counter inc)
+    (apply f args)))
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
+(deftest a-malformed-doors-entry-refuses-before-any-filesystem-call
+  (testing "the MCP tool touches neither the workspace router's stat/realpath nor the source reader"
+    (let [canonical-calls (atom 0)
+          read-calls (atom 0)]
+      (with-redefs [workspace/canonical-root
+                    (counting canonical-calls workspace/canonical-root)
+                    census-tool/collect-inputs
+                    (counting read-calls census-tool/collect-inputs)]
+        (let [result (census-tool/execute-request! {:project-root repo-root}
+                                                    {:doors [1]})]
+          (is (false? (:ok result)))
+          (is (= "doors-not-strings" (:reason result)))
+          (is (= 0 @canonical-calls)
+              "the workspace router stat'ed/realpath'd the root before doors was validated")
+          (is (= 0 @read-calls)
+              "the source reader ran before doors was validated")))))
+
+  (testing "the JVM CLI op touches neither its routing resolver nor its source reader"
+    ;; :threads is the CLI's pool_size; there is no CLI-shaped equivalent of a
+    ;; non-string `doors` entry (every CLI arg arrives as a string), so this
+    ;; exercises the same MCP-OP-CENSUS-016 family — a type/bound violation
+    ;; that must refuse before `core/census-root`/`core/census-sources` run.
+    (let [canonical-calls (atom 0)
+          read-calls (atom 0)]
+      (with-redefs [core/census-root (counting canonical-calls core/census-root)
+                    core/census-sources (counting read-calls core/census-sources)]
+        (let [result (core/run-relation-census {:dir repo-root :threads "not-a-number"})]
+          (is (false? (:ok result)))
+          (is (= :invalid-pool-size (:error-type result)))
+          (is (= 0 @canonical-calls)
+              "the CLI's routing resolver ran before threads was validated")
+          (is (= 0 @read-calls)
+              "the CLI's source reader ran before threads was validated")))))
+
+  (testing "the babashka CLI subprocess refuses the same shape violation (behavioural parity)"
+    (let [result (bb-cli ":op" "relation-census" ":dir" repo-root
+                         ":threads" "not-a-number")]
+      (is (false? (:ok result)))
+      (is (= :invalid-pool-size (:error-type result))))))
 
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-032
