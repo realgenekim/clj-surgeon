@@ -252,29 +252,145 @@
   ^File [transactions-dir]
   (io/file transactions-dir "LOCK"))
 
-(defn- acquire-lock!
-  [transactions-dir txid]
-  (let [^File lock (lock-file transactions-dir)]
-    (try
-      (Files/createFile (.toPath lock)
-                        (make-array java.nio.file.attribute.FileAttribute 0))
-      (spit lock (pr-str {:txid txid
-                          :pid (.pid (java.lang.ProcessHandle/current))
-                          :acquired-at (str (java.time.Instant/now))}))
-      {:ok true}
-      (catch java.nio.file.FileAlreadyExistsException _
-        (let [holder (try (read-string (slurp lock)) (catch Exception _ {}))]
-          (refusal :txn-lock-held
-                   (str "Another transaction holds the project lock: " (:txid holder))
-                   {:holder-txid (:txid holder)
-                    :holder-pid (:pid holder)
-                    :next_call {:op :txn/recover
-                                :workspace_root nil}
-                    :remedy "Wait for the holder, or run recovery if its process is gone."}))))))
+(defn- boot-id
+  "This kernel boot's identity, or nil where the OS does not publish one.
+
+   A pid is unique only WITHIN one boot. After a reboot the same number names a
+   different process, so a LOCK a crash left behind would read as held by a
+   live holder for as long as that number is in use again."
+  []
+  (let [file (io/file "/proc/sys/kernel/random/boot_id")]
+    (when (.isFile file)
+      (try (str/trim (slurp file)) (catch Exception _ nil)))))
+
+(defn- process-handle
+  "The `ProcessHandle` for `pid`, or nil when no such process exists."
+  ^java.lang.ProcessHandle [pid]
+  (try
+    (let [^java.util.Optional found (java.lang.ProcessHandle/of (long pid))]
+      (when (.isPresent found) (.get found)))
+    (catch Exception _ nil)))
+
+(defn- process-start-ticks
+  "Epoch milliseconds at which `pid` started, or nil when unknown."
+  [pid]
+  (try
+    (when-let [^java.lang.ProcessHandle handle (process-handle pid)]
+      (let [^java.util.Optional started (.startInstant (.info handle))]
+        (when (.isPresent started)
+          (.toEpochMilli ^java.time.Instant (.get started)))))
+    (catch Exception _ nil)))
+
+(defn- holder-identity
+  "The triple that makes a recorded holder CHECKABLE from another process.
+
+   A pid alone is not an identity: it is reused within a boot and repeated
+   across boots. Pid plus the holder's own start ticks plus the boot id names
+   one process and no other."
+  []
+  (let [pid (.pid (java.lang.ProcessHandle/current))]
+    {:pid pid
+     :start-ticks (process-start-ticks pid)
+     :boot-id (boot-id)}))
+
+(defn- stale-holder
+  "Why the LOCK's recorded holder cannot be a live process, or nil if it can.
+
+   Fail closed on every ambiguity: a holder that cannot be DISPROVED is
+   treated as live. An unreadable holder is not proof of death - it is named
+   `:no-recorded-holder`, `begin!` refuses it, and only the explicit `recover!`
+   remedy acts on it."
+  [holder]
+  (let [pid (:pid holder)
+        recorded-boot (:boot-id holder)
+        current-boot (boot-id)
+        ^java.lang.ProcessHandle handle (when pid (process-handle pid))]
+    (cond
+      (nil? pid) :no-recorded-holder
+      (and recorded-boot current-boot (not= recorded-boot current-boot)) :boot-id-mismatch
+      (nil? handle) :process-not-alive
+      (not (.isAlive handle)) :process-not-alive
+      (and (:start-ticks holder)
+           (not= (:start-ticks holder) (process-start-ticks pid))) :start-ticks-mismatch
+      :else nil)))
+
+(def ^:private breakable-causes
+  "The causes that PROVE the recorded holder is gone.
+
+   `:no-recorded-holder` is deliberately absent: an unparsable LOCK is an
+   unknown, and `begin!` must not break a lock on an unknown."
+  #{:boot-id-mismatch :process-not-alive :start-ticks-mismatch})
+
+(defn- read-holder
+  [^File lock]
+  (try (read-string (slurp lock)) (catch Exception _ {})))
+
+(defn- lock-broken-line
+  "The typed receipt line a broken lock leaves behind."
+  [holder cause]
+  {:reason :stale-holder
+   :cause cause
+   :pid (:pid holder)
+   :holder-txid (:txid holder)
+   :broken-at (str (java.time.Instant/now))})
 
 (defn- release-lock!
   [transactions-dir]
   (Files/deleteIfExists (.toPath (lock-file transactions-dir))))
+
+(defn- write-lock!
+  "Create the LOCK ALREADY populated, or fail because one exists.
+
+   The payload is written into a temporary first and given the LOCK's name by
+   a same-directory hard link, which is create-if-absent. No reader can then
+   observe an empty lock and mistake an unwritten claim for an unowned one."
+  [^File lock txid]
+  (let [^File tmp (File/createTempFile ".LOCK-" ".tmp" (.getParentFile lock))]
+    (try
+      (spit tmp (pr-str (merge {:txid txid :acquired-at (str (java.time.Instant/now))}
+                               (holder-identity))))
+      (Files/createLink (.toPath lock) (.toPath tmp))
+      (finally (Files/deleteIfExists (.toPath tmp))))))
+
+(defn- try-write-lock!
+  "Create the LOCK, or report that one already exists. A separate verb because
+   `recur` cannot cross a `try`."
+  [^File lock txid]
+  (try
+    (write-lock! lock txid)
+    true
+    (catch java.nio.file.FileAlreadyExistsException _ false)))
+
+(defn- acquire-lock!
+  ;; @spec MCP-OP-MEM-013
+  "Take the project lock, breaking one whose holder is PROVABLY gone.
+
+   A LOCK is a claim by a PROCESS, and a process can die between making the
+   claim and releasing it. Nothing used to read the recorded pid back, so a
+   crash after the transaction directory was finished - or any hand-cleaned
+   journal - deadlocked the workspace for ever, and the refusal's own remedy
+   did not clear it. The claim now records pid, start ticks and boot id, and a
+   lock that fails all three is broken exactly ONCE with a typed line. A LIVE
+   holder's lock is never broken, however old it is."
+  [transactions-dir txid]
+  (let [^File lock (lock-file transactions-dir)]
+    (loop [attempt 0 broken nil]
+      (if (try-write-lock! lock txid)
+        (if broken {:ok true :lock-broken broken} {:ok true})
+        (let [holder (read-holder lock)
+              cause (stale-holder holder)]
+          (if (and (contains? breakable-causes cause) (zero? attempt))
+            (do (release-lock! transactions-dir)
+                (recur (inc attempt) (lock-broken-line holder cause)))
+            (refusal :txn-lock-held
+                       (str "Another transaction holds the project lock: " (:txid holder))
+                     {:holder-txid (:txid holder)
+                      :holder-pid (:pid holder)
+                      :holder-live (nil? cause)
+                      :holder-cause cause
+                      :next_call {:op :txn/recover
+                                  :workspace_root nil}
+                      :remedy "Wait for the holder, or run recovery if its process is gone."})))))))
 
 (defn- publish-lock-file
   ^File [transactions-dir]
@@ -334,7 +450,7 @@
                                   default-limits)]
             (.mkdirs objects)
             (.mkdirs staging)
-            (let [txn {:txid txid
+            (let [txn (cond-> {:txid txid
                        :workspace-root root
                        ;; resolved once: confinement must not cost a realpath
                        ;; syscall per pinned file
@@ -358,9 +474,14 @@
                                  :pinned {}
                                  :staged {}
                                  :written []
-                                 :scope-walk scope-walk})}]
+                                 :scope-walk scope-walk})}
+                        (:lock-broken lock) (assoc :lock-broken (:lock-broken lock)))]
               (write-state! txn :open {:started-at (str (java.time.Instant/now))})
               (append-journal! txn (str "begin\t" txid))
+              (when-let [broken (:lock-broken lock)]
+                ;; the break is durable evidence, not only a return value
+                (append-journal! txn (str "lock-broken\t" (:pid broken) "\t"
+                                         (name (:cause broken)))))
               txn)))))))
 
 ;; -------------------------------------------------------------- read set
@@ -1271,9 +1392,19 @@
                                             :bytes (dir-bytes d)})))
                            result))
                        candidates)]
-     (when (seq results)
-       (release-lock! transactions))
-     {:ok (every? :ok results)
-      :transactions-recovered (count results)
-      :isolation compact-isolation
-      :paths (vec (mapcat :paths results))})))
+     ;; The lock is a claim by a PROCESS. Recovery releases it whenever no LIVE
+     ;; holder exists - including when it recovered nothing, which is exactly
+     ;; the stranded case: a crash after the transaction directory was
+     ;; finished leaves a LOCK with no journal beside it, and releasing only
+     ;; `(when (seq results))` left that workspace deadlocked for ever.
+     (let [^File lock (lock-file transactions)
+           holder (when (.isFile lock) (read-holder lock))
+           cause (when holder (stale-holder holder))
+           broken (when (and holder cause)
+                    (release-lock! transactions)
+                    (lock-broken-line holder cause))]
+       (cond-> {:ok (every? :ok results)
+                :transactions-recovered (count results)
+                :isolation compact-isolation
+                :paths (vec (mapcat :paths results))}
+         broken (assoc :lock-broken broken))))))

@@ -72,6 +72,27 @@
 
 (defn- bytes-of [path] (slurp path))
 
+(defn- boot-id-now
+  []
+  (let [f (io/file "/proc/sys/kernel/random/boot_id")]
+    (when (.isFile f) (str/trim (slurp f)))))
+
+(defn- plant-lock!
+  "Write a project LOCK naming `holder`, the way a crashed process leaves one."
+  ^java.io.File [{:keys [root state-home]} holder]
+  (let [dir (io/file (journal/transactions-dir root state-home))
+        lock (io/file dir "LOCK")]
+    (.mkdirs dir)
+    (spit lock (pr-str holder))
+    lock))
+
+(defn- reaped-pid
+  "A pid that certainly named a process and certainly names none now."
+  []
+  (let [process (.start (ProcessBuilder. ["sleep" "0"]))]
+    (.waitFor process)
+    (.pid process)))
+
 ;; ------------------------------------------------- MCP-OP-MEM-006 ceilings
 
 ;; @spec MCP-OP-MEM-006
@@ -537,6 +558,96 @@
         (is (:txid (begin! ws {}))
             "the lock is released when the transaction ends"))
       (finally (cleanup! ws)))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-lock-left-by-a-dead-holder-is-broken-once-and-named
+  (testing "Opus round 2, blocker 1: a LOCK whose process is gone deadlocked
+            the workspace PERMANENTLY. Nothing read the recorded pid back, so
+            `begin!` refused for ever and `recover!` - the remedy the refusal
+            itself named - returned ok with the lock still in place."
+    (let [ws (workspace! "stale-lock" 2)]
+      (try
+        (let [dead (reaped-pid)
+              lock (plant-lock! ws {:txid "ghost-1" :pid dead :boot-id (boot-id-now)})
+              txn (begin! ws {})]
+          (is (string? (:txid txn))
+              "a dead holder's lock does not deadlock the workspace")
+          (is (= :stale-holder (get-in txn [:lock-broken :reason])))
+          (is (= :process-not-alive (get-in txn [:lock-broken :cause])))
+          (is (= dead (get-in txn [:lock-broken :pid]))
+              "the receipt names the pid whose lock it broke")
+          (is (= "ghost-1" (get-in txn [:lock-broken :holder-txid])))
+          (is (str/includes? (slurp (io/file (:dir txn) "journal.log")) "lock-broken\t")
+              "and the break is a durable journal line, not only a return value")
+          (journal/rollback! txn)
+          (is (not (.isFile lock)) "the transaction that broke it also released it"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-lock-held-by-a-live-process-is-never-broken
+  (testing "the other half: breaking a stale lock must not become breaking
+            ANY lock. A real child process holds this one."
+    (let [ws (workspace! "live-lock" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))]
+      (try
+        (let [lock (plant-lock! ws {:txid "live-1" :pid (.pid child)
+                                    :boot-id (boot-id-now)})
+              refused (begin! ws {})]
+          (is (false? (:ok refused)))
+          (is (= :txn-lock-held (:error-type refused)))
+          (is (= (.pid child) (:holder-pid refused)))
+          (is (true? (:holder-live refused)))
+          (is (.isFile lock) "a live holder's lock survives the attempt")
+          (let [recovery (journal/recover! (:root ws) {:state-home (:state-home ws)})]
+            (is (nil? (:lock-broken recovery))
+                "and recovery does not break it either")
+            (is (.isFile lock))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-lock-whose-start-ticks-do-not-match-its-live-pid-is-stale
+  (testing "a pid is unique only within one boot and is reused. A LOCK naming
+            a pid that IS alive but did not start when the lock says is a
+            recycled number, not a holder."
+    (let [ws (workspace! "recycled-pid" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))]
+      (try
+        (let [_ (plant-lock! ws {:txid "recycled-1" :pid (.pid child)
+                                 :start-ticks 1
+                                 :boot-id (boot-id-now)})
+              txn (begin! ws {})]
+          (is (string? (:txid txn)))
+          (is (= :start-ticks-mismatch (get-in txn [:lock-broken :cause])))
+          (journal/rollback! txn))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest recovery-releases-a-lock-whose-holder-is-gone-even-with-nothing-to-recover
+  (testing "Opus's exact reproduction: a LOCK naming a dead pid with NO
+            transaction directory beside it. `recover!` released only
+            `(when (seq results))`, so the one case that strands a workspace
+            was the one case recovery did not clear."
+    (let [ws (workspace! "stale-lock-recover" 2)]
+      (try
+        (let [dead (reaped-pid)
+              lock (plant-lock! ws {:txid "ghost-2" :pid dead :boot-id (boot-id-now)})
+              recovery (journal/recover! (:root ws) {:state-home (:state-home ws)})]
+          (is (:ok recovery))
+          (is (= 0 (:transactions-recovered recovery))
+              "there is nothing to recover; the lock is the whole problem")
+          (is (= :stale-holder (get-in recovery [:lock-broken :reason])))
+          (is (= dead (get-in recovery [:lock-broken :pid])))
+          (is (not (.isFile lock)))
+          (let [txn (begin! ws {})]
+            (is (string? (:txid txn)) "the workspace is usable again")
+            (journal/rollback! txn)))
+        (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-007
 (deftest a-changed-read-only-file-refuses-the-whole-transaction
