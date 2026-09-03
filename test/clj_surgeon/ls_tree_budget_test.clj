@@ -929,6 +929,73 @@
             "and the substituted file is never encoded")))))
 
 ;; @spec MCP-OP-MEM-003
+(deftest a-substituted-slice-is-never-served-under-a-live-rows-swap
+  ;; Round FOUR's finding, and the reason verification and the slice read are
+  ;; ONE open. Verifying the manifest and then reopening it to take the slice
+  ;; are two observations of one mutable file, and the window between them is
+  ;; the whole verifying fold — O(N) in the manifest, so it GROWS with the
+  ;; corpus. The reviewer measured it on a real filesystem with no
+  ;; interposition at all: 400 page-2 reads while a swapper renamed a
+  ;; substituted rows file in and out of place served 89 pages carrying
+  ;; `[m006 m001 m008 m009 m010]` — round three's exact wrong page, reached by
+  ;; winning a race instead of by a persistent tamper. This witness is that
+  ;; harness. Refusals are fine and expected; a WRONG page never is.
+  (with-project [dir 200 "ls-tree-budget-rows-swap"]
+    (let [p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (cursor-of p1)
+          cursor-id (:cursor-id (budget/parse-cursor cursor))
+          rows (rows-path dir cursor-id)
+          good (slurp rows)
+          lines (vec (str/split-lines good))
+          row-0 (edn/read-string (nth lines 0))
+          ;; The substituted manifest has the SAME row count and every row is a
+          ;; self-consistent (path, content-digest) pair: position 6 carries
+          ;; mod000's real path and its real digest. A guard that COUNTS rows
+          ;; cannot see it, and the staleness check — which digests exactly
+          ;; those files — cannot either. Only the fold can.
+          bad (str (str/join "\n" (assoc lines 6 (pr-str (assoc row-0 :i 6)))) "\n")
+          swap-dir (str (fs/create-temp-dir {:prefix "ls-tree-rows-swap"}))
+          move! (fn [^String from]
+                  (java.nio.file.Files/move
+                   (fs/path from) (fs/path rows)
+                   (into-array java.nio.file.CopyOption
+                               [java.nio.file.StandardCopyOption/ATOMIC_MOVE
+                                java.nio.file.StandardCopyOption/REPLACE_EXISTING])))
+          expected (mapv #(format "src/fixt/mod%03d.clj" %) (range 5 10))
+          stop (atom false)
+          swapper (future
+                    (while (not @stop)
+                      (spit (str swap-dir "/a.rows") bad)
+                      (move! (str swap-dir "/a.rows"))
+                      (spit (str swap-dir "/b.rows") good)
+                      (move! (str swap-dir "/b.rows"))))
+          tally (reduce
+                 (fn [t _]
+                   (let [r (core/run-ls-tree {:dir dir :format :edn
+                                              :max-results 5 :cursor cursor})
+                         files (entry-files r)]
+                     (update t (cond
+                                 (:error-type r) (str "REFUSE:" (name (:error-type r)))
+                                 (= files expected) "SERVED-correct"
+                                 :else (str "SERVED-WRONG " (pr-str files)))
+                             (fnil inc 0))))
+                 {}
+                 (range 400))
+          wrong (reduce-kv (fn [n k v]
+                             (if (str/starts-with? k "SERVED-WRONG") (+ n v) n))
+                           0 tally)]
+      (reset! stop true)
+      @swapper
+      (spit rows good)
+      (fs/delete-tree swap-dir)
+      (is (zero? wrong)
+          (str "a page whose rows changed between the verifying fold and the "
+               "slice read must REFUSE, never serve a substituted candidate "
+               "under a valid cursor and a full receipt; tally: " (pr-str tally)))
+      (is (pos? (reduce + 0 (vals tally)))
+          "the storm actually ran"))))
+
+;; @spec MCP-OP-MEM-003
 (deftest a-continuation-receipt-is-measured-from-the-page-it-describes
   (with-project [dir fixture-count "ls-tree-budget-measured-returned"]
     (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
