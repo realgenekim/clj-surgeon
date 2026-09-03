@@ -170,6 +170,41 @@
   [pattern]
   (.getPathMatcher (FileSystems/getDefault) (str "glob:" pattern)))
 
+;; @spec MCP-OP-ALIAS-057
+(defn scope-glob-patterns
+  "The glob patterns one `scope.paths` entry selects under `root`.
+
+  `scope.paths` are globs, so the entry `src` selects only a path spelled
+  exactly `src`, and a caller who means the directory selects nothing at all.
+  That is not a hypothetical: every tool arm of the E3-P cohort spelled it that
+  way on its first call and paid a refusal for it, four refusals in four of four
+  arms, on a rung whose pass line is one call.
+
+  An entry that names an existing DIRECTORY under the root is therefore read as
+  that directory's subtree as well — the obvious reading of a directory name.
+  The literal pattern is kept alongside it, so an entry that is both a legal
+  glob and a directory name loses nothing it selected before; this widens what a
+  scope admits and can never narrow it.
+
+  Resolution is lexical-then-checked: an entry that escapes the root, is
+  absolute, or is the root itself contributes no subtree pattern, so the
+  confinement the walk performs afterwards is never handed a wider tree than the
+  caller named."
+  [^Path root pattern]
+  (let [trimmed (str/replace pattern #"/+$" "")
+        directory?
+        (and (not (str/blank? trimmed))
+             (not (str/starts-with? trimmed "/"))
+             (not (str/includes? trimmed "\u0000"))
+             (try
+               (let [candidate (.normalize (.resolve root trimmed))]
+                 (and (.startsWith candidate root)
+                      (not (.equals candidate root))
+                      (Files/isDirectory candidate (make-array LinkOption 0))))
+               (catch Exception _ false)))]
+    (cond-> [pattern]
+      directory? (conj (str trimmed "/**")))))
+
 (defn- relative-path
   [^Path root ^Path candidate]
   (str/replace (.toString (.relativize root candidate)) "\\" "/"))
@@ -240,7 +275,7 @@
   read failures included. A ceiling that counts an entry class it will not stop
   on is not a ceiling for that class."
   [^Path root {:keys [paths exclude]}]
-  (let [matchers (mapv glob-matcher paths)
+  (let [matchers (mapv glob-matcher (mapcat #(scope-glob-patterns root %) paths))
         excluded (set exclude)
         default-fs (FileSystems/getDefault)
         found (java.util.ArrayList.)
