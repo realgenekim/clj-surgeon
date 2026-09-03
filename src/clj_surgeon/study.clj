@@ -420,28 +420,44 @@
                                (or args-str "")))))
     (str lines)))
 
+;; @spec MCP-OP-STUDY-017
 (defn format-ls-tree-text
   "Pure: format ls-tree results as compact text for LLM/human scanning.
-   Expects projects with :outlines already computed."
-  [projects dir]
-  (let [sb (StringBuilder.)
-        multi-project? (> (count projects) 1)
-        total-files (reduce + (map #(count (:outlines %)) projects))
-        total-forms (reduce + (map (fn [p]
-                                     (reduce + (map #(or (:form-count (second %)) 0)
-                                                    (:outlines p))))
-                                   projects))]
-    (doseq [{:keys [name outlines]} projects
-            :let [project-forms (reduce + (map #(or (:form-count (second %)) 0) outlines))]]
-      (when multi-project?
-        (.append sb (format "── %s (%d files, %d forms)\n\n"
-                            name (count outlines) project-forms)))
-      (doseq [[f result] outlines
-              :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
-        (.append sb (format-file-text result rel-path))
-        (.append sb "\n")))
-    (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
-    (str sb)))
+   Expects projects with :outlines already computed.
+
+   `:file-count`, when supplied, is the TRUE number of files discovered. The
+   trailing total line counted only the outlines it was handed, so a bounded
+   receipt that returned 3 of 1072 files ended with `total: 3 files` while its
+   own envelope said `file_count 1072` — the body contradicted the receipt it
+   travelled in. When the true count differs from what is shown, the line
+   reports the true total plus what was shown and omitted, and omits the form
+   total, which is unknowable for files that were deliberately never parsed.
+   With no `:file-count`, or when everything is shown, the complete line is
+   unchanged."
+  ([projects dir] (format-ls-tree-text projects dir nil))
+  ([projects dir {:keys [file-count]}]
+   (let [sb (StringBuilder.)
+         multi-project? (> (count projects) 1)
+         shown-files (reduce + (map #(count (:outlines %)) projects))
+         total-files (or file-count shown-files)
+         total-forms (reduce + (map (fn [p]
+                                      (reduce + (map #(or (:form-count (second %)) 0)
+                                                     (:outlines p))))
+                                    projects))]
+     (doseq [{:keys [name outlines]} projects
+             :let [project-forms (reduce + (map #(or (:form-count (second %)) 0) outlines))]]
+       (when multi-project?
+         (.append sb (format "── %s (%d files, %d forms)\n\n"
+                             name (count outlines) project-forms)))
+       (doseq [[f result] outlines
+               :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
+         (.append sb (format-file-text result rel-path))
+         (.append sb "\n")))
+     (if (= total-files shown-files)
+       (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
+       (.append sb (format "── total: %d files; %d shown, %d omitted\n"
+                           total-files shown-files (- total-files shown-files))))
+     (str sb))))
 
 (defn format-ls-tree-edn
   "Pure: format ls-tree results as EDN vector.

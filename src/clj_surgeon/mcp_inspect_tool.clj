@@ -385,11 +385,13 @@
   16)
 
 (defn- ls-tree-render
-  [projects dir output-format]
+  [projects dir output-format total]
   (case output-format
     "edn"   (inspect/json-data (study/format-ls-tree-edn projects dir))
     "names" (inspect/json-data (study/format-ls-tree-names projects dir))
-    (study/format-ls-tree-text projects dir)))
+    ;; The true discovered count travels with the text rendering so its total
+    ;; line cannot contradict the receipt's own file_count.
+    (study/format-ls-tree-text projects dir {:file-count total})))
 
 (defn- ls-tree-payload-size
   [payload output-format]
@@ -411,7 +413,7 @@
   (let [cache (atom {})
         attempt (fn [n map-fn]
                   (let [kept (study/outline-take projects n cache map-fn)
-                        payload (ls-tree-render kept dir output-format)]
+                        payload (ls-tree-render kept dir output-format total)]
                     {:returned n
                      :omitted (- total n)
                      :truncated (< n total)
@@ -421,7 +423,7 @@
         empty-receipt {:returned 0
                        :omitted total
                        :truncated (pos? total)
-                       :payload (ls-tree-render [] dir output-format)}]
+                       :payload (ls-tree-render [] dir output-format total)}]
     (loop [best empty-receipt
            fitting 0]
       (let [batch-end (min total (+ fitting ls-tree-outline-chunk))]

@@ -593,6 +593,26 @@
                                                "limit" limit}))]
       (is (<= (inspect/json-character-count (:closure result)) limit)))))
 
+;; @spec MCP-OP-STUDY-017
+(deftest a-truncated-tree-text-total-agrees-with-its-own-receipt
+  ;; The text body's `── total: N files` counted only the files it SHOWED, so
+  ;; a receipt reading `file_count 1072, returned 3` ended its own body with
+  ;; `total: 3 files`. The two numbers in one payload disagreed.
+  (let [response (run {"mode" "ls-tree" "dir" "src" "format" "text"
+                       "limit" 2000})]
+    (is (true? (:truncated response)))
+    (is (< (:returned response) (:file_count response)))
+    (is (str/includes? (:tree response)
+                       (str "total: " (:file_count response)))
+        "the body's total must be the receipt's true file_count")
+    (is (str/includes? (:tree response)
+                       (str (:omitted response) " omitted"))))
+  (testing "a complete tree keeps the byte-identical complete total line"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
+                         "limit" 16384})]
+      (is (false? (:truncated response)))
+      (is (str/includes? (:tree response) "total: 7 files, ")))))
+
 ;; ============================================================
 ;; Refusals
 ;; ============================================================
