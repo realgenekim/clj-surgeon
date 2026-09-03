@@ -82,3 +82,6 @@ requirement.
 # #Bounded, Confined Discovery
 
 - [x] **MCP-OP-ALIAS-037**: When `alias_migration` expands `scope.paths`, the walk shall not follow a symlinked directory and shall be bounded in depth, so that a link cycle inside the project root terminates and a directory link pointing out of the root is never entered, before any confinement check runs.
+- [x] **MCP-OP-ALIAS-038**: If `scope.paths` selects more files than the per-call file ceiling, then clj-surgeon shall refuse with `alias-migration-scope-too-large` before reading any source, naming the count found, the ceiling, and the request's `expect.files`.
+- [x] **MCP-OP-ALIAS-039**: If any file in scope is larger than the per-file byte ceiling, then clj-surgeon shall refuse with `alias-migration-source-too-large` before that file is read, naming the file and the ceiling.
+- [x] **MCP-OP-ALIAS-040**: If `expect.files` is larger than the number of files `scope.paths` selects, then clj-surgeon shall refuse with `alias-migration-expect-mismatch` before reading any source, because discovery is a subset of the scanned set and can never reach that expectation.

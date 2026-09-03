@@ -206,63 +206,138 @@
 ;; ---------------------------------------------------------------------------
 ;; planning
 
+(def max-scope-files
+  "Ceiling on the number of source files one alias_migration call reads.
+
+  The frozen read holds every scoped source in memory at once, so the scope is
+  bounded before the first slurp rather than after the plan. A migration whose
+  scope selects more than this many files is a scope the caller has not yet
+  narrowed; the refusal names both the count found and the expect.files the
+  request declared, which is what a caller needs to narrow it."
+  2000)
+
+(def max-source-bytes
+  "Ceiling on the size of one source file alias_migration reads.
+
+  Two mebibytes is far above any hand-written Clojure namespace; a file past it
+  is a generated or vendored artifact that the frozen read must not hold."
+  (* 2 1024 1024))
+
+(defn- oversized-source
+  "The first resolved source above the per-file byte ceiling, or nil."
+  [resolutions]
+  (first (filter (fn [{:keys [path]}]
+                   (> (.length (io/file ^String path)) max-source-bytes))
+                 resolutions)))
+
 ;; @spec MCP-OP-ALIAS-006
 ;; @spec MCP-OP-ALIAS-012
+;; @spec MCP-OP-ALIAS-038
+;; @spec MCP-OP-ALIAS-039
+;; @spec MCP-OP-ALIAS-040
 (defn plan!
-  "Expand scope, confine every path, freeze the sources, and plan.
+  "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
   Returns {:ok true :plan p :root r :paths {relative absolute}} or one typed
-  refusal. No bytes are written."
+  refusal. No bytes are written, and every bound is enforced before the first
+  file is slurped."
   [workspace-root request]
   (let [root (mcp-paths/real-root workspace-root)
         relatives (expand-scope root (:scope request))
-        resolutions (mapv #(mcp-paths/resolve-source-path root %) relatives)
-        bad (first (remove :ok resolutions))]
-    (if bad
-      (refusal :alias-migration-scope-path-refused
-               (or (:error bad) "A scope path is outside the configured project root")
-               {:path (:path bad) :next_call nil})
-      (let [sources (mapv (fn [{:keys [relative path]}]
-                            {:file relative :source (slurp path)})
-                          resolutions)
-            plan (planner/plan (assoc request :workspace-root
-                                      (.toString root))
-                               sources)]
-        (cond
-          (not (:ok plan))
-          (assoc plan :scanned_files (count sources))
+        scanned (count relatives)
+        expected (get-in request [:expect :files])]
+    (cond
+      (> scanned max-scope-files)
+      (refusal :alias-migration-scope-too-large
+               (str "scope.paths selects " scanned " files, above the "
+                    max-scope-files "-file ceiling one alias_migration reads")
+               {:scanned_files scanned
+                :max_files max-scope-files
+                :expected_files expected
+                :next_call nil
+                :remedy (str "Narrow scope.paths to the namespaces that can "
+                             "require from.lib; expect.files declared "
+                             expected ".")})
 
-          ;; the lib-only migration also moves the defining namespace, so its
-          ;; destination is confined and proved absent before anything is written
-          (:lib-rename plan)
-          (let [{:keys [new-file file]} (:lib-rename plan)
-                destination (mcp-paths/resolve-new-source-path root new-file)]
-            (if-not (:ok destination)
-              (if (= "target-already-exists" (:error_type destination))
-                (refusal :alias-migration-target-lib-exists
-                         (str new-file " already exists, so " (:to (:lib-rename plan))
-                              " cannot take over the definition in " file)
-                         {:file new-file
-                          :from_lib (:from (:lib-rename plan))
-                          :to_lib (:to (:lib-rename plan))
-                          :defining_file file
-                          :next_call nil})
-                (refusal :alias-migration-scope-path-refused
-                         (or (:error destination) "The renamed namespace path is refused")
-                         {:path new-file :next_call nil}))
+      ;; discovery is a subset of the scanned set, so an expectation larger than
+      ;; the scope can never be met and is refused without reading one file
+      (and expected (< scanned expected))
+      (refusal :alias-migration-expect-mismatch
+               (str "scope.paths contains " scanned
+                    " files; expect.files declared " expected
+                    ", which discovery cannot reach")
+               {:scanned_files scanned
+                :expected_files expected
+                :next_call nil
+                :remedy (str "Widen scope.paths, or send expect.files no "
+                             "greater than the number of files in scope.")})
+
+      :else
+      (let [resolutions (mapv #(mcp-paths/resolve-source-path root %) relatives)
+            bad (first (remove :ok resolutions))
+            oversized (when-not bad (oversized-source resolutions))]
+        (cond
+          bad
+          (refusal :alias-migration-scope-path-refused
+                   (or (:error bad) "A scope path is outside the configured project root")
+                   {:path (:path bad) :next_call nil})
+
+          oversized
+          (refusal :alias-migration-source-too-large
+                   (str (:relative oversized) " is larger than the "
+                        max-source-bytes "-byte ceiling one alias_migration reads")
+                   {:path (:relative oversized)
+                    :bytes (.length (io/file ^String (:path oversized)))
+                    :max_bytes max-source-bytes
+                    :next_call nil
+                    :remedy (str "Exclude " (:relative oversized)
+                                 " through scope.exclude, or narrow scope.paths.")})
+
+          :else
+          (let [sources (mapv (fn [{:keys [relative path]}]
+                                {:file relative :source (slurp path)})
+                              resolutions)
+                plan (planner/plan (assoc request :workspace-root
+                                          (.toString root))
+                                   sources)]
+            (cond
+              (not (:ok plan))
+              (assoc plan :scanned_files (count sources))
+
+              ;; the lib-only migration also moves the defining namespace, so
+              ;; its destination is confined and proved absent before anything
+              ;; is written
+              (:lib-rename plan)
+              (let [{:keys [new-file file]} (:lib-rename plan)
+                    destination (mcp-paths/resolve-new-source-path root new-file)]
+                (if-not (:ok destination)
+                  (if (= "target-already-exists" (:error_type destination))
+                    (refusal :alias-migration-target-lib-exists
+                             (str new-file " already exists, so "
+                                  (:to (:lib-rename plan))
+                                  " cannot take over the definition in " file)
+                             {:file new-file
+                              :from_lib (:from (:lib-rename plan))
+                              :to_lib (:to (:lib-rename plan))
+                              :defining_file file
+                              :next_call nil})
+                    (refusal :alias-migration-scope-path-refused
+                             (or (:error destination)
+                                 "The renamed namespace path is refused")
+                             {:path new-file :next_call nil}))
+                  {:ok true
+                   :plan plan
+                   :root root
+                   :scanned-files (count sources)
+                   :destination destination
+                   :paths (into {} (map (juxt :relative :path)) resolutions)}))
+
+              :else
               {:ok true
                :plan plan
                :root root
                :scanned-files (count sources)
-               :destination destination
-               :paths (into {} (map (juxt :relative :path)) resolutions)}))
-
-          :else
-          {:ok true
-           :plan plan
-           :root root
-           :scanned-files (count sources)
-           :paths (into {} (map (juxt :relative :path)) resolutions)})))))
+               :paths (into {} (map (juxt :relative :path)) resolutions)})))))))
 
 ;; ---------------------------------------------------------------------------
 ;; transaction spec

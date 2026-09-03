@@ -269,7 +269,7 @@
             _ (mcp-tool/handle-alias-migration
                 nil
                 (json/parse-string
-                  (json/generate-string (request workspace {:expect {:files 80}}))
+                  (json/generate-string (request workspace {:expect {:files 13}}))
                   true)
                 (fn [content error? structured]
                   (reset! captured {:content content :error? error?
@@ -279,7 +279,7 @@
         (is (false? (:ok result)))
         (is (= "alias-migration-expect-mismatch" (:error_type result)))
         (is (= 12 (:found_files result)))
-        (is (= 80 (:expected_files result)))
+        (is (= 13 (:expected_files result)))
         (is (true? (:source_unchanged result)))
         (is (false? (:write_authority result)))
         (is (number? (:elapsed_ms result)))
@@ -504,6 +504,94 @@
         (Files/deleteIfExists (.toPath link))
         (delete-tree! workspace)
         (delete-tree! outside)))))
+
+(defn- bare-workspace!
+  "One empty workspace holding only the files a test writes into it."
+  []
+  (temp-dir))
+
+(defn- cap-request
+  [workspace overrides]
+  (merge {:op "alias_migration"
+          :workspace_root (.getPath workspace)
+          :from {:lib fixture/from-lib :var fixture/from-var}
+          :to {:lib fixture/to-lib :var fixture/to-var
+               :alias_policy fixture/alias-policy}
+          :scope {:paths ["src/**"]}
+          :expect {:files 1}}
+         overrides))
+
+;; @spec MCP-OP-ALIAS-038
+(deftest a-scope-above-the-file-ceiling-refuses-before-any-source-is-read
+  (let [workspace (bare-workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (let [directory (io/file workspace "src" "wide")]
+        (.mkdirs directory)
+        (dotimes [index 3000]
+          (spit (io/file directory (str "f" index ".clj"))
+                (str "(ns wide.f" index ")\n"))))
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (cap-request workspace {}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-scope-too-large" (:error_type result)))
+        (is (= 3000 (:scanned_files result)))
+        (is (= alias-migration/max-scope-files (:max_files result)))
+        (is (= 1 (:expected_files result))
+            "the refusal names expect.files so the caller can narrow scope")
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-039
+(deftest a-source-above-the-byte-ceiling-refuses-before-it-is-slurped
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        oversized (io/file workspace "src/acid/fanout/huge.clj")]
+    (.mkdirs receipt-dir)
+    (try
+      (spit oversized
+            (str "(ns acid.fanout.huge)\n;; "
+                 (String. (char-array (inc alias-migration/max-source-bytes)
+                                      \x))
+                 "\n"))
+      (is (> (.length oversized) alias-migration/max-source-bytes))
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-source-too-large" (:error_type result)))
+        (is (= "src/acid/fanout/huge.clj" (:path result)))
+        (is (= alias-migration/max-source-bytes (:max_bytes result)))
+        (is (true? (:source_unchanged result)))
+        (testing "no byte was written by the refused call"
+          (doseq [[relative expected] (:pre corpus)]
+            (is (= expected (slurp (io/file workspace relative))) relative))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-040
+(deftest an-expectation-larger-than-the-scope-refuses-before-any-source-is-read
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (let [scanned (count (alias-migration/expand-scope
+                             (.toPath (.getCanonicalFile workspace))
+                             {:paths ["src/**"] :exclude []}))
+            result (alias-migration/execute!
+                     (config workspace receipt-dir)
+                     (request workspace {:expect {:files (+ scanned 1)}}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-expect-mismatch" (:error_type result)))
+        (is (= scanned (:scanned_files result)))
+        (is (= (inc scanned) (:expected_files result)))
+        (is (nil? (:found_files result))
+            "discovery never ran, so there is no found count to report")
+        (is (true? (:source_unchanged result))))
+      (finally
+        (delete-tree! workspace)))))
 
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
