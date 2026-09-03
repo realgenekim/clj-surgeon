@@ -104,7 +104,7 @@
    [clojure.string :as str])
   (:import
    (java.io File)
-   (java.nio.file LinkOption Path Paths)
+   (java.nio.file Files LinkOption Path Paths)
    (java.security MessageDigest)))
 
 ;; ============================================================
@@ -551,23 +551,48 @@
    `IllegalArgumentException: ... is not a relative path` out of the operation
    from the read side. A boundary enforced by two resolvers is not a boundary.
 
-   THE PARENT IS RESOLVED; THE LEAF IS LEXICAL — EXCEPT FOR ONE CHECK: a leaf
-   that EXISTS and names a DIRECTORY refuses, symlink or not. The row path
-   must be relative and `root/p` normalized must still lie under `root`
-   normalized — and then the row's PARENT DIRECTORY (or, when that directory
-   no longer exists, its deepest existing ancestor) must really be inside the
-   real root, symlinks followed. Beyond that the final component is never
-   resolved, and the directory check is deliberately `.isDirectory`, not
-   `.isFile`: a row whose file was legitimately deleted must still reach
-   `stale-row` and its `:stale-result-cursor`, never be refused here as if it
-   had escaped. `.isDirectory` is `false` for a path that does not exist, so a
-   deleted-file row passes this check exactly as before; only a leaf that
-   still resolves to a directory — a symlinked one included — is stopped.
+   THE PARENT IS RESOLVED; THE LEAF IS LEXICAL — EXCEPT FOR ONE CHECK, whose
+   predicate is exactly the negation of what discovery admits:
+
+       refuse when   (Files/exists leaf NOFOLLOW_LINKS)
+               and   (not (Files/isRegularFile leaf))     ; links FOLLOWED
+
+   The row path must be relative and `root/p` normalized must still lie under
+   `root` normalized — and then the row's PARENT DIRECTORY (or, when that
+   directory no longer exists, its deepest existing ancestor) must really be
+   inside the real root, symlinks followed. Beyond that the final component is
+   never resolved, except by that one check.
+
+   Both halves of the check earn their spelling. `NOFOLLOW_LINKS` on the
+   EXISTENCE test is what separates a tamper from an ordinary deletion: a row
+   whose file was legitimately deleted has no directory entry at all, so it
+   passes through here and reaches `stale-row` and its
+   `:stale-result-cursor`, and is never refused as if it had escaped. A
+   DANGLING symlink still HAS an entry, so it is refused — which is the case
+   round six's `.isDirectory` missed, because `.isDirectory` is false for a
+   dangling link and the encoder then spent a page slot failing to open it.
+   The regularity test, conversely, FOLLOWS links, because a symlink to a
+   regular file is a candidate discovery deliberately admits; testing it
+   `NOFOLLOW` would refuse `src/fixt/zlinked.clj` and reintroduce the
+   page-1/page-2 divergence this whole design exists to avoid.
+
+   Nothing here opens the leaf, which matters for one shape in particular: a
+   FIFO. `open(2)` on a FIFO BLOCKS until a writer appears, so a guard that
+   proved non-regularity by trying to read would hang instead of refusing.
 
    That split is not a compromise; it is the exact shape of what DISCOVERY can
-   produce, measured on this branch both ways. `find-clj-files` shells to plain
-   `find` with no `-L`, which LISTS a symlinked `.clj` file whose target is
-   outside the root and NEVER DESCENDS a symlinked directory. So:
+   produce, and the predicate is quoted here rather than paraphrased because
+   round six was a paraphrase that was FALSE. `core/find-clj-files` runs
+
+       find <dir> ( -name '*.clj' -o -name '*.cljs' -o -name '*.cljc' )
+                  ( -type f -o ( -type l -xtype f ) )
+
+   (argv tokens, not a shell string, so the parentheses are literal)
+
+   with no `-L`, so a candidate is a REGULAR FILE or a SYMLINK THAT RESOLVES
+   TO ONE — it LISTS a symlinked `.clj` file whose target is outside the root,
+   NEVER DESCENDS a symlinked directory, and never lists a directory, a
+   dangling symlink, a FIFO or a socket. So:
 
    - resolving the LEAF would refuse on page 2 what page 1 encoded — a
      page-1/page-2 divergence introduced by the guard itself. That is why
@@ -580,18 +605,23 @@
      outcome through a different spelling, and a row the EARS requirement said
      must refuse. `a-manifest-row-through-a-symlinked-DIRECTORY-is-refused-
      not-read` pins that.
-   - a LEAF naming a directory is likewise a row no scan can ever produce —
-     `find -type f` never lists a directory, symlinked or plain — and a purely
-     lexical leaf admitted it anyway: round five paged `src/leafdir` (a
-     symlink to a directory, pinned `:h nil` so staleness never fired) as a
-     typed `:error` RECORD inside a served page, wasting a page slot rather
-     than refusing. `a-manifest-row-whose-LEAF-is-a-symlinked-DIRECTORY-is-
-     refused-not-paged` pins that.
+   - a LEAF whose directory entry STILL EXISTS and does not resolve to a
+     regular file is likewise a row no scan can ever produce — the predicate
+     above admits only regular files and symlinks resolving to them, so a
+     directory, a symlink to a directory, a DANGLING symlink, a FIFO and a
+     socket are all outside it — and a purely lexical leaf admitted them
+     anyway: round five paged `src/leafdir` (a symlink to a directory, pinned
+     `:h nil` so staleness never fired) as a typed `:error` RECORD inside a
+     served page, wasting a page slot rather than refusing, and round six's
+     `.isDirectory` spelling closed the live-directory case while leaving the
+     dangling one open. `a-manifest-row-whose-LEAF-is-a-symlinked-DIRECTORY-
+     is-refused-not-paged` and `a-manifest-row-whose-LEAF-is-a-DANGLING-
+     symlink-is-refused-not-paged` pin both.
 
    The rule the three bullets share: the guard refuses what discovery can
    NEVER produce (an absolute path, a `..` escape, a symlinked DIRECTORY
-   component, a leaf naming a directory) and defers to discovery on what it
-   can (a symlinked FILE)."
+   component, a leaf that exists and is not a regular file) and defers to
+   discovery on what it can (a symlinked FILE)."
   ^File [root p]
   (when (string? p)
     (try
@@ -605,12 +635,18 @@
                     real-anchor (when anchor (real-path anchor))]
                 (when (and real-anchor (.startsWith real-anchor real-base))
                   (let [f (.toFile resolved)]
-                    ;; `.isDirectory`, never `.isFile`: `false` for a path
-                    ;; that no longer exists, so a legitimately deleted file
-                    ;; still returns here and reaches `stale-row`. A leaf
-                    ;; that DOES exist and names a directory — symlinked or
-                    ;; not — is a row no scan can ever produce.
-                    (when-not (.isDirectory f)
+                    ;; EXISTS as a directory entry (NOFOLLOW, so a dangling
+                    ;; symlink counts) but does NOT resolve to a regular file
+                    ;; (links followed, so a symlinked file does not count):
+                    ;; a row no scan can ever produce. A path with no entry at
+                    ;; all is a legitimately deleted file and still returns
+                    ;; here, to reach `stale-row`. Neither test opens it.
+                    (when-not (and (Files/exists resolved
+                                                 (into-array LinkOption
+                                                             [LinkOption/NOFOLLOW_LINKS]))
+                                   (not (Files/isRegularFile
+                                          resolved
+                                          (into-array LinkOption []))))
                       f))))))))
       (catch Exception _ nil))))
 

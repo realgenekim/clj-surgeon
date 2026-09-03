@@ -205,14 +205,52 @@
     (catch Exception _e ["src"])))
 
 (defn- find-clj-files
-  "Find all .clj/.cljs/.cljc files under a directory using system find."
+  "Find all .clj/.cljs/.cljc files under a directory using system find.
+
+   THIS PREDICATE IS THE CONTRACT `ls-tree-snapshot/row-file` IS WRITTEN
+   AGAINST. A candidate is a REGULAR FILE, or a SYMLINK THAT RESOLVES TO ONE —
+   nothing else. Everything downstream reasons about what discovery can
+   produce, so the predicate has to be stated in one place and be true.
+
+   It was `-name \"*.clj\" -o -name \"*.cljs\" -o -name \"*.cljc\"` with no
+   `-type` at all, and `row-file`'s docstring justified refusing a
+   directory-leaf row with \"`find -type f` never lists a directory\" — a flag
+   that was not there. So a DIRECTORY named `src/mydir.clj` was discovered,
+   pinned as an honest manifest row, and then refused by that guard:
+   `:unconfined-manifest-row` naming a path inside the root, two innocent
+   files lost, and a pagination no cursor could finish, while an unbounded
+   scan of the same tree still served every record (Opus, 2026-09-03). The
+   same missing flag made a FIFO named `src/pipe.clj` a candidate, and
+   `open(2)` on a FIFO BLOCKS: a scan of that tree returned nothing, forever,
+   and survived SIGTERM.
+
+   Three details, each of which was a trap:
+
+   - `-type f` ALONE is wrong. It is false for a symlink (there is no `-L`
+     here), so it would stop listing symlinked `.clj` FILES, which discovery
+     deliberately admits and
+     `a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered`
+     pins. Hence `( -type f -o ( -type l -xtype f ) )`: `-xtype f` is
+     GNU find asking what the link RESOLVES to, so a symlink to a directory
+     and a DANGLING symlink are both excluded while a symlink to a regular
+     file is kept.
+   - the `-o` chain was UNPARENTHESIZED, so a `-type` predicate dropped in
+     front of it would have bound to the first `-name` only and silently
+     changed the result set. Both chains are parenthesized now.
+   - the name chain runs FIRST so the type test — which costs a `stat`, twice
+     for a symlink — is only paid for paths that could be candidates at all.
+
+   Arguments are an argv vector, never a shell string, so the parentheses
+   reach `find` as literal arguments and need no escaping."
   [dir]
   (when (fs/directory? dir)
     (try
       (let [result (babashka.process/shell
                      {:out :string :err :string :continue true}
                      "find" (str dir)
-                     "-name" "*.clj" "-o" "-name" "*.cljs" "-o" "-name" "*.cljc")]
+                     "(" "-name" "*.clj" "-o" "-name" "*.cljs"
+                         "-o" "-name" "*.cljc" ")"
+                     "(" "-type" "f" "-o" "(" "-type" "l" "-xtype" "f" ")" ")")]
         (when (zero? (:exit result))
           (->> (str/split-lines (str/trim (:out result)))
                (remove str/blank?))))

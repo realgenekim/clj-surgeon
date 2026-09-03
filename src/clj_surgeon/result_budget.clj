@@ -290,15 +290,28 @@
    of this root.
 
    No legitimate scan can produce such a row — `rel-path` relativizes files
-   discovered under the root — so this is reachable only through a manifest
-   rewritten under the state root. It refuses rather than reads: before this
+   discovered under the root, and discovery lists only regular files and
+   symlinks that resolve to them — so this is reachable through a manifest
+   rewritten under the state root, or through the TREE changing under a
+   pinned manifest (a directory that becomes a symlink out of the root
+   between the pin and the page). It refuses rather than reads: before this
    receipt existed a `..` row ENCODED a namespace from outside the scan root
    with no signal at all, and an absolute row threw
    `IllegalArgumentException` out of an operation whose whole promise is a
-   typed receipt and never a throw."
+   typed receipt and never a throw.
+
+   THE MESSAGE SAYS `does not resolve to a source file inside`, not `is not
+   inside`, and the difference is a round-six finding rather than a
+   preference: two different facts reach this receipt. One is an ESCAPE — a
+   `..` row, an absolute row, a parent that resolves outside — and `is not
+   inside the scanned root` is true of it. The other is a leaf whose entry
+   exists and is not a regular file — a directory, a symlink to one, a
+   dangling symlink, a FIFO — which IS inside the root, and about which the
+   old wording was simply FALSE, sending a reader hunting an attack that did
+   not happen. One sentence has to be true of both."
   [{:keys [path] :as request}]
   {:error-type :unconfined-manifest-row
-   :error (format "pinned manifest row %s is not inside the scanned root"
+   :error (format "pinned manifest row %s does not resolve to a source file inside the scanned root"
                   (pr-str path))
    :limit {:kind :manifest-row :requested path}
    :complete false
