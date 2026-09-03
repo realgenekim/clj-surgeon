@@ -843,8 +843,40 @@
                 [[] (+ ns-lines 2)]
                 form-texts))}))
 
+;; @spec MCP-OP-EXTRACT-033
+(defn scan-gap
+  "Pure: one `callers-unresolved` entry for a workspace scan that did not read
+  every Clojure source, or nil when it did.
+
+  `:complete` is the field an agent reads. Leaving a skipped source to be
+  inferred from `:discovery :skipped-large` publishes a receipt that says the
+  rewire is complete while a caller nobody read still requires the source
+  namespace, so the gap is stated where the completeness verdict is made.
+
+  A DECLARED build-tree exclusion is not a gap: `target/`, `out/`, `.cpcache/`,
+  `node_modules/` and `.git/` at the root are named in `:discovery`, and the
+  same reasoning that refuses to rewire a build copy says an unread build copy
+  is not an outstanding caller. Every other skipped directory is a gap, because
+  nothing proved what was inside it. Making `:complete` false on every git
+  repository would retire the flag as surely as leaving it true here."
+  [discovery]
+  (let [large (mapv :file (:skipped-large discovery))
+        dirs (->> (:skipped-directories discovery)
+                  (remove #(= :build-tree (:reason %)))
+                  (mapv :dir))]
+    (when (or (seq large) (seq dirs))
+      (cond-> {:file :workspace-scan
+               :reason :workspace-scan-incomplete
+               :remedy (str "discovery did not read every Clojure source under "
+                            "the root, so a caller in one of these may still "
+                            "require the source namespace; read them by hand, "
+                            "or raise :max-workspace-file-bytes and re-run")}
+        (seq large) (assoc :sources-too-large large)
+        (seq dirs) (assoc :directories-not-read dirs)))))
+
 ;; @spec MCP-OP-EXTRACT-015
 ;; @spec MCP-OP-EXTRACT-016
+;; @spec MCP-OP-EXTRACT-033
 (defn receipt-map
   "Pure: one receipt a reader who did not drive the run can act on.
 
@@ -874,7 +906,12 @@
                             (sort-by :owner)
                             vec)
         classification (:_caller-classification plan)
-        unresolved (vec (:unresolved classification))
+        ;; @spec MCP-OP-EXTRACT-033
+        ;; an unread source is an unresolved caller, stated where the
+        ;; completeness verdict is made rather than left in :discovery
+        unresolved (cond-> (vec (:unresolved classification))
+                     (scan-gap (:discovery plan))
+                     (conj (scan-gap (:discovery plan))))
         namespaces (:_touched-namespaces plan)]
     (apply array-map
       (concat

@@ -1961,6 +1961,58 @@
                   "and must not report a namespace segment as a build tree"))))
         (finally (delete-recursive! root))))))
 
+;; @spec MCP-OP-EXTRACT-033
+(deftest an-unread-source-makes-the-receipt-say-it-is-incomplete
+  (testing "the reviewer's probe: a 700 KB caller is never read, so the field
+            an agent actually reads -- :complete -- must not say true"
+    (let [root (create-caller-project!)
+          huge (io/file root "src" "app" "huge_caller.clj")]
+      (try
+        (spit huge (str "(ns app.huge-caller\n"
+                        "  (:require\n"
+                        "   [app.core :as core]))\n\n"
+                        ";; " (apply str (repeat (* 700 1024) \x)) "\n"
+                        "(defn go [x] (core/moved-two x))\n"))
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})
+              unresolved (:callers-unresolved result)]
+          (is (true? (:applied result)) (pr-str (:error result)))
+          (is (= 1 (count (get-in result [:discovery :skipped-large])))
+              "the file was indeed skipped")
+          (is (false? (:complete result))
+              (str "a scan that did not read every source cannot report a "
+                   "complete rewire: " (pr-str (:complete result))))
+          (is (some #(= :workspace-scan-incomplete (:reason %)) unresolved)
+              (str ":callers-unresolved must SAY the scan was incomplete, "
+                   "not leave it to be inferred from :discovery: "
+                   (pr-str unresolved)))
+          (is (some #(some (fn [f] (str/includes? (str f) "huge_caller.clj"))
+                           (:sources-too-large %))
+                    unresolved)
+              "and must name the source it could not read")
+          (is (some #(seq (str (:remedy %))) unresolved)
+              "and must name a remedy"))
+        (finally (delete-recursive! root)))))
+
+  (testing "a workspace with nothing skipped still reports complete"
+    (let [root (create-caller-project!)]
+      (try
+        (let [result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:complete result))
+              (str "a declared build-tree exclusion is not an unread source; "
+                   ":complete must stay usable: "
+                   (pr-str (:callers-unresolved result)))))
+        (finally (delete-recursive! root))))))
+
 ;; @spec MCP-OP-EXTRACT-030
 (deftest verification-flags-are-derived-from-the-checks
   (testing "a forced read-back mismatch flips :read-back false"
