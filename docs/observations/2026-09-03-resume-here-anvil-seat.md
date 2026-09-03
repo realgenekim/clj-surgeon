@@ -222,3 +222,18 @@ LANDED (`2026-09-03-memory-design-opus-answer.md`): the node tree is 48× source
 zipper premise was wrong; outline double-parses (76 MB garbage per 52 KB file); aggregate-bytes ceiling
 is the missing control that explains the alias_migration OOM. Next: reconcile with Sol-2, launch B2
 read-path lane.
+
+## RESUME DELTA 2026-09-03T05:19Z — night orders, mid-night state
+MERGED to main by surgeon1: kondo f8a9ef9 (acda1b3), routing-doc a9d8701 (3ebeafd/d1c5330); main fast-suite baseline is ZERO (702/5912/0, ~/tmp/main/test-fast-981a9f1.log). Queue doc: `2026-09-03-merge-queue-for-mayor.md`.
+Live lanes and where their receipts land (Sol reviews: ~/tmp/sol/<lane>-sol-review.md, log ends with EXIT):
+- ratchets fe7a1a1 pushed → Sol round-3 re-check (ratchets3).
+- rf2 465c956 pushed → Opus found the MCP entrance bypasses the walk (wrote into .git/hooks) → round 4 building on ~/src/clj-surgeon-rf2.
+- q5z ca677bc pushed → Sol NO-GO (undo receipt pruned; aggregate next_call IS possible) → round 4 building on ~/src/clj-surgeon-q5z.
+- census ef545c5 pushed → Sol NO-GO (silent truncation at 4,000) → round 3 building on ~/src/clj-surgeon-census.
+- study round 3 building on ~/src/clj-surgeon-study; template-upsert fix on ~/src/curtaincall-cfp-tmpl; fold-diff round 3 on ~/src/curtaincall-cfp-folddiff (waiting on its suite).
+- memory battery 2bae68b pushed → Sol GO-WITH-FIX as tooling → round 2 building on ~/src/clj-surgeon-membat (INCOMPLETE≠PASS, verified corpus, attested reference, held_mb line: max(held 10k) ≤ max(held 1k) + 2.0 MiB).
+- B1 kernel on ~/src/clj-surgeon-txn (TDD from the OOM; owns the reserved-peak accountant); B2 MEM-015 single-parse on ~/src/clj-surgeon-readpath (gate = battery lines on ls-tree).
+- arms apparatus 598139c pushed (bridge/anvil-arms-apparatus) → Sol instrument review (arms). E3/E6 spec: `2026-09-04-e3-e6-prestaged.md`. Owed before any cohort: PF-1..4, PF-6; PF-4 = G1 hand-drive of alias_migration/ls-tree (needs q5z on main and my MCP tools bound to 7906 — session restart required, NOT tonight while lanes run).
+Crons in this session: heartbeat */10 (pulse /tmp/anvil-pulse.txt, reads /tmp/mayor-*.txt, honours /tmp/anvil-halt.txt); usage watch hourly at :23. Inbox: inb-1165ce (night orders to the mayor), inb-2f78f5 (collateral handler-identity assertion), inb-3a9818 (fold-diff HOLD).
+Docs added tonight: vision.md "How we work" + "When the work is delegated" (+ the-how techniques doc), magic-moments chronicle, memory-design reconciled, night orders, answer to the mayor.
+Next on wake: read the newest Sol/Opus verdicts, file, launch rounds; when lanes go quiet, write the Gene report (tables first) and refresh this note.

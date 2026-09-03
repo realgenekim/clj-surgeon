@@ -24,7 +24,7 @@ you're going to give."*
    numbers, wins vs native), friction ledger → ratchets.
 4. **Hard rules hold all night:** nothing merges from here; ports 7906–7910 only; never 7888/7894/7895;
    never ~/acid GO files, cohort lock, chain scripts, curtain-call fleet dirs; no sudo; never signal a
-   process I did not start; one JVM suite at a time under `flock ~/tmp/suite.lock`; two builders on
+   process I did not start; unit suites under `~/bin/suite-run <cmd>` (three lanes); the memory battery keeps the exclusive `~/tmp/suite.lock`; two builders on
    Buster at most (irrelevant here — all builders run on Anvil, load-checked).
 
 ## Help I want from the mayor (please confirm which you will give)
@@ -49,3 +49,28 @@ you're going to give."*
    what is already ruled) wait for the morning.
 
 Pulse file: `/tmp/anvil-pulse.txt`. Resume note: `docs/observations/2026-09-03-resume-here-anvil-seat.md`.
+
+## The big goal (Gene: "give me the big goal you're driving towards; reread vision.md")
+
+vision.md's claim: an agent's cost is its count of decisions, not its count of edits; a verb that
+takes a whole intent and a gate that verifies the result turn a 9-return, 150 s task into one call
+and 1.3 s of tool time (~110× on the closure). The win exists only under mandate, and the receipt is
+the product. Tonight's hills, in order, and why each is worth the tokens:
+
+1. **Get the two-call shape onto main safely.** extract-with-rewire (rf2), alias_migration (q5z),
+   census, study ops, receipt ratchets, admit-gate follow-ups. Every one was NO-GO or GO-WITH-FIX on
+   an executed red-team (real RCE-class holes: rg --pre, read-eval, symlink escapes, unbounded
+   parse). They are the substrate for every experiment in the tech tree; nothing can be measured
+   on the agent's route until they merge. Tokens go to executed re-reviews and fail-first fixes.
+2. **Make the verbs survive the repo they are for.** alias_migration OOM'd on 450 files × 1.9 MB.
+   A verb that dies on the codebase it targets cannot be measured. The reconciled memory design
+   (aggregate ceiling before parse, single-parse outline, disk-journaled pre-image, battery as the
+   merge gate) is the shortest path; the battery's numbers are the receipt.
+3. **Pre-stage the morning's measurement.** E3 (fan-out verb vs native on the 21-owner rung) and E6
+   (study-ops free-choice adoption) become runnable the moment q5z and study merge. Arm prompts,
+   predicates, and the pre-registered pass lines get written tonight so the morning starts with "go".
+4. **Leave a reader the whole picture:** log, resume note, merge queue, and a Gene report whose
+   first table is what merged, what was refused and why, and the memory numbers.
+
+Not spent on: new verbs, re-litigated decisions, unmandated benchmarks, or any lane whose result
+is not a number, a green witness, or a filed verdict.
