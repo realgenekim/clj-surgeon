@@ -140,13 +140,21 @@
                       (or (source-paths-in-root root) ["src" "test" "dev"])))
 
 
+;; @spec MCP-OP-EXTRACT-032
 (def ^:private skipped-workspace-directories
-  "Directory names a source walk never descends.
+  "Directory names a source walk never descends -- AT THE WORKSPACE ROOT ONLY.
 
   Build output and vendored trees are not the workspace's own source. `target/`
   in particular holds COPIES of the very files being rewired, and rewiring a
   copy is rewriting build output under a receipt that claims a caller was
-  repaired; `.cpcache/` and `node_modules/` are cost with no callers in them."
+  repaired; `.cpcache/` and `node_modules/` are cost with no callers in them.
+
+  Matched at the root and nowhere else, because these are the names of TOP-LEVEL
+  build artifacts, while the same words are ordinary namespace segments further
+  down: `src/app/out/writer.clj` is `app.out.writer`, a real caller. Matching
+  the bare basename anywhere under the tree dropped that namespace silently --
+  discovery reported a smaller workspace, no refusal was raised, and the
+  receipt still said `complete`."
   #{"target" ".cpcache" "node_modules" "out" ".git"})
 
 (def ^:private default-max-workspace-files
@@ -177,18 +185,27 @@
   duplicated; one that resolves OUTSIDE the root is surfaced as `:escape`, so
   the caller refuses rather than dropping it quietly.
 
-  Returns one of `{:files [...] :skipped-large [...]}`, `{:escape <path>}`, or
-  `{:over-cap <count>}`."
+  A skip-list name is a build tree only at the workspace ROOT; deeper down it
+  is a namespace segment. Every directory the walk declines to enter is NAMED
+  in `:skipped-directories`, so an incomplete scan is visible rather than
+  inferred from a smaller file count.
+
+  Returns one of
+  `{:files [...] :skipped-large [...] :skipped-directories [...]}`,
+  `{:escape <path>}`, or `{:over-cap <count>}`."
   [^java.io.File root real-root cap]
   (let [no-follow (make-array java.nio.file.LinkOption 0)]
-    (loop [stack (apply list (or (.listFiles root) []))
+    (loop [stack (mapv (fn [entry] [entry true]) (or (.listFiles root) []))
            files (transient [])
            skipped (transient [])
+           skipped-dirs (transient [])
            seen 0]
       (if (empty? stack)
-        {:files (persistent! files) :skipped-large (persistent! skipped)}
-        (let [^java.io.File entry (first stack)
-              stack (rest stack)
+        {:files (persistent! files)
+         :skipped-large (persistent! skipped)
+         :skipped-directories (persistent! skipped-dirs)}
+        (let [[^java.io.File entry root-level?] (peek stack)
+              stack (pop stack)
               path (.toPath entry)
               link? (java.nio.file.Files/isSymbolicLink path)
               real (when link?
@@ -201,22 +218,29 @@
             (if (.startsWith real real-root)
               ;; already reachable by its real path; descending would
               ;; rediscover every source under it a second time
-              (recur stack files skipped seen)
+              (recur stack files skipped skipped-dirs seen)
               ;; refused by the caller, never dropped quietly
               {:escape (.getPath entry)})
 
             ;; a broken link points at nothing to read
             (and link? (nil? real))
-            (recur stack files skipped seen)
+            (recur stack files skipped skipped-dirs seen)
 
             (and (not link?) (.isDirectory entry))
-            (recur (if (contains? skipped-workspace-directories (.getName entry))
-                     stack
-                     (into stack (or (.listFiles entry) [])))
-                   files skipped seen)
+            ;; @spec MCP-OP-EXTRACT-032
+            (if (and root-level?
+                     (contains? skipped-workspace-directories (.getName entry)))
+              (recur stack files skipped
+                     (conj! skipped-dirs {:dir (.getPath entry)
+                                          :reason :build-tree})
+                     seen)
+              (recur (into stack
+                           (map (fn [child] [child false]))
+                           (or (.listFiles entry) []))
+                     files skipped skipped-dirs seen))
 
             (not (re-matches #".*\.clj[sc]?$" (.getName entry)))
-            (recur stack files skipped seen)
+            (recur stack files skipped skipped-dirs seen)
 
             (> (inc seen) (long cap))
             {:over-cap (inc seen)}
@@ -225,10 +249,11 @@
             (recur stack files
                    (conj! skipped {:file (.getPath entry)
                                    :bytes (.length entry)})
+                   skipped-dirs
                    (inc seen))
 
             :else
-            (recur stack (conj! files (.getPath entry)) skipped
+            (recur stack (conj! files (.getPath entry)) skipped skipped-dirs
                    (inc seen))))))))
 
 ;; @spec MCP-OP-EXTRACT-024
@@ -1517,9 +1542,12 @@
            :alias alias
            :rewire-callers rewire-callers
            ;; @spec MCP-OP-EXTRACT-029
-           :discovery (let [large (:skipped-large walked)]
+           ;; @spec MCP-OP-EXTRACT-032
+           :discovery (let [large (:skipped-large walked)
+                            dirs (:skipped-directories walked)]
                         (cond-> {:files (count (:files walked))}
-                          (seq large) (assoc :skipped-large (vec large))))})))
+                          (seq large) (assoc :skipped-large (vec large))
+                          (seq dirs) (assoc :skipped-directories (vec dirs))))})))
     (catch Exception error
       {:ok false
        :error-type :extraction-snapshot-failed

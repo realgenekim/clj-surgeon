@@ -1914,6 +1914,53 @@
           (is (true? (:applied result)) (pr-str (:error result)))))
       (finally (delete-recursive! root)))))
 
+;; @spec MCP-OP-EXTRACT-032
+(deftest a-build-tree-name-inside-a-namespace-is-not-a-build-tree
+  (testing "the reviewer's probe: src/app/out/writer.clj is app.out.writer, a
+            REAL caller, and a bare basename match anywhere under the tree
+            dropped it silently"
+    (let [root (create-caller-project!)
+          out-dir (io/file root "src" "app" "out")
+          writer (io/file out-dir "writer.clj")
+          stale (io/file root "target" "app" "only_moved.clj")]
+      (try
+        (.mkdirs out-dir)
+        (spit writer
+              (str "(ns app.out.writer\n"
+                   "  (:require\n"
+                   "   [app.core :as core]))\n\n"
+                   "(defn go [x] (core/moved-two x))\n"))
+        (.mkdirs (.getParentFile stale))
+        (spit stale (slurp (io/file root "src" "app" "only_moved.clj")))
+        (let [before-stale (slurp stale)
+              result (extract/execute!
+                       {:file (.getPath (io/file root "src" "app" "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file root "src" "app" "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (true? (:applied result)) (pr-str (:error result)))
+          (is (str/includes? (slurp writer) "[app.moved :as moved]")
+              (str "a namespace whose PATH segment is a skip-list name is a "
+                   "real caller and must be rewired: "
+                   (pr-str (mapv :file (:external-callers-rewired result)))))
+          (is (some #(str/includes? (str (:file %)) "out/writer.clj")
+                    (:external-callers-rewired result)))
+
+          (testing "the root-level build tree is still never descended"
+            (is (= before-stale (slurp stale)))
+            (is (not-any? #(str/includes? (str (:file %)) "target/")
+                          (:external-callers-rewired result))))
+
+          (testing "and every directory the walk refused to enter is NAMED"
+            (let [skipped (get-in result [:discovery :skipped-directories])]
+              (is (some #(str/ends-with? (str (:dir %)) "/target") skipped)
+                  (str "discovery must report what it did not read: "
+                       (pr-str (:discovery result))))
+              (is (not-any? #(str/includes? (str (:dir %)) "app/out") skipped)
+                  "and must not report a namespace segment as a build tree"))))
+        (finally (delete-recursive! root))))))
+
 ;; @spec MCP-OP-EXTRACT-030
 (deftest verification-flags-are-derived-from-the-checks
   (testing "a forced read-back mismatch flips :read-back false"
