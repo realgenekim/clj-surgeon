@@ -128,6 +128,10 @@ def validate_rollout(records: list[dict]) -> None:
 def validate_watch(records: list[dict]) -> None:
     """Monotonic `ms_since_start`, unique ordinals covering 1..N, one final `end`.
 
+    The `end` is REQUIRED, and it must carry the driver's exit status and the run's
+    wall: they appear nowhere else in the stream, so a stream without them describes a
+    run whose ending nobody witnessed (Sol round two, item 4).
+
     `ms_since_start` is stamped inside `emit()`, so non-decreasing is a true
     invariant of a watch stream this apparatus wrote; a decreasing one has been
     reordered.  Return ordinals and call seqs are dense from 1, so a duplicated
@@ -137,6 +141,7 @@ def validate_watch(records: list[dict]) -> None:
     returns: list[int] = []
     seqs: list[int] = []
     ended = False
+    end_record: dict | None = None
     for lineno, rec in enumerate(records, 1):
         if ended:
             raise StreamError(f"record-after-end watch:{lineno}")
@@ -160,6 +165,7 @@ def validate_watch(records: list[dict]) -> None:
             seqs.append(seq)
         elif kind == "end":
             ended = True
+            end_record = rec
         elif kind != "abort":
             raise StreamError(f"unknown-record-kind watch:{lineno} kind={kind!r}")
     if sorted(returns) != list(range(1, len(returns) + 1)):
@@ -168,6 +174,21 @@ def validate_watch(records: list[dict]) -> None:
     if sorted(seqs) != list(range(1, len(seqs) + 1)):
         raise StreamError(f"call-seqs-not-dense-from-1 "
                           f"(n={len(seqs)}, distinct={len(set(seqs))})")
+
+    # THE `end` RECORD IS THE COMPLETION STAMP.  Sol round two, item 4: this function
+    # promised "one final `end`" in its own docstring and never required one, so a
+    # stream with the record deleted scored rc 0.  driver rc and wall live nowhere else
+    # in the stream; without them the receipt's wall_s is a number about a moment the
+    # meter never observed, which is the hand-typed-timestamp defect wearing a schema.
+    if not ended or end_record is None:
+        raise StreamError("watch-unterminated (no final `end` record: the run's "
+                          "completion stamp, driver rc and wall are missing)")
+    if not isinstance(end_record.get("driver_rc"), int):
+        raise StreamError(f"watch-unterminated (the final `end` carries no driver rc: "
+                          f"driver_rc={end_record.get('driver_rc')!r})")
+    if not isinstance(end_record.get("wall_s"), (int, float)):
+        raise StreamError(f"watch-unterminated (the final `end` carries no wall: "
+                          f"wall_s={end_record.get('wall_s')!r})")
 
 
 def abort(arm: pathlib.Path, code: int, reason: str) -> int:
