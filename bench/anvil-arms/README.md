@@ -64,6 +64,16 @@ Makefile outside the subset must invoke its test runner directly — `bin/kaocha
 `make test` — to be metered at all.** `run-arm.sh` writes that sentence into `driver.log`
 when it happens.
 
+**Measured on the repositories this program actually meters (2026-09-03):** both fall
+outside the subset — `clj-surgeon` at `?=`, `marvin-voice-remote` at `.DEFAULT_GOAL` —
+so on either worktree the map resolves nothing and **a single `make` call anywhere in an
+arm refuses that arm-run** (`incomplete-run`). That is compatible with the B.4 prompts
+as pre-registered: they already tell the agent to run
+`bin/kaocha --focus marvin-voice-remote.bridge3-new-test` directly and not to run
+`make golden-update`. It is stated here because it is a cost, not a detail: the ratchet
+converts a stray `make` into a refused arm-run rather than a wrong number, and a cohort
+operator should know which of those they are buying.
+
 One case is stricter still: a **hard `include` of a file that does not exist** is a file
 make would *generate*, carrying target definitions no static read can ever see. That is
 `dynamic_refusal: include-generated:<file>`, exit 4, `ATTEST-MISMATCH makefile-dynamic` —
