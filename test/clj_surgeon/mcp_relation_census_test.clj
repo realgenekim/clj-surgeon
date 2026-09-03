@@ -19,6 +19,7 @@
 
 (def repo-root (.getCanonicalPath (io/file ".")))
 (def fixture "test-fixtures/relation-census/folds.clj")
+(def second-fixture "test-fixtures/relation-census/inventory_folds.clj")
 (def helpers "test-fixtures/relation-census/helpers_only.clj")
 
 (defn- temp-dir
@@ -98,9 +99,10 @@
 ;; @spec MCP-OP-CENSUS-011
 (deftest pool-size-one-and-pool-size-n-agree-byte-for-byte
   (let [strip #(-> % (dissoc :elapsed_ms :phases_elapsed_ms :pool_size))
-        serial (run {:files [fixture helpers] :pool_size 1})
-        parallel (run {:files [fixture helpers] :pool_size 8})
-        reversed (run {:files [helpers fixture] :pool_size 8})]
+        all [fixture second-fixture helpers]
+        serial (run {:files all :pool_size 1})
+        parallel (run {:files all :pool_size 8})
+        reversed (run {:files (vec (reverse all)) :pool_size 8})]
     (is (= 1 (:pool_size serial)))
     (is (= 8 (:pool_size parallel)))
     (is (= (json/generate-string (strip serial))
@@ -109,7 +111,10 @@
     (is (= (json/generate-string (strip serial))
            (json/generate-string (strip reversed)))
         "the merge re-keys by path, so request order cannot reorder the census")
-    (is (= 1 (:files serial)) "only files that define arms are censused")))
+    (is (= 2 (:files serial))
+        "both arm-defining fixtures went through the pool; the helper did not")
+    (is (= [fixture second-fixture] (vec (keys (:by_file serial))))
+        "the merge orders by path regardless of the order the pool finished in")))
 
 ;; @spec MCP-OP-CENSUS-014
 (deftest refuses-with-a-typed-reason-and-an-executable-next-call

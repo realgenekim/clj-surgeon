@@ -45,6 +45,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-019**: When clj-surgeon executes the `:relation-census` CLI op, it shall parse `:threads` through the same pool-size kernel as the MCP tool and refuse an out-of-range or non-integer value typed, shall validate `:doors` through the same door kernel and refuse a door that shadows a collection write head, and shall bound its scan by the same scanned-file and source-byte caps, refusing a named source above the byte cap.
 
+- [x] **MCP-OP-CENSUS-020**: When clj-surgeon witnesses that the census answer is pool-size independent, it shall run at least two arm-defining files through the plan phase, and the plan-phase pool shall map every input exactly once, shall use no more threads than the pool size it was given, and shall leave no worker thread alive after the call returns.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |
