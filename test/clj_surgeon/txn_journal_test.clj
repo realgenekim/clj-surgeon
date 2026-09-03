@@ -705,6 +705,43 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-006
+(deftest a-quota-sweep-refuses-a-journal-a-receipt-still-references
+  (testing "the other half of the retention policy: an explicit forget! is a
+            decision, but a sweep running because disk is short must not
+            silently destroy a receipt somebody is still holding"
+    (let [ws (workspace! "lease-refcount" 2)
+          path (first (sort (:paths ws)))]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn (:paths ws))
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn path)
+              _ (journal/stage! txn path "(ns f0) (def v :new)\n")
+              receipt (journal/commit! txn)
+              txid (:txid receipt)
+              opts {:state-home (:state-home ws)}
+              dir (transaction-dir ws txid)
+              refused (journal/evict! (:root ws) txid opts)
+              released (journal/release-receipt! (:root ws) txid opts)
+              evicted (journal/evict! (:root ws) txid opts)]
+          (is (:ok receipt))
+          (is (false? (:ok refused)))
+          (is (= :txn-journal-referenced (:error-type refused)))
+          (is (= 1 (:receipt-refs refused))
+              "the lease says how many receipts are holding it")
+          (is (some? (:next_call refused))
+              "and the refusal names the call that would release it")
+          (is (:ok released))
+          (is (:ok evicted) "once nothing references it, the sweep may reclaim it")
+          (is (not (.exists dir)))
+          (let [after (journal/undo! (:root ws) txid opts)]
+            (is (false? (:ok after)))
+            (is (= :txn-journal-missing (:error-type after))
+                "an evicted receipt says it cannot be undone rather than
+                 pretending it can")))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-006
 ;; @spec MCP-OP-MEM-013
 (deftest a-failed-restoration-keeps-its-journal-and-refuses-eviction
   (testing "the second half of Sol's blocker: a failed rollback deleted the only
