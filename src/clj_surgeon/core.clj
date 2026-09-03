@@ -463,11 +463,15 @@
 ;; The bounded output budget — streaming encode (MCP-OP-MEM-003)
 ;; ============================================================
 
-(def ^:private outline-pool-size
-  "Files outlined concurrently. This is `pmap`'s own degree of parallelism,
-   kept identical so bounding the OUTPUT does not quietly change how much
-   parser peak the scan carries — that is MCP-OP-MEM-008's subject, not this
-   row's."
+;; @spec MCP-OP-MEM-003
+(def outline-pool-size
+  "Files outlined concurrently — the DECLARED bound on how much parser peak a
+   scan carries at once.
+
+   Public because a bound nobody can read is a bound nobody can check: the
+   concurrency witness gates on this number, and Sol's review found the
+   implementation running 32 outlines against a declared 18 precisely because
+   nothing measured it."
   (+ 2 (.availableProcessors (Runtime/getRuntime))))
 
 ;; @spec MCP-OP-MEM-003

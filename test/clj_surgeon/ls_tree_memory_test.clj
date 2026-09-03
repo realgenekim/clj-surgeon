@@ -183,3 +183,73 @@
             (str dir ": streamed EDN differs from the batch EDN"))
         (is (= (mapv :file expected-edn) (mapv :file actual-edn))
             (str dir ": record ORDER differs"))))))
+
+;; ============================================================
+;; The DECLARED worker bound, measured
+;;
+;; Sol finding 6/9: the streaming materialiser documents a pool of
+;; `outline-pool-size` (18 on a 16-core box) and a window of `4 x pool`, and
+;; measured 32 outlines simultaneously active. `pmap` realises its input in
+;; CHUNKS of 32, so chunked realisation outruns the bound the docstring
+;; states. Nothing was wrong with the output; what was wrong is that the
+;; parser-peak bound the whole memory row rests on was a claim, not a control.
+;;
+;; The window must also NOT scale with N, or boundedness is defeated by
+;; growth. `outline-window-size` is `4 x pool` and independent of the corpus;
+;; this witness pins that too.
+;; ============================================================
+
+(defn- max-concurrent-outlines
+  "Run `f` with `safe-outline` instrumented, and return the greatest number of
+   outlines that were ever simultaneously in flight.
+
+   Each outline holds for 2 ms so overlap is observable at all: without a
+   dwell, workers finish faster than they are scheduled and every
+   implementation looks serial."
+  [f]
+  (let [active (atom 0)
+        peak (atom 0)
+        v #'core/safe-outline
+        real @v]
+    (alter-var-root
+      v (constantly
+          (fn [file]
+            (let [n (swap! active inc)]
+              (swap! peak max n)
+              (try (Thread/sleep 2) (real file)
+                   (finally (swap! active dec)))))))
+    (try (f) (finally (alter-var-root v (constantly real))))
+    @peak))
+
+;; @spec MCP-OP-MEM-003
+(deftest outline-concurrency-never-exceeds-the-declared-pool
+  (let [dir (make-fixture! 240)]
+    (try
+      (let [pool core/outline-pool-size
+            peak (max-concurrent-outlines
+                   #(core/run-ls-tree {:dir dir :format :edn :max-results 200}))]
+        (is (pos? peak) "the meter saw the scan at all")
+        (is (> peak 1)
+            "the scan really is concurrent — a serial peak would make the
+             bound below vacuous")
+        (is (<= peak pool)
+            (format "measured %d outlines active against a declared pool of %d"
+                    peak pool)))
+      (finally (fs/delete-tree dir)))))
+
+;; @spec MCP-OP-MEM-003
+(deftest the-materialisation-window-does-not-scale-with-n
+  (is (= (* 4 core/outline-pool-size) core/outline-window-size)
+      "the window is a fixed multiple of the pool")
+  (let [small (make-fixture! 20)
+        large (make-fixture! 240)]
+    (try
+      (let [w core/outline-window-size]
+        (core/run-ls-tree {:dir small :format :edn})
+        (is (= w core/outline-window-size))
+        (core/run-ls-tree {:dir large :format :edn :max-results 200})
+        (is (= w core/outline-window-size)
+            "a bigger corpus does not widen the window; if it did, retained
+             heap would grow with N through the materialiser even with the
+             result ceiling holding"))
+      (finally (fs/delete-tree small) (fs/delete-tree large)))))
