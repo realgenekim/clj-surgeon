@@ -1131,6 +1131,72 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-045
+(deftest detail-pruning-never-deletes-a-document-this-writer-does-not-own
+  ;; `.clj-surgeon/alias-migration/` is a legal receipt directory: it is inside
+  ;; the workspace, it is pruned from every scope walk, and nothing in the
+  ;; request forbids it. When the detail writer claims every `.edn` in its
+  ;; directory, a run configured that way prunes its OWN undo receipt while
+  ;; publishing ok=true committed=true — a receipt naming an inverse that no
+  ;; longer exists, which is the worst shape a write tool can return.
+  (let [workspace (workspace!)
+        details (.getCanonicalFile (io/file workspace ".clj-surgeon"
+                                            "alias-migration"))]
+    (.mkdirs details)
+    (try
+      ;; twenty documents this writer did not write, stamped newer than the run
+      ;; about to happen. That is the concurrent-peer shape `details-retention`
+      ;; already documents: twenty peers publishing between this run's receipt
+      ;; and this run's prune push the receipt past the retention window.
+      (let [later (+ (System/currentTimeMillis) 600000)]
+        (dotimes [index 20]
+          (let [peer (io/file details (str "peer-" index ".edn"))]
+            (spit peer "{:version 1 :files []}")
+            (.setLastModified peer (+ later index)))))
+      (let [result (alias-migration/execute! (config workspace details)
+                                             (request workspace))]
+        (is (:ok result) (pr-str result))
+        (is (true? (:committed result)))
+        (let [receipt (io/file (:undo_receipt result))]
+          (is (.exists receipt)
+              (str "the committed run pruned its own undo receipt: "
+                   (:undo_receipt result)))
+          (when (.exists receipt)
+            (is (= (:receipt_hash result)
+                   (:receipt-hash (edn/read-string (slurp receipt))))
+                "the surviving file is not the receipt this run published"))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest receipt-and-detail-namespaces-are-proved-disjoint-by-a-typed-guard
+  (let [guard (ns-resolve 'clj-surgeon.mcp-alias-migration
+                          'receipt-detail-collision?)
+        detail-name? (ns-resolve 'clj-surgeon.mcp-alias-migration
+                                 'detail-document-name?)
+        workspace (temp-dir)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (try
+      (is (some? detail-name?)
+          "the detail writer owns no name pattern, so it cannot tell its own
+           documents from anything else in the directory")
+      (is (some? guard)
+          "no typed guard refuses receipt/detail co-location")
+      (when (and guard detail-name?)
+        (is (true? (detail-name? "detail-0dd1.edn")))
+        (is (false? (detail-name? "0dd1.edn")))
+        (testing "a receipt name inside the detail namespace is refused"
+          (is (true? (guard (.getPath workspace) (.getPath details)
+                            "detail-0dd1.edn"))))
+        (testing "and the names the two actually use are disjoint"
+          (is (false? (guard (.getPath workspace) (.getPath details)
+                             (str (java.util.UUID/randomUUID) ".edn"))))
+          (is (false? (guard (.getPath workspace) (.getPath receipts)
+                             "detail-0dd1.edn")))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-043
 (deftest a-rolled-back-retire-failure-deletes-its-undo-receipt
   (let [workspace (workspace!)
