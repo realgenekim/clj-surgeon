@@ -69,6 +69,8 @@
 #      refused as a runtime override, not silently discarded by the wrapper strip
 #  42  a bare `--` in a `make` invocation is inert, not an unknown option
 #  43  the scorer requires the EXACT supported watch schema, never a floor
+#  44  capture-mode reading is non-blocking, so the scan loop keeps its cadence
+#      (and --max-wall its bound) during driver silence
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -2269,6 +2271,42 @@ PY43B
     && ok "case43b schema_version=$ver typed abort" \
     || bad "case43b schema_version=$ver no typed abort: $(cat "$WORK/case43-v$ver.out")"
 done
+
+echo "== case 44: capture-mode reading is NON-BLOCKING during driver silence =="
+# Sol round five, item 4 (watch.py:1043): a plain blocking `readline()` in capture-
+# stdout mode stalls the WHOLE scan loop for as long as the driver stays silent --
+# Sol measured `--max-wall 0.5` taking 4.13s and recording ONE scan against a silent
+# two-second driver, because nothing below that call (scans, idle-timeout, max-wall)
+# can run while it blocks.  The fix bounds the read to one scan interval via `select`
+# so the loop keeps its cadence during silence.  Witness: a silent 2s driver under
+# `--max-wall 0.5` aborts within ~0.75s (well under the old 4.13s) with >= 2 scans.
+A44="$WORK/st-P-N-44"; mkdir -p "$A44"
+git clone -q --no-hardlinks "$BASE_REPO" "$A44/worktree"
+printf '%s\n' "$BASE_SHA" > "$A44/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A44/prompt.md"
+EXP=st RUNG=P SLOT=44 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A44" N - "" > /dev/null 2>&1
+t44_start=$(date +%s.%N)
+python3 "$HERE/watch.py" --arm "$A44" --capture-stdout --max-wall 0.5 \
+  --zero-return-window 5 --poll 0.25 -- bash -c 'sleep 2' \
+  > "$WORK/case44.out" 2>&1
+rc44=$?
+t44_elapsed=$(python3 -c "print($(date +%s.%N) - $t44_start)")
+want "case44 watch rc (silent driver, zero returns)" 4 "$rc44"
+awk -v e="$t44_elapsed" 'BEGIN{exit !(e < 3.0)}' \
+  && ok "case44 aborted in ${t44_elapsed}s (< 3.0s; the pre-fix defect took 4.13s+)" \
+  || bad "case44 took ${t44_elapsed}s — the scan loop is still blocking on the read"
+scans44=$(jqf "$A44/run.json" scans)
+case "$scans44" in
+  ''|MISSING|null|*[!0-9]*) bad "case44 scans is not a computed integer: $scans44";;
+  0|1) bad "case44 scans=$scans44 — the loop only ran once or zero times while silent";;
+  *) ok "case44 run.json recorded $scans44 scan(s) (>= 2) during driver silence";;
+esac
+want "case44 run.json abort" max-wall "$(jqf "$A44/run.json" abort)"
+drc44=$(jqf "$A44/run.json" driver_rc)
+[ "$drc44" = "-15" ] \
+  && ok "case44 driver_rc=$drc44 — the still-silent driver was SIGTERM'd, not waited out" \
+  || bad "case44 driver_rc=$drc44 — expected -15 (SIGTERM), driver ran to natural completion"
 
 # --- the shell-error trap fires here, before any verdict is printed ---------------
 exec 2>&3 3>&-

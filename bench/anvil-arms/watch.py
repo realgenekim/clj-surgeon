@@ -49,6 +49,7 @@ import os
 import pathlib
 import re
 import resource
+import select
 import shlex
 import signal
 import subprocess
@@ -1096,13 +1097,26 @@ def main() -> int:
 
     try:
         while True:
+            skip_sleep = False
             if args.capture_stdout:
-                line = proc.stdout.readline() if proc.stdout else ""
+                # Sol round five, item 4: a plain blocking `readline()` here stalls
+                # the WHOLE scan loop for as long as the driver stays silent -- a
+                # silent 2s driver under `--max-wall 0.5` took 4.13s and recorded ONE
+                # scan, because nothing below this call (scans, idle-timeout,
+                # max-wall) can run while it blocks.  `select` bounds the wait to one
+                # scan interval so the loop keeps its cadence during silence; a line
+                # is only read once the fd is actually reported readable (data, or
+                # real EOF).
+                ready = (select.select([proc.stdout], [], [],
+                                       DESCENDANT_SCAN_INTERVAL_S)[0]
+                        if proc.stdout else [])
+                line = proc.stdout.readline() if ready else ""
                 if line:
                     stdout_sink.write(line)
                     stdout_sink.flush()
                     pump_lines([line])
                     continue
+                skip_sleep = not ready   # already waited one interval in select()
             else:
                 if tailer is None and codex_home is not None:
                     try:
@@ -1156,7 +1170,8 @@ def main() -> int:
                     if tailer.check_rotation():
                         abort_reason = tailer.abort_kind or "rollout-rotated"
                 break
-            time.sleep(args.poll)
+            if not skip_sleep:
+                time.sleep(args.poll)
     finally:
         # One last snapshot while the driver may still be alive: a descendant that left
         # the group is visible as a CHILD only until its parent dies.
@@ -1166,7 +1181,20 @@ def main() -> int:
             # because a descendant that called setsid is not in that group
             kill_group(signal.SIGTERM)
             signal_recorded(signal.SIGTERM)
-            time.sleep(2)
+            # Up to a 2s grace for SIGTERM to take effect -- POLLED, not a blind
+            # sleep.  Sol round five, item 4's witness bounds the whole abort at
+            # ~0.75s; a driver that dies promptly under SIGTERM (the common case,
+            # proved by the self-test) must not still pay a fixed 2s here on top of
+            # the loop's own now-bounded detection latency.  A driver that traps
+            # SIGTERM and genuinely needs time to exit still gets the full 2s before
+            # SIGKILL -- this only shortens the wait once nothing is left alive.
+            grace_deadline = time.time() + 2.0
+            while time.time() < grace_deadline:
+                if proc.poll() is not None and not group_members() and not any(
+                        still_alive(pid, start) for pid, start in recorded.items()
+                        if pid not in (os.getpid(), os.getppid(), 1)):
+                    break
+                time.sleep(0.05)
             kill_group(signal.SIGKILL)
             signal_recorded(signal.SIGKILL)
         driver_rc = proc.wait()
