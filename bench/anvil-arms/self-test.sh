@@ -43,6 +43,11 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # so the self-test runs where a real cohort runs -- not in an ambient system temp dir.
 ARMS_ROOT_BASE=/home/forge/tmp/arms
 mkdir -p "$ARMS_ROOT_BASE"
+# A test suite must leave the source tree exactly as it found it.  Case 17b imports
+# build-prompts.py and score.py imports watch.py, both of which would otherwise drop
+# __pycache__ into the repo -- and one such .pyc is already tracked, so a self-test run
+# showed up as a dirty worktree.
+export PYTHONDONTWRITEBYTECODE=1
 WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "$ARMS_ROOT_BASE/selftest.XXXXXX")}
 CLEAN=${ANVIL_ARMS_SELFTEST_KEEP:-0}
 PASS=0; FAIL=0
