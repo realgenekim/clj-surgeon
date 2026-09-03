@@ -153,10 +153,31 @@
                      reverse)]
     (mapv #(if (= ::gap %) (n/spaces 1) %) trimmed)))
 
+(defn- unwrapped-pr-str
+  "Reader-safe escaped text for `value`, without the wrapping quotes.
+
+  `pr-str` on a string escapes every embedded newline as the two characters
+  `\\n`; stripping the outer quotes leaves text `n/string-node` can wrap back
+  into a normal single-line (`:token`) string node."
+  [value]
+  (apply str (-> value pr-str next butlast)))
+
 (defn- presentation-node
   [node]
-  (if (n/inner? node)
+  (cond
+    (n/inner? node)
     (n/replace-children node (presentation-children (n/children node)))
+
+    ;; A string node whose source spans more than one physical line (a raw
+    ;; newline typed inside the quotes, not an escaped `\n`) carries that
+    ;; newline as literal `lines` content; `n/string` on it reproduces the
+    ;; newline verbatim. Re-escape it through `pr-str` so the presented form
+    ;; collapses to one physical line and still `read-string`s to the same
+    ;; value.
+    (= :multi-line (n/tag node))
+    (n/string-node (unwrapped-pr-str (n/sexpr node)))
+
+    :else
     node))
 
 ;; @spec MCP-OP-DISPATCH-004
@@ -164,9 +185,10 @@
   "One dispatch spelling rendered as a single comment-free line.
 
   The selector compares parsed dispatch values, not bytes, so dropping a
-  comment and collapsing a line break leaves a spelling the selector still
-  accepts — while a `;;` can no longer comment out the rest of a joined summary
-  line, and no entry can smuggle a newline into bounded evidence."
+  comment, collapsing a line break, and reader-escaping an embedded raw
+  newline all leave a spelling the selector still accepts — while a `;;` can
+  no longer comment out the rest of a joined summary line, and no entry can
+  smuggle a newline into bounded evidence."
   [spelling]
   (let [text (str spelling)]
     (try

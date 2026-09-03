@@ -268,3 +268,30 @@
         (is (not (str/includes? dispatch "\n")))
         (is (= "[:conference.schedule/event-with-a-long-qualified-name-0 :legacy-arm]"
                dispatch))))))
+
+;; ---------------------------------------------------------------------------
+;; A dispatch spelling that embeds a literal newline (a multi-line string
+;; literal in source, written with a real Enter inside the quotes rather than
+;; an escaped `\n`) survived presentation with that newline intact: Sol's
+;; 2026-09-03 re-review returned contains-newline=true, joined-line-count=2 for
+;; exactly this shape. `presentation-node` only collapsed whitespace between a
+;; node's *children*; a string node has no children, so its raw source text —
+;; newline included — passed through `n/string` unchanged.
+;; ---------------------------------------------------------------------------
+
+(deftest defmethod-owner-evidence-escapes-a-multiline-string-dispatch
+  ;; @spec MCP-OP-DISPATCH-004
+  (let [multiline-dispatch (str "\"a" \newline "b\"")
+        records (fold-arms [multiline-dispatch])
+        evidence (hypotheses/defmethod-owner-evidence "fold-event" records)
+        presented (get-in evidence [:owner-form :dispatch])]
+    (testing "the presented dispatch is exactly one physical line"
+      (is (not (str/includes? presented "\n")))
+      (is (= 1 (count (str/split-lines presented)))))
+    (testing "the presented dispatch still reads back to the original value"
+      (is (= (read-string multiline-dispatch) (read-string presented))))
+    (testing "the selector chooses the right arm from the presented spelling"
+      (let [attempted (hypotheses/defmethod-owner-evidence
+                        (str "fold-event " presented) records)]
+        (is (true? (:owner-form-is-exact attempted)))
+        (is (= presented (get-in attempted [:owner-form :dispatch])))))))
