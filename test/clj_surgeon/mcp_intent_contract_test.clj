@@ -1,5 +1,9 @@
 (ns clj-surgeon.mcp-intent-contract-test
   (:require
+   [clj-surgeon.mcp-intent-contract]
+   [clojure.java.io :as io]
+   [clojure.set :as set]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (defn- audit-contract
@@ -87,3 +91,124 @@
         (requiring-resolve
           'clj-surgeon.mcp-intent-contract/audit-current-repository)]
     (is (:ok (audit-current-repository)))))
+
+;; ---------------------------------------------------------------------------
+;; The spec-document registry is DERIVED, not listed.
+;;
+;; Ratchet, 2026-09-03 (integration branch): the audited spec documents used to
+;; live in a literal vector inside `audit-current-repository`. Every lane that
+;; added an intent leaf appended a line to that one vector, so every lane
+;; conflicted with every other lane by construction. The list is now scanned from
+;; docs/intent/<leaf>/<name>-specs.md, so a new lane adds a FILE and touches no
+;; shared line. These witnesses keep the scan honest: pickup, loud failure on an
+;; orphan listing, named reasons for every exclusion, and an EXACT expected set
+;; so drift is visible rather than silent.
+;; ---------------------------------------------------------------------------
+
+(defn- spec-doc-paths
+  ([] ((requiring-resolve 'clj-surgeon.mcp-intent-contract/spec-doc-paths)))
+  ([root] ((requiring-resolve 'clj-surgeon.mcp-intent-contract/spec-doc-paths) root))
+  ([root excluded]
+   ((requiring-resolve 'clj-surgeon.mcp-intent-contract/spec-doc-paths) root excluded)))
+
+(defn- excluded-spec-docs
+  []
+  @(requiring-resolve 'clj-surgeon.mcp-intent-contract/excluded-spec-docs))
+
+(defn- spec-ids
+  "The MCP-OP intent IDs the audit would parse out of these repo-relative files."
+  [root paths]
+  (set (keys (:specs (audit-contract
+                       {:spec-text (str/join
+                                     "\n"
+                                     (map #(slurp (io/file root %)) paths))
+                        :implementation-sources {}
+                        :test-sources {}})))))
+
+(defn- temp-dir
+  [prefix]
+  (str (java.nio.file.Files/createTempDirectory
+         prefix (into-array java.nio.file.attribute.FileAttribute []))))
+
+(deftest a-new-intent-leaf-is-picked-up-by-adding-only-a-file
+  (testing "a lane adds docs/intent/<leaf>/<leaf>-specs.md and nothing else"
+    (let [root (temp-dir "surgeon-intent-scan")
+          leaf (io/file root "docs" "intent" "temp-lane")]
+      (.mkdirs leaf)
+      (spit (io/file leaf "temp-lane-specs.md")
+            (spec-line "x" "MCP-OP-TEMPLANE-001"))
+      ;; a sibling that is NOT a spec document, and a `-specs.from-*.md` variant,
+      ;; must both be ignored.
+      (spit (io/file leaf "temp-lane-design.md") "design\n")
+      (spit (io/file leaf "temp-lane-specs.from-docs--x.md")
+            (spec-line "x" "MCP-OP-TEMPLANE-999"))
+      (is (= ["docs/intent/temp-lane/temp-lane-specs.md"] (spec-doc-paths root {})))
+      (is (= #{"MCP-OP-TEMPLANE-001"}
+             (spec-ids root (spec-doc-paths root {})))))))
+
+(deftest an-orphan-spec-doc-listing-fails-loudly
+  (testing "an exclusion naming a file that does not exist throws, never shrinks silently"
+    (let [thrown (try
+                   (spec-doc-paths "." {"docs/intent/no-such-leaf/no-such-leaf-specs.md"
+                                        "deliberately absent fixture"})
+                   nil
+                   (catch clojure.lang.ExceptionInfo e e))]
+      (is (some? thrown) "an orphan listing must throw")
+      (is (= :orphan-spec-doc-listing (:type (ex-data thrown))))
+      (is (= ["docs/intent/no-such-leaf/no-such-leaf-specs.md"]
+             (:paths (ex-data thrown)))))))
+
+(deftest an-empty-intent-tree-fails-loudly
+  (testing "a moved or emptied docs/intent is an error, not an empty audit"
+    (let [root (temp-dir "surgeon-intent-empty")
+          thrown (try (spec-doc-paths root {}) nil
+                      (catch clojure.lang.ExceptionInfo e e))]
+      (is (some? thrown))
+      (is (= :no-spec-docs-found (:type (ex-data thrown)))))))
+
+(deftest every-spec-doc-exclusion-carries-a-named-reason
+  (testing "the exclusion set is non-empty only for named, existing reasons"
+    (doseq [[path reason] (excluded-spec-docs)]
+      (is (string? path))
+      (is (.isFile (io/file "." path))
+          (str "an excluded spec document must exist: " path))
+      (is (and (string? reason) (<= 40 (count (str/trim reason))))
+          (str "exclusion needs a substantive one-line reason: " path)))))
+
+(deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
+  (testing "drift in docs/intent is visible here, not silent"
+    (is (= ["docs/intent/2026-08-29-ratification/measurement-evidence-specs.md"
+            "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
+            "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
+            "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
+            "docs/intent/operation-algebra/operation-algebra-specs.md"
+            "docs/intent/performance-regression-sentinel/performance-regression-sentinel-specs.md"
+            "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
+            "docs/intent/prepared-request/prepared-request-specs.md"
+            "docs/intent/read-request-normalization/read-request-normalization-specs.md"
+            "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
+            "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
+            "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
+            "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"]
+           (spec-doc-paths ".")))))
+
+(deftest the-derived-audit-covers-exactly-the-old-literal-vector-intents
+  (testing "deriving the list changed WHICH FILES are scanned, not WHICH INTENTS are audited"
+    (let [literal-vector
+          ["docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
+           "docs/intent/read-request-normalization/read-request-normalization-specs.md"
+           "docs/intent/prepared-request/prepared-request-specs.md"
+           "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
+           "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"
+           "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
+           "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"]
+          old (spec-ids "." literal-vector)
+          derived (spec-ids "." (spec-doc-paths "."))]
+      ;; The six additionally-scanned documents contribute either no MCP-OP IDs at
+      ;; all (measurement-evidence, operation-algebra, performance-regression-sentinel,
+      ;; sibling-pair-edit, worktree-lifecycle use other prefixes) or a duplicate of
+      ;; the prepared-request IDs (the 2026-08-30 ratification copy).
+      (is (= old derived)
+          (str "added: " (sort (set/difference derived old))
+               " removed: " (sort (set/difference old derived))))
+      (is (= 187 (count derived))))))
