@@ -1669,7 +1669,7 @@
                    (pr-str refused)))
           (is (= :evidence-unrecordable (:cause line))
               (str "with the cause named: " (pr-str line)))
-          (is (= "LOCK.broken-at.STABLE-TXID" (:sidecar line))
+          (is (= "LOCK.broken-at.STABLE-TXID" (:blocking-sidecar line))
               (str "and the FILE that blocked it named, so the owner has "
                    "something to act on: " (pr-str line)))
           (is (str/includes? remedy "LOCK.broken-at.STABLE-TXID")
@@ -1693,6 +1693,16 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(def ^:private receipt-file-keys
+  "The keys under which a receipt names a file in the transactions directory.
+
+   `:tombstone` is the evidence a resolution or a break is about;
+   `:blocking-sidecar` and `:sidecar` are a file that REFUSED a break. Opus
+   round 8, finding 3: the walk covered `:tombstone` alone, so the ONE refusal
+   that names a file was the one refusal the standing invariant could not
+   see."
+  [:tombstone :blocking-sidecar :sidecar])
+
 (defn- receipt-file-names
   "Every place a receipt NAMES a file in the transactions directory, with the
    `:evidence` word its own map carries about that file, if any.
@@ -1706,10 +1716,13 @@
   (let [named (atom [])]
     (walk/postwalk
       (fn [x]
-        (when (and (map? x) (string? (:tombstone x)))
-          (swap! named conj {:name (:tombstone x)
-                             :evidence (:evidence x)
-                             :in x}))
+        (when (map? x)
+          (doseq [k receipt-file-keys
+                  :when (string? (get x k))]
+            (swap! named conj {:name (get x k)
+                               :key k
+                               :evidence (:evidence x)
+                               :in x})))
         x)
       receipt)
     @named))
@@ -2042,6 +2055,56 @@
                    (pr-str stamped)))
           (is (.isFile (io/file dir "LOCK.broken-at.HERE"))
               "and its sidecar is written"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-standing-invariant-sees-the-file-a-refusal-names
+  (testing "Opus round 8, finding 3. `:evidence` carried two different
+            meanings: `:retained`/`:removed` say WHAT BECAME OF the file a
+            resolution names, and `:sidecar-name-taken` said WHICH FILE
+            BLOCKED the break. `unaccounted-names` treats ANY `:evidence`
+            value as an account of the file, so the day one refusal carried
+            both keys the witness would have passed vacuously - and
+            `receipt-file-names` walked only maps with a string `:tombstone`,
+            so the ONE refusal that names a file was the one refusal the
+            standing invariant could not see.
+
+            The blocking file gets its own key, and the walk covers it."
+    (let [ws (workspace! "blocking-sidecar-seen" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          orphan (io/file dir "LOCK.broken-at.STABLE-TXID")]
+      (try
+        (plant-lock! ws {:txid "ghost-b3" :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (spit orphan (pr-str {:tombstone "LOCK.broken.STABLE-TXID"
+                              :phase :linked}))
+        (let [refused (begin! ws {:txid "STABLE-TXID"})
+              line (:lock-break-refused refused)
+              named (receipt-file-names refused)]
+          (is (= "LOCK.broken-at.STABLE-TXID" (:blocking-sidecar line))
+              (str "the blocking file has its OWN key, so it cannot be "
+                   "mistaken for a word about what became of a file: "
+                   (pr-str line)))
+          (is (nil? (:evidence line))
+              (str "and `:evidence` is not overloaded to carry it: "
+                   (pr-str line)))
+          (is (= #{"LOCK.broken-at.STABLE-TXID"} (set (map :name named)))
+              (str "the walk behind the standing invariant SEES it: "
+                   (pr-str named)))
+          (is (empty? (unaccounted-names dir refused))
+              (str "and it is accounted for, because the file that blocked "
+                   "the break is on disk: "
+                   (pr-str (unaccounted-names dir refused))))
+          ;; and the invariant is a witness rather than a description: it
+          ;; fires on a refusal that names a file which is not there
+          (let [forged (assoc-in refused
+                                 [:lock-break-refused :blocking-sidecar]
+                                 "LOCK.broken-at.NOT-THERE")]
+            (is (= ["LOCK.broken-at.NOT-THERE"]
+                   (mapv :name (unaccounted-names dir forged)))
+                (str "a refusal naming a file that is not there is "
+                     "UNACCOUNTED: "
+                     (pr-str (unaccounted-names dir forged))))))
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013

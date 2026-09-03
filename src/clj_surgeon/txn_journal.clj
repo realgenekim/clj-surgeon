@@ -1307,9 +1307,15 @@
       :name-taken
       (if (.isFile tomb)
         {:broken false :cause :tombstone-exists :tombstone (.getName tomb)}
+        ;; the file that BLOCKED the break gets its own key. It used to ride
+        ;; under `:evidence`, which everywhere else answers "what became of
+        ;; the file this line names" - `:retained`, `:removed`, `:vanished` -
+        ;; so one key carried two questions, and the receipt walk that backs
+        ;; the standing invariant treats ANY `:evidence` value as an account
+        ;; of the file. The day a refusal carried both, the witness would have
+        ;; passed vacuously.
         {:broken false :cause :evidence-unrecordable
-         :evidence :sidecar-name-taken
-         :sidecar (.getName side)})
+         :blocking-sidecar (.getName side)})
 
       ;; nothing can record that this break began, so it does not begin
       :failed {:broken false :cause :evidence-unrecordable}
@@ -1370,11 +1376,12 @@
    worse than a bare cause, because the owner spends the outage looking in the
    wrong place. House rule 17: a refusal names its owner AND what they can
    actually do."
-  [{:keys [cause evidence sidecar]}]
+  [{:keys [cause blocking-sidecar]}]
   (cond
-    (and (= :evidence-unrecordable cause) (= :sidecar-name-taken evidence))
+    (and (= :evidence-unrecordable cause) blocking-sidecar)
     (str "The break claims its own marker file before it claims the evidence "
-         "name, and that marker name was already taken: " sidecar ". It is an "
+         "name, and that marker name was already taken: " blocking-sidecar
+         ". It is an "
          "ORPHAN SIDECAR - what a break interrupted between its marker and "
          "its evidence name leaves behind - so the claim was not touched and "
          "nothing about this directory needs fixing. Break with a different "
@@ -1404,7 +1411,7 @@
    at all - a refusal with an owner on one surface and none on two others."
   [outcome]
   (when (contains? break-refusal-causes (:cause outcome))
-    (let [line (select-keys outcome [:cause :tombstone :evidence :sidecar])]
+    (let [line (select-keys outcome [:cause :tombstone :blocking-sidecar])]
       (assoc line :remedy (break-refusal-remedy line)))))
 
 (defn- break-lock!
