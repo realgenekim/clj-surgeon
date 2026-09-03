@@ -323,3 +323,8 @@ Memory added: jvm-file-locks-are-per-process (bash flock does not block FileChan
 GO (ten) unchanged. Live: Sol fold-diff round 6 at the tip (66325423); builders kernel round 4 (~/src/clj-surgeon-txn), apparatus round 6 (~/src/clj-surgeon-arms), census round 9 (~/src/clj-surgeon-census: validation before routing), MEM-003 round 3 (~/src/clj-surgeon-stream: content-addressed cursor id + snapshot reuse; then Sol reviews the cursor surface).
 Follow-ups since the fifteenth refresh: inb-276378 (MEM-003 cursor identity bead).
 Memory added: cursor-mac-needs-an-unpublished-secret.
+
+## RESUME DELTA (seventeenth refresh; commit time is the timestamp)
+GO (ten) unchanged; production fold-diff read GO at 347fe6d3 stands (tip 66325423 NO-GO on the required-var scan; round 8 building).
+No review in flight; five builders: kernel round 4 (~/src/clj-surgeon-txn), apparatus round 6 (~/src/clj-surgeon-arms), census round 9 (~/src/clj-surgeon-census), MEM-003 round 3 (~/src/clj-surgeon-stream), fold-diff round 8 (~/src/curtaincall-cfp-folddiff).
+Next on each report: push → Sol (census, apparatus, fold-diff, MEM-003 cursor surface) or Opus (kernel) → file → GO note or next round. Gene report final refresh ~13:00Z with skills/gene-report/SKILL.md.
