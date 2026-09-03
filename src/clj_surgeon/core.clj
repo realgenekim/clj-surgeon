@@ -647,6 +647,37 @@
          :anchor anchor}
         (or-remedy (continue-with :doors) (overflow-remedy :doors)))
 
+      ;; @spec MCP-OP-CENSUS-014
+      ;; The FIRST filesystem question this op asks, and it is asked HERE, at
+      ;; the entrance, before `@scan` is forced. Sol's round-thirteen item 7:
+      ;; a `:file` that does not exist reached `census-sources`, which stats
+      ;; the named path with `fs/size` before anything had asked whether it
+      ;; was there, and the `java.nio.file.NoSuchFileException` surfaced
+      ;; through the launcher as a bare `:invalid-arguments` whose entire
+      ;; payload was the path — no type to branch on, no anchor, no remedy.
+      ;;
+      ;; It cannot live in the pure shape pass: existence is a filesystem
+      ;; question and MCP-OP-CENSUS-016 requires that pass to touch nothing.
+      ;; It must not live inside `census-sources` either, because that is a
+      ;; SHARED kernel three frames down that knows nothing about anchors or
+      ;; continuations — which is exactly how the throw escaped untyped. The
+      ;; entrance is where every other filesystem refusal this op makes is
+      ;; decided, and it is where this one belongs.
+      ;;
+      ;; No continuation, and that is the honest answer: the file this op was
+      ;; given IS the request, so the request minus it is not a request.
+      (and (string? file) (not (fs/exists? file)))
+      {:ok false
+       :error-type :file-not-found
+       :anchor anchor
+       :error (str file " does not exist")
+       :file file
+       :remedy (str file " does not exist, and the one source this op was "
+                    "given IS the request, so the request minus it is not a "
+                    "request and no narrower command can be computed: name a "
+                    "source that exists with :file, or point :dir at a "
+                    "directory to census its tree.")}
+
       (:oversized @scan)
       {:ok false
        :error-type :source-too-large

@@ -782,6 +782,7 @@
     :too-many-doors
     :unknown-door-symbol
     :file-not-a-string
+    :file-not-found
     :invalid-pool-size
     :source-too-large
     :too-many-walk-entries

@@ -316,6 +316,25 @@
                              (catch Throwable _ false)))))))
         relatives))
 
+;; @spec MCP-OP-CENSUS-014
+(defn- unreadable-among
+  "The named sources that cannot be read through the fence, in the order named.
+
+   `collect-inputs` stops at the FIRST unreadable path, which is right when
+   reading: nothing after it can be trusted either. It is wrong when COMPUTING
+   a continuation, because a request that removes only the entry the reader
+   tripped on refuses again on the next one. This resolves the named list and
+   reads nothing, and it runs only when a refusal is already being built.
+
+   The sibling of `oversized-among`, and deliberately its twin: an entry the
+   fence refuses and an entry too large to read are the same thing to a
+   continuation — a name the next call must not carry."
+  [root relatives]
+  (into []
+        (remove (fn [relative]
+                  (:ok (mcp-paths/resolve-source-path root relative))))
+        relatives))
+
 ;; @spec MCP-OP-CENSUS-017
 ;; @spec MCP-OP-CENSUS-030
 (defn collect-inputs
@@ -720,12 +739,51 @@
       (ceiling-refusal discovered canonical facts)
 
       (:refusal loaded)
-      (refusal :unreadable-source-path
-               (str (:error (:refusal loaded)) " (" (:file loaded) ")")
-               {:tool "relation_census"
-                :workspace_root canonical
-                :files [(:file loaded)]}
-               (merge {:file (:file loaded)} facts))
+      ;; The continuation is the request the caller made, MINUS the entries
+      ;; that cannot be read — exactly as the oversized branch below, and for
+      ;; the same reason. Sol's round-thirteen item 8: this branch handed back
+      ;; `files [<the entry that failed>]`, which is not a narrowing of
+      ;; anything. It drops the sources the caller asked about, drops every
+      ;; other option the request carried, and replays into the IDENTICAL
+      ;; refusal — a loop with a receipt. When removing the unreadable entries
+      ;; leaves no request, there is no call to hand back and the refusal says
+      ;; so. When the caller named no `files` at all, the paths came from the
+      ;; walk rather than the request, so there is no request to narrow either.
+      (let [unreadable (when requested (unreadable-among root scanned))
+            removed (set unreadable)
+            remaining (when requested
+                        (vec (remove removed (distinct requested))))]
+        (refusal :unreadable-source-path
+                 (str (:error (:refusal loaded)) " (" (:file loaded) ")")
+                 (when (seq remaining)
+                   (assoc (dissoc params :files)
+                          :tool "relation_census"
+                          :workspace_root canonical
+                          :files remaining))
+                 (cond-> (merge {:file (:file loaded)} facts)
+                   (seq unreadable)
+                   (merge {:files_removed (vec (take max-listed-files
+                                                     unreadable))
+                           :files_removed_omitted
+                           (max 0 (- (count unreadable) max-listed-files))})
+
+                   (and requested (empty? remaining))
+                   (assoc :remedy
+                          (str "Every source this request named is unreadable "
+                               "through the project fence, so the request minus "
+                               "them is not a request and no narrower call can "
+                               "be computed: name a source that exists under "
+                               "the workspace root with files, or omit files to "
+                               "census the tree."))
+
+                   (not requested)
+                   (assoc :remedy
+                          (str "This path came from the workspace walk, not "
+                               "from the request, so there is no request to "
+                               "narrow and no narrower call can be computed: "
+                               "remove or repair " (:file loaded)
+                               " under " canonical
+                               ", or name the sources to census with files.")))))
 
       (:oversized loaded)
       ;; The continuation is the request the caller made, MINUS the sources it

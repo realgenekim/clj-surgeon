@@ -3152,6 +3152,16 @@
                 :opts {:file (str (named workspace) "/src/a/one.clj")}
                 :around (fn [f]
                           (with-redefs [census/max-source-bytes 4] (f)))}
+               ;; Sol's round-thirteen item 7: the missing-`:file` refusal,
+               ;; enumerated so it cannot ship unexercised. It names a `:file`,
+               ;; so the workspace it named IS that file — even though the file
+               ;; is not there, which is the whole point: the anchor is what
+               ;; the CALLER named, not what the filesystem confirms.
+               {:label :file-not-found
+                :error-type :file-not-found
+                :root workspace
+                :expect-anchor (str (named workspace) "/src/a/missing.clj")
+                :opts {:file (str (named workspace) "/src/a/missing.clj")}}
                {:label :no-fold-arms-found
                 :error-type :no-fold-arms-found
                 :root empty-ws
