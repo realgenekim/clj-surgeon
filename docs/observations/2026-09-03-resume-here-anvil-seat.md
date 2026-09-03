@@ -290,3 +290,8 @@ Follow-ups filed tonight: inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07
 GO (eight) unchanged; fold-diff production read at 347fe6d3.
 Live: Sol MEM-003 (8c1087f); Opus q5z round 9 (f51ceae — rule the builder's dispute first: :rolled-back true on an undo = migration still in place). Builders: fold-diff round 6 (~/src/curtaincall-cfp-folddiff), arms apparatus round 4 (~/src/clj-surgeon-arms), kernel round 3 (~/src/clj-surgeon-txn: stale LOCK, lease fail-closed, undo! under lock), MEM-005 round 3 (~/src/clj-surgeon-admit: unmatched-close clamp + malformed corpus, meta counting), census round 7 (~/src/clj-surgeon-census: two continuation gaps).
 Follow-ups filed since the eighth refresh: inb-9c5826 (timing/HEAD-stamp test fragility under parallel lanes).
+
+## RESUME DELTA (tenth refresh; commit time is the timestamp)
+GO (nine): + q5z-alias-migration f51ceae (Opus round 9 withdrew its own item after reproducing the builder's counter-proof). E3's prerequisite amended in the prestaged doc: q5z merged + alias_migration admits the rung's scope (not "battery green").
+Live: Sol apparatus round 4 (895eed0), Sol fold-diff round 5 (885f58b3). Builders: kernel round 3 (~/src/clj-surgeon-txn), MEM-005 round 3 (~/src/clj-surgeon-admit), census round 7 (~/src/clj-surgeon-census), MEM-003 round 2 (~/src/clj-surgeon-stream: pinned manifest + MAC cursor).
+Follow-ups since the ninth refresh: inb-c95f37 (alias_migration deletions count / retire-failed).

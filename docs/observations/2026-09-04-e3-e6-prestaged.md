@@ -1232,3 +1232,6 @@ Written now, so it cannot be negotiated later:
 - **Whether `require_change` is a "winner" is currently demoted** by `docs/vision.md` "what winner
   is allowed to mean" until the rf2 composition fixes merge. If E3-L runs before rf2 lands, its
   receipt must say so in the caveat line.
+
+
+> **Prerequisite amendment (2026-09-03 09:4xZ, forge-anvil):** the E3 go-tree originally required `make memory-battery` green. The battery is RED on main *by design* on rows other lanes own (read-all, rename full-match); the condition E3 actually needs is that `alias_migration` ADMITS the rung's scope instead of OOMing — which bridge/q5z-alias-migration f51ceae provides (aggregate-bytes ceiling, typed refusal before any read; GO after nine executed rounds). Read the prerequisite as: q5z merged + `alias_migration` plan-only completes on the rung's worktree at -Xmx512m. The battery's own lines are the memory program's gate, not E3's.
