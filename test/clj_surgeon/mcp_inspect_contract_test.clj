@@ -448,6 +448,10 @@
            (count (:available_owners result))))))
 
 (deftest output-budget-boundaries-are-inclusive-and-fail-closed
+  ;; @spec MCP-OP-STUDY-020
+  ;; The source bound is charged against the source the result RETURNS, so the
+  ;; boundary fixture carries real returned source rather than a declared
+  ;; `source_character_count` (which reports what was READ and is not a budget).
   (doseq [[label size limit ok?]
           [[:below 9 10 true]
            [:equal 10 10 true]
@@ -456,7 +460,7 @@
       (let [result (inspect/enforce-output-budget
                      [{:id "x" :operation "forms"
                        :source_character_count size
-                       :payload (apply str (repeat size "x"))}]
+                       :forms [{:source (apply str (repeat size "x"))}]}]
                      {:per-request-source limit
                       :per-request-result 1000
                       :aggregate-result 1000})]

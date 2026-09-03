@@ -11,7 +11,8 @@
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
    [clj-surgeon.study :as study]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [clojure.walk :as walk]))
 
 (def max-requests 64)
 (def max-files 32)
@@ -866,8 +867,37 @@
       {:error (.getMessage error)
        :error-type (or (:error-type (ex-data error)) :invalid-source)})))
 
+;; @spec MCP-OP-STUDY-020
+(defn returned-source-character-count
+  "How many characters of file SOURCE one result actually hands back.
+
+  This is NOT `:source_character_count`, which MCP-OP-STUDY-016 defines as the
+  characters the request READ. Charging the read count to the per-request
+  SOURCE budget conflated the two: `outline` and every study operation return
+  a derived structure and no source at all, yet a 126,596-character file made
+  them refuse with `inspect-output-limit` / `request_less_evidence` — a remedy
+  no caller can act on, because the request was already the smallest one that
+  answers the question. The budget exists to bound what crosses the wire, so
+  it counts what crosses the wire: every `:source` string anywhere in the
+  result, and nothing else."
+  [result]
+  (let [total (volatile! 0)]
+    (walk/postwalk
+      (fn [node]
+        (when (and (map-entry? node)
+                   (= :source (key node))
+                   (string? (val node)))
+          (vswap! total + (count (val node))))
+        node)
+      result)
+    @total))
+
+;; @spec MCP-OP-STUDY-020
 (defn enforce-output-budget
   "Apply inclusive per-request source/result and aggregate result limits.
+
+  The source limit is charged against the source a result RETURNS, not the
+  source it read; see `returned-source-character-count`.
 
   Returns the original result vector on success and never truncates data."
   ([results]
@@ -877,7 +907,7 @@
          (merge default-output-limits limits)
          failure
          (some (fn [[index result]]
-                 (let [source-count (or (:source_character_count result) 0)
+                 (let [source-count (returned-source-character-count result)
                        result-count (json-character-count result)]
                    (cond
                      (> source-count per-request-source)

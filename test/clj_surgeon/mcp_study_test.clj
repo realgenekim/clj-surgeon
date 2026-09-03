@@ -133,6 +133,84 @@
 ;; real-shaped tree without committing hundreds of fixture files.
 ;; ============================================================
 
+(def ^:private files-over-the-returned-source-budget
+  "Every file in this repository larger than `:per-request-source` (65,536).
+   Each one was unreadable by `outline` until the budget stopped charging
+   characters READ against a limit on characters RETURNED."
+  ["src/clj_surgeon/intent_transaction.clj"
+   "test/clj_surgeon/intent_transaction_test.clj"
+   "src/clj_surgeon/worktree_lifecycle_io.clj"
+   "test/clj_surgeon/mcp_tool_test.clj"
+   "src/clj_surgeon/mcp_change_buffer.clj"
+   "src/clj_surgeon/core.clj"
+   "src/clj_surgeon/mcp_inspect_tool.clj"])
+
+;; @spec MCP-OP-STUDY-016
+;; @spec MCP-OP-STUDY-020
+(deftest a-read-that-returns-no-source-is-not-charged-the-source-budget
+  ;; Regression witness. MCP-OP-STUDY-016 redefined `source_character_count`
+  ;; as the characters a request READ, and `enforce-output-budget` charged
+  ;; that number against `per-request-source` — a bound on characters
+  ;; RETURNED. `outline` returns a derived structure and no source at all, so
+  ;; every one of the seven files below refused with
+  ;; `error_type inspect-output-limit`, `scope request_source` and
+  ;; `next_action request_less_evidence`: a remedy no caller can act on,
+  ;; because the request was already the smallest one that answers the
+  ;; question.
+  (doseq [file files-over-the-returned-source-budget]
+    (testing file
+      (let [expected (count (slurp file))
+            response (run {"requests" [{"operation" "outline" "file" file}]
+                           "expect" {"requests" 1 "files" 1}})
+            result (result-of response)]
+        (is (< 65536 expected)
+            "the fixture only bites while the file exceeds the source budget")
+        (is (true? (:ok response)))
+        (is (true? (:read_complete response)))
+        (is (= expected (:source_character_count result))
+            "the receipt still reports the characters it READ"))))
+  (testing "every study operation over an oversized file answers too"
+    (let [file "src/clj_surgeon/intent_transaction.clj"
+          expected (count (slurp file))]
+      (doseq [[operation extra]
+              [["deps" {"limit" 16384}]
+               ["topo" {"limit" 16384}]
+               ["ls-extract" {"form" "execute-change!" "limit" 16384}]]]
+        (testing operation
+          (let [response (run {"requests" [(merge {"operation" operation
+                                                   "file" file}
+                                                  extra)]
+                               "expect" {"requests" 1 "files" 1}})]
+            (is (true? (:ok response)))
+            (is (= expected (:source_character_count (result-of response))))))))))
+
+;; @spec MCP-OP-STUDY-020
+(deftest the-source-budget-counts-the-source-a-result-returns
+  (testing "a derived structure returns no source"
+    (let [result (result-of
+                   (run {"requests" [{"operation" "outline"
+                                      "file" "src/clj_surgeon/intent_transaction.clj"}]
+                         "expect" {"requests" 1 "files" 1}}))]
+      (is (zero? (inspect/returned-source-character-count result)))
+      (is (< 65536 (:source_character_count result))
+          "while the source it READ is far over the budget")))
+  (testing "source a result really does return is still charged"
+    (let [result (result-of
+                   (run {"requests" [{"operation" "forms"
+                                      "file" "src/clj_surgeon/parallel.clj"
+                                      "forms" ["bounded-map"]
+                                      "expect" {"forms" 1}}]
+                         "expect" {"requests" 1 "files" 1}}))]
+      (is (pos? (inspect/returned-source-character-count result)))
+      (is (= (:source_character_count result)
+             (inspect/returned-source-character-count result))
+          "a forms read returns exactly the source it counts")
+      (is (false? (:ok (inspect/enforce-output-budget
+                         [result]
+                         (assoc inspect/default-output-limits
+                                :per-request-source 1))))
+          "returned source still refuses when it exceeds the budget"))))
+
 (defn- write-clj-file!
   [path ns-form & body-lines]
   (fs/create-dirs (fs/parent path))
