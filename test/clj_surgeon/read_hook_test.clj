@@ -246,8 +246,10 @@
          (mapv #(json/parse-string % true)))))
 
 (defmacro ^:private with-served
-  "Bind a Clojure tree, a stub read path serving its true file set, and a shim."
-  [[root-sym ctx-sym log-sym & {:keys [files file-count read-complete truncated]}]
+  "Bind a Clojure tree, a stub read path serving its true file set, a shim, and
+  the stub's own record of the JSON-RPC methods it was asked for."
+  [[root-sym ctx-sym log-sym calls-sym
+    & {:keys [files file-count read-complete truncated]}]
    & body]
   `(let [~root-sym (clojure-tree!)
          stub# (start-stub! {:root ~root-sym
@@ -256,6 +258,7 @@
                              :read-complete ~read-complete
                              :truncated ~truncated})
          bin# (install-shim!)
+         ~calls-sym (:calls stub#)
          ~log-sym (str (fs/path ~root-sym "route.jsonl"))
          ~ctx-sym {:dir ~root-sym
                    :bin bin#
@@ -273,7 +276,7 @@
 
 ;; @spec MCP-OP-READ-HOOK-001
 (deftest served-answer-is-byte-identical-to-ripgrep
-  (with-served [root ctx log]
+  (with-served [root ctx log calls]
     (doseq [args [["-n" "-C" "5" "System/currentTimeMillis|\\(ns app" "src"]
                   ["-n" "-C" "8" "System/currentTimeMillis|\\(ns " "src"]
                   ["-n" "System/currentTimeMillis" "src"]
@@ -288,7 +291,11 @@
           (is (= "" (:err hooked)))
           (is (= "surgeon"
                  (:served_by (last (route-records log))))
-              "this invocation must have been served, not fallen back"))))))
+              "this invocation must have been served, not fallen back")
+          (is (some #{"tools/call"} @calls)
+              (str "the read path must actually have been asked; a hook that "
+                   "quietly searched ripgrep's own candidate set would pass "
+                   "every other assertion here")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; MCP-OP-READ-HOOK-002 / -008 — total, silent fallback
@@ -325,7 +332,7 @@
 
 ;; @spec MCP-OP-READ-HOOK-002
 (deftest unsupported-flags-fall-back
-  (with-served [root ctx log]
+  (with-served [root ctx log calls]
     (doseq [args [["-n" "--max-depth" "1" "System/currentTimeMillis" "src"]
                   ["-n" "--sortr" "path" "System/currentTimeMillis" "src"]
                   ["--files"]
@@ -387,7 +394,7 @@
 
 ;; @spec MCP-OP-READ-HOOK-003
 (deftest every-invocation-appends-exactly-one-route-record
-  (with-served [root ctx log]
+  (with-served [root ctx log calls]
     (run ctx "-n" "System/currentTimeMillis" "src")
     (run ctx "-n" "System/currentTimeMillis" "src/app/core.clj")
     (let [records (route-records log)]
@@ -410,7 +417,7 @@
 
 ;; @spec MCP-OP-READ-HOOK-004
 (deftest exit-status-is-ripgreps-own
-  (with-served [root ctx log]
+  (with-served [root ctx log calls]
     (is (= 0 (:exit (run ctx "-n" "System/currentTimeMillis" "src")))
         "0 when something matched")
     (is (= 1 (:exit (run ctx "-n" "ZZZ-no-such-token-ZZZ" "src")))
@@ -423,7 +430,7 @@
 
 ;; @spec MCP-OP-READ-HOOK-005
 (deftest real-ripgrep-is-never-the-hook-itself
-  (with-served [root ctx log]
+  (with-served [root ctx log calls]
     (testing "the hook is first on PATH under the name rg and still terminates"
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
         (is (= 0 (:exit hooked)))
@@ -444,7 +451,7 @@
 
 ;; @spec MCP-OP-READ-HOOK-006
 (deftest filename-prefix-survives-the-substitution
-  (with-served [root ctx log]
+  (with-served [root ctx log calls]
     (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
       (is (= "surgeon" (:served_by (last (route-records log)))))
       (is (every? #(str/starts-with? % "src/")
@@ -457,14 +464,14 @@
 ;; @spec MCP-OP-READ-HOOK-007
 (deftest a-read-path-set-that-disagrees-with-ripgrep-is-refused
   (testing "a read path that omits a file the tree holds"
-    (with-served [root ctx log :files (vec (butlast tree-files))]
+    (with-served [root ctx log calls :files (vec (butlast tree-files))]
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
         (is (= 4 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
             "every match, because the disagreement forced a fallback")
         (is (= "fallback" (:served_by (last (route-records log)))))
         (is (= "discovery-mismatch" (:reason (last (route-records log))))))))
   (testing "a read path that names a file the tree does not hold"
-    (with-served [root ctx log
+    (with-served [root ctx log calls
                   :files (conj tree-files
                                {:file "app/ghost.clj" :ns "app.ghost"
                                 :form_count 1 :line_count 1})]
