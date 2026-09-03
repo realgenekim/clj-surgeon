@@ -545,11 +545,30 @@
     :cli-data (fn [_req] {})
     :cli-fix :threads}])
 
+(def ^:dynamic *shape-rules*
+  "An override for the shared refusal table, or nil for the real one.
+
+   Bound ONLY by witnesses, and it exists because of Sol's round-eleven item
+   3. The parity witness could prove that both entrances read the table's
+   PREDICATES — widening one predicate failed both entrances — but it could
+   not prove they read the table's ORDER, and they did not: moving `files`
+   before `doors` in the table left the witness green while the tool still
+   refused `doors` and the CLI still refused `file`. A property that can only
+   be tested by editing the source and re-reading the diff is a property
+   nothing enforces. This var makes the mutation injectable, so the witness
+   can assert that reordering the table reorders BOTH entrances' refusals."
+  nil)
+
+(defn shape-rules
+  "The refusal table in force: the injected one when a witness has bound one."
+  []
+  (or *shape-rules* request-shape-rules))
+
 (defn shape-rule
   "One row of the shared refusal table, by field and violation."
   [field violation]
   (first (filter #(and (= field (:field %)) (= violation (:violation %)))
-                 request-shape-rules)))
+                 (shape-rules))))
 
 (defn shape-name
   "The name `entrance` publishes for one row of the shared table, or nil when
@@ -692,7 +711,7 @@
                         " bytes, so no narrower command can be computed: run "
                         "the census from a shorter path."))})))))
       nil
-      request-shape-rules)))
+      (shape-rules))))
 
 (def ^:private write-heads '#{conj cons into concat})
 

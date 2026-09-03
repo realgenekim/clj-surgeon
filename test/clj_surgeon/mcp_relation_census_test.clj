@@ -2752,3 +2752,98 @@
           (is (true? (:ok result)) (str "a valid :dir refused: " (pr-str result)))
           (is (= 1 (:files result))))
         (finally (delete-tree! cwd))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eleven review, item 3 (partial): the parity witness proves the
+;; entrances read the table's PREDICATES, not the table's ORDER.
+;;
+;; Widening one predicate failed the live parity witness at both entrances
+;; (1/58/3), which proves enumeration. But MOVING `files` before `doors` in
+;; the table left it green (1/58/0) while the tool still refused `doors` and
+;; the CLI still refused `file` — the tool's `cond` carries an ordering of its
+;; own, and nothing notices when the two disagree.
+;;
+;; MCP-OP-CENSUS-029 states the order as a REQUIREMENT, so the order has to be
+;; a fact about the table rather than a coincidence between the table and a
+;; hand-written `cond`. A property that can only be tested by editing the
+;; source and re-reading the diff is a property nothing enforces, so the
+;; mutation is made injectable (`census/*shape-rules*`) and asserted here.
+;; ---------------------------------------------------------------------------
+
+(defn- reordered-shape-rules
+  "The shared table with its FIELD groups in `field-order`.
+
+   Rows keep their relative order inside a group, so this is a REORDERING of
+   the same rows and nothing else — Sol's mutation, made injectable."
+  [field-order]
+  (let [rank (into {} (map-indexed (fn [i f] [f i]) field-order))]
+    (vec (sort-by #(get rank (:field %) (count field-order))
+                  census/request-shape-rules))))
+
+(defn- expected-first-refusal
+  "The name `entrance` must publish, read from the table in force.
+
+   Computed from the table rather than hard-coded, so a permutation the
+   witness did not anticipate still has an expected answer."
+  [entrance params]
+  (let [req (census/normalise-request entrance params)]
+    (some (fn [rule]
+            (when (and (keyword? (get rule entrance))
+                       (or (not= :mcp entrance)
+                           (= :shape (:mcp-phase rule :shape)))
+                       (not ((:predicate rule) req)))
+              (get rule entrance)))
+          (census/shape-rules))))
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
+(deftest the-refusal-order-is-the-tables-order-at-both-entrances
+  (let [mcp-probe {:doors "conj-once" :files [] :pool_size "8"}
+        cli-probe {:op :relation-census :dir repo-root
+                   :doors [1] :file "" :threads "not-a-number"}
+        cli-refusal #(binding [*out* (java.io.StringWriter.)]
+                       (core/run cli-probe))
+        files-first (reordered-shape-rules
+                      [:unknown-fields :dir :files :doors :pool-size])]
+
+    (testing "the mutation is a reordering of the same rows, nothing else"
+      (is (= (set census/request-shape-rules) (set files-first))
+          "the reordering added or dropped a row")
+      (is (not= census/request-shape-rules files-first)
+          "the reordering did not reorder anything"))
+
+    (testing "with the table as written, doors wins at both entrances"
+      (is (= "doors-not-an-array" (published-mcp-name (run mcp-probe))))
+      (is (= :doors-not-a-string (:error-type (cli-refusal)))))
+
+    (testing "moving files ahead of doors moves BOTH entrances' refusal"
+      (binding [census/*shape-rules* files-first]
+        (is (= "empty-file-list" (published-mcp-name (run mcp-probe)))
+            (str "the tool keeps an ordering of its own, independent of the "
+                 "table: it still published "
+                 (pr-str (published-mcp-name (run mcp-probe)))))
+        (is (= :file-not-a-string (:error-type (cli-refusal)))
+            (str "the CLI keeps an ordering of its own, independent of the "
+                 "table: it still published "
+                 (pr-str (:error-type (cli-refusal)))))))
+
+    (testing "every field-group permutation moves both entrances together"
+      (doseq [order [[:unknown-fields :dir :pool-size :doors :files]
+                     [:unknown-fields :dir :files :pool-size :doors]
+                     [:unknown-fields :dir :pool-size :files :doors]
+                     [:unknown-fields :dir :doors :files :pool-size]]]
+        (binding [census/*shape-rules* (reordered-shape-rules order)]
+          (let [want-mcp (expected-first-refusal :mcp mcp-probe)
+                want-cli (expected-first-refusal :cli cli-probe)]
+            (is (= (name want-mcp) (published-mcp-name (run mcp-probe)))
+                (str "order " (pr-str order) ": the table's first violated row "
+                     "is " (pr-str want-mcp) ", the tool published "
+                     (pr-str (published-mcp-name (run mcp-probe)))))
+            (is (= want-cli (:error-type (cli-refusal)))
+                (str "order " (pr-str order) ": the table's first violated row "
+                     "is " (pr-str want-cli) ", the CLI published "
+                     (pr-str (:error-type (cli-refusal)))))))))
+
+    (testing "the real table is restored outside the binding"
+      (is (= "doors-not-an-array" (published-mcp-name (run mcp-probe))))
+      (is (= :doors-not-a-string (:error-type (cli-refusal)))))))
