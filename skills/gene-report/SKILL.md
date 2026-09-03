@@ -42,6 +42,12 @@ order of `docs/gene-peek-report.md` (the template; read it first, every time):
 
 ## Rules
 
+- **ALWAYS also output the report to chat, in full, not only to the file (Gene, 2026-09-03:
+  "always also output to chat, not a file. I read them in iOS app or Claude code on macOS").**
+  The file is the durable copy; the chat message is the delivery. Paste §1–§10 verbatim in the
+  reply; the appendix may be summarised with the file path. A report that exists only as a path
+  has not been delivered.
+
 - **The four things Gene reads for come first and are never blank (Gene, 2026-09-03: "Gene
   reports require perf improvements vs native, top wins and losses, learnings, and what's
   next"):** §2/§3 vs-native tables, §7 best/worst + a "top wins / top losses" pair, §6 learnings
