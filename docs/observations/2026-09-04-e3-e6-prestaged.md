@@ -1235,3 +1235,8 @@ Written now, so it cannot be negotiated later:
 
 
 > **Prerequisite amendment (2026-09-03 09:4xZ, forge-anvil):** the E3 go-tree originally required `make memory-battery` green. The battery is RED on main *by design* on rows other lanes own (read-all, rename full-match); the condition E3 actually needs is that `alias_migration` ADMITS the rung's scope instead of OOMing — which bridge/q5z-alias-migration f51ceae provides (aggregate-bytes ceiling, typed refusal before any read; GO after nine executed rounds). Read the prerequisite as: q5z merged + `alias_migration` plan-only completes on the rung's worktree at -Xmx512m. The battery's own lines are the memory program's gate, not E3's.
+
+## Prerequisite status (appended)
+
+- Apparatus cohort-readiness: **SATISFIED** — Sol round-7 GO at 23a7643 (bridge/anvil-arms-apparatus), self-test 384/0, four round-five defects replay closed.
+- Still open: q5z admission (mayor merge of bridge/q5z-alias-migration f51ceae into main) and the read-path/parser-admission merges the arms exercise; PF-4 hand-drive needs a session restart to bind MCP tools to 7906 (not during live lanes).

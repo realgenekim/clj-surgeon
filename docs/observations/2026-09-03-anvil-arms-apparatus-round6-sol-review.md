@@ -31,3 +31,21 @@ Cohort-readiness decision: GO-WITH-FIX
 7. CLOSED — [watch.py:1191](/home/forge/tmp/sol/arms6-wt/bench/anvil-arms/watch.py:1191): an infinite TERM-resistant child observed SIGTERM, remained through the grace, then was gone after 2.675 s total—approximately the 0.5 s wall cap plus the 2 s KILL ceiling—with `orphans_after_reap=0`.
 
 8. OPEN — [watch.py:66](/home/forge/tmp/sol/arms6-wt/bench/anvil-arms/watch.py:66), [score.py:234](/home/forge/tmp/sol/arms6-wt/bench/anvil-arms/score.py:234): emitter and scorer still define separate literal `2` constants, although `score.py` already imports from `watch.py`; importing the schema constant would remove this drift path.
+
+---
+
+# Round 7 — Sol confirm-only re-check at 23a7643 (2026-09-03T11:20Z)
+
+Verdict: **GO** for cohort readiness. Item 8 CLOSED.
+
+## Sol, verbatim
+
+1. Clean self-test, rc 0: `anvil-arms self-test: 384 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview7/selftest)`
+
+2. Mutation ratchet: restoring `WATCH_SCHEMA_SUPPORTED = 2` made case 35d report `FAIL case35d the scorer does not carry its own schema literal`; tally was `383 passed, 1 failed`, suite rc 1. The file was restored via `git checkout`.
+
+3. Exact-schema replay: schemas 1 and 3 were refused with `watch-schema-unsupported`, rc 3, and no receipt; schema 2 scored rc 0 and wrote a receipt.
+
+4. Item 8: CLOSED — [score.py:51](/home/forge/tmp/sol/arms7-wt/bench/anvil-arms/score.py:51) imports `WATCH_SCHEMA_VERSION` from [watch.py:66](/home/forge/tmp/sol/arms7-wt/bench/anvil-arms/watch.py:66), and [score.py:236](/home/forge/tmp/sol/arms7-wt/bench/anvil-arms/score.py:236) assigns `WATCH_SCHEMA_SUPPORTED = WATCH_SCHEMA_VERSION`.
+
+5. Cohort readiness: **GO**. Checkout remains clean at `23a7643`; port 7909 is free.
