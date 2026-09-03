@@ -18,7 +18,9 @@
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing]]
+   [rewrite-clj.node :as rn]
+   [rewrite-clj.parser :as rp]))
 
 (def ^:private find-build-files
   "Private discovery helper under test; the reviewer's direct reproduction."
@@ -211,4 +213,179 @@
                 "the symlinked root discovers the file its target discovers")
             (is (= (:out control) (:out linked))
                 "and discovers exactly the same projects and files")))
+        (finally (fs/delete-tree sandbox))))))
+
+;; ============================================================
+;; The CLASS-level ratchet: no shell interpreter anywhere under src/
+;;
+;; The two canary witnesses above pin `find-build-files` only, and the intent
+;; audit (`mcp-intent-contract/audit-contract`) is marker-PRESENCE: the
+;; reviewer reintroduced a `format` + `sh -c` discovery site in `src/` with
+;; every @spec marker intact and the audit stayed `OK= true, violations= []`.
+;; MCP-OP-SHELL-ARGV-001's promise is structural — "there is no shell" — so
+;; this scans the source itself and fails on a NEW site, not just the old one.
+;; ============================================================
+
+(def ^:private shell-interpreter-literals
+  "Program names that are a shell interpreter."
+  #{"sh" "bash" "zsh" "dash" "/bin/sh" "/bin/bash" "/bin/zsh" "/usr/bin/env"})
+
+(def ^:private process-spawning-fns
+  "Unqualified names of fns whose first non-option argument is the program."
+  #{"shell" "sh" "process" "exec"})
+
+(def ^:private string-building-fns
+  "A command string built from data is the exact shape of the Andon defect."
+  #{"format" "str" "join" "print-str" "cl-format"})
+
+(defn- sexpr-of
+  "The node's sexpr, or ::none when it has none (reader macros, whitespace)."
+  [node]
+  (try (if (rn/sexpr-able? node) (rn/sexpr node) ::none)
+       (catch Exception _e ::none)))
+
+(defn- kids
+  "Child nodes, or nil for a leaf (`rn/children` throws on one)."
+  [node]
+  (when (rn/inner? node) (rn/children node)))
+
+(defn- code-children
+  "Children of a node with whitespace and comments removed."
+  [node]
+  (remove rn/whitespace-or-comment? (kids node)))
+
+(defn- head-name
+  "The unqualified name of a form's head symbol, or nil."
+  [node]
+  (let [h (first (code-children node))
+        s (some-> h sexpr-of)]
+    (when (symbol? s) (name s))))
+
+(defn- excerpt
+  [node]
+  (let [s (str/replace (str node) #"\s+" " ")]
+    (if (> (count s) 160) (str (subs s 0 160) " ...") s)))
+
+(defn- adjacent-shell-c-violation
+  "`\"sh\" \"-c\"` (or bash/zsh, or an absolute /bin/... path) as two adjacent
+   literals in one form: an argv that hands a command STRING to a shell."
+  [node]
+  (let [vals (mapv sexpr-of (code-children node))]
+    (when (some (fn [i]
+                  (and (contains? shell-interpreter-literals (nth vals i))
+                       (= "-c" (nth vals (inc i)))))
+                (range (max 0 (dec (count vals)))))
+      (str "argv literal hands a command string to a shell interpreter: "
+           (excerpt node)))))
+
+(defn- spawn-first-argument-violation
+  "A process-spawning call whose PROGRAM argument is a shell interpreter, or a
+   string built by `format`/`str` at the call site."
+  [node]
+  (let [children (code-children node)
+        head (head-name node)
+        [head children] (if (= "apply" head)
+                          [(some-> (second children) sexpr-of
+                                   (as-> s (when (symbol? s) (name s))))
+                           (drop 2 children)]
+                          [head (rest children)])
+        ;; option maps (`{:out :string ...}`) precede the program
+        args (drop-while #(= :map (rn/tag %)) children)
+        program (first args)]
+    (when (and (contains? process-spawning-fns head) program)
+      (let [s (sexpr-of program)]
+        (cond
+          (contains? shell-interpreter-literals s)
+          (str "process-spawning call names a shell interpreter as its program: "
+               (excerpt node))
+
+          (and (= :list (rn/tag program))
+               (contains? string-building-fns (head-name program)))
+          (str "process-spawning call builds its command string at the call "
+               "site (" (head-name program) "); the program must be a literal "
+               "and every caller value its own argv token: " (excerpt node)))))))
+
+(defn- absolute-shell-path-violation
+  [node]
+  (let [s (sexpr-of node)]
+    (when (and (string? s) (str/starts-with? s "/bin/")
+               (contains? shell-interpreter-literals s))
+      (str "absolute shell-interpreter path literal: " (pr-str s)))))
+
+(defn shell-argv-violations
+  "Scan every Clojure source under `root` and return
+   [{:file <path> :violation <message>} ...]. Empty means the promise holds."
+  [root]
+  (->> (fs/glob root "**{.clj,.cljc,.cljs}")
+       (sort-by str)
+       (mapcat
+        (fn [file]
+          (let [nodes (tree-seq #(seq (kids %)) kids
+                                (rp/parse-string-all (slurp (str file))))]
+            (->> nodes
+                 (mapcat (juxt adjacent-shell-c-violation
+                               spawn-first-argument-violation
+                               absolute-shell-path-violation))
+                 (remove nil?)
+                 distinct
+                 (map (fn [v] {:file (str file) :violation v}))))))
+       vec))
+
+;; @spec MCP-OP-SHELL-ARGV-001
+(deftest no-source-file-hands-a-command-string-to-a-shell
+  (testing "every Clojure source under src/"
+    (let [violations (shell-argv-violations "src")]
+      (is (= [] violations)
+          (str "MCP-OP-SHELL-ARGV-001 is structural: no file under src/ may "
+               "invoke a shell interpreter or build a command string at a "
+               "process-spawning call site. Found:\n"
+               (str/join "\n" (map (fn [{:keys [file violation]}]
+                                     (str "  " file ": " violation))
+                                   violations)))))))
+
+;; @spec MCP-OP-SHELL-ARGV-001
+(deftest the-source-scan-is-not-vacuous
+  (testing "the scanner sees the exact shape the Andon cord was pulled on"
+    (let [sandbox (fresh-sandbox)
+          bad (fs/path sandbox "bad.clj")]
+      (try
+        (spit (str bad)
+              (str "(ns bad)\n"
+                   "(defn- find-build-files-legacy [dir]\n"
+                   "  (babashka.process/shell {:out :string :continue true}\n"
+                   "    \"sh\" \"-c\" (format \"find %s -name deps.edn -print\" (str dir))))\n"))
+        (let [found (shell-argv-violations (str sandbox))]
+          (is (seq found) "the reintroduced site must be seen")
+          ;; both detectors fire on this shape, and that is correct: it is a
+          ;; literal `sh -c` argv AND a command string built at the call site.
+          (is (some #(str/includes? (:violation %) "argv literal") found))
+          (is (some #(str/includes? (:violation %)
+                                    "names a shell interpreter as its program")
+                    found)))
+        (finally (fs/delete-tree sandbox)))))
+
+  (testing "and the format-built-command shape on its own, with no literal sh"
+    (let [sandbox (fresh-sandbox)
+          bad (fs/path sandbox "bad2.clj")]
+      (try
+        (spit (str bad)
+              (str "(ns bad2)\n"
+                   "(defn- run [dir]\n"
+                   "  (babashka.process/sh (format \"find %s\" (str dir))))\n"))
+        (let [found (shell-argv-violations (str sandbox))]
+          (is (= 1 (count found)) (pr-str found))
+          (is (str/includes? (:violation (first found))
+                             "builds its command string at the call site")))
+        (finally (fs/delete-tree sandbox)))))
+
+  (testing "a clean argv vector is NOT flagged"
+    (let [sandbox (fresh-sandbox)
+          ok (fs/path sandbox "ok.clj")]
+      (try
+        (spit (str ok)
+              (str "(ns ok)\n"
+                   "(defn- run [dir]\n"
+                   "  (babashka.process/shell {:out :string} \"find\" (str dir) \"-name\" \"deps.edn\"))\n"
+                   "(defn- guard [argv] (not-any? #(or (= % \"sh\") (= % \"bash\") (= % \"-c\")) argv))\n"))
+        (is (= [] (shell-argv-violations (str sandbox))))
         (finally (fs/delete-tree sandbox))))))

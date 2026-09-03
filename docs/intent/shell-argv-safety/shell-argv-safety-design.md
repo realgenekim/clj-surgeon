@@ -57,11 +57,25 @@ simply failed to parse and were dropped — a silent, correct-looking result.
 `-print0` plus a NUL split removes the ambiguity at the source rather than
 detecting it downstream.
 
+## Why the intent audit is not the ratchet
+
+`mcp-intent-contract/audit-contract` is a marker-PRESENCE audit: it checks that
+an `@spec <ID>` annotation exists in some implementation source and some test
+source. The 2026-09-03 adversarial review reintroduced a `format` + `sh -c`
+discovery site in `src/` with every marker intact and the audit stayed
+`OK= true, violations= []`. Marker presence cannot see a new shell. The
+structural promise therefore carries its own source-level witness,
+`no-source-file-hands-a-command-string-to-a-shell`, which parses every
+`src/**.clj{,c,s}` with rewrite-clj and fails on an `"sh" "-c"`-shaped argv, a
+`/bin/sh`-class program literal, or a process-spawning call whose program is
+built by `format`/`str` at the call site. There is no allowlist; if a shell
+ever becomes legitimate, the allowlist is added deliberately and reviewed.
+
 ## Falsifier table
 
 | Intent | Falsifier — what would prove the promise broken | Required result | Witness |
 |---|---|---|---|
-| MCP-OP-SHELL-ARGV-001 | A `:dir` of `<real dir>; touch CANARY ; echo z` or `<real dir>$(touch CANARY)` causes `CANARY` to exist after discovery runs. | `CANARY` never exists; discovery returns no build files. | `hostile-dir-never-reaches-a-shell-from-find-build-files` |
+| MCP-OP-SHELL-ARGV-001 | A `:dir` of `<real dir>; touch CANARY ; echo z` or `<real dir>$(touch CANARY)` causes `CANARY` to exist after discovery runs. **Or**: a NEW source file under `src/` hands a command string to a shell — an `"sh" "-c"` argv, or a process-spawning call whose program is built by `format`/`str` — and nothing fails. | `CANARY` never exists; discovery returns no build files. No source under `src/` invokes a shell interpreter. | `hostile-dir-never-reaches-a-shell-from-find-build-files`, `no-source-file-hands-a-command-string-to-a-shell` (with `the-source-scan-is-not-vacuous` as its own positive control) |
 | MCP-OP-SHELL-ARGV-002 | The public `:ls-tree` op accepts a non-directory `:dir`, reaches discovery, and reports an untyped error (or a stack trace) instead of a refusal. | `{:error-type :workspace-root-not-a-directory}` returned before discovery starts. | `ls-tree-entrance-refuses-a-non-directory-root-without-executing-it` |
 | MCP-OP-SHELL-ARGV-003 | A project directory named `b\nad` is absent from `:ls-tree` output while an ordinary sibling project is present — on the full-scan path, or on the `:grep` fast path. | Both projects discovered on both paths; the newline is data inside one path. | `project-directories-containing-a-newline-are-discovered` |
 
