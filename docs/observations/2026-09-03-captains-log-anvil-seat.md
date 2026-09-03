@@ -310,3 +310,5 @@ pool size as a function of a memory budget, and the memory-vs-N battery pass lin
 skill applies: could a maintainer silently narrow it with every test green? A ceiling can be raised by one
 constant with no test noticing — so the witness asserts the behaviour AT the ceiling, not the constant.
 Builder prompts for the memory rounds carry this clause verbatim.
+
+## 04:09Z — load 12/16 (three forge suite JVMs at 150–400% CPU); memory 18 GB available of 30, heaviest forge JVM 1.6 GB; no action — CPU-bound by design, memory safe.
