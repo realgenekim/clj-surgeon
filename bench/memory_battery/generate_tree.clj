@@ -362,6 +362,15 @@
                     (reduced {:status :refuse :reason :symlink-at-expected-path
                               :detail rel})
 
+                    ;; A directory at an expected path must never fall through
+                    ;; to :missing-file/:regenerate: writing the promised bytes
+                    ;; would then throw the JVM's own untyped
+                    ;; FileNotFoundException ("Is a directory") mid-spit,
+                    ;; instead of a typed refusal raised before any write.
+                    (.isDirectory f)
+                    (reduced {:status :refuse :reason :directory-at-expected-path
+                              :detail rel})
+
                     ;; `Files/isRegularFile` with NOFOLLOW_LINKS, not `.isFile`
                     ;; (which follows symlinks) — the symlink case above is
                     ;; already handled, so anything left that isn't a real
@@ -515,6 +524,28 @@
         (generate-tree! root 3)
         (assert (= :ok (:status (verify-tree root 3)))
                 "regeneration restores a plain file after the symlink is removed"))
+
+      ;; A DIRECTORY at an expected path must be a typed refusal raised BEFORE
+      ;; any write, not an untyped FileNotFoundException thrown mid-spit.
+      (let [victim3 (io/file dir (rel-path-for 0))]
+        (.delete victim3)
+        (.mkdirs victim3)
+        (assert (= :refuse (:status (verify-tree root 3)))
+                "a directory at an expected path is refused, not silently missing")
+        (assert (= :directory-at-expected-path (:reason (verify-tree root 3))))
+        ;; generate-tree! must refuse the same way, typed, and must not throw
+        ;; the JVM's own untyped "Is a directory" I/O exception.
+        (let [threw (try (generate-tree! root 3) :did-not-throw
+                         (catch clojure.lang.ExceptionInfo e
+                           (:reason (ex-data e)))
+                         (catch Exception e
+                           [:untyped (class e)]))]
+          (assert (= :directory-at-expected-path threw)
+                  (str "generate-tree! refuses typed, not: " (pr-str threw))))
+        (.delete victim3)
+        (generate-tree! root 3)
+        (assert (= :ok (:status (verify-tree root 3)))
+                "regeneration restores a plain file after the directory is removed"))
 
       ;; A TAMPERED manifest digest is not authority over the bytes.
       (let [mf (io/file dir "manifest.edn")]
