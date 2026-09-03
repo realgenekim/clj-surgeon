@@ -118,4 +118,17 @@
               "the ordinary project is discovered")
           (is (contains? files "b\nad/src/core.clj")
               "the newline-named project is discovered too"))
+        (finally (fs/delete-tree sandbox)))))
+
+  (testing "the :grep fast path is the same external file-discovery command"
+    (let [sandbox (fresh-sandbox)]
+      (try
+        (make-project! sandbox "ok")
+        (make-project! sandbox "b\nad")
+        (let [result (core/run-ls-tree {:dir (str sandbox) :format :edn :grep "defn"})
+              files  (set (map :file result))]
+          (is (contains? files "ok/src/core.clj")
+              "the ordinary project is discovered through rg/grep")
+          (is (contains? files "b\nad/src/core.clj")
+              "the newline-named project is discovered through rg/grep too"))
         (finally (fs/delete-tree sandbox))))))

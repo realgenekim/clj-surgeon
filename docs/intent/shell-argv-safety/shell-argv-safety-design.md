@@ -63,20 +63,22 @@ detecting it downstream.
 |---|---|---|---|
 | MCP-OP-SHELL-ARGV-001 | A `:dir` of `<real dir>; touch CANARY ; echo z` or `<real dir>$(touch CANARY)` causes `CANARY` to exist after discovery runs. | `CANARY` never exists; discovery returns no build files. | `hostile-dir-never-reaches-a-shell-from-find-build-files` |
 | MCP-OP-SHELL-ARGV-002 | The public `:ls-tree` op accepts a non-directory `:dir`, reaches discovery, and reports an untyped error (or a stack trace) instead of a refusal. | `{:error-type :workspace-root-not-a-directory}` returned before discovery starts. | `ls-tree-entrance-refuses-a-non-directory-root-without-executing-it` |
-| MCP-OP-SHELL-ARGV-003 | A project directory named `b\nad` is absent from `:ls-tree` output while an ordinary sibling project is present. | Both projects discovered; the newline is data inside one path. | `project-directories-containing-a-newline-are-discovered` |
+| MCP-OP-SHELL-ARGV-003 | A project directory named `b\nad` is absent from `:ls-tree` output while an ordinary sibling project is present — on the full-scan path, or on the `:grep` fast path. | Both projects discovered on both paths; the newline is data inside one path. | `project-directories-containing-a-newline-are-discovered` |
 
 ## Deliberately out of scope in this leaf
 
-- **Argument injection** (a value that `find`, `rg`, or `grep` would read as an
-  *option* because it begins with `-`). This is a different failure class from
-  shell injection: it cannot execute an arbitrary command, only mis-parse a
-  flag. `find-build-files` is guarded by an existing-directory check, and
-  `run-ls-tree` absolutizes before discovery, so the reachable surface is a
-  relative directory literally named `-x`. Registered here as known and
-  unratcheted rather than silently omitted.
-- **`:grep` pattern handling** in `grep-tree`. It is already invoked as an
-  argument vector, so it carries no shell-injection exposure; it retains the
-  option-parsing exposure described above.
+- **Argument injection is CLOSED but not separately ratcheted.** A value that
+  `find`, `rg`, or `grep` would read as an *option* because it begins with `-`
+  is a different failure class from shell injection: it cannot execute an
+  arbitrary command, only mis-parse a flag. It is closed at every discovery
+  site — `find-start-token` prefixes `./` to a relative start point, and
+  `grep-tree` passes the caller's pattern after `-e` and the directory after
+  `--` — but no witness pins it, so a refactor could reopen it silently. Named
+  here as the next rung rather than claimed as proven.
 - **Any entrance outside project discovery.** The audit that produced this leaf
   found exactly one `sh -c` site in `src/`; if a second appears, it belongs
-  under MCP-OP-SHELL-ARGV-001, not a new prefix.
+  under MCP-OP-SHELL-ARGV-001, not a new prefix. Every other subprocess in
+  `src/` already runs an argv vector through `ProcessBuilder`, and
+  `worktree-lifecycle-io/validate-process-request` already refuses an argv
+  containing `sh`, `bash`, or `-c` — a pre-existing ratchet of this same
+  invariant, at a different site.

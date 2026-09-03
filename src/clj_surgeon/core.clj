@@ -315,10 +315,15 @@
       (zero? (:exit r)))
     (catch Exception _e false)))
 
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- grep-tree
   "Single recursive grep on a directory tree. Returns set of matching absolute paths.
    Uses ripgrep (rg) if available — faster and respects .gitignore.
-   Falls back to system grep (MUCH slower on large trees)."
+   Falls back to system grep (MUCH slower on large trees).
+
+   NUL-delimited (rg --null / grep -Z) for the same reason as find-clj-files: a
+   matching path may contain a newline. The caller's pattern is passed after
+   `-e` and the directory after `--`, so neither can be read as an option."
   [pattern dir]
   (when-not (rg-available?)
     (binding [*out* *err*]
@@ -328,24 +333,24 @@
     (let [args (if (rg-available?)
                  ;; ripgrep: fast, respects .gitignore automatically
                  ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
-                 ["rg" "-li"
+                 ["rg" "-li" "--null"
                   "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
                   "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
-                  pattern (str dir)]
+                  "-e" pattern "--" (str dir)]
                  ;; fallback: system grep
                  (let [exclude-args (mapcat #(vector "--exclude-dir" %)
                                             [".git" ".cpcache" ".gitlibs" "target"
                                              "node_modules" ".clj-kondo" ".lsp" ".shadow-cljs"])]
-                   (concat ["grep" "-rliE"
+                   (concat ["grep" "-rliZE"
                             "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
                             "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
                            exclude-args
-                           [pattern (str dir)])))
+                           ["-e" pattern "--" (str dir)])))
           result (apply babashka.process/shell
                         {:out :string :err :string :continue true}
                         args)]
       (if (zero? (:exit result))
-        (set (str/split-lines (str/trim (:out result))))
+        (set (nul-separated-paths (:out result)))
         #{}))
     (catch Exception _e #{})))
 
