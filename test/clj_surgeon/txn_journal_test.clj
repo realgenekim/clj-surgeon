@@ -1194,6 +1194,54 @@
               (when (:txid next-txn) (journal/rollback! next-txn)))))
         (finally (cleanup! ws))))))
 
+;; @spec MCP-OP-MEM-007
+(deftest a-throw-after-the-commit-is-recorded-does-not-un-commit-it
+  (testing "Opus round 4, blocker 2: `finish-after-throw!` had no terminal
+            status guard. `finish!` publishes, appends `committed` to the
+            journal, writes `state.edn` `:committed`, RELEASES the project
+            LOCK, and only then does its bookkeeping tail - reclaiming staging
+            and writing the lease. An ENOSPC in that tail reached the catch,
+            which rolled every written path back to H0: the durable record and
+            the tree then disagree permanently, `recover!` will not touch a
+            `:committed` journal and `undo!` refuses it as a digest conflict.
+            The revert also ran AFTER the LOCK was released, outside every
+            lock this build exists to take. Past a terminal status the tail is
+            bookkeeping, and a failure there degrades to a bare release."
+    (let [ws (workspace! "finish-tail-throw" 2)
+          path (first (sort (:paths ws)))
+          new-source "(ns f0) (def v :committed-and-staying)\n"
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (let [txn (begin! ws {:txid "TAIL"})
+              _ (record-scope! txn (:paths ws))
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn path)
+              _ (journal/stage! txn path new-source)
+              journal-dir (io/file (:dir txn))
+              thrown (atom nil)]
+          (with-redefs-fn
+            {#'journal/write-lease!
+             (fn [& _] (throw (java.io.IOException. "ENOSPC writing lease.edn")))}
+            (fn []
+              (try (journal/commit! txn)
+                   (catch Throwable cause (reset! thrown cause)))))
+          (is (instance? java.io.IOException @thrown)
+              (str "the bookkeeping failure is still raised: " (pr-str @thrown)))
+          (is (= "ENOSPC writing lease.edn" (.getMessage ^Throwable @thrown)))
+          (is (= new-source (bytes-of path))
+              "the bytes the journal calls committed are the bytes on disk")
+          (is (= :committed
+                 (:status (read-string (slurp (io/file journal-dir "state.edn")))))
+              "and state.edn still says so")
+          (is (= "committed" (last (str/split-lines (slurp (io/file journal-dir "journal.log")))))
+              "as does the journal's last line")
+          (is (not (.isFile lock)) "the project LOCK is released")
+          (let [next-txn (begin! ws {})]
+            (is (string? (:txid next-txn)) "so the workspace is still usable")
+            (when (:txid next-txn) (journal/rollback! next-txn))))
+        (finally (cleanup! ws))))))
+
 ;; @spec MCP-OP-MEM-013
 (deftest breaking-a-stale-lock-cannot-delete-a-live-holders-fresh-lock
   (testing "Opus round 3, blocker 3: the break was a READ followed by an
