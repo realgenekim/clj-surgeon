@@ -48,7 +48,7 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from watch import (  # noqa: E402  (same-directory module, deliberate)
-    APPLY_PATCH_CMD_RE, COMMITTING_VERBS, _shell_script,
+    APPLY_PATCH_CMD_RE, COMMITTING_VERBS, WATCH_SCHEMA_VERSION, _shell_script,
     is_test_command, load_make_map, normalize, parse_utc, patch_targets,
 )
 
@@ -231,7 +231,9 @@ def validate_watch(records: list[dict]) -> None:
 # >= 2, so an unknown future stream shape scored rc 0 and wrote a receipt.  Fail
 # closed on the exact contract this scorer reads, the same evidence-format posture as
 # the missing-provenance and no-header refusals right above it.
-WATCH_SCHEMA_SUPPORTED = 2
+# Sol round six, item 8: ONE literal.  The scorer reads exactly the schema the
+# watcher in the same checkout writes; a second independent `2` here was a drift path.
+WATCH_SCHEMA_SUPPORTED = WATCH_SCHEMA_VERSION
 PROVENANCE_KEYS = ("rollout_dev", "rollout_ino", "session_id")
 
 

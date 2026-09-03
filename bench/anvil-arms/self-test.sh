@@ -1793,8 +1793,33 @@ for label, cond in checks:
 sys.exit(0)
 PY35C
 cat "$WORK/case35c.out"
+
+# 35d -- Sol round six, item 8: the scorer's supported schema IS the watcher's version
+# (one constant, imported), so the two cannot drift apart in one checkout.
+python3 - "$HERE" > "$WORK/case35d.out" 2>&1 <<'PY35D'
+import ast, pathlib, sys
+import importlib.util
+here = pathlib.Path(sys.argv[1]).resolve()
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, here / f"{name}.py")
+    m = importlib.util.module_from_spec(spec); sys.modules[name] = m; spec.loader.exec_module(m); return m
+watch = load("watch"); score = load("score")
+src = (here / "score.py").read_text()
+literal = any(isinstance(n, ast.Assign) and any(getattr(t, "id", None) == "WATCH_SCHEMA_SUPPORTED" for t in n.targets)
+              and isinstance(n.value, ast.Constant) for n in ast.walk(ast.parse(src)))
+checks = [
+    ("case35d scorer supported schema equals the watcher schema version",
+     score.WATCH_SCHEMA_SUPPORTED == watch.WATCH_SCHEMA_VERSION),
+    ("case35d the scorer does not carry its own schema literal", not literal),
+]
+for label, cond in checks:
+    print(("ok   " if cond else "FAIL ") + label)
+PY35D
+cat "$WORK/case35d.out"
 PASS=$((PASS + $(grep -c '^ok   case35c' "$WORK/case35c.out")))
 FAIL=$((FAIL + $(grep -c '^FAIL case35c' "$WORK/case35c.out")))
+PASS=$((PASS + $(grep -c '^ok   case35d' "$WORK/case35d.out")))
+FAIL=$((FAIL + $(grep -c '^FAIL case35d' "$WORK/case35d.out")))
 
 echo "== case 36: a stat that ERRORED is not a stat that said no rotation =="
 # Sol round three, finding (c).  The inode binding is re-checked every poll, and BOTH
