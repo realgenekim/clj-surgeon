@@ -4714,6 +4714,92 @@
         (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-fifteen item 10 and NO-GO item 6: the ONE constructor refuses an
+;; EMPTY `files` because "the published schema declares minItems 1" — and the
+;; same schema declares the items are STRINGS, which it never asked.
+;;
+;;   ctor empty files     -> {:candidate nil, :bytes nil, :next-call nil}
+;;   ctor nil-entry files -> {:next-call {… :files [nil] …}, :bytes 91}
+;;   ctor non-string      -> {:next-call {… :files [42]  …}, :bytes 89}
+;;   ctor files "x"       -> {:next-call {… :files "x"   …}, :bytes 88}
+;;
+;; The `:census-failed` fallback hands it `{:files [(:file planned)]}`, and a
+;; plan failure that names no `:file` — the documented reason that fallback
+;; exists — makes that `[nil]`. Driven from a short root, where the byte
+;; ceiling cannot mask it:
+;;
+;;   census-failed next_call: {"workspace_root":"…","files":[null],"tool":"relation_census"}
+;;   has remedy? false
+;;
+;; Replaying that continuation refuses `invalid-mcp-request / file-not-a-string`
+;; — a call the tool's own schema rejects, which is the same unexecutable
+;; promise a caption in an argument position is. And the 600-character ratchet
+;; is structurally BLIND to it: at 600 characters the ceiling drops the
+;; continuation before any schema question is asked, so the root length that
+;; makes that witness work is what hides this one.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+(deftest the-constructor-refuses-a-files-list-the-published-schema-rejects
+  (testing "the constructor's own contract, direct"
+    (doseq [[label candidate]
+            [[:empty-list {:workspace_root "/x" :files []}]
+             [:nil-entry {:workspace_root "/x" :files [nil]}]
+             [:non-string-entry {:workspace_root "/x" :files [42]}]
+             [:blank-entry {:workspace_root "/x" :files [""]}]
+             [:not-a-list-at-all {:workspace_root "/x" :files "x"}]]]
+      (let [{:keys [next-call bytes candidate]}
+            (census-tool/continuation candidate)]
+        (is (nil? next-call)
+            (str label " was admitted as a continuation: " (pr-str next-call)))
+        (is (nil? candidate)
+            (str label " was admitted as a candidate: " (pr-str candidate)))
+        (is (nil? bytes)
+            (str label " reports a measured byte length, which says it was "
+                 "refused for LENGTH when it was refused for shape: "
+                 (pr-str bytes))))))
+
+  (testing "a well-formed files list still travels"
+    (let [{:keys [next-call bytes]}
+          (census-tool/continuation {:workspace_root "/x"
+                                     :files ["src/a.clj"]})]
+      (is (= {:tool "relation_census" :workspace_root "/x"
+              :files ["src/a.clj"]}
+             next-call)
+          (str "a valid narrowing was refused: " (pr-str next-call)))
+      (is (pos? bytes))))
+
+  (testing "the :census-failed fallback publishes no continuation at all"
+    (let [root (temp-dir)
+          arm "src/app/folds.clj"]
+      (try
+        (spit-file! (io/file root arm) arm-source)
+        (let [named (.getCanonicalPath root)
+              result (with-redefs [census/plan
+                                   (fn [& _]
+                                     {:ok false :error "injected plan failure"})]
+                       (census-tool/execute-request!
+                         {:project-root named}
+                         {:files [arm] :doors ["upsert-by"] :pool_size 1}))]
+          (is (= "census-failed" (:error_type result))
+              (str "the probe did not reach the fallback: " (pr-str result)))
+          (is (not (contains? result :next_call))
+              (str "the fallback published a continuation the tool's own "
+                   "schema rejects: " (json/generate-string (:next_call result))))
+          (is (string? (:remedy result))
+              (str "the fallback offers neither a continuation nor a remedy: "
+                   (pr-str result)))
+          (is (not (str/includes? (str (:remedy result)) "null"))
+              (str "the remedy is built out of the measurement of a "
+                   "continuation that was never measurable: "
+                   (pr-str (:remedy result))))
+          (is (not (and (contains? result :file) (nil? (:file result))))
+              (str "the refusal publishes a null :file rather than omitting "
+                   "the key: " (pr-str (select-keys result [:file])))))
+        (finally
+          (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
 ;;
 ;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
