@@ -538,6 +538,69 @@
                        :hashes {}}))))))
 
 ;; ------------------------------------------------------------------
+;; Attestation names WHAT the reference measured; anchoring binds it to
+;; its OWN bytes, so a hand-written reference with correct-looking
+;; attestation fields but forged hashes cannot pass. Sol's probe:
+;; "A hand-written reference with current attestation fields and
+;; :hashes {:forged "arbitrary"} passed memory-battery-attest."
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-011
+(deftest reference-canonicalization-is-order-independent-and-value-sensitive
+  (testing "key insertion order never changes the canonical bytes"
+    (is (= (battery/canonical-reference-str {:b 2 :a 1 :hashes {:z 1 :y 2}})
+           (battery/canonical-reference-str {:a 1 :hashes {:y 2 :z 1} :b 2}))))
+
+  (testing "nested maps under vectors and maps are canonicalized too"
+    (is (= (battery/canonical-reference-str {:xs [{:b 1 :a 2}]})
+           (battery/canonical-reference-str {:xs [{:a 2 :b 1}]}))))
+
+  (testing "an actual value change produces different bytes"
+    (is (not= (battery/canonical-reference-str {:hashes {:ls-tree "h1"}})
+              (battery/canonical-reference-str {:hashes {:ls-tree "h2"}})))))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-reference-not-anchored-to-its-own-bytes-is-refused
+  (testing "a missing sidecar is refused, typed :reference-unanchored"
+    (let [issue (battery/reference-anchor-mismatch nil "computed-hash")]
+      (is (= :reference-unanchored (:reason issue)))
+      (is (= :missing (get-in issue [:detail :sidecar])))))
+
+  (testing "a sidecar that does not match the reference's own bytes is refused —
+            this is Sol's forged-reference probe: correct attestation, forged :hashes"
+    (let [issue (battery/reference-anchor-mismatch "sidecar-says-abc" "computed-says-xyz")]
+      (is (= :reference-unanchored (:reason issue)))
+      (is (= :mismatch (get-in issue [:detail :sidecar])))
+      (is (= "computed-says-xyz" (get-in issue [:detail :expected])))
+      (is (= "sidecar-says-abc" (get-in issue [:detail :found])))))
+
+  (testing "a sidecar matching the reference's own bytes is fresh"
+    (is (nil? (battery/reference-anchor-mismatch "same-hash" "same-hash")))))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-reference-naming-the-wrong-ops-catalogue-is-refused
+  (testing "hashes for exactly the ops catalogue is fresh"
+    (is (nil? (battery/reference-ops-mismatch
+                {:hashes {:ls-tree {} :workspace-sources {}}}
+                [:ls-tree :workspace-sources]))))
+
+  (testing "an extra key the ops catalogue never named — Sol's :forged \"arbitrary\" —
+            is refused, typed :reference-ops-mismatch"
+    (let [issue (battery/reference-ops-mismatch
+                  {:hashes {:ls-tree {} :forged "arbitrary"}}
+                  [:ls-tree :workspace-sources])]
+      (is (= :reference-ops-mismatch (:reason issue)))
+      (is (= [:forged] (get-in issue [:detail :extra])))
+      (is (= [:workspace-sources] (get-in issue [:detail :missing])))))
+
+  (testing "a missing op is refused the same way"
+    (let [issue (battery/reference-ops-mismatch
+                  {:hashes {:ls-tree {}}}
+                  [:ls-tree :workspace-sources])]
+      (is (= [:workspace-sources] (get-in issue [:detail :missing])))
+      (is (= [] (get-in issue [:detail :extra]))))))
+
+;; ------------------------------------------------------------------
 ;; The battery is a gate, and it is not in the fast gates
 ;; ------------------------------------------------------------------
 
@@ -584,3 +647,28 @@
             (str "make " gate
                  " must not launch the memory battery: it is a minutes-scale"
                  " measurement, deliberately kept out of the fast gates"))))))
+
+;; ------------------------------------------------------------------
+;; A fresh MEMBAT_ROOT must never auto-launch the 4g reference JVM as a
+;; side effect of `make memory-battery` — Sol's finding 8.
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-011
+(deftest membat-reference-defaults-to-require-not-auto
+  (is (str/includes? (makefile-text) "MEMBAT_REFERENCE ?= require")
+      "MEMBAT_REFERENCE must default to require, not auto, so a stale/missing"))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-stale-reference-does-not-silently-rebuild-under-the-default
+  (let [targets (battery/parse-makefile-targets (makefile-text))
+        recipe (str/join "\n" (:recipe (get targets "memory-battery")))]
+    (testing "the recipe is gated on MEMBAT_REFERENCE, not an unconditional ||"
+      (is (str/includes? recipe "MEMBAT_REFERENCE")
+          "the memory-battery recipe must consult MEMBAT_REFERENCE before rebuilding"))
+    (testing "a stale/missing reference under the default refuses with a typed reason"
+      (is (str/includes? recipe "membat-reference-required")
+          "the refusal must be typed and greppable, not a bare shell failure"))
+    (testing "the old unconditional auto-rebuild fallback is gone"
+      (is (not (re-find #"memory-battery-attest\s*\\\s*\n\s*\|\|\s*\$\(MAKE\)\s*--no-print-directory\s*memory-battery-reference\s*$"
+                        recipe))
+          "attest failure must not unconditionally fall through to the 4g reference build"))))

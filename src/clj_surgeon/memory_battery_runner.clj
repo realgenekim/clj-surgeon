@@ -266,6 +266,18 @@
 
 (defn- reference-file [root] (io/file root "reference-hashes.edn"))
 
+;; The anchor. Written ONLY here (and by `-main`'s :reference mode, the only
+;; writer of the reference file itself) — never by anything that reads or
+;; compares a reference. See `battery/reference-anchor-mismatch`.
+(defn- reference-sidecar-file [root] (io/file root "reference-hashes.edn.sha256"))
+
+(defn- read-reference-sidecar
+  "The sha256 hex anchoring the reference to its own bytes, or nil when the
+  sidecar file does not exist."
+  [root]
+  (let [f (reference-sidecar-file root)]
+    (when (.exists f) (str/trim (slurp f)))))
+
 (defn- read-reference
   "The cached reference document, or nil when there is none. Legacy files hold
   the bare {op {n hash}} map with no attestation; they are returned as they are
@@ -324,6 +336,23 @@
    :jvm (System/getProperty "java.version")
    :head-sha (or (not-empty (System/getenv "MEMBAT_HEAD_SHA")) "unknown")})
 
+(defn- reference-trust-issue
+  "Every reason a cached reference must be refused, in order: staleness
+  against THIS run's attestation (unchanged; see `battery/reference-staleness`
+  — :no-reference and :unattested-reference fire here, before the sidecar is
+  ever touched), then — only once a reference document actually exists — that
+  its bytes are anchored to its own `.sha256` sidecar
+  (`battery/reference-anchor-mismatch`), then that its `:hashes` names exactly
+  the ops catalogue (`battery/reference-ops-mismatch`). nil when none apply."
+  [att reference root]
+  (or (battery/reference-staleness att reference)
+      (when reference
+        (battery/reference-anchor-mismatch
+          (read-reference-sidecar root)
+          (sha256-hex (battery/canonical-reference-str reference))))
+      (when reference
+        (battery/reference-ops-mismatch reference (mapv :id ops)))))
+
 ;; ============================================================
 ;; Driver
 ;; ============================================================
@@ -355,7 +384,7 @@
                         arms)
         att (attestation manifests)
         reference (read-reference root)
-        staleness (battery/reference-staleness att reference)]
+        staleness (reference-trust-issue att reference root)]
     (cond
       (not (.isDirectory (io/file root)))
       {:exit (refuse (str "MEMBAT_ROOT is not a directory: " root) nil)}
@@ -514,7 +543,7 @@
   (let [manifests (read-manifests root (battery/corpus-arms scales))
         att (attestation manifests)
         reference (read-reference root)
-        staleness (battery/reference-staleness att reference)]
+        staleness (reference-trust-issue att reference root)]
     (if staleness
       (do (binding [*out* *err*]
             (println "reference NOT attested to this run:"
@@ -551,13 +580,19 @@
                                              [(:op c) (:profile c :default) (:n c)]
                                              (:result-hash c)))
                                  {}
-                                 (:cells observation))]
+                                 (:cells observation))
+                  reference-doc {:attestation (:attestation observation)
+                                 :hashes hashes}]
               ;; The hashes are only meaningful together with what produced
               ;; them, so they are never written without their attestation.
-              (spit (reference-file root)
-                    (with-out-str
-                      (pprint/pprint {:attestation (:attestation observation)
-                                      :hashes hashes})))
+              (spit (reference-file root) (with-out-str (pprint/pprint reference-doc)))
+              ;; The anchor. Written HERE ONLY, immediately after the bytes it
+              ;; anchors, so a hand-edit to reference-hashes.edn afterward
+              ;; leaves the sidecar naming the OLD (correct) bytes' hash — see
+              ;; `battery/reference-anchor-mismatch` and the boundary note in
+              ;; docs/memory-battery.md.
+              (spit (reference-sidecar-file root)
+                    (sha256-hex (battery/canonical-reference-str reference-doc)))
               (println)
               (println "reference hashes written to" (str (reference-file root)))
               (println "attested to" (pr-str (select-keys (:attestation observation)

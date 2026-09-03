@@ -98,6 +98,17 @@ MCP-OP-MEM-011:
   present file may hold hashes from other code over another corpus; a reference
   not bound to this run's operation sources, generator, corpus digests and JVM
   is refused, never compared.
+- "The attestation fields all match, so the reference is trustworthy." Attested
+  fields say WHAT was measured; they say nothing about whether the `:hashes`
+  on disk are the bytes that measurement actually produced. A hand-written
+  reference carrying today's correct attestation and a forged or extra
+  `:hashes` key passed attestation cleanly. A reference is also anchored
+  (`:reference-unanchored` when its sha256 sidecar is missing or does not
+  match its own canonical bytes) and its `:hashes` are checked against the ops
+  catalogue exactly (`:reference-ops-mismatch`) — see the honest-boundary note
+  in `docs/memory-battery.md`: this is a stale/hand-edit check, not a
+  signature; a party with write access to both the reference and its sidecar
+  can still forge both together.
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.
 - "The sampled peak crossed its budget, so the operation is unbounded." The
   sampled peak is process-wide, contains garbage, and G1 moves it with heap and
@@ -139,6 +150,13 @@ MCP-OP-MEM-011:
   sha is recorded for forensics but not compared: the source digest already
   covers every change that could alter an operation's output, and binding to
   HEAD would force a minutes-long reference rebuild on every unrelated commit.
+  The reference is also anchored to its own bytes via a sha256 sidecar written
+  only by `memory-battery-reference`, and its `:hashes` are checked against
+  the ops catalogue exactly — a hand-edited or partially-forged reference
+  refuses (`:reference-unanchored`, `:reference-ops-mismatch`) even when every
+  attested field matches. This anchor is a stale/hand-edit check, not a
+  signature: a party able to write both the reference and its sidecar can
+  still forge both together.
 - Two of Sol's pass lines are NOT implemented by this battery and are out of
   scope for its current arms: the 450 x 1.9 MiB aggregate-admission case, and
   injected conflict at staging, validation, every commit boundary, and rollback.
@@ -166,8 +184,15 @@ MCP-OP-MEM-011:
   admission exists and parsing never starts.
 - The corpus is verified, not asserted: every promised file's existence, byte
   count and content digest are checked against the deterministic generator, and
-  unlisted files under the tree are a refusal, before any cell is measured. A
-  cell's reported file and byte counts are therefore the corpus, not a manifest's
+  unlisted files under the tree are a refusal, before any cell is measured.
+  "Existence" is checked with `NOFOLLOW_LINKS`: a symlink standing at an
+  expected path is a refusal (`:symlink-at-expected-path`), even when its
+  target holds byte-identical content, because `.isFile`/`.length`/a plain
+  read all follow the link and would otherwise verify a substituted file as
+  clean. A directory standing at an expected path is the same kind of refusal
+  (`:directory-at-expected-path`), typed and raised before any write, not an
+  untyped I/O exception raised mid-regeneration. A cell's reported file and
+  byte counts are therefore the corpus, not a manifest's
   claim about it.
 - An arm measures one operation under one query shape. An operation whose result
   is small under the battery's query is not thereby bounded: `rename/plan` under
@@ -184,6 +209,25 @@ MCP-OP-MEM-011:
 - A shared build host perturbs wall time and, through GC scheduling, the sampled
   peak. The receipt records host load context; a single failing run near a line
   is re-run before it is called a regression.
+- `MEMBAT_ROOT` is guarded, not merely a path variable: a fresh root is
+  created and marked (`.membat-root`) by the battery itself; a root that
+  already exists WITHOUT that marker is refused (`:membat-root-unmarked`)
+  rather than written into, because the battery cannot tell whether an
+  existing directory it did not mark is its own corpus or something else
+  entirely; and the root's canonical path must resolve inside
+  `/home/forge/tmp` unless the caller explicitly sets
+  `MEMBAT_ALLOW_ANY_ROOT=1` (`:membat-root-outside-allowed` otherwise). None of
+  this claims MEMBAT_ROOT's *contents* are trustworthy — that is the corpus
+  and reference checks above — only that the battery does not create or write
+  into a directory it has no evidence it owns.
+- A stale or missing cached reference does NOT silently launch the 4 GiB
+  reference JVM as a side effect of `make memory-battery`. `MEMBAT_REFERENCE`
+  (default `require`) refuses that case with a typed line
+  (`:membat-reference-required`) naming the explicit remedy
+  (`make memory-battery-reference`); `MEMBAT_REFERENCE=auto` restores the
+  side-effecting rebuild for a caller who wants it. This is an operational
+  guard on WHEN the reference build runs, not a claim about the reference
+  itself — see the anchoring and ops-catalogue boundaries above for that.
 
 ## Rationale
 

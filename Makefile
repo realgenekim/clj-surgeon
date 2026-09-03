@@ -842,6 +842,11 @@ MEMBAT_REFERENCE_XMX ?= 4g
 MEMBAT_REPS ?= 5
 MEMBAT_SCALES ?= 100,1000,10000
 MEMBAT_OP_TIMEOUT_MS ?= 600000
+# require (default): a stale/missing cached reference REFUSES rather than
+# silently launching the 4g reference JVM as a side effect of `make
+# memory-battery` — that build must be an explicit, visible act. auto: restore
+# the old rebuild-on-stale behavior. See docs/memory-battery.md.
+MEMBAT_REFERENCE ?= require
 MEMBAT_HEAD_SHA = $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 MEMBAT_ENV = MEMBAT_ROOT="$(MEMBAT_ROOT)" MEMBAT_REPS="$(MEMBAT_REPS)" \
   MEMBAT_SCALES="$(MEMBAT_SCALES)" MEMBAT_OP_TIMEOUT_MS="$(MEMBAT_OP_TIMEOUT_MS)" \
@@ -866,9 +871,21 @@ memory-battery:
 	@# @spec MCP-OP-MEM-011
 	@$(MAKE) --no-print-directory memory-battery-generate
 	@# Existence is not attestation: a shared MEMBAT_ROOT can hold a reference
-	@# built from other code over another corpus. Rebuild unless it is attested.
-	@$(MAKE) --no-print-directory memory-battery-attest \
-	  || $(MAKE) --no-print-directory memory-battery-reference
+	@# built from other code over another corpus, or an unanchored/hand-edited
+	@# one. MEMBAT_REFERENCE gates what happens when it is stale: "auto"
+	@# rebuilds it (a 4g JVM, minutes-scale) as this target's own side effect;
+	@# the default "require" refuses, typed, so that JVM only ever starts from
+	@# an explicit `make memory-battery-reference`.
+	@$(MAKE) --no-print-directory memory-battery-attest || \
+	  if [ "$(MEMBAT_REFERENCE)" = "auto" ]; then \
+	    $(MAKE) --no-print-directory memory-battery-reference; \
+	  elif [ "$(MEMBAT_REFERENCE)" = "require" ]; then \
+	    echo "REFUSED: {:reason :membat-reference-required, :configured \"$(MEMBAT_REFERENCE)\", :detail \"cached reference is stale or missing\", :remedy \"run 'make memory-battery-reference' explicitly, or set MEMBAT_REFERENCE=auto to rebuild it as a side effect of this target\"}" >&2; \
+	    exit 2; \
+	  else \
+	    echo "REFUSED: {:reason :membat-reference-invalid, :configured \"$(MEMBAT_REFERENCE)\", :detail \"MEMBAT_REFERENCE must be auto or require\"}" >&2; \
+	    exit 2; \
+	  fi
 	$(MEMBAT_ENV) MEMBAT_MODE=battery \
 	  clojure -J-Xmx$(MEMBAT_XMX) -M:clj-surgeon/memory-battery
 

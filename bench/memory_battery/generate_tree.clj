@@ -26,7 +26,9 @@
 (ns generate-tree
   (:require
    [clojure.java.io :as io]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  (:import
+   [java.nio.file Files LinkOption]))
 
 (def generator-version "membat-gen-1")
 
@@ -352,7 +354,29 @@
               (fn [_ [rel size sha]]
                 (let [f (io/file dir rel)]
                   (cond
-                    (not (.isFile f))
+                    ;; A symlink at an expected path is refused outright, never
+                    ;; regenerated: `.isFile`/`.length`/reading through it all
+                    ;; follow the link, so a symlink to an out-of-tree copy with
+                    ;; identical bytes would otherwise verify clean.
+                    (Files/isSymbolicLink (.toPath f))
+                    (reduced {:status :refuse :reason :symlink-at-expected-path
+                              :detail rel})
+
+                    ;; A directory at an expected path must never fall through
+                    ;; to :missing-file/:regenerate: writing the promised bytes
+                    ;; would then throw the JVM's own untyped
+                    ;; FileNotFoundException ("Is a directory") mid-spit,
+                    ;; instead of a typed refusal raised before any write.
+                    (.isDirectory f)
+                    (reduced {:status :refuse :reason :directory-at-expected-path
+                              :detail rel})
+
+                    ;; `Files/isRegularFile` with NOFOLLOW_LINKS, not `.isFile`
+                    ;; (which follows symlinks) — the symlink case above is
+                    ;; already handled, so anything left that isn't a real
+                    ;; regular file is either missing or some other node type.
+                    (not (Files/isRegularFile (.toPath f)
+                                              (into-array LinkOption [LinkOption/NOFOLLOW_LINKS])))
                     (reduced {:status :regenerate :reason :missing-file :detail rel})
 
                     (not= (long size) (.length f))
@@ -375,6 +399,52 @@
                :detail {:manifest (:digest existing)
                         :expected (entries-digest expected)}})
             {:status :ok})))))))
+
+(def ^:private allowed-root-prefix
+  "MEMBAT_ROOT must resolve inside this directory unless the caller sets
+  MEMBAT_ALLOW_ANY_ROOT=1. It is arbitrary and, without a marker, a fresh run
+  would create or write into whatever it pointed at."
+  "/home/forge/tmp")
+
+(defn- membat-root-marker [root] (io/file root ".membat-root"))
+
+(defn ensure-root-marker!
+  "Guard MEMBAT_ROOT against pointing at an arbitrary directory: a FRESH root
+  (does not yet exist) is created and marked; a root that already exists
+  WITHOUT the marker is refused rather than written into — it might be $HOME,
+  a real repository, or another tool's directory, and the battery has no way
+  to tell. The root's canonical path must also resolve inside
+  `allowed-root-prefix` unless `allow-any-root?` (default: the
+  MEMBAT_ALLOW_ANY_ROOT=1 env var) says otherwise.
+
+  Throws ex-info shaped like `verify-tree`'s :refuse ({:reason ... :detail
+  ...}) so -main's existing REFUSED handler catches it uniformly. Returns nil."
+  ([root] (ensure-root-marker! root (= "1" (System/getenv "MEMBAT_ALLOW_ANY_ROOT"))))
+  ([root allow-any-root?]
+   (let [rf (io/file root)
+         canonical (.getCanonicalPath rf)
+         allowed (.getCanonicalPath (io/file allowed-root-prefix))]
+     (when (and (not allow-any-root?)
+                (not (or (= canonical allowed)
+                        (str/starts-with? canonical (str allowed java.io.File/separator)))))
+       (throw (ex-info (str "MEMBAT_ROOT resolves outside " allowed-root-prefix
+                            ": " canonical)
+                       {:reason :membat-root-outside-allowed
+                        :root root :resolved canonical :allowed allowed-root-prefix
+                        :remedy "point MEMBAT_ROOT under /home/forge/tmp, or set MEMBAT_ALLOW_ANY_ROOT=1"})))
+     (if (.exists rf)
+       (when-not (.exists (membat-root-marker rf))
+         (throw (ex-info (str "MEMBAT_ROOT exists without its marker: " root)
+                         {:reason :membat-root-unmarked
+                          :root root
+                          :remedy (str "point MEMBAT_ROOT at a fresh directory, "
+                                      "or create " (str (membat-root-marker rf))
+                                      " yourself if you are certain this root "
+                                      "was built by the battery")})))
+       (.mkdirs rf))
+     (when-not (.exists (membat-root-marker rf))
+       (spit (membat-root-marker rf)
+             (str "membat root created " (java.time.Instant/now) "\n"))))))
 
 (defn generate-tree!
   "Write (or verify) the N-file tree under `root`. Returns the manifest.
@@ -483,6 +553,46 @@
       (assert (= :unexpected-files (:reason (verify-tree root 3))))
       (.delete (io/file dir "src/membat/pkg000/intruder.clj"))
 
+      ;; A SYMLINK at an expected path, even pointing at bytes identical to
+      ;; the promised content, must never be reported as present: `.isFile`
+      ;; follows symlinks, so a symlink to an out-of-tree copy of the same
+      ;; file used to verify clean.
+      (let [victim2 (io/file dir (rel-path-for 2))
+            outside (io/file root "outside-target.clj")]
+        (spit outside (slurp victim2))
+        (.delete victim2)
+        (Files/createSymbolicLink (.toPath victim2) (.toPath outside)
+                                  (make-array java.nio.file.attribute.FileAttribute 0))
+        (assert (= :refuse (:status (verify-tree root 3)))
+                "a symlink at an expected path is refused, not verified")
+        (assert (= :symlink-at-expected-path (:reason (verify-tree root 3))))
+        (Files/delete (.toPath victim2))
+        (generate-tree! root 3)
+        (assert (= :ok (:status (verify-tree root 3)))
+                "regeneration restores a plain file after the symlink is removed"))
+
+      ;; A DIRECTORY at an expected path must be a typed refusal raised BEFORE
+      ;; any write, not an untyped FileNotFoundException thrown mid-spit.
+      (let [victim3 (io/file dir (rel-path-for 0))]
+        (.delete victim3)
+        (.mkdirs victim3)
+        (assert (= :refuse (:status (verify-tree root 3)))
+                "a directory at an expected path is refused, not silently missing")
+        (assert (= :directory-at-expected-path (:reason (verify-tree root 3))))
+        ;; generate-tree! must refuse the same way, typed, and must not throw
+        ;; the JVM's own untyped "Is a directory" I/O exception.
+        (let [threw (try (generate-tree! root 3) :did-not-throw
+                         (catch clojure.lang.ExceptionInfo e
+                           (:reason (ex-data e)))
+                         (catch Exception e
+                           [:untyped (class e)]))]
+          (assert (= :directory-at-expected-path threw)
+                  (str "generate-tree! refuses typed, not: " (pr-str threw))))
+        (.delete victim3)
+        (generate-tree! root 3)
+        (assert (= :ok (:status (verify-tree root 3)))
+                "regeneration restores a plain file after the directory is removed"))
+
       ;; A TAMPERED manifest digest is not authority over the bytes.
       (let [mf (io/file dir "manifest.edn")]
         (spit mf (pr-str (assoc (read-string (slurp mf)) :digest "deadbeef")))
@@ -523,6 +633,53 @@
       (println "generate_tree verification self-test: ok")
       (finally (rm-rf! root)))))
 
+;; MEMBAT_ROOT is arbitrary and, before this, had no marker or scope guard: a
+;; fresh root auto-created whatever it pointed at, and a shared/pre-existing
+;; directory (potentially unrelated to the battery) was written into on the
+;; same footing as a battery-owned one.
+(defn- root-marker-self-test! []
+  (let [base "/home/forge/tmp"
+        stamp (System/currentTimeMillis)
+        fresh-root (io/file base (str "membat-marker-selftest-" stamp))
+        unmarked-root (io/file base (str "membat-unmarked-selftest-" stamp))
+        outside-root (io/file (System/getProperty "java.io.tmpdir")
+                              (str "membat-outside-selftest-" stamp))]
+    (try
+      ;; A fresh root is created and marked by the battery itself.
+      (ensure-root-marker! (str fresh-root))
+      (assert (.isDirectory fresh-root) "a fresh root is created")
+      (assert (.exists (io/file fresh-root ".membat-root"))
+              "a fresh root is marked")
+      ;; Reusing an already-marked root is a no-op, not a refusal.
+      (ensure-root-marker! (str fresh-root))
+
+      ;; A pre-existing root with NO marker is refused, not silently adopted
+      ;; — it might be $HOME, a real repo, or another tool's directory.
+      (.mkdirs unmarked-root)
+      (let [reason (try (ensure-root-marker! (str unmarked-root)) :did-not-throw
+                        (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))]
+        (assert (= :membat-root-unmarked reason)
+                (str "an unmarked pre-existing root is refused, got " reason)))
+
+      ;; A root outside /home/forge/tmp is refused by default...
+      (let [reason (try (ensure-root-marker! (str outside-root) false) :did-not-throw
+                        (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))]
+        (assert (= :membat-root-outside-allowed reason)
+                (str "a root outside the allowed scope is refused, got " reason)))
+      (assert (not (.exists outside-root))
+              "a refused outside-scope root is never created")
+
+      ;; ...unless the caller explicitly opts in (MEMBAT_ALLOW_ANY_ROOT=1).
+      (ensure-root-marker! (str outside-root) true)
+      (assert (.isDirectory outside-root)
+              "an explicit override creates and marks an outside-scope root")
+
+      (println "generate_tree root-marker self-test: ok")
+      (finally
+        (rm-rf! fresh-root)
+        (rm-rf! unmarked-root)
+        (rm-rf! outside-root)))))
+
 (defn- self-test! []
   (let [a (file-source 3 100)
         b (file-source 3 100)
@@ -537,6 +694,7 @@
     (assert (= :medium (bucket-for 6)))
     (assert (= :large (bucket-for 9)))
     (verification-self-test!)
+    (root-marker-self-test!)
     (println "generate_tree self-test: ok")
     0))
 
@@ -545,6 +703,13 @@
     (if self-test
       (System/exit (self-test!))
       (do
+        (try
+          (ensure-root-marker! root)
+          (catch clojure.lang.ExceptionInfo e
+            (binding [*out* *err*]
+              (println "REFUSED:" (.getMessage e))
+              (println (pr-str (ex-data e))))
+            (System/exit 2)))
         (doseq [[profile n] (into (vec (for [n (sort scales)] [:default n]))
                                   profile-arms)]
           (let [t0 (System/currentTimeMillis)

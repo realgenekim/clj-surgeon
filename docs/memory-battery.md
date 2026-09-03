@@ -34,6 +34,23 @@ Knobs, all optional:
 | `MEMBAT_REPS` | `5` | reps per (op, N); rep 1 is `fresh`, the rest aggregate into `warm` |
 | `MEMBAT_SCALES` | `100,1000,10000` | default-corpus tree sizes (the adversarial arms are fixed) |
 | `MEMBAT_OP_TIMEOUT_MS` | `600000` | if one fresh rep exceeds this, its warm reps and every larger N for that operation are skipped |
+| `MEMBAT_REFERENCE` | `require` | `require` refuses (typed, exit 2) rather than rebuild a stale/missing reference as a side effect; `auto` restores the old rebuild-on-stale behavior — see below |
+| `MEMBAT_ALLOW_ANY_ROOT` | unset | set to `1` to let `MEMBAT_ROOT` resolve outside `/home/forge/tmp` — see below |
+
+`MEMBAT_ROOT` is guarded, not just a path: a **fresh** root is created and
+marked (a `.membat-root` file) by the battery itself, so a root that already
+exists **without** that marker is refused (`:membat-root-unmarked`) rather
+than written into — it might be `$HOME`, a real repository, or another tool's
+directory, and the battery has no way to tell those apart from its own corpus.
+The root's canonical path must also resolve inside `/home/forge/tmp` unless
+`MEMBAT_ALLOW_ANY_ROOT=1` (`:membat-root-outside-allowed` otherwise).
+
+By default (`MEMBAT_REFERENCE=require`), `make memory-battery` never launches
+the 4 GiB reference JVM as a side effect: a stale or missing reference refuses
+with a typed `:membat-reference-required` line naming the remedy (`make
+memory-battery-reference`), so that minutes-long, 4 GiB build only ever starts
+from an explicit invocation. Set `MEMBAT_REFERENCE=auto` to restore the old
+behavior of rebuilding it automatically.
 
 Sub-targets, if you want them separately:
 
@@ -72,6 +89,38 @@ the reference cannot be rebuilt, or when the battery is run directly.
 This matters because `MEMBAT_ROOT` defaults to a path **shared between
 worktrees**: before attestation, a `reference-hashes.edn` written from another
 branch over a different corpus was accepted simply because the file existed.
+
+### The reference is anchored, not merely attested — and this is not a signature
+
+Attestation says WHAT the reference measured; it does not say the reference's
+own bytes are the ones `memory-battery-reference` actually wrote.
+Attestation-only had a hole: a hand-written `reference-hashes.edn` carrying
+today's correct `:attestation` fields but a forged `:hashes` (or an extra key
+no operation produces) passed `memory-battery-attest` cleanly — every field
+attestation compares matched, and nothing looked at `:hashes` at all.
+
+So `memory-battery-reference` also writes a sidecar,
+`reference-hashes.edn.sha256`, holding the sha256 of the reference document's
+canonical bytes (every map sorted by key, then `pr-str`, so re-pretty-printing
+the same content in a different key order still anchors — only an actual
+value change does not). `memory-battery-attest` and the battery recompute that
+hash from the reference on disk and refuse `:reference-unanchored` when the
+sidecar is missing or does not match, and separately refuse
+`:reference-ops-mismatch` when `:hashes` names anything other than exactly the
+current ops catalogue — no extra key, none missing.
+
+**Honest boundary: this is a cache-staleness check, not a signature.** The
+sidecar is written by the same process, to the same directory, with the same
+write access as the reference file itself. Anyone who can hand-edit
+`reference-hashes.edn` can recompute and hand-write a matching
+`reference-hashes.edn.sha256` right alongside it — there is no secret, no
+asymmetric key, nothing an attacker lacks that a legitimate writer has. What
+it DOES catch: a reference that was correct when written and has since been
+partially hand-edited (the common real failure — someone patches one hash by
+hand, or a merge/copy leaves the sidecar behind), because editing the
+reference alone, without also recomputing and rewriting the sidecar, leaves
+the sidecar naming the OLD bytes' hash. It does not catch a deliberate forger
+willing to edit both files together.
 
 To force a fresh reference by hand, delete `$MEMBAT_ROOT/reference-hashes.edn`
 or run `make memory-battery-reference`.
@@ -336,7 +385,12 @@ manifest's own digest (which covers file *contents*, not just paths and sizes)
 against the bytes on disk. Bad or missing bytes regenerate the tree; unexpected
 files **refuse** with exit 2, because regeneration would not remove them and
 deleting files under `MEMBAT_ROOT` on the corpus's own say-so is worse than
-stopping.
+stopping. So do two other substitutions at an expected path: a **symlink**
+(`:symlink-at-expected-path`) — existence is checked with `NOFOLLOW_LINKS`, so
+a symlink to an out-of-tree copy with byte-identical content is refused rather
+than reported verified — and a **directory** (`:directory-at-expected-path`),
+typed and refused before any write instead of throwing an untyped I/O
+exception mid-regeneration.
 
 Verification costs about 3 s for all three trees. That is the price of a table
 that cannot print `N=10,000` over a corpus of 9,999 files: the previous no-op
