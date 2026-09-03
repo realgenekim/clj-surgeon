@@ -1193,6 +1193,9 @@
   {[:unknown-fields :present]
    {:mcp {:nope 1} :cli {:format :edn}}
 
+   [:dir :type]
+   {:cli {:dir ""}}
+
    [:doors :container-type]
    {:mcp {:doors "conj-once"} :cli {:doors [1]}}
 
@@ -1245,14 +1248,26 @@
     (let [key [(:field rule) (:violation rule)]
           probe (get shape-rule-probes key)]
 
-      (testing (str "the tool refuses " key " as the table says")
-        (let [result (run (:mcp probe))]
-          (is (false? (:ok result))
-              (str key " was accepted by the tool: " (pr-str result)))
-          (is (= (name (:mcp rule)) (published-mcp-name result))
-              (str key ": the tool published "
-                   (pr-str (published-mcp-name result))
-                   ", the table says " (pr-str (:mcp rule))))))
+      (if (keyword? (:mcp rule))
+        (testing (str "the tool refuses " key " as the table says")
+          (let [result (run (:mcp probe))]
+            (is (false? (:ok result))
+                (str key " was accepted by the tool: " (pr-str result)))
+            (is (= (name (:mcp rule)) (published-mcp-name result))
+                (str key ": the tool published "
+                     (pr-str (published-mcp-name result))
+                     ", the table says " (pr-str (:mcp rule))))))
+
+        (testing (str key " is closed at the tool, not merely unimplemented")
+          (is (string? (:inexpressible (:mcp rule)))
+              (str key ": the MCP column is neither a published name nor a "
+                   "stated reason the violation cannot arise"))
+          (is (not (str/blank? (:inexpressible (:mcp rule)))))
+          (is (nil? (census/shape-name :mcp (:field rule) (:violation rule)))
+              (str key ": the table both closes the row and names it"))
+          (is (nil? (:mcp probe))
+              (str key ": the row says the tool cannot express this "
+                   "violation, and the probes contain an MCP spelling of it"))))
 
       (if (keyword? (:cli rule))
         (testing (str "the CLI refuses " key " as the table says")

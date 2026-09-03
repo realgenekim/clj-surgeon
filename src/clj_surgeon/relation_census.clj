@@ -278,6 +278,12 @@
       :mcp {:entrance :mcp
             :params params
             :unknown (unknown (into mcp-census-fields mcp-routing-fields))
+            ;; The tool has no `:dir`. Its anchor is `workspace_root`, a
+            ;; ROUTING field this pass deliberately does not validate: checking
+            ;; it would mean resolving it, which is the filesystem work this
+            ;; pass runs before. So the `:dir` row is absent here, and the
+            ;; table's `:mcp` column says so rather than leaving it unstated.
+            :dir {:present? false}
             :doors {:present? (some? (:doors params))
                     :value (:doors params)
                     :entries (:doors params)}
@@ -291,6 +297,8 @@
              {:entrance :cli
               :params params
               :unknown (unknown (into cli-census-fields cli-dispatch-fields))
+              :dir {:present? (contains? params :dir)
+                    :value (:dir params)}
               :doors {:present? (some? doors)
                       :value doors
                       :entries (when (string? doors) (cli-door-names doors))}
@@ -336,6 +344,46 @@
                 {:accepted (vec (sort (map #(str ":" (name %))
                                            cli-census-fields)))})
     :cli-fix :none}
+
+   ;; The CLI's ANCHOR, and it is checked ahead of `doors`, `files` and
+   ;; `threads` for a reason that is not alphabetical: every refusal below
+   ;; builds its continuation from this value (`cli-anchor`), so a request
+   ;; whose anchor is unusable cannot produce a faithful continuation for any
+   ;; later row. Sol's round-eleven item 8: `:dir [1]` returned a generic
+   ;; `:invalid-arguments` from an `as-file` coercion three frames down, and
+   ;; `:dir ""` was worse than untyped — it stat'ed the config ancestors,
+   ;; SCANNED THE CWD, and reported success about whatever directory the
+   ;; process happened to be standing in.
+   {:field :dir
+    :violation :type
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:dir req)]
+                   (or (not present?)
+                       (and (string? value) (not (str/blank? value))))))
+    :mcp {:inexpressible
+          (str "the tool has no :dir; its anchor is workspace_root, a ROUTING "
+               "field this pass deliberately does not validate, because "
+               "checking it would mean resolving it — the filesystem work "
+               "this pass runs before. workspace/resolve-request owns it, "
+               "and refuses it as invalid-workspace-root")}
+    :cli :dir-not-a-string
+    :cli-message (fn [req]
+                   (str ":dir must be a non-blank path (got "
+                        (pr-str (:value (:dir req))) ")"))
+    :cli-data (fn [req] {:value (:value (:dir req))})
+    ;; No continuation exists for this row, and that is the honest answer.
+    ;; The anchor is the one thing a CLI continuation is built OUT OF, so a
+    ;; request whose anchor is unusable has no narrower call to compute: the
+    ;; only command that could be offered would anchor on the cwd, which is
+    ;; the silent retarget MCP-OP-CENSUS-014 forbids and precisely the
+    ;; accident `:dir ""` was already committing.
+    :cli-fix :uncomputable
+    :cli-remedy (fn [req]
+                  (str ":dir " (pr-str (:value (:dir req)))
+                       " names no workspace, and a continuation is built out "
+                       "of the workspace the caller named, so no narrower "
+                       "command can be computed: retry with :dir naming a "
+                       "directory, or name one source with :file."))}
 
    {:field :doors
     :violation :container-type
@@ -548,18 +596,37 @@
              :absolute absolute}
       (not= given absolute) (assoc :resolved-against cwd))))
 
-(defn- cli-next-command
-  "The continuation one CLI shape refusal hands back, or nil when it does not
-   fit the shared continuation bound."
+(defn cli-next-command
+  "The continuation one CLI refusal hands back, or nil when there is none.
+
+   THE ONE PLACE a CLI continuation is built. Sol's round-eleven item 2,
+   blocking: round ten routed the SHAPE refusals through this function and
+   left the POST-SCAN ones spelling their own command, so an undefined door
+   discovered after the scan still handed back the literal
+   `:dir . :doors …`. Sol replayed that from another cwd and the census
+   answered about the client fixture — the same silent retarget the shape
+   refusals had just been fixed for, from a site the fix never reached. A
+   rule that lives in one branch is a rule the other branches break, so this
+   function is public and every refusal site calls it.
+
+   `fix` names the narrowing the refusal suggests: `:doors` and `:threads`
+   append the argument the caller must correct, `:none` narrows nothing but
+   still anchors, and `:uncomputable` says there is no continuation to
+   compute at all — that anchor was itself the thing refused.
+
+   Returns nil when there is no continuation OR when the rendered command
+   would exceed `max-next-call-bytes`; the caller publishes a remedy instead.
+   A null continuation is not a smaller promise than a real one."
   [anchor fix]
-  (let [command (str "clj-surgeon :op :relation-census "
-                     (if (= :file (:kind anchor)) ":file " ":dir ")
-                     (:absolute anchor)
-                     (case fix
-                       :doors (str " :doors " @known-door-list)
-                       :threads " :threads 8"
-                       ""))]
-    (when (<= (count command) max-next-call-bytes) command)))
+  (when (and anchor (not= :uncomputable fix))
+    (let [command (str "clj-surgeon :op :relation-census "
+                       (if (= :file (:kind anchor)) ":file " ":dir ")
+                       (:absolute anchor)
+                       (case fix
+                         :doors (str " :doors " @known-door-list)
+                         :threads " :threads 8"
+                         ""))]
+      (when (<= (count command) max-next-call-bytes) command))))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-016
@@ -604,7 +671,8 @@
   (let [req (normalise-request :cli params)
         anchor (cli-anchor params)]
     (reduce
-      (fn [_ {:keys [predicate cli cli-message cli-data cli-fix] :as _rule}]
+      (fn [_ {:keys [predicate cli cli-message cli-data cli-fix cli-remedy]
+              :as _rule}]
         (if (or (not (keyword? cli)) (predicate req))
           nil
           (reduced
@@ -617,10 +685,12 @@
               (if-let [command (cli-next-command anchor cli-fix)]
                 {:next-command command}
                 {:remedy
-                 (str "The workspace this request names is too long to carry "
-                      "into a continuation under " max-next-call-bytes
-                      " bytes, so no narrower command can be computed: run "
-                      "the census from a shorter path.")})))))
+                 (if cli-remedy
+                   (cli-remedy req)
+                   (str "The workspace this request names is too long to "
+                        "carry into a continuation under " max-next-call-bytes
+                        " bytes, so no narrower command can be computed: run "
+                        "the census from a shorter path."))})))))
       nil
       request-shape-rules)))
 
