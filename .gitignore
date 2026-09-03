@@ -32,3 +32,7 @@ cclsp.json
 .beads-credential-key
 .beads/proxieddb/
 .mcp.json
+
+# Machine-local classpath cache: it records absolute paths from the machine
+# that built it, so it is never portable and is never committed.
+.cpcache/

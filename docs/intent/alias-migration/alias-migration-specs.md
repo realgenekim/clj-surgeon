@@ -74,3 +74,7 @@ requirement.
 - [x] **MCP-OP-ALIAS-033**: When a qualified reference appears inside a metadata map, clj-surgeon shall migrate it, because metadata values are evaluated code; a string inside that map shall remain a string.
 - [x] **MCP-OP-ALIAS-034**: When a lib-only migration completes, its receipt shall carry the count of files naming the old lib as a string literal, which the verb does not rewrite because such strings are assertions about the codebase or data rather than code references.
 - [x] **MCP-OP-ALIAS-035**: When a lib-only migration runs, clj-surgeon shall treat a quoted fully-qualified symbol `'from.lib/x` as a site and rewrite it to `'to.lib/x`, including in a file that never requires the lib, because retiring the namespace otherwise breaks that reference lazily at call time with no compile error; a quoted alias-qualified symbol shall remain a typed refusal.
+
+# #Repository Hygiene
+
+- [x] **MCP-OP-ALIAS-036**: The clj-surgeon repository shall track no path under `.cpcache/` and shall carry a gitignore rule covering that directory, because a classpath cache records absolute paths belonging to the machine that produced it and is never portable.
