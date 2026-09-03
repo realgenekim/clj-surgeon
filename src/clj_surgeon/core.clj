@@ -594,23 +594,39 @@
        :next-command "clj-surgeon :op :relation-census :file <a source under the byte cap>"}
 
       ;; The same ceiling semantics as the MCP entrance: a tree the census may
-      ;; not finish is refused with nothing read, never truncated into success.
+      ;; not finish is refused with nothing read, never truncated into success,
+      ;; and the continuation is COMPUTED from the walk's own per-directory
+      ;; aggregates rather than described in prose the caller cannot run.
       (:exceeded? @scan)
-      {:ok false
-       :error-type :too-many-candidate-files
-       :error (str "This directory holds more than "
-                   relation-census/max-scanned-files
-                   " candidate Clojure sources (" (:observed @scan)
-                   " seen before the walk stopped). The census reads at most "
-                   relation-census/max-scanned-files
-                   " and will not report a truncated tree as a complete census")
-       :maximum relation-census/max-scanned-files
-       :fits relation-census/max-scanned-files
-       :observed (:observed @scan)
-       :observed-at-least true
-       :files-read 0
-       :read-complete false
-       :next-command "clj-surgeon :op :relation-census :dir <a narrower subtree>"}
+      (let [discovered (:discovered @scan)
+            narrower (census-discovery/narrowing-subtree discovered)
+            candidate (when narrower
+                        (str "clj-surgeon :op :relation-census :dir "
+                             (:root discovered) "/" narrower))
+            next-command (when (and candidate
+                                    (<= (count candidate)
+                                        relation-census/max-next-call-bytes))
+                           candidate)]
+        {:ok false
+         :error-type :too-many-candidate-files
+         :error (str "This directory holds more than "
+                     relation-census/max-scanned-files
+                     " candidate Clojure sources (" (:observed @scan)
+                     " seen before the walk stopped). The census reads at most "
+                     relation-census/max-scanned-files
+                     " and will not report a truncated tree as a complete census")
+         :maximum relation-census/max-scanned-files
+         :fits relation-census/max-scanned-files
+         :observed (:observed @scan)
+         :observed-at-least true
+         :files-read 0
+         :read-complete false
+         :next-command next-command
+         :remedy (when-not next-command
+                   (str "The walk stopped at the ceiling, so every count it "
+                        "observed is a lower bound and no subtree it finished "
+                        "walking is known to fit; point :dir at a directory you "
+                        "know is smaller, or census one :file at a time."))})
 
       :else
       (let [inputs (:inputs @scan)

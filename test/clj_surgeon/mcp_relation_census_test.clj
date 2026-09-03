@@ -395,7 +395,16 @@
           (is (nil? (:counts result)))
           (is (nil? (:by_file result)))
           (is (= "relation_census" (get-in result [:next_call :tool])))
-          (is (seq (get-in result [:next_call :files])))))
+          ;; This assertion used to require a non-empty `files`, which the
+          ;; refusal satisfied with the literal string
+          ;; "<at most 4000 named sources under this root>" — a caption in an
+          ;; argument position. The promise is now a narrowed root the caller
+          ;; can replay, so the caption must be gone.
+          (is (nil? (get-in result [:next_call :files]))
+              "the continuation still carries a placeholder file list")
+          (is (str/starts-with? (str (get-in result [:next_call :workspace_root]))
+                                (str (.getCanonicalPath root) "/"))
+              "the continuation hands back the root that was just refused")))
       (finally (delete-tree! root)))))
 
 (defn- padded-source
@@ -989,7 +998,7 @@
                            :partial-dirs #{"" "src" "src/b"}}))
             "a partially walked count is a lower bound, not a fit"))
 
-      (testing "a subtree at the ceiling does not fit under it"
+      (testing "a subtree over the ceiling never wins"
         (is (nil? (choose {:subtree-counts {"" 4001 "src" 4001
                                             "src/a" 4001}
                            :partial-dirs #{"" "src"}})))))))

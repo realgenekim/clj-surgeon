@@ -29,7 +29,8 @@
    - a source above `max-source-bytes` is collected BY NAME instead of read,
      so the receipt can say what it did not look at."
   (:require
-   [clj-surgeon.relation-census :as census])
+   [clj-surgeon.relation-census :as census]
+   [clojure.string :as str])
   (:import
    (java.io File)
    (java.nio.file Files LinkOption Path Paths)))
@@ -71,6 +72,21 @@
   [^Path root ^Path candidate]
   (and (some? candidate) (.startsWith candidate root)))
 
+(defn- child-relative
+  [^String parent ^String name]
+  (if (str/blank? parent) name (str parent "/" name)))
+
+(defn- ancestor-chain
+  "Every directory that contains this one, this one included, root first.
+   The root is the empty string."
+  [^String rel]
+  (if (str/blank? rel)
+    [""]
+    (reduce (fn [chain segment]
+              (conj chain (child-relative (peek chain) segment)))
+            [""]
+            (str/split rel #"/"))))
+
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-028
@@ -86,7 +102,9 @@
      :skipped-outside-root n
      :duplicates n
      :exceeded? bool
-     :observed n}`
+     :observed n
+     :subtree-counts {project-relative directory -> candidates beneath it}
+     :partial-dirs #{directories whose counts are lower bounds}}`
 
    `:observed` is the candidate count the walk had seen when it stopped; when
    `:exceeded?` it is a LOWER BOUND, because the walk stops rather than
@@ -103,9 +121,11 @@
           skipped (volatile! 0)
           duplicates (volatile! 0)
           exceeded (volatile! false)
+          per-directory (volatile! {})
+          terminated-in (volatile! nil)
           relative (fn [^Path path] (.toString (.relativize root path)))
           visit-file
-          (fn [^File file]
+          (fn [^File file ^String rel-dir]
             (let [^Path real (real-path-of file)
                   escapes? (not (inside-root? root real))]
               (cond
@@ -127,33 +147,47 @@
                 (do (.add oversized (relative real)) :continue)
 
                 (>= (.size found) census/max-scanned-files)
-                (do (vreset! exceeded true) :terminate)
+                (do (vreset! exceeded true)
+                    (vreset! terminated-in rel-dir)
+                    :terminate)
 
-                :else (do (.add found (relative real)) :continue))))
+                :else (do (.add found (relative real))
+                          (vswap! per-directory update rel-dir (fnil inc 0))
+                          :continue))))
           walk
-          (fn walk [^File dir]
+          (fn walk [^File dir ^String rel-dir]
             (loop [entries (sort-by #(.getName ^File %)
                                     (or (seq (.listFiles dir)) []))]
               (if-let [^File entry (first entries)]
-                (let [outcome
+                (let [name (.getName entry)
+                      outcome
                       (if (real-directory? entry)
-                        (if (contains? census/skipped-directories
-                                       (.getName entry))
+                        (if (contains? census/skipped-directories name)
                           :continue
-                          (walk entry))
-                        (visit-file entry))]
+                          (walk entry (child-relative rel-dir name)))
+                        (visit-file entry rel-dir))]
                   (if (= :terminate outcome)
                     :terminate
                     (recur (rest entries))))
                 :continue)))]
-      (walk (.toFile root))
+      (walk (.toFile root) "")
       {:root (.toString root)
        :files (vec (sort found))
        :oversized (vec (sort oversized))
        :skipped-outside-root @skipped
        :duplicates @duplicates
        :exceeded? @exceeded
-       :observed (cond-> (.size found) @exceeded inc)})
+       :observed (cond-> (.size found) @exceeded inc)
+       :subtree-counts (reduce (fn [totals [rel-dir n]]
+                                 (reduce (fn [totals dir]
+                                           (update totals dir (fnil + 0) n))
+                                         totals
+                                         (ancestor-chain rel-dir)))
+                               {}
+                               @per-directory)
+       :partial-dirs (if @exceeded
+                       (set (ancestor-chain @terminated-in))
+                       #{})})
     {:root nil
      :unresolved-root? true
      :files []
@@ -161,4 +195,32 @@
      :skipped-outside-root 0
      :duplicates 0
      :exceeded? false
-     :observed 0}))
+     :observed 0
+     :subtree-counts {}
+     :partial-dirs #{}}))
+
+;; @spec MCP-OP-CENSUS-027
+(defn narrowing-subtree
+  "The project-relative subtree a caller should retry, or nil.
+
+   The walk STOPS at one candidate past the ceiling, so the only counts it
+   knows exactly are the ones for directories it FINISHED: every ancestor of
+   the file it stopped on holds a lower bound, and offering one of those as a
+   narrowing would hand back a call that refuses again. Those are excluded,
+   and of what remains the LARGEST subtree that fits under the ceiling wins,
+   ties broken deepest first and then lexicographically — the deepest of two
+   equal subtrees is the one that excludes the most, and the name is the
+   tiebreak of last resort so the answer is stable across runs.
+
+   nil means the walk learned nothing it can promise: the caller is told that,
+   and told why, rather than handed a call that cannot work."
+  [{:keys [subtree-counts partial-dirs]}]
+  (->> subtree-counts
+       (remove (fn [[dir n]]
+                 (or (str/blank? dir)
+                     (contains? partial-dirs dir)
+                     (not (pos? n))
+                     (> n census/max-scanned-files))))
+       (sort-by (fn [[dir n]]
+                  [(- n) (- (count (str/split dir #"/"))) dir]))
+       ffirst))

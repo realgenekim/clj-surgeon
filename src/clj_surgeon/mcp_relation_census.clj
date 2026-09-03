@@ -434,25 +434,45 @@
 
    The caller gets the ceiling, the count that fits, the count the walk had
    observed when it stopped (a lower bound, because the walk stops rather than
-   enumerating the rest), and a next_call that narrows the scan."
+   enumerating the rest), and a next_call COMPUTED from the walk's own
+   per-directory aggregates — the largest subtree the walk finished that fits
+   under the ceiling. A placeholder in an argument position is not a
+   continuation; when nothing is known to fit, the caller is told so and told
+   why, and gets no next_call at all."
   [discovered canonical]
-  (refusal :too-many-candidate-files
-           (str "This workspace holds more than " census/max-scanned-files
-                " candidate Clojure sources (" (:observed discovered)
-                " seen before the walk stopped). The census reads at most "
-                census/max-scanned-files
-                " and will not report a truncated tree as a complete census: "
-                "name the sources, or point workspace_root at a narrower "
-                "subtree.")
-           {:tool "relation_census"
-            :workspace_root canonical
-            :files [(str "<at most " census/max-scanned-files
-                         " named sources under this root>")]}
-           {:maximum census/max-scanned-files
-            :fits census/max-scanned-files
-            :observed (:observed discovered)
-            :observed_at_least true
-            :files_read 0}))
+  (let [narrower (discovery/narrowing-subtree discovered)
+        candidate (when narrower
+                    {:tool "relation_census"
+                     :workspace_root (str canonical "/" narrower)})
+        next-call (when (and candidate
+                             (<= (count (json/generate-string candidate))
+                                 census/max-next-call-bytes))
+                    candidate)]
+    (refusal :too-many-candidate-files
+             (str "This workspace holds more than " census/max-scanned-files
+                  " candidate Clojure sources (" (:observed discovered)
+                  " seen before the walk stopped). The census reads at most "
+                  census/max-scanned-files
+                  " and will not report a truncated tree as a complete census: "
+                  (if next-call
+                    (str "retry under " narrower ", which holds "
+                         (get-in discovered [:subtree-counts narrower])
+                         ".")
+                    "name the sources, or point workspace_root at a subtree you know is smaller."))
+             next-call
+             (cond-> {:maximum census/max-scanned-files
+                      :fits census/max-scanned-files
+                      :observed (:observed discovered)
+                      :observed_at_least true
+                      :files_read 0}
+               (not next-call)
+               (assoc :remedy
+                      (str "The walk stopped at the ceiling, so every count it "
+                           "observed is a lower bound and no subtree it finished "
+                           "walking is known to fit; name at most "
+                           census/max-requested-files
+                           " sources with files, or point workspace_root at a "
+                           "directory you know is smaller."))))))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn- door-refusal
