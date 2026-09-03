@@ -281,3 +281,119 @@
              (entry-files (core/run-ls-tree {:dir dir :format :edn
                                              :max-results 7})))
           "a bounded result is the PREFIX of the unbounded one, not a sample"))))
+
+;; ============================================================
+;; Cursor INTEGRITY — Sol's executed counterexamples (2026-09-03)
+;;
+;; The review that refused this branch found the cursor was bound to a
+;; STAT-derived digest: `<path>\t<size>\t<mtime>` per candidate. Three things
+;; follow from that, and all three are silent-wrong-result failures rather
+;; than refusals, which is why they are BLOCKERs and not fixes:
+;;
+;;   1. a file whose bytes change while its path, size and mtime are preserved
+;;      pages as unchanged, so page 2 serves content from a tree page 1 never
+;;      saw;
+;;   2. a cursor minted against one root is accepted against a DIFFERENT root
+;;      whose files happen to carry the same stats;
+;;   3. the offset half of the cursor is neither authenticated nor
+;;      range-checked, so an edited offset past the end returns an empty
+;;      vector with no receipt — presented as a complete result.
+;;
+;; The remedy these witnesses gate is PINNING: the first page writes an
+;; immutable manifest snapshot (paths + per-file CONTENT digests) into the
+;; workspace state root, and later pages are served from that snapshot.
+;; ============================================================
+
+(defn- mtime [path] (.lastModified (java.io.File. (str path))))
+(defn- set-mtime! [path ms] (.setLastModified (java.io.File. (str path)) (long ms)))
+
+(defn- swap-bytes-preserving-stat!
+  "Replace `path`'s bytes with `content` and restore its recorded mtime.
+
+   `tiny-source` renders the same number of bytes for every single-digit
+   index, so writing source `j` over file `i` changes the bytes while leaving
+   path, size and mtime identical — the exact shape a stat-derived digest
+   cannot see."
+  [path content]
+  (let [before (mtime path)
+        size-before (.length (java.io.File. (str path)))]
+    (spit path content)
+    (set-mtime! path before)
+    (assert (= size-before (.length (java.io.File. (str path))))
+            "the swap must preserve size, or it is not this counterexample")
+    (assert (= before (mtime path))
+            "the swap must preserve mtime, or it is not this counterexample")))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-cursor-refuses-when-a-pinned-file-s-bytes-changed-under-a-preserved-stat
+  (with-project [dir fixture-count "ls-tree-budget-byteswap"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (get-in (receipt page-1) [:next_call :cursor])
+          victim (str dir "/src/fixt/mod007.clj")]
+      (is (some? cursor) "page 1 issues a cursor")
+      (swap-bytes-preserving-stat! victim (tiny-source 8))
+      (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                 :cursor cursor})]
+        (is (map? r)
+            "a page whose pinned content no longer matches refuses; it does not
+             serve records from a tree page 1 never saw")
+        (is (= :stale-result-cursor (:error-type r)))
+        (is (false? (:complete r)))
+        (is (true? (:source-unchanged r)))
+        (is (str/includes? (str (:error r) (pr-str (:limit r))) "mod007.clj")
+            "the refusal NAMES the file whose bytes moved")))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-cursor-minted-against-another-root-is-refused
+  (let [a (make-project! fixture-count "ls-tree-budget-root-a")
+        b (make-project! fixture-count "ls-tree-budget-root-b")]
+    (try
+      ;; Make the two trees stat-identical: same relative paths, same sizes,
+      ;; and now the same mtimes. A stat-derived manifest digest cannot tell
+      ;; them apart; a pinned snapshot can, because it lives under the root it
+      ;; was taken from.
+      (doseq [i (range fixture-count)]
+        (let [rel (format "/src/fixt/mod%03d.clj" i)]
+          (set-mtime! (str b rel) (mtime (str a rel)))))
+      (set-mtime! (str b "/deps.edn") (mtime (str a "/deps.edn")))
+      (let [page-1 (core/run-ls-tree {:dir a :format :edn :max-results 5})
+            cursor (get-in (receipt page-1) [:next_call :cursor])
+            r (core/run-ls-tree {:dir b :format :edn :max-results 5
+                                 :cursor cursor})]
+        (is (map? r)
+            "a cursor is not portable between roots, however alike their stats")
+        (is (contains? #{:unknown-result-cursor :stale-result-cursor}
+                       (:error-type r))
+            (str "expected a typed cursor refusal, got " (pr-str (:error-type r))))
+        (is (false? (:complete r))))
+      (finally (fs/delete-tree a) (fs/delete-tree b)))))
+
+(defn- edit-offset
+  "Rewrite the OFFSET field of a cursor token, whatever its shape: the
+   stat-digest form this witness was written against is `<offset>:<digest>`,
+   the pinned form that replaces it is `<cursor-id>:<offset>:<mac>`. Editing by
+   FIELD rather than by regex keeps the witness meaningful across the change it
+   gates."
+  [cursor n]
+  (let [parts (str/split cursor #":")]
+    (str/join ":" (case (count parts)
+                    2 (assoc parts 0 (str n))
+                    3 (assoc parts 1 (str n))
+                    parts))))
+
+;; @spec MCP-OP-MEM-003
+(deftest an-edited-offset-never-yields-an-empty-result-presented-as-complete
+  (with-project [dir 3 "ls-tree-budget-forged"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 2})
+          cursor (get-in (receipt page-1) [:next_call :cursor])
+          forged (edit-offset cursor 99)
+          r (core/run-ls-tree {:dir dir :format :edn :max-results 2
+                               :cursor forged})]
+      (is (not= cursor forged) "the witness actually edited the offset")
+      (is (map? r)
+          "an offset this server did not mint is refused; it never returns an
+           empty vector that a caller would read as a complete result")
+      (is (contains? #{:invalid-result-cursor :result-cursor-out-of-range}
+                     (:error-type r))
+          (str "expected a typed refusal, got " (pr-str r)))
+      (is (false? (:complete r))))))
