@@ -1387,7 +1387,11 @@
       (try
         (create-lock-if-absent! dir (pr-str {:txid "VICTIM-0" :pid pid :boot-id "b"}))
         (.start hammer)
-        (dotimes [i 2000]
+        ;; enough iterations to land a documented number of third-party
+        ;; claims INSIDE the restore gap, with a hard cap so a loaded box
+        ;; cannot turn a race witness into an unbounded loop
+        (loop [i 0]
+         (when (and (< i 20000) (< (long @checked) 50))
           (when-not (.exists lock)
             (create-lock-if-absent! dir (pr-str {:txid (str "VICTIM-" i)
                                                  :pid pid :boot-id "b"})))
@@ -1405,11 +1409,12 @@
               (when-not (contains? on-disk content) (swap! clobbered inc)))
             ;; the tombstones are accounted for above; keep the directory small
             (doseq [^java.io.File f (.listFiles (io/file dir))]
-              (when (.startsWith (.getName f) "LOCK.broken.") (.delete f)))))
+              (when (.startsWith (.getName f) "LOCK.broken.") (.delete f))))
+          (recur (inc i))))
         (reset! running false)
         (.join hammer 5000)
 
-        (is (pos? @checked)
+        (is (>= (long @checked) 50)
             (str "the storm must actually land third-party claims inside the "
                  "restore gap, or it proves nothing: checked=" @checked))
         (is (zero? @clobbered)
