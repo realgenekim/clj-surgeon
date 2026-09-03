@@ -42,6 +42,13 @@ order of `docs/gene-peek-report.md` (the template; read it first, every time):
 
 ## Rules
 
+- **The four things Gene reads for come first and are never blank (Gene, 2026-09-03: "Gene
+  reports require perf improvements vs native, top wins and losses, learnings, and what's
+  next"):** §2/§3 vs-native tables, §7 best/worst + a "top wins / top losses" pair, §6 learnings
+  each with its ratchet, §8 board as ONE next action per lane. If no vs-native measurement was
+  taken in the period, the §2 table's first row is `NONE MEASURED — <why>` and Surgeon-vs-
+  Surgeon-before figures go in a separately titled table, never in the vs-native one.
+
 - Count-first; headroom never consumption; every ratio names n and its instrument.
 - A claim without a receipt path is not in the report.
 - Quote Gene verbatim where his words are the source of a decision.
