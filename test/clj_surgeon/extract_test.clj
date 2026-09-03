@@ -2510,3 +2510,82 @@
           (is (= before-real (slurp real)))
           (is (true? (java.nio.file.Files/isSymbolicLink (.toPath link)))))
         (finally (delete-recursive! root))))))
+
+(defn- chmod!
+  [file mode]
+  (java.nio.file.Files/setPosixFilePermissions
+    (.toPath (io/file file))
+    (java.nio.file.attribute.PosixFilePermissions/fromString mode)))
+
+;; @spec MCP-OP-EXTRACT-039
+;; @spec MCP-OP-EXTRACT-040
+(deftest an-unreadable-directory-is-named-and-counted-never-silently-empty
+  (testing "a directory the walk cannot list is a GAP, not an absence:
+            `(or (.listFiles entry) [])` swallowed the null return, so the
+            directory was not descended, not named in :skipped-directories,
+            and :complete still said true"
+    (let [root (create-caller-project!)
+          locked (io/file root "src" "app" "locked")]
+      (try
+        (.mkdirs locked)
+        (spit (io/file locked "deep.clj")
+              (str "(ns app.locked.deep\n"
+                   "  (:require\n"
+                   "   [app.core :as core]))\n\n"
+                   "(defn go [x] (core/moved-two x))\n"))
+        (chmod! locked "---------")
+        (let [src (io/file root "src" "app")
+              result (extract/plan {:file (.getPath (io/file src "core.clj"))
+                                    :forms '[moved-one moved-two]
+                                    :to (.getPath (io/file src "moved.clj"))
+                                    :alias "moved"
+                                    :compile-check false})
+              skipped (get-in result [:discovery :skipped-directories])]
+          (is (some #(and (= :unreadable (:reason %))
+                          (str/includes? (str (:dir %)) "locked"))
+                    skipped)
+              (str "the directory nobody could read must be NAMED with its own "
+                   "non-harmless reason: " (pr-str skipped)))
+          (is (false? (:complete result))
+              (str "a caller in a directory nothing proved the contents of is "
+                   "an unresolved caller, not a complete rewire: "
+                   (pr-str (select-keys result [:complete
+                                                :callers-unresolved]))))
+          (is (some #(and (= :workspace-scan (:file %))
+                          (some (fn [d] (str/includes? (str d) "locked"))
+                                (:directories-not-read %)))
+                    (:callers-unresolved result))
+              (str "and named where the completeness verdict is made: "
+                   (pr-str (:callers-unresolved result)))))
+        (finally
+          (chmod! locked "rwxr-xr-x")
+          (delete-recursive! root)))))
+
+  (testing "and the escape probe answers `true` when it cannot finish, so an
+            unreadable tree behind an escaping link is refused rather than
+            admitted as proven harmless"
+    (let [root (create-caller-project!)
+          outside (java.io.File/createTempFile "extract-outside" "")
+          _ (.delete outside)
+          _ (.mkdirs outside)
+          hidden (io/file outside "hidden")]
+      (try
+        (.mkdirs hidden)
+        (spit (io/file hidden "caller.clj") "(ns outside.caller)\n")
+        (chmod! outside "---------")
+        (symlink! (io/file root "vendor") (.getPath outside))
+        (let [src (io/file root "src" "app")
+              result (extract/execute!
+                       {:file (.getPath (io/file src "core.clj"))
+                        :forms '[moved-one moved-two]
+                        :to (.getPath (io/file src "moved.clj"))
+                        :alias "moved"
+                        :compile-check false})]
+          (is (= :caller-path-outside-root (:error-type result))
+              (str "an escape the probe could not prove harmless is refused, "
+                   "never admitted: "
+                   (pr-str (select-keys result [:error-type :applied])))))
+        (finally
+          (chmod! outside "rwxr-xr-x")
+          (delete-recursive! outside)
+          (delete-recursive! root))))))
