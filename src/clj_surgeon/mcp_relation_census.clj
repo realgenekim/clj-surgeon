@@ -213,6 +213,7 @@
 
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-028
 (defn- candidate-files
   "Project-relative Clojure sources under one canonical root, bounded.
 
@@ -222,12 +223,17 @@
    pruned before they are read rather than filtered out of the result, and the
    file cap terminates the walk rather than truncating it afterwards.
 
+   A discovered source above `max-source-bytes` is never read, and it is never
+   dropped in silence either: it is counted and NAMED, and the census that
+   skipped it does not claim `read_complete`.
+
    Reaching the cap is a REFUSAL, not a result: the walk stops at one candidate
    past the ceiling and reports `:exceeded?` with the count it had seen, so the
    caller is told the tree is larger than the census may read instead of being
    handed a subset dressed as a complete answer."
   [^Path root]
   (let [found (java.util.ArrayList.)
+        oversized (java.util.ArrayList.)
         skipped (atom 0)
         exceeded (atom false)
         visitor
@@ -242,12 +248,14 @@
             (let [^Path path path
                   ^BasicFileAttributes attrs attrs]
               (cond
-                (and (.isRegularFile attrs)
-                     (source-name? path)
-                     (<= (.size attrs) census/max-source-bytes))
+                (and (.isRegularFile attrs) (source-name? path))
                 (cond
                   (escapes-root? root path)
                   (do (swap! skipped inc)
+                      FileVisitResult/CONTINUE)
+
+                  (> (.size attrs) census/max-source-bytes)
+                  (do (.add oversized (str (.relativize root path)))
                       FileVisitResult/CONTINUE)
 
                   (>= (.size found) census/max-scanned-files)
@@ -266,6 +274,7 @@
           (visitFileFailed [_path _error] FileVisitResult/CONTINUE))]
     (Files/walkFileTree root #{} Integer/MAX_VALUE visitor)
     {:files (vec (sort found))
+     :oversized (vec (sort oversized))
      :skipped-outside-root @skipped
      :exceeded? @exceeded
      :observed (cond-> (.size found) @exceeded inc)}))
@@ -404,9 +413,10 @@
     :else "none"))
 
 ;; @spec MCP-OP-CENSUS-013
+;; @spec MCP-OP-CENSUS-028
 (defn- build-receipt
   [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root
-           reserved]}]
+           oversized reserved]}]
   (let [counts (:counts merged)
         sites (:all-sites merged)
         unrecognised (census/unrecognised-summary
@@ -417,7 +427,13 @@
             {:ok true
              :operation "relation-census"
              :census_version census/census-version
-             :read_complete true
+             ;; A census that skipped a source in scope is not complete, and
+             ;; says so in the same receipt that names what it skipped.
+             :read_complete (empty? oversized)
+             :oversized_skipped (when (seq oversized)
+                                  {:count (count oversized)
+                                   :files (vec (take max-listed-files oversized))
+                                   :maximum census/max-source-bytes})
              :files (:files merged)
              :arms (:arms merged)
              :sites (:sites merged)
@@ -573,6 +589,7 @@
                   (build-receipt
                     {:merged planned
                      :reserved (+ receipt-envelope-allowance (count canonical))
+                     :oversized (:oversized discovered)
                      :pool-size pool-size
                      :requested-pool requested-pool
                      :scanned (count scanned)

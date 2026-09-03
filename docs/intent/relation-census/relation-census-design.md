@@ -148,8 +148,10 @@ does and does not do:
 - the walk stops at `max-scanned-files`, and reaching that ceiling is a
   REFUSAL (`too-many-candidate-files`, naming the ceiling, the count that
   fits, the observed lower bound, and a narrowing `next_call`) rather than
-  a truncated scan published as a complete census; a source above
-  `max-source-bytes` is never read;
+  a truncated scan published as a complete census; a discovered source above
+  `max-source-bytes` is never read, and never dropped in silence: it is
+  counted and named in `oversized_skipped`, and that census publishes
+  `read_complete` false;
 - only the sources that define arms are retained, and the receipt carries
   one-line excerpts, never file text.
 
