@@ -47,6 +47,35 @@
    :scale-small-n           1000
    :scale-large-n           10000})
 
+(def ^:private mib (* 1024.0 1024.0))
+
+(defn bytes->mb
+  "Bytes as MiB, rounded to one decimal. Pure, so the runner and the verdict
+  cannot disagree about the conversion."
+  [b]
+  (/ (Math/round (/ (double b) mib 0.1)) 10.0))
+
+;; @spec MCP-OP-MEM-001
+(defn reserved-peak-mb
+  "The ATTRIBUTABLE reserved peak an operation reported, in MiB, or nil.
+
+  Read from the operation's own admission block — `:reserved` (the shape the
+  streaming reader and the transaction journal emit) or `:resources` — and from
+  nowhere else. It is deliberately blind to `:heap-used-peak-mb`: the sampled
+  process-wide peak is a different quantity from a different instrument, and
+  reading it here would make the 192 MiB line unfalsifiable.
+
+  nil means the operation reports no accountant, which the verdict renders as
+  UNMEASURED. Zero is a measurement, not an absence."
+  [result]
+  (when (map? result)
+    (let [block (or (:reserved result) (:resources result))
+          observed (when (map? block)
+                     (or (:heap-reserved-peak-bytes block)
+                         (:reserved-peak-bytes block)))]
+      (when (number? observed)
+        (bytes->mb observed)))))
+
 (def exit-codes
   "Process exit contract for `make memory-battery`."
   {:pass         0

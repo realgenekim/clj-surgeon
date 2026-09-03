@@ -10,8 +10,13 @@ These IDs are stable and must not be reused if a requirement is deleted. Ids
 002-010 and 012-014 are reserved; 006, 007 and 012-014 belong to the
 streaming-kernel builder and are not registered here.
 
-Both requirements below are **active gaps**: no operation on this branch
-satisfies either one. Their witnesses are the battery and its millisecond
+Both requirements below are **active gaps**. As of 2026-09-03 exactly ONE
+operation carries the memory-and-work block MEM-001 asks for — the transaction
+kernel's streaming scope reader, measured by the battery's
+`:journal-scope-stream` arm — so the battery's reserved-peak line is MEASURED
+for that arm and UNMEASURED for every other, which is what an active gap that
+is partly closed must look like. No operation satisfies MEM-001 in full and
+none satisfies MEM-011. Their witnesses are the battery and its millisecond
 verdict test, so removing the battery breaks the contract audit rather than
 turning the promise green by deletion.
 
@@ -75,6 +80,10 @@ MCP-OP-MEM-011:
   cross-N lines are defined at 1,000 and 10,000. A missing 10,000 is UNMEASURED.
 - "No operation reports a reserved peak yet, so that line passes." An
   unobserved line is not a satisfied line.
+- "One arm reports a reserved peak, so the line is measured for the battery."
+  The line is per operation. An arm whose operation has no admission accountant
+  stays UNMEASURED until its verb adopts one; it never inherits another arm's
+  number.
 - "The bounded run produced a result, so output parity holds." Parity is against
   a cached unbounded reference hash; with no reference, parity is UNMEASURED.
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.

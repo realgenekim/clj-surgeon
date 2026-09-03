@@ -213,6 +213,50 @@
           result (battery/verdict {:xmx-mb 512 :cells cells})]
       (is (not (contains? (lines-of result) :reserved-peak-over-budget))))))
 
+;; ------------------------------------------------------------------
+;; Where the reserved peak comes from
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-001
+;; @spec MCP-OP-MEM-011
+(deftest the-reserved-peak-is-read-from-the-operations-own-reservation-block
+  (testing "an operation that reports no reservation block yields nil, and the
+            verdict then reports the line UNMEASURED"
+    (is (nil? (battery/reserved-peak-mb nil)))
+    (is (nil? (battery/reserved-peak-mb {:work {:files-read 10}})))
+    (is (nil? (battery/reserved-peak-mb {:reserved {}}))))
+  (testing "the sampled process-wide peak is never a substitute for it"
+    (is (nil? (battery/reserved-peak-mb {:heap-used-peak-mb 250.0}))
+        "a process-wide sampled number must not be read as an attributable one"))
+  (testing "the accountant's own block is read, under either key"
+    (is (= 28.0 (battery/reserved-peak-mb
+                  {:reserved {:heap-reserved-peak-bytes (* 28 1024 1024)}})))
+    (is (= 28.0 (battery/reserved-peak-mb
+                  {:resources {:heap-reserved-peak-bytes (* 28 1024 1024)}})))
+    (is (= 0.0 (battery/reserved-peak-mb {:reserved {:heap-reserved-peak-bytes 0}}))
+        "zero is a measurement; only absence is UNMEASURED")))
+
+;; @spec MCP-OP-MEM-001
+(deftest a-measured-reserved-peak-stops-the-line-being-unmeasured
+  (testing "the whole point of wiring the accountant into the battery"
+    (let [unmeasured (battery/verdict
+                       {:xmx-mb 512
+                        :cells [(cell :scope-stream 1000 :warm 120.0 50.0
+                                      :reserved-peak nil)
+                                (cell :scope-stream 10000 :warm 120.0 50.0
+                                      :reserved-peak nil)]})
+          measured (battery/verdict
+                     {:xmx-mb 512
+                      :cells [(cell :scope-stream 1000 :warm 120.0 50.0
+                                    :reserved-peak 28.0)
+                              (cell :scope-stream 10000 :warm 120.0 50.0
+                                    :reserved-peak 28.0)]})]
+      (is (contains? (set (map :line (:unmeasured unmeasured)))
+                     :reserved-peak-over-budget))
+      (is (not (contains? (set (map :line (:unmeasured measured)))
+                          :reserved-peak-over-budget))
+          "an arm whose operation reports the block is MEASURED, not assumed"))))
+
 ;; @spec MCP-OP-MEM-001
 (deftest each-op-is-judged-independently
   (let [cells (concat (clean-cells)

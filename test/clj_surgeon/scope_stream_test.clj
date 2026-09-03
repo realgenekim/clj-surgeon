@@ -5,6 +5,7 @@
    unit past it refuses BEFORE the effect the limit bounds - which for this
    reader means before the planner callback ever sees the file."
   (:require
+   [clj-surgeon.memory-battery :as battery]
    [clj-surgeon.scope-stream :as scope]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -212,6 +213,25 @@
              factor, which is what a battery reads instead of UNMEASURED")
         (is (= 4000 (get-in receipt [:reserved :aggregate-bytes]))))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-MEM-001
+;; @spec MCP-OP-MEM-011
+(deftest the-battery-reads-this-receipts-reservation-block
+  (testing "the shape binding. The battery's reserved-peak reader and the
+            kernel's receipt are written in different namespaces by different
+            builds; if they disagree the battery reports UNMEASURED for ever and
+            nothing fails. This witness fails instead."
+    (let [root (temp-root "battery-shape")]
+      (try
+        (write-file! root "src/a.clj" (padded 3000))
+        (let [receipt (scope/stream-scope! root (constantly nil) {:parse-factor 56})
+              observed (battery/reserved-peak-mb receipt)]
+          (is (:ok receipt))
+          (is (some? observed)
+              "the battery must find an attributable reserved peak in this receipt")
+          (is (= (battery/bytes->mb (* 3000 56)) observed)
+              "and it must be the accountant's number, not the sampled peak"))
+        (finally (delete-tree! root))))))
 
 ;; @spec MCP-OP-MEM-020
 (deftest the-walk-refuses-a-matching-symbolic-link-and-never-follows-it
