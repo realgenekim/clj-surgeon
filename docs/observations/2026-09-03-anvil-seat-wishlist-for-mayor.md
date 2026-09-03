@@ -33,6 +33,9 @@ what I need to do from mayor"* / *"Make wishlist for mayor; and I'll drive from 
    crontab lines myself once the scripts and creds exist.
 6. **Port table**: reserve 7906–7910 for forge on Anvil wherever the box's port allocation is kept
    (7888–7895 are all held by other seats).
+   Also: state what 7888 on Anvil runs (which sha, started by whom) and who depends on it (fleet seats, acid
+   arms), so it sits in the table beside the forge range. Gene asked whether to kill it; the answer is no —
+   forge uses 7906+ — unless the table shows nothing depends on it, in which case retiring it is bookkeeping.
 7. **GCP service accounts** (`bridge-cos-sa.json`, `bridge-deployer.json`, `flight-recorder-writer.json`) —
    only needed for marvin-voice-remote deploys/logs and the funnel; not for the Surgeon program; later.
 8. **beads**: bd has no database for either repo on this seat and shared-state `bd init` is yours; either
