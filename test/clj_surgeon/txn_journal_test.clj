@@ -1043,6 +1043,70 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-007
+(deftest a-future-spawned-inside-the-publish-lock-takes-the-lock-itself
+  (testing "Opus round 3, blocker 2: the re-entrancy guard was a DYNAMIC var,
+            and Clojure conveys dynamic bindings to `future`, `send`, `pmap`
+            and every `bound-fn`. The guard therefore said 'some frame on my
+            binding stack took the lock', never 'this thread holds it', so a
+            future spawned inside the lock - the first concurrency primitive an
+            adopting verb reaches for, and the one house rules name for
+            Surgeon's per-file plan phases - inherited the claim and took NO
+            lock at all. Re-entrancy is a property of a THREAD."
+    (let [ws (workspace! "publish-lock-future" 2)
+          path (second (sort (:paths ws)))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))]
+      (try
+        ;; (a) the owning thread still holds it: a future is a different
+        ;;     thread and must queue behind it.
+        (let [done (promise)
+              writer (file-ops/with-publish-lock*
+                       dir
+                       (fn []
+                         (let [spawned (future
+                                         (journal/with-cooperating-writes
+                                           dir
+                                           (fn []
+                                             (file-ops/atomic-write!
+                                               path "(ns f1) (def v :from-future)\n")
+                                             (deliver done true)
+                                             :wrote)))]
+                           (Thread/sleep 400)
+                           (is (not (realized? done))
+                               "a future is a DIFFERENT thread; it may not write
+                                under the owning thread's claim")
+                           spawned)))]
+          (is (= :wrote (deref writer 20000 :timeout))
+              "and it completes once the owning thread lets go")
+          (is (= "(ns f1) (def v :from-future)\n" (bytes-of path))))
+
+        ;; (b) the conveyed claim against a lock ANOTHER JVM holds. This is the
+        ;;     defect in its realisable form: the future carries the binding out
+        ;;     of the owning thread's extent and then writes with no OS lock.
+        (let [gate (promise)
+              spawned (file-ops/with-publish-lock*
+                        dir
+                        (fn []
+                          (future
+                            (deref gate 30000 :timeout)
+                            (journal/with-cooperating-writes
+                              dir
+                              (fn []
+                                (file-ops/atomic-write!
+                                  path "(ns f1) (def v :after-the-child)\n")
+                                :wrote)))))
+              child (hold-publish-lock! ws 2000)
+              started (System/nanoTime)]
+          (deliver gate :go)
+          (is (= :wrote (deref spawned 30000 :timeout)))
+          (let [elapsed-ms (quot (- (System/nanoTime) started) 1000000)]
+            (is (>= elapsed-ms 900)
+                (str "the future must take the publish lock ITSELF and wait for "
+                     "the other process; it returned after " elapsed-ms " ms")))
+          (is (= "(ns f1) (def v :after-the-child)\n" (bytes-of path)))
+          (.waitFor child))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
 ;; @spec MCP-OP-MEM-013
 (deftest a-commit-racing-a-sibling-thread-does-not-strand-the-project-lock
   (testing "the blast radius of blocker 1. The `OverlappingFileLockException`

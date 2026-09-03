@@ -26,12 +26,6 @@
    default and changes nothing."
   nil)
 
-(def ^:dynamic ^:private *publish-lock-held*
-  "The lock directory this thread already holds. `FileChannel/lock` is a
-   per-JVM view of the OS lock, so re-locking the same file inside the lock
-   throws `OverlappingFileLockException` rather than re-entering."
-  nil)
-
 (defn publish-lock-file
   "The workspace's advisory publish lock file."
   ^File [transactions-dir]
@@ -78,14 +72,25 @@
    an exception is not mutual exclusion - it escaped `commit!` before
    `finish!` could release the project lock and stranded the workspace behind
    a LIVE pid no recovery is permitted to break. The per-path `ReentrantLock`
-   is what turns that throw back into a wait."
+   is what turns that throw back into a wait.
+
+   RE-ENTRANCY IS THE MONITOR'S OWN HOLD COUNT, WHICH IS PER THREAD. It used to
+   be a dynamic var, and Clojure CONVEYS dynamic bindings to `future`, `send`,
+   `pmap` and every `bound-fn`: a future spawned inside the lock inherited the
+   claim, carried it out of the owning thread's dynamic extent, and then wrote
+   with no lock at all against a lock another process was holding. A thread
+   either holds this monitor or it does not, and nothing it spawns can inherit
+   that."
   [transactions-dir f]
   (let [^File file (publish-lock-file transactions-dir)
         _ (.mkdirs (.getParentFile (.getAbsoluteFile file)))
         ^ReentrantLock monitor (publish-monitor (.getCanonicalPath file))]
     (.lock monitor)
     (try
-      (if (= *publish-lock-held* (str transactions-dir))
+      (if (> (.getHoldCount monitor) 1)
+        ;; THIS thread is already inside the OS lock; re-entering it would
+        ;; throw. `getHoldCount` counts holds by the current thread and by no
+        ;; other, so nothing this thread spawned can answer yes here.
         (f)
         (with-open [channel (FileChannel/open
                               (.toPath file)
@@ -94,7 +99,7 @@
                                                       StandardOpenOption/WRITE]))]
           (let [lock (.lock channel)]
             (try
-              (binding [*publish-lock-held* (str transactions-dir)] (f))
+              (f)
               (finally (.release lock))))))
       (finally (.unlock monitor)))))
 
