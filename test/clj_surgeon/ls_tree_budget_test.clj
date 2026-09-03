@@ -65,6 +65,7 @@
 ;; The ceiling itself
 ;; ============================================================
 
+;; @spec MCP-OP-MEM-003
 (deftest a-request-may-lower-the-ceiling-and-may-never-raise-it
   (testing "no request resolves to the server cap"
     (is (= budget/max-result-records (budget/resolve-ceiling nil))))
@@ -81,6 +82,7 @@
     (is (= :invalid (budget/parse-ceiling :everything)))
     (is (nil? (budget/parse-ceiling nil)))))
 
+;; @spec MCP-OP-MEM-003
 (deftest a-result-exactly-at-the-ceiling-is-complete
   (with-project [dir fixture-count "ls-tree-budget-at"]
     (let [at (core/run-ls-tree {:dir dir :format :edn :max-results fixture-count})
@@ -92,6 +94,7 @@
       (is (= unbounded at)
           "at the ceiling the bounded result is identical to the unbounded one"))))
 
+;; @spec MCP-OP-MEM-003
 (deftest one-record-past-the-ceiling-yields-a-typed-continuation
   (with-project [dir fixture-count "ls-tree-budget-over"]
     (let [r (core/run-ls-tree {:dir dir :format :edn
@@ -117,6 +120,7 @@
                   :manifest-digest (:manifest_digest ceiling)}
                  (budget/parse-cursor (:cursor nc)))))))))
 
+;; @spec MCP-OP-MEM-003
 (deftest a-complete-request-past-the-ceiling-refuses-and-names-what-fits
   (with-project [dir fixture-count "ls-tree-budget-refuse"]
     (let [r (core/run-ls-tree {:dir dir :format :edn
@@ -138,6 +142,7 @@
           "the remedy narrows the scope; it never says raise the heap")
       (is (some? (get-in r [:next_call :cursor]))))))
 
+;; @spec MCP-OP-MEM-003
 (deftest a-complete-request-inside-the-ceiling-is-not-refused
   (with-project [dir fixture-count "ls-tree-budget-complete-ok"]
     (let [r (core/run-ls-tree {:dir dir :format :edn
@@ -150,6 +155,7 @@
 ;; The cursor, and what it is bound to
 ;; ============================================================
 
+;; @spec MCP-OP-MEM-003
 (deftest the-continuation-cursor-pages-the-remainder-exactly-once
   (with-project [dir fixture-count "ls-tree-budget-page"]
     (let [page-size 5
@@ -170,6 +176,7 @@
                (into (into (entry-files page-1) (entry-files page-2))
                      (entry-files page-3))))))))
 
+;; @spec MCP-OP-MEM-003
 (deftest a-cursor-is-refused-once-the-tree-has-changed
   (with-project [dir fixture-count "ls-tree-budget-stale"]
     (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
@@ -186,6 +193,7 @@
         (is (not= (get-in r [:limit :requested])
                   (get-in r [:limit :observed])))))))
 
+;; @spec MCP-OP-MEM-003
 (deftest a-malformed-cursor-is-refused-rather-than-ignored
   (with-project [dir 4 "ls-tree-budget-badcursor"]
     (let [r (core/run-ls-tree {:dir dir :format :edn :cursor "not-a-cursor"})]
@@ -207,6 +215,7 @@
       (core/format-ls-tree-edn projects (str (fs/absolutize dir)))
       (core/format-ls-tree-text projects (str (fs/absolutize dir))))))
 
+;; @spec MCP-OP-MEM-003
 (deftest under-the-ceiling-the-streamed-result-equals-the-batch-result
   (testing "single project"
     (with-project [dir fixture-count "ls-tree-budget-diff-single"]
@@ -226,6 +235,7 @@
                (core/run-ls-tree {:dir parent :format :edn})))
         (finally (fs/delete-tree parent))))))
 
+;; @spec MCP-OP-MEM-003
 (deftest a-parse-error-under-the-ceiling-still-reads-exactly-as-before
   (let [dir (str (fs/create-temp-dir {:prefix "ls-tree-budget-broken"}))]
     (try
@@ -241,6 +251,7 @@
 ;; The text encoding of a bounded result
 ;; ============================================================
 
+;; @spec MCP-OP-MEM-003
 (deftest the-text-encoding-names-the-ceiling-and-the-resuming-call
   (with-project [dir fixture-count "ls-tree-budget-text"]
     (let [text (core/run-ls-tree {:dir dir :max-results 4})]
@@ -259,6 +270,7 @@
 ;; Order stability
 ;; ============================================================
 
+;; @spec MCP-OP-MEM-003
 (deftest the-record-order-is-stable-across-runs-and-across-ceilings
   (with-project [dir fixture-count "ls-tree-budget-order"]
     (let [whole (entry-files (core/run-ls-tree {:dir dir :format :edn}))]

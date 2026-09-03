@@ -220,3 +220,113 @@ The adversarial `giant` file is 532,424 nodes — 2.66x over.
 - An empty source, a whitespace-only source, and a source with unbalanced
   delimiters are admitted (the parser, not the admission gate, reports a syntax
   error).
+
+# Bounded `ls-tree` output budget (`MCP-OP-MEM-003`)
+
+Status: registered 2026-09-03; active gap until the streaming encoder lands.
+
+## Context
+
+The memory battery at `8a55dbc` (`MEMBAT_ROOT=/home/forge/tmp/stream/membat`,
+`-Xmx512m`, 5 reps) reports `cli-ls-tree` retaining:
+
+| N | held_mb (fresh / warm) | per file |
+|---:|---|---:|
+| 100 | 0.6 / 0.9 | ~9 KB |
+| 1,000 | 9.6 / 9.5 | 9.5 KB |
+| 10,000 | 94.0 / 93.6 | 9.4 KB |
+
+```
+FAIL held-scales-with-n {:op :cli-ls-tree, :profile :default, :observed 94.0,
+                         :limit 11.6, :small-n-observed 9.6, :slack-mb 2.0}
+```
+
+`held_mb` is the after-GC used heap **while the result is still referenced**: the
+retained size of what the operation hands back. It is a straight line in N
+because the operation has no output ceiling — `outline-all-files` realises every
+outline into one retained vector, and both formatters then traverse the complete
+set. The result IS the repository.
+
+## The control
+
+A **result ceiling `R`, counted in RECORDS, applied to the ENCODER** — not to the
+walk. The walk still visits and stats every candidate. What is bounded is what
+the encoder keeps: each file is admitted (MEM-005), parsed once (MEM-015),
+outlined, encoded, and **dropped**. The vector of all outlines is never built.
+
+`max-result-records = 1000` is a server hard cap; a request may lower it with
+`:max-results` and may never raise it. The derivation is in
+`docs/observations/2026-09-03-mem-003-streaming-ls-tree.md` §3: retention
+(9.4–9.5 KB/record makes the battery's held line hold by construction at this
+cap), real corpora (163 files here, 6.1x headroom), and output size (~1.5 MB of
+text at the cap).
+
+When the ceiling binds the caller gets one of two TYPED answers:
+
+- a **continuation** — the first `R` records plus `:next_call`, whose cursor is
+  `<offset>:<manifest-digest>`; or
+- a **refusal** — `:result-ceiling-exceeded`, when the caller passed
+  `:complete true`, naming `R`, the observed count and what fits.
+
+The cursor is bound to a **manifest digest**, not to an offset alone: SHA-256
+over the ordered `<relative-path>\t<size>\t<mtime>` lines of the candidate list,
+folded one candidate at a time and never materialised. A page taken after the
+tree changed would silently interleave records from two different repositories,
+so it refuses with `:stale-result-cursor`.
+
+## Boundary
+
+- **It does not change outline CONTENT.** Every result at or under `R` is
+  byte-identical to the batch encoder's, in both the text and EDN encodings, and
+  in record order. The ceiling is invisible until it binds.
+- **It does not bound the WALK.** Per-file bytes, aggregate bytes, walk entries
+  and depth are `MCP-OP-MEM-002`'s; the bounded walker is q5z's. This row bounds
+  the ENCODER only, which is why discovery still holds one path string per
+  candidate.
+- **It is not a peak-heap promise.** Peak is heap-size dependent under G1 and is
+  a trend line, not a gate. The promise is on retained result heap.
+- **A ceiling is never a silent truncation.** Every bounded result carries either
+  a continuation naming the exact resuming call or a typed refusal. A result
+  with no receipt is complete, and that is the only way to read one.
+- **It does not touch the MCP study-ops entrance.** `mcp_inspect_tool.clj` and
+  `study.clj` belong to the `bridge/study-ops-mcp` lane; they must adopt the same
+  ceiling, the same cursor shape, and the same two typed answers.
+
+## Misreadings this row forbids
+
+- *An outline is small, so retaining them all is fine.* 9.4 KB each is small;
+  10,000 of them is 94 MB, in a 512 MB budget shared with the parser's transient
+  peak.
+- *A bounded read is a truncated read.* It is not. Bounded means the result
+  names its own boundary and the call that continues past it. The unbounded read
+  is the one that silently hands back whatever the repository happened to
+  contain.
+- *`R` should be raised until nobody hits it.* That re-opens the failure. `R` may
+  be lowered by any request; raising the server cap requires re-measuring the
+  battery.
+- *A cursor is just an offset.* An offset alone silently interleaves two
+  different trees. The digest is what makes a second page honest.
+- *The materialiser window can be unbounded because the outlines are dropped.*
+  The window is what the parallel materialiser holds in flight; it is a constant
+  (`4 x pool`), and the retained-heap witness gates on `R + window`, not on `R`.
+
+## Boundaries the witnesses must hold
+
+- A result of exactly `R` records is COMPLETE, carries no receipt, and equals
+  the unbounded result exactly.
+- `R+1` candidates yield a continuation whose `:next_call` cursor parses to
+  `{:offset R :manifest-digest <64 hex>}`, and whose pages concatenate to the
+  unbounded result in the same order — a bounded result is the PREFIX of the
+  unbounded one, never a sample.
+- With `:complete true`, `R+1` candidates refuse with `:error-type
+  :result-ceiling-exceeded`, `:complete false`, `:source-unchanged true`, and a
+  `:limit` naming `:requested`, `:server-max`, `:observed` and `:fits`. The
+  remedy narrows the scope; it never says raise the heap.
+- A cursor issued before a file was added is refused as `:stale-result-cursor`
+  with the two digests named.
+- A malformed `:max-results` is `:invalid`, never silently promoted to the cap.
+- Retained heap tracks `R`, not `N`: at a fixed `R`, scanning 8x the files must
+  not retain measurably more, and an unbounded control on the same corpus must
+  retain measurably more than both — otherwise the witness is measuring nothing.
+- The differential over `src/` and `test/` is zero mismatches in text, in EDN,
+  and in record order.

@@ -100,7 +100,7 @@
 ;; The witnesses
 ;; ============================================================
 
-;; INTENT (registration pending): the bounded ls-tree output budget
+;; @spec MCP-OP-MEM-003
 (deftest retained-heap-tracks-the-ceiling-and-not-the-file-count
   (let [big (make-fixture! scan-n)
         small (make-fixture! ceiling)]
@@ -169,7 +169,7 @@
       (core/format-ls-tree-edn projects abs)
       (core/format-ls-tree-text projects abs))))
 
-;; INTENT (registration pending): the bounded ls-tree output budget
+;; @spec MCP-OP-MEM-003
 (deftest streaming-and-batch-encoders-agree-over-this-repository
   (testing "every result under the ceiling is byte-identical to the batch path"
     (doseq [dir ["src" "test"]]
