@@ -160,24 +160,73 @@
   (let [rel (str (fs/relativize root path))]
     (boolean (some skip-dirs (str/split rel #"/")))))
 
+(defn- existing-directory?
+  "True only when `path` names an existing directory. Never throws: a string
+   that is not a legal path (an embedded NUL, say) is simply not a directory."
+  [path]
+  (try (boolean (fs/directory? (str path)))
+       (catch Exception _e false)))
+
+(defn- find-start-token
+  "Render a directory as a `find` start-point token. A RELATIVE path beginning
+   with `-` would be parsed by find as an OPTION rather than a path, so prefix
+   it with `./`. Absolute paths are already unambiguous."
+  [path]
+  (let [s (str path)]
+    (if (str/starts-with? s "-") (str "./" s) s)))
+
+(defn- nul-separated-paths
+  "Split NUL-delimited command output into paths, dropping the trailing empty
+   token. Never trims: leading or trailing whitespace, and newlines, are legal
+   inside a path and are data, not framing."
+  [out]
+  (->> (str/split (str out) #"\u0000")
+       (remove #(= "" %))
+       sort
+       vec))
+
+;; @spec MCP-OP-SHELL-ARGV-001
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-build-files
   "Find deps.edn, project.clj, bb.edn under dir, skipping hidden/cache dirs.
-   Uses system find with -prune for speed (~10x faster than fs/glob on large trees)."
+   Uses system find with -prune for speed (~10x faster than fs/glob on large trees).
+
+   The command is an explicit ARGUMENT VECTOR — `dir` is exactly one token and
+   never reaches a shell interpreter. It must stay that way: this function used
+   to `format` dir into a string run through `sh -c`, so any :dir carrying `;`
+   or `$(...)` executed arbitrary commands (Andon pull inb-d27b79, 2026-09-03).
+   Output is NUL-delimited so a path containing a newline survives intact.
+
+   A dir that is not an existing directory yields [] and logs the reason; the
+   typed refusal for that case belongs to the entrance (ls-tree-root-refusal),
+   because this helper's contract is a vector of paths."
   [dir]
-  (try
-    (let [prune-expr (str/join " -o "
-                               (map #(str "-name " %) skip-dirs))
-          cmd (format "find %s \\( %s \\) -prune -o \\( -name deps.edn -o -name project.clj -o -name bb.edn \\) -print"
-                      (str dir) prune-expr)
-          result (babashka.process/shell {:out :string :err :string :continue true}
-                                         "sh" "-c" cmd)]
-      (if (zero? (:exit result))
-        (->> (str/split-lines (str/trim (:out result)))
-             (remove str/blank?)
-             sort
-             vec)
-        []))
-    (catch Exception _e [])))
+  (if-not (existing-directory? dir)
+    (do (binding [*out* *err*]
+          (println (str "clj-surgeon: skipping project discovery; "
+                        "not an existing directory: " (pr-str (str dir)))))
+        [])
+    (try
+      (let [prune-tokens (concat ["("]
+                                 (->> (sort skip-dirs)
+                                      (map (fn [d] ["-name" d]))
+                                      (interpose ["-o"])
+                                      (apply concat))
+                                 [")" "-prune"])
+            args (concat ["find" (find-start-token dir)]
+                         prune-tokens
+                         ["-o" "("
+                          "-name" "deps.edn"
+                          "-o" "-name" "project.clj"
+                          "-o" "-name" "bb.edn"
+                          ")" "-print0"])
+            result (apply babashka.process/shell
+                          {:out :string :err :string :continue true}
+                          args)]
+        (if (zero? (:exit result))
+          (nul-separated-paths (:out result))
+          []))
+      (catch Exception _e []))))
 
 (defn source-paths-from-config
   "Pure: given a build filename and its parsed content, return source paths.
@@ -460,25 +509,44 @@
          (sort-by :name)
          vec)))
 
+;; @spec MCP-OP-SHELL-ARGV-002
+(defn ls-tree-root-refusal
+  "Typed refusal when an :ls-tree root is not an existing directory; nil when
+   the root is usable. A root that fails this check must never reach project
+   discovery: an empty result is indistinguishable from an empty tree, and the
+   caller needs to know its root was wrong (Andon pull inb-d27b79)."
+  [dir]
+  (when-not (existing-directory? dir)
+    {:error (str ":ls-tree :dir must be an existing directory: "
+                 (pr-str (str dir)))
+     :error-type :workspace-root-not-a-directory
+     :dir (str dir)
+     :next-action "pass_an_existing_directory_path"}))
+
 (defn run-ls-tree [{:keys [dir format grep] :as _opts}]
   (when-not dir
     (println "Error: :dir is required for :ls-tree")
     (System/exit 1))
-  (let [dir (str (fs/absolutize dir))
-        projects (if grep
-                   ;; Fast path: rg first, skip expensive directory globbing
-                   (let [hits (grep-tree grep dir)]
-                     (discover-projects-grep hits dir))
-                   ;; Full scan: discover all projects
-                   (discover-projects dir))]
-    (if (empty? projects)
-      (do (println (format "No Clojure files found under %s%s"
-                           dir (when grep (str " matching '" grep "'"))))
-          (System/exit 1))
-      (let [projects (outline-all-files projects)]
-        (if (= format :edn)
-          (format-ls-tree-edn projects dir)
-          (format-ls-tree-text projects dir))))))
+  (let [dir (try (str (fs/absolutize dir))
+                 (catch Exception _e (str dir)))]
+    (if-let [refusal (ls-tree-root-refusal dir)]
+      ;; The CLI top level turns a result map carrying :error into exit 1,
+      ;; so the shell contract is unchanged while the refusal stays testable.
+      refusal
+      (let [projects (if grep
+                       ;; Fast path: rg first, skip expensive directory globbing
+                       (let [hits (grep-tree grep dir)]
+                         (discover-projects-grep hits dir))
+                       ;; Full scan: discover all projects
+                       (discover-projects dir))]
+        (if (empty? projects)
+          (do (println (format "No Clojure files found under %s%s"
+                               dir (when grep (str " matching '" grep "'"))))
+              (System/exit 1))
+          (let [projects (outline-all-files projects)]
+            (if (= format :edn)
+              (format-ls-tree-edn projects dir)
+              (format-ls-tree-text projects dir))))))))
 
 ;; ============================================================
 ;; Ops registry — single source of truth for dispatch + help

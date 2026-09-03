@@ -11,9 +11,9 @@ Status marks follow the repository contract: `[ ]` active gap (test witness
 required), `[x]` implemented (implementation and test witnesses required),
 `[D]` deferred.
 
-- [ ] **MCP-OP-SHELL-ARGV-001**: When clj-surgeon runs an external command on behalf of project discovery, clj-surgeon shall invoke that command as an explicit argument vector in which every caller-supplied value occupies exactly one token, and shall never pass a command string built from caller-supplied data to a shell interpreter.
+- [x] **MCP-OP-SHELL-ARGV-001**: When clj-surgeon runs an external command on behalf of project discovery, clj-surgeon shall invoke that command as an explicit argument vector in which every caller-supplied value occupies exactly one token, and shall never pass a command string built from caller-supplied data to a shell interpreter.
 
-- [ ] **MCP-OP-SHELL-ARGV-002**: When the `:ls-tree` entrance receives a `:dir` that does not resolve to an existing directory, clj-surgeon shall return the typed refusal `:workspace-root-not-a-directory` before project discovery starts.
+- [x] **MCP-OP-SHELL-ARGV-002**: When the `:ls-tree` entrance receives a `:dir` that does not resolve to an existing directory, clj-surgeon shall return the typed refusal `:workspace-root-not-a-directory` before project discovery starts.
 
 - [ ] **MCP-OP-SHELL-ARGV-003**: When clj-surgeon consumes the output of an external file-discovery command, clj-surgeon shall delimit that output with NUL so that a path containing a newline is returned as one intact path.
 
