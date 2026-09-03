@@ -4353,7 +4353,30 @@
             (is (str/includes? (str (:remedy result))
                                (.getCanonicalPath locked-dir))
                 (str "the remedy does not name the parent: "
-                     (pr-str (:remedy result)))))))
+                     (pr-str (:remedy result))))))
+
+        (testing "the tool names the denied parent too, not just the path"
+          ;; Sol's round-fifteen item 9, the tool half. It TYPES the refusal
+          ;; correctly and then says nothing: `AccessDeniedException.getMessage`
+          ;; IS the path, and it was passed through unlabelled, so the error
+          ;; read "/abs/src/app/locked/inner.clj (src/app/locked/inner.clj)" —
+          ;; the path twice, once absolutely, and not one word about what may
+          ;; not be read or why. Every other refusal this resolver publishes
+          ;; names paths project-relative; leaking the absolute one is the
+          ;; signature of a message nobody wrote.
+          (let [result (census-tool/execute-request!
+                         {:project-root plain-root} {:files [inner]})]
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "the tool answered " (pr-str result)))
+            (is (not (str/includes? (str (:error result)) plain-root))
+                (str "the error is the raw exception path, not a message: "
+                     (pr-str (:error result))))
+            (is (str/includes? (str (:error result)) "src/app/locked")
+                (str "the error does not name the parent: "
+                     (pr-str (:error result))))
+            (is (str/includes? (str (:error result)) "directory")
+                (str "the error does not say a DIRECTORY is what may not be "
+                     "read: " (pr-str (:error result)))))))
       (finally
         (allow-reads! denied-file)
         (allow-traversal! locked-dir)
