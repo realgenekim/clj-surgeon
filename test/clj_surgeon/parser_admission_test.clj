@@ -51,9 +51,15 @@
   (str "(def x " (str/join (repeat n prefix)) "y)\n"))
 
 (defn- repo-sources
-  "Every Clojure-family source under src/ and test/, as [path source] pairs."
+  "Every Clojure-family source under src/, test/ AND bench/, as [path source]
+   pairs.
+
+   bench/ is in the corpus because it is the only directory holding the
+   construct the scanner could not parse: all 20 of this repository's `#!`
+   shebang files live there. A corpus witness that excludes the directory
+   containing its own counterexample is not a witness."
   []
-  (for [root ["src" "test"]
+  (for [root ["src" "test" "bench"]
         ^java.io.File f (file-seq (io/file root))
         :when (and (.isFile f) (re-find #"\.clj[cs]?$" (.getName f)))]
     [(.getPath f) (slurp f)]))
@@ -186,6 +192,18 @@
         (is (some? e))
         (is (= :parser_admission_refused (:refusal (ex-data e))))
         (is (str/includes? (ex-message e) "max_parse_depth"))))))
+
+;; @spec MCP-OP-MEM-005
+(deftest a-shebang-line-is-a-comment-not-structure
+  (testing "the balance-zero invariant survives #!"
+    ;; The only overcount found in a 24-fixture lexical attack: `#!` is a line
+    ;; comment to Clojure's reader, and scoring its delimiters as structure
+    ;; broke the very invariant the spec calls proof of comment handling.
+    (let [src "#!/usr/bin/env foo ((((\n(def x 1)\n"]
+      (is (zero? (:delimiter-balance (admission/scan-shape src)))
+          "a shebang line's brackets are text, not structure")
+      (is (= 1 (depth-of src))
+          "only the (def x 1) list is real nesting"))))
 
 ;; ------------------------------------------------------------------
 ;; nesting is EVERY construct that makes the reader recurse
