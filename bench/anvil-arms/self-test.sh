@@ -1641,6 +1641,57 @@ cat "$WORK/case34.out"
 PASS=$((PASS + $(grep -c '^ok   case34' "$WORK/case34.out")))
 FAIL=$((FAIL + $(grep -c '^FAIL case34' "$WORK/case34.out")))
 
+echo "== case 35: an unversioned watch stream is REFUSED, never rescored =="
+# Sol round three, finding (e).  The watcher was repaired to bind its rollout by inode
+# and to abort on rotation -- and then Sol copied a round-TWO split-brain artifact,
+# produced BEFORE that repair, into the current scorer.  It returned rc 0 and wrote a
+# receipt reading `sources.agree=true` over evidence that is two files.  A scorer that
+# cannot tell which watcher wrote a stream is assuming the repair it is measuring.
+#
+# So the stream carries its own provenance: a header record with `schema_version` and
+# the bound rollout identity (st_dev, st_ino, session id), and the scorer refuses
+# anything without both -- `watch-schema-unsupported`, rc 3, no receipt.
+D=$(mk11 -35a); python3 - "$D/watch.jsonl" <<'PY35'
+import json, sys
+path = sys.argv[1]
+recs = [json.loads(l) for l in open(path) if l.strip()]
+recs = [r for r in recs if r.get("kind") != "header"]      # the pre-repair shape
+open(path, "w").write("".join(json.dumps(r) + "\n" for r in recs))
+PY35
+score11 "$D" case35a 3 'SCORE-ABORT watch-schema-unsupported'
+
+# 35b -- SOL'S OWN ARTIFACT, replayed byte for byte.
+SOL35=/home/forge/tmp/arms/solreview3/old-rotation-rescore
+if [ -d "$SOL35" ]; then
+  D35B="$WORK/st-P-N-35b"; rm -rf "$D35B"; mkdir -p "$D35B"
+  cp "$SOL35/attest.json" "$SOL35/rollout.jsonl" "$SOL35/watch.jsonl" \
+     "$SOL35/run.json" "$SOL35/receipt.json" "$D35B/" 2>/dev/null
+  score11 "$D35B" case35b 3 'SCORE-ABORT watch-schema-unsupported'
+else
+  ok "case35b skipped — Sol's retained artifact is not on this box ($SOL35)"
+fi
+
+# 35c -- the control: a stream this watcher wrote carries the provenance and scores.
+python3 - "$A1/watch.jsonl" > "$WORK/case35c.out" 2>&1 <<'PY35C'
+import json, sys
+recs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+head = recs[0] if recs else {}
+checks = [
+    ("case35c the first record is a header", head.get("kind") == "header"),
+    ("case35c the header names schema_version 2", head.get("schema_version") == 2),
+    ("case35c the header carries the bound rollout identity",
+     all(k in head for k in ("rollout_dev", "rollout_ino", "session_id"))),
+    ("case35c the identity is BOUND, not empty",
+     isinstance(head.get("rollout_dev"), int) and isinstance(head.get("rollout_ino"), int)),
+]
+for label, cond in checks:
+    print(("ok   " if cond else "FAIL ") + label + ("" if cond else f" head={head}"))
+sys.exit(0)
+PY35C
+cat "$WORK/case35c.out"
+PASS=$((PASS + $(grep -c '^ok   case35c' "$WORK/case35c.out")))
+FAIL=$((FAIL + $(grep -c '^FAIL case35c' "$WORK/case35c.out")))
+
 echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
 # Found while replaying Sol's probes by hand: the self-test exports
 # PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
