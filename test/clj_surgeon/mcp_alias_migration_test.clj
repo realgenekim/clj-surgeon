@@ -575,6 +575,82 @@
       (finally
         (delete-tree! workspace)))))
 
+(defn- sparse-source!
+  "One .clj file that REPORTS `bytes` in size without occupying them.
+
+  `RandomAccessFile.setLength` extends the file with a hole: the directory entry
+  records the full size while no data block is allocated. A bound that is
+  checked from recorded sizes before the first slurp is therefore witnessed at
+  full scale on a 512 MiB heap, which is exactly the property under test."
+  [^java.io.File target bytes]
+  (.mkdirs (.getParentFile target))
+  (with-open [handle (java.io.RandomAccessFile. target "rw")]
+    (.setLength handle (long bytes)))
+  target)
+
+;; @spec MCP-OP-ALIAS-046
+(deftest an-aggregate-scope-above-the-byte-ceiling-refuses-before-any-source-is-read
+  (let [workspace (bare-workspace!)
+        receipt-dir (io/file workspace "receipts")
+        per-file 1900000
+        files 450]
+    (.mkdirs receipt-dir)
+    (try
+      (dotimes [index files]
+        (sparse-source! (io/file workspace "src" "wide" (str "f" index ".clj"))
+                        per-file))
+      (testing "every file is under BOTH existing ceilings"
+        (is (< files alias-migration/max-scope-files))
+        (is (< per-file alias-migration/max-source-bytes))
+        (is (> (* (long files) per-file) alias-migration/max-scope-bytes)
+            "the product of two legal ceilings exceeds any heap the server has"))
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (cap-request workspace {}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-scope-too-large-bytes" (:error_type result)))
+        (is (= (* (long files) per-file) (:scope_bytes result)))
+        (is (= alias-migration/max-scope-bytes (:max_bytes result)))
+        (is (= files (:scanned_files result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-047
+(deftest heap-exhaustion-is-published-as-a-typed-refusal-not-an-untyped-throw
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (testing "the direct dispatch"
+        (with-redefs [alias-migration/plan!
+                      (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+          (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                                 (request workspace))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-resource-exhausted" (:error_type result)))
+            (is (true? (:source_unchanged result))
+                "the heap was exhausted before the transaction began")
+            (is (false? (:mutation_attempted result))))))
+      (testing "and the MCP tool entrance, which has no try of its own"
+        (mcp-tool/init! (config workspace receipt-dir))
+        (let [captured (atom nil)]
+          (with-redefs [alias-migration/plan!
+                        (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+            (mcp-tool/handle-alias-migration
+              nil
+              (json/parse-string (json/generate-string (request workspace)) true)
+              (fn [content error? structured]
+                (reset! captured {:content content :error? error?
+                                  :result structured}))))
+          (is (some? @captured) "the handler threw instead of publishing")
+          (is (true? (:error? @captured)))
+          (is (= "alias-migration-resource-exhausted"
+                 (:error_type (:result @captured))))))
+      (finally
+        (mcp-tool/init! nil)
+        (delete-tree! workspace)))))
+
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
 

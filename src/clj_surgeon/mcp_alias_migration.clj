@@ -223,17 +223,34 @@
   is a generated or vendored artifact that the frozen read must not hold."
   (* 2 1024 1024))
 
-(defn- oversized-source
-  "The first resolved source above the per-file byte ceiling, or nil."
+(def max-scope-bytes
+  "Ceiling on the TOTAL bytes of source one alias_migration call holds at once.
+
+  The file ceiling and the per-file byte ceiling do not bound their product: a
+  scope of four hundred and fifty files of one and nine tenths mebibytes each
+  passes both and is still eight hundred and fifty megabytes the frozen read
+  would try to hold on a five-hundred-and-twelve-mebibyte heap. This third bound
+  is the one that names the resource actually spent, and it is accumulated from
+  the filesystem's recorded sizes BEFORE the first slurp, so a scope that cannot
+  fit is a typed refusal rather than an OutOfMemoryError."
+  (* 256 1024 1024))
+
+(defn- sized-sources
+  "Every resolution carrying its size in bytes, measured without reading it.
+
+  `Files/size` reads the directory entry, so the whole scope is weighed for far
+  less than the cost of holding one file of it."
   [resolutions]
-  (first (filter (fn [{:keys [path]}]
-                   (> (.length (io/file ^String path)) max-source-bytes))
-                 resolutions)))
+  (mapv (fn [{:keys [path] :as resolution}]
+          (assoc resolution
+                 :bytes (Files/size (.toPath (io/file ^String path)))))
+        resolutions))
 
 ;; @spec MCP-OP-ALIAS-006
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-038
 ;; @spec MCP-OP-ALIAS-039
+;; @spec MCP-OP-ALIAS-046
 (defn plan!
   "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
@@ -263,7 +280,9 @@
       :else
       (let [resolutions (mapv #(mcp-paths/resolve-source-path root %) relatives)
             bad (first (remove :ok resolutions))
-            oversized (when-not bad (oversized-source resolutions))]
+            sized (when-not bad (sized-sources resolutions))
+            oversized (first (filter #(> (:bytes %) max-source-bytes) sized))
+            scope-bytes (reduce + 0 (map :bytes sized))]
         (cond
           bad
           (refusal :alias-migration-scope-path-refused
@@ -275,16 +294,31 @@
                    (str (:relative oversized) " is larger than the "
                         max-source-bytes "-byte ceiling one alias_migration reads")
                    {:path (:relative oversized)
-                    :bytes (.length (io/file ^String (:path oversized)))
+                    :bytes (:bytes oversized)
                     :max_bytes max-source-bytes
                     :next_call nil
                     :remedy (str "Exclude " (:relative oversized)
                                  " through scope.exclude, or narrow scope.paths.")})
 
+          ;; @spec MCP-OP-ALIAS-046
+          (> scope-bytes max-scope-bytes)
+          (refusal :alias-migration-scope-too-large-bytes
+                   (str "scope.paths selects " scope-bytes
+                        " bytes of source across " (count sized)
+                        " files, above the " max-scope-bytes
+                        "-byte ceiling one alias_migration holds at once")
+                   {:scope_bytes scope-bytes
+                    :max_bytes max-scope-bytes
+                    :scanned_files (count sized)
+                    :expected_files expected
+                    :next_call nil
+                    :remedy (str "Narrow scope.paths, or exclude the largest "
+                                 "files through scope.exclude.")})
+
           :else
           (let [sources (mapv (fn [{:keys [relative path]}]
                                 {:file relative :source (slurp path)})
-                              resolutions)
+                              sized)
                 plan (planner/plan (assoc request :workspace-root
                                           (.toString root))
                                    sources)]
@@ -703,9 +737,13 @@
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-018
 ;; @spec MCP-OP-ALIAS-019
-(defn execute!
-  "Plan, commit, and publish one O(1) alias_migration receipt."
-  [config params]
+(defn- execute-migration!
+  "Plan, commit, and publish one O(1) alias_migration receipt.
+
+  `attempted` is set the instant the transaction kernel is entered, so the
+  heap-exhaustion guard around this function can say truthfully whether any
+  write was ever begun."
+  [config params attempted]
   (let [validated (validate-request params)]
     (if-not (:ok validated)
       validated
@@ -727,9 +765,10 @@
                 spec (plan->spec plan paths destination)
                 files (mapv #(get paths (:file %)) (:files plan))
                 verify (:verify request)
-                commit (commit! (assoc config :verify verify)
-                                (.toString root) spec files
-                                (get-in plan [:lib-rename :file]))]
+                commit (do (vreset! attempted true)
+                           (commit! (assoc config :verify verify)
+                                    (.toString root) spec files
+                                    (get-in plan [:lib-rename :file])))]
             ;; @spec MCP-OP-ALIAS-042
             (if (or (:error commit) (not (:committed commit)))
               (commit-refusal plan commit)
@@ -739,3 +778,41 @@
                                   :receipt_hash (:receipt-hash commit)
                                   :verify-requested (boolean verify)))
                        (write-details! root plan)))))))))))
+
+;; @spec MCP-OP-ALIAS-047
+(defn execute!
+  "One alias_migration, with heap exhaustion published as a typed refusal.
+
+  The ceilings above make an OutOfMemoryError unreachable for any scope the verb
+  accepts, but a ceiling is an argument and this is a guard: the MCP tool
+  entrance has no `try` of its own, so without this an `Error` escapes as an
+  untyped throw and the caller learns nothing about the state of its tree. The
+  refusal reports `source_unchanged` from whether the transaction kernel was
+  ever entered rather than from a hopeful literal."
+  [config params]
+  (let [attempted (volatile! false)]
+    (try
+      (execute-migration! config params attempted)
+      (catch OutOfMemoryError error
+        (let [mutated? @attempted]
+          {:ok false
+           :operation "alias_migration"
+           :error_type "alias-migration-resource-exhausted"
+           :error (str "alias_migration exhausted the server's heap"
+                       (if mutated?
+                         " after entering the transaction kernel"
+                         " before entering the transaction kernel"))
+           :cause (str (.getMessage error))
+           :source_unchanged (not mutated?)
+           :mutation_attempted mutated?
+           :write_authority false
+           :max_files max-scope-files
+           :max_bytes max-scope-bytes
+           :next_action (if mutated? "review_receipt" "correct_request")
+           :next_call nil
+           :remedy (if mutated?
+                     (str "Inspect the workspace's undo receipts before "
+                          "resending; the transaction's own state is the "
+                          "authority, not this refusal.")
+                     (str "Narrow scope.paths; the whole scope is held in "
+                          "memory at once."))})))))
