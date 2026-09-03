@@ -67,6 +67,7 @@
 # first:
 #  41  a leading Make-affecting environment assignment (MAKEFLAGS and friends) is
 #      refused as a runtime override, not silently discarded by the wrapper strip
+#  42  a bare `--` in a `make` invocation is inert, not an unknown option
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -2147,6 +2148,46 @@ print(f"ok   case41 Make-affecting environment override refusal (8/8)" if not fa
       else f"case41 {len(fails)} failure(s)")
 sys.exit(1 if fails else 0)
 PY41
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
+echo "== case 42: a bare -- in a make invocation is INERT, not an unknown option =="
+# Sol round five, item 2 (watch.py:101): `make -- verify` and `make verify --` were
+# both refused as `make-runtime-override:--`, though GNU Make's own end-of-options
+# marker changes nothing about what runs.  Both placements must resolve exactly like
+# plain `make verify` -- and an actual option occurring AFTER `--` must still be
+# refused, so the fix is not a blanket "ignore everything past --".
+python3 - "$HERE" <<'PY42'
+import sys
+sys.path.insert(0, sys.argv[1])
+from watch import is_test_command, unresolved_make_targets as u, make_runtime_override
+
+m = {"verify": "echo DEFAULT-RUNNER", "test": "bin/kaocha"}
+fails = []
+
+for script in ("make -- verify", "make verify --"):
+    got = u(script, m)
+    if got != []:
+        fails.append(f"{script!r} wrongly refused: {got}")
+    hit_a, why_a = is_test_command(script, m)
+    hit_b, why_b = is_test_command("make verify", m)
+    if (hit_a, why_a) != (hit_b, why_b):
+        fails.append(f"{script!r} did not resolve like plain `make verify`: "
+                     f"{(hit_a, why_a)} vs {(hit_b, why_b)}")
+
+# the parenthetical: -- is inert, but a real option AFTER it is still refused.
+got = u("make -- -j4 verify", m)
+if not got or not got[0].startswith("make-runtime-override:"):
+    fails.append(f"an option after -- was not refused: {got}")
+
+if make_runtime_override(["--"]) is not None:
+    fails.append("a lone -- alone is not inert at the helper level")
+
+for f in fails:
+    print(f"FAIL case42 {f}")
+print("ok   case42 a bare -- in a make invocation resolves, options after it still refused"
+      if not fails else f"case42 {len(fails)} failure(s)")
+sys.exit(1 if fails else 0)
+PY42
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
 # --- the shell-error trap fires here, before any verdict is printed ---------------

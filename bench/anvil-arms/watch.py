@@ -105,8 +105,14 @@ def make_runtime_override(rest: list[str]) -> str | None:
     not the one GNU Make actually ran.  No make option is on a known-safe list here,
     so any `-`-prefixed argument is refused as an unknown option, same as any
     assignment -- both change what will run in a way this parser cannot see.
+
+    Sol round five, item 2: a bare `--` is GNU Make's own end-of-options marker --
+    inert by itself -- and was being refused as if it were an unknown option.  It is
+    skipped here; anything AFTER it that still looks like an option is still refused.
     """
     for tok in rest:
+        if tok == "--":
+            continue
         if MAKE_ASSIGNMENT_RE.match(tok):
             return tok
         if tok.startswith("-") and tok != "-":
