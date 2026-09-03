@@ -236,9 +236,9 @@ receipt refcount, and whether the row may be evicted.
   :transaction` for journals and `:kind :broken-lock` for the `LOCK.broken.*`
   tombstones beside them; a tombstone row carries its bytes, its age and the
   verb that retires it (`:txn/recover`), because `evict!` operates on journals
-  only. A tombstone that IS the live LOCK — one inode, two names, which is what
-  a crash between the break's link and its unlink leaves — is `:kind
-  :interrupted-break :status :lock-break-interrupted`, because it is evidence of
+  only. A tombstone whose break never COMPLETED — what a crash between the
+  break's link and its unlink leaves — is `:kind :interrupted-break :status
+  :lock-break-interrupted`, because it is evidence of
   a break that never happened. There is NO row for a file that VANISHED between
   the listing and the stat: `lastModified` of a missing file is 0, which reads
   as infinitely old and bills `:bytes 0`, and 822 of 9,831 rows were of exactly
@@ -275,12 +275,31 @@ rename preserves mtime, so breaking a two-day-old crashed holder's lock produced
 `{:found 1 :pruned 1 :remaining 0}` beside a receipt naming
 `LOCK.broken.recover-…` that the same call had deleted. `:vanished` counts
 entries whose file was gone by the time it was stat'd, and they are deliberately
-not in `:found`, which they used to inflate. Recovery also resolves an
-INTERRUPTED break before it decides anything else, returning `:interrupted-break
-{:tombstone … :resolution :interrupted-break-finished | :interrupted-break-reverted}`:
-if the holder is dead by the ordinary rule the LOCK side is unlinked and the
-evidence stands, and if it is alive the extra link is removed and the LOCK is
-untouched. A recovery whose restoration verified deletes its journal; one that
+not in `:found`, which they used to inflate. Recovery also resolves EVERY
+INTERRUPTED break before it decides anything else, returning
+`:interrupted-breaks [{:tombstone … :resolution :interrupted-break-finished |
+:interrupted-break-reverted :evidence :retained | :removed} …]` — a vector,
+because the listing used to type the first of them and publish the rest as
+breaks that happened, and a second `recover!` was needed to clear each one. If
+the LOCK is still that claim and its holder is dead by the ordinary rule the
+LOCK side is unlinked and the evidence stands; if it is alive the extra link is
+removed and the LOCK is untouched; and if the LOCK is gone or names a different
+inode the break never happened at all and cannot be finished on anybody's
+behalf, so the extra link goes. With two interrupted breaks over one claim the
+first finishes it and the rest revert: exactly one break may be evidence.
+
+**An interrupted break is typed by its OWN marker.** `break-by-link!` writes
+`:phase :linked` into the tombstone's `LOCK.broken-at.*` sidecar immediately
+after the link, and clears it — by writing the real `:broken-at-ms` stamp —
+BEFORE the unlink. Recognising the state by sharing an inode with the live LOCK
+alone was state inferred from a NEIGHBOUR, and it died with the neighbour: the
+moment the wrongly-broken holder released its own claim, cleanly and
+txid-scoped, the sweep silently re-typed the file as a break that happened and
+billed it for a day as evidence of one. The inode rule is kept as the
+corroborator for a crash that lands before the marker is written, and for
+tombstones from builds that wrote none. Clearing the marker before the unlink
+rather than after is what stops the reverse failure — a break that DID happen
+still wearing the marker, which recovery would revert. A recovery whose restoration verified deletes its journal; one that
 did not verify records `:restore-failed` and keeps everything.
 
 Two crash points are witnessed: killed between pin and rename (nothing was

@@ -657,6 +657,36 @@
           :else :unreadable))
       (catch Exception _ :unreadable))))
 
+(defn- stamp-broken-at!
+  "Write the break's OWN creation time into the tombstone's sidecar, and
+   return it.
+
+   Separate from the mtime half because it is safe to call while the tombstone
+   is still a second link to the LOCK: it writes a DIFFERENT file, and touches
+   no shared inode."
+  [^File tomb]
+  (let [now (System/currentTimeMillis)]
+    (try
+      (spit (broken-at-file tomb)
+            (pr-str {:tombstone (.getName tomb)
+                     :broken-at (str (java.time.Instant/ofEpochMilli now))
+                     :broken-at-ms now}))
+      (catch Exception _ nil))
+    now))
+
+(defn- touch-tombstone!
+  "Give the tombstone's own inode the break's creation time, and return it.
+
+   Only once the break OWNS the file: setting mtime through one link sets it
+   on the inode BOTH names, so doing this while the tombstone is still a
+   second link would re-date the LOCK of a holder whose break has not even
+   completed."
+  [^File tomb now]
+  (try
+    (Files/setLastModifiedTime (.toPath tomb) (FileTime/fromMillis (long now)))
+    (catch Exception _ nil))
+  now)
+
 (defn- stamp-tombstone!
   "Give the break's evidence its OWN creation time, twice over.
 
@@ -680,15 +710,39 @@
    still a second link to a live LOCK, because setting mtime through one link
    sets it on the inode both names."
   [^File tomb]
-  (let [now (System/currentTimeMillis)]
-    (try
-      (Files/setLastModifiedTime (.toPath tomb) (FileTime/fromMillis now))
-      (spit (broken-at-file tomb)
-            (pr-str {:tombstone (.getName tomb)
-                     :broken-at (str (java.time.Instant/ofEpochMilli now))
-                     :broken-at-ms now}))
-      (catch Exception _ nil))
-    now))
+  (touch-tombstone! tomb (stamp-broken-at! tomb)))
+
+(defn- mark-break-linked!
+  "Record in the tombstone's OWN sidecar that a break has claimed the evidence
+   name and has not yet unlinked the LOCK.
+
+   Without this, an interrupted break was recognised only by sharing an inode
+   with the live LOCK - state inferred from a NEIGHBOUR, which dies with the
+   neighbour. The moment the wrongly-broken holder released its own claim,
+   cleanly and txid-scoped, the sweep silently re-typed the tombstone as a
+   break that happened, billed it for a day as evidence of one, and refused
+   every later break by that txid for a name recording nothing.
+
+   Written immediately after `Files/createLink`, so it covers the whole window
+   including the recheck; cleared by `stamp-broken-at!` BEFORE the unlink, so
+   a crash between the unlink and the stamp can never leave a completed break
+   wearing this marker. A crash before the marker is written is still caught
+   by the inode rule, which is why both survive."
+  [^File tomb]
+  (try
+    (spit (broken-at-file tomb)
+          (pr-str {:tombstone (.getName tomb)
+                   :phase :linked
+                   :linked-at-ms (System/currentTimeMillis)}))
+    (catch Exception _ nil)))
+
+(defn- break-phase
+  "What a tombstone's own sidecar says about the break that made it: `:linked`
+   while the LOCK has not been unlinked yet, nil once it has."
+  [^File tomb]
+  (let [^File side (broken-at-file tomb)]
+    (when (.isFile side)
+      (try (:phase (read-string (slurp side))) (catch Exception _ nil)))))
 
 (defn- evidence-stat
   "The size and the age basis of one piece of break evidence, from ONE stat,
@@ -774,21 +828,35 @@
   [^File tomb now]
   (evidence-age tomb (broken-at-file tomb) now))
 
-(defn- interrupted-break-file
-  "The tombstone that is a SECOND LINK to the live LOCK, or nil.
+(defn- interrupted-break-files
+  "EVERY tombstone whose break never completed.
 
-   A crash between `Files/createLink` and the unlink leaves exactly this: a
-   `LOCK.broken.*` whose (device, inode) IS the LOCK's, holding the same bytes.
-   It is not evidence of a break, because the break never completed - reporting
-   it as one names a claim that currently holds the lock, and a later break by
-   that txid is refused for a name that records nothing. `recover!` resolves
-   it; the sweep types it apart from a break that happened."
-  ^File [transactions-dir]
+   A crash between `Files/createLink` and the unlink leaves a `LOCK.broken.*`
+   holding the claim's bytes with the LOCK still in place. It is not evidence
+   of a break, because the break never happened - reporting it as one names a
+   claim that currently holds the lock, and a later break by that txid is
+   refused for a name that records nothing. `recover!` resolves them; the
+   sweep types them apart from a break that happened.
+
+   TWO rules, because one of them expires. The tombstone's own `:phase
+   :linked` marker survives anything that happens to the LOCK afterwards -
+   including the wrongly-broken holder's own clean release, after which the
+   inode rule can no longer see it at all and the sweep silently re-typed the
+   file as a break that happened. The (device, inode) rule catches the crash
+   that lands before the marker is written, and old tombstones from builds
+   that wrote no marker.
+
+   EVERY match, not the first: the prune excluded all of them while the
+   listing typed one, so with two interrupted breaks at once the second was
+   published as `:kind :broken-lock` - false evidence of a break, naming the
+   claim that currently holds the lock - until a second `recover!` ran."
+  [transactions-dir]
   (let [^File lock (lock-file transactions-dir)
         key (lock-file-key lock)]
-    (when key
-      (first (filter (fn [^File f] (= key (lock-file-key f)))
-                     (broken-lock-files transactions-dir))))))
+    (filterv (fn [^File f]
+               (or (= :linked (break-phase f))
+                   (and key (= key (lock-file-key f)))))
+             (broken-lock-files transactions-dir))))
 
 (defn- prune-broken-locks!
   "Retire the tombstones older than `broken-lock-retention-ms`, and count them.
@@ -810,11 +878,9 @@
   [transactions-dir now-ms]
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
-        lock-key (lock-file-key (lock-file transactions-dir))
-        ;; a tombstone that IS the live LOCK is a break that was interrupted,
-        ;; not one that happened: retiring it here would resolve it silently
-        live (filterv (fn [^File f] (and lock-key (= lock-key (lock-file-key f))))
-                      tombstones)
+        ;; a tombstone whose break never completed is not a break that
+        ;; happened: retiring it here would resolve it silently
+        live (interrupted-break-files transactions-dir)
         ;; read BEFORE the tombstone prune, so a sidecar this call deletes
         ;; alongside its own tombstone is never counted as an orphan
         orphans (mapv (fn [^File f] [f (evidence-age f f now)])
@@ -987,6 +1053,10 @@
   [transactions-dir ^File lock ^File tomb claim opts]
   (try
     (Files/createLink (.toPath tomb) (.toPath lock))
+    ;; the window opens HERE, and the marker that says so is the tombstone's
+    ;; own: the LOCK it shares an inode with can be released out from under
+    ;; this state, and inferring the state from that neighbour loses it
+    (mark-break-linked! tomb)
     (let [linked-content (try (slurp tomb) (catch Exception _ nil))]
       (if (and (some? (:content claim))
                (= (:content claim) linked-content)
@@ -997,15 +1067,25 @@
         (do
           ;; the seam a witness needs to crash between the link and the unlink
           (when-let [hook (:before-unlink opts)] (hook tomb))
-          (Files/deleteIfExists (.toPath lock))
-          {:broken true
-           :tombstone (.getName tomb)
-           :content-sha256 (:content-sha256 claim)
-           :broken-at-ms (stamp-tombstone! tomb)
-           :break-path :link})
+          ;; the break's own creation time is recorded BEFORE the unlink, and
+          ;; the mtime half after it. A crash between the unlink and the stamp
+          ;; would otherwise leave a break that DID happen still wearing the
+          ;; `:phase :linked` marker, and recovery would revert real evidence.
+          ;; The reverse crash - stamped, LOCK not yet unlinked - is still an
+          ;; interrupted break, and the inode rule types it.
+          (let [broken-at (stamp-broken-at! tomb)]
+            (Files/deleteIfExists (.toPath lock))
+            (touch-tombstone! tomb broken-at)
+            {:broken true
+             :tombstone (.getName tomb)
+             :content-sha256 (:content-sha256 claim)
+             :broken-at-ms broken-at
+             :break-path :link}))
         ;; not the claim that was judged. The LOCK never left, so there is
-        ;; nothing to put back and nothing to displace: drop our own link.
-        (do (Files/deleteIfExists (.toPath tomb))
+        ;; nothing to put back and nothing to displace: drop our own link,
+        ;; and the marker that said we held it.
+        (do (Files/deleteIfExists (.toPath ^File (broken-at-file tomb)))
+            (Files/deleteIfExists (.toPath tomb))
             {:broken false
              :cause :holder-changed
              :restored true
@@ -2217,9 +2297,9 @@
    (let [transactions (transactions-dir workspace-root state-home)
          dir (io/file transactions)
          now (long (or now-ms (System/currentTimeMillis)))
-         ;; a tombstone that IS the live LOCK is a break that was interrupted
-         ;; between the link and the unlink, never one that happened
-         interrupted (interrupted-break-file transactions)]
+         ;; a tombstone whose break never completed is not one that happened
+         interrupted (into #{} (map #(.getName ^File %))
+                           (interrupted-break-files transactions))]
      (into
        (vec (for [^File d (sort-by #(.getName ^File %)
                                    (seq (or (.listFiles dir) (make-array File 0))))
@@ -2245,8 +2325,7 @@
                :let [aged (tombstone-age f now)
                      bytes (:bytes aged 0)]
                :when (map? aged)]
-           (let [interrupted? (= (.getName f) (when interrupted
-                                                (.getName ^File interrupted)))]
+           (let [interrupted? (contains? interrupted (.getName f))]
              {:txid (.getName f)
               :kind (if interrupted? :interrupted-break :broken-lock)
               :status (cond interrupted? :lock-break-interrupted
@@ -2405,6 +2484,69 @@
                                      :released-at (str (java.time.Instant/now)))))
            {:ok true :txid txid :receipt-refs 0})))))
 
+(defn- resolve-interrupted-break!
+  "Finish or revert ONE break that never completed, and say which.
+
+   The LOCK decides, and it is re-read here rather than passed in, because
+   finishing one interrupted break unlinks it:
+
+   - the LOCK is still that same claim and its holder is DEAD by the ordinary
+     rule - the same rule every break obeys, a legacy claim still needing the
+     explicit remedy AND a receipt of death: FINISH it. The LOCK side is
+     unlinked, the evidence is stamped with its own creation time, and it
+     becomes a break that happened.
+   - the LOCK is still that same claim and its holder is ALIVE: REVERT. The
+     extra link goes, the claim is untouched.
+   - the LOCK is gone, or names a different inode: the claim this link was
+     taken from is no longer the lock, so there is no break to finish on
+     anybody's behalf and nothing that could be evidence of one. REVERT.
+
+   Either way the line names the tombstone it acted on and says what became
+   of it - `:evidence :retained` for a finish, `:evidence :removed` for a
+   revert - because a receipt naming a file that is not there, with no word
+   about why, is the shape this kernel has had to fix twice.
+
+   That third case is the one the inode rule could not even see. It is also
+   what makes two interrupted breaks over one claim resolve correctly: the
+   first finishes it, and the rest find the LOCK gone and revert - exactly one
+   break may be evidence, and a second tombstone of the same claim is a
+   duplicate rather than a second break."
+  [transactions-dir ^File tomb break-legacy-lock now-ms]
+  (let [^File lock (lock-file transactions-dir)
+        same-claim? (boolean (when-let [key (lock-file-key lock)]
+                               (= key (lock-file-key tomb))))
+        claim (when (.isFile lock) (read-lock-claim lock))
+        holder (:holder claim)
+        cause (when claim (stale-holder holder))
+        dead? (boolean
+                (and same-claim? cause
+                     (or (not= cause :legacy-format)
+                         (and break-legacy-lock
+                              (legacy-lock-dead? lock holder now-ms)))))]
+    (if dead?
+      (do (Files/deleteIfExists (.toPath lock))
+          (stamp-tombstone! tomb)
+          {:tombstone (.getName tomb)
+           :resolution :interrupted-break-finished
+           ;; the file this line names is on disk when the call returns
+           :evidence :retained
+           :holder-txid (:txid holder)
+           :holder-cause cause})
+      (do (Files/deleteIfExists (.toPath ^File (broken-at-file tomb)))
+          (Files/deleteIfExists (.toPath tomb))
+          (cond-> {:tombstone (.getName tomb)
+                   :resolution :interrupted-break-reverted
+                   ;; and this line names a file this call DELETED, which is
+                   ;; said rather than left for a reader to discover: a
+                   ;; receipt must name its subject, and a name whose file is
+                   ;; gone must say why it is gone
+                   :evidence :removed
+                   :holder-txid (:txid holder)
+                   :holder-live (boolean (and claim (nil? cause)))
+                   :lock-present (.isFile lock)}
+            (not same-claim?)
+            (assoc :cause :lock-is-no-longer-the-linked-claim))))))
+
 (defn recover!
   ;; @spec MCP-OP-MEM-013
   "Roll back every unfinished transaction found for this workspace.
@@ -2468,31 +2610,15 @@
            ;; leaves one inode under two names. That is neither a break nor a
            ;; free lock, and nothing else in this verb can tell the difference:
            ;; resolve it FIRST, and say which way it went.
+           ;; EVERY one of them, in ONE call: the listing used to type the
+           ;; first and publish the rest as breaks that happened, and a second
+           ;; `recover!` was needed to clear each of them. The LOCK is re-read
+           ;; per tombstone because finishing one unlinks it.
            interrupted
-           (when-let [^File tomb (interrupted-break-file transactions)]
-             (let [holder (:holder (read-lock-claim lock))
-                   cause (stale-holder holder)
-                   ;; the ordinary liveness rule, unweakened: a legacy claim
-                   ;; still needs the explicit remedy AND a receipt of death
-                   dead? (boolean
-                           (and cause
-                                (or (not= cause :legacy-format)
-                                    (and break-legacy-lock
-                                         (legacy-lock-dead? lock holder now-ms)))))]
-               (if dead?
-                 (do (when (= (lock-file-key tomb) (lock-file-key lock))
-                       (Files/deleteIfExists (.toPath lock)))
-                     (stamp-tombstone! tomb)
-                     {:tombstone (.getName tomb)
-                      :resolution :interrupted-break-finished
-                      :holder-txid (:txid holder)
-                      :holder-cause cause})
-                 (do (Files/deleteIfExists (.toPath ^File (broken-at-file tomb)))
-                     (Files/deleteIfExists (.toPath tomb))
-                     {:tombstone (.getName tomb)
-                      :resolution :interrupted-break-reverted
-                      :holder-txid (:txid holder)
-                      :holder-live (nil? cause)}))))
+           (mapv (fn [^File tomb]
+                   (resolve-interrupted-break! transactions tomb
+                                               break-legacy-lock now-ms))
+                 (interrupted-break-files transactions))
            claim (when (.isFile lock) (read-lock-claim lock))
            holder (:holder claim)
            cause (when claim (stale-holder holder))
@@ -2537,7 +2663,7 @@
                 ;; tombstone made a moment ago is never retired by the
                 ;; recovery that made it.
                 :broken-locks (prune-broken-locks! transactions now-ms)}
-         interrupted (assoc :interrupted-break interrupted)
+         (seq interrupted) (assoc :interrupted-breaks interrupted)
          broken (assoc :lock-broken broken)
          displaced (assoc :lock-break-displaced displaced)
          refused-break (assoc :lock-break-refused refused-break))))))

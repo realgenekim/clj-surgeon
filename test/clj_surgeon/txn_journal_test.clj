@@ -1763,7 +1763,7 @@
                    (pr-str row))))
 
         (let [result (journal/recover! (:root ws) opts)
-              finished (:interrupted-break result)]
+              finished (first (:interrupted-breaks result))]
           (is (some? finished)
               (str "recovery names what it resolved: " (pr-str result)))
           (is (= :interrupted-break-finished (:resolution finished)))
@@ -1795,7 +1795,7 @@
         ;; exactly what a crash between the link and the unlink leaves
         (Files/createLink (.toPath tomb) (.toPath lock))
         (let [result (journal/recover! (:root ws) opts)
-              reverted (:interrupted-break result)]
+              reverted (first (:interrupted-breaks result))]
           (is (some? reverted)
               (str "recovery names what it resolved: " (pr-str result)))
           (is (= :interrupted-break-reverted (:resolution reverted)))
