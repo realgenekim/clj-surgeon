@@ -8,6 +8,7 @@
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.mcp-workspace-sources :as workspace-sources]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -1937,3 +1938,137 @@
           (is (= source (slurp source-file)))))
       (finally
         (delete-tree! workspace)))))
+
+(defn- symlink!
+  "Create `link` pointing at `target`, both as strings."
+  [link target]
+  (Files/createSymbolicLink
+    (java.nio.file.Paths/get (str link) (make-array String 0))
+    (java.nio.file.Paths/get (str target) (make-array String 0))
+    (make-array java.nio.file.attribute.FileAttribute 0)))
+
+(defn- pruned-tree-workspace!
+  "The reviewer's `w9`: a source under `src/` that is really a symlink into the
+  repository's own `.git` metadata, the tree every extraction walk prunes."
+  []
+  (let [workspace (temp-dir)
+        src (io/file workspace "src" "app")
+        hooks (io/file workspace ".git" "hooks")]
+    (.mkdirs src)
+    (.mkdirs hooks)
+    (spit (io/file workspace "deps.edn") "{:paths [\"src\"]}\n")
+    (spit (io/file src "core.clj")
+          (str "(ns app.core)\n\n"
+               "(defn helper [x] (inc x))\n\n"
+               "(defn retained [] :ok)\n"))
+    (spit (io/file src "state.clj") "(ns app.state)\n\n(def value :ok)\n")
+    (spit (io/file hooks "caller.clj")
+          (str "(ns app.real-caller)\n\n"
+               "(defn go [x]\n"
+               "  (app.core/helper x))\n"))
+    (symlink! (io/file src "alias_caller.clj") "../../.git/hooks/caller.clj")
+    workspace))
+
+(def ^:private pruned-tree-extraction
+  {:extraction
+   {:file "src/app/core.clj"
+    :to "src/app/moved.clj"
+    :forms ["helper"]
+    :require_policy "minimal"
+    :caller_changes
+    [{:id "redirect-helper"
+      :files ["src/app/alias_caller.clj"]
+      :forms ["go"]
+      :find "app.core/helper"
+      :replace "app.moved/helper"
+      :expect {:matches 1 :each_form 1 :each_file 1}}]
+    :ignored_caller_files []}})
+
+;; @spec MCP-OP-EXTRACT-037
+(deftest mcp-extraction-refuses-a-caller-whose-real-file-is-inside-a-pruned-tree
+  (testing "the MCP extraction entrance is the SAME gate as :extract!: a
+            discovered source whose canonical real file lives inside a tree
+            the walk pruned is a typed refusal before any byte, never a write
+            into the repository's own metadata"
+    (let [workspace (pruned-tree-workspace!)
+          hooked (io/file workspace ".git" "hooks" "caller.clj")
+          link (io/file workspace "src" "app" "alias_caller.clj")
+          source (io/file workspace "src" "app" "core.clj")
+          target (io/file workspace "src" "app" "moved.clj")
+          before-hooked (slurp hooked)
+          before-source (slurp source)]
+      (try
+        (let [result (mcp-tool/execute-request!
+                       {:project-root (.getPath workspace)
+                        :receipt-dir (.getPath (io/file workspace "receipts"))}
+                       pruned-tree-extraction)]
+          (is (= "caller-path-in-skipped-tree" (:error_type result))
+              (str "writing into a pruned tree through the MCP entrance is a "
+                   "corruption vector, not a rewire: "
+                   (pr-str (select-keys result [:ok :error_type :error]))))
+          (is (not (true? (:ok result))))
+          (is (= before-hooked (slurp hooked))
+              "the repository's own metadata tree must be byte-identical")
+          (is (= before-source (slurp source)) "and the source unchanged")
+          (is (not (.exists target)) "and no target created")
+          (is (true? (Files/isSymbolicLink (.toPath link)))
+              "and the link is still a link"))
+        (finally (delete-tree! workspace))))))
+
+;; @spec MCP-OP-EXTRACT-037
+(deftest both-extraction-entrances-share-one-discovery-kernel
+  (testing "the same workspace yields the same discovery set on both
+            entrances: one walk, one prune, one canonicalisation"
+    (let [workspace (temp-dir)
+          src (io/file workspace "src" "app")
+          build (io/file workspace "target")]
+      (try
+        (.mkdirs src)
+        (.mkdirs build)
+        (spit (io/file workspace "deps.edn") "{:paths [\"src\"]}\n")
+        (spit (io/file src "core.clj") "(ns app.core)\n\n(defn helper [x] x)\n")
+        (spit (io/file src "state.clj") "(ns app.state)\n\n(def value :ok)\n")
+        (spit (io/file build "gen.clj") "(ns app.gen)\n\n(def copy :build)\n")
+        (symlink! (io/file src "alias_state.clj") "state.clj")
+        (let [kernel ((requiring-resolve
+                        'clj-surgeon.extract/discover-workspace-sources)
+                      workspace)
+              mcp (workspace-sources/read-all (.toPath workspace))]
+          (is (:ok kernel) (pr-str kernel))
+          (is (:ok mcp) (pr-str mcp))
+          (is (= (set (:paths kernel)) (set (keys (:sources mcp))))
+              "both entrances read exactly the same canonical source set")
+          (is (= 2 (count (:paths kernel)))
+              (str "the build tree is pruned and the alias collapses onto its "
+                   "real file: " (pr-str (:paths kernel))))
+          (is (not-any? #(str/includes? (str %) "/target/") (:paths kernel))
+              "a build copy is never a source this verb may edit")
+          (is (not-any? #(str/includes? (str %) "alias_state.clj")
+                        (keys (:sources mcp)))
+              "two names for one file are one canonical source, not two"))
+        (finally (delete-tree! workspace)))))
+
+  (testing "and both entrances refuse the pruned-tree fixture identically"
+    (let [workspace (pruned-tree-workspace!)
+          hooked (io/file workspace ".git" "hooks" "caller.clj")
+          before-hooked (slurp hooked)]
+      (try
+        (let [native (extract/execute!
+                       {:file (.getPath (io/file workspace "src/app/core.clj"))
+                        :forms '[helper]
+                        :to (.getPath (io/file workspace "src/app/moved.clj"))
+                        :alias "moved"
+                        :compile-check false})
+              _ (is (= before-hooked (slurp hooked)))
+              mcp (mcp-tool/execute-request!
+                    {:project-root (.getPath workspace)
+                     :receipt-dir (.getPath (io/file workspace "receipts"))}
+                    pruned-tree-extraction)]
+          (is (= :caller-path-in-skipped-tree (:error-type native))
+              (pr-str (select-keys native [:error-type :error])))
+          (is (= (name (:error-type native)) (:error_type mcp))
+              (str "one rule, two entry points: the refusal type must be the "
+                   "same on both, or the gate is entrance-scoped: "
+                   (pr-str [(:error-type native) (:error_type mcp)])))
+          (is (= before-hooked (slurp hooked))))
+        (finally (delete-tree! workspace))))))
