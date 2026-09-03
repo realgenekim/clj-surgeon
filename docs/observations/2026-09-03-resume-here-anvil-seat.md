@@ -71,3 +71,7 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
   Opus red-team of study ops (read-only). Each lands → my own suites under the lock → push → log.
 - **Morning items for the mayor, add:** codex auth on this seat (401 now; Sol unavailable), maven creds,
   connector, clj-nrepl-eval, /opt/claude-skills, crons.
+
+## RESUME DELTA 02:02Z
+
+- Lane 5: ac6a55658002e3ef2 template-upsert (`~/src/curtaincall-cfp-tmpl`). Gated and NOT started: S2 (q5z merge), E6 (S1), C2 (Gene's product call), A1 (tester account), inbox notes (maven creds).

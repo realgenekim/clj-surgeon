@@ -30,3 +30,5 @@ Four lanes now, disjoint worktrees, suites serialised behind `~/tmp/suite.lock`:
    contract, dep widening, the `format` shadow class, parity) — read-only.
 Codex on this seat is unauthenticated (401 on `codex exec`), so Sol is unavailable until the mayor
 provisions the login — a morning item; Opus stands in for the red-team tonight. Load at launch 3.9/16.
+
+## 02:02Z — lane 5: inb-06d376 (comms.template-saved characterization + shadow rename + upsert decision) — Sonnet on `~/src/curtaincall-cfp-tmpl` (`bridge/template-upsert` from settings-lens). Five lanes; suites serialised.
