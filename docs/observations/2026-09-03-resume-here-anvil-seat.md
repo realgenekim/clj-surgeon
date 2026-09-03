@@ -252,3 +252,11 @@ Live builders: study round 4 (ReDoS step budget; ~/src/clj-surgeon-study), censu
 Rules in force: unit suites via ~/bin/suite-run (three lanes); battery/memory-red keep the exclusive suite.lock; sol-yolo disables repo-declared MCP servers (7888 incident 06:05Z, reported).
 Inbox: inb-1165ce (night orders, GO notes, incident), inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4 (rf2 fence follow-ups), inb-3a9818 (fold-diff HOLD until Sol GO).
 Next on wake: file newest verdicts; at ~08:30Z the Gene report (tables first) from the captain's log; refresh this note.
+
+## RESUME DELTA 2026-09-03T07:18Z — night orders, fourth refresh
+GO (seven): kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated on Gene); rf2 965d49e; read-path-memory 2aa648a (MEM-015); memory-battery 5534e94 (tooling; main RED under it by design). fold-diff 2b56a484: GO for the mayor's exact production read with Sol's conditions (inb-3a9818 HOLD lifted); round 4 building for residuals.
+Live reviews: Sol census round 4 (1e5eec7), Sol q5z round 6 (9d72bcf); Opus study round 4 (ec5a592).
+Live builders: B3 MEM-005 (~/src/clj-surgeon-admit, RED committed, GREEN in progress), arms apparatus round 3 (~/src/clj-surgeon-arms), B1 kernel round 2 (~/src/clj-surgeon-txn: recheck→rename race, membership digest, , identity pinning, pre-image lifetime, battery accountant), fold-diff round 4 (~/src/curtaincall-cfp-folddiff).
+Gene report DRAFT committed: docs/observations/2026-09-03-gene-report-night.md (refresh at the end; tables from the log).
+Rules in force unchanged (suite-run lanes; battery/memory-red exclusive; sol-yolo neutralises repo .codex/config.toml — two 7888 contacts reported on inb-1165ce).
+Next on wake: file newest verdicts; when lanes go quiet or at ~08:30Z, refresh the Gene report and this note.
