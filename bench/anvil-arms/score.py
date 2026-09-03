@@ -154,6 +154,8 @@ def validate_watch(records: list[dict]) -> None:
     seqs: list[int] = []
     ended = False
     end_record: dict | None = None
+    header_seen = False
+    rollout_bound_seen = False
     for lineno, rec in enumerate(records, 1):
         if ended:
             raise StreamError(f"record-after-end watch:{lineno}")
@@ -178,7 +180,28 @@ def validate_watch(records: list[dict]) -> None:
         elif kind == "end":
             ended = True
             end_record = rec
-        elif kind not in ("abort", "header", "rollout-bound"):
+        elif kind == "header":
+            # Sol round four: `header` was permitted anywhere in the stream with no
+            # count limit, so a second, CONTRADICTORY header (a different schema,
+            # session or inode than record 1's) scored rc 0 and wrote a receipt.
+            # Genuine late binding is announced through `rollout-bound`, never a
+            # second `header` -- exactly one header opens a stream, at record zero.
+            if lineno != 1 or header_seen:
+                raise StreamError(
+                    f"duplicate-header watch:{lineno} (a header record belongs "
+                    f"only at record 1, once; a stream with a second or misplaced "
+                    f"header is not the record of one metered run)")
+            header_seen = True
+        elif kind == "rollout-bound":
+            # at most one late-binding announcement per stream, for the same reason:
+            # a second one is a contradiction, not a correction.
+            if rollout_bound_seen:
+                raise StreamError(
+                    f"duplicate-header watch:{lineno} (a second rollout-bound "
+                    f"record contradicts the first; at most one is permitted per "
+                    f"stream)")
+            rollout_bound_seen = True
+        elif kind != "abort":
             raise StreamError(f"unknown-record-kind watch:{lineno} kind={kind!r}")
     if sorted(returns) != list(range(1, len(returns) + 1)):
         raise StreamError(f"return-ordinals-not-dense-from-1 "

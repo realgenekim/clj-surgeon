@@ -1947,6 +1947,101 @@ want "case20e score rc with no PYTHONDONTWRITEBYTECODE" 0 "$?"
 # accident, and a test that deletes a tracked file to make its own assertion pass is a
 # worse defect than the one it is checking.
 
+echo "== case 39: a SECOND or misplaced watch header is a typed refusal, never rc 0 =="
+# Sol round four, item 2 (score.py:181): `header` was permitted anywhere in the
+# stream with no count limit.  Sol appended a second, CONTRADICTORY header -- schema
+# 999, a different session id and inode than record 1's -- and the scorer returned
+# rc 0 and wrote a receipt over it.  Fix: exactly one header, at record zero; at most
+# one rollout-bound.  A duplicate or misplaced one is `malformed-watch
+# duplicate-header`, rc 3, no receipt.
+
+# 39a -- Sol's own reproduction, end to end through the real scorer.
+D=$(mk11 -39a); python3 - "$D/watch.jsonl" <<'PY39A'
+import json, sys
+path = sys.argv[1]
+recs = [json.loads(l) for l in open(path) if l.strip()]
+header = dict(recs[0])
+header.update({"schema_version": 999, "session_id": "not-the-real-session",
+               "rollout_ino": header.get("rollout_ino", 0) + 1})
+recs.append(header)
+open(path, "w").write("".join(json.dumps(r) + "\n" for r in recs))
+PY39A
+score11 "$D" case39a 3 'SCORE-ABORT malformed-watch duplicate-header'
+
+# 39b -- the control the fix must not break: a clean, single-header stream still
+# scores and writes a receipt.
+D=$(mk11 -39b)
+python3 "$HERE/score.py" "$D" > "$WORK/case39b.out" 2>&1
+want "case39b score rc (control: a clean stream still scores)" 0 "$?"
+[ -e "$D/receipt.json" ] \
+  && ok "case39b a clean single-header stream still scores and writes a receipt" \
+  || { bad "case39b a clean stream no longer scores"; cat "$WORK/case39b.out"; }
+
+# 39c -- the unit-level witnesses: exactly which shapes validate_watch must refuse,
+# built directly so ms_since_start stays monotonic and only the header/rollout-bound
+# placement varies.
+python3 - "$HERE" <<'PY39C'
+import sys
+sys.path.insert(0, sys.argv[1])
+from score import validate_watch, StreamError
+
+fails = []
+
+def expect_refused(label, records):
+    try:
+        validate_watch(records)
+        fails.append(f"{label}: no refusal")
+    except StreamError as exc:
+        if "duplicate-header" not in str(exc):
+            fails.append(f"{label}: refused for the wrong reason: {exc}")
+
+def expect_ok(label, records):
+    try:
+        validate_watch(records)
+    except StreamError as exc:
+        fails.append(f"{label}: refused a clean stream: {exc}")
+
+expect_ok("clean", [
+    {"kind": "header", "ms_since_start": 0, "schema_version": 2},
+    {"kind": "return", "ms_since_start": 1, "n": 1},
+    {"kind": "end", "ms_since_start": 2, "driver_rc": 0, "wall_s": 0.1},
+])
+
+expect_refused("second-header-mid-stream", [
+    {"kind": "header", "ms_since_start": 0, "schema_version": 2},
+    {"kind": "header", "ms_since_start": 1, "schema_version": 999},
+    {"kind": "return", "ms_since_start": 2, "n": 1},
+    {"kind": "end", "ms_since_start": 3, "driver_rc": 0, "wall_s": 0.1},
+])
+
+expect_refused("header-misplaced-none-at-record-zero", [
+    {"kind": "return", "ms_since_start": 0, "n": 1},
+    {"kind": "header", "ms_since_start": 1, "schema_version": 2},
+    {"kind": "end", "ms_since_start": 2, "driver_rc": 0, "wall_s": 0.1},
+])
+
+expect_ok("single-rollout-bound", [
+    {"kind": "header", "ms_since_start": 0, "schema_version": 2},
+    {"kind": "rollout-bound", "ms_since_start": 1, "session_id": "s1"},
+    {"kind": "return", "ms_since_start": 2, "n": 1},
+    {"kind": "end", "ms_since_start": 3, "driver_rc": 0, "wall_s": 0.1},
+])
+
+expect_refused("double-rollout-bound", [
+    {"kind": "header", "ms_since_start": 0, "schema_version": 2},
+    {"kind": "rollout-bound", "ms_since_start": 1, "session_id": "s1"},
+    {"kind": "rollout-bound", "ms_since_start": 2, "session_id": "s2"},
+    {"kind": "return", "ms_since_start": 3, "n": 1},
+    {"kind": "end", "ms_since_start": 4, "driver_rc": 0, "wall_s": 0.1},
+])
+
+for f in fails:
+    print(f"FAIL case39c {f}")
+print(f"ok   case39c duplicate/misplaced watch-header refusal ({5-len(fails)}/5)")
+sys.exit(1 if fails else 0)
+PY39C
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
 # --- the shell-error trap fires here, before any verdict is printed ---------------
 exec 2>&3 3>&-
 SHELL_ERRORS=$(grep -c 'command not found' "$STDERR_LOG" 2>/dev/null || true)
