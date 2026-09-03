@@ -1,1 +1,1 @@
-No Clojure files found under <WORKSPACE>/docs/intent/study-ops
+No Clojure files found under docs/intent/study-ops

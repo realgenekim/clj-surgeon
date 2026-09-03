@@ -265,17 +265,19 @@
     (is (= (slurp edn-golden-file) (:out result)))))
 
 ;; @spec MCP-OP-STUDY-008
+;; @spec MCP-OP-STUDY-026
 (deftest cli-ls-tree-refusal-bytes-match-the-frozen-golden
-  ;; The refusal names the canonical scanned directory, which is
-  ;; machine-specific, so the workspace root is the one thing normalized.
+  ;; The refusal used to name the canonical scanned directory — a
+  ;; machine-specific absolute path — so the golden had to normalize the
+  ;; workspace root away. It now names the directory the CALLER asked for, so
+  ;; the bytes are the same on every machine and the golden is frozen whole.
   (let [result (process/shell {:out :string :err :string :continue true}
                               "bb" "-m" "clj-surgeon.core"
                               ":op" ":ls-tree" ":dir" "docs/intent/study-ops")]
     (is (= 1 (:exit result)))
-    (is (= (slurp refusal-golden-file)
-           (str/replace (:out result)
-                        (System/getProperty "user.dir")
-                        "<WORKSPACE>")))))
+    (is (= (slurp refusal-golden-file) (:out result)))
+    (is (not (str/includes? (:out result) (System/getProperty "user.dir")))
+        "a refusal message must not publish where the workspace lives")))
 
 ;; ============================================================
 ;; The format shadow that made a documented refusal unreachable

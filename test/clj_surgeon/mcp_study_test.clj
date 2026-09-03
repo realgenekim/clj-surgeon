@@ -742,6 +742,47 @@
       (is (= "invalid-ns-grep-pattern" (:error_type response)))
       (is (false? (:read_complete response))))))
 
+;; @spec MCP-OP-STUDY-006
+;; @spec MCP-OP-STUDY-026
+(deftest no-ls-tree-refusal-publishes-a-host-absolute-path
+  ;; MCP-OP-STUDY-006 forbids publishing a host-absolute path, and the two
+  ;; kernel refusals broke it: `no-clojure-files` and `study-tree-too-large`
+  ;; embedded the CANONICAL scan root, so a caller who asked for
+  ;; "docs/intent/study-ops" was told about
+  ;; "/home/…/clj-surgeon-study/docs/intent/study-ops".
+  (with-scratch-project
+    "test-fixtures/study/scratch-absolute-paths"
+    (fn [dir] (write-scratch-project! dir 30))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-absolute-paths"]
+        (doseq [request [{"mode" "ls-tree" "dir" "docs/intent/study-ops"}
+                         {"mode" "ls-tree" "dir" rel-dir "max_files" 5}
+                         {"mode" "ls-tree" "dir" rel-dir "grep" absent-pattern}
+                         {"mode" "ls-tree" "dir" rel-dir "ns_grep" absent-pattern}
+                         {"mode" "ls-tree" "dir" rel-dir "ns_grep" "["}
+                         {"mode" "ls-tree" "dir" rel-dir "ns_grep" "-x"}
+                         {"mode" "ls-tree" "dir" rel-dir "grep" "--pre=/bin/sh"}
+                         {"mode" "ls-tree" "dir" rel-dir "format" "EDN"}
+                         {"mode" "ls-tree" "dir" rel-dir "limit" 99999}
+                         {"mode" "ls-tree" "dir" rel-dir "max_files" 0}
+                         {"mode" "ls-tree" "dir" rel-dir "formatt" "edn"}
+                         {"mode" "ls-tree" "dir" rel-dir "grep" 5}
+                         {"mode" "ls-tree" "dir" "no-such-directory"}]]
+          (testing (pr-str request)
+            (let [response (run request)]
+              (is (false? (:ok response)))
+              (is (not (re-find #"(?m)(^|\s)/[^\s]+" (str (:error response))))
+                  (str "the message names a host-absolute path: "
+                       (pr-str (:error response))))
+              (is (not (str/includes? (str (:error response)) project-root))
+                  "and must not publish where the workspace lives"))))
+        (testing "the refusals that name a directory name the one the caller asked for"
+          (let [empty-dir (run {"mode" "ls-tree" "dir" "docs/intent/study-ops"})
+                too-large (run {"mode" "ls-tree" "dir" rel-dir "max_files" 5})]
+            (is (= "No Clojure files found under docs/intent/study-ops"
+                   (:error empty-dir)))
+            (is (str/includes? (:error too-large) (str "under " rel-dir)))))))))
+
 ;; @spec MCP-OP-STUDY-025
 (deftest a-rejected-pattern-is-named-but-never-handed-back
   ;; `invalid-format` was given the drop treatment; the two pattern refusals

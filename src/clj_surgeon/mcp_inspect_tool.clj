@@ -571,6 +571,7 @@
 ;; @spec MCP-OP-STUDY-007
 ;; @spec MCP-OP-STUDY-022
 ;; @spec MCP-OP-STUDY-025
+;; @spec MCP-OP-STUDY-026
 (defn execute-ls-tree
   "Run the one study kernel over a workspace-confined directory."
   [{:keys [project-root]} params]
@@ -658,6 +659,10 @@
 
       :else
       (let [scan (study/ls-tree (cond-> {:dir (:path resolved)
+                                         ;; What the CALLER named. The kernel
+                                         ;; scans the canonical realpath, which
+                                         ;; must never appear in a message.
+                                         :dir-label dir
                                          :max-files max-files}
                                   (:grep params) (assoc :grep (:grep params))
                                   (:ns_grep params) (assoc :ns-grep (:ns_grep params))))]

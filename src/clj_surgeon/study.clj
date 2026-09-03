@@ -750,6 +750,7 @@
 ;; @spec MCP-OP-STUDY-001
 ;; @spec MCP-OP-STUDY-012
 ;; @spec MCP-OP-STUDY-015
+;; @spec MCP-OP-STUDY-026
 (defn ls-tree
   "Discover the projects and source files under one directory. Parses nothing.
 
@@ -765,8 +766,15 @@
    (`outline-take`/`outline-all`), so a caller with a byte budget never pays
    to parse a tree it cannot return.
 
+   `dir-label` is what the CALLER named — the scan-relative directory, or the
+   project-relative `dir` an MCP request supplied. Refusal messages use it:
+   `dir` is rebound below to the canonical realpath, which is the confinement
+   boundary and the basis for relativizing file paths, but it is also a
+   host-absolute path that means nothing to the caller and leaks where the
+   workspace lives (MCP-OP-STUDY-006 forbids publishing one).
+
    Printing, exit codes, and receipts belong to the entrances, not here."
-  [{:keys [dir grep ns-grep max-files] :as _opts}]
+  [{:keys [dir dir-label grep ns-grep max-files] :as _opts}]
   (cond
     (not dir)
     {:ok false
@@ -813,6 +821,7 @@
     ;; symlinked components unresolved, so a realpath comparison against it
     ;; could not be made at all.
     (let [root (canonical-scan-root dir)
+          named (str (or dir-label dir))
           dir (str root)
           cap (min (or max-files default-max-scan-files) max-scan-files-ceiling)
           discovery (if grep
@@ -841,7 +850,7 @@
          :max-files cap
          :error (format "Discovery found %s%d Clojure files under %s, above the %d-file scan cap"
                         (if (:halted-early discovery) "at least " "")
-                        (:file-count discovery) dir cap)
+                        (:file-count discovery) named cap)
          :remedy (format (str "Scan a subdirectory, add a grep or ns_grep "
                               "pattern, or raise max_files (ceiling %d).")
                          max-scan-files-ceiling)}
@@ -856,7 +865,7 @@
          ;; the message; this branch was unreachable before the format shadow
          ;; was removed, so no caller depended on that spelling.
          :error (format "No Clojure files found under %s%s%s"
-                        dir
+                        named
                         (if grep (str " matching '" grep "'") "")
                         (if ns-grep (str " with ns/path matching '" ns-grep "'") ""))}
 
