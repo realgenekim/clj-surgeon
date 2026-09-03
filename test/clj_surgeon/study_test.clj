@@ -66,10 +66,15 @@
       (is (false? (:ok result)))
       (is (= :no-clojure-files (:error-type result)))
       (is (str/starts-with? (:error result) "No Clojure files found under "))))
-  (testing "a real tree returns outlined projects"
+  (testing "a real tree discovers files without parsing any of them"
     (let [result (study/ls-tree {:dir fixture-dir})]
       (is (true? (:ok result)))
-      (is (= 7 (reduce + 0 (map #(count (:outlines %)) (:projects result))))))))
+      (is (= 7 (:file-count result)))
+      (is (= 7 (study/total-file-count (:projects result))))
+      (is (every? #(nil? (:outlines %)) (:projects result))
+          "discovery lists names; outlining is the separate bounded step")
+      (is (= 7 (reduce + 0 (map #(count (:outlines %))
+                                (study/outline-all (:projects result)))))))))
 
 ;; @spec MCP-OP-STUDY-001
 (deftest ls-tree-refuses-a-flag-shaped-grep-or-ns-grep-pattern

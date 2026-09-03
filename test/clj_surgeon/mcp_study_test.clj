@@ -11,6 +11,7 @@
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.outline :as outline]
    [clj-surgeon.study :as study]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -228,6 +229,81 @@
             (is (true? (:ok response)))
             (is (= 4 (:file_count response))
                 "grep matches file bodies, so both decoy comments count too")))))))
+
+(defn- counting-outlines
+  "Run thunk with every `outline/outline` call counted. `safe-outline` — the
+   only thing that opens a source file during :ls-tree — goes through this
+   var, so the count is the number of files actually PARSED."
+  [thunk]
+  (let [calls (atom 0)
+        real-outline outline/outline]
+    (with-redefs [outline/outline (fn [& args]
+                                    (swap! calls inc)
+                                    (apply real-outline args))]
+      (let [value (thunk)]
+        [value @calls]))))
+
+(defn- write-scratch-project!
+  [dir file-count]
+  (fs/create-dirs dir)
+  (spit (str (fs/path dir "deps.edn")) "{:paths [\"src\"]}")
+  (dotimes [i file-count]
+    (write-clj-file! (str dir "/src/scratch/ns" i ".clj")
+                     (format "(ns scratch.ns%d)" i)
+                     (format "(defn f%d [] :ok)" i))))
+
+;; @spec MCP-OP-STUDY-015
+(deftest ls-tree-refuses-an-oversized-tree-before-parsing-it
+  ;; Before this, `ls-tree` outlined — that is, opened and parsed — the WHOLE
+  ;; tree before any bound applied: the red team measured 1072 files, 618 MB
+  ;; of heap and 2.86 s to return three files, ~0.55 MB per file linear. The
+  ;; cap is on DISCOVERY, which only lists names, so the refusal must arrive
+  ;; with nothing parsed.
+  (with-scratch-project
+    "test-fixtures/study/scratch-3000"
+    (fn [dir] (write-scratch-project! dir 3000))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-3000"
+            started (System/nanoTime)
+            [response outlined] (counting-outlines
+                                  #(run {"mode" "ls-tree" "dir" rel-dir}))
+            elapsed-ms (/ (- (System/nanoTime) started) 1e6)]
+        (is (false? (:ok response)))
+        (is (= "study-tree-too-large" (:error_type response)))
+        (is (= 3000 (:file_count response)) "the refusal names the count")
+        (is (= 2000 (:max_files response)) "and the cap")
+        (is (str/includes? (:error response) "3000"))
+        (is (str/includes? (:remedy response) "max_files")
+            "and the remedy that raises it")
+        (is (false? (:read_complete response)))
+        (is (true? (:source_unchanged response)))
+        (is (nil? (:tree response)))
+        (is (nil? (:files response)))
+        (is (< outlined 50)
+            "an oversized tree must be refused before it is parsed")
+        (is (< elapsed-ms 20000)
+            "and the refusal must not cost a whole-tree parse")))))
+
+;; @spec MCP-OP-STUDY-015
+(deftest ls-tree-outlines-only-the-files-the-receipt-can-carry
+  ;; The other half of the same defect: even under the cap, a receipt that
+  ;; returns a few dozen files must not parse hundreds.
+  (with-scratch-project
+    "test-fixtures/study/scratch-400"
+    (fn [dir] (write-scratch-project! dir 400))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-400"
+            [response outlined] (counting-outlines
+                                  #(run {"mode" "ls-tree" "dir" rel-dir}))]
+        (is (true? (:ok response)))
+        (is (= 400 (:file_count response)))
+        (is (true? (:truncated response)))
+        (is (pos? (:returned response)))
+        (is (< (:returned response) 400))
+        (is (< outlined 400)
+            "the whole tree must not be parsed to render a bounded receipt")
+        (is (<= outlined (+ (:returned response) 16))
+            "at most one outlining batch beyond what the receipt returned")))))
 
 ;; ============================================================
 ;; Confinement
@@ -466,17 +542,18 @@
 
     (testing "ls-tree renders through the one formatter"
       (let [scan (study/ls-tree {:dir fixture-dir})
+            outlined (study/outline-all (:projects scan))
             response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
                            "limit" 16384})]
         (is (true? (:ok scan)))
-        (is (= (study/format-ls-tree-text (:projects scan) (:dir scan))
+        (is (= (study/format-ls-tree-text outlined (:dir scan))
                (:tree response)))
         (is (= (inspect/json-data
-                 (study/format-ls-tree-edn (:projects scan) (:dir scan)))
+                 (study/format-ls-tree-edn outlined (:dir scan)))
                (:files (run {"mode" "ls-tree" "dir" fixture-dir
                              "format" "edn" "limit" 16384}))))
         (is (= (inspect/json-data
-                 (study/format-ls-tree-names (:projects scan) (:dir scan)))
+                 (study/format-ls-tree-names outlined (:dir scan)))
                (:files (run {"mode" "ls-tree" "dir" fixture-dir
                              "limit" 16384})))
             "names is the default rendering with no grep, and is the same one formatter")))))

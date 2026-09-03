@@ -15,6 +15,7 @@
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.parallel :as parallel]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
    [clj-surgeon.study :as study]
@@ -369,29 +370,19 @@
     "format" {:type "string" :enum ["names" "text" "edn"]
               :description "names (the default when grep is absent) is a compact table of contents — one {file, ns, form_count, line_count} row per file, sized to fit a whole tree in one bounded receipt. text (the default when grep is present) is the fuller compact per-form scanning view. edn is one fully detailed row per file. All three share the same bound/truncation contract."}
     "limit" {:type "integer" :minimum 1 :maximum 16384 :default 4096
-             :description "Maximum receipt payload characters. A larger tree returns truncated=true with an executable next_call."}}
+             :description "Maximum receipt payload characters. A larger tree returns truncated=true with an executable next_call."}
+    "max_files" {:type "integer" :minimum 1 :maximum 20000 :default 2000
+                 :description "Maximum number of source files DISCOVERY may find before refusing with study-tree-too-large. Independent of limit, which bounds the receipt: this bounds the work done before any receipt exists. Raise it only for a tree you actually intend to scan whole."}}
    :required ["mode"]})
 
-(defn- ls-tree-total-outlines
-  [projects]
-  (reduce + 0 (map #(count (:outlines %)) projects)))
+(def ^:private ls-tree-outline-chunk
+  "How many additional files one bounded-parallel outlining batch parses.
 
-(defn- ls-tree-take-outlines
-  "Rebuild projects keeping only the first n file outlines in scan order."
-  [projects n]
-  (loop [remaining projects
-         left n
-         acc []]
-    (if (or (empty? remaining) (<= left 0))
-      acc
-      (let [project (first remaining)
-            outlines (:outlines project)
-            kept (min left (count outlines))]
-        (recur (rest remaining)
-               (- left kept)
-               (if (pos? kept)
-                 (conj acc (assoc project :outlines (vec (take kept outlines))))
-                 acc))))))
+  The receipt grows a file at a time, but the files it needs are parsed in
+  batches so the loop pays for one worker pool per batch rather than one per
+  file. It is an upper bound on the overshoot: at most this many files beyond
+  the last that fit are ever parsed."
+  16)
 
 (defn- ls-tree-render
   [projects dir output-format]
@@ -406,26 +397,50 @@
     (inspect/json-character-count payload)
     (count payload)))
 
+;; @spec MCP-OP-STUDY-015
 (defn- ls-tree-bounded
-  "Grow the receipt one file at a time and stop at the first overflow."
-  [projects dir output-format limit]
-  (let [total (ls-tree-total-outlines projects)]
-    (loop [n 1
-           best {:returned 0
-                 :omitted total
-                 :truncated (pos? total)
-                 :payload (ls-tree-render [] dir output-format)}]
-      (if (> n total)
-        best
-        (let [kept (ls-tree-take-outlines projects n)
-              payload (ls-tree-render kept dir output-format)]
-          (if (<= (ls-tree-payload-size payload output-format) limit)
-            (recur (inc n)
-                   {:returned n
-                    :omitted (- total n)
-                    :truncated (< n total)
-                    :payload payload})
-            best))))))
+  "Grow the receipt one file at a time and stop at the first overflow, parsing
+  only the files the receipt can actually carry.
+
+  Discovery returns names; outlining opens and PARSES. Before this the kernel
+  outlined the whole tree before any bound applied — 1072 files and 618 MB of
+  heap to return three. Files are parsed here in bounded-parallel batches of
+  `ls-tree-outline-chunk`, so the number ever parsed is at most one chunk
+  beyond the number returned."
+  [projects dir output-format limit total]
+  (let [cache (atom {})
+        attempt (fn [n map-fn]
+                  (let [kept (study/outline-take projects n cache map-fn)
+                        payload (ls-tree-render kept dir output-format)]
+                    {:returned n
+                     :omitted (- total n)
+                     :truncated (< n total)
+                     :payload payload
+                     :fits? (<= (ls-tree-payload-size payload output-format)
+                                limit)}))
+        empty-receipt {:returned 0
+                       :omitted total
+                       :truncated (pos? total)
+                       :payload (ls-tree-render [] dir output-format)}]
+    (loop [best empty-receipt
+           fitting 0]
+      (let [batch-end (min total (+ fitting ls-tree-outline-chunk))]
+        (if (= fitting batch-end)
+          best
+          ;; One bounded-parallel batch, then the exact answer inside it.
+          (let [batch (attempt batch-end parallel/bounded-map)]
+            (if (:fits? batch)
+              (recur (dissoc batch :fits?) batch-end)
+              ;; Every file in this batch is cached now, so walking it costs
+              ;; renders, not parses.
+              (loop [n (inc fitting)
+                     best best]
+                (if (> n batch-end)
+                  best
+                  (let [candidate (attempt n map)]
+                    (if (:fits? candidate)
+                      (recur (inc n) (dissoc candidate :fits?))
+                      best)))))))))))
 
 (defn- ls-tree-next-call
   [params overrides]
@@ -434,7 +449,8 @@
                        (:dir params) (assoc :dir (:dir params))
                        (:grep params) (assoc :grep (:grep params))
                        (:ns_grep params) (assoc :ns_grep (:ns_grep params))
-                       (:format params) (assoc :format (:format params)))
+                       (:format params) (assoc :format (:format params))
+                       (:max_files params) (assoc :max_files (:max_files params)))
                      overrides)})
 
 (defn- ls-tree-refusal
@@ -463,6 +479,7 @@
         ;; fuller per-form view) stays the default once grep is present.
         output-format (or (:format params) (if (:grep params) "text" "names"))
         limit (or (:limit params) ls-tree-default-limit)
+        max-files (or (:max_files params) study/default-max-scan-files)
         root (mcp-paths/real-root project-root)
         resolved (mcp-paths/resolve-directory-path root dir)]
     (cond
@@ -480,8 +497,17 @@
                        "Expected a study limit between 1 and 16384 characters"
                        {:dir dir :limit limit})
 
+      (not (and (integer? max-files) (pos? max-files)
+                (<= max-files study/max-scan-files-ceiling)))
+      (ls-tree-refusal params :invalid-max-files
+                       (format (str "Expected a discovery cap between 1 and %d "
+                                    "files")
+                               study/max-scan-files-ceiling)
+                       {:dir dir :max_files max-files})
+
       :else
-      (let [scan (study/ls-tree (cond-> {:dir (:path resolved)}
+      (let [scan (study/ls-tree (cond-> {:dir (:path resolved)
+                                         :max-files max-files}
                                   (:grep params) (assoc :grep (:grep params))
                                   (:ns_grep params) (assoc :ns-grep (:ns_grep params))))]
         (if-not (:ok scan)
@@ -489,15 +515,18 @@
                            (:error-type scan)
                            (:error scan)
                            (cond-> {:dir dir
-                                    :remedy (if (or (:grep params) (:ns_grep params))
-                                              "Widen or drop grep/ns_grep, or scan a parent directory."
-                                              "Scan a directory that contains Clojure sources.")}
+                                    :remedy (or (:remedy scan)
+                                                (if (or (:grep params) (:ns_grep params))
+                                                  "Widen or drop grep/ns_grep, or scan a parent directory."
+                                                  "Scan a directory that contains Clojure sources."))}
+                             (:file-count scan) (assoc :file_count (:file-count scan))
+                             (:max-files scan) (assoc :max_files (:max-files scan))
                              (:grep params) (assoc :grep (:grep params))
                              (:ns_grep params) (assoc :ns_grep (:ns_grep params))))
           (let [projects (:projects scan)
-                total (ls-tree-total-outlines projects)
+                total (:file-count scan)
                 bounded (ls-tree-bounded projects (:path resolved)
-                                         output-format limit)]
+                                         output-format limit total)]
             (cond->
               {:ok true
                :operation "inspect_clojure"

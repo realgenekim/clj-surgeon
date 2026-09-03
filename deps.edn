@@ -5,6 +5,7 @@
   babashka/fs {:mvn/version "0.5.30"}
   babashka/process {:mvn/version "0.6.23"}
   cheshire/cheshire {:mvn/version "5.13.0"}
+  com.climate/claypoole {:mvn/version "1.1.4"}
   org.babashka/sci {:mvn/version "0.10.47"}
   rewrite-clj/rewrite-clj {:mvn/version "1.2.50"}}
 

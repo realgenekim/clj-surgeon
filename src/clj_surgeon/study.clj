@@ -161,10 +161,18 @@
   [root dir]
   (when (fs/directory? dir)
     (try
-      (let [result (babashka.process/shell
-                     {:out :string :err :string :continue true}
-                     "find" (str dir)
-                     "-name" "*.clj" "-o" "-name" "*.cljs" "-o" "-name" "*.cljc")]
+      (let [;; -prune the cache/vendor directories exactly as find-build-files
+            ;; does. Without it a scan walked every file under target/,
+            ;; node_modules/, and .gitlibs/ and then filtered by name.
+            prune-args (concat ["("]
+                               (drop 1 (mapcat #(vector "-o" "-name" %) skip-dirs))
+                               [")" "-prune" "-o"
+                                "(" "-name" "*.clj"
+                                "-o" "-name" "*.cljs"
+                                "-o" "-name" "*.cljc" ")" "-print"])
+            result (apply babashka.process/shell
+                          {:out :string :err :string :continue true}
+                          "find" (str dir) prune-args)]
         (when (zero? (:exit result))
           (->> (str/split-lines (str/trim (:out result)))
                (remove str/blank?)
@@ -327,25 +335,62 @@
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
 
-(defn- outline-all-files
-  "Compute outlines for all files across projects, in parallel.
-   Returns projects with :outlines — a vec of [file outline] pairs."
+(defn total-file-count
+  "How many source files discovery found across projects."
   [projects]
-  (let [;; Collect all [project-idx file] pairs
-        all-files (for [[pidx project] (map-indexed vector projects)
-                        f (:files project)]
-                    [pidx f])
-        ;; Parse all files in parallel
-        results (pmap (fn [[pidx f]]
-                        [pidx f (safe-outline f)])
-                      all-files)
-        ;; Group back by project index
-        by-project (group-by first results)]
-    (mapv (fn [[pidx project]]
-            (let [file-results (mapv (fn [[_ f outline]] [f outline])
-                                     (get by-project pidx []))]
-              (assoc project :outlines file-results)))
-          (map-indexed vector projects))))
+  (reduce + 0 (map #(count (:files %)) projects)))
+
+(defn- files-in-scan-order
+  [projects]
+  (for [[index project] (map-indexed vector projects)
+        file (:files project)]
+    [index file]))
+
+;; @spec MCP-OP-STUDY-015
+(defn outline-take
+  "Outline the FIRST n files across projects in scan order, and return the
+   projects rebuilt with `:outlines` — dropping projects left with none.
+
+   Outlining is the expensive half of `:ls-tree`: it opens and PARSES every
+   file it is given. It is therefore deliberately not part of discovery. A
+   caller with a byte budget grows n until the rendered receipt overflows and
+   never pays to parse a tree it cannot return. Before this, the whole tree
+   was outlined up front — 1072 files, 618 MB of heap, to return three.
+
+   `cache` is an atom of file -> outline, so a growing bound never re-parses
+   a file.
+
+   `map-fn` maps `(fn [file] [file outline])` across the files still missing.
+   It may run in any order and on any threads — results are re-keyed by file,
+   so a strategy changes only the order work is done in, never the answer. It
+   defaults to serial `map` because this kernel must keep loading under
+   babashka, where the CLI runs; the JVM MCP entrance passes a bounded
+   claypoole pool (`clj-surgeon.parallel/bounded-map`)."
+  ([projects n cache] (outline-take projects n cache map))
+  ([projects n cache map-fn]
+   (let [wanted (vec (take n (files-in-scan-order projects)))
+         missing (->> (map second wanted)
+                      distinct
+                      (remove #(contains? @cache %))
+                      vec)]
+     (when (seq missing)
+       (swap! cache into (map-fn (fn [file] [file (safe-outline file)]) missing)))
+     (let [outlines @cache
+           by-project (group-by first wanted)]
+       (->> (map-indexed vector projects)
+            (map (fn [[index project]]
+                   (assoc project :outlines
+                          (mapv (fn [[_ file]] [file (get outlines file)])
+                                (get by-project index [])))))
+            (remove #(empty? (:outlines %)))
+            vec)))))
+
+;; @spec MCP-OP-STUDY-015
+(defn outline-all
+  "Outline every discovered file — the whole-tree rendering the CLI prints."
+  ([projects] (outline-all projects map))
+  ([projects map-fn]
+   (outline-take projects (total-file-count projects) (atom {}) map-fn)))
 
 (defn format-file-text
   "Pure: format a single file's outline map as compact text lines."
@@ -505,10 +550,24 @@
       (when (fs/directory? (str root)) root))
     (catch Exception _e nil)))
 
+(def default-max-scan-files
+  "How many source files one `:ls-tree` scan may DISCOVER before refusing.
+
+   A cap on discovery, not on the receipt: the receipt's own byte budget
+   already decides how many files come back. This exists because the work
+   between 'directory named' and 'first byte budgeted' used to be unbounded —
+   the whole tree was parsed before any bound applied."
+  2000)
+
+(def max-scan-files-ceiling
+  "Highest `:max-files` a request may ask for."
+  20000)
+
 ;; @spec MCP-OP-STUDY-001
 ;; @spec MCP-OP-STUDY-012
+;; @spec MCP-OP-STUDY-015
 (defn ls-tree
-  "Scan one absolute-or-relative directory and return outlined projects.
+  "Discover the projects and source files under one directory. Parses nothing.
 
    `grep` filters by file CONTENTS (ripgrep over file bodies — matches
    comments, strings, and unrelated substrings). `ns-grep` filters by each
@@ -517,9 +576,13 @@
    namespaces matching X'. Both may be given; ns-grep narrows whatever grep
    (or the full scan) already found.
 
-   Returns {:ok true :dir <absolutized> :projects [...]} or a typed refusal.
+   Returns {:ok true :dir <canonical> :file-count n :projects [{:name :root
+   :files}]} or a typed refusal. Outlining is the separate, bounded step
+   (`outline-take`/`outline-all`), so a caller with a byte budget never pays
+   to parse a tree it cannot return.
+
    Printing, exit codes, and receipts belong to the entrances, not here."
-  [{:keys [dir grep ns-grep] :as _opts}]
+  [{:keys [dir grep ns-grep max-files] :as _opts}]
   (cond
     (not dir)
     {:ok false
@@ -567,8 +630,11 @@
                        (discover-projects root dir))
           projects (if ns-grep
                      (filter-projects-by-ns-grep discovered dir ns-grep)
-                     discovered)]
-      (if (empty? projects)
+                     discovered)
+          file-count (total-file-count projects)
+          cap (min (or max-files default-max-scan-files) max-scan-files-ceiling)]
+      (cond
+        (empty? projects)
         {:ok false
          :error-type :no-clojure-files
          :dir dir
@@ -581,8 +647,28 @@
                         dir
                         (if grep (str " matching '" grep "'") "")
                         (if ns-grep (str " with ns/path matching '" ns-grep "'") ""))}
+
+        ;; Refused after discovery (which only lists names) and BEFORE any
+        ;; file is opened. The count and the cap are both named so the caller
+        ;; can choose a remedy instead of guessing one.
+        (> file-count cap)
+        {:ok false
+         :error-type :study-tree-too-large
+         :dir dir
+         :grep grep
+         :ns-grep ns-grep
+         :file-count file-count
+         :max-files cap
+         :error (format "Discovery found %d Clojure files under %s, above the %d-file scan cap"
+                        file-count dir cap)
+         :remedy (format (str "Scan a subdirectory, add a grep or ns_grep "
+                              "pattern, or raise max_files (ceiling %d).")
+                         max-scan-files-ceiling)}
+
+        :else
         {:ok true
          :dir dir
          :grep grep
          :ns-grep ns-grep
-         :projects (outline-all-files projects)}))))
+         :file-count file-count
+         :projects projects}))))

@@ -150,9 +150,12 @@
     (if-not (:ok scan)
       (do (println (:error scan))
           (System/exit 1))
-      (if (= format :edn)
-        (study/format-ls-tree-edn (:projects scan) (:dir scan))
-        (study/format-ls-tree-text (:projects scan) (:dir scan))))))
+      ;; The CLI has no byte budget, so it asks for the whole tree; the MCP
+      ;; entrance grows the same `outline-take` only as far as its receipt fits.
+      (let [projects (study/outline-all (:projects scan))]
+        (if (= format :edn)
+          (study/format-ls-tree-edn projects (:dir scan))
+          (study/format-ls-tree-text projects (:dir scan)))))))
 
 ;; ============================================================
 ;; Ops registry — single source of truth for dispatch + help
