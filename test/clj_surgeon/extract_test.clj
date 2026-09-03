@@ -2434,3 +2434,79 @@
                                         :compile-check false})]
           (is (true? (:applied result)) (pr-str (:error result)))))
       (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-037
+(deftest a-pruned-name-that-links-to-a-tree-the-walk-read-is-not-a-pruned-tree
+  (testing "target -> build_out, where build_out is an ordinary root-level
+            directory the walk descended and read: canonicalising the pruned
+            NAME must not forbid the tree the walk actually READ"
+    (let [root (create-caller-project!)
+          build-out (io/file root "build_out")
+          gen (io/file build-out "gen.clj")]
+      (try
+        (.mkdirs build-out)
+        (spit gen (str "(ns app.gen\n"
+                       "  (:require\n"
+                       "   [app.core :as core]))\n\n"
+                       "(defn go [x] (core/moved-two x))\n"))
+        (symlink! (io/file root "target") "build_out")
+        (let [src (io/file root "src" "app")
+              result (extract/execute! {:file (.getPath (io/file src "core.clj"))
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (true? (:applied result))
+              (str "a tree the walk demonstrably read is not a tree it "
+                   "declined to enter: "
+                   (pr-str (select-keys result [:error-type :error :path
+                                                :resolves-to :tree]))))
+          (is (str/includes? (slurp gen) "[app.moved :as moved]")
+              "and the caller inside it is rewired like any other"))
+        (finally (delete-recursive! root)))))
+
+  (testing "out -> src, the shape that refused EVERY extraction in the
+            workspace and named the source file itself as the offender"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")]
+      (try
+        (symlink! (io/file root "out") "src")
+        (let [result (extract/execute! {:file (.getPath (io/file src "core.clj"))
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (true? (:applied result))
+              (str "the workspace has no remedy short of deleting the link, "
+                   "and the walk read src/ by its own name: "
+                   (pr-str (select-keys result [:error-type :error :path
+                                                :resolves-to :tree]))))
+          (is (str/includes? (slurp (io/file src "only_moved.clj"))
+                             "[app.moved :as moved]")
+              "and every ordinary caller is still rewired"))
+        (finally (delete-recursive! root)))))
+
+  (testing "but a tree the walk truly DECLINED still refuses: .git is pruned
+            by name and nothing under it was ever read"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")
+          hooks (io/file root ".git" "hooks")
+          real (io/file hooks "caller.clj")
+          link (io/file src "alias_caller.clj")]
+      (try
+        (.mkdirs hooks)
+        (spit real (str "(ns app.real-caller\n"
+                        "  (:require\n"
+                        "   [app.core :as core]))\n\n"
+                        "(defn go [x] (core/moved-two x))\n"))
+        (symlink! link "../../.git/hooks/caller.clj")
+        (let [before-real (slurp real)
+              result (extract/execute! {:file (.getPath (io/file src "core.clj"))
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (= :caller-path-in-skipped-tree (:error-type result)))
+          (is (= before-real (slurp real)))
+          (is (true? (java.nio.file.Files/isSymbolicLink (.toPath link)))))
+        (finally (delete-recursive! root))))))
