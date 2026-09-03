@@ -506,10 +506,24 @@
      :exceeded? @exceeded
      :observed (cond-> (count @found) @exceeded inc)}))
 
+;; @spec MCP-OP-CENSUS-032
+(defn census-root
+  "The CANONICAL workspace root the CLI census walks.
+
+   The tool resolves its project root through `mcp-paths/real-root` before it
+   walks anything. The CLI only absolutized, so `:dir` naming a symlink to a
+   workspace handed the walk a link; the walk correctly does not follow links,
+   visited nothing, and reported `no-fold-arms-found` on a tree the tool
+   censused. Canonicalising here is what makes the two entrances answer the
+   same question."
+  [dir]
+  (.getCanonicalPath (java.io.File. (str (fs/absolutize (or dir "."))))))
+
 ;; @spec MCP-OP-CENSUS-019
 ;; @spec MCP-OP-CENSUS-024
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-028
+;; @spec MCP-OP-CENSUS-032
 (defn census-sources
   "Project-relative {:file :source} inputs that define fold arms.
 
@@ -523,7 +537,7 @@
    drops their text."
   ([dir file] (census-sources dir file {}))
   ([dir file {:keys [declared?]}]
-  (let [root (str (fs/absolutize (or dir ".")))
+  (let [root (census-root dir)
         discovered (when-not file (census-candidates root))
         paths (if file
                 [(str (fs/absolutize file))]
@@ -644,7 +658,7 @@
           {:ok false
            :error-type :no-fold-arms-found
            :error "No file defines defmethod fold-event arms"
-           :dir (str (fs/absolutize (or dir ".")))
+           :dir (census-root dir)
            :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
           (let [threads (when pool (:size pool))
                 {:keys [map-fn pool-size]} (census-plan-pool threads)
