@@ -57,3 +57,13 @@ disappears with the loop. Builder's unit 1054/13155/0; my own run in progress un
 For Gene at merge time: on a historical log with nil-id templates (none known), the projection changes
 from collide to append.
 
+
+## 02:20Z — two more executed red-teams on queued branches; the fence-review rule widened
+
+The study-ops NO-GO proved a read verb can be a write path without touching any fence file. Launched
+Opus red-teams on the other "ready" branches with the same classes in scope: census 7244141 (discovery,
+subprocess, bounds, `doors` as user input, pool_size 64 on a shared box) and rf2 5e6cdd2 + q5z 2753f23
+(the write verbs: the compile subprocess built from the repo's own `.clj-surgeon.edn` aliases, reader
+eval, write confinement for rename/retire and target files, atomicity, discovery bounds). CLAUDE.md now
+carries "Fence review scope": subprocess argv, reader eval, walk paths, pre-parse bounds, next_call
+termination — executed review before any surface enters the queue.
