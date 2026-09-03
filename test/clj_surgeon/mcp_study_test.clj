@@ -981,6 +981,28 @@
           "the floor is the total line and nothing else")
       (is (> (count (:tree response)) 1)
           "a text receipt cannot be smaller than the line that reports what it omitted")))
+  (testing "and that line is 36 + 2 x digits(file_count) characters wide"
+    ;; The floor was DOCUMENTED as "38 characters for a two-digit tree", which
+    ;; is a one-digit tree's floor attached to the wrong width: `shown` is 0
+    ;; and `omitted` equals `file_count`, so the count is spelled twice and
+    ;; every extra digit costs two characters. The test computes the width
+    ;; from the documented formula rather than pinning one number, so the
+    ;; source comment and the payload cannot disagree again in silence.
+    (let [floor (fn [file-count] (+ 36 (* 2 (count (str file-count)))))]
+      (is (= [38 40 42 46] (mapv floor [7 50 100 20000]))
+          "the formula, stated once, by hand")
+      (doseq [file-count [7 50 100]]
+        (testing (str file-count " files")
+          (with-scratch-project
+            "test-fixtures/study/scratch-floor"
+            (fn [dir] (write-scratch-project! dir file-count))
+            (fn []
+              (let [response (run {"mode" "ls-tree"
+                                   "dir" "test-fixtures/study/scratch-floor"
+                                   "format" "text" "limit" 1})]
+                (is (zero? (:returned response)))
+                (is (= file-count (:file_count response)))
+                (is (= (floor file-count) (count (:tree response)))))))))))
   (testing "names and edn bottom out at the empty array's two characters"
     (doseq [format ["names" "edn"]]
       (testing format

@@ -424,8 +424,14 @@
         ;; The floor. Below it no bound can go: `names`/`edn` bottom out at
         ;; the empty array's two characters (MCP-OP-STUDY-018), and `text`
         ;; bottoms out at its trailing total line plus, when discovery found
-        ;; more than one project, one `0 shown` header per project. At
-        ;; `limit 1` the text payload is therefore LARGER than the limit, by
+        ;; more than one project, one `0 shown` header per project. That total
+        ;; line is `36 + 2 x digits(file_count)` characters — 38 for a
+        ;; one-digit tree, 40 for two digits, 42 for three, 46 at the 20,000
+        ;; ceiling — because `shown` is 0 and `omitted` equals `file_count`,
+        ;; so the count is spelled twice. (The number here read "38 characters
+        ;; for a two-digit tree", which is a one-digit tree's floor attached
+        ;; to the wrong width.) At `limit 1` the text payload is therefore
+        ;; LARGER than the limit, by
         ;; construction and not by accident: the alternative is a receipt that
         ;; reports nothing about what it left out, or one whose body
         ;; contradicts its own `project_count`.
