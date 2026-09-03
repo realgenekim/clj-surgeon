@@ -224,11 +224,18 @@
 ;; @spec MCP-OP-MEM-003
 (defn unknown-cursor-refusal
   "The receipt for a cursor whose pinned snapshot this root does not hold —
-   expired, pruned, never written, or minted against a DIFFERENT root.
+   expired, pruned, never written, minted against a DIFFERENT root, or filed
+   under bytes that no longer PROVE the manifest they are filed as.
 
    Snapshots are addressed by the canonical root path, so a cursor is not
    portable between roots however alike two trees look. Serving it from
-   whatever the current root happens to contain is the first blocker."
+   whatever the current root happens to contain is the first blocker.
+
+   The last cause is the round-three finding: a snapshot is verified before it
+   is SERVED, not only before it is reused, so rows that no longer re-fold to
+   their own address are `unknown` rather than authoritative. `unknown` is the
+   honest word for it — the manifest that address names is not on disk any
+   more, whatever is."
   [{:keys [token] :as request}]
   {:error-type :unknown-result-cursor
    :error (str "no pinned manifest for this cursor under this root: "

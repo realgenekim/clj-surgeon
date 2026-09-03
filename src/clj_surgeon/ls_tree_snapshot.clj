@@ -273,16 +273,22 @@
             [(hex (.digest md)) n])))
       (catch Exception _ nil))))
 
-(defn- verified-snapshot
+(defn verified-snapshot
   "The snapshot filed under `cursor-id` for `root` — but ONLY when its own
    bytes still prove it: this projection version, this root, this id, a secret
    present, and rows on disk that re-fold to exactly the id they are filed
    under with the row count the meta claims.
 
-   Anything else is a MISS and gets rebuilt from the tree. A corrupt,
-   truncated, half-written or tampered snapshot must never be served on the
-   strength of its filename: that would make the address a name again, and the
-   caller cannot tell the difference from the outside."
+   Anything else is a MISS. On the WRITE path a miss rebuilds from the tree;
+   on the SERVE path a miss is `:unknown-result-cursor`, because a manifest
+   that no longer proves its own address is not a manifest this root holds.
+
+   PUBLIC because SERVE needs it as much as REUSE does. The round-three review
+   found `run-pinned-page` resolving the snapshot with `read-meta`, so a rows
+   file tampered to substitute one candidate for another was served under an
+   unchanged cursor with no signal: `[m06 m01 m08 m09 m10]`, m01 standing in
+   for m07. Verifying on reuse and trusting on serve makes the address a
+   filename again on exactly the path a caller reads."
   [root cursor-id]
   (when-let [m (read-meta root cursor-id)]
     (let [[d n] (rows-digest (rows-file root cursor-id))]

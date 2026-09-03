@@ -804,17 +804,27 @@
 
    Four typed refusals guard it, and each names a DIFFERENT fact about the
    caller's cursor: `:invalid-result-cursor` — this server did not mint that
-   token; `:unknown-result-cursor` — it did, but not for this root, or the
-   snapshot is gone; `:result-cursor-out-of-range` — it did, and the position
+   token; `:unknown-result-cursor` — it did, but not for this root, the
+   snapshot is gone, or the bytes filed under it no longer PROVE the manifest
+   they are filed as; `:result-cursor-out-of-range` — it did, and the position
    is not in the manifest; `:stale-result-cursor` — it did, and a file this
    page must serve no longer holds its pinned content.
+
+   The snapshot is resolved by `verified-snapshot`, so the page re-folds the
+   rows on disk to their own address before it serves a single record. The
+   cost is one streaming pass over the manifest file; the alternative is
+   trusting a filename, which the round-three review turned into a silently
+   substituted candidate.
 
    No discovery, no glob, no tree walk: the page reads its own slice of the
    pinned rows and nothing else."
   ;; @spec MCP-OP-MEM-003
   [{:keys [abs cursor ceiling complete output-format base render]}]
   (if-let [{:keys [cursor-id offset mac]} (budget/parse-cursor cursor)]
-    (let [snap (snapshot/read-meta abs cursor-id)]
+    ;; VERIFIED, never merely read: a snapshot file is a CLAIM about its
+    ;; content, and the claim is re-checked on the path that SERVES it, not
+    ;; only on the path that reuses it.
+    (let [snap (snapshot/verified-snapshot abs cursor-id)]
       (cond
         (nil? snap)
         (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
