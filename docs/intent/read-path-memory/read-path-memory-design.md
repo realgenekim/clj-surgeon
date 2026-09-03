@@ -377,6 +377,22 @@ pass over the corpus, because the address cannot be known before the last row
 is folded. The saving is in stored state (one snapshot per distinct tree state
 rather than one per scan) and in determinism, not in the pinning scan's wall.
 
+One caveat it introduces, stated here rather than discovered later: two scans
+that BOTH find no snapshot for the same tree and pin it concurrently now race
+for one address, where random ids gave each its own. Both write identical rows;
+the meta written last wins, and the loser's cursor fails its mac and refuses
+`:invalid-result-cursor`. It is a refusal, never a wrong result, and it
+requires both scans to pin the same unpinned tree within the same few hundred
+milliseconds. The fix, if it is ever seen, is a lock file in `cursor-dir` — not
+a return to entropy.
+
+Measured on the memory battery's 10,000-file corpus, `ad3cdc7`: across one
+reference rep and five battery reps in both phases — about eleven
+ceiling-binding scans — the state root gained ONE 1.24 MB snapshot and zero
+build temporaries, and the parity cell reports a single `:result-hash` equal to
+`:reference-hash` across four warm reps, where the random id produced
+`nondeterministic:4`.
+
 **Every digest is taken AT ISSUE TIME, not lazily when a page is served.** The
 cheaper variant — digest each file only when its own page is read, so the
 scan's single read (MEM-015) pays for it — was considered and rejected, because

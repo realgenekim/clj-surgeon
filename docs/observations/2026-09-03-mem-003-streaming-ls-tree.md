@@ -511,3 +511,180 @@ digest is published in the receipt as `:manifest_digest`, so any holder of a
 receipt could mint any offset. The implementation correctly deviated to a
 per-snapshot secret. Option 1 keeps that deviation; do not undo it while making
 the id deterministic.
+
+---
+
+# The blocker CLOSED, 2026-09-03 (later still) — the cursor is content-addressed
+
+Option 1 above was applied, red first, at `33dacb5` (witnesses) and `ad3cdc7`
+(implementation + LID amendment). The recommendation was followed exactly,
+including its warning: the per-snapshot secret stays, and the MAC is NOT keyed
+on the manifest digest.
+
+## What changed
+
+`cursor-id` **is** the manifest digest — SHA-256 folded, in result order, over
+each row's `position ⇥ project-index ⇥ path ⇥ content-digest`, seeded with a
+`manifest-version`. `snapshot/new-id` (two `UUID/randomUUID` values) still
+exists, renamed `random-hex64`, and now mints only SECRETS and build
+temporaries.
+
+A scan that binds the ceiling folds the manifest as before, then looks for a
+snapshot already filed under that address. **A hit is verified before it is
+reused**: the rows on disk are re-folded and must still prove the id they are
+filed under, and the meta must name this root, this id, this projection
+version, and the same row count. Anything else is a MISS — rebuilt from the
+tree, with a fresh secret — because a file sitting under a content address is
+a *claim* about its content, and serving it unverified would make the address
+a filename again.
+
+Two boundaries went into the LID (`read-path-memory-specs.md`, MEM-003
+amendment, plus a new `cursor addressing` falsifier row):
+
+- **Stat is not in the address.** `:s` and `:m` were dropped from the manifest
+  row. They are not identity — that was Sol's finding 1 — and folding mtime
+  would hand a touched-but-unchanged tree a new id, a new snapshot and a
+  different cursor, which is this same nondeterminism at one remove.
+- **The MAC key is not the address.** Content-addressing PUBLISHES the id: it
+  is the receipt's `:manifest_digest`. The previous builder's deviation from
+  the original brief's `sha256(cursor-id ‖ offset ‖ snapshot-digest)` therefore
+  became load-bearing rather than incidental, and is kept.
+
+## Witnesses — red first, each on its own defect
+
+| witness | RED, at `979cb0c` | GREEN |
+|---|---|---|
+| two scans of an unchanged tree are byte-identical (text and EDN, cursor included) and pin ONE snapshot | the two cursors differ; 4 scans left 4 snapshots | identical; 1 snapshot, no build temporaries |
+| a changed tree mints a new id, an unchanged one does not | two scans of the SAME tree already differed; 3 snapshots for 2 tree states | ids equal across scans, different across content; exactly 2 snapshots |
+| a receipt holder cannot mint a cursor for another offset | `cursor-id` was not the published digest, and the "do not key the MAC on it" line had no witness at all | every mac derivable from the receipt refuses `:invalid-result-cursor`; the server-keyed mac for the same offset serves |
+| a snapshot whose rows do not match its digest is rebuilt, not trusted | no snapshot was ever reused, so nothing verified one | corrupt rows rebuilt byte-for-byte; page 2 serves 5 distinct files; the discarded snapshot's authenticator is discarded with it |
+
+`bb -cp src:test` over `clj-surgeon.ls-tree-budget-test`: **11 failing
+assertions at `979cb0c`, 0 after** — 27 tests, 157 assertions.
+
+## Hand-driven at the CLI, every mode
+
+`CLJ_SURGEON_STATE_ROOT` pointed at a throwaway root; `bb -cp src -m
+clj-surgeon.core`.
+
+```
+$ diff <(… :op ls-tree :dir src :max-results 3) <(… :op ls-tree :dir src :max-results 3)
+IDENTICAL                        <- four scans, ONE snapshot, 32 KB of state
+
+   next_call: … :cursor 410fc992…:3:04a8e33f…      (the same token every scan)
+
+$ … :cursor 410fc992…:3:04a8e33f…
+clj_surgeon/cljc/analyze.clj  80 lines, 6 forms   <- the 4th file, as it should be
+
+$ … :cursor 410fc992…:9:410fc992…                 <- mac forged from the PUBLISHED digest
+── invalid-result-cursor: :cursor is not a continuation cursor
+
+$ … :max-results 3 :complete true
+── result-ceiling-exceeded: ls-tree found 70 file(s); a complete result may hold at most 3 record(s)
+
+$ … :max-results 0
+── invalid-result-ceiling: :max-results must be a positive integer; got "0"
+
+$ … :cursor 00000000…:3:04a8e33f…
+── unknown-result-cursor: no pinned manifest for this cursor under this root
+
+# a five-file tree, one file's content changed between scans:
+id before: 4b54d844…      id after: dd98902217…      snapshots: 2
+$ … :cursor <the old one>
+── stale-result-cursor: src/x/m2.clj changed since this cursor was issued
+```
+
+## The battery, run once under the exclusive lock — the parity line is GREEN
+
+`flock /home/forge/tmp/suite.lock make memory-battery
+MEMBAT_ROOT=/home/forge/tmp/stream/membat`, `-Xmx512m`, 5 reps, six corpora, at
+`ad3cdc7`. The cached unbounded reference failed attestation (the source digest
+moved) and was rebuilt up front, as the target is designed to do.
+Receipt: `/home/forge/tmp/stream/membat/receipts/20260903T105811.079847492Z-battery.edn`.
+
+```
+op                            prof      N  phase  wall_ms  peak_mb  held_mb  excl_mb  grow_mb afterGC_mb  files      bytes  OOM?  verdict
+-----------------------------------------------------------------------------------------------------------------------------------------
+cli-ls-tree                default    100  fresh      134    189.9      0.6      0.9      0.0       24.3    100     404332    no       ok
+cli-ls-tree                default    100   warm       96    193.5      0.9      0.9      0.0       24.2    100     404332    no       ok
+cli-ls-tree                default   1000  fresh      413    259.6      9.5      9.4      0.1       24.3   1000    4045282    no    trend
+cli-ls-tree                default   1000   warm      488    293.7      9.5      9.5      0.1       24.3   1000    4045282    no    trend
+cli-ls-tree                default  10000  fresh     1087    257.8      9.4      9.4      0.0       24.3  10000   40472773    no    trend
+cli-ls-tree                default  10000   warm     1102    286.9      9.6      9.4      0.1       24.3  10000   40472773    no    trend
+cli-ls-tree                   cljc    100  fresh       37     48.2      0.3      0.4      0.0       24.3    100      77260    no       ok
+cli-ls-tree                   cljc    100   warm       28     89.6      0.4      0.4      0.0       24.2    100      77260    no       ok
+cli-ls-tree                  giant      1  fresh       23     33.9      0.0      0.0      0.0       24.2      1    1992594    no       ok
+cli-ls-tree                  giant      1   warm       26     34.0      0.0      0.0      0.0       24.2      1    1992594    no       ok
+cli-ls-tree                 nested      1  fresh        8     25.2      0.0      0.0      0.0       24.2      1     111183    no       ok
+cli-ls-tree                 nested      1   warm        9     25.7      0.0      0.0      0.0       24.2      1     111183    no       ok
+```
+
+**The two `reference-mismatch` lines are gone, and the receipt contains the
+string `nondeterministic` zero times.** The parity cell is the direct proof,
+not the absence of a verdict line: at N=10,000, across four warm reps,
+
+```
+:op :cli-ls-tree, :n 10000, :phase :warm, :reps 4,
+:result-hash    "1573bed8f4a96ee818c80112aac2beab3fc840df88307179ac3816b31a0dd838",
+:reference-hash "1573bed8f4a96ee818c80112aac2beab3fc840df88307179ac3816b31a0dd838"
+```
+
+ONE result hash where there were four, and it equals the reference. `held_mb`
+is unchanged by this repair and still flat: **9.4 fresh / 9.6 warm at N=10,000
+against 9.5 / 9.5 at N=1,000**, so `held-scales-with-n` stays green for
+`cli-ls-tree`.
+
+The battery still exits 1 on the two other-lane failures it exited 1 on before,
+unchanged and untouched by this work:
+
+```
+FAIL held-scales-with-n {:op :rename-ns-plan-full-match,   :observed 10.0, :limit 3.0}
+FAIL held-scales-with-n {:op :workspace-sources-read-all,  :observed 40.9, :limit 6.5}
+```
+
+`cli-ls-tree` keeps its four `peak-over-budget` TRENDs (257.8–293.7 MB against
+a ~248 MB trend line). Peak is not what this row bounds, and the attributable
+reserved peak stays `UNMEASURED` until MEM-001's accountant exists — the
+battery reports that rather than passing a line nobody measured. §9's gaps are
+otherwise unchanged.
+
+### Reuse, measured on the battery's own corpus
+
+The state directory is the second half of the finding, so it was counted the
+same way. Across the whole run — one reference rep plus five battery reps in
+both phases, about eleven ceiling-binding scans of the 10,000-file corpus —
+the state root gained exactly:
+
+```
+10:50:21   1,238,890 bytes   …/9ff1b043…/ls-tree-cursors/10de8d9d….rows
+```
+
+**One snapshot, written by the first scan and reused by every later one, and
+zero build temporaries.** Under the random id that would have been ~11
+snapshots and ~13.6 MB; the 34 orphaned `.rows` files still in that directory
+(43 MB) are exactly that debris from earlier runs, and they expire on the
+24-hour TTL prune.
+
+## Gates
+
+| gate | result |
+|---|---|
+| `make test-fast` | Ran 764 tests containing 6260 assertions. 0 failures, 0 errors. (baseline 760 / 6225) |
+| `clojure -M:clj-surgeon/mcp-test` | Ran 389 tests containing 3988 assertions. 0 failures, 0 errors. |
+| `make mcp-operation-oracle` | pass; legacy counterexamples `[verification_failed, verification_pending]` — the baseline two, unchanged |
+| `make memory-battery-self-test` | Ran 24 tests containing 138 assertions. 0 failures, 0 errors. |
+| `make memory-battery` | `cli-ls-tree` parity GREEN and held flat; exit 1 on the two other-lane failures |
+
+All unit suites ran under `/home/forge/bin/suite-run`. The battery took the
+exclusive `/home/forge/tmp/suite.lock` and ran exactly once, on this lane's own
+`MEMBAT_ROOT`.
+
+## A caveat this addressing introduces, stated rather than discovered later
+
+Two scans that BOTH find no snapshot for the same tree and pin it concurrently
+now race for one address, where random ids gave each its own. Both write
+identical rows; the meta written last wins, and the loser's cursor fails its
+mac and refuses `:invalid-result-cursor`. It is a refusal, never a wrong
+result, and it needs both scans to pin the same unpinned tree inside the same
+few hundred milliseconds. If it is ever seen in the field the fix is a lock
+file in `cursor-dir`, not a return to entropy.
