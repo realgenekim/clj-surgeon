@@ -1863,3 +1863,188 @@
               (is (= expected (slurp (io/file workspace relative))) relative))))
         (finally
           (delete-tree! workspace))))))
+
+;; ---------------------------------------------------------------------------
+;; round six: the receipt directory's own identity, after the guards answer
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-receipt-directory-swapped-after-the-second-check-never-reports-ok
+  ;; The post-create guard proves the identity of the directory that now
+  ;; exists — and then the write happens through a NAME, which the kernel
+  ;; resolves afresh on every open. A symlink installed between the second
+  ;; answer and the first byte redirects the receipt into the detail directory,
+  ;; and the run reported ok=true with its undo receipt sitting in the one
+  ;; place its own retention may delete. The OS leaves that window open; what
+  ;; must never happen is a SUCCESS reported over it.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")
+        guard alias-migration/receipt-detail-collision?
+        calls (atom 0)]
+    (.mkdirs details)
+    (try
+      (with-redefs [alias-migration/receipt-detail-collision?
+                    (fn [project-root receipt-dir receipt-name]
+                      (let [answer (guard project-root receipt-dir receipt-name)]
+                        (when (= 2 (swap! calls inc))
+                          ;; the window: the directory whose identity was just
+                          ;; proved becomes a link to the detail directory
+                          (.delete receipts)
+                          (Files/createSymbolicLink (.toPath receipts)
+                                                    (.toPath details)
+                                                    (make-array FileAttribute 0)))
+                        answer))]
+        (let [result (alias-migration/execute! (config workspace receipts)
+                                               (request workspace))
+              ;; a receipt, not a detail document: the detail writer's own
+              ;; files legitimately live here
+              published (vec (filter (fn [^java.io.File file]
+                                       (and (str/ends-with? (.getName file) ".edn")
+                                            (not (str/starts-with? (.getName file)
+                                                                   "detail-"))))
+                                     (or (seq (.listFiles details)) [])))]
+          (is (= 2 @calls) "the identity guard was not asked on both sides of creation")
+          (when (:ok result)
+            (is (not= (.getCanonicalPath details)
+                      (.getCanonicalPath (.getParentFile
+                                           (io/file (:undo_receipt result)))))
+                "ok=true with the undo receipt canonically inside the detail directory"))
+          (is (empty? published)
+              (str "an undo receipt was left in the detail directory: "
+                   (mapv (fn [^java.io.File file] (.getName file)) published)))
+          (when-not (:ok result)
+            (is (= "alias-migration-receipt-published-elsewhere"
+                   (:error_type result))
+                (pr-str result))
+            (is (= "post-write" (:phase result)))
+            (is (true? (:source_unchanged result))
+                "the redirected receipt was detected but the tree was not restored")
+            (testing "and the tree agrees with the refusal"
+              (doseq [[relative expected] (:pre corpus)]
+                (is (= expected (slurp (io/file workspace relative))) relative))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest two-concurrent-receipt-directory-creations-record-disjoint-sets
+  ;; `createDirectories` answers for a whole chain and cannot say which links
+  ;; it made. Two calls racing the same missing chain both recorded all of it
+  ;; as "created by me", so one caller's cleanup deleted directories the peer
+  ;; was still counting as its own. A call may record only what its OWN create
+  ;; brought into being.
+  (let [create! (ns-resolve 'clj-surgeon.mcp-alias-migration
+                            'create-receipt-directory!)
+        base (temp-dir)]
+    (try
+      (is (some? create!) "the receipt directory creator is gone")
+      (when create!
+        (dotimes [round 40]
+          (let [deep (reduce (fn [^java.io.File acc index]
+                               (io/file acc (str "d" index)))
+                             (io/file base (str "round-" round))
+                             (range 40))
+                barrier (java.util.concurrent.CyclicBarrier. 2)
+                left (future (.await barrier) (vec (create! deep)))
+                right (future (.await barrier) (vec (create! deep)))
+                a @left
+                b @right]
+            (is (zero? (count (clojure.set/intersection (set a) (set b))))
+                (str "round " round ": "
+                     (count (clojure.set/intersection (set a) (set b)))
+                     " directories were recorded by BOTH calls as their own"))
+            (doseq [^java.nio.file.Path path a]
+              (.delete (.toFile path)))
+            (is (zero? (count (remove (fn [^java.nio.file.Path path]
+                                        (.exists (.toFile path)))
+                                      b)))
+                (str "round " round ": one caller's cleanup removed "
+                     (count (remove (fn [^java.nio.file.Path path]
+                                      (.exists (.toFile path)))
+                                    b))
+                     " directories the peer recorded")))))
+      (finally
+        (delete-tree! base)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-receipt-directory-inside-a-control-directory-refuses-before-any-write
+  ;; `.git` is not this verb's tree. A receipt published into `.git/refs/heads`
+  ;; is a file git reads as a ref, and the workspace's own tooling breaks:
+  ;; `git show-ref` exits 128 on a bad ref. The refusal is structural and comes
+  ;; before any write, because the damage is done by the first published byte.
+  (let [workspace (workspace!)
+        path (.getPath workspace)
+        heads (io/file workspace ".git" "refs" "heads")]
+    (try
+      (shell/sh "git" "init" "--quiet" "-b" "main" :dir path)
+      (shell/sh "git" "-c" "user.email=witness@example.invalid"
+                "-c" "user.name=witness" "commit" "--allow-empty"
+                "-m" "root" :dir path)
+      (is (zero? (:exit (shell/sh "git" "show-ref" :dir path)))
+          "the fixture repository has no ref to break")
+      (let [result (alias-migration/execute! (config workspace heads)
+                                             (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-receipt-dir-in-control-directory"
+               (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (empty? (filter (fn [^java.io.File file]
+                              (str/ends-with? (.getName file) ".edn"))
+                            (or (seq (.listFiles heads)) [])))
+            "a receipt was published into git's ref namespace")
+        (is (zero? (:exit (shell/sh "git" "show-ref" :dir path)))
+            "the run left git unable to read its own refs"))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-relative-receipt-directory-that-escapes-through-a-link-refuses
+  ;; A relative receipt directory is written against the workspace and reads as
+  ;; a place inside it. `toRealPath` resolves a symlink component before any
+  ;; lexical normalisation runs, so a link that points out of the tree carries
+  ;; the receipts somewhere the caller never named, silently.
+  (let [workspace (workspace!)
+        outside (temp-dir)
+        link-name (str "outside-link-" (java.util.UUID/randomUUID))
+        link (io/file workspace link-name)
+        relative (str link-name "/receipts")
+        ;; the old resolution read a relative path against this process's
+        ;; working directory, so a red run creates it there; it is cleaned up
+        ;; whichever way the run goes
+        cwd-junk (io/file (System/getProperty "user.dir") link-name)]
+    (try
+      (Files/createSymbolicLink (.toPath link) (.toPath outside)
+                                (make-array FileAttribute 0))
+      (let [result (alias-migration/execute!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir relative}
+                     (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-receipt-dir-escapes" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (not (.exists (io/file outside "receipts")))
+            "the refusal created the directory it refused to write in"))
+      (finally
+        (delete-tree! cwd-junk)
+        (delete-tree! workspace)
+        (delete-tree! outside)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest an-absolute-receipt-directory-outside-the-workspace-stays-legal
+  ;; The default receipt directory lives under the user's state root, outside
+  ;; every workspace. A restriction that kept receipts inside the tree would
+  ;; refuse the configuration the server ships with.
+  (let [workspace (workspace!)
+        outside (temp-dir)
+        receipts (io/file outside "receipts")]
+    (.mkdirs receipts)
+    (try
+      (let [result (alias-migration/execute! (config workspace receipts)
+                                             (request workspace))]
+        (is (:ok result) (pr-str result))
+        (is (true? (:committed result)))
+        (is (= (.getCanonicalPath receipts)
+               (.getCanonicalPath (.getParentFile (io/file (:undo_receipt result)))))
+            "the receipt was not published in the directory the caller named"))
+      (finally
+        (delete-tree! workspace)
+        (delete-tree! outside)))))
