@@ -893,6 +893,42 @@
       (is (= "invalid-study-limit" (:error_type response))))))
 
 
+;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-027
+(deftest an-atomic-result-too-big-for-the-ceiling-serves-no-continuation
+  ;; `raisable?` asked only whether the proposed limit DIFFERED from the one
+  ;; just used. An atomic result needing more than the 16,384 ceiling can
+  ;; never be returned at any limit, so at limit 4096 the receipt handed back
+  ;; an executable `limit 16384` that is known, right here, to fail exactly as
+  ;; this call did. Raising has to be able to succeed, not merely to change
+  ;; the number.
+  (let [file "src/clj_surgeon/intent_transaction.clj"
+        response (run {"requests" [{"operation" "ls-deps"
+                                    "file" file
+                                    "form" "execute-mcp-change!"
+                                    "limit" 4096}]
+                       "expect" {"requests" 1 "files" 1}})]
+    (is (false? (:ok response)))
+    (is (= "study-output-limit" (:error_type response)))
+    (is (= 4096 (:limit response)))
+    (is (< inspect/study-max-limit (:required response))
+        (str "the fixture only bites while one atomic result cannot fit the "
+             "ceiling; required was " (:required response)))
+    (is (nil? (:next_call response))
+        "a continuation that cannot succeed is a loop with extra steps")
+    (is (= "narrow_scope" (:next_action response)))
+    (is (string? (:remedy response))))
+  (testing "a result that the ceiling CAN carry still gets its continuation"
+    (let [response (run {"requests" [{"operation" "ls-deps"
+                                      "file" "src/clj_surgeon/analyze.clj"
+                                      "form" "extraction-closure"
+                                      "limit" 50}]
+                         "expect" {"requests" 1 "files" 1}})]
+      (is (= "study-output-limit" (:error_type response)))
+      (is (<= (:required response) inspect/study-max-limit))
+      (is (= "inspect_clojure" (get-in response [:next_call :tool])))
+      (is (= "raise_limit_or_narrow_scope" (:next_action response))))))
+
 ;; @spec MCP-OP-STUDY-018
 (deftest bound-rows-charges-the-arrays-own-characters
   ;; The array's own brackets and separators were not charged, so a kept

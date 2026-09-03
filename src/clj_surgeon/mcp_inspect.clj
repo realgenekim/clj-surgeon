@@ -726,6 +726,7 @@
                                  {:form "REPLACE-WITH-ONE-EXACT-OWNER"})}))
 
 ;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-027
 (defn- study-oversized
   "One atomic result that cannot be split refuses rather than half-serialized.
 
@@ -734,10 +735,16 @@
   so the old unconditional next_call handed back the exact call just made —
   the loop MCP-OP-STUDY-007 forbids. Mirrors `study-truncation`: at the
   ceiling, a narrower scope is a caller judgment, so the receipt names it
-  instead of serving an executable call."
+  instead of serving an executable call.
+
+  Raising has to be able to SUCCEED, not merely to change the number. An
+  atomic result needing 22,141 characters cannot be returned at any limit,
+  because the ceiling is 16,384: proposing `limit 16384` to a caller at 4,096
+  is a call that is known, here, to fail exactly as this one did. So
+  `required` must also fit under the ceiling."
   [request required limit]
   (let [raised (min study-max-limit (max required limit))
-        raisable? (> raised limit)]
+        raisable? (and (> raised limit) (<= required study-max-limit))]
     (cond-> {:error "One atomic study result exceeds the receipt limit"
              :error-type :study-output-limit
              :required required
