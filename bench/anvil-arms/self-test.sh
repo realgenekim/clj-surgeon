@@ -1142,6 +1142,66 @@ sys.exit(1 if fails else 0)
 PY28B
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 29: a recorded spawn is (pid, start ticks, BOOT ID) — reboots reuse both =="
+# Sol round two, item 8: /proc start time is measured in ticks since THIS boot, so a pid
+# plus its start ticks is unique within one boot and repeats across reboots.  Sol wrote a
+# mismatching boot-ID field into the record and stop-server.sh ignored it and signalled.
+# A record that survives a reboot -- an arm directory on disk is exactly that -- can name
+# a process this apparatus never started.
+boot29=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+[ -n "$boot29" ] && ok "case29 the box reports a boot id" || bad "case29 no /proc/sys/kernel/random/boot_id"
+
+# 29a -- correct pid, start ticks and boot id: the server this arm spawned is stopped
+A29A="$WORK/st-P-T-29a"; mkdir -p "$A29A/server"
+sleep 300 & P29A=$!
+printf '%s %s %s\n' "$P29A" "$(starttime_of "$P29A")" "$boot29" > "$A29A/server/spawned.pid"
+bash "$HERE/stop-server.sh" "$A29A" > "$WORK/case29a.out" 2>&1
+want "case29a stop-server rc" 0 "$?"
+sleep 1
+kill -0 "$P29A" 2>/dev/null \
+  && { bad "case29a the server this script started ($P29A) was not stopped"; kill -9 "$P29A" 2>/dev/null; } \
+  || ok "case29a the spawned server $P29A was stopped"
+
+# 29b -- the boot id does not match: this record was written before a reboot
+A29B="$WORK/st-P-T-29b"; mkdir -p "$A29B/server"
+sleep 300 & P29B=$!
+printf '%s %s %s\n' "$P29B" "$(starttime_of "$P29B")" \
+  "00000000-1111-2222-3333-444444444444" > "$A29B/server/spawned.pid"
+bash "$HERE/stop-server.sh" "$A29B" > "$WORK/case29b.out" 2>&1
+rc29b=$?
+[ "$rc29b" -ne 0 ] && ok "case29b refused (rc $rc29b) on a boot-id mismatch" \
+  || bad "case29b signalled a pid recorded under a different boot"
+sleep 1
+kill -0 "$P29B" 2>/dev/null \
+  && ok "case29b the process $P29B was NOT signalled" \
+  || bad "case29b killed a process whose pid was reused across a reboot"
+grep -q 'boot-id-mismatch' "$WORK/case29b.out" \
+  && ok "case29b typed refusal: boot-id-mismatch" \
+  || { bad "case29b untyped refusal"; cat "$WORK/case29b.out"; }
+kill -9 "$P29B" 2>/dev/null
+
+# 29c -- a legacy two-field record carries no boot id at all: unusable, signal nothing
+A29C="$WORK/st-P-T-29c"; mkdir -p "$A29C/server"
+sleep 300 & P29C=$!
+printf '%s %s\n' "$P29C" "$(starttime_of "$P29C")" > "$A29C/server/spawned.pid"
+bash "$HERE/stop-server.sh" "$A29C" > "$WORK/case29c.out" 2>&1
+rc29c=$?
+[ "$rc29c" -ne 0 ] && ok "case29c refused (rc $rc29c) a record with no boot id" \
+  || bad "case29c signalled on a record that cannot be checked against a boot"
+sleep 1
+kill -0 "$P29C" 2>/dev/null \
+  && ok "case29c the process $P29C was NOT signalled" \
+  || bad "case29c signalled on an uncheckable record"
+grep -q 'no recorded boot id' "$WORK/case29c.out" \
+  && ok "case29c typed refusal names the missing field" \
+  || { bad "case29c untyped refusal"; cat "$WORK/case29c.out"; }
+kill -9 "$P29C" 2>/dev/null
+
+# 29d -- run-arm.sh writes the boot id it spawned under
+grep -q 'boot_id' "$HERE/run-arm.sh" \
+  && ok "case29d run-arm.sh records the boot id with the pid it spawned" \
+  || bad "case29d run-arm.sh records a pid whose identity cannot survive a reboot"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
