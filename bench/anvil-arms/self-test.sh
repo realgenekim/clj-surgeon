@@ -776,6 +776,81 @@ grep -q 'server-sha-unverified' "$WORK/case21b.out" \
   || { bad "case21b an unreadable server source attested"; cat "$WORK/case21b.out"; }
 want "case21b server_sha" unverified "$(jqf "$A21B/attest.json" server_sha)"
 
+echo "== case 22: the make map is a STATIC PARSE — attest never executes the Makefile =="
+# Sol round two, item 1: the map was generated with `make -n`, which PARSES the whole
+# Makefile.  A `:=` assignment holding $(shell …) ran at attest time, and a recipe line
+# prefixed `+` runs even under -n.  Sol's probe watched both fire: repo-controlled code
+# executed inside the attestation whose whole job is to decide whether the repo may run.
+MK22="$WORK/mk22"; mkdir -p "$MK22"
+{ printf 'KAOCHA = bin/kaocha\n'
+  printf 'SIDE := $(shell touch %s/shell-expansion-ran)\n' "$MK22"
+  printf 'verify:\n\t$(KAOCHA) --focus marvin-voice-remote.bridge3-new-test\n'
+  printf 'recurse:\n\t+$(MAKE) --no-print-directory build\n\t+touch %s/recursive-recipe-ran\n' "$MK22"
+  printf 'build:\n\techo building\n'
+} > "$MK22/Makefile"
+python3 "$HERE/_make_targets.py" "$MK22" "$MK22/map.json" > "$WORK/case22.out" 2>&1
+want "case22 map rc" 0 "$?"
+[ -e "$MK22/shell-expansion-ran" ] \
+  && bad "case22 attest-time mapping EXECUTED \$(shell …)" \
+  || ok "case22 \$(shell …) was parsed, never executed"
+[ -e "$MK22/recursive-recipe-ran" ] \
+  && bad "case22 attest-time mapping EXECUTED a + recipe line" \
+  || ok "case22 the + recipe lines were parsed, never executed"
+want "case22 parser" static "$(jqf "$MK22/map.json" parser)"
+want "case22 verify resolves through \$(KAOCHA)" \
+     "bin/kaocha --focus marvin-voice-remote.bridge3-new-test" \
+     "$(jqf "$MK22/map.json" targets.verify)"
+want "case22 build resolves" "echo building" "$(jqf "$MK22/map.json" targets.build)"
+want "case22 recurse is REFUSED, not resolved" 'dynamic:+$(MAKE)' \
+     "$(jqf "$MK22/map.json" refused.recurse)"
+want "case22 recurse is not in the resolved map" MISSING \
+     "$(jqf "$MK22/map.json" targets.recurse)"
+
+# 22b -- a hard `include` of a file make would GENERATE: the parse cannot see those
+# targets at all, so the whole map is untrustworthy and the arm never launches.
+MK22B="$WORK/mk22b"; mkdir -p "$MK22B"
+{ printf 'include generated.mk\n'
+  printf 'generated.mk:\n\techo "verify:" > generated.mk\n'
+  printf 'build:\n\techo building\n'
+} > "$MK22B/Makefile"
+python3 "$HERE/_make_targets.py" "$MK22B" "$MK22B/map.json" > "$WORK/case22b.out" 2>&1
+want "case22b map rc" 4 "$?"
+case "$(jqf "$MK22B/map.json" dynamic_refusal)" in
+  include-generated*) ok "case22b typed whole-map refusal: $(jqf "$MK22B/map.json" dynamic_refusal)";;
+  *) bad "case22b an include of a generated file was accepted: $(jqf "$MK22B/map.json" dynamic_refusal)";;
+esac
+A22B="$WORK/st-P-N-22b"; mkdir -p "$A22B"
+git clone -q --no-hardlinks "$BASE_REPO" "$A22B/worktree"
+printf '%s\n' "$BASE_SHA" > "$A22B/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A22B/prompt.md"
+cp "$MK22B/map.json" "$A22B/make-targets.json"
+EXP=st RUNG=P SLOT=22b MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+MAKE_TARGETS="$A22B/make-targets.json" \
+  bash "$HERE/attest.sh" "$A22B" N - "" > "$WORK/case22b-attest.out" 2>&1
+want "case22b attest rc" 2 "$?"
+grep -q 'makefile-dynamic' "$WORK/case22b-attest.out" \
+  && ok "case22b ATTEST-MISMATCH makefile-dynamic — the driver is never launched" \
+  || { bad "case22b an untrustworthy make map still attested"; cat "$WORK/case22b-attest.out"; }
+
+# 22c -- a target defined inside a conditional: which recipe make would pick depends on
+# the environment the driver runs in, so it is refused rather than guessed.
+MK22C="$WORK/mk22c"; mkdir -p "$MK22C"
+{ printf 'ifeq ($(CI),1)\n'
+  printf 'conditional:\n\techo ci\n'
+  printf 'else\n'
+  printf 'conditional:\n\tbin/kaocha --focus x\n'
+  printf 'endif\n'
+  printf 'build:\n\techo building\n'
+} > "$MK22C/Makefile"
+python3 "$HERE/_make_targets.py" "$MK22C" "$MK22C/map.json" > "$WORK/case22c.out" 2>&1
+want "case22c map rc" 0 "$?"
+want "case22c conditional target refused" conditional \
+     "$(jqf "$MK22C/map.json" refused.conditional)"
+want "case22c conditional target not resolved" MISSING \
+     "$(jqf "$MK22C/map.json" targets.conditional)"
+want "case22c an unconditional target beside it still resolves" "echo building" \
+     "$(jqf "$MK22C/map.json" targets.build)"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
