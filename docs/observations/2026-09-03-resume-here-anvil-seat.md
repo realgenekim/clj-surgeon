@@ -279,3 +279,9 @@ GO (eight): kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upser
 Live reviews: Opus kernel round 2 (7c9a9b1). Builders: MEM-005 round 2 (~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms), B4 MEM-003 streaming ls-tree (~/src/clj-surgeon-stream), q5z round 8 (~/src/clj-surgeon-q5z: constant-true source_unchanged), fold-diff round 6 (~/src/curtaincall-cfp-folddiff), census round 6 (~/src/clj-surgeon-census: streaming listing, candidate-aware narrowing, placeholders + CENSUS-014).
 Opus-first branches (Sol's filter refuses): rf2, study, MEM-005, q5z, kernel. Two 7888 contacts + the 7890 self-test observation are on inb-1165ce.
 Gene report DRAFT refreshes ~10:30Z and ~13:00Z (nine hours end ~13:35Z).
+
+## RESUME DELTA (eighth refresh; commit time is the timestamp)
+GO (eight) unchanged; fold-diff production read at 347fe6d3 (inb-3a9818).
+Live reviews: Sol MEM-003 streaming ls-tree (8c1087f); Opus kernel round 2 (7c9a9b1); Opus MEM-005 round 2 (ad439f4). Builders: fold-diff round 6 (~/src/curtaincall-cfp-folddiff), census round 6 (~/src/clj-surgeon-census), q5z round 9 (~/src/clj-surgeon-q5z), arms apparatus round 4 (~/src/clj-surgeon-arms: whitelist Make grammar, child subreaper, schema v2).
+Memory program state: MEM-015 GO (2aa648a) · battery GO (5534e94) · MEM-005 round 2 under Opus (ad439f4) · MEM-003 under Sol (8c1087f: ls-tree held 94 → 9.5 MB at 10k) · kernel round 2 under Opus (7c9a9b1) · remaining battery RED rows: workspace-sources-read-all 41.1 MB (MEM-004 streaming fold/spill, unbuilt) and rename-ns-plan-full-match 10.0 MB (the ungated rename planner, inb-07c5e7).
+Follow-ups filed tonight: inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07c5e7, inb-ddb845 (7890 self-test), inb-fa5d68 (MCP ls-tree adoption of MEM-003).
