@@ -475,9 +475,12 @@
     [index file]))
 
 ;; @spec MCP-OP-STUDY-015
+;; @spec MCP-OP-STUDY-024
 (defn outline-take
   "Outline the FIRST n files across projects in scan order, and return the
-   projects rebuilt with `:outlines` — dropping projects left with none.
+   projects rebuilt with `:outlines`. Every project is kept, `:files` intact,
+   even when the bound reached none of its files: a project the receipt could
+   not carry is still one the scan found, and the renderer names it.
 
    Outlining is the expensive half of `:ls-tree`: it opens and PARSES every
    file it is given. It is therefore deliberately not part of discovery. A
@@ -505,13 +508,15 @@
        (swap! cache into (map-fn (fn [file] [file (safe-outline file)]) missing)))
      (let [outlines @cache
            by-project (group-by first wanted)]
+       ;; Projects with no outlines are KEPT, carrying their `:files`. A
+       ;; project the receipt's byte budget did not reach is still a project
+       ;; the scan found: dropping it here made it vanish from the body while
+       ;; `project_count` still counted it.
        (->> (map-indexed vector projects)
-            (map (fn [[index project]]
-                   (assoc project :outlines
-                          (mapv (fn [[_ file]] [file (get outlines file)])
-                                (get by-project index [])))))
-            (remove #(empty? (:outlines %)))
-            vec)))))
+            (mapv (fn [[index project]]
+                    (assoc project :outlines
+                           (mapv (fn [[_ file]] [file (get outlines file)])
+                                 (get by-project index []))))))))))
 
 ;; @spec MCP-OP-STUDY-015
 (defn outline-all
@@ -549,6 +554,7 @@
     (str lines)))
 
 ;; @spec MCP-OP-STUDY-017
+;; @spec MCP-OP-STUDY-024
 (defn format-ls-tree-text
   "Pure: format ls-tree results as compact text for LLM/human scanning.
    Expects projects with :outlines already computed.
@@ -561,7 +567,13 @@
    reports the true total plus what was shown and omitted, and omits the form
    total, which is unknowable for files that were deliberately never parsed.
    With no `:file-count`, or when everything is shown, the complete line is
-   unchanged."
+   unchanged.
+
+   A per-project header obeys the same rule against its project's own `:files`:
+   `── beta (50 files, 71 forms)` when the receipt carries them all, and
+   `── beta (50 files; 9 shown)` when it does not — including `0 shown`, so a
+   project the bound never reached is named rather than silently absent while
+   `project_count` still counts it."
   ([projects dir] (format-ls-tree-text projects dir nil))
   ([projects dir {:keys [file-count]}]
    (let [sb (StringBuilder.)
@@ -572,11 +584,22 @@
                                       (reduce + (map #(or (:form-count (second %)) 0)
                                                      (:outlines p))))
                                     projects))]
-     (doseq [{:keys [name outlines]} projects
-             :let [project-forms (reduce + (map #(or (:form-count (second %)) 0) outlines))]]
+     (doseq [{:keys [name files outlines]} projects
+             :let [project-forms (reduce + (map #(or (:form-count (second %)) 0) outlines))
+                   shown (count outlines)
+                   ;; The files DISCOVERY found for this project, not the
+                   ;; subset the receipt could carry. The header counted the
+                   ;; outlines it was handed, so a project showing 9 of 50
+                   ;; announced itself as 9 files.
+                   project-files (if files (count files) shown)]]
        (when multi-project?
-         (.append sb (format "── %s (%d files, %d forms)\n\n"
-                             name (count outlines) project-forms)))
+         (.append sb (if (= shown project-files)
+                       (format "── %s (%d files, %d forms)\n\n"
+                               name project-files project-forms)
+                       ;; No form total: it is unknowable for files this
+                       ;; receipt deliberately never parsed.
+                       (format "── %s (%d files; %d shown)\n\n"
+                               name project-files shown))))
        (doseq [[f result] outlines
                :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
          (.append sb (format-file-text result rel-path))

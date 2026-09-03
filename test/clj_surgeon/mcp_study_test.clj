@@ -922,6 +922,61 @@
                                                "limit" limit}))]
       (is (<= (inspect/json-character-count (:closure result)) limit)))))
 
+;; @spec MCP-OP-STUDY-024
+(deftest per-project-headers-report-true-counts-and-name-dropped-projects
+  ;; The per-project header counted the outlines it was handed, so a project
+  ;; showing 9 of 50 files announced itself as `(9 files, N forms)` — the same
+  ;; body-contradicts-its-own-receipt defect MCP-OP-STUDY-017 fixed for the
+  ;; total line. Worse, a project the byte budget never reached was dropped
+  ;; from the body entirely while `project_count` still counted it.
+  (with-scratch-project
+    "test-fixtures/study/scratch-two-projects"
+    (fn [dir]
+      (doseq [project ["alpha" "beta"]]
+        (fs/create-dirs (str dir "/" project))
+        (spit (str dir "/" project "/deps.edn") "{:paths [\"src\"]}")
+        (dotimes [i 50]
+          (write-clj-file! (str dir "/" project "/src/" project "/ns" i ".clj")
+                           (format "(ns %s.ns%d)" project i)
+                           (format "(defn f%d [] :ok)" i)))))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-two-projects"
+            header (fn [tree project]
+                     (first (filter #(str/starts-with? % (str "── " project " "))
+                                    (str/split-lines tree))))
+            counted (fn [tree project]
+                      (count (filter #(str/starts-with? % (str project "/src/"))
+                                     (str/split-lines tree))))]
+        (testing "a header names the files DISCOVERY found, and how many are shown"
+          (let [response (run {"mode" "ls-tree" "dir" rel-dir
+                               "format" "text" "limit" 5000})
+                tree (:tree response)]
+            (is (true? (:truncated response)))
+            (is (= 100 (:file_count response)))
+            (is (= 2 (:project_count response)))
+            (doseq [project ["alpha" "beta"]]
+              (let [line (header tree project)
+                    shown (counted tree project)]
+                (is (some? line) (str project " must be named"))
+                (is (= (if (= 50 shown)
+                         (str "── " project " (50 files, 50 forms)")
+                         (str "── " project " (50 files; " shown " shown)"))
+                       line)
+                    "the header must report 50 discovered, not the number shown")))))
+        (testing "a project the bound never reached is still named"
+          (let [response (run {"mode" "ls-tree" "dir" rel-dir
+                               "format" "text" "limit" 600})
+                tree (:tree response)]
+            (is (true? (:truncated response)))
+            (is (= 2 (:project_count response)))
+            (is (zero? (counted tree "beta"))
+                "600 characters cannot reach the second project's files")
+            (is (= "── beta (50 files; 0 shown)" (header tree "beta"))
+                "a project counted by project_count must appear in the body")
+            (is (= (str "── alpha (50 files; " (counted tree "alpha") " shown)")
+                   (header tree "alpha")))
+            (is (<= (count tree) 600))))))))
+
 ;; @spec MCP-OP-STUDY-017
 (deftest a-truncated-tree-text-total-agrees-with-its-own-receipt
   ;; The text body's `── total: N files` counted only the files it SHOWED, so
