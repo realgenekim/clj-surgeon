@@ -513,6 +513,24 @@
       (is (= "invalid-study-limit" (:error_type response))))))
 
 
+;; @spec MCP-OP-STUDY-018
+(deftest bound-rows-charges-the-arrays-own-characters
+  ;; The array's own brackets and separators were not charged, so a kept
+  ;; payload could be exactly limit+1 characters: each row paid for one
+  ;; separator, which covers n of the n+1 punctuation characters an n-element
+  ;; JSON array actually costs. Fixed-width names make the overflow limits
+  ;; deterministic rather than incidental.
+  (let [rows (mapv (fn [i] {:name (format "form-%03d" i) :depends_on []})
+                   (range 60))]
+    (doseq [n (range 1 401)]
+      (let [[kept _omitted _truncated?] (inspect/bound-rows rows n)
+            cost (inspect/json-character-count kept)]
+        (is (<= cost (max 2 n))
+            (str "limit " n ": kept " (count kept) " rows costing " cost))
+        (when (seq kept)
+          (is (<= cost n)
+              (str "limit " n ": a non-empty payload must fit its limit")))))))
+
 ;; @spec MCP-OP-STUDY-016
 (deftest a-study-receipt-counts-the-source-it-read
   ;; `source_character_count` was hardcoded 0 for every study operation and

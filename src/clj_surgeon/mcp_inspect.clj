@@ -649,11 +649,18 @@
   "Bound an already JSON-normalized row vector by total JSON characters.
 
   Returns [kept omitted truncated?]. A first row larger than the limit keeps
-  nothing rather than silently exceeding the receipt budget."
+  nothing rather than silently exceeding the receipt budget.
+
+  `used` starts at 1, not 0. The serialized array costs
+  `sum(rows) + (n-1) separators + 2 brackets`; charging each row `len + 1`
+  pays for n of those n+1 punctuation characters, leaving exactly one bracket
+  unpaid, so a kept payload could be `limit + 1` characters. The seed pays for
+  it. The one floor no bound can go below is the empty array's two
+  characters."
   [rows limit]
   (loop [remaining (seq rows)
          kept []
-         used 0]
+         used 1]
     (if-let [row (first remaining)]
       (let [cost (inc (json-character-count row))]
         (if (> (+ used cost) limit)
