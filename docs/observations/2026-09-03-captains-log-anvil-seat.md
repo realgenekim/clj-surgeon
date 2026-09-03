@@ -341,3 +341,37 @@ baseline says otherwise.
 ## 04:22Z — ratchets fix round landed (70c2c60…49f6e12 on ece8c1c), eight items red-first: addressed-ness by preorder span (two sites on one line → 1 unaddressed, the containment direction pinned); dispatch vocabulary under a 2048-char budget with truncation and no comments/newlines (note: the owner form the refusal teaches now carries the NORMALISED dispatch spelling — safe because the selector compares parsed values, but a real change to that field); invalid-require-policy surfaced on the apply route by resurrecting the dead branch (the contract dropped its duplicate enum check); `#_` discards and `^meta` handled in dispatch extraction (three compiles that threw while scanning now succeed); the schema refuses `expect_matched` on the extraction/edits branches, and — the one contract tightening to flag — `edit_clojure` now refuses undeclared `changes` it used to accept and commit (`unexpected_fields`, no mutation); wildcard note from the parsed pattern; minimal shapes pinned to the live validators with a set-equality guard; cosmetics. Suites: test-fast 718/6005 (baseline five), mcp JVM 400/4138 (baseline one), mcp-smoke green. My full suites queued (`~/tmp/ratchets2-*.log`, waiter b1q8ixsp0); push → Sol re-check (no symlink fixtures here, so no filter issue) with the entrance tightening named explicitly.
 
 ## 04:23Z — kondo-path test fixed on `bridge/kondo-path-test` (f8a9ef9, test-only: assert the resolver's rule, not a macOS path; mcp-test 0 failures on this box, the resolver untouched); my full mcp-test queued, push after. The other standing baseline noise — five `terminal-response-routing…` failures (MCP-OP-RELAY-004; the routing doc drifted from the promise at 01f0739) — has its own lane on `bridge/routing-doc-test` (ab9e22b95f515a848). When both merge, every clj-surgeon suite on Linux reads zero failures and "baseline six" disappears from every report.
+
+## 04:48Z — the memory battery exists and main is RED (measurement half only; no op was changed)
+
+`make memory-battery` at 4ec01da: one JVM at `-Xmx512m`, 5 reps, N = 100/1,000/10,000, four arms,
+continuous 5 ms heap sampler, exit 0/1/2/3. **Exit 1.** `cli-ls-tree` fails `peak-over-budget` at
+N=1,000 (301 MB vs a 248 MB budget) and N=10,000 (433 MB) and `peak-scales-with-n` (433 vs 333);
+`workspace-sources-read-all` fails `peak-scales-with-n` (204 vs 105). No OOM anywhere, and every
+bounded result hashed identically to the `-Xmx4g` reference at every N. `reserved-peak ≤ 192 MiB` is
+reported UNMEASURED for all four arms — no operation has an admission accountant, and the sampled
+process-wide peak is not substituted for it, so the verdict prints `(INCOMPLETE)`.
+
+Retention (`held_mb`, after-GC with the result still referenced) is dead linear: ls-tree 9.4 KB/file,
+read-all 4.1 KB/file (= **1.01 heap bytes per source byte** — the instrument calibrating itself against a
+`sorted-map` of compact ASCII strings), rename full-match 1.0 KB/file. Peak above ~200 MB is GC
+scheduling, not live data (ls-tree peaks at 433 MB holding 94 MB). Table:
+`docs/observations/2026-09-03-memory-battery-baseline.md`. Generator: 10,000 files in 973 ms, 40.5 MB.
+
+Two honest limits, both in the baseline doc. (1) Sol's published lines do NOT catch a *small-constant*
+O(N) receipt: `rename-ns-plan-full-match` retains 1.0 KB/file, unambiguously linear, and passes
+everything, because 8.8 MB of growth fits inside 224 MB of headroom and `retained-scales-with-n` is
+measured after the result is released and so only sees leaks. Flagged for the kernel builder; this
+battery implements Sol's constants verbatim and invents none. (2) The narrow rename arm alone would have
+reported a false `ok` — its prefix matches 100 of 10,000 files — so a full-match arm was added. Every
+future arm needs the query that makes its result grow with N.
+
+LID: `MCP-OP-MEM-001` (per-op memory/work receipt block) and `MCP-OP-MEM-011` (the battery as release
+gate), both `[ ]` active gaps in `docs/intent/memory-boundedness/`, wired into
+`audit-current-repository` (`:ok true`). Witness is a millisecond test in the fast suite that feeds
+hand-written numbers to the pure verdict function AND asserts `memory-battery` exists in the Makefile,
+carries `@spec MCP-OP-MEM-011`, and is absent from the transitive target closure of
+test/test-fast/mcp-test/runtests. Delete the target → fast suite red; delete the witness → contract
+audit red. `make test` gains only `memory-battery-self-test` (ms-scale).
+
+Pre-existing RED found in passing, NOT mine: `agent-routing-test/terminal-response-routing-is-conditional-on-complete-user-work` fails 5 assertions on main — `resources/clj-surgeon-agent-routing.md` no longer contains any `terminal_response` text (removed by 01f0739, the routing-plate rewrite) and the test was not updated.

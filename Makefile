@@ -52,7 +52,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test test-fast memory-red analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test test-fast memory-red analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -106,6 +106,10 @@ help:
 	@echo "  make benchmark-agent-skills    Run both bounded clean-agent skill batteries"
 	@echo "  make benchmark-agent-skills-self-test Test both skill harnesses without model calls"
 	@echo "  make clj-surgeon-skill-self-test Verify compact routing contract and mirror"
+	@echo "  make memory-battery           Measure tree-scale heap at N=100/1k/10k in one bounded JVM (minutes; not in make test)"
+	@echo "  make memory-battery-generate  Build/verify the synthetic 100/1k/10k trees (~1 s)"
+	@echo "  make memory-battery-reference Rebuild the unbounded reference output hashes"
+	@echo "  make memory-battery-self-test Millisecond verdict + gate-placement self-test (runs inside make test)"
 	@echo "  make performance-regression-sentinel-test Run the zero-model adaptive sentinel contract"
 	@echo "  make worktree-lifecycle-test   Run the zero-model lifecycle contract"
 	@echo "  make worktree-lifecycle-recovery-test  Run JVM file-lock/crash recovery tests"
@@ -814,6 +818,46 @@ benchmark-retention-self-test:
 verify-benchmark-evidence:
 	bb bench/verify_evidence_manifest.clj
 
+# ============================================================
+# Tree-scale memory battery (MCP-OP-MEM-011)
+#
+# Minutes-scale measurement. It is deliberately NOT a prerequisite of `test`,
+# `test-fast`, or `mcp-test`; clj-surgeon.memory-battery-test asserts that and
+# fails loudly if the target disappears or is wired into a fast gate.
+# See docs/memory-battery.md.
+# ============================================================
+MEMBAT_ROOT ?= /home/forge/tmp/membat
+MEMBAT_XMX ?= 512m
+MEMBAT_REFERENCE_XMX ?= 4g
+MEMBAT_REPS ?= 5
+MEMBAT_SCALES ?= 100,1000,10000
+MEMBAT_OP_TIMEOUT_MS ?= 600000
+MEMBAT_ENV = MEMBAT_ROOT="$(MEMBAT_ROOT)" MEMBAT_REPS="$(MEMBAT_REPS)" \
+  MEMBAT_SCALES="$(MEMBAT_SCALES)" MEMBAT_OP_TIMEOUT_MS="$(MEMBAT_OP_TIMEOUT_MS)"
+
+memory-battery-generate:
+	bb bench/memory_battery/generate_tree.clj --root "$(MEMBAT_ROOT)" --scales "$(MEMBAT_SCALES)"
+
+memory-battery-reference: memory-battery-generate
+	@# The unbounded reference outputs every bounded run must reproduce exactly.
+	$(MEMBAT_ENV) MEMBAT_MODE=reference MEMBAT_REPS=1 \
+	  clojure -J-Xmx$(MEMBAT_REFERENCE_XMX) -M:clj-surgeon/memory-battery
+
+memory-battery:
+	@# @spec MCP-OP-MEM-011
+	@$(MAKE) --no-print-directory memory-battery-generate
+	@test -f "$(MEMBAT_ROOT)/reference-hashes.edn" \
+	  || $(MAKE) --no-print-directory memory-battery-reference
+	$(MEMBAT_ENV) MEMBAT_MODE=battery \
+	  clojure -J-Xmx$(MEMBAT_XMX) -M:clj-surgeon/memory-battery
+
+memory-battery-self-test:
+	@# Millisecond-scale. Proves the generator is deterministic, the verdict
+	@# applies the published pass lines exactly, and the battery is absent from
+	@# every fast gate. This one IS wired into `make test`.
+	bb bench/memory_battery/generate_tree.clj --self-test
+	bb -e "(require 'clj-surgeon.memory-battery-test 'clojure.test) (let [r (clojure.test/run-tests 'clj-surgeon.memory-battery-test)] (System/exit (+ (:fail r) (:error r))))"
+
 test-fast:
 	bb test/run_all.clj
 
@@ -842,6 +886,7 @@ test:
 	$(MAKE) --no-print-directory analyzer-contract-test
 	$(MAKE) --no-print-directory mcp-test
 	$(MAKE) --no-print-directory mcp-smoke
+	$(MAKE) --no-print-directory memory-battery-self-test
 	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test
 	bb bench/initialize_benchmark_workspace.clj --self-test
 	bb bench/verify_edit_portfolio.clj --self-test
