@@ -75,6 +75,31 @@ SHELL_RUNNERS = {"bash", "sh", "zsh", "dash", "ksh"}
 MAKE_TEST_TARGET = re.compile(r"^(test|test-fast|runtests|mcp-test|.*-test)$")
 CLOJURE_TEST_ALIAS = re.compile(r"^-M:.*\b(test|kaocha)\b|^:test$|^-X:.*\btest\b")
 SPLITTERS = re.compile(r"\|\||&&|[;\n|&]")
+# a command-line variable assignment to `make` (`CMD=bin/kaocha`, `V:=1`, `X+=y`) --
+# GNU Make accepts it anywhere among the operands, and it can change what a target's
+# recipe actually runs without changing the target name at all.
+MAKE_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(:=|::=|\+=|\?=|=)")
+
+
+def make_runtime_override(rest: list[str]) -> str | None:
+    """The first token in a `make` invocation's arguments the attest-time map cannot
+    account for: a variable assignment, or any option at all.
+
+    Sol round four: `make CMD=bin/kaocha verify` ran the Kaocha stub -- GNU Make
+    substituted the override into `verify`'s recipe -- while `_make_targets.py`'s map
+    was built at attest time under the Makefile's own default `CMD`, so the map still
+    named `verify`'s recipe as whatever it resolves to WITHOUT the override.  The
+    meter classified the call non-test and "resolved" it against a recipe that was
+    not the one GNU Make actually ran.  No make option is on a known-safe list here,
+    so any `-`-prefixed argument is refused as an unknown option, same as any
+    assignment -- both change what will run in a way this parser cannot see.
+    """
+    for tok in rest:
+        if MAKE_ASSIGNMENT_RE.match(tok):
+            return tok
+        if tok.startswith("-") and tok != "-":
+            return tok
+    return None
 
 # a native `apply_patch` payload names its own targets; the watcher extracts them
 # from the FULL arguments (score.py only ever sees a truncated copy), so predicate 6
@@ -199,7 +224,12 @@ def is_test_command(script: str, make_map: dict | None = None,
             operands = [a for a in rest if not a.startswith("-")]
             if any(MAKE_TEST_TARGET.match(a) for a in operands):
                 return True, f"make {' '.join(rest)}"
-            if make_map and _depth < MAX_MAKE_DEPTH:
+            # A runtime assignment/option (Sol round four) means the attest-time map
+            # cannot be trusted for this call -- GNU Make may substitute a different
+            # recipe than the one the map recorded.  Do not resolve through it; the
+            # name check above still catches an explicitly-named test target.
+            # `unresolved_make_targets` is what turns this into an incomplete-run.
+            if make_map and _depth < MAX_MAKE_DEPTH and not make_runtime_override(rest):
                 for target in operands:
                     recipe = make_map.get(target)
                     if not recipe:
@@ -243,6 +273,16 @@ def unresolved_make_targets(script: str, make_map: dict | None,
                 break
             continue
         if base != "make":
+            continue
+        override = make_runtime_override(rest)
+        if override:
+            # Sol round four: `make CMD=bin/kaocha verify` ran the Kaocha stub while
+            # the attest-time map still named `verify`'s default-CMD recipe, so the
+            # meter classified it non-test and "resolved" it.  Typed and
+            # unconditional -- this is unresolved regardless of whether the named
+            # target happens to be in the map, because the map cannot speak to what
+            # the override changes.
+            out.append(f"make-runtime-override:{override}")
             continue
         operands = [a for a in rest if not a.startswith("-") and "=" not in a]
         if not operands:

@@ -1153,7 +1153,10 @@ cases = [
     ("make conditional", m, ["conditional"]),     # declared but REFUSED by the parser
     ("bash -lc 'make ghost'", m, ["ghost"]),      # still found at command position
     ("make", m, ["(default-goal)"]),              # which goal? the map cannot say
-    ("make V=1 verify", m, []),                   # a variable override is not a target
+    # Sol round four: a runtime variable assignment is NOT waved through as "not a
+    # target" any more -- it is refused, typed, unconditionally, because GNU Make can
+    # substitute it into a recipe the attest-time map cannot reflect.
+    ("make V=1 verify", m, ["make-runtime-override:V=1"]),
     ("make verify", None, ["verify"]),            # no map at all resolves nothing
     ("bin/kaocha --focus x", m, []),              # not a make invocation
 ]
@@ -1163,6 +1166,69 @@ for c, w, got in bad:
 print(f"ok   case27b unresolved-target lookup {len(cases)-len(bad)}/{len(cases)}")
 sys.exit(1 if bad else 0)
 PY27
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
+echo "== case 27c: a RUNTIME MAKE OVERRIDE is refused even when the target resolves =="
+# Sol round four, item 1: `make CMD=bin/kaocha verify` ran the Kaocha stub under GNU
+# Make -- the assignment substituted into `verify`'s recipe -- while the meter,
+# because `verify` IS in the attest-time map, classified the call non-test and
+# "resolved" it.  A run carrying an unmodeled runtime assignment or option must be
+# `incomplete-run`, typed `make-runtime-override`, never silently resolved through a
+# map that cannot see the override.  Plain `make verify` on the same whitelisted map
+# must still resolve normally -- the fix must not blanket-refuse every make call.
+python3 - "$HERE" <<'PY27C'
+import sys
+sys.path.insert(0, sys.argv[1])
+from watch import is_test_command, unresolved_make_targets as u, make_runtime_override
+
+m = {"verify": "echo not-a-test-by-name", "test": "bin/kaocha"}
+
+fails = []
+
+# Sol's own reproduction: an override on a target the map resolves to something that
+# is NOT itself a test runner by name.  GNU Make actually ran Kaocha; the meter must
+# not certify this as resolved-non-test.
+got = u("make CMD=bin/kaocha verify", m)
+if got != ["make-runtime-override:CMD=bin/kaocha"]:
+    fails.append(f"CMD= override not refused: {got}")
+
+hit, why = is_test_command("make CMD=bin/kaocha verify", m)
+if hit:
+    fails.append(f"is_test_command certified a stale-map recipe as a test hit: {why}")
+
+# Every disallowed flag Sol named, one at a time.
+for flag in ("-f", "--file", "-C", "-e", "--eval", "-I"):
+    script = f"make {flag} extra verify"
+    got = u(script, m)
+    if not got or not got[0].startswith("make-runtime-override:"):
+        fails.append(f"flag {flag!r} not refused: {got}")
+
+# An option Sol did not name by name is still "an unknown option" -- also refused.
+got = u("make -j4 verify", m)
+if not got or not got[0].startswith("make-runtime-override:"):
+    fails.append(f"unknown option -j4 not refused: {got}")
+
+# The witness the fix must NOT break: plain `make verify` on a whitelisted map still
+# resolves -- this fix is a refusal for overrides, not a blanket refusal of `make`.
+if u("make verify", m) != []:
+    fails.append(f"plain `make verify` no longer resolves: {u('make verify', m)}")
+if not is_test_command("make test", m)[0]:
+    fails.append("plain `make test` (name rule) stopped being detected")
+
+# An explicitly-named test target still counts even carrying an override -- the name
+# rule is independent of the map and is not what the override poisons.
+if not is_test_command("make V=1 test", m)[0]:
+    fails.append("`make V=1 test` (named test target) stopped being detected")
+
+# The helper itself: no override on a clean invocation.
+if make_runtime_override(["verify"]) is not None:
+    fails.append("make_runtime_override false-positived on a clean operand")
+
+for f in fails:
+    print(f"FAIL case27c {f}")
+print(f"ok   case27c runtime Make override refusal ({9-len(fails)}/9)")
+sys.exit(1 if fails else 0)
+PY27C
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
 echo "== case 28: the B.4 PARENT paragraph is part of the source contract =="
