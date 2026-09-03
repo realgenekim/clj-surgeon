@@ -229,24 +229,33 @@
   "True when any Clojure source lives under `dir`, or the bounded probe could
   not prove otherwise. Never follows a symlink."
   [^java.nio.file.Path dir]
-  (loop [stack (vec (or (.listFiles (.toFile dir)) []))
-         budget (long escape-probe-budget)]
-    (cond
-      (empty? stack) false
-      (not (pos? budget)) true
-      :else
-      (let [^java.io.File entry (peek stack)
-            stack (pop stack)]
-        (cond
-          (java.nio.file.Files/isSymbolicLink (.toPath entry))
-          (recur stack (dec budget))
+  ;; @spec MCP-OP-EXTRACT-040
+  ;; A directory that will not list is not an empty directory. `(or (.listFiles
+  ;; entry) [])` answered "no Clojure source is behind this link" for a tree
+  ;; nothing could read, and the escaping link was skipped as proven harmless.
+  ;; Unreadable is the same answer as out-of-budget: sources MAY be there.
+  (if-let [top (.listFiles (.toFile dir))]
+    (loop [stack (vec top)
+           budget (long escape-probe-budget)]
+      (cond
+        (empty? stack) false
+        (not (pos? budget)) true
+        :else
+        (let [^java.io.File entry (peek stack)
+              stack (pop stack)]
+          (cond
+            (java.nio.file.Files/isSymbolicLink (.toPath entry))
+            (recur stack (dec budget))
 
-          (.isDirectory entry)
-          (recur (into stack (or (.listFiles entry) [])) (dec budget))
+            (.isDirectory entry)
+            (if-let [children (.listFiles entry)]
+              (recur (into stack children) (dec budget))
+              true)
 
-          (re-matches #".*\.clj[sc]?$" (.getName entry)) true
+            (re-matches #".*\.clj[sc]?$" (.getName entry)) true
 
-          :else (recur stack (dec budget)))))))
+            :else (recur stack (dec budget))))))
+    true))
 
 ;; @spec MCP-OP-EXTRACT-029
 (defn- walk-workspace-sources
@@ -278,11 +287,19 @@
   `{:files [...] :skipped-large [...] :skipped-directories [...]}`,
   `{:escape <path> :escape-real <path>}`, or `{:over-cap <count>}`."
   [^java.io.File root real-root cap byte-cap]
-  (let [no-follow (make-array java.nio.file.LinkOption 0)]
-    (loop [stack (mapv (fn [entry] [entry true]) (or (.listFiles root) []))
+  (let [no-follow (make-array java.nio.file.LinkOption 0)
+        ;; @spec MCP-OP-EXTRACT-039
+        ;; `nil` is "this directory would not list", never "this directory is
+        ;; empty". Swallowing it with `(or ... [])` dropped every caller under
+        ;; it and left `:complete` true.
+        root-entries (.listFiles root)]
+    (loop [stack (mapv (fn [entry] [entry true]) (or root-entries []))
            files (transient [])
            skipped (transient [])
-           skipped-dirs (transient [])
+           skipped-dirs (transient
+                          (if (nil? root-entries)
+                            [{:dir (.getPath root) :reason :unreadable}]
+                            []))
            seen 0]
       (if (empty? stack)
         {:files (persistent! files)
@@ -336,11 +353,15 @@
             (and link? (nil? real))
             (recur stack files skipped skipped-dirs seen)
 
+            ;; @spec MCP-OP-EXTRACT-039
             (and (not link?) directory?)
-            (recur (into stack
-                         (map (fn [child] [child false]))
-                         (or (.listFiles entry) []))
-                   files skipped skipped-dirs seen)
+            (if-let [children (.listFiles entry)]
+              (recur (into stack (map (fn [child] [child false])) children)
+                     files skipped skipped-dirs seen)
+              (recur stack files skipped
+                     (conj! skipped-dirs {:dir (.getPath entry)
+                                          :reason :unreadable})
+                     seen))
 
             (not (re-matches #".*\.clj[sc]?$" (.getName entry)))
             (recur stack files skipped skipped-dirs seen)
