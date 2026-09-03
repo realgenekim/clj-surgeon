@@ -21,6 +21,7 @@
    [clj-surgeon.forms :as forms]
    [clj-surgeon.forward-refs :as fwd]
    [clj-surgeon.intent-transaction :as intent-transaction]
+   [clj-surgeon.ls-tree-snapshot :as snapshot]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
@@ -492,26 +493,23 @@
         f (:files project)]
     [pidx f]))
 
-(defn- manifest-summary
-  "Count and digest the ordered candidate manifest in ONE pass, retaining no
-   row: each candidate's `<relative-path>\t<size>\t<mtime>` line is folded
-   into a SHA-256 and dropped. This is what a continuation cursor is bound to,
-   so that a page taken after the tree changed refuses instead of interleaving
-   records from two different repositories."
+(defn- candidate-rows
+  "Every candidate as `{:pidx :path :abs}` in result order, lazily. This is the
+   shape the pinned manifest snapshot is written from; it holds no outline and
+   no source, and the seq is consumed one row at a time."
   ;; @spec MCP-OP-MEM-003
-  [projects dir]
-  (let [root (fs/path dir)
-        md (budget/digest-start)
-        total (reduce (fn [n [_ f]]
-                        (let [file (java.io.File. (str f))]
-                          (budget/digest-candidate! md
-                                                    (rel-path root f)
-                                                    (.length file)
-                                                    (.lastModified file))
-                          (inc n)))
-                      0
-                      (candidate-seq projects))]
-    {:total total :digest (budget/digest-hex md)}))
+  [projects root-path]
+  (for [[pidx project] (map-indexed vector projects)
+        f (:files project)]
+    {:pidx pidx :path (rel-path root-path f) :abs (str f)}))
+
+(defn- candidate-total
+  "The candidate count, from the discovered project file lists. No stat, no
+   walk: the counts are already in hand, and a scan at or under the ceiling
+   must not pay a manifest pass it will never use."
+  ;; @spec MCP-OP-MEM-003
+  [projects]
+  (reduce + 0 (map #(count (:files %)) projects)))
 
 (defn- stream-outlines!
   "Outline `candidates` and hand each `[project-index file outline]` to
@@ -689,6 +687,137 @@
          (sort-by :name)
          vec)))
 
+(defn no-clojure-files-message
+  "The message an empty scan prints. Extracted so it has a witness: this
+   `format` call sat inside a fn that destructured `:format` out of its own
+   opts map, shadowing `clojure.core/format`, and an empty scan threw an NPE
+   instead of saying what it found."
+  ;; @spec MCP-OP-MEM-003
+  [abs grep]
+  (format "No Clojure files found under %s%s"
+          abs (if grep (str " matching '" grep "'") "")))
+
+(defn- page-cursor
+  "The cursor token for `offset` in one pinned snapshot: the snapshot's id, the
+   offset, and a mac over both keyed on the snapshot's private secret."
+  ;; @spec MCP-OP-MEM-003
+  [cursor-id secret offset]
+  (budget/cursor-token cursor-id offset (snapshot/mac cursor-id offset secret)))
+
+(defn- pinned-candidates
+  "The `[project-index absolute-path]` pairs a page will outline, taken from
+   the PINNED manifest rows rather than from a fresh walk of the tree."
+  ;; @spec MCP-OP-MEM-003
+  [abs rows]
+  (mapv (fn [{:keys [x p]}] [x (str (fs/path abs p))]) rows))
+
+(defn- encode-page
+  "Outline `candidates` through the streaming encoder and return the encoded
+   page. `projects` supplies the text encoder's per-project headers; `receipt`
+   is the trailing ceiling receipt, or nil for a complete result."
+  ;; @spec MCP-OP-MEM-003
+  [abs projects candidates output-format receipt]
+  (let [encoder (if (= :edn output-format)
+                  (edn-encoder (fs/path abs))
+                  (text-encoder (fs/path abs) projects (> (count projects) 1)))]
+    (stream-outlines! candidates (:emit! encoder))
+    ((:finish! encoder) receipt)))
+
+(defn- run-fresh-scan
+  "A scan with no cursor: discover, count, and either encode the whole result
+   or PIN a manifest snapshot and serve its first page.
+
+   A result at or under the ceiling pins nothing. It needs no cursor, so it
+   pays no stat pass, no content digest and no snapshot file — which makes the
+   ordinary scan cheaper than it was before this budget existed, when every
+   scan folded a manifest digest it then discarded."
+  ;; @spec MCP-OP-MEM-003
+  [{:keys [abs dir grep ceiling complete output-format base render]}]
+  (let [projects (if grep
+                   (discover-projects-grep (grep-tree grep abs) abs)
+                   (discover-projects abs))]
+    (if (empty? projects)
+      (do (println (no-clojure-files-message abs grep))
+          (System/exit 1))
+      (let [total (candidate-total projects)]
+        (if-not (> total ceiling)
+          (encode-page abs projects (candidate-seq projects) output-format nil)
+          (let [{:keys [cursor-id digest secret]}
+                (snapshot/write-snapshot!
+                  {:root abs
+                   :projects projects
+                   :rows (candidate-rows projects (fs/path abs))})
+                request (assoc base :digest digest :total total :offset 0)]
+            (if complete
+              (render (budget/ceiling-refusal
+                        (assoc request :next-cursor
+                               (page-cursor cursor-id secret 0))))
+              (let [rows (snapshot/read-rows abs cursor-id 0 ceiling)]
+                (encode-page abs projects (pinned-candidates abs rows)
+                             output-format
+                             (budget/continuation
+                               (assoc request
+                                      :returned ceiling
+                                      :next-cursor (page-cursor cursor-id secret
+                                                                ceiling))))))))))))
+
+(defn- run-pinned-page
+  "A page served from a pinned manifest snapshot.
+
+   Four typed refusals guard it, and each names a DIFFERENT fact about the
+   caller's cursor: `:invalid-result-cursor` — this server did not mint that
+   token; `:unknown-result-cursor` — it did, but not for this root, or the
+   snapshot is gone; `:result-cursor-out-of-range` — it did, and the position
+   is not in the manifest; `:stale-result-cursor` — it did, and a file this
+   page must serve no longer holds its pinned content.
+
+   No discovery, no glob, no tree walk: the page reads its own slice of the
+   pinned rows and nothing else."
+  ;; @spec MCP-OP-MEM-003
+  [{:keys [abs cursor ceiling complete output-format base render]}]
+  (if-let [{:keys [cursor-id offset mac]} (budget/parse-cursor cursor)]
+    (let [snap (snapshot/read-meta abs cursor-id)]
+      (cond
+        (nil? snap)
+        (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
+
+        (not= mac (snapshot/mac cursor-id offset (:secret snap)))
+        (render (budget/invalid-cursor-refusal (assoc base :token cursor)))
+
+        (>= offset (:total snap))
+        (render (budget/out-of-range-refusal
+                  (assoc base :offset offset :total (:total snap))))
+
+        :else
+        (let [total (:total snap)
+              remaining (- total offset)
+              over? (> remaining ceiling)
+              returned (min ceiling remaining)
+              rows (snapshot/read-rows abs cursor-id offset returned)
+              stale (snapshot/stale-row abs rows)
+              request (assoc base :digest (:digest snap) :total total
+                             :offset offset)]
+          (cond
+            stale
+            (render (budget/stale-cursor-refusal (merge base stale)))
+
+            (and complete over?)
+            (render (budget/ceiling-refusal
+                      (assoc request :next-cursor
+                             (page-cursor cursor-id (:secret snap) offset))))
+
+            :else
+            (encode-page abs (:projects snap) (pinned-candidates abs rows)
+                         output-format
+                         (when over?
+                           (budget/continuation
+                             (assoc request
+                                    :returned returned
+                                    :next-cursor
+                                    (page-cursor cursor-id (:secret snap)
+                                                 (+ offset returned)))))))))) 
+    (render (budget/invalid-cursor-refusal (assoc base :token cursor)))))
+
 (defn run-ls-tree
   "Map namespaces across a directory tree.
 
@@ -698,9 +827,17 @@
    raise it. A scan at or under the ceiling is encoded whole and is identical
    to the unbounded path; past it the caller gets one of two TYPED answers and
    never a silent truncation: a continuation carrying `:next_call` with a
-   cursor bound to the candidate manifest, or, when the caller asked for a
+   cursor bound to a PINNED MANIFEST SNAPSHOT, or, when the caller asked for a
    complete result with `:complete true`, a refusal naming the ceiling, the
-   observed count, and what fits."
+   observed count, and what fits.
+
+   A continuation is a SNAPSHOT read. The first page that needs a cursor pins
+   the ordered candidate list and every candidate's CONTENT digest under the
+   workspace state root; later pages are served from that snapshot and refuse,
+   by name, when a file they must serve no longer holds its pinned bytes. The
+   price is that files created after the snapshot are not in it — the honest
+   trade for a page that reads only its own slice instead of re-walking the
+   whole tree."
   ;; @spec MCP-OP-MEM-003
   [{:keys [dir grep max-results cursor complete] :as opts}]
   (when-not dir
@@ -708,62 +845,22 @@
     (System/exit 1))
   (let [output-format (:format opts)
         abs (str (fs/absolutize dir))
-        projects (if grep
-                   ;; Fast path: rg first, skip expensive directory globbing
-                   (let [hits (grep-tree grep abs)]
-                     (discover-projects-grep hits abs))
-                   ;; Full scan: discover all projects
-                   (discover-projects abs))]
-    (if (empty? projects)
-      (do (println (format "No Clojure files found under %s%s"
-                           abs (if grep (str " matching '" grep "'") "")))
-          (System/exit 1))
-      (let [requested (budget/parse-ceiling max-results)
-            ceiling (budget/resolve-ceiling max-results)
-            {:keys [total digest]} (manifest-summary projects abs)
-            parsed-cursor (when (some? cursor) (budget/parse-cursor cursor))
-            request {:dir dir
-                     :ceiling ceiling
-                     :output-format output-format
-                     :digest digest
-                     :total total}
-            render (fn [receipt]
-                     (if (= :edn output-format)
-                       receipt
-                       (budget/refusal-text receipt)))]
-        (cond
-          (= :invalid requested)
-          (render (budget/invalid-ceiling-refusal
-                    (assoc request :requested max-results)))
+        requested (budget/parse-ceiling max-results)
+        ceiling (budget/resolve-ceiling max-results)
+        base {:dir dir :ceiling ceiling :output-format output-format}
+        render (fn [receipt]
+                 (if (= :edn output-format)
+                   receipt
+                   (budget/refusal-text receipt)))
+        ctx {:abs abs :dir dir :grep grep :cursor cursor :ceiling ceiling
+             :complete complete :output-format output-format
+             :base base :render render}]
+    (cond
+      (= :invalid requested)
+      (render (budget/invalid-ceiling-refusal (assoc base :requested max-results)))
 
-          (and (some? cursor) (nil? parsed-cursor))
-          (render (budget/invalid-cursor-refusal (assoc request :token cursor)))
-
-          (and parsed-cursor
-               (not= digest (:manifest-digest parsed-cursor)))
-          (render (budget/stale-cursor-refusal
-                    (assoc request :cursor-digest (:manifest-digest
-                                                    parsed-cursor))))
-
-          :else
-          (let [offset (long (or (:offset parsed-cursor) 0))
-                remaining (max 0 (- total offset))
-                over? (> remaining ceiling)]
-            (if (and complete over?)
-              (render (budget/ceiling-refusal request))
-              (let [returned (min ceiling remaining)
-                    receipt (when over?
-                              (budget/continuation
-                                (assoc request :offset offset :returned returned)))
-                    candidates (->> (candidate-seq projects)
-                                    (drop offset)
-                                    (take returned))
-                    encoder (if (= :edn output-format)
-                              (edn-encoder (fs/path abs))
-                              (text-encoder (fs/path abs) projects
-                                            (> (count projects) 1)))]
-                (stream-outlines! candidates (:emit! encoder))
-                ((:finish! encoder) receipt)))))))))
+      (some? cursor) (run-pinned-page ctx)
+      :else (run-fresh-scan ctx))))
 
 ;; ============================================================
 ;; Ops registry — single source of truth for dispatch + help

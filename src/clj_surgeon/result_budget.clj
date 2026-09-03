@@ -22,18 +22,20 @@
    - a REFUSAL — when the caller asked for a complete result, naming `R`, the
      observed count, and how many fit.
 
-   The cursor is bound to the MANIFEST DIGEST, not to the offset alone. A page
-   taken after the tree changed would silently interleave records from two
-   different repositories; binding the digest turns that into a refusal.
+   The cursor is bound to a PINNED MANIFEST SNAPSHOT, not to the offset alone
+   and not to a digest folded from stats. The page that first needs a cursor
+   writes the ordered candidate list with each file's CONTENT digest into the
+   workspace state root (`clj-surgeon.ls-tree-snapshot`); later pages are served
+   from it, and a served file whose content moved refuses by name. This
+   namespace owns the cursor GRAMMAR and the typed receipts; the snapshot store
+   owns the bytes.
 
    PURE. No I/O, no heavy requires — it loads under babashka so its witnesses
    run in the millisecond fast suite.
 
    See docs/intent/read-path-memory/read-path-memory-design.md."
   (:require
-   [clojure.string :as str])
-  (:import
-   (java.security MessageDigest)))
+   [clojure.string :as str]))
 
 ;; ============================================================
 ;; The ceiling
@@ -101,52 +103,41 @@
 ;; ============================================================
 
 ;; @spec MCP-OP-MEM-003
-(defn digest-start
-  "A fresh SHA-256 accumulator for a candidate manifest."
-  ^MessageDigest []
-  (MessageDigest/getInstance "SHA-256"))
-
-(defn digest-candidate!
-  "Fold one candidate into the manifest digest and return the accumulator.
-
-   The line is `<relative-path>\\t<size>\\t<mtime-millis>\\n`. It is folded and
-   dropped: the manifest is never materialised, so the digest costs one stat
-   per file and no retained heap."
-  ^MessageDigest [^MessageDigest md path size mtime]
-  (.update md (.getBytes (str path "\t" size "\t" mtime "\n") "UTF-8"))
-  md)
-
-(defn digest-hex
-  "The finished manifest digest as 64 lowercase hex characters."
-  [^MessageDigest md]
-  (str/join (map #(format "%02x" %) (.digest md))))
+(def ^:private hex64 #"[0-9a-f]{64}")
 
 (defn cursor-token
-  "The opaque continuation cursor: an offset bound to a manifest digest."
-  [offset digest]
-  (str offset ":" digest))
+  "The opaque continuation cursor: `<cursor-id>:<offset>:<mac>`.
+
+   The cursor-id NAMES a pinned manifest snapshot; the mac AUTHENTICATES this
+   exact offset against that snapshot's secret. Before this shape the token was
+   `<offset>:<manifest-digest>`, and its offset half was neither authenticated
+   nor range-checked: an edited offset past the end returned an empty vector
+   with no receipt, which a caller reads as a complete result."
+  [cursor-id offset mac]
+  (str cursor-id ":" offset ":" mac))
 
 (defn parse-cursor
   "Parse a continuation cursor, or return `nil` when it is not one."
   [token]
   (when (string? token)
-    (let [[offset digest] (str/split (str/trim token) #":" 2)]
-      (when (and offset digest
-                 (re-matches #"\d+" offset)
-                 (re-matches #"[0-9a-f]{64}" digest))
-        {:offset (Long/parseLong offset)
-         :manifest-digest digest}))))
+    (let [parts (str/split (str/trim token) #":")]
+      (when (= 3 (count parts))
+        (let [[cursor-id offset mac] parts]
+          (when (and (re-matches hex64 cursor-id)
+                     (re-matches hex64 mac)
+                     (re-matches #"\d+" offset))
+            {:cursor-id cursor-id :offset (Long/parseLong offset) :mac mac}))))))
 
 ;; ============================================================
 ;; Typed receipts — continuation, refusal, stale cursor
 ;; ============================================================
 
 (defn- next-call
-  [{:keys [dir ceiling output-format]} cursor]
+  [{:keys [dir ceiling output-format next-cursor]}]
   (cond-> {:op :ls-tree :dir dir}
     (not= ceiling max-result-records) (assoc :max-results ceiling)
     output-format (assoc :format output-format)
-    cursor (assoc :cursor cursor)))
+    next-cursor (assoc :cursor next-cursor)))
 
 ;; @spec MCP-OP-MEM-003
 (defn continuation
@@ -163,7 +154,7 @@
                     :total total
                     :remaining (max 0 (- total (+ offset returned)))
                     :manifest_digest digest}
-   :next_call (next-call request (cursor-token (+ offset returned) digest))})
+   :next_call (next-call request)})
 
 ;; @spec MCP-OP-MEM-003
 (defn ceiling-refusal
@@ -184,23 +175,69 @@
    :source-unchanged true
    :remedy (str "narrow :dir, add :grep, or drop :complete and page through "
                 "the result with the :cursor in :next_call")
-   :next_call (next-call request (cursor-token 0 digest))})
+   :next_call (next-call request)})
 
 ;; @spec MCP-OP-MEM-003
 (defn stale-cursor-refusal
-  "The receipt for a continuation whose manifest digest no longer matches the
-   tree. Paging on regardless would interleave records from two different
-   repositories, so the page refuses and the remedy is to rescan."
-  [{:keys [cursor-digest digest] :as request}]
+  "The receipt for a page one of whose PINNED files no longer holds the content
+   the snapshot recorded — its bytes moved, or it is gone.
+
+   It NAMES the file. A refusal that only says `the tree changed` leaves the
+   caller to find which of ten thousand files moved; naming the path is the
+   difference between a receipt and an apology. `:observed nil` is a deletion.
+
+   Identity here is CONTENT, not stat: this refusal is what a byte swap under a
+   preserved path, size and mtime produces, and the stat-derived digest it
+   replaces served that swap as unchanged."
+  [{:keys [path pinned observed] :as request}]
   {:error-type :stale-result-cursor
-   :error "the tree changed since this cursor was issued"
-   :limit {:kind :manifest-digest
-           :requested cursor-digest
-           :observed digest}
+   :error (format "%s changed since this cursor was issued" path)
+   :limit {:kind :pinned-content
+           :file path
+           :requested pinned
+           :observed observed}
    :complete false
    :source-unchanged true
-   :remedy "rescan from the start; the cursor's manifest no longer exists"
-   :next_call (next-call request nil)})
+   :remedy "rescan from the start; this page's pinned manifest no longer holds"
+   :next_call (next-call request)})
+
+;; @spec MCP-OP-MEM-003
+(defn unknown-cursor-refusal
+  "The receipt for a cursor whose pinned snapshot this root does not hold —
+   expired, pruned, never written, or minted against a DIFFERENT root.
+
+   Snapshots are addressed by the canonical root path, so a cursor is not
+   portable between roots however alike two trees look. Serving it from
+   whatever the current root happens to contain is the first blocker."
+  [{:keys [token] :as request}]
+  {:error-type :unknown-result-cursor
+   :error (str "no pinned manifest for this cursor under this root: "
+               (pr-str token))
+   :limit {:kind :result-cursor :requested token}
+   :complete false
+   :source-unchanged true
+   :remedy (str "rescan from the start; a cursor is only valid for the root "
+                "that issued it, and only until its snapshot expires")
+   :next_call (next-call request)})
+
+;; @spec MCP-OP-MEM-003
+(defn out-of-range-refusal
+  "The receipt for a GENUINE cursor — this server minted it, the mac verifies —
+   whose offset is past the end of its pinned manifest.
+
+   Distinct from `:invalid-result-cursor` on purpose: that one says the token
+   was not ours, this one says the token was ours and the position is not
+   there. Before the range check, this returned an empty vector with no
+   receipt, which is a complete result as far as any caller can tell."
+  [{:keys [offset total] :as request}]
+  {:error-type :result-cursor-out-of-range
+   :error (format "cursor offset %d is past the end of a %d-record manifest"
+                  offset total)
+   :limit {:kind :result-offset :requested offset :observed total}
+   :complete false
+   :source-unchanged true
+   :remedy "rescan from the start; the last page carries no :next_call"
+   :next_call (next-call request)})
 
 ;; ============================================================
 ;; Text rendering — the same receipts, in the text encoding
@@ -243,7 +280,7 @@
    :source-unchanged true
    :remedy (str "pass :max-results as a positive integer at or below "
                 max-result-records ", or omit it")
-   :next_call (next-call (assoc request :ceiling max-result-records) nil)})
+   :next_call (next-call (assoc request :ceiling max-result-records))})
 
 ;; @spec MCP-OP-MEM-003
 (defn invalid-cursor-refusal
@@ -257,4 +294,4 @@
    :complete false
    :source-unchanged true
    :remedy "drop :cursor and rescan; a cursor is only ever copied from :next_call"
-   :next_call (next-call request nil)})
+   :next_call (next-call request)})

@@ -13,9 +13,20 @@
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.core :as core]
+   [clj-surgeon.ls-tree-snapshot :as snapshot]
    [clj-surgeon.result-budget :as budget]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]))
+
+;; Pinned manifest snapshots are FILES. Every witness in this namespace runs
+;; against a throwaway state root so a test never writes into — or reads from —
+;; the operator's real `~/.local/state/clj-surgeon`.
+(use-fixtures :once
+  (fn [f]
+    (let [root (str (fs/create-temp-dir {:prefix "ls-tree-cursor-state"}))]
+      (try
+        (binding [snapshot/*state-root* root] (f))
+        (finally (fs/delete-tree root))))))
 
 ;; ============================================================
 ;; Fixtures — a project of N tiny files, deterministic in path order
@@ -112,13 +123,16 @@
              (select-keys ceiling [:limit :offset :returned :total :remaining])))
       (is (= 64 (count (:manifest_digest ceiling))))
       (testing "the continuation names the exact call that resumes it"
-        (let [nc (:next_call rcpt)]
+        (let [nc (:next_call rcpt)
+              parsed (budget/parse-cursor (:cursor nc))]
           (is (= :ls-tree (:op nc)))
           (is (= dir (:dir nc)))
           (is (= (dec fixture-count) (:max-results nc)))
-          (is (= {:offset (dec fixture-count)
-                  :manifest-digest (:manifest_digest ceiling)}
-                 (budget/parse-cursor (:cursor nc)))))))))
+          (is (some? parsed) "the cursor parses as a cursor")
+          (is (= (dec fixture-count) (:offset parsed))
+              "the cursor resumes at the first record this page did not encode")
+          (is (= 64 (count (:cursor-id parsed))))
+          (is (= 64 (count (:mac parsed)))))))))
 
 ;; @spec MCP-OP-MEM-003
 (deftest a-complete-request-past-the-ceiling-refuses-and-names-what-fits
@@ -177,21 +191,25 @@
                      (entry-files page-3))))))))
 
 ;; @spec MCP-OP-MEM-003
-(deftest a-cursor-is-refused-once-the-tree-has-changed
+(deftest a-cursor-is-refused-once-a-pinned-file-is-gone
   (with-project [dir fixture-count "ls-tree-budget-stale"]
     (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
           cursor (get-in (receipt page-1) [:next_call :cursor])]
-      (spit (str dir "/src/fixt/mod999.clj") (tiny-source 999))
+      ;; mod007 is on page 2. Deleting it is the same class of fact as swapping
+      ;; its bytes: the pinned manifest promised a record this page cannot
+      ;; honestly serve.
+      (fs/delete (str dir "/src/fixt/mod007.clj"))
       (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
                                  :cursor cursor})]
         (is (= :stale-result-cursor (:error-type r))
-            "a page bound to a manifest that no longer exists refuses")
+            "a page whose pinned record is gone refuses")
         (is (false? (:complete r)))
         (is (true? (:source-unchanged r)))
-        (is (= (:manifest-digest (budget/parse-cursor cursor))
-               (get-in r [:limit :requested])))
-        (is (not= (get-in r [:limit :requested])
-                  (get-in r [:limit :observed])))))))
+        (is (= "src/fixt/mod007.clj" (get-in r [:limit :file]))
+            "the refusal names the missing file")
+        (is (nil? (get-in r [:limit :observed]))
+            "a deleted file observes no content digest at all")
+        (is (some? (get-in r [:limit :requested])))))))
 
 ;; @spec MCP-OP-MEM-003
 (deftest a-malformed-cursor-is-refused-rather-than-ignored
@@ -259,7 +277,10 @@
       (is (str/includes? text "── total: 4 files"))
       (is (str/includes? text "── result_ceiling: 4 record(s), 4 of 12 file(s)"))
       (is (str/includes? text "next_call: clj-surgeon :op :ls-tree"))
-      (is (str/includes? text ":cursor 4:")))
+      (testing "the text carries a real cursor, resuming at the first record it
+                did not encode"
+        (let [token (second (re-find #":cursor (\S+)" text))]
+          (is (= 4 (:offset (budget/parse-cursor token)))))))
     (testing "a complete text request past the ceiling refuses in text"
       (let [text (core/run-ls-tree {:dir dir :max-results 4 :complete true})]
         (is (string? text))
@@ -397,3 +418,92 @@
                      (:error-type r))
           (str "expected a typed refusal, got " (pr-str r)))
       (is (false? (:complete r))))))
+
+;; ============================================================
+;; The refusals that only exist once the manifest is PINNED
+;;
+;; The three witnesses above are Sol's counterexamples and failed before the
+;; snapshot existed. These two name behaviour that had no representation at
+;; all: a cursor whose snapshot is gone, and a cursor this server really did
+;; mint whose offset is not in the manifest. They are new-behaviour witnesses,
+;; so their falsifiability is shown by construction rather than by history —
+;; each asserts the specific error-type, and a page that served records
+;; instead, or an empty vector, fails them.
+;; ============================================================
+
+;; @spec MCP-OP-MEM-003
+(deftest a-cursor-whose-pinned-snapshot-is-gone-is-unknown
+  (with-project [dir fixture-count "ls-tree-budget-pruned"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (get-in (receipt page-1) [:next_call :cursor])
+          cursor-id (:cursor-id (budget/parse-cursor cursor))]
+      (is (some? cursor-id))
+      (fs/delete-tree (snapshot/cursor-dir dir))
+      (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                 :cursor cursor})]
+        (is (= :unknown-result-cursor (:error-type r))
+            "an expired or pruned snapshot is named as such, not re-derived
+             from whatever the tree holds now")
+        (is (false? (:complete r)))
+        (is (true? (:source-unchanged r)))
+        (is (nil? (get-in r [:next_call :cursor]))
+            "the remedy is a rescan, so the refusal offers no cursor")))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-genuine-cursor-past-the-end-of-its-manifest-is-out-of-range
+  (with-project [dir 3 "ls-tree-budget-range"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 2})
+          cursor (get-in (receipt page-1) [:next_call :cursor])
+          cursor-id (:cursor-id (budget/parse-cursor cursor))
+          snap (snapshot/read-meta dir cursor-id)
+          ;; Minted by the server's own authenticator, so the mac verifies and
+          ;; this is NOT the forged case. Offsets past the end are never issued
+          ;; — the last page carries no cursor — so the only way to reach the
+          ;; range check is to mint one.
+          genuine (budget/cursor-token
+                    cursor-id 99 (snapshot/mac cursor-id 99 (:secret snap)))
+          r (core/run-ls-tree {:dir dir :format :edn :max-results 2
+                               :cursor genuine})]
+      (is (= 3 (:total snap)))
+      (is (= :result-cursor-out-of-range (:error-type r))
+          "a real cursor at an unreal position refuses; it never returns an
+           empty vector a caller would read as a complete result")
+      (is (= {:kind :result-offset :requested 99 :observed 3} (:limit r))
+          "the refusal names the offset asked for and the manifest it is not in")
+      (is (false? (:complete r)))
+      (is (true? (:source-unchanged r))))))
+
+;; ============================================================
+;; A page reads only its OWN slice
+;;
+;; Finding 7 measured `O(pages x N)`: every continuation page re-walked the
+;; whole manifest, folding 10,000 stat rows to serve 1,000 records. Pinning
+;; removes the re-walk, and this witness gates it structurally rather than by
+;; timing: page 2 must not call discovery at all.
+;; ============================================================
+
+;; @spec MCP-OP-MEM-003
+(deftest a-continuation-page-does-no-discovery
+  (with-project [dir fixture-count "ls-tree-budget-no-rewalk"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (get-in (receipt page-1) [:next_call :cursor])
+          discoveries (atom 0)
+          v #'core/discover-projects
+          real @v]
+      ;; `alter-var-root` rather than `with-redefs`: the var is private and this
+      ;; namespace runs under both babashka and the JVM.
+      (alter-var-root v (constantly (fn [d] (swap! discoveries inc) (real d))))
+      (try
+        (let [page-2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                        :cursor cursor})]
+          (is (= 5 (count (entry-files page-2))) "the page is served")
+          (is (zero? @discoveries)
+              "a continuation is served from the pinned manifest; it does not
+               glob, walk, or stat the tree a second time"))
+        ;; The counter is not decorative: a scan WITHOUT a cursor must move it,
+        ;; or the assertion above proves nothing about the redefinition.
+        (let [fresh (core/run-ls-tree {:dir dir :format :edn})]
+          (is (= fixture-count (count (entry-files fresh))))
+          (is (= 1 @discoveries)
+              "a fresh scan does discover — the counter is wired in"))
+        (finally (alter-var-root v (constantly real)))))))
