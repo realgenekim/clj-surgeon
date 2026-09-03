@@ -125,18 +125,27 @@ line, every `:unknown` site with its reason, the `:outside-arms` count,
 pool size, and a `next_action`. Listed evidence is trimmed until the receipt
 fits its budget, and the trim is reported.
 
-Every refusal carries an executable `next_call`: workspace not found, no fold
-arms found (naming the files scanned), an unparseable file (naming it), and an
-unknown door symbol (naming it and the known doors).
+Every refusal carries an executable `next_call` WHEN ONE CAN BE COMPUTED — a
+call the caller may replay verbatim that is not the request just refused: no
+fold arms found where the scan named files to look at, an unparseable file
+(naming it), an unknown door symbol (naming it and the known doors), a bounds
+refusal that finished a subtree worth offering, and a request naming a source
+too large to read (the same request MINUS the oversized sources, with
+`files_removed`, because the caller named them and so they can be removed).
 
-Two refusals deliberately carry NO `next_call`, and say why in a `remedy`
-instead. A bounds refusal whose walk finished no subtree that fits has nothing
-to offer, and a `census-resource-exhausted` refusal has less than that: the
-walk's own per-directory aggregates were lost with the resource that held them,
-so no narrower call can be computed at all. Both cases publish a `remedy`
-rather than a caption in an argument position — a placeholder such as `files
-["<a narrower file list>"]` is not a smaller promise than a real continuation,
-it is an unexecutable one.
+Where no continuation can be computed the refusal carries NO `next_call` key at
+all, and says why in a `remedy` instead. That is the case for a bounds refusal
+whose walk finished no subtree that both fits and holds a candidate source; a
+`census-resource-exhausted` refusal, which has less than that, because the
+walk's own per-directory aggregates were lost with the resource that held them;
+a workspace root that does not resolve, leaving no root to narrow; a request
+whose every named source is oversized, leaving no request; and an arm-less tree
+that scanned nothing, where the only call left to offer is the one just
+refused. All of them publish a `remedy` rather than a caption in an argument
+position — a placeholder such as `files ["<a narrower file list>"]` is not a
+smaller promise than a real continuation, it is an unexecutable one, and
+MCP-OP-CENSUS-014 forbids it in every argument position of every refusal on
+every entrance.
 
 ## Versioning
 
@@ -190,14 +199,23 @@ does and does not do:
   fits, and the observed lower bound) rather than a truncated scan published
   as a complete census. Its continuation is COMPUTED, not described: the walk
   aggregates candidates per directory as it goes, and the refusal offers the
-  largest subtree the walk FINISHED whose count fits — ties deepest first,
-  then lexicographic — as a `next_call` (a `:next-command` at the CLI) the
+  largest subtree the walk FINISHED whose count fits and which holds at least
+  one candidate source — ties by most candidates, then deepest, then
+  lexicographic — as a `next_call` (a `:next-command` at the CLI) the
   caller can replay verbatim, bounded by `max-next-call-bytes`. Every ancestor
   of the file the walk stopped on is excluded, because those counts are lower
   bounds. When nothing is known to fit there is no continuation at all, and a
   `remedy` says why;
 - the walk also stops at `max-walk-entries` — 50,000 — counting EVERY entry it
-  visits, of any name, and charging the bound BEFORE it stats the entry. The
+  visits, of any name, and charging the bound BEFORE it stats the entry. Each
+  directory is STREAMED, one name at a time, and the bound is charged as the
+  filesystem yields each name: a complete listing is never materialised or
+  ordered before the counter runs, because a walk that built and sorted the
+  name array of a 60,000-entry directory has already spent what the bound
+  exists to protect. Only the ADMITTED names are ordered, so a walk under the
+  bound visits the tree in the same order it always did, and the refusal
+  publishes `entries_yielded` — the names it actually obtained from the
+  filesystem, never more than the bound. The
   scanned-file ceiling bounds what the census will READ; it does not bound what
   the walk COSTS, and a tree of 60,000 images or fixtures holds no candidate at
   all, so the ceiling never fires while the walk enumerates the lot. Reaching
@@ -205,7 +223,11 @@ does and does not do:
   ceiling refusal — the bound, the entry count visited and that it is a lower
   bound, `files_read` 0 — and a continuation computed from the walk's own
   per-directory ENTRY aggregates: the largest fully-walked subtree that fits
-  under BOTH bounds, so the narrowing cannot replay into the other refusal;
+  under BOTH bounds AND holds at least one candidate source, so the narrowing
+  can neither replay into the other refusal nor hand back a subtree of the very
+  junk that tripped the bound — the entry bound fires on trees of junk, so the
+  biggest finished subtree is usually junk, and a census of junk is
+  `no-fold-arms-found` on a workspace that has arms;
 - a discovered source above `max-source-bytes` is never read, and never
   dropped in silence: it is counted in `oversized_skipped`, at most
   `max-listed-files` of them are named, and `oversized_skipped_omitted` states
