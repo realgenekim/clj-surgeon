@@ -674,3 +674,11 @@ measurement, and a delegated run is treated as an arm, not a handoff:
 6. **Steer by the same squares.** A delegated result is judged by the square it wins or loses, with
    the same numbers, and it is conceded as readily. Caring about its methods and timings as if we
    had done the work ourselves is what keeps the measurement honest when we no longer hold the tool.
+
+**The how, mined from the history (Gene: "the how, versus just why and what"):** twelve techniques
+with the exact commands, each traced to a timestamped moment, live in
+`docs/observations/2026-09-03-delegation-techniques-the-how.md`. The shape under all twelve is one
+rule: **every check reads a source that could not have been written by the thing making the claim.**
+Suite bytes, not the summary; the remote ref, not the push's exit code; the watcher's transcript,
+not the driver's memory; server telemetry, not the agent's notes. Where no such source exists, the
+honest receipt is `:unverified`, never a green.
