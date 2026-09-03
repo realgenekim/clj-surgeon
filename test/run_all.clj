@@ -8,6 +8,7 @@
    [clj-surgeon.cljc.merge-test]
    [clj-surgeon.cljc.require-ops-test]
    [clj-surgeon.cljc.split-test]
+   [clj-surgeon.core-discovery-test]
    [clj-surgeon.diagnostic-delta-test]
    [clj-surgeon.edit-dsl-test]
    [clj-surgeon.edit-test]
@@ -87,5 +88,6 @@
                    'clj-surgeon.worktree-lifecycle-io-test
                    'clj-surgeon.worktree-lifecycle-cli-test
                    'clj-surgeon.recovery-test
-                   'clj-surgeon.cli-dispatch-test)]
+                   'clj-surgeon.cli-dispatch-test
+                   'clj-surgeon.core-discovery-test)]
   (System/exit (+ (:fail r) (:error r))))
