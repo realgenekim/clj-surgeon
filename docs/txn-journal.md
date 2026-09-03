@@ -240,7 +240,14 @@ receipt refcount, and whether the row may be evicted.
   only. A tombstone whose break never COMPLETED — what a crash between the
   break's link and its unlink leaves — is `:kind :interrupted-break :status
   :lock-break-interrupted`, because it is evidence of
-  a break that never happened. There is NO row for a file that VANISHED between
+  a break that never happened. That typing needs the LOCK to CORROBORATE it:
+  a tombstone that shares the present LOCK's inode is a second link to a claim
+  that is still there, which a completed break can never leave. A tombstone
+  carrying only the `:phase :linked` marker, with the LOCK gone or naming a
+  different inode, is `:kind :broken-lock :status :uncorroborated-marker` —
+  the marker is a claim by the breaker, any writer of the directory can write
+  one, and nothing left on disk can tell a break that never happened from a
+  break that did. There is NO row for a file that VANISHED between
   the listing and the stat: `lastModified` of a missing file is 0, which reads
   as infinitely old and bills `:bytes 0`, and 822 of 9,831 rows were of exactly
   that kind under concurrency. An absent file is absent, which is neither an age
@@ -269,8 +276,8 @@ A transaction whose
 also retires the break tombstones older than `broken-lock-retention-ms`,
 measured against the tombstone's OWN creation stamp rather than the mtime it
 inherited from the claim it broke, and reports `:broken-locks {:found … :pruned
-… :remaining … :vanished … :interrupted … :orphan-sidecars {…} :retention-ms
-…}`. The ordering used
+… :remaining … :vanished … :interrupted … :orphan-sidecars {…}
+:unreadable-stamps … :retention-ms …}`. The ordering used
 to be the guarantee — "pruned after its own break" — and it was not one: a
 rename preserves mtime, so breaking a two-day-old crashed holder's lock produced
 `{:found 1 :pruned 1 :remaining 0}` beside a receipt naming
@@ -279,20 +286,44 @@ entries whose file was gone by the time it was stat'd, and they are deliberately
 not in `:found`, which they used to inflate. Recovery also resolves EVERY
 INTERRUPTED break before it decides anything else, returning
 `:interrupted-breaks [{:tombstone … :resolution :interrupted-break-finished |
-:interrupted-break-reverted :evidence :retained | :removed} …]` — a vector,
+:interrupted-break-reverted | :interrupted-break-uncorroborated
+:evidence :retained | :removed} …]` — a vector,
 because the listing used to type the first of them and publish the rest as
-breaks that happened, and a second `recover!` was needed to clear each one. If
-the LOCK is still that claim and its holder is dead by the ordinary rule the
+breaks that happened, and a second `recover!` was needed to clear each one.
+If the LOCK is still that claim and its holder is dead by the ordinary rule the
 LOCK side is unlinked and the evidence stands; if it is alive the extra link is
-removed and the LOCK is untouched; and if the LOCK is gone or names a different
-inode the break never happened at all and cannot be finished on anybody's
-behalf, so the extra link goes. With two interrupted breaks over one claim the
-first finishes it and the rest revert: exactly one break may be evidence.
+removed and the LOCK is untouched. **The revert requires the LOCK's
+corroboration and gets no further than that.** If the LOCK is gone, or names a
+different inode, nothing on disk can confirm the marker that put the file in
+this list, and the two states the evidence cannot distinguish are a break that
+never happened and a break that DID: the tombstone is stamped with its own
+creation time and KEPT, `:resolution :interrupted-break-uncorroborated
+:evidence :retained :cause :marker-uncorroborated`, retired on the ordinary
+published retention. With two interrupted breaks over one claim the first
+finishes it and the rest are kept as uncorroborated — a duplicate tombstone
+that retires in a day, which is the price of never deleting a real break's
+evidence on a claim any directory writer can forge. The rule that produced it:
+**evidence is never deleted on an uncorroborated match.** Measured, before the
+rule existed: one hand-written `:phase :linked` sidecar dropped beside a
+genuine break, and the next `recover!` unlinked the sidecar and the tombstone
+and returned `:broken-locks {:found 0}`.
 
-**An interrupted break is typed by its OWN marker.** `break-by-link!` writes
-`:phase :linked` into the tombstone's `LOCK.broken-at.*` sidecar immediately
-after the link, and clears it — by writing the real `:broken-at-ms` stamp —
-BEFORE the unlink. Recognising the state by sharing an inode with the live LOCK
+**An interrupted break is typed by its OWN marker.** `break-by-link!` claims
+`:phase :linked` in the tombstone's `LOCK.broken-at.*` sidecar BEFORE the link,
+with the same create-if-absent primitive the break itself uses, and clears
+it — by writing the real `:broken-at-ms` stamp — BEFORE the unlink. Before
+that ordering the marker went in immediately AFTER the link, which left a
+two-statement window in which a tombstone existed with no marker at all: typed
+by the inode rule while the LOCK was there, and re-typed as a break that
+happened the moment the wrongly-broken holder released. It needed no crash,
+either, because `spit` truncates before it writes and a zero-length marker
+reads as no marker. Both sidecar writes are now whole — a link from a
+temporary to claim the name, a rename over it to replace the contents — so a
+partially written sidecar is not a state on disk, and what an interruption
+before the link leaves is a marker with no tombstone: an ORPHAN SIDECAR, which
+this kernel already lists, counts and retires. A sidecar name already taken is
+a typed refusal before the LOCK is touched, never another break's stamp
+overwritten with this break's marker. Recognising the state by sharing an inode with the live LOCK
 alone was state inferred from a NEIGHBOUR, and it died with the neighbour: the
 moment the wrongly-broken holder released its own claim, cleanly and
 txid-scoped, the sweep silently re-typed the file as a break that happened and
@@ -337,7 +368,14 @@ not the judged one is simply never removed, and the outcome is `{:broken false
 tombstone name already on disk is `link(2)` returning EEXIST — the kernel's own
 verdict, not a stat this code performs — surfaced as the typed refusal
 `:lock-break-refused {:cause :tombstone-exists …}` by `begin!` AND by `recover!`,
-taken before the LOCK is touched, never a replacement. Under the old check-then-act
+taken before the LOCK is touched, never a replacement. `:cause
+:evidence-unrecordable` is the second member of that refusal set: a break that
+cannot write the sidecar recording when it happened REFUSES the unlink, leaves
+the claim byte for byte where it was, and drops its own extra link. It used to
+swallow that write failure and unlink anyway — a destroyed claim with nothing
+on disk naming who took it, and a completed break left wearing the marker of
+an interrupted one for the next recovery to revert. A break the kernel could
+not record is a break that did not happen. Under the old check-then-act
 that sentence was false: two breakers sharing one txid destroyed the judged claim
 13 times in 4,000 races and both were handed the same tombstone name.
 
@@ -359,6 +397,31 @@ never reaches that path. `:unsafe-break-by-move true` is the only way to
 select it where `link(2)` works, and it is spelled that way on purpose: the
 previous name, `:no-hard-links`, was an ordinary descriptive word on the PUBLIC
 `begin!`/`recover!` surface, one keyword from a caller who meant nothing by it.
+
+> **THE ADOPTION BOUNDARY RULE for `:unsafe-break-by-move`. The name is a
+> barrier only while no argument map reaches the kernel, and the day one does
+> it stops being one — so the rule is written here, before adoption, rather
+> than discovered after it.**
+>
+> Today the word is enough, and that is a fact about ADOPTION rather than
+> about the word. The kernel reads no environment variable and no system
+> property (`grep -n 'getenv\|System/getProperty' src/clj_surgeon/txn_journal.clj`
+> returns nothing), there is no config file on any path into `opts`, and there
+> is no MCP surface at all: no `:txn/recover` operation is registered anywhere
+> in `src/`, and the only cross-namespace reference to the kernel is a require
+> in `scope_stream.clj`. Every route to `break-lock!` is therefore a Clojure
+> caller typing the literal keyword.
+>
+> **The rule: `:unsafe-break-by-move` must NEVER be reachable from an argument
+> map.** The moment an MCP operation — or any other boundary that accepts
+> caller-supplied arguments — passes a map through to `begin!` or `recover!`,
+> that boundary must either refuse unrecognised keys outright or forward only
+> an explicit allowlist that does not contain this one. Selecting the measured
+> check-then-act break, which destroyed 13 judged claims in 4,000 races and
+> handed two breakers the same tombstone name, must remain something a
+> programmer WRITES, never something a request can ask for. A name is a
+> warning to a reader; it is not an authorization control, and it stops
+> protecting anything the moment the caller is not a reader.
 Which primitive took the claim is part of the receipt, not an internal:
 `:lock-broken` carries `:break-path :link` for the kernel-atomic break and
 `:break-path :move` for the fallback, from `begin!` and from `recover!` alike,
@@ -380,7 +443,13 @@ steps forward once and back, made a tombstone permanent and published
 clock skew) or more ahead of the clock is therefore not a time at all — the file
 falls back to its own mtime/ctime basis and its row says `:stamp :unreadable` —
 and no published age is ever negative, because the subtraction is clamped at
-zero. A `LOCK.broken-at.*` whose tombstone is gone is an ORPHAN: listed
+zero. That refusal is COUNTED as well as typed: `:broken-locks
+:unreadable-stamps` is the standing number, because the tolerance is sized for
+two writers of one directory on ONE host, and the deployment that breaks it is
+two hosts sharing a filesystem — where every tombstone the skewed host writes
+reads `:stamp :unreadable` and, with the count absent, nothing tells the
+operator the stamp mechanism has stopped working. A non-zero value there is an
+alarm about a clock, not an archive. A `LOCK.broken-at.*` whose tombstone is gone is an ORPHAN: listed
 `:kind :orphan-sidecar`, counted in `:broken-locks :orphan-sidecars {:found …
 :pruned … :remaining …}`, and retired on the same published retention, because a
 bucket nothing sweeps is accumulation whatever its size. Tombstones are rows in `retained-transactions` (`:kind :broken-lock`,
