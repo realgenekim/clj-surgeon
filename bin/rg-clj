@@ -1,0 +1,272 @@
+#!/usr/bin/env bb
+;; -*- clojure -*-
+;;
+;; rg-clj — the read-side routing hook.
+;;
+;; Install this file as `rg`, FIRST on an agent's PATH:
+;;
+;;     ln -s <repo>/bin/rg-clj "$CODEX_HOME/bin/rg"
+;;     export PATH="$CODEX_HOME/bin:$PATH"
+;;     export SURGEON_URL=http://127.0.0.1:<port>/mcp
+;;     export SURGEON_ROUTE_LOG=<run-dir>/route.jsonl
+;;
+;; Its argument vector is then ripgrep's argument vector, and the agent never
+;; types a new command and is never told a tool exists. When the invocation is
+;; a Clojure-scoped search the file set comes from the clj-surgeon read path;
+;; otherwise, and on any doubt whatsoever, the real ripgrep runs with the
+;; caller's own arguments and the hook is not in the answer.
+;;
+;; Every decision lives in clj-surgeon.read-hook. This file is environment,
+;; HTTP, subprocess and logging.
+;;
+;; Specifications: docs/intent/read-hook/read-hook-specs.md
+
+(require '[babashka.classpath :as cp]
+         '[clojure.java.io :as io])
+
+(def script-file (.getCanonicalFile (io/file *file*)))
+(def repo-root (.getParentFile (.getParentFile script-file)))
+(cp/add-classpath (str (io/file repo-root "src")))
+
+(require '[babashka.fs :as fs]
+         '[babashka.http-client :as http]
+         '[babashka.process :as proc]
+         '[cheshire.core :as json]
+         '[clj-surgeon.read-hook :as hook]
+         '[clojure.string :as str])
+
+;; ---------------------------------------------------------------------------
+;; environment
+
+(defn- env
+  [name]
+  (let [v (System/getenv name)]
+    (when-not (str/blank? v) v)))
+
+(def surgeon-url (env "SURGEON_URL"))
+(def route-log (env "SURGEON_ROUTE_LOG"))
+(def timeout-ms (parse-long (or (env "SURGEON_HOOK_TIMEOUT_MS") "3000")))
+(def cwd (.getCanonicalFile (io/file (System/getProperty "user.dir"))))
+
+(defn- canonical
+  [path]
+  (try (.getCanonicalPath (io/file path)) (catch Exception _ (str path))))
+
+(def self-paths
+  "Every canonical path that IS this hook. Without this the hook resolves
+  itself from PATH and execs forever."
+  #{(.getCanonicalPath script-file)})
+
+;; @spec MCP-OP-READ-HOOK-005
+(def real-rg
+  (or (env "SURGEON_RG_REAL")
+      (hook/real-ripgrep
+        {:path-entries (remove str/blank?
+                               (str/split (or (System/getenv "PATH") "") #":"))
+         :self-paths self-paths
+         :canonical canonical
+         :exists? #(let [f (io/file %)] (and (.isFile f) (.canExecute f)))})))
+
+(defn- workspace-root
+  []
+  (or (env "SURGEON_WORKSPACE_ROOT")
+      (loop [dir cwd]
+        (when dir
+          (if (some #(.exists (io/file dir %))
+                    ["deps.edn" "bb.edn" "project.clj" ".git"])
+            (.getPath dir)
+            (recur (.getParentFile dir)))))
+      (.getPath cwd)))
+
+;; ---------------------------------------------------------------------------
+;; logging — one record per invocation, and the record is the cohort's meter
+
+;; @spec MCP-OP-READ-HOOK-003
+(defn- log!
+  [record]
+  (when route-log
+    (try
+      (with-open [w (java.io.FileOutputStream. ^String route-log true)]
+        (.write w (.getBytes (str (json/generate-string record) "\n") "UTF-8")))
+      (catch Exception _ nil))))
+
+;; ---------------------------------------------------------------------------
+;; running the real ripgrep, and becoming it
+
+(def ^:private interactive?
+  (some? (System/console)))
+
+;; @spec MCP-OP-READ-HOOK-002
+;; @spec MCP-OP-READ-HOOK-004
+;; @spec MCP-OP-READ-HOOK-008
+(defn- exec-rg!
+  "Run the real ripgrep and become it: its bytes on our streams, its status as
+  our status. Nothing of the hook's own is ever written."
+  [args]
+  (if interactive?
+    ;; A terminal changes ripgrep's own defaults (colour, heading), so the
+    ;; streams are inherited rather than captured and the byte count is not
+    ;; observed. Agent arms always pipe; this branch exists so a human at a
+    ;; prompt sees exactly what ripgrep would have shown.
+    (let [r @(proc/process (into [real-rg] args)
+                           {:inherit true :continue true})]
+      {:exit (:exit r) :bytes -1})
+    (let [r @(proc/process (into [real-rg] args)
+                           {:out :bytes :err :bytes :continue true})
+          out (or (:out r) (byte-array 0))
+          err (or (:err r) (byte-array 0))]
+      (.write (System/out) ^bytes out)
+      (.flush (System/out))
+      (.write (System/err) ^bytes err)
+      (.flush (System/err))
+      {:exit (:exit r) :bytes (alength ^bytes out)})))
+
+(defn- finish!
+  [{:keys [parse served? reason files started]} args]
+  (let [{:keys [exit bytes]} (exec-rg! args)]
+    (log! (hook/route-record
+            {:parse parse
+             :served? served?
+             :reason reason
+             :files files
+             :ms (- (System/currentTimeMillis) started)
+             :bytes (max 0 bytes)
+             :exit exit
+             :cwd (.getPath cwd)
+             :pid (.pid (java.lang.ProcessHandle/current))}))
+    (System/exit exit)))
+
+;; ---------------------------------------------------------------------------
+;; ripgrep's own candidate set — the falsifier for the read path's answer
+
+;; @spec MCP-OP-READ-HOOK-007
+(defn- candidates
+  [{:keys [paths walk-flags]}]
+  (let [r @(proc/process (into (into [real-rg "--files" "--sort" "path"]
+                                     walk-flags)
+                               (into ["--"] paths))
+                         {:out :string :err :string :continue true :dir cwd})]
+    (when (zero? (:exit r))
+      (vec (remove str/blank? (str/split-lines (:out r)))))))
+
+;; ---------------------------------------------------------------------------
+;; the clj-surgeon read path
+
+(defn- rpc!
+  [url payload session-id]
+  (http/post url
+             {:headers (cond-> {"Content-Type" "application/json"
+                                "Accept" "application/json, text/event-stream"}
+                         session-id (assoc "Mcp-Session-Id" session-id))
+              :body (json/generate-string payload)
+              :timeout timeout-ms
+              :throw false}))
+
+(defn- rpc-result
+  "The JSON-RPC result out of either transport shape this server uses: a plain
+  JSON body, or one `data:` frame of an SSE stream."
+  [response]
+  (let [body (str (:body response))
+        json-text (if-let [line (first (filter #(str/starts-with? % "data: ")
+                                               (str/split-lines body)))]
+                    (subs line 6)
+                    body)]
+    (some-> (json/parse-string json-text true) :result)))
+
+(defn- ls-tree!
+  "One `ls-tree` receipt per path argument, or nil if the read path could not
+  answer. `dir` is the path argument expressed relative to the workspace root
+  the server is scoped to."
+  [root paths]
+  (try
+    (let [init (rpc! surgeon-url
+                     {:jsonrpc "2.0" :id 1 :method "initialize"
+                      :params {:protocolVersion "2025-06-18"
+                               :capabilities {}
+                               :clientInfo {:name "rg-clj" :version "1"}}}
+                     nil)
+          session (get-in init [:headers "mcp-session-id"])]
+      (when (= 200 (:status init))
+        (rpc! surgeon-url
+              {:jsonrpc "2.0" :method "notifications/initialized" :params {}}
+              session)
+        (reduce
+          (fn [acc path]
+            (let [abs (.getCanonicalFile (io/file cwd path))
+                  rel (str (fs/relativize (fs/path (canonical root))
+                                          (fs/path (.getPath abs))))
+                  dir (if (str/blank? rel) "." rel)]
+              (if (or (str/starts-with? dir "..") (fs/absolute? dir))
+                (reduced nil)
+                (let [result (rpc-result
+                               (rpc! surgeon-url
+                                     {:jsonrpc "2.0" :id 2 :method "tools/call"
+                                      :params {:name "inspect_clojure"
+                                               :arguments {:mode "ls-tree"
+                                                           :dir dir
+                                                           :format "names"
+                                                           :limit 16384}}}
+                                     session))
+                      receipt (:structuredContent result)]
+                  (if (and receipt
+                           (= (canonical (:workspace_root receipt))
+                              (canonical root)))
+                    (conj acc [path receipt])
+                    (reduced nil))))))
+          []
+          paths)))
+    (catch Exception _ nil)))
+
+;; ---------------------------------------------------------------------------
+;; the invocation
+
+(defn- serve-or-fall-back
+  [argv]
+  (let [started (System/currentTimeMillis)
+        parse (hook/parse-argv argv)
+        fall-back (fn [reason]
+                    (finish! {:parse parse :served? false :reason reason
+                              :started started}
+                             argv))]
+    (cond
+      (nil? real-rg)
+      (do (binding [*out* *err*]
+            (println "rg-clj: no ripgrep on PATH to fall back to"))
+          (System/exit 2))
+
+      (not surgeon-url) (fall-back :no-read-path)
+
+      :else
+      (let [cands (candidates parse)
+            path-kinds (into {} (for [p (:paths parse)
+                                      :let [f (io/file cwd p)]]
+                                  [p (cond (.isDirectory f) :dir
+                                           (.isFile f) :file
+                                           :else :missing)]))
+            {:keys [servable? reason]} (hook/servable {:parse parse
+                                                       :path-kinds path-kinds
+                                                       :candidates cands})]
+        (if-not servable?
+          (fall-back reason)
+          (let [root (workspace-root)
+                receipts (ls-tree! root (:paths parse))]
+            (if (nil? receipts)
+              (fall-back :read-path-unreachable)
+              (let [resolved (map (fn [[path receipt]]
+                                    (hook/receipt-files receipt path))
+                                  receipts)]
+                (if-let [bad (first (remove :ok? resolved))]
+                  (fall-back (:reason bad))
+                  (let [read-path-files (vec (mapcat :files resolved))
+                        agreed (hook/reconcile read-path-files cands)]
+                    (if-not (:ok? agreed)
+                      (fall-back (:reason agreed))
+                      (finish! {:parse parse
+                                :served? true
+                                :reason :servable
+                                :files (count (:files agreed))
+                                :started started}
+                               (hook/substitute-argv
+                                 {:parse parse :files (:files agreed)})))))))))))))
+
+(serve-or-fall-back (vec *command-line-args*))

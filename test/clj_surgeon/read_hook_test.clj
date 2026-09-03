@@ -374,7 +374,7 @@
                                      "SURGEON_ROUTE_LOG" log
                                      "SURGEON_WORKSPACE_ROOT" root}}
                               "-n" "System/currentTimeMillis" "src")]
-              (is (= 3 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
+              (is (= 4 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
                   "every match in the tree, not the two the receipt carried")
               (is (= "fallback" (:served_by (last (route-records log))))))
             (finally ((:stop! stub))))))
@@ -393,8 +393,9 @@
     (let [records (route-records log)]
       (is (= 2 (count records)) "one record per invocation, no more and no fewer")
       (is (= ["surgeon" "fallback"] (mapv :served_by records)))
+      (is (= [["src"] ["src/app/core.clj"]] (mapv :paths records))
+          "the path arguments, verbatim")
       (doseq [r records]
-        (is (= ["src"] (:paths r)) "the path arguments, verbatim")
         (is (vector? (:flags r)))
         (is (contains? r :reason))
         (is (nat-int? (:ms r)))
@@ -458,7 +459,7 @@
   (testing "a read path that omits a file the tree holds"
     (with-served [root ctx log :files (vec (butlast tree-files))]
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
-        (is (= 3 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
+        (is (= 4 (count (re-seq #"System/currentTimeMillis" (:out hooked))))
             "every match, because the disagreement forced a fallback")
         (is (= "fallback" (:served_by (last (route-records log)))))
         (is (= "discovery-mismatch" (:reason (last (route-records log))))))))
@@ -468,6 +469,6 @@
                                {:file "app/ghost.clj" :ns "app.ghost"
                                 :form_count 1 :line_count 1})]
       (let [hooked (run ctx "-n" "System/currentTimeMillis" "src")]
-        (is (= 3 (count (re-seq #"System/currentTimeMillis" (:out hooked)))))
+        (is (= 4 (count (re-seq #"System/currentTimeMillis" (:out hooked)))))
         (is (= "fallback" (:served_by (last (route-records log)))))
         (is (= "discovery-mismatch" (:reason (last (route-records log)))))))))

@@ -11,21 +11,21 @@ Status marks follow the repository contract: `[ ]` active gap (test witness
 required), `[x]` implemented (implementation and test witnesses required),
 `[D]` deferred.
 
-- [ ] **MCP-OP-READ-HOOK-001**: While every path argument of a ripgrep invocation is a directory whose complete ripgrep candidate set contains only Clojure source files, when the read hook runs that invocation, the read hook shall print output byte-identical to the output ripgrep itself would print for the caller's original argument vector.
+- [x] **MCP-OP-READ-HOOK-001**: While every path argument of a ripgrep invocation is a directory whose complete ripgrep candidate set contains only Clojure source files, when the read hook runs that invocation, the read hook shall print output byte-identical to the output ripgrep itself would print for the caller's original argument vector.
 
-- [ ] **MCP-OP-READ-HOOK-002**: When the read hook cannot serve an invocation exactly, the read hook shall execute the real ripgrep with the caller's original argument vector unchanged.
+- [x] **MCP-OP-READ-HOOK-002**: When the read hook cannot serve an invocation exactly, the read hook shall execute the real ripgrep with the caller's original argument vector unchanged.
 
-- [ ] **MCP-OP-READ-HOOK-003**: When the read hook finishes an invocation and a route log is configured, the read hook shall append exactly one route record naming the path arguments, the flags, whether the answer was served through the clj-surgeon read path or fell back to ripgrep, the elapsed milliseconds, and the byte count of the answer.
+- [x] **MCP-OP-READ-HOOK-003**: When the read hook finishes an invocation and a route log is configured, the read hook shall append exactly one route record naming the path arguments, the flags, whether the answer was served through the clj-surgeon read path or fell back to ripgrep, the elapsed milliseconds, and the byte count of the answer.
 
-- [ ] **MCP-OP-READ-HOOK-004**: When the read hook finishes an invocation, the read hook shall exit with the exit status ripgrep produced for that invocation.
+- [x] **MCP-OP-READ-HOOK-004**: When the read hook finishes an invocation, the read hook shall exit with the exit status ripgrep produced for that invocation.
 
-- [ ] **MCP-OP-READ-HOOK-005**: When the read hook resolves the real ripgrep executable, the read hook shall never resolve to the hook itself.
+- [x] **MCP-OP-READ-HOOK-005**: When the read hook resolves the real ripgrep executable, the read hook shall never resolve to the hook itself.
 
-- [ ] **MCP-OP-READ-HOOK-006**: While the caller's original invocation would have printed a filename prefix on every matching line, when the read hook serves that invocation from an explicit file list, the read hook shall request the filename prefix from ripgrep.
+- [x] **MCP-OP-READ-HOOK-006**: While the caller's original invocation would have printed a filename prefix on every matching line, when the read hook serves that invocation from an explicit file list, the read hook shall request the filename prefix from ripgrep.
 
-- [ ] **MCP-OP-READ-HOOK-007**: While the read hook serves an invocation, the file set the read hook searches shall be the file set the clj-surgeon read path returned, and the read hook shall refuse to serve when that set differs from ripgrep's own candidate set for the same invocation.
+- [x] **MCP-OP-READ-HOOK-007**: While the read hook serves an invocation, the file set the read hook searches shall be the file set the clj-surgeon read path returned, and the read hook shall refuse to serve when that set differs from ripgrep's own candidate set for the same invocation.
 
-- [ ] **MCP-OP-READ-HOOK-008**: When the read hook falls back to ripgrep, the read hook shall not have written any byte of its own to standard output or standard error.
+- [x] **MCP-OP-READ-HOOK-008**: When the read hook falls back to ripgrep, the read hook shall not have written any byte of its own to standard output or standard error.
 
 ## Misreadings these requirements exist to forbid
 

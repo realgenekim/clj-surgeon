@@ -120,6 +120,12 @@
        {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources
         (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
-               (read-sources root ["Makefile"] ["Makefile"]))
+               (read-sources root ["Makefile"] ["Makefile"])
+               ;; `bin/rg-clj` is an executable, not a namespace: the read
+               ;; hook's exit-status and silent-fallback promises are kept in
+               ;; the shim and nowhere else, so the audit has to be able to
+               ;; see it or those two requirements have no implementation
+               ;; witness anywhere.
+               (read-sources root ["bin"] ["rg-clj"]))
         :test-sources
         (read-sources root ["test"] [".clj" ".cljc" ".cljs" ".pl"])}))))
