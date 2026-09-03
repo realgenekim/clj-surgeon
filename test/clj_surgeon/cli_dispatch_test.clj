@@ -412,3 +412,22 @@
             "the raw per-call vector must not leak into the CLI receipt"))
       (finally
         (doseq [f (reverse (file-seq dir))] (.delete f))))))
+
+;; @spec MCP-OP-CENSUS-024
+(deftest cli-relation-census-confirms-doors-against-every-scanned-file
+  (testing "a door defined in a scanned file that defines no arms is accepted"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "record-window")
+          result (edn/read-string out)]
+      (is (zero? exit) (str "refused: " (:error result)))
+      (is (true? (:ok result)))))
+
+  (testing "a door defined nowhere is refused, which the CLI never checked"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "nowhere-door")
+          result (edn/read-string out)]
+      (is (pos? exit))
+      (is (= :unknown-door-symbol (:error-type result)))
+      (is (= "nowhere-door" (:door result))))))

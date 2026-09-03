@@ -55,6 +55,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-025**: When clj-surgeon censuses an arm, it shall count every call inside that arm whose head is neither a modelled form nor an identity door, shall publish that count with up to five named examples carrying file, line, and arm, and when no site is `:raw` and no site is `:unknown` but such calls exist, its `next_action` shall name them and state that a write behind one of them is not a site; clj-surgeon shall never publish `next_action` `none` for a census that could not see inside the arm's own calls.
 
+- [x] **MCP-OP-CENSUS-024**: When clj-surgeon confirms that a supplied identity door is defined, it shall consider the top-level declarations of every scanned file, not only of the files that define arms, and both the MCP tool and the CLI op shall accept a door defined in a scanned helper namespace and refuse one defined nowhere.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |

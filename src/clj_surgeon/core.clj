@@ -462,13 +462,19 @@
          vec)))
 
 ;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-024
 (defn census-sources
   "Project-relative {:file :source} inputs that define fold arms.
 
    Bounded like the tool's discovery: the scan stops at `max-scanned-files` and
    a source above `max-source-bytes` is skipped. A file the caller NAMED is
-   refused by size rather than silently dropped."
-  [dir file]
+   refused by size rather than silently dropped.
+
+   `declared?` also collects the top-level names of the files that define no
+   arms — a door commonly lives in a helper namespace that defines none — and
+   drops their text."
+  ([dir file] (census-sources dir file {}))
+  ([dir file {:keys [declared?]}]
   (let [root (str (fs/absolutize (or dir ".")))
         paths (if file
                 [(str (fs/absolutize file))]
@@ -480,12 +486,18 @@
         too-big? #(> (fs/size %) relation-census/max-source-bytes)]
     (if (and file (some too-big? paths))
       {:oversized (str (fs/relativize root (first paths)))}
-      {:scanned (count paths)
-       :inputs (->> paths
-                    (remove too-big?)
-                    (map (fn [p] {:file (str (fs/relativize root p))
-                                  :source (slurp p)}))
-                    (filterv #(relation-census/defines-arms? (:source %))))})))
+      (reduce
+        (fn [acc p]
+          (let [source (slurp p)]
+            (if (relation-census/defines-arms? source)
+              (update acc :inputs conj {:file (str (fs/relativize root p))
+                                        :source source})
+              (cond-> acc
+                declared?
+                (update :declared into
+                        (relation-census/source-declared-names source))))))
+        {:scanned (count paths) :inputs [] :declared #{}}
+        (remove too-big? paths))))))
 
 ;; @spec MCP-OP-CENSUS-021
 (defn census-plan-pool
@@ -514,12 +526,14 @@
 (defn run-relation-census
   "Census collection writes inside fold arms. Reads only; writes nothing."
   [{:keys [dir file doors threads]}]
-  (let [pool (when (some? threads) (relation-census/coerce-pool-size threads))
+  (let [doors-arg doors
+        pool (when (some? threads) (relation-census/coerce-pool-size threads))
         parsed-doors (if doors
                        (relation-census/parse-doors
                          (str/split (str doors) #",") nil)
                        relation-census/default-doors)
-        scan (delay (census-sources dir file))]
+        want-declared? (boolean doors)
+        scan (delay (census-sources dir file {:declared? want-declared?}))]
     (cond
       (and pool (not (:ok pool)))
       {:ok false
@@ -562,9 +576,28 @@
                 result (relation-census/plan
                          {:inputs inputs
                           :doors doors
-                          :map-fn map-fn})]
-            (if-not (:ok result)
-              result
+                          :map-fn map-fn})
+                confirmed (when (and want-declared? (:ok result))
+                            (relation-census/parse-doors
+                              (str/split (str doors-arg) #",")
+                              (into (:declared @scan #{}) (:declared result))))]
+            (cond
+              (not (:ok result)) result
+
+              ;; Whether a door is DEFINED can only be answered once the scan
+              ;; has been parsed: confirm it against the plan's own :declared
+              ;; plus the names read from the files that define no arms.
+              (map? confirmed)
+              {:ok false
+               :error-type :unknown-door-symbol
+               :error (str "Unknown identity door " (:invalid confirmed) ": "
+                           (:why confirmed))
+               :door (:invalid confirmed)
+               :known-doors (vec (sort (map str relation-census/default-doors)))
+               :next-command (str "clj-surgeon :op :relation-census :dir . :doors "
+                                  (str/join "," (sort (map str relation-census/default-doors))))}
+
+              :else
               (let [unrecognised (relation-census/unrecognised-summary
                                    (:unrecognised result) 5)]
                 (-> result

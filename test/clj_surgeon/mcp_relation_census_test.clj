@@ -458,3 +458,30 @@
   (testing "a raw site still outranks unmodelled calls in next_action"
     (let [result (run {:files [fixture]})]
       (is (str/starts-with? (:next_action result) "review the raw sites")))))
+
+;; @spec MCP-OP-CENSUS-024
+(deftest a-door-defined-in-a-file-with-no-arms-is-accepted
+  (testing "the branch's own fixture shape: the door lives in a helpers ns"
+    (let [result (run {:files [fixture helpers]
+                       :doors ["conj-once" "record-window"]})]
+      (is (true? (:ok result))
+          (str "refused a door defined in a scanned helper file: "
+               (:error result)))
+      (is (= 1 (:files result)) "the helper file still defines no arms")))
+
+  (testing "discovery collects declarations from every scanned file too"
+    (let [root (temp-dir)]
+      (try
+        (spit-file! (io/file root "src/app/folds.clj") arm-source)
+        (spit-file! (io/file root "src/app/helpers.clj")
+                    "(ns app.helpers)\n(defn keep-once [coll x] (conj coll x))\n")
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)} {:doors ["keep-once"]})]
+          (is (true? (:ok result)) (str "refused: " (:error result))))
+        (finally (delete-tree! root)))))
+
+  (testing "a door defined nowhere is still refused"
+    (let [result (run {:files [fixture helpers] :doors ["nowhere-door"]})]
+      (is (false? (:ok result)))
+      (is (= "unknown-door-symbol" (:error_type result)))
+      (is (= "nowhere-door" (:door result))))))
