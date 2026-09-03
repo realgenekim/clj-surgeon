@@ -3193,3 +3193,101 @@
             (str "an injected root executed a second command: "
                  (.getPath canary) " exists")))
       (finally (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-twelve review, item 1 (blocking): trailing whitespace silently
+;; retargets.
+;;
+;; `cli-anchor` ran the caller's path through `str/trim`, so `:dir "/root "`
+;; produced an anchor whose `:absolute` was `/root` — a DIFFERENT directory,
+;; which on Sol's fixture existed and held two arm-bearing sources against the
+;; named root's one. The continuation carried the trimmed sibling, replayed
+;; without refusing, and reported success about a tree the caller never named:
+;; the silent retarget MCP-OP-CENSUS-014 forbids, arriving this time through a
+;; normalisation nobody asked for rather than through a bare dot.
+;;
+;; A PATH IS THE BYTES THE CALLER GAVE. POSIX filenames may begin and end with
+;; spaces, and no layer between the caller and the filesystem is entitled to
+;; edit them: `census-root` never did (it absolutizes and canonicalises, both
+;; byte-preserving), so the census READ the right tree while the anchor NAMED
+;; the wrong one — the two halves of one entrance disagreeing about which
+;; directory the request meant.
+;;
+;; The one string that names nothing is the EMPTY one: POSIX gives the empty
+;; pathname no meaning and every syscall answers it with ENOENT. So the
+;; `:dir` row refuses `""` and nothing else, and `"   "` — three spaces — is
+;; a legal, if peculiar, relative path that resolves against the cwd like any
+;; other.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+(deftest a-cli-anchor-carries-the-path-bytes-the-caller-gave
+  (let [parent (temp-dir)
+        trimmed (io/file parent "root")
+        spaced (io/file parent "root ")]
+    (try
+      (spit-file! (io/file trimmed "src/app/one.clj") arm-source)
+      (spit-file! (io/file trimmed "src/app/two.clj") arm-source)
+      (spit-file! (io/file spaced "src/app/only.clj") arm-source)
+      (let [named (str (.getCanonicalPath parent) "/root ")
+            sibling (.getCanonicalPath trimmed)]
+
+        (testing "the fixture is Sol's: the trimmed sibling holds a file more"
+          (is (.isDirectory (io/file named))
+              "the trailing-space root was not created")
+          (is (= 1 (:files (core/run-relation-census {:dir named}))))
+          (is (= 2 (:files (core/run-relation-census {:dir sibling})))))
+
+        (testing "the anchor names the path the caller named, byte for byte"
+          (let [refusal (core/run-relation-census
+                          {:dir named :threads "not-a-number"})
+                anchor (:anchor refusal)]
+            (is (= :invalid-pool-size (:error-type refusal))
+                (str "the request was not refused on shape: " (pr-str refusal)))
+            (is (= named (:given anchor))
+                "the anchor lost the caller's own string")
+            (is (= named (:absolute anchor))
+                (str "the anchor trimmed the caller's path to a DIFFERENT "
+                     "directory: " (pr-str (:absolute anchor))))
+            (is (not (contains? anchor :resolved-against))
+                (str "an already-absolute path was reported as resolved "
+                     "against the cwd, which only a normalisation could "
+                     "cause: " (pr-str anchor)))
+
+            (testing "and the continuation replays against THAT root"
+              (let [argv (:next-command-argv refusal)
+                    replay (replay-next-command sibling nil argv)]
+                (is (= named (nth argv 4))
+                    (str "the continuation carries a different directory: "
+                         (pr-str argv)))
+                (is (true? (:ok replay))
+                    (str "the replay refused: " (pr-str replay)))
+                (is (= 1 (:files replay))
+                    (str "the replay censused " (:files replay)
+                         " arm-bearing file(s); the named root holds 1 and "
+                         "the trimmed sibling holds 2"))
+                (is (contains? (:by-file replay) "src/app/only.clj")
+                    (str "the replay censused the WRONG root: "
+                         (pr-str (keys (:by-file replay)))))))))
+
+        (testing "only the EMPTY path names nothing; whitespace is a path"
+          (is (= :dir-not-a-string
+                 (:error-type (census/validate-cli-request-shape {:dir ""})))
+              "the empty pathname was accepted")
+          (is (nil? (census/validate-cli-request-shape {:dir "   "}))
+              (str "a whitespace-only :dir was refused; it is a legal "
+                   "relative path and must resolve like any other"))
+          (let [anchor (census/cli-anchor {:dir "   "})]
+            (is (= "   " (:given anchor)))
+            (is (= (str (System/getProperty "user.dir") "/   ")
+                   (:absolute anchor))
+                (str "a whitespace-only relative path did not resolve "
+                     "against the cwd: " (pr-str anchor))))
+          (let [anchor (census/cli-anchor {:file "   "})]
+            (is (= :file (:kind anchor))
+                (str ":file \"   \" was treated as no file at all, and the "
+                     "anchor silently fell back to the directory: "
+                     (pr-str anchor))))))
+      (finally
+        (delete-tree! spaced)
+        (delete-tree! parent)))))
