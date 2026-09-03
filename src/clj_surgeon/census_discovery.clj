@@ -58,10 +58,6 @@
   [^File file]
   (try (.toRealPath (.toPath file) follow-links) (catch Throwable _ nil)))
 
-(defn- symbolic-link?
-  [^File file]
-  (try (Files/isSymbolicLink (.toPath file)) (catch Throwable _ false)))
-
 (defn- real-directory?
   "A DIRECTORY, not a link to one: a link is never descended."
   [^File file]
@@ -78,6 +74,7 @@
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-028
+;; @spec MCP-OP-CENSUS-030
 ;; @spec MCP-OP-CENSUS-032
 (defn discover
   "Walk one workspace root and return what the census may read.
@@ -87,6 +84,7 @@
      :files [project-relative source paths, sorted]
      :oversized [project-relative paths above the byte cap, sorted]
      :skipped-outside-root n
+     :duplicates n
      :exceeded? bool
      :observed n}`
 
@@ -101,13 +99,14 @@
   (if-let [^Path root (canonical-root root-arg)]
     (let [found (java.util.ArrayList.)
           oversized (java.util.ArrayList.)
+          seen (java.util.HashSet.)
           skipped (volatile! 0)
+          duplicates (volatile! 0)
           exceeded (volatile! false)
           relative (fn [^Path path] (.toString (.relativize root path)))
           visit-file
           (fn [^File file]
-            (let [link? (symbolic-link? file)
-                  real (real-path-of file)
+            (let [^Path real (real-path-of file)
                   escapes? (not (inside-root? root real))]
               (cond
                 ;; An escaping path of ANY name is counted, not read: the
@@ -115,11 +114,14 @@
                 ;; instead of refusing the whole census.
                 escapes? (do (vswap! skipped inc) :continue)
 
-                ;; A link that stays inside the root is left to the walk: the
-                ;; file it names is discovered where it really lives.
-                link? :continue
-
                 (not (candidate-name? file)) :continue
+
+                ;; The path SET is the set of REAL paths. A chain of links
+                ;; onto one source is one source, and the count of what
+                ;; collapsed is published rather than left to be inferred
+                ;; from a file total the caller cannot reconcile.
+                (not (.add seen (.toString real)))
+                (do (vswap! duplicates inc) :continue)
 
                 (> (Files/size real) census/max-source-bytes)
                 (do (.add oversized (relative real)) :continue)
@@ -149,6 +151,7 @@
        :files (vec (sort found))
        :oversized (vec (sort oversized))
        :skipped-outside-root @skipped
+       :duplicates @duplicates
        :exceeded? @exceeded
        :observed (cond-> (.size found) @exceeded inc)})
     {:root nil
@@ -156,5 +159,6 @@
      :files []
      :oversized []
      :skipped-outside-root 0
+     :duplicates 0
      :exceeded? false
      :observed 0}))

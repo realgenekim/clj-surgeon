@@ -479,8 +479,12 @@
         loaded (when-not (:exceeded? discovered)
                  (collect-inputs root scanned {:declared? want-declared?}))
         t-read (System/nanoTime)
-        duplicates (:duplicates loaded 0)
-        scanned-count (- (count scanned) duplicates)]
+        ;; Two ways one real source reaches the census twice: a caller who
+        ;; names it twice, and a walk that finds two paths onto it. Both are
+        ;; collapsed, and the receipt reports the SUM — the caller cannot
+        ;; reconcile `files` against what it asked for otherwise.
+        duplicates (+ (:duplicates loaded 0) (:duplicates discovered 0))
+        scanned-count (- (count scanned) (:duplicates loaded 0))]
     (cond
       (:exceeded? discovered)
       (ceiling-refusal discovered canonical)

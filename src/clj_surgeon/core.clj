@@ -525,7 +525,8 @@
           :inputs []
           :declared #{}
           :oversized-skipped (vec (:oversized discovered))
-          :skipped-outside-root (:skipped-outside-root discovered 0)}
+          :skipped-outside-root (:skipped-outside-root discovered 0)
+          :duplicates (:duplicates discovered 0)}
          paths)))))
 
 ;; @spec MCP-OP-CENSUS-021
@@ -661,6 +662,9 @@
                            :skipped-outside-root
                            (when (pos? (:skipped-outside-root @scan 0))
                              (:skipped-outside-root @scan))
+                           :duplicates-collapsed
+                           (when (pos? (:duplicates @scan 0))
+                             (:duplicates @scan))
                            :pool-size pool-size
                            :pool-size-requested (when (and threads
                                                           (> threads pool-size))
