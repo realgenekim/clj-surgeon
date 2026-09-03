@@ -511,6 +511,55 @@
 ;; Execution
 ;; ---------------------------------------------------------------------------
 
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-033
+(defn- narrowing-continuation
+  "The narrowing one bound refusal would carry, and what carrying it MEASURES.
+
+   THE ONE PLACE both bound refusals turn a chosen subtree into a continuation.
+   `:next-call` is nil in two DIFFERENT situations, and the whole point of this
+   map is that the caller can tell them apart: the walk knew no fitting subtree
+   (`:narrower` nil), or it knew one the wire cannot carry (`:narrower` set,
+   `:bytes` over the ceiling).
+
+   The shared BYTE predicate decides, not `count`: a JSON request body is bytes
+   on the wire, and a workspace path outside ASCII costs more of them than it
+   has characters (Sol's round-twelve item 3)."
+  [canonical narrower]
+  (let [candidate (when narrower
+                    {:tool "relation_census"
+                     :workspace_root (str canonical "/" narrower)})
+        rendered (when candidate (json/generate-string candidate))]
+    {:narrower narrower
+     :candidate candidate
+     :bytes (when rendered (census/utf8-byte-count rendered))
+     :next-call (when (and rendered (census/within-next-call-bytes? rendered))
+                  candidate)}))
+
+;; @spec MCP-OP-CENSUS-014
+(defn- narrowing-overflow-remedy
+  "Why a narrowing the walk DID find was not handed back, with what it measured.
+
+   Sol's round-thirteen item 3: both bound refusals fell through to the
+   NO-SUBTREE remedy whenever the byte ceiling dropped their continuation, and
+   told the caller that no subtree the walk finished was known to fit — about a
+   walk that had found one and measured it at 891 bytes. A refusal that names a
+   bound without naming the value it compared against leaves the caller to
+   guess how much shorter is short enough; one that reports the wrong REASON
+   leaves them narrowing the wrong thing. This says only what is true: the
+   subtree is known, it is named, and it is the PATH to it that does not fit."
+  [narrower bytes]
+  (str "The walk did find a subtree that fits under the bound — " narrower
+       " — but the smallest narrowing this refusal can offer renders as "
+       bytes " UTF-8 bytes, over the " census/max-next-call-bytes
+       "-byte ceiling a continuation must fit, so none is offered. The SUBTREE "
+       "is not the problem, the length of the path to it is: narrow the "
+       "request yourself by setting workspace_root to " narrower
+       " under the workspace just refused — reaching it by a shorter path if "
+       "you can — or name at most " census/max-requested-files
+       " sources with files."))
+
 ;; @spec MCP-OP-CENSUS-027
 (defn- ceiling-refusal
   "Refuse a tree that holds more candidate sources than the census may read.
@@ -523,17 +572,9 @@
    continuation; when nothing is known to fit, the caller is told so and told
    why, and gets no next_call at all."
   [discovered canonical facts]
-  (let [narrower (discovery/narrowing-subtree discovered)
-        candidate (when narrower
-                    {:tool "relation_census"
-                     :workspace_root (str canonical "/" narrower)})
-        ;; The shared BYTE predicate, not `count`: a JSON request body is
-        ;; bytes on the wire, and a workspace path outside ASCII costs more
-        ;; of them than it has characters (Sol's round-twelve item 3).
-        next-call (when (and candidate
-                             (census/within-next-call-bytes?
-                               (json/generate-string candidate)))
-                    candidate)]
+  (let [{:keys [narrower bytes next-call]}
+        (narrowing-continuation canonical
+                                (discovery/narrowing-subtree discovered))]
     (refusal :too-many-candidate-files
              (str "This workspace holds more than " census/max-scanned-files
                   " candidate Clojure sources (" (:observed discovered)
@@ -552,7 +593,15 @@
                              :observed_at_least true
                              :files_read 0}
                             facts)
-               (not next-call)
+               ;; Two reasons there is no continuation, told apart. A
+               ;; subtree the walk KNEW about and could not carry is not the
+               ;; same fact as no fitting subtree at all, and reporting the
+               ;; second for the first sends the caller looking for a smaller
+               ;; tree when what they need is a shorter path.
+               (and (not next-call) narrower)
+               (assoc :remedy (narrowing-overflow-remedy narrower bytes))
+
+               (and (not next-call) (not narrower))
                (assoc :remedy
                       (str "The walk stopped at the ceiling, so every count it "
                            "observed is a lower bound and no subtree it finished "
@@ -574,17 +623,9 @@
    aggregates: the largest subtree it FINISHED walking that fits under BOTH
    bounds. When nothing is known to fit, it gets a remedy and no next_call."
   [discovered canonical facts]
-  (let [narrower (discovery/entry-narrowing-subtree discovered)
-        candidate (when narrower
-                    {:tool "relation_census"
-                     :workspace_root (str canonical "/" narrower)})
-        ;; The shared BYTE predicate, not `count`: a JSON request body is
-        ;; bytes on the wire, and a workspace path outside ASCII costs more
-        ;; of them than it has characters (Sol's round-twelve item 3).
-        next-call (when (and candidate
-                             (census/within-next-call-bytes?
-                               (json/generate-string candidate)))
-                    candidate)]
+  (let [{:keys [narrower bytes next-call]}
+        (narrowing-continuation canonical
+                                (discovery/entry-narrowing-subtree discovered))]
     (refusal :too-many-walk-entries
              (str "This workspace holds more than " census/max-walk-entries
                   " filesystem entries (" (:entries-observed discovered)
@@ -609,7 +650,10 @@
                              :entries_yielded (:entries-yielded discovered)
                              :files_read 0}
                             facts)
-               (not next-call)
+               (and (not next-call) narrower)
+               (assoc :remedy (narrowing-overflow-remedy narrower bytes))
+
+               (and (not next-call) (not narrower))
                (assoc :remedy
                       (str "The walk stopped at the entry bound, so every "
                            "count it observed is a lower bound and no subtree "
