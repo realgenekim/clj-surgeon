@@ -413,6 +413,7 @@
 
 ;; @spec MCP-OP-STUDY-015
 ;; @spec MCP-OP-STUDY-030
+;; @spec MCP-OP-STUDY-032
 (defn- ls-tree-bounded
   "Grow the receipt one file at a time and stop at the first overflow, parsing
   only the files the receipt can actually carry.

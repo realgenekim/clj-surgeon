@@ -162,6 +162,7 @@
 
 ;; @spec MCP-OP-STUDY-014
 ;; @spec MCP-OP-STUDY-021
+;; @spec MCP-OP-STUDY-033
 (defn- walk-clj-files
   "Find all .clj/.cljs/.cljc files under a directory using system find.
    Returns `[[walk-path canonical-path] ...]`.
@@ -276,6 +277,7 @@
   {:seen #{} :projects []})
 
 ;; @spec MCP-OP-STUDY-021
+;; @spec MCP-OP-STUDY-033
 (defn- accumulate-projects
   "Fold project candidates into a DEDUPLICATED, capped file set.
 
@@ -365,6 +367,7 @@
                 by-root)))
 
 ;; @spec MCP-OP-STUDY-021
+;; @spec MCP-OP-STUDY-033
 (defn- discover-projects
   "Find projects under dir via build files, deduplicated and capped as it goes.
 
