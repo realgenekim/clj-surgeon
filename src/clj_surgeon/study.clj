@@ -14,6 +14,7 @@
    [babashka.process]
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.outline :as outline]
+   [clojure.edn :as edn]
    [clojure.string :as str]))
 
 ;; ============================================================
@@ -111,13 +112,34 @@
                     (or (:source-paths m) ["src"]))
     ["src"]))
 
+(defn- read-build-file
+  "Pure: read one build file's content WITHOUT evaluating anything in it.
+
+   deps.edn and bb.edn are EDN, so `clojure.edn/read-string` reads them and
+   has no eval reader at all. project.clj is Clojure source and needs the
+   Clojure reader, so it is read with `*read-eval*` bound false, which makes
+   `#=(...)` throw instead of run.
+
+   Before this, every build file under a scanned tree reached
+   `clojure.core/read-string` with `*read-eval*` at its ambient true: a
+   `#=(clojure.core/spit ...)` inside ANY deps.edn/bb.edn/project.clj in the
+   tree executed as the scanning process during discovery, and the silent
+   catch below hid it."
+  [filename source]
+  (if (= "project.clj" filename)
+    (binding [*read-eval* false]
+      (read-string source))
+    (edn/read-string source)))
+
 (defn- extract-source-paths
   "I/O wrapper: read a build file and return its source paths."
   [build-file]
-  (try
-    (source-paths-from-config (str (fs/file-name build-file))
-                              (read-string (slurp (str build-file))))
-    (catch Exception _e ["src"])))
+  (let [filename (str (fs/file-name build-file))]
+    (try
+      (source-paths-from-config filename
+                                (read-build-file filename
+                                                 (slurp (str build-file))))
+      (catch Exception _e ["src"]))))
 
 (defn- find-clj-files
   "Find all .clj/.cljs/.cljc files under a directory using system find."

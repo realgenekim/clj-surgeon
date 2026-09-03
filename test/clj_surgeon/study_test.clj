@@ -4,6 +4,7 @@
    @spec MCP-OP-STUDY-002 MCP-OP-STUDY-003 MCP-OP-STUDY-004
    @spec MCP-OP-STUDY-005 MCP-OP-STUDY-008 MCP-OP-STUDY-009"
   (:require
+   [babashka.fs :as fs]
    [babashka.process :as process]
    [clj-surgeon.core :as core]
    [clj-surgeon.study :as study]
@@ -109,6 +110,62 @@
       (is (not= -1 dash-dash-idx))
       (is (= (inc dash-dash-idx) pattern-idx)
           "the pattern must immediately follow the -- argv separator"))))
+
+;; ============================================================
+;; Reading a build file is a read, never an evaluation
+;; ============================================================
+
+(defn- with-temp-dir
+  [f]
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-study-test"})]
+    (try (f dir) (finally (fs/delete-tree dir)))))
+
+;; @spec MCP-OP-STUDY-013
+(deftest reading-a-build-file-never-evaluates-it
+  ;; Executed against the branch bytes before this fix: discovery read every
+  ;; deps.edn/bb.edn/project.clj in the scanned tree with
+  ;; `clojure.core/read-string` and `*read-eval*` at its ambient true, so a
+  ;; `#=(clojure.core/spit …)` form anywhere in any of those files RAN as the
+  ;; scanning process — and the silent `(catch Exception _e ["src"])` hid it.
+  (with-temp-dir
+    (fn [dir]
+      (let [extract #'study/extract-source-paths
+            marker (str (fs/path dir "PWNED"))
+            evil (str "#=(clojure.core/spit \"" marker "\" \"x\")")]
+        (doseq [[filename source]
+                [["deps.edn" (str "{:paths [\"src\"]\n :evil " evil "}")]
+                 ["bb.edn" (str "{:paths [\"src\"]\n :evil " evil "}")]
+                 ["project.clj" (str "(defproject demo \"0.1.0\"\n"
+                                     "  :source-paths [\"src\"]\n"
+                                     "  :evil " evil ")")]]]
+          (testing filename
+            (let [build-file (fs/path dir filename)]
+              (spit (str build-file) source)
+              (is (= ["src"] (extract build-file))
+                  "an unreadable build file falls back to the documented default")
+              (is (not (fs/exists? marker))
+                  "reading a build file must never write one")
+              (fs/delete-if-exists build-file))))))))
+
+;; @spec MCP-OP-STUDY-013
+(deftest the-safe-reader-still-answers-the-source-paths-question
+  ;; The eval-free reader must still parse the declarations the unsafe one
+  ;; parsed, or the fix would have bought safety with a silent scan regression.
+  (with-temp-dir
+    (fn [dir]
+      (let [extract #'study/extract-source-paths]
+        (doseq [[filename source expected]
+                [["deps.edn" "{:paths [\"lib\" \"src\"] :deps {}}" ["lib" "src"]]
+                 ["bb.edn" "{:paths [\"scripts\"]}" ["scripts"]]
+                 ["deps.edn" "{:deps {}}" ["src"]]
+                 ["project.clj"
+                  "(defproject demo \"0.1.0\" :source-paths [\"s1\" \"s2\"])"
+                  ["s1" "s2"]]]]
+          (testing (str filename " " source)
+            (let [build-file (fs/path dir filename)]
+              (spit (str build-file) source)
+              (is (= expected (extract build-file)))
+              (fs/delete-if-exists build-file))))))))
 
 ;; ============================================================
 ;; One kernel: the CLI handler adds print, never a second answer
