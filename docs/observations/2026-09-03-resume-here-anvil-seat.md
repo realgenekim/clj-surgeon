@@ -140,4 +140,4 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 
 - Environment: swipl 10 + plunit at `~/.local/bin/swipl` (micromamba env `~/opt/mamba/envs/swipl`); `~/opt/claude-skills`; `~/.claude/CLAUDE.md` (seat header + imports); `~/src/the-gene-maven`; connector deps installed; seat-local `.mcp.json` → 7906 (uncommitted). Wishlist for the mayor: docs/observations/2026-09-03-anvil-seat-wishlist-for-mayor.md; Gene drives it; his restart command is in that file.
 - q5z round landed (cc4e38c…0f01440); ruling: drop the pre-read expect.files bound (anchor idiom); builder aaa35fb0f121fdb9a resumed for one commit; then my suites → push → re-review.
-- rf2 round three a59ea3ce2a6b2a7fc running (re-review items 1–7). Still running: census, study, fold-diff, template-upsert, ratchets fix rounds. Oracle proof on main running (`~/tmp/oracle-main.log`).
+- rf2 round three a59ea3ce2a6b2a7fc running (re-review items 1–7). Still running: census, study, fold-diff, template-upsert, ratchets fix rounds. Oracle proof on main running (`~/tmp/oracle-main.log`) → PASS; the full `make mcp-test` runs here now.

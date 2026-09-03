@@ -194,3 +194,5 @@ one commit; my suites and a re-review after.
 
 
 ## 03:31Z — Surgeon server for this seat: 127.0.0.1:7906, `:telemetry :full`, started from clj-surgeon main (Gene: "Do you have watcher loop running to time your every surgeon operation" — answer: no; the watcher is per hand-drive session; zero Surgeon calls from this seat since the move because the session MCP config was bound to 7888 at start and must never be used here). Standing meter from now: server-side telemetry on 7906 for every call (builders included when pointed at it), `make study-agent-usage` for the readout; the watcher stays reserved for hand-drives.
+
+## 03:32Z — the Prolog gate runs on Anvil: `make mcp-operation-oracle` on main → "mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]", EXIT 0 (MCP-OP-ORACLE-001), on the user-local swipl 10. The swipl gap is closed; `make mcp-test` is whole on this box from here.
