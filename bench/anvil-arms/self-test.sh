@@ -50,6 +50,17 @@
 #  30  every identity component is validated before it becomes a path segment
 #  31  the self-test honours the CALLER's COHORT_PORTS
 #  32  a session id past the scan ceiling fails closed AND says so truthfully
+#
+# Cases 33-38 are the repairs for Sol's THIRD executed review of 2026-09-03
+# (/home/forge/tmp/sol/arms3-sol-review.md, NO-GO, 6 items), each written RED first:
+#  33  the make parser is a WHITELIST GRAMMAR -- eight constructs GNU Make itself
+#      proves the old text parse got wrong now refuse the whole file
+#  34  a grandchild forked BETWEEN scans cannot escape: the watcher is a child subreaper
+#  35  a watch stream without schema + inode-binding provenance is refused, never rescored
+#  36  a stat/fstat failure on the rollout binding is typed, never read as "no rotation"
+#  37  a backticked word in a case header EXECUTES -- the positive control for the
+#      suite-wide stderr trap installed below
+#  38  the README never hand-types a count this run computes
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

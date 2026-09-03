@@ -8,21 +8,25 @@ The apparatus that
 > no → write them FIRST. **A cohort without a meter is a rumour.**
 
 Nothing here has run a live arm. It has been proved end to end against a fake
-driver (`make anvil-arms-self-test`, 32 cases / 278 assertions, ~50 s).
+driver: `make anvil-arms-self-test`, about a minute, one case per repair. **The
+count of cases and assertions is not written down here** — the run computes it and
+prints it (`anvil-arms self-test: <passed> passed, <failed> failed`), and a number
+typed into a document is a claim about a run nobody observed. A case in the suite
+keeps it that way.
 
 ## The pieces
 
 | file | spec | what it does |
 |---|---|---|
 | `attest.sh` + `_attest_write.py` | A.4 | writes `attest.json` / `attest.edn` **before** any driver starts; exits 2 with `ATTEST-MISMATCH` on any fail-closed condition |
-| `watch.py` | A.10 | wraps the driver, tails its JSONL **bound to one inode**, writes `watch.jsonl` (one record per model return and per tool call) and `run.json`; typed aborts on zero returns, an unresolvable make target, a rotated rollout, and an unbound session; records the driver's descendants from `/proc` and reports `orphans_after_reap` as a computed number |
-| `score.py` | A.7 + A.10 | predicates over `rollout.jsonl` + `watch.jsonl` → `receipt.json` + `receipt.md`; computed counts only, and **no receipt at all** from a stream that does not validate or a run the watcher aborted |
+| `watch.py` | A.10 | wraps the driver, tails its JSONL **bound to one inode**, writes `watch.jsonl` (a `header` record carrying `schema_version` + the bound rollout identity, then one record per model return and per tool call) and `run.json`; typed aborts on zero returns, an unresolvable make target, a rotated rollout, a rollout whose binding cannot be **re-checked** (`rollout-stat-failed:<ERRNO>`), and an unbound session; becomes a **child subreaper** before spawning the driver so orphans re-parent to it rather than to init, and reports `orphans_after_reap` as a computed number |
+| `score.py` | A.7 + A.10 | predicates over `rollout.jsonl` + `watch.jsonl` → `receipt.json` + `receipt.md`; computed counts only, and **no receipt at all** from a stream that does not validate, one whose provenance it does not support (`watch-schema-unsupported`), or a run the watcher aborted |
 | `run-arm.sh` | B.6 §5 | one arm-run: attest → watch(driver) → freeze diff → score |
 | `run-cohort.sh` | B.3 / C.4 | n slots per arm, serial, **mirrored order** |
 | `stop-server.sh` | A.5 | stops **only** the server this arm-run spawned, by recorded pid, recorded start time **and** recorded boot id |
 | `_make_targets.py` | A.10 | resolves the worktree's Make targets by **parsing the Makefile as text** at attest time — nothing is executed — so a test runner behind `make verify` is metered as one. It is a **whitelist grammar and fails closed**: a Makefile outside the trivially-parseable subset resolves **nothing at all** (see *The meter is exact on the whitelist and honest outside it*, below) |
 | `fake-driver.sh` | PF-5 | a synthetic rollout, so the chain is provable with no arm-run budget |
-| `self-test.sh` | PF-5 | 32 cases / 278 assertions; `make anvil-arms-self-test`, which honours `COHORT_PORTS` and refuses at preflight if a named port is held |
+| `self-test.sh` | PF-5 | the whole chain against a fake driver — one case per repair, totals computed and printed by the run itself; `make anvil-arms-self-test`, which honours `COHORT_PORTS`, refuses at preflight if a named port is held, and **fails on any `command not found` on its own stderr** |
 | `prompts/` | B.4 | the four E3 arm prompts, extracted from the doc, hashed |
 
 ## The meter is exact on the whitelist and honest outside it
