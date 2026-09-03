@@ -197,7 +197,11 @@
 
   Depth is checked per entry rather than handed to `walkFileTree` as its
   `maxDepth`, because that parameter truncates silently and this bound must be
-  observable to the caller."
+  observable to the caller.
+
+  Every visitor callback returns TERMINATE once the entry ceiling is crossed,
+  read failures included. A ceiling that counts an entry class it will not stop
+  on is not a ceiling for that class."
   [^Path root {:keys [paths exclude]}]
   (let [matchers (mapv glob-matcher paths)
         excluded (set exclude)
@@ -276,7 +280,14 @@
                 (vswap! unreadable-count inc)
                 (when (< (.size unreadable) max-unreadable-paths)
                   (.add unreadable (relative-path root candidate)))))
-            FileVisitResult/CONTINUE))]
+            ;; @spec MCP-OP-ALIAS-050
+            ;; the ceiling counts read failures, so it has to STOP on them too;
+            ;; a tree whose entries are unreadable is exactly the tree that
+            ;; walks furthest past a bound that only the other callbacks honour
+            (if @over-walk FileVisitResult/TERMINATE FileVisitResult/CONTINUE))
+          ;; @spec MCP-OP-ALIAS-050
+          (postVisitDirectory [_dir _error]
+            (if @over-walk FileVisitResult/TERMINATE FileVisitResult/CONTINUE)))]
     (Files/walkFileTree root
                         (EnumSet/noneOf FileVisitOption)
                         Integer/MAX_VALUE
