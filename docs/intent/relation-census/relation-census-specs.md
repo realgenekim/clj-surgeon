@@ -39,6 +39,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-016**: When clj-surgeon receives a census request, it shall validate server-side, before any filesystem work, that no unknown field is present, that `files` when supplied is a non-empty array of at most 512 non-blank strings, that `doors` when supplied is an array of at most 32 entries, and that `pool_size` when supplied is an integer between 1 and 64, and it shall refuse a violation with a typed reason, the offending bound, and an executable `next_call`; when a valid `pool_size` exceeds the box's available processors, clj-surgeon shall run the plan phase on a pool of the available processors and shall publish both the pool it used and the pool that was requested.
 
+- [x] **MCP-OP-CENSUS-017**: When clj-surgeon reads a scanned source, it shall test that source for `defmethod` arms as it is read and shall retain the text only of the sources that define arms; it shall refuse a requested source larger than `max-source-bytes` with a typed reason naming the file, its size, and the cap, before reading it; and if any `Throwable` escapes the census, clj-surgeon shall publish a typed refusal — `census-resource-exhausted` for a runtime resource failure and `census-adapter-failure` otherwise — carrying an executable narrower `next_call` and no counts.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |

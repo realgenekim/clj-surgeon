@@ -7,6 +7,7 @@
    963875358a37c48ab6175ea1bea22633e4fd0306."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-relation-census :as census-tool]
    [clj-surgeon.relation-census :as census]
    [clojure.java.io :as io]
@@ -240,3 +241,47 @@
       (if (< effective 64)
         (is (= 64 (:pool_size_requested result)))
         (is (nil? (:pool_size_requested result)))))))
+
+;; @spec MCP-OP-CENSUS-017
+(deftest reads-are-bounded-and-exhaustion-is-a-typed-refusal
+  (testing "an oversized requested file refuses typed instead of being slurped"
+    (let [root (temp-dir)
+          big (io/file root "src/app/huge.clj")]
+      (try
+        (.mkdirs (.getParentFile big))
+        (spit big (str "(defmethod fold-event \"a\" [state event] state)\n"
+                       (apply str (repeat (inc census/max-source-bytes) \;))))
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)}
+                       {:files ["src/app/huge.clj"]})]
+          (is (false? (:ok result)))
+          (is (= "source-too-large" (:error_type result)))
+          (is (= "src/app/huge.clj" (:file result)))
+          (is (= census/max-source-bytes (:maximum result)))
+          (is (nil? (:counts result)))
+          (is (= "relation_census" (get-in result [:next_call :tool]))))
+        (finally (delete-tree! root)))))
+
+  (testing "a scanned source that defines no arms is read and then dropped"
+    (let [root (mcp-paths/real-root repo-root)
+          collected (census-tool/collect-inputs root [helpers fixture] {})]
+      (is (= 2 (:read collected)) "both files were read")
+      (is (= [fixture] (mapv :file (:inputs collected)))
+          "only the arm-defining source is retained")
+      (is (every? string? (map :source (:inputs collected))))))
+
+  (testing "an out-of-memory inside the census is a typed refusal, not a crash"
+    (with-redefs [census-tool/collect-inputs
+                  (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+      (let [result (run {:files [fixture]})]
+        (is (false? (:ok result)))
+        (is (= "census-resource-exhausted" (:error_type result)))
+        (is (nil? (:counts result)))
+        (is (= "relation_census" (get-in result [:next_call :tool]))))))
+
+  (testing "any other Throwable is typed too"
+    (with-redefs [census-tool/collect-inputs
+                  (fn [& _] (throw (AssertionError. "boom")))]
+      (let [result (run {:files [fixture]})]
+        (is (false? (:ok result)))
+        (is (= "census-adapter-failure" (:error_type result)))))))

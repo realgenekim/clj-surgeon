@@ -16,7 +16,9 @@
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.relation-census :as census]
    [clojure.java.io :as io]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  (:import
+   (java.nio.file Files Path)))
 
 (def max-scanned-files census/max-scanned-files)
 (def max-source-bytes census/max-source-bytes)
@@ -213,18 +215,36 @@
          (take max-scanned-files)
          vec)))
 
-(defn- load-inputs
-  "Resolve and read each requested path through the existing project fence."
-  [root relatives]
-  (reduce
-    (fn [acc relative]
-      (let [resolved (mcp-paths/resolve-source-path root relative)]
-        (if-not (:ok resolved)
-          (reduced {:refusal resolved :file relative})
-          (update acc :inputs conj {:file relative
-                                    :source (slurp (:path resolved))}))))
-    {:inputs []}
-    relatives))
+;; @spec MCP-OP-CENSUS-017
+(defn collect-inputs
+  "Read each scanned path through the project fence, retaining only arm sources.
+
+   The census needs the text of a file only if that file defines arms, so each
+   source is tested as it is read and dropped when it does not. Nothing but the
+   arm-defining sources is ever held at once, and a source above
+   `max-source-bytes` is refused rather than read."
+  ([root relatives] (collect-inputs root relatives {}))
+  ([root relatives _opts]
+   (reduce
+     (fn [acc relative]
+       (let [resolved (mcp-paths/resolve-source-path root relative)]
+         (cond
+           (not (:ok resolved))
+           (reduced (assoc acc :refusal resolved :file relative))
+
+           (> (Files/size ^Path (:canonical resolved)) census/max-source-bytes)
+           (reduced (assoc acc
+                           :oversized relative
+                           :bytes (Files/size ^Path (:canonical resolved))))
+
+           :else
+           (let [source (slurp (:path resolved))
+                 acc (update acc :read inc)]
+             (if (census/defines-arms? source)
+               (update acc :inputs conj {:file relative :source source})
+               acc)))))
+     {:inputs [] :read 0}
+     relatives)))
 
 ;; ---------------------------------------------------------------------------
 ;; Receipt
@@ -355,16 +375,29 @@
         t0 (System/nanoTime)
         requested (when (seq files) (mapv str files))
         scanned (or requested (candidate-files root))
-        loaded (load-inputs root scanned)]
-    (if-let [path-refusal (:refusal loaded)]
+        loaded (collect-inputs root scanned {})]
+    (cond
+      (:refusal loaded)
       (refusal :unreadable-source-path
-               (str (:error path-refusal) " (" (:file loaded) ")")
+               (str (:error (:refusal loaded)) " (" (:file loaded) ")")
                {:tool "relation_census"
                 :workspace_root canonical
                 :files [(:file loaded)]}
                {:file (:file loaded)})
-      (let [candidates (filterv #(census/defines-arms? (:source %))
-                                (:inputs loaded))
+
+      (:oversized loaded)
+      (refusal :source-too-large
+               (str (:oversized loaded) " is " (:bytes loaded)
+                    " bytes; the census reads at most " census/max-source-bytes)
+               {:tool "relation_census"
+                :workspace_root canonical
+                :files ["<a source under the byte cap>"]}
+               {:file (:oversized loaded)
+                :bytes (:bytes loaded)
+                :maximum census/max-source-bytes})
+
+      :else
+      (let [candidates (:inputs loaded)
             t1 (System/nanoTime)]
         (if (empty? candidates)
           (refusal :no-fold-arms-found
@@ -414,6 +447,26 @@
                                  (assoc :classify (get-in planned [:phases :classify])
                                         :merge (get-in planned [:phases :merge])))}))))))))))
 
+;; @spec MCP-OP-CENSUS-017
+(defn- exhaustion-refusal
+  "Turn a Throwable that escaped the census into a typed refusal.
+
+   A census walks a tree it did not choose. Running out of heap or stack is a
+   bounded, reportable outcome of that walk, not an adapter crash, and the
+   caller needs an executable narrower call rather than a stack trace."
+  [^Throwable error]
+  (let [exhausted? (instance? VirtualMachineError error)]
+    (refusal (if exhausted? :census-resource-exhausted :census-adapter-failure)
+             (str (if exhausted?
+                    "The census exhausted a runtime resource: "
+                    "The census failed: ")
+                  (.getName (class error))
+                  (when-let [message (.getMessage error)] (str " " message)))
+             {:tool "relation_census"
+              :files ["<a narrower file list>"]
+              :pool_size 1}
+             {:exhausted exhausted?})))
+
 (defn execute-request!
   "Route and execute one relation_census request."
   [config params]
@@ -432,7 +485,10 @@
                                               (:workspace-root routed))]
         (if-not (:ok validated)
           (assoc validated :workspace_root (:workspace-root routed))
-          (assoc (execute-in-context! (:config routed) (:params validated))
+          (assoc (try
+                   (execute-in-context! (:config routed) (:params validated))
+                   (catch Throwable error
+                     (exhaustion-refusal error)))
                  :workspace_root (:workspace-root routed)))))))
 
 (defn- summary
