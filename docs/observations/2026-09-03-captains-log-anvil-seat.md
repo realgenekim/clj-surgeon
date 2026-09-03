@@ -279,3 +279,5 @@ delta → then the mayor's production run (inb-3a9818 updated with the new comma
 ## 03:59Z — q5z round three launched (a4f713cb01afc03cb, items 1–7 of the re-review); the standing Linux baseline failure (hardcoded /opt/homebrew/bin/clj-kondo in mcp_change_buffer_test.clj:686) gets its own fix on `bridge/kondo-path-test` from main (af5a3aed64de01ebb). Eight lanes live.
 
 ## 04:02Z — study re-review: NO-GO lifted to GO-WITH-FIX (10× on the motivating workload; twelve items dead); four blockers (outline regression from the budget semantics, quadratic discovery via `:paths [".."]`, ns_grep unguarded, limit-spelling defeats item 6); round three launched.
+
+## 04:03Z — Gene: memory as files grow ("so afraid of huge heaps — but dont want to OOM… have sol figure out a clever way"). Question filed for Sol (docs/observations/2026-09-03-memory-design-question-for-sol.md); codex is unauthenticated on this seat, so an Opus design consult runs now and the mayor is asked to put the same question to Sol on the skiff; the two get reconciled.
