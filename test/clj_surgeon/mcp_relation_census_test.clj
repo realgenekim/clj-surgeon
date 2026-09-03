@@ -4570,6 +4570,150 @@
         (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-fifteen item 5 and NO-GO item 4: `isReadable` is a CHECK, and
+;; the read happens somewhere else.
+;;
+;; `mcp-paths/resolve-source-path` answers "may this process read it" and
+;; `collect-inputs` performs the `slurp`, with nothing between them and no
+;; typed catch around it. Sol's storm — twenty thousand in-process requests
+;; naming one file whose mode a second thread flipped:
+;;
+;;   RACE RESULTS: {"unreadable-source-path" 10085, :OK 5308,
+;;                  "census-adapter-failure" 4607}
+;;
+;; and the payload of one of those 4,607 is round fourteen's REJECTED receipt,
+;; verbatim: `census-adapter-failure`, `exhausted false`, and a remedy telling
+;; the caller a runtime resource ran out and to retry smaller — against a
+;; permission bit that refuses identically at any size.
+;;
+;; It is not only a permission race. The same window opens for an ordinary
+;; editor's atomic save — `spit` to `.tmp`, `renameTo`, with no `chmod`
+;; anywhere — which Sol measured at 38 in 20,000.
+;;
+;; Moving the CHECK earlier does not remove the need for a typed catch at the
+;; READ: the class narrowed, it did not close. A read that fails after the
+;; fence is the same fact to a continuation as one the fence refused — a name
+;; the next call must not carry — so it answers alike, and the entry that
+;; tripped the reader is removed from the narrowing whether the fence saw it or
+;; not.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(deftest a-read-that-fails-after-the-fence-is-never-an-adapter-crash
+  (let [root (temp-dir)
+        arm "src/app/folds.clj"
+        race "src/app/race.clj"
+        racing (io/file root race)
+        ;; Sol drove 20,000. The mode-flip window reproduces on roughly a
+        ;; quarter of runs, so 2,000 is several hundred hits and costs a few
+        ;; seconds. The assertion is one-sided — ZERO adapter failures — so a
+        ;; green run is never a lucky one, and the liveness assertion below
+        ;; refuses to pass a run in which the racer never won.
+        storm 2000]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (spit-file! racing arm-source)
+      (let [named (.getCanonicalPath root)
+            here (fn [params]
+                   (census-tool/execute-request! {:project-root named} params))
+            answer (fn [] (let [r (here {:files [race arm]
+                                         :doors ["upsert-by"]
+                                         :pool_size 1})]
+                            (if (:ok r) :ok (:error_type r))))]
+
+        (testing "a mode flipped between the check and the read is not an adapter crash"
+          (let [stop (atom false)
+                flipper (doto (Thread.
+                                ^Runnable
+                                (fn []
+                                  (while (not @stop)
+                                    (.setReadable racing false false)
+                                    (.setReadable racing true true))))
+                          (.setDaemon true)
+                          (.start))
+                counts (try (frequencies (repeatedly storm answer))
+                            (finally (reset! stop true)
+                                     (.join flipper 5000)
+                                     (.setReadable racing true true)))]
+            (is (pos? (- storm (get counts :ok 0)))
+                (str "the flipper never won a race, so this run proves "
+                     "nothing: " (pr-str counts)))
+            (is (zero? (get counts "census-adapter-failure" 0))
+                (str "a permission bit was reported as an adapter crash "
+                     (get counts "census-adapter-failure" 0) " times in "
+                     storm ": " (pr-str counts)))
+            (is (zero? (get counts "census-resource-exhausted" 0))
+                (str "a permission bit was reported as a resource "
+                     "exhaustion: " (pr-str counts)))))
+
+        (testing "an atomic rename between the check and the read is not one either"
+          (let [stop (atom false)
+                tmp (io/file root "src/app/race.clj.tmp")
+                saver (doto (Thread.
+                              ^Runnable
+                              (fn []
+                                (while (not @stop)
+                                  (spit tmp arm-source)
+                                  (.renameTo tmp racing))))
+                        (.setDaemon true)
+                        (.start))
+                counts (try (frequencies (repeatedly storm answer))
+                            (finally (reset! stop true)
+                                     (.join saver 5000)
+                                     (spit racing arm-source)))]
+            (is (zero? (get counts "census-adapter-failure" 0))
+                (str "an ordinary editor's atomic save was reported as an "
+                     "adapter crash " (get counts "census-adapter-failure" 0)
+                     " times in " storm ": " (pr-str counts)))))
+
+        (testing "the entry that tripped the READER is narrowed away exactly as one the fence refused"
+          ;; The race above proves the CLASS is gone; this proves what the
+          ;; answer says, deterministically, with no race at all: the reader
+          ;; fails on one named entry and the refusal must remove THAT entry
+          ;; from the continuation. It cannot fall back on re-resolving the
+          ;; list through the fence, because the fence says every entry is
+          ;; fine — which would hand back the identical request, a loop with a
+          ;; receipt.
+          (let [original slurp
+                result (with-redefs
+                         [slurp (fn [& args]
+                                  (if (str/includes? (str (first args))
+                                                     "race.clj")
+                                    (throw (java.io.FileNotFoundException.
+                                             "injected (Permission denied)"))
+                                    (apply original args)))]
+                         (here {:files [race arm]
+                                :doors ["upsert-by"]
+                                :pool_size 1}))]
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "a read that failed after the fence answered "
+                     (pr-str (select-keys result [:error_type :error :exhausted
+                                                  :remedy]))))
+            (is (not (contains? result :exhausted))
+                (str "the refusal claims a resource-exhaustion fact about a "
+                     "read: " (pr-str (:exhausted result))))
+            (is (= race (:file result))
+                (str "the refusal does not name the entry the reader tripped "
+                     "on: " (pr-str result)))
+            (is (= [race] (:files_removed result))
+                (str "the refusal does not name what it removed: "
+                     (pr-str (:files_removed result))))
+            (is (= {:tool "relation_census"
+                    :workspace_root named
+                    :files [arm]
+                    :doors ["upsert-by"]
+                    :pool_size 1}
+                   (:next_call result))
+                (str "the continuation is not the request minus the entry "
+                     "that could not be read: " (pr-str (:next_call result))))
+            (is (not (str/includes? (str (:remedy result)) "ran out"))
+                (str "the remedy invites a smaller retry against a read that "
+                     "failed: " (pr-str (:remedy result)))))))
+      (finally
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
 ;;
 ;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
