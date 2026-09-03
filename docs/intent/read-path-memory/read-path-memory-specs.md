@@ -1,7 +1,7 @@
 ---
 parent: read-path-memory-design
 prefix: MCP-OP-MEM
-status: draft
+status: implemented
 ---
 
 # Read-Path Memory Bounds Specifications
@@ -16,7 +16,7 @@ lanes own their own rows in their own leaves.
 
 ## Outline read path
 
-- [ ] **MCP-OP-MEM-015**: When clj-surgeon outlines a source file, it shall parse the file once and shall not construct per-form source text that the outline does not return.
+- [x] **MCP-OP-MEM-015**: When clj-surgeon outlines a source file, it shall parse the file once and shall not construct per-form source text that the outline does not return.
 
 ## Falsifiers
 

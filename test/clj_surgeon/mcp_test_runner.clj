@@ -34,6 +34,7 @@
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
    [clj-surgeon.mcp-write-refusal-test]
+   [clj-surgeon.outline-differential-test]
    [clj-surgeon.outline-memory-test]
    [clj-surgeon.quoted-var-refs-test]
    [clj-surgeon.workspace-onboarding-test]
@@ -77,6 +78,7 @@
           'clj-surgeon.mcp-write-refusal-test
           'clj-surgeon.mcp-server-test
           'clj-surgeon.mcp-semantic-client-test
+          'clj-surgeon.outline-differential-test
           'clj-surgeon.outline-memory-test
           'clj-surgeon.quoted-var-refs-test
           'clj-surgeon.workspace-onboarding-test)]
