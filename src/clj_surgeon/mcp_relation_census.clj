@@ -125,6 +125,69 @@
            (some? next-call) (assoc :next_call next-call))
          data))
 
+;; @spec MCP-OP-CENSUS-014
+(defn continuation
+  "THE ONE PLACE this tool turns a candidate request into a `next_call`.
+
+   Sol's round-fourteen item 9, blocking. `narrowing-continuation` measured
+   what it built and both bound refusals went through it; the other SEVEN
+   sites — the shape pass, the door refusal, the unreadable and oversized
+   narrowings, the arm-less file list, the plan failure and the
+   uninitialised-server refusal — each spelled a map straight into `refusal`'s
+   `next-call` argument, and nothing measured any of them. An unknown-field
+   refusal on a 600-character `workspace_root` emitted 660 UTF-8 bytes under a
+   512-byte ceiling. A bound enforced at one of eight construction sites is
+   not a bound, it is that site's habit, and the habit does not travel to the
+   site added next round.
+
+   So every site hands its candidate HERE and takes back what this returns.
+   What this enforces, on all of them alike:
+
+   - `:tool` is STAMPED, never spelled by a site. A continuation naming
+     another tool is not a narrowing of a census request, and a typo in an
+     argument position is exactly the class MCP-OP-CENSUS-014 forbids.
+   - an empty `:files` is not a narrowing — the published schema declares
+     `minItems 1`, and a call the tool's own schema rejects is unexecutable
+     whatever it measures.
+   - the ceiling is measured on the RENDERED JSON in UTF-8 BYTES, because
+     that is what crosses the wire (round twelve's finding, now enforced
+     everywhere rather than at the two sites that happened to call it).
+
+   `nil` in means there is nothing to offer and gets nothing back. A
+   candidate that cannot fit comes back with `:next-call` nil and `:bytes`
+   set, so the refusal can say what it measured instead of going silent — the
+   two situations are DIFFERENT and a caller must be able to tell them apart."
+  [candidate]
+  (let [stamped (when (map? candidate)
+                  (assoc candidate :tool "relation_census"))
+        faithful (when (and stamped
+                            (not (and (contains? stamped :files)
+                                      (not (seq (:files stamped))))))
+                   stamped)
+        rendered (when faithful (json/generate-string faithful))]
+    {:candidate faithful
+     :bytes (when rendered (census/utf8-byte-count rendered))
+     :next-call (when (and rendered (census/within-next-call-bytes? rendered))
+                  faithful)}))
+
+;; @spec MCP-OP-CENSUS-014
+(defn- continuation-overflow-remedy
+  "Why a continuation this refusal COULD compute was not handed back.
+
+   The sibling of `narrowing-overflow-remedy`, for the refusals whose
+   continuation is built out of the caller's own request rather than out of
+   the walk's aggregates. It says the same true thing that one does: the
+   narrowing is known, and it is the LENGTH of the path in it that does not
+   fit. A refusal that names a bound without naming the value it compared
+   against leaves the caller to guess how much shorter is short enough."
+  [bytes]
+  (str "The narrowest continuation this refusal can compute renders as "
+       bytes " UTF-8 bytes, over the " census/max-next-call-bytes
+       "-byte ceiling a continuation must fit, so none is offered. The "
+       "REQUEST is not the problem, the length of the workspace path in it "
+       "is: retry with workspace_root reaching the same tree by a shorter "
+       "path, and fix what this refusal named."))
+
 ;; ---------------------------------------------------------------------------
 ;; Parameter validation (server-side; the advertised schema is only a hint)
 ;; ---------------------------------------------------------------------------
@@ -203,9 +266,15 @@
         ;; own schema rejects.
         carriable? (or (not (contains? params :workspace_root))
                        (string? asked-root))
-        next-call (when carriable?
-                    (cond-> {:tool "relation_census" :pool_size 8}
-                      (string? asked-root) (assoc :workspace_root asked-root)))
+        ;; Through the ONE constructor, like every other site. This is the
+        ;; site Sol measured at 660 bytes: the caller's own `workspace_root`
+        ;; travels through verbatim, and a long one made the continuation
+        ;; longer than the wire rule allows without anything noticing.
+        computed (when carriable?
+                   (continuation
+                     (cond-> {:pool_size 8}
+                       (string? asked-root) (assoc :workspace_root asked-root))))
+        next-call (:next-call computed)
         ;; `uncomputable` is a row that can offer no continuation AT ALL,
         ;; whatever `workspace_root` said — the not-decodable row is the
         ;; first: what it would carry is the corrupted spelling of a path
@@ -230,6 +299,16 @@
                                          "naming an existing absolute "
                                          "directory, or omit it to census "
                                          "the server's workspace.")})
+                                 ;; The THIRD reason there is no continuation,
+                                 ;; kept apart from the other two: the value
+                                 ;; was carriable and the call it produced is
+                                 ;; over the wire ceiling. It gets the bytes
+                                 ;; it measured, not silence.
+                                 (when (and (not uncomputable)
+                                            carriable?
+                                            (nil? next-call))
+                                   {:remedy (continuation-overflow-remedy
+                                              (:bytes computed))})
                                  data)))
         ;; The shape questions AND THEIR ORDER are the shared table's, not
         ;; this function's. Sol's round-eleven item 3: this validator read the
@@ -546,15 +625,9 @@
    on the wire, and a workspace path outside ASCII costs more of them than it
    has characters (Sol's round-twelve item 3)."
   [canonical narrower]
-  (let [candidate (when narrower
-                    {:tool "relation_census"
-                     :workspace_root (str canonical "/" narrower)})
-        rendered (when candidate (json/generate-string candidate))]
-    {:narrower narrower
-     :candidate candidate
-     :bytes (when rendered (census/utf8-byte-count rendered))
-     :next-call (when (and rendered (census/within-next-call-bytes? rendered))
-                  candidate)}))
+  (merge {:narrower narrower}
+         (continuation (when narrower
+                         {:workspace_root (str canonical "/" narrower)}))))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn- narrowing-overflow-remedy
@@ -684,14 +757,17 @@
 ;; @spec MCP-OP-CENSUS-014
 (defn- door-refusal
   [invalid canonical facts]
-  (refusal :unknown-door-symbol
-           (str "Unknown identity door " (:invalid invalid) ": " (:why invalid))
-           {:tool "relation_census"
-            :workspace_root canonical
-            :doors (vec (sort (map str census/default-doors)))}
-           (merge {:door (:invalid invalid)
-                   :known_doors (vec (sort (map str census/default-doors)))}
-                  facts)))
+  (let [known (vec (sort (map str census/default-doors)))
+        {:keys [next-call bytes]}
+        (continuation {:workspace_root canonical :doors known})]
+    (refusal :unknown-door-symbol
+             (str "Unknown identity door " (:invalid invalid) ": "
+                  (:why invalid))
+             next-call
+             (cond-> (merge {:door (:invalid invalid) :known_doors known}
+                            facts)
+               (nil? next-call)
+               (assoc :remedy (continuation-overflow-remedy bytes))))))
 
 ;; @spec MCP-OP-CENSUS-023
 ;; @spec MCP-OP-CENSUS-031
@@ -752,15 +828,19 @@
       (let [unreadable (when requested (unreadable-among root scanned))
             removed (set unreadable)
             remaining (when requested
-                        (vec (remove removed (distinct requested))))]
+                        (vec (remove removed (distinct requested))))
+            {:keys [next-call bytes]}
+            (continuation (when (seq remaining)
+                            (assoc (dissoc params :files)
+                                   :workspace_root canonical
+                                   :files remaining)))]
         (refusal :unreadable-source-path
                  (str (:error (:refusal loaded)) " (" (:file loaded) ")")
-                 (when (seq remaining)
-                   (assoc (dissoc params :files)
-                          :tool "relation_census"
-                          :workspace_root canonical
-                          :files remaining))
+                 next-call
                  (cond-> (merge {:file (:file loaded)} facts)
+                   (and (seq remaining) (nil? next-call))
+                   (assoc :remedy (continuation-overflow-remedy bytes))
+
                    (seq unreadable)
                    (merge {:files_removed (vec (take max-listed-files
                                                      unreadable))
@@ -798,15 +878,16 @@
       (let [over (oversized-among root scanned)
             removed (set over)
             remaining (when requested
-                        (vec (remove removed (distinct requested))))]
+                        (vec (remove removed (distinct requested))))
+            {:keys [next-call] over-bytes :bytes}
+            (continuation (when (seq remaining)
+                            (assoc (dissoc params :files)
+                                   :workspace_root canonical
+                                   :files remaining)))]
         (refusal :source-too-large
                  (str (:oversized loaded) " is " (:bytes loaded)
                       " bytes; the census reads at most " census/max-source-bytes)
-                 (when (seq remaining)
-                   (assoc (dissoc params :files)
-                          :tool "relation_census"
-                          :workspace_root canonical
-                          :files remaining))
+                 next-call
                  (cond-> (merge {:file (:oversized loaded)
                                  :bytes (:bytes loaded)
                                  :maximum census/max-source-bytes
@@ -814,6 +895,9 @@
                                  :files_removed_omitted
                                  (max 0 (- (count over) max-listed-files))}
                                 facts)
+                   (and (seq remaining) (nil? next-call))
+                   (assoc :remedy (continuation-overflow-remedy over-bytes))
+
                    (empty? remaining)
                    (assoc :remedy
                           (str "Every source this request named is larger than "
@@ -838,7 +922,10 @@
                 ;; these paths, the caller never named them, and pinning them
                 ;; with `files` is a real narrower call than re-walking the
                 ;; same root.
-                explicit? (boolean requested)]
+                explicit? (boolean requested)
+                {:keys [next-call bytes]}
+                (continuation (when (and (seq named) (not explicit?))
+                                {:workspace_root canonical :files named}))]
             (refusal :no-fold-arms-found
                      (str "No file defines defmethod fold-event arms. Scanned "
                           scanned-count " file(s).")
@@ -850,11 +937,11 @@
                      ;; refuses identically. The tool offers a call only when
                      ;; it can name the sources to look at, AND that call is
                      ;; not the one the caller just made.
-                     (when (and (seq named) (not explicit?))
-                       {:tool "relation_census"
-                        :workspace_root canonical
-                        :files named})
+                     next-call
                      (cond-> (merge {:scanned named} facts)
+                       (and (seq named) (not explicit?) (nil? next-call))
+                       (assoc :remedy (continuation-overflow-remedy bytes))
+
                        (or (empty? named) explicit?)
                        (assoc :remedy
                               (cond
@@ -895,12 +982,16 @@
                                 (census/parse-doors doors declared))]
                 (cond
                   (not (:ok planned))
-                  (refusal (or (:error-type planned) :census-failed)
-                           (:error planned)
-                           {:tool "relation_census"
-                            :workspace_root canonical
-                            :files [(:file planned)]}
-                           (merge {:file (:file planned)} facts))
+                  (let [{:keys [next-call bytes]}
+                        (continuation {:workspace_root canonical
+                                       :files [(:file planned)]})]
+                    (refusal (or (:error-type planned) :census-failed)
+                             (:error planned)
+                             next-call
+                             (cond-> (merge {:file (:file planned)} facts)
+                               (nil? next-call)
+                               (assoc :remedy
+                                      (continuation-overflow-remedy bytes)))))
 
                   (map? confirmed)
                   (door-refusal confirmed canonical facts)
@@ -1008,7 +1099,7 @@
                  (execute-request! config params)
                  (refusal :server-not-initialized
                           "relation_census server is not initialized"
-                          {:tool "relation_census"}))
+                          (:next-call (continuation {}))))
      :summarize summary
      :callback callback}))
 
