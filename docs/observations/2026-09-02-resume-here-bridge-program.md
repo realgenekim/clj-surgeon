@@ -1,3 +1,5 @@
+> **2026-09-03: the seat moved to forge@anvil.** Read `docs/observations/2026-09-03-resume-here-anvil-seat.md` for host facts, missing tools and boundaries; this file remains the program state.
+
 # RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 12:25Z; read the UPDATE blocks bottom-up, the newest supersedes)
 
 STANDING ORDERS (memory files): headlines first (table: arm, wall, correct? + one learning + one
@@ -604,4 +606,177 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - **Next, awaiting Gene's word:** session 4 — the settings lens over 19 owners on a worktree stacked
   on store 96387535, characterization witness first, one Surgeon transaction, watcher on
   (Sol's ordered commits, log 961186b). No cohort running on Anvil; cohort lock free.
+
+
+## RESUME DELTA 2026-09-02T22:34Z
+
+- **Autonomy for the day** (Gene: "No word needed. Use best judgement." / "I'm busy all day today. Keep
+  going!" / "Or get sol opinion."). Running: session-4 step A builder aac78b909147d4a88 on
+  `~/src/curtaincall-cfp-lens` (bridge/settings-lens @ 96387535; characterization + lens, no call
+  sites); census builder ae28eeb3c06c1aeb1 on `~/src/clj-surgeon-census` (bridge/census-verb @ 8ac4332);
+  Sol plan opinion `scratchpad/fleet/sol-plan-s4-census-answer.md` (waiter bjuuwssgr).
+- **Step B (after A + Sol):** two arms: (1) me driving ONE `apply_clojure_changes` transaction over the
+  19 owners on the lens worktree via bridge 7888, Sonnet watcher per docs/tweezer-loop.md (marker
+  `.tweezer/session-4.closed`, six fields, 60-min cap, stopwatch), (2) Opus native arm on a second
+  worktree `~/src/curtaincall-cfp-lens-native` (branch bridge/settings-lens-native from the step-A
+  sha). Gate: characterization digest + `bin/kaocha unit` 0 failures. Push the correct tree; inbox for Gene.
+- Never git stash in any curtain-call worktree (parallel agents share the stash).
+
+
+## RESUME DELTA 2026-09-02T22:50Z
+
+- THREE builders on Buster: lens step A aac78b909147d4a88 (`~/src/curtaincall-cfp-lens`); census
+  ae28eeb3c06c1aeb1 (`~/src/clj-surgeon-census`, re-specced per Sol: five classes incl. `:unknown`,
+  four-condition guard rule, evidence fields); study ops aa962e1fb576e0072 (`~/src/clj-surgeon-study`,
+  `bridge/study-ops-mcp` from b2177ad; Gene's nudge via the mayor; clj-surgeon-0me; inb-f403aa updated).
+- Sol's plan opinion applied (log b2177ad): step B = dry plans first, native production default,
+  Surgeon arm research, no auto-winner; census not an enforcement gate.
+- Merge-queue note: census and study-ops both touch the MCP schema/tool files → rebase the second.
+- Gene asked "Where are they running": all on Buster; Anvil idle, lock free.
+
+
+## RESUME DELTA 2026-09-02T23:02Z
+
+- **Session 4 dry plan, Surgeon side DONE** (log a39206c): 4 calls, one 16-arm transaction on the
+  scratch worktree `~/src/curtaincall-cfp-lens-scratch` (detached 55d1fd3f; safe to delete after the
+  comparison), zero outside churn, projection gate green, tripwire 19→3 / 24→6. Artifact:
+  `~/src/curtaincall-cfp-lens/.plan/surgeon-settings-lens.patch`. Marker `.tweezer/session-4.closed`
+  written 23:01:49Z; watcher a4647e8ebb78985fc writes `.tweezer/session-4-watch.md` (copy to
+  docs/observations/2026-09-02-tweezer-session-4-watch.md when it lands).
+- **Step A pushed** (`bridge/settings-lens` 55d1fd3f, my run 1050/13097/0).
+- Running: native dry plan a7ef75d64e2a9fd85 on `~/src/curtaincall-cfp-lens-native` (writes
+  `.plan/native-settings-lens.patch` + `.plan/native-plan.md`, not applied); LENS-003 builder
+  ae6df9a536b15e3f4 on the lens worktree (identity no-op in update-settings, fails-first); census
+  ae28eeb3c06c1aeb1; study ops aa962e1fb576e0072. Suites serialised via `flock ~/tmp/suite.lock`.
+- **Next:** comparison receipt (cardinality, churn, preconditions, decisions, wall) Surgeon vs native
+  → log + Gene report; then the REAL migration commit on `bridge/settings-lens` after LENS-003 lands
+  (either plan; Gene merges; no auto-winner), tripwire numbers updated in the same commit, all three
+  excluded arms handled (export.generated stays; the two conditional arms migrate once LENS-003 is in).
+- Buster load ~3.2/4 cores; Gene asked about farming to Anvil — declined mid-build, farm if OOM.
+
+
+## RESUME DELTA 2026-09-02T23:06Z
+
+- **Session 4 comparison receipt DONE** (`docs/observations/2026-09-02-session-4-comparison-receipt.md`,
+  6406768): Surgeon 16/19 arms, 0 outside churn, gate green; native 18/19, 149 outside lines, found the
+  24th write (`speaker.reminder-schedule-configured`, slug-keyed). Nomination: Surgeon transaction for the
+  migration commit after LENS-003; Gene decides. vision.md now defines "winner" by composition (47c1eee).
+- Running: LENS-003 builder ae6df9a536b15e3f4 (lens worktree); 23j builder ac9d2922b2d295e87 on
+  `~/src/clj-surgeon-rf2` (target-ns from workspace_root; witness on the wire); census ae28eeb3c06c1aeb1;
+  study ops aa962e1fb576e0072. Watcher session 4 closed (receipt filed).
+- **Migration commit plan (after LENS-003):** on `~/src/curtaincall-cfp-lens`, re-run the 16-change
+  `apply_clojure_changes` (same finds/replaces as the scratch; the transcript holds them; also
+  `.plan/surgeon-settings-lens.patch` is the equivalent patch), then a second transaction for
+  `event.speaker-unannounced` + `event.announced-speaker-adopted` (form-for-form, no hoisting), then a
+  delegated test edit: tripwire numbers, the `(= arm-count guards)` assertion, a row for the 24th write;
+  gate `flock ~/tmp/suite.lock bin/kaocha unit` 0 failures; push; inbox item for Gene. `export.generated`
+  stays. Native patch stays on `bridge/settings-lens-native` (push it as the specimen).
+- Mayor's beads: 23j mine (in progress); 3s5/c37/dk9 fixed on rf2 a66b626 (close on merge); oni P2.
+
+
+## RESUME DELTA 2026-09-02T23:12Z
+
+- **Channel rule:** replies to Gene go to seat "bridge" (memory `reply-seat-bridge-until-requested`).
+- **Merge ruling** (log 2972f73): curtain-call main auto-deploys to live Postgres → no blind merges.
+  Owner ops routed to the mayor (Gene: "You can ask mayor to run curtain call and do nrepl ops to
+  check Postgres"): inb-3a9818 — (1) create `store_events_idempotency_key` from the REPL + paste
+  `pg_get_indexdef`; (2) run `make fold-diff-checkpoint` from `bridge/fold-diff-tool` (builder
+  acaae1bcfa4441c72, worktree `~/src/curtaincall-cfp-folddiff` from 96387535) and paste the diff.
+  Merge order: fold after (2) reviewed, store after (1) + paste. Announce the branch to the mayor on
+  seat bridge when it lands.
+- **Census verb landed** `bridge/census-verb` f325529+7244141 (fifth tool; q5z not on main); my suites
+  running (`~/tmp/census-{test-fast,mcp-test}.log`, waiter bdv1wx2gk); push after green; mayor queue.
+- Running: LENS-003 ae6df9a536b15e3f4 (then the migration commit on the lens worktree: 16-change
+  transaction from the transcript / `.plan/surgeon-settings-lens.patch`, second transaction for the two
+  conditional arms, tripwire test edit delegated, gate, push, inbox); 23j ac9d2922b2d295e87 on rf2;
+  study ops aa962e1fb576e0072.
+
+
+## RESUME DELTA 2026-09-02T23:20Z
+
+- **Migration applied on `~/src/curtaincall-cfp-lens`** (uncommitted folds.clj on a8af3393): two Surgeon
+  transactions (16 + 2 edits), guards 19→1, paths 25→4, focused gate green except the tripwire
+  numbers. Builder a0ad6890cb421cb67 is editing the tripwire test + registering LENS-004 + committing
+  ("LENS-004: migrate 18 fold arms …"). After its report: my own `flock ~/tmp/suite.lock bin/kaocha
+  unit` → push `bridge/settings-lens` → inbox item for Gene (stacked on store; merge after store).
+- Census pushed (7244141). Scratch worktree removed (patch saved in `.plan/`).
+- Running: 23j ac9d2922b2d295e87 (rf2 worktree), study ops aa962e1fb576e0072, fold-diff acaae1bcfa4441c72.
+- Owed to the mayor on seat bridge: the fold-diff branch name + make target; census + study-ops +
+  rf2(+23j) branches for the queue.
+
+
+## RESUME DELTA 2026-09-02T23:37Z
+
+- **Session 4 COMPLETE**: `bridge/settings-lens` aebb7b9a pushed (LENS-001..004; my unit 1053/13134/0);
+  inb-554636 for Gene's merge after fold + store. Native specimen `bridge/settings-lens-native` 74a3d7e6.
+- **rf2 pushed** at 5e6cdd2 (23j witnessed; closes 23j/3s5/c37/dk9 on merge). **Census pushed** 7244141.
+- Running (cap: two builders): study ops aa962e1fb576e0072, fold-diff acaae1bcfa4441c72. When fold-diff
+  lands: push `bridge/fold-diff-tool`, tell the mayor the make target on seat bridge (inb-3a9818).
+- Gene floated an Anvil Claude seat; position sent (second seat, not a move); brief pre-staged at
+  `docs/observations/2026-09-02-anvil-builder-seat-brief.md`. If he starts it, hand it the two builds
+  named there via inbox.
+- Then: regenerate the Gene report (skill `skills/gene-report/SKILL.md`).
+
+## RESUME DELTA 2026-09-02T23:42Z
+
+- **fold-diff tool pushed** `bridge/fold-diff-tool` f2d8f6eb (my unit 1052/13017/0); mayor has the commands
+  (inb-3a9818 + seat bridge). Waiting on the mayor's paste: index `pg_get_indexdef` + fold-diff output.
+- **Study ops built** b3c17bb on `bridge/study-ops-mcp` (inside inspect_clojure; `ls-tree` as a mode);
+  my suites running (`~/tmp/study-{test-fast,mcp-test}.log`, waiter bh7hkujz2); push after the baseline-
+  only failure check (5 routing + 1 exact-profile), then tell the mayor; then Gene report §8 rows
+  (fold-diff, study ops) + tech tree E6 "BUILT, adoption unmeasured".
+- No builders running. Load ~1.2. Cap: two builders + one suite.
+- Open for Gene: fold/store/lens merge order; four decisions in the report §9; the Anvil `forge` seat.
+- Next candidate builds (if Gene starts the Anvil seat, hand these over; else run here one at a time):
+  receipt ratchets from the friction ledger; lens follow-ups (program-speaker-updated, reminder-schedule).
+
+
+## RESUME DELTA 2026-09-02T23:45Z — day queue COMPLETE; nothing running
+
+- All branches pushed and verified. clj-surgeon (mayor's queue): rf2 5e6cdd2, census 7244141, study ops
+  b3c17bb, q5z 2753f23, admit-gate 17125fe, close-losers 205e13a, format-form-scope 62981ee.
+  curtain-call (Gene's merges, in order): fold f115cc2d (inb-d603ce) → store 96387535 (inb-70711c) →
+  settings-lens aebb7b9a (inb-554636); tools: fold-diff f2d8f6eb (mayor runs it, inb-3a9818); specimen
+  settings-lens-native 74a3d7e6.
+- Waiting on: the mayor's `pg_get_indexdef` paste + fold-diff output; Gene's four decisions (report §9);
+  whether the Anvil `forge` seat is created (brief: docs/observations/2026-09-02-anvil-builder-seat-brief.md).
+- Routing: answer Gene in the surface he wrote from (memory reply-seat-bridge-until-requested).
+- Held builds, in priority: (1) receipt ratchets from the friction ledger (log 8392477); (2) lens
+  follow-ups (program-speaker-updated onto the lens; reminder-schedule guard); (3) E6 ls-tree free-choice
+  cohort on Anvil (needs the study branch on a cohort server + FAN-style prompts). Start (1) only when the
+  mayor has merged census or study ops (schema-file conflicts) or on the Anvil seat.
+- Gene report current at bc967f6 (§8/§9/§10). Captain's log current through bc967f6.
+
+
+## RESUME DELTA 2026-09-02T23:54Z — the prosecution list (Gene: "Make sure all suggestions and areas to explore are in a trusted place where they'll be prosecuted at the right time.")
+
+Every open suggestion is a maven inbox item with an owner and a trigger (bd has no database on the
+bridge for either repo, so the inbox is the trusted store):
+S1 inb-a0f37e ls-tree names-only rendering (before E6)
+S2 inb-0a6315 tree-level requirers-of-ns op on the alias-migration discovery kernel (after q5z merges)
+S3 inb-d8a635 make mcp-serve honours MCP_PORT (next touch)
+S4 inb-11a6ae outline emits defmethod dispatch; owner refusal names the defmethod owner form (after census+study merge)
+S5 inb-a97614 unaddressed_matches in transaction receipts (same trigger)
+S6 inb-3cb0f4 refusals name the missing field; match receipts explain `_` arity (same trigger)
+S7 inb-c973d2 E6 free-choice adoption cohort for the study ops on Anvil (after S1)
+S8 inb-78e75c contract: "two public tools" invariant stale — Gene's ruling before census merges
+C1 inb-ace545 lens follow-ups: program-speaker-updated onto the lens; reminder-schedule guard (after the three merges)
+C2 inb-041b28 announce UI has no unannounce control — product decision then route+witness (after store deploys)
+C3 inb-06d376 comms.template-saved hand-rolled upsert (census :unknown) — fixture first (after fold merges)
+A1 inb-c06fd8 regenerate the missing sl1 .diff receipts from the Anvil worktrees (next quiet hour)
+Plus the standing ones: inb-d603ce / inb-70711c / inb-554636 (Gene's merges), inb-3a9818 (mayor's
+production ops), inb-f5ee92 (census verb, now built), inb-f403aa (study ops, now built), inb-600289
+(the Gene report). Session 5 closed; watcher a9fa65891683c1c40 writes `.tweezer/session-5-watch.md`
+(copy to docs/observations when it lands). Anvil builder seat = tester (brief amended).
+
+## RESUME DELTA 2026-09-02T23:55Z
+
+- Session 5 watcher receipt filed (f32076a): verdict MIXED; E6 (inb-c973d2) gated on S1 + S2.
+- **Prosecuting S1 (inb-a0f37e) + S3 (inb-d8a635) now**: builder a72e392109a38e858 on
+  `~/src/clj-surgeon-study` (bridge/study-ops-mcp @ b3c17bb): names-only ls-tree rendering as the
+  default (+ ns_grep), and `make mcp-serve` honouring MCP_PORT. After its report: my suites under the
+  lock → push → note the mayor → mark inb-a0f37e / inb-d8a635 attempted. Then S2 (tree-level
+  requirers) waits for q5z to merge.
+- Still pending on others: the mayor's production paste (inb-3a9818); Gene's merges and rulings
+  (inb-78e75c contract; inb-041b28 product); whether Gene starts the tester@anvil seat.
 

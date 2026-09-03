@@ -2747,3 +2747,519 @@ merge re-keyed by path so order is irrelevant. The write/commit phase stays seri
 all-or-nothing. Receipts carry per-phase `elapsed_ms` so the parallel win is a measured number
 (baseline: 1.19 s per file for 8 match patterns; 171 files ≈ 3–4 min serial vs ~15 s on 16 cores).
 
+
+## 22:33Z — autonomy for the day: session 4 and the census verb launched in parallel (Gene: "No word needed. Use best judgement." / "I'm busy all day today. Keep going!" / "Or get sol opinion.")
+
+Worktrees: `~/src/curtaincall-cfp-lens` = `bridge/settings-lens` at 96387535 (stacked on the store
+branch; 19 guards, 23 settings paths counted); `~/src/clj-surgeon-census` = `bridge/census-verb` at
+origin/main 8ac4332 (fetched, recorded). Session 4, step A (Opus builder): characterization first —
+replay digest, the guard's three edge cases over the 19 event types, a structural inventory pinning
+19/23 — then the lens with no call sites (LENS-001/002). Step B after A: the migration measured as
+two arms — one structural transaction through Surgeon over the 19 owners driven by me with a watcher
+(returns + stopwatch) vs an Opus agent natively on a second worktree; gate = the characterization
+digest + unit suite. Census verb (Opus builder): `relation_census`, classification :door / :set /
+:guarded (enclosing branch mentioning an identity key of the written value) / :raw; claypoole upmap
+plan phase; allowlisted receipt with per-phase elapsed_ms; LID CENSUS-001..; real-bytes fixture from
+folds.clj; pool-1-vs-N identical-answer witness; real-wire witness. Sol consulted in parallel on
+the plan (`scratchpad/fleet/sol-plan-s4-census-answer.md`): KEEP / ADJUST / STOP per build, what
+must not run unattended, the guard rule he would ship. His answer is folded in before step B starts.
+
+
+## 22:35Z — Sol on the day plan: ADJUST both; dry plans before arms; the census gets `:unknown` and evidence
+
+`scratchpad/fleet/sol-plan-s4-census-answer.md`. (a) The two-arm migration is legitimate as an
+instrument, not as the decision procedure: produce BOTH plans dry first (native exact patch with
+preconditions; Surgeon structural plan) and inspect match cardinality, ambiguity, projected churn,
+and whether Surgeon targets forms or reprints owners — the house rules already record owner-scoped
+`apply_clojure_changes` as a measured loser on fan-out. Native is the production default for this
+migration; the Surgeon arm is research. Unconvincing if: arms not byte-identical at start, prompts
+differ, warm-up charged to one arm, "one transaction" is 19 reprinted owners, native constrained to
+per-form edits, success judged by tests alone (churn and tree equivalence matter), uncounted retries,
+n=1 presented as general, winner chosen by speed. (b) `:guarded` as "an enclosing branch mentions an
+identity key" overclaims: misses let-bound predicates, cond/case, membership idioms, threading,
+helper-carried guards, early returns; falsely blesses same-key-different-value, wrong polarity,
+existence vs nonexistence, `or` paths, shadowing, checks after the write. Ship rule: `:guarded` only
+with dominance + same target + written value's identity expression + correct polarity; trace only
+single-assignment let aliases and standard control forms; explicit membership idioms; no helper or
+macro inference in v1; add `:unknown` with reasons; `:raw` only when positively shown; return evidence
+(write, target path, identity expr, guard, polarity, uncertainty). The census locates review work; it
+does not prove idempotency and is not an enforcement gate. (c) Nothing irreversible on branches; the
+unattended hazards are decision boundaries: never auto-select and push "the correct tree" (nominate
+in a receipt; Gene merges); no force-updates of stacked branches; no broad owner reprints; counts are
+inventory tripwires, not invariants; no fence widening for recall; wire fields versioned.
+**Rulings applied:** census builder re-specced (five classes, four-condition guard rule, evidence
+fields, complete-output pool invariance, `:census-version 1`); lens builder told to compare the full
+projection with a readable first-difference report and to name the count test a tripwire. Step B
+redesigned: after step A, dry plans first (Surgeon `inspect_clojure` prepare-change/plan over the
+19 owners on the lens worktree — read-only; native plan as one exact patch written by an Opus
+agent on `bridge/settings-lens-native`, not applied), then the plans' cardinality/churn decide
+whether the measured arms run at all; both trees stay on experimental branches with a receipt
+nominating a winner; Gene merges.
+
+
+## 22:50Z — the mayor relays Gene's nudge: study ops through the MCP, one kernel, now
+
+Mayor, via the channel, with Gene verbatim: *"Nudge bridge: really think this needs to be done sooner
+rather than later"* — on the finding that `:ls-tree` (and `:ls-deps`, `:deps`, `:topo`, `:ls-extract`,
+plus the write ops `:mv`, `:rename-ns!`, `:fix-declares!`) live only in `core.clj` and appear nowhere
+in the MCP surface (git grep on origin/main: zero hits in mcp_schema / mcp_tool / mcp_contract).
+Why it matters, the mayor's reading: vision.md names square 3 (the questions grep answers wrong) as
+winnable and `:ls-tree` as its foundation; it is the discovery half of the fan-out verb, what the
+gate needs to name its owner delta, and the precondition for square 4. Constraint held: both
+entrances call ONE kernel (docs/plans/one-compiler-two-entrances.md), never a forked path — the
+class we closed three times yesterday. Study ops first because they are read-only and add no
+refusal surface; write ops stay behind the gate. Tracked clj-surgeon-0me (mayor's). Decision under
+day-autonomy: build now. Worktree `~/src/clj-surgeon-study` = `bridge/study-ops-mcp` from origin/main;
+Opus builder; fails-first witnesses incl. the real wire; bounded allowlisted receipts. Merge note:
+this and `bridge/census-verb` both register a tool in the MCP schema files; rebase the second lander.
+
+
+## 22:55Z — session 4 step A landed: LENS-001 pin (d10a6009) + LENS-002 lens (55d1fd3f); the 19 arms and 23 sites are named
+
+Builder's gates: unit 1040/12908/0 → 1044/13052/0 → 1050/13097/0; compile-check green; kondo clean.
+LENS-001 is a pin (mutation probes: a renamed settings key failed the oracle naming `event.hero-set`
+and the drift report printed the path with both values; one `if-let`→`when-let` tripped the
+tripwire "18 copies, not 19"); every pre-existing golden digest survived byte-for-byte; the golden
+now carries the whole projection beside the digest with a `clojure.data/diff` first-difference
+report (empty relations pruned — `empty-state` carries 40 of them). LENS-002 fails-first in two
+stages; missing event → `identical?` state AND `f` never called (call counter); no key and nil key →
+`f` applied to nil, identical results. The 19 event types: schedule.locked, schedule.unlocked,
+agenda.published, replay.marked, sink.registered, sink.removed, api-key.created, export.generated,
+api-key.revoked, event.hero-set, event.email-notifications-set, event.day-hours-set,
+event.unlisted-set, event.submission-cap-set, event.blind-review-set, event.speaker-unannounced,
+event.speaker-announced, event.announced-speaker-adopted, event.announced-speaker-added. Guards at
+folds.clj 628 636 644 673 680 686 695 709 722 1062 1067 1073 1080 1086 1091 1100 1148 1164 1184;
+settings paths at 629 637 645 674 681 687 696 723 1063 1068 1075 1076 1081 1087 1093 1095 1110 1145
+1157 1173 1175 1189 1201 (+174, the lens itself). Traps for the migration: `export.generated` is a
+guard but writes `:exports`, not settings; `event.program-speaker-updated` (1201) writes settings
+under a different guard (event AND person); 1145 is a read; three arms carry two paths each;
+`announced-speaker-adopted` can no-op on a present event. Suspected src defects reported, not
+fixed: the intent-registry test's `(deftest\s+([^\s\)]+)` regex mis-parses metadata on a deftest
+name; `sink.removed`/`api-key.revoked` materialise `{:webhooks nil}`/`{:api-keys nil}` on an event
+that never had one. Next (Sol's order): dry plans on both sides before any arm — native exact patch
+on `bridge/settings-lens-native` (worktree created at 55d1fd3f, not applied), Surgeon plan via
+`inspect_clojure` over the 19 owners with the watcher on.
+
+
+## 23:01Z — session 4 dry plan, Surgeon side: 16 arms in ONE transaction, zero churn outside the forms, projection gate green (Gene: "Study surgeon usage and usefulness! Seems perfect for the job!!!")
+
+Driver calls (watcher on from transcript offset 21805140; receipts in
+`~/src/curtaincall-cfp-lens/.tweezer/session-4-watch.md`), scratch worktree
+`~/src/curtaincall-cfp-lens-scratch` (detached at 55d1fd3f) so the lens tree stayed untouched:
+1. `inspect_clojure` outline of folds.clj — 1.85 s, 139 forms; **deviation (receipt/schema): every
+   `defmethod` is named `fold-event` with no dispatch value**, so the 19 arms cannot be addressed from
+   the outline.
+2. `forms` probe with a guessed owner `fold-event "schedule.locked"` — refused in 0.16 s with the
+   22-name owner vocabulary; all ~117 arms collapse to one owner name. The addressing answer lives
+   only in `apply_clojure_changes`' schema: `forms: [{kind: defmethod, name, dispatch}]`. A cold
+   agent pays at least one refusal to learn that (return-tax y).
+3. `match` for the guard pattern (19/19, each with full source, hash, preorder address, enclosing
+   form) + `[:events slug :settings _]` (21; the two 5-element paths need a second pattern) — 0.6 s.
+   One read gave the whole migration's content.
+4. `apply_clojure_changes`, ONE call, 16 `changes`, each owner = the arm's dispatch, `find` = the
+   guard form verbatim (interior INTENT comments included in two arms — accepted, spelling preserved),
+   `replace` = the lens form — 3.8 s (formatter 0.7 s), `committed true`, `verification_complete true`,
+   undo receipt written.
+Churn: 58+/83−, 7 hunks, **every changed line inside the 16 replaced forms** — the filtered residue is
+the sixteen `state))` closers and nothing else. Gate on the scratch (`bin/kaocha --focus` the two
+lens namespaces): **20 tests, 250 assertions, 6 failures, all six the inventory tripwire** (19→3
+guards, 24→6 path occurrences; counted twice because the ns loaded under both focus flags) —
+whole-projection replay equality, the 19-arm oracle, the three edge cases and LENS-002 all green.
+Excluded from the transaction, with reasons: `export.generated` (a guard but writes `:exports`, not
+settings); `event.speaker-unannounced` and `event.announced-speaker-adopted` — conditional arms that
+return `state` untouched on a present event; through the lens, an absent `:settings` would be
+materialised as nil where the original left it absent, and the golden would catch it. **Plan
+precondition LENS-003:** `update-settings` returns `state` unchanged when `f` returns the identical
+settings value (`identical?`, nil included); then those two arms migrate too. Surgeon plan artifact:
+`~/src/curtaincall-cfp-lens/.plan/surgeon-settings-lens.patch`; native plan pending from the agent on
+`bridge/settings-lens-native`. Sol's unconvincing-if list, checked: same base sha both sides (55d1fd3f);
+the Surgeon side is form-scoped, not owner-reprinted; churn measured; the correct tree is not
+auto-selected — comparison receipt next, Gene merges. Session marker written.
+
+
+## 23:04Z — session 4 meter (watcher): 11 returns, 299 s, no hand repairs, verdict YES; the mayor's composition finding; 23j reproduced live on main
+
+Watcher receipt `docs/observations/2026-09-02-tweezer-session-4-watch.md` (copied from the lens
+worktree): 11 counted calls — 4 Surgeon (outline; refused owner probe; two-pattern match 19/19 +
+21; one 16-change transaction) + 7 Bash (worktrees, churn, gate, artifact, marker); ~299 s first call
+to marker; ~7.1 s inside the tool; deviations refusal×1, scope×2, semantic×3, schema×1; hand repairs:
+none (two apparent misses were my shell filters against ANSI kaocha output); housekeeping excluded 8,
+each named. Verdict: "YES — the tool answered the plan question with fewer returns than reading the
+file would". **Watcher's finding for the tool:** the transaction receipt does not say why 16 of the
+19 matched arms were addressed; the exclusion rationale lived only in the driver's head until the
+log — a cold reader cannot recover it from the receipt. Ratchet candidate: a plan-level receipt
+field listing matched-but-unaddressed sites when a prior `match` and a later transaction share a
+snapshot hash.
+
+**The mayor (on Opus, flagged) filed my five bead asks** — clj-surgeon-23j (P1, plan-extraction
+target-ns from the SERVER root), -3s5 (P1, source ns docstring copied), -c37 (P1, `:ls` fails on a file
+`:extract!` wrote; four rf1-ethno findings), -dk9 (P1, require rewiring refused after extract), -oni
+(P2, load-sensitive tests flake) — and raised the design point: three are defects in operations
+vision.md lists as measured winners, two failing ON EACH OTHER; "nobody checked whether the winners
+compose". Ruling (mine): correct, and it is the doctrine we moved to today — a winner is a receipt the
+next verb accepts without hand repair, measured by the pre-registered A/B readouts; written into
+vision.md as the definition of winner, with the older `:extract!`/`:ls`/`require_change` entries
+demoted to "fast, composition unproven" until rf2 merges and they are re-measured. Disposition sent:
+3s5/c37/dk9 fixed on `bridge/rf2-extract-rewire` a66b626 (mayor's queue) — keep composite, P1 until
+merge, close with pointers; oni P2 stays; **23j is open and mine**: reproduced live on main via the
+bridge 7888 server from a foreign workspace root — `plan-extraction` returned
+`target-ns "curtaincall-cfp-lens-scratch.src.cfp-scheduler-killer.settings-lens"` (server-root-relative)
+and the new-file preview carried the source ns docstring; rf2's Anvil server ran from its own workspace,
+so the target-ns derivation was never exercised there. Witness + fix on the rf2 branch before merge.
+
+## 23:05Z — session 4 comparison receipt written: Surgeon 0 lines of outside churn vs native 149; native found a 24th write
+
+`docs/observations/2026-09-02-session-4-comparison-receipt.md`. Surgeon: 299 s session / ~7 s in
+tool, 16/19 arms, 83−/58+, **0 lines outside the replaced forms**, gate green on the scratch. Native:
+465 s planning, 11 decisions, 18/19 arms (two by restructuring, one hoist changes evaluation order),
+125−/82+, **149 lines outside guard+path** (86 whitespace), not gate-run, plus one genuine inventory
+finding: `speaker.reminder-schedule-configured` writes settings under a slug-keyed guard that neither
+tripwire regex counts. Nomination (not selection): Surgeon transaction for the mechanical 16 on the
+real worktree after LENS-003, second transaction for the two conditional arms, tripwire edited by
+hand (numbers, the `(= arm-count guards)` assertion, a row for the 24th write). n=1, a specimen.
+
+## 23:11Z — the merge call: curtain-call main auto-deploys to live Postgres, so fold and store merges are outward-facing; owner ops routed to the mayor by Gene
+
+Gene: *"What is needed from me. You make the call, as noted."* Checked before ruling: `.github/workflows/
+build-and-deploy.yml` deploys on push to main; `docs/postgres-store.md` says Cloud Run runs
+`STORE_BACKEND=postgres` and "dev IS production". Ruling: I do not merge either branch blind. Fold is
+replay-equal on the judge-sandbox log only, and its change is product-visible by design (a name-only
+unannounce no longer removes id-bearing rows — a speaker unpublished by name in the old world could
+reappear). Store refuses to boot until the unique index exists in the live DB — merging first would take
+the site down. Two owner-cred items, pre-staged: (1) create the index from the REPL and paste the real
+`pg_get_indexdef`; (2) run a `make fold-diff-checkpoint` (being built now on `bridge/fold-diff-tool`,
+worktree `~/src/curtaincall-cfp-folddiff` from 96387535) that re-folds the production log against the
+checkpoint production already stores and prints every differing projection path. Gene: *"You can ask
+mayor to run curtain call and do nrepl ops to check Postgres"* — routed to the mayor on the bridge
+channel with the exact DDL, and filed as a maven inbox item. Merge order: fold after (2) is reviewed,
+store after (1) and the paste. The lens migration commit proceeds on its stacked branch (no deploy).
+
+## 23:11Z — census verb landed on `bridge/census-verb` (f325529 + 7244141); zero `:raw` sites in curtain-call
+
+Builder: five classes with evidence, four-condition guard rule, claypoole `upmap` plan phase, receipt
+1,986 B with per-phase elapsed, typed refusals with next_call, real-wire witness on a scratch port,
+fails-first by ablation (the naive write-only match reproduces the exact task-chase false positive; the
+"guard found but not required" variant lands it in `:unknown`, never `:raw`). Suites under the lock:
+test-fast 710/6001 (same 5 pre-existing), mcp-test 383/4024 (same 1). Pool 1 → 4 on 48 arm-files:
+319 → 197 ms; one file shows no win (noise); receipt byte-identical across pool sizes (witnessed).
+Real repo: 117 arms, 11 sites, **0 raw**, 9 door, 1 set, 1 `:unknown` (`comms.template-saved`, a
+hand-rolled upsert whose binding shadows the fn param — surfaced as review work, not passed silently).
+Note: it registers as the FIFTH tool because alias_migration (q5z) is not on main yet — the mayor's
+merge queue holds both; rebase whichever lands second. My own verification run is in progress.
+
+
+## 23:18Z — census verified and pushed; LENS-003 landed; the real migration ran as two Surgeon transactions on the lens branch
+
+Census `bridge/census-verb` 7244141: my own suites under the lock — test-fast 710/6001, mcp-test
+383/4024, failures exactly the baseline six (5× terminal-response-routing, 1× exact-profile) — pushed;
+mayor's queue (registers as the fifth tool; rebase against q5z, whichever lands second).
+LENS-003 (a8af3393, builder): `update-settings` returns `state` when `f` returns the `identical?`
+settings value, nil included; red first on the absent-key/nil case (the identity-map case passed
+before the fix only through `assoc`'s reference-equality shortcut — the builder said so); unit
+1053/13117/0; the lens now carries two path sites so the tripwire moved 24 → 25 deliberately.
+Migration on `~/src/curtaincall-cfp-lens` (branch head a8af3393, uncommitted): transaction 1 = the
+validated 16 changes, 7.46 s (formatter 1.7 s), 16 edits, verification complete; transaction 2 = the
+two conditional arms form-for-form onto `(fn [settings] …)` with the no-op returning `settings` itself
+(LENS-003 tags added inside the forms), 1.06 s, 2 edits. Counts after: guards 19 → **1**
+(`export.generated`, writes `:exports`), path occurrences 25 → **4** (lens ×2, the read at
+`announced-speaker-removals`, `event.program-speaker-updated`); diff 95+/116−. Focused gate running
+(characterization + lens + relation-policy); expected failures = the tripwire numbers only. Next: a
+delegated test edit (tripwire numbers, the `(= arm-count guards)` assertion rewritten, a row for the
+24th write `speaker.reminder-schedule-configured`), then `bin/kaocha unit` to 0, commit, push, inbox.
+
+
+## 23:29Z — 23j: already fixed on the rf2 branch (EXTRACT-014, 57e3ca0); witnessed on all three MCP surfaces at 5e6cdd2
+
+Builder finding: the live reproduction against main was real, and the fix already exists on
+`bridge/rf2-extract-rewire` — not on origin/main. Root cause pinned by mutation: with the wrong root,
+`file-path->ns-name`'s fallback takes the FIRST `/src/` in the absolute path, and every checkout under
+`~/src/<repo>` has an outer `/src/` ancestor, so the server root's fallback grabbed that one. Witnesses
+added (fail on the mutated pre-fix behaviour, pass now): in-process plan-extraction, in-process
+apply extraction (checks the written file), and the real HTTP wire on port 0 — all with the workspace
+nested under `<tmp>/src/<fixture>/src/…` and the server root pointed elsewhere. Wire target-ns before
+(mutated) `curtaincall-cfp-lens-scratch-fixture.src.cfp-scheduler-killer.settings-lens`, after
+`cfp-scheduler-killer.settings-lens`. Docstring copy (3s5) confirmed gone on all three surfaces: the
+header is exactly `(ns cfp-scheduler-killer.settings-lens)`. CLI `:extract` not exposed (derives from
+the file path). Intent MCP-OP-EXTRACT-023 with `@spec` tags (the repo's convention). Suites: test-fast
+731 with the 5 pre-existing routing failures; mcp-test 385 with the 1 pre-existing (on this box it is the
+homebrew clj-kondo path expectation). My own mcp-test run in progress; push after. Disposition for the
+mayor: 23j closes on the rf2 merge, pointer 5e6cdd2.
+
+
+## 23:33Z — Surgeon friction ledger from session 4 and the production migration (Gene: "Are you tweezering in this? Are you getting any useful data on surgeon usage / friction etc")
+
+Watched (session 4 dry plan): 11 returns, ~299 s wall, ~7 s in tool, 0 hand repairs, verdict YES.
+Unwatched but receipted (the production migration on the lens branch): two transactions, 7.46 s + 1.06 s,
+18 arms, comments and spelling preserved, 0 churn outside the forms; LENS-004 commit 9ed7b0ef.
+Friction, with the refusal text, each a ratchet candidate:
+1. Outline names every `defmethod` "fold-event" with no dispatch value; the owner vocabulary collapses
+   ~117 arms into one name (`missing form fold-event "schedule.locked" … available owners (22/22)`); the
+   `{kind: defmethod, name, dispatch}` owner shape is documented only in `apply_clojure_changes`' schema.
+   A cold agent pays one refusal to learn it. Ratchet: outline emits `dispatch` for defmethods and the
+   refusal's hypotheses name the defmethod owner form.
+2. The transaction receipt does not report matched-but-unaddressed sites when a prior `match` on the
+   same snapshot hash found more (19 matched, 16 addressed); the exclusion rationale was in my head.
+   Ratchet: `unaddressed_matches` in the receipt when a match basis is supplied.
+3. `inspect_clojure` refuses `missing-fields` without the aggregate `expect {requests, files}`, even
+   for one request; the refusal names nothing. Ratchet: the refusal names the missing field.
+4. `plan-extraction` refuses `invalid-require-policy` when `require_policy` is omitted — no default,
+   refusal names nothing. Ratchet: default `minimal` or name the field.
+5. `plan-extraction` on main derives target-ns from the server root and copies the source ns docstring
+   (23j/3s5) — fixed on rf2 (EXTRACT-014/023), found by this session's live probe.
+6. A 4-element `match` pattern `[:events slug :settings _]` silently misses 5-element paths (21 of 23);
+   `_` matches exactly one subtree and nothing says so at the miss. Ratchet: match receipts could
+   report near-misses by prefix, or the docs say "one subtree per `_`" next to the pattern field.
+Wins, concrete: one `match` returned all 19 guard forms with source + hash + preorder address + enclosing
+form in 0.6 s (one read for the whole migration's content); defmethod-addressed `find`/`replace` kept
+interior INTENT comments byte for byte; refusals were typed and fast (0.16 s, 0.01 s). Load note (Gene:
+"Maybe we single task this … Overloading buster box?"): load 2.3 falling from ~3.8 peak, 3.4 GB
+available, one busy JVM (my unit run); cap set at two concurrent builders + one suite behind the lock.
+
+
+## 23:36Z — LENS-004 pushed: `bridge/settings-lens` aebb7b9a; session 4 complete end to end
+
+Builder a0ad6890cb421cb67 (9ed7b0ef): tripwire rewritten to the migrated tree — guards 1
+(`export.generated`), path literals 4, `update-settings` call sites inside arms 18 = 19 − 1, the 24th
+write `speaker.reminder-schedule-configured` pinned at 1 under its slug-keyed guard as a follow-up;
+focused gate 38/388/0; registry LENS-004; the builder correctly refused to add the code-side
+`;; INTENT: LENS-004` tag to folds.clj (told not to touch it; the tag would also falsify "zero churn
+outside the replaced forms" in the message), leaving one residual failure in
+`every-active-intent-is-traceable`. I added the one comment line above the lens myself and ran the
+suite: **1053 tests, 13134 assertions, 0 failures**; committed aebb7b9a, pushed; inbox item for
+Gene's merge (after fold and store). The whole session, receipts: characterization first (LENS-001),
+the lens (LENS-002), the identity no-op (LENS-003), dry plans both ways with the watcher on, comparison
+receipt, then the migration as two Surgeon transactions (LENS-004). Native's patch stays as the
+specimen on `bridge/settings-lens-native` 74a3d7e6.
+
+
+## 23:39Z — Anvil seat: position and the user question; Gene report regenerated
+
+Gene: *"Idea. Should I get a clause code session going on anvil — and we can move your work there????"*
+Position sent: a second seat, not a move — builders and suites belong on Anvil's 16 cores; this seat keeps
+the phone channel, memory, inbox creds, the tweezer server and the resume-note pointer. Brief pre-staged:
+`docs/observations/2026-09-02-anvil-builder-seat-brief.md` (identity `forge-anvil <forge-anvil@anvil>`,
+scoped token in `~/secrets`, never 7888/7894/7895 or `~/acid/GO-*`/lock/chains/fleet dirs, resume
+pointer, first two builds). *"What user should I use ?"* — Anvil's users read from the box: anvil-peek,
+dev-a/b/c, developer, foreman, foreman-ops, gene, kentbeck, merger, surgeon, tester. Recommended a new
+`forge` user (no sudo): tester owns the acid apparatus, dev-*/foreman/merger/kentbeck are the curtain-call
+fleet, surgeon runs the production Surgeon on 7888; `developer` looks generic but its owner is unknown.
+Gene report regenerated (700393e; inb-600289): anchor win, session 4 shipped, z7c flat, false greens,
+composition definition, merge order and the four decisions.
+
+
+## 23:39Z — fold-diff-checkpoint built (f2d8f6eb on `bridge/fold-diff-tool`): the checkpoint is a raw prefix, the baseline is folded by main's own code, and the naive read path would have installed the index
+
+Builder acaae1bcfa4441c72. Premise correction: `store_checkpoint.clj` writes a validated snapshot of
+the RAW log (`:frontier`, `:row-count`, `:sha256`, `:rows`), fold-independent — no projection to compare
+against; and the fetch target is `make download-cache`, not `store-checkpoint`. Built instead:
+`bin/fold-diff-checkpoint` checks `BASELINE_REF` (default `origin/main` = what production runs) into a
+throwaway worktree and runs main's own `store/fold` there to emit the baseline projection; this tree
+re-folds the same live prefix (digest re-checked against the checkpoint) and diffs; both fold-source
+digests are printed and a vacuous comparison (equal digests) is called out. Exit 0 identical / 1
+differences / 2 refusal (`make` collapses to 2; run the bin for exact codes). **Finding that changed the
+design:** `store-pg/read-lines-with-seq` goes through `start!` → `ensure-schema!` →
+`ensure-idempotency-index!` — a read-only merge gate would have created STORE-IDEM-002's index on
+production as a side effect; the tool opens the pool with `db/start-pool!` (SELECT 1) and issues
+`SELECT seq, line FROM store_events WHERE seq <= ? ORDER BY seq` directly (FOLD-DIFF-002's pin).
+Read-only asserted: every append path stubbed to throw for the run and restored; touched files digested
+before/after. Hand-driven against real origin/main 00e8f0fa on a JSONL fixture: ONE real difference —
+`[:events "prop-summit" :settings :announced-speakers]` baseline `[{:name "Andrew Stellman"} {:name
+"Andrew Stellman"}]`, this tree `[{:name "Andrew Stellman"}]` — main's `announced-speaker-added`
+dedupes only by `:person-id`, so a name-only speaker announced twice is conj'ed twice; the branch upserts
+under the tagged identity. That is the product-visible change the mayor's production run will enumerate.
+Fails-first: reverting that arm to main's turned 8 assertions red and the tool said IDENTICAL. FOLD-
+DIFF-001..003, 12 tests; unit 1052/13017/0 (builder). Unverified without production: the Postgres read
+path, a real checkpoint's exact shape (fail-closed via `hydrate!`), wall/memory on the full log. My own
+unit run in progress; then push and hand the mayor the exact commands (inb-3a9818).
+
+
+## 23:41Z — study ops reach the MCP through one kernel (b3c17bb on `bridge/study-ops-mcp`, clj-surgeon-0me): Gene's nudge answered
+
+Builder aa962e1fb576e0072, 19 files, +1821/−387. Entrance decision by the contract, not taste:
+`docs/plans/one-compiler-two-entrances.md` forbids a new public tool, so `deps`, `topo`, `ls-deps`,
+`ls-extract` are `inspect_clojure` `requests` operations (file-scoped, zero existing rule changed) and
+`ls-tree` is a top-level `mode: "ls-tree"` (directory-scoped, the shape the contract reserves for
+whole-project reads, like `plan-extraction`). `topo` takes `file`, not `dir` (core.clj). Real-wire
+witnesses per op, success + refusal: `ls-tree :dir "."` → 161 files, returned 3 / omitted 158,
+`truncated true`, `next_action raise_limit_or_narrow_scope`, elapsed 2.35–3.24 s (the scan dominates);
+refusals `invalid-relative-directory-path` (`../../etc`), `directory-not-found`, `path-not-directory`,
+`study-form-not-found` with the 27-owner vocabulary and a `next_call`, `unknown-operation` listing all
+eight, `study-output-limit` (a tree is atomic — refuses rather than returning half). **CLI golden 9 of 10
+byte-identical, and the tenth is a real defect found by the extraction:** old `run-ls-tree` destructured
+`format` as a local, shadowing `clojure.core/format`, so the "No Clojure files found" refusal threw an
+NPE and printed `{:error nil …}` — it had never worked; pinned by `ls-tree-refusal-message-is-reachable`.
+Parity witness `study-ops-both-entrances-call-one-kernel`: MCP receipt payload = kernel data = CLI
+handler return, on the same bytes. A hand-drive caught what the units missed: the truncated `next_call`
+at the limit ceiling returned itself — a continuation that cannot advance; now a call is served only
+while raising `limit` can help, else `narrow_scope`. Suites under the lock: test-fast 711/5942/5
+(baseline five), mcp-test 390/4111/1 (baseline one); kondo clean; intent audit ok. Widenings reported,
+none of them fences: babashka/fs + process moved from a test alias into base deps (the server could not
+load the kernel without them); `find-build-files` no longer builds a `sh -c` string with the scanned
+directory interpolated — an argv vector now, because `ls-tree` is the first MCP read path that runs a
+subprocess (goldens unchanged); `mcp_paths/resolve-directory-path` added, additive, mirroring
+`resolve-source-path`; the mode-enum inventory witness grew by one; the specs file registered with the
+LID auditor. Writes (`:mv`, `:rename-ns!`, `:fix-declares!`) stay out, witnessed. Owed: the E6 free-choice
+adoption cohort for `:ls-tree` through MCP is unmeasured — tech-tree says BUILT, not WON. Note for the
+mayor's queue: the one-compiler doc's "exactly two public tools" invariant is already stale (edit/transform
+exist) and the census branch adds a fifth — the contract text needs Gene's ruling, not a silent edit.
+My own suites in progress; push after; then the mayor on seat bridge.
+
+
+## 23:43Z — routing corrected twice in one evening: answer Gene where he typed
+
+Gene, in the terminal: *"Still seeing this on Marvin dictation which I'm not watching. Send messages
+here."* — quoting the `forge`-user reply I had sent on seat "bridge" after his earlier screenshot said
+to use that channel. The seat the connector calls "bridge" is the dictation page from his side. Rule
+saved (memory `reply-seat-bridge-until-requested`, rewritten): answer in the surface the message came
+from — terminal text gets a terminal answer; `<channel>` blocks get the reply tool on their seat (the
+mayor). fold-diff pushed (f2d8f6eb, my run 1052/13017/0) and handed to the mayor with commands;
+study-ops suites running on my side.
+
+
+## 23:44Z — study ops pushed (b3c17bb; my suites 711/5942 + 390/4111, baseline failures only); the day's queue is complete
+
+Mayor's queue from bridge: rf2 5e6cdd2, census 7244141, study ops b3c17bb, q5z 2753f23, admit-gate
+17125fe, close-losers 205e13a, format-form-scope 62981ee; curtain-call for Gene: fold f115cc2d → store
+96387535 → settings-lens aebb7b9a, gated on the mayor's index paste and fold-diff output (inb-3a9818).
+No builders running; load ~1.2. Held deliberately until the queue drains or the Anvil seat exists: the
+receipt ratchets from the friction ledger, the lens follow-ups, the ls-tree free-choice cohort (E6).
+
+## 23:47Z — what today taught about Surgeon usage, in eight lines (Gene: "What did you learn about surgeon usage during this build? What's next?")
+
+1. The win is site discovery, not typing: native's cost everywhere it lost was proving completeness;
+   one structural match was the whole plan for 19 arms (0.6 s).
+2. Form-scoped replacement addressed by dispatch value is the clean write: 0 lines outside the forms,
+   comments preserved; native's equivalent patch touched 149 outside lines, 86 reindentation.
+3. The tool does not say how to address what it just showed: outline collapses arms to one name; the
+   defmethod owner shape lives only in the apply schema; two refusals name no field; `_` silently misses
+   longer paths. A cold agent pays a refusal to learn each.
+4. Receipts are thinner than the driver's head: 16 edits reported, 19 matched, the exclusion only in my log.
+5. Winners must compose (the mayor's finding): extract wrote what `:ls` could not read; now the definition
+   of winner in vision.md, measured by A and B.
+6. Structural match sees the write, not the guard: the finder's false positive became the census's
+   four-condition rule with `:unknown`.
+7. The gate buys correctness, not speed (6/6 complete, flat at n=6); every gate speed win was a slow native trio.
+8. Hand-driving finds what suites miss: the self-returning continuation, the `format` shadow, the
+   read path that would have created a production index.
+Next, in order: the mayor's production paste decides fold/store; receipt ratchets; the E6 adoption cohort
+for the study ops; the two lens follow-ups; drain the queue before touching the MCP schema files again.
+
+
+## 23:52Z — session 5 (watcher on): the study ops through the MCP, hand-driven on curtain-call against an rg baseline; Anvil seat = tester
+
+Server: the study branch on 127.0.0.1:7897 (make mcp-serve ignores MCP_PORT — it binds 7888 and failed
+"Address already in use"; started with `clojure -X:clj-surgeon/mcp :port 7897`). Baseline (rg, timed):
+q1 table of contents 0.02 s (190 ns files + defn counts); q2 requires of folds.clj 0.00 s; q3 "who
+requires store" 0.01 s → **180 files, WRONG** (prefix siblings, strings, comments; the migration receipt's
+truth is 171). Study ops: q1 `ls-tree` dir src/cfp_scheduler_killer grep "folds|store" format edn limit
+4096 → 1.76 s, **1 of 116 files returned, 115 omitted**, next_call served with limit 163xx; retry at the
+ceiling 16384, text → 0.98 s, **13 of 116 files, 103 omitted, `narrow_scope`, no next_call**. The MCP
+receipt embeds per-file forms with args, so a tree of 116 files cannot fit the ceiling; the CLI text
+format (byte-identical golden) is compact. **A table of contents that returns 13 of 116 files at the
+ceiling is not a table of contents.** q2 `deps` on folds.clj → 0.17 s wall / 83 ms in tool, 140 rows
+`{name type line depends_on}` — an intra-file form dependency graph, read_complete; not the ns requires I
+asked for (my expectation, context-privilege). q3 `topo` on store.clj → 0.13 s / 52 ms, 108 rows —
+topological order of the file's own forms; **no exposed study op answers "who requires this namespace"
+across the tree**, the one question rg answers wrong. Verdict: the intra-file ops are fast (50–90 ms)
+and structured; the tree-level questions an agent actually asks before a refactor — contents, requirers
+— are either bounded out or unexposed. Ratchets for the study branch before any adoption cohort:
+(1) `ls-tree` needs a names-only rendering (`format: "names"` or `include_forms: false`) so 190 files
+fit one receipt; (2) a tree-level "requirers of ns" operation — the alias-migration discovery already
+computes exactly this (171 requiring namespaces in 4.4 s) and should be the shared kernel; (3) `make
+mcp-serve` should honour MCP_PORT. Watcher receipt to follow (`.tweezer/session-5-watch.md`).
+Gene, on the seat: *"Use anvil seats that exist already."* → the builder seat is `tester@anvil`;
+brief amended (worktrees under `~/build/`, never while a GO file or the lock exists; fleet seats untouched).
+
+
+## 23:54Z — the prosecution list filed, twelve inbox items with owners and triggers
+
+Gene: *"Make sure all suggestions and areas to explore are in a trusted place where they'll be
+prosecuted at the right time."* bd has no database on the bridge for clj-surgeon or curtain-call
+(embedded dolt not initialised; not a wipe I will do blind on shared state), so the trusted store is the
+maven inbox, per house rules. Filed:
+S1 inb-a0f37e ls-tree names-only rendering (before E6)
+S2 inb-0a6315 tree-level requirers-of-ns op on the alias-migration discovery kernel (after q5z merges)
+S3 inb-d8a635 make mcp-serve honours MCP_PORT (next touch)
+S4 inb-11a6ae outline emits defmethod dispatch; owner refusal names the defmethod owner form (after census+study merge)
+S5 inb-a97614 unaddressed_matches in transaction receipts (same trigger)
+S6 inb-3cb0f4 refusals name the missing field; match receipts explain `_` arity (same trigger)
+S7 inb-c973d2 E6 free-choice adoption cohort for the study ops on Anvil (after S1)
+S8 inb-78e75c contract: "two public tools" invariant stale — Gene's ruling before census merges
+C1 inb-ace545 lens follow-ups: program-speaker-updated onto the lens; reminder-schedule guard (after the three merges)
+C2 inb-041b28 announce UI has no unannounce control — product decision then route+witness (after store deploys)
+C3 inb-06d376 comms.template-saved hand-rolled upsert (census :unknown) — fixture first (after fold merges)
+A1 inb-c06fd8 regenerate the missing sl1 .diff receipts from the Anvil worktrees (next quiet hour)
+
+## 23:54Z — session 5 meter (watcher): 4 counted calls, ~171 s, verdict MIXED — worse than session 4
+
+Receipt `docs/observations/2026-09-02-tweezer-session-5-watch.md`. Deviations: scope×2 and receipt×2 on
+q1 (`ls-tree` bounded both times; `grep` never narrowed the 116-file universe), semantic×2 on q2/q3 (the
+receipts succeeded but answered a different question: an intra-file per-def graph, an intra-file
+topological order). No refusals, no hand repairs; 10 housekeeping calls excluded by id. Verdict, the
+watcher's words: the study ops did not demonstrate a correctness win over rg anywhere; wall matched the
+pre-registered ~100× expectation without a correctness payoff. This is the honest input for the E6
+cohort: it does not run until S1 (names-only ls-tree, inb-a0f37e) and S2 (tree-level requirers,
+inb-0a6315) land, or the cohort would measure a tool that cannot answer the question it is for.
+Tech tree E6 stays BUILT, adoption unmeasured, now with the reason.
+
+## 2026-09-03T00:51Z — CAPTAIN'S LOG, end of the day (written 17:51 PDT, Wednesday)
+
+**What was asked.** Gene, over the day: reproduce the "faster than native" result and find where the
+math is in our favour; make the curtain-call duplicate-record class impossible with a big LID assertion
+and generalise it into a finder; get the Surgeon refactor of the fold namespace done with a watcher on;
+put ls-tree and the study ops inside the MCP kernel (the nudge, via the mayor); use best judgement all
+day, get Sol's opinion, keep the box from overloading, and put every suggestion somewhere it will be
+prosecuted. He also asked, twice, whether we were tweezering and what the friction data said.
+
+**What happened, in order.** rf2 scored: the rewiring extract verb beat stripped native on all nine
+cross-pairs, 243 s against 336 s, zero native bytes after the verb, five promotion criteria met — the
+first promoted winner under the new definition. z7c scored the gate at n=6: wall-neutral, z7b's win
+withdrawn as a slow native arm; correctness 6/6 with `verify none` never used. The q5z alias-migration
+fix went through my own suites, restarted the Anvil server, and the anchor re-ran: on the point where
+native was predicted to win, the tool won wall, actions and tokens with an identical tree, and the
+chain's own "pass" line turned out to be a hardcoded noun over an empty glob — three apparatus defects,
+fixed the same hour. Curtain-call: the fold branch went two rounds with Sol (tagged identity, Ann's
+sequence pinned, adoption no longer drops the person id), the store branch went four (the forever key
+that would have refused Ann's republish, caught in my review; the generation moved inside the lock;
+every writer claims the key; a real 32-bit collision in the witness), both pushed. Session 4 ran the
+refactor the way the doctrine says: characterization first, the lens, dry plans both ways with the
+watcher on, a comparison receipt (Surgeon 0 lines of outside churn against native's 149), then the
+migration as two Surgeon transactions, 18 arms, pushed with 1053 tests green. The census verb shipped
+with Sol's five-class rule and zero raw sites in curtain-call. The study ops reached the MCP through one
+kernel and found a never-working refusal on the way; session 5 then measured them honestly on real
+questions and came back MIXED — the tree-level questions an agent actually asks are bounded out or
+unexposed — so the adoption cohort is gated on two fixes, one of which is building now. The mayor's
+sweep turned five bead asks into a design finding: nobody had checked that the winners compose. That is
+now the definition of winner in the vision doc.
+
+**Evidence.** Anvil receipts rf2-score, z7c-score, sl1-R-score; the session-4 comparison receipt and two
+watcher files; branches fold f115cc2d, store 96387535, settings-lens aebb7b9a, fold-diff f2d8f6eb, rf2
+5e6cdd2, census 7244141, study ops b3c17bb; the Gene report at 5e44ab1; twelve prosecution items in the
+maven inbox with owners and triggers.
+
+**Why it went the way it did.** Every claim that survived today was a receipt somebody else could act
+on; every claim that died was a label. The gate's speed win died twice to slow native trios; the chain's
+"pass" died to an empty glob; my own finder positive died to a guard three lines above the match; my
+own generation fix died to Sol reading the lock boundary. What held was the anchor, the rewiring verb,
+and the refactor, because each was measured on a real repo with the output's usability as the meter.
+Tomorrow's first hour: the mayor's production paste decides the fold and store merges; the names-only
+ls-tree lands and the tree-level requirers op follows; the tester seat on Anvil takes the receipt
+ratchets. Standing rule, re-learned: answer Gene where he typed.
+
+
+## 01:03Z — seat move to Anvil: the checklist, sent to the mayor and filed (inb-20c591)
+
+Gene wants to resume THIS session on Anvil. The mechanism: the transcript JSONL (24 MB) copied under the
+same project key + `claude --resume`; then memory (60 files), doctrine import, skiff-minted creds
+(GitHub, maven, connector token; Surgeon MCP on a new port), tools, repos from origin, two crons.
+Detail in the Anvil brief and the inbox item. The seat inventory as measured: 60 memory files,
+`~/.claude.json` + `~/.claude/settings.json` + the connector's `.mcp.json` carry the MCP config,
+20 scripts in `~/bin`, 8 secret files, 4 crons.
+
+## 01:04Z — seat tarball pre-staged for the move (no secrets)
+
+`~/src/seat-move/bridge-seat-20260903T0104Z.tar.gz` (25 MB, sha256 4241b28e…, 600): the transcript,
+the 60 memory files, global CLAUDE.md + settings.json, the connector's `.mcp.json`, eight `~/bin`
+scripts, the crontab. Excluded on inspection: `~/.claude.json` (carries `oauthAccount`), every secret,
+gh hosts.yml — skiff mints those as files. Mayor told on the channel; inb-20c591 carries the path.
+
