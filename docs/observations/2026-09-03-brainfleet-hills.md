@@ -898,3 +898,177 @@ Ratings below are evidence-value ratings, not a selection; all four remain indep
 - **Runs tonight on:** `marvin-voice-remote @ ab267f9`, the frozen rung-L prompt/oracle, tool server with the composition-fixed `require_change` on **7908**, same `sol-yolo` caller and mirrored order as E3-P.
 - **Could be waste because:** it deliberately exercises a boundary already predicted by n1 and the withdrawn single-edit square; if the live refusal fires, the cohort mostly re-measures an old request grammar defect rather than closability.
 
+
+## 15. Result poll on E3-P — Opus (file /home/forge/tmp/sol/e3poll-opus.md, 23:01Z)
+
+# Opus — poll on the E3-P result (0.36x wall, inside the floor, 57% refusals)
+
+*forge@anvil, 2026-09-04, read-only in clj-surgeon @ 31886f8. Evidence: the six
+`rollout.jsonl` under `/home/forge/tmp/arms/e3/e3-P-*/`, timestamps and payload
+character counts computed from them, not from the report.*
+
+## 0. A correction to the record, before any interpretation
+
+**`docs/observations/2026-09-04-e3-p-cohort.md` says the refusal "carries no `remedy` and no
+executable `next_call`." That is false.** All four `alias-migration-empty-scope` refusals carried
+a complete, executable `next_call` in `structuredContent`, with the corrected globs, the right
+`expect.files: 21`, the arm's own `workspace_root`, and the arm's own `refer_policy` echoed back
+(`preserve-refer` for T-1/T-3, `alias-qualify` for T-2 — the tool got even that right):
+
+```json
+"next_call": {"op":"alias_migration",
+  "from":{"lib":"acid.fanout.store","var":"find-event"},
+  "to":{"lib":"acid.fanout.store2","var":"fetch-event",
+        "alias_policy":["store2","st2","es","store-2"],"refer_policy":"preserve-refer"},
+  "scope":{"paths":["src/**","test/**"]},"expect":{"files":21},
+  "workspace_root":"/home/forge/tmp/arms/e3/e3-P-T-1/worktree"}
+```
+
+T-1 and T-3 said so out loud — *"returned a corrected executable call"*, *"Per its required
+recovery path, I'm sending the returned executable `next_call` once"* — and executed it verbatim
+on the next turn in **3.3 s**. So `docs/vision.md`'s constraint *"every refusal carries a
+next_call the agent can execute unchanged"* **was satisfied**, 2 of 3, and the vision's own
+recovery contract worked as designed. The real defect is narrower: the **`content.text` block**
+renders only the domain sentence (`→ No namespace under scope requires acid.fanout.store`) and
+drops both the remedy and the two fields that distinguish the causes (`found_files: 0`,
+`scanned_files: 0` — the tool has the evidence and mis-narrates it). Only T-2 was fooled: it
+ignored the `next_call`, ran a native `rg`, guessed an absolute path, was refused again, and only
+then used the globs.
+
+**This is the same defect class as E6-Lb's mechanism candidate inb-3e298e ("text content
+header-only"), found the same night on a different square.** One ratchet — *the text block is a
+lossy projection of `structuredContent` and must never omit a field that changes the next call* —
+closes both. That is the strongest cross-experiment finding of the night and it is worth more
+than either cohort's headline.
+
+## 1. Interpretation — five lines
+
+1. **0.36x is a real mechanism, and the mechanism is not site discovery — it is write-payload
+   emission.** Native's discovery is *fast*: one or two `rg` calls, 8–13 s total, and all three
+   native arms had the correct 21-file inventory inside 30 s. What costs 137 s is **typing the
+   patch**: 8,649 / 8,160+8,161 / 9,531 characters of `apply_patch` body, emitted at a
+   near-constant **136.7 / 140.8 / 136.8 chars per second** (CV 1.7% across four independent
+   emissions). Per arm: **63.3 s, 115.9 s, 69.7 s of pure payload emission — mean 83.0 s.** The
+   tool arms emitted 465–593-character JSON requests at 166–174 chars/s: **6.6 / 8.8 / 6.7 s,
+   mean 7.4 s.** The difference is **75.6 s of the 87.7 s wall gap — 86% of it.** Everything else
+   (discovery, `bin/fan-test`, the final message) is the same in both arms. This is not a warm-server
+   artefact: server time was 618–666 ms, 1.3% of the tool arm's wall.
+2. **So the fan-out law is `native payload = N x ~412 chars = ~3.01 s per owner; verb payload =
+   ~550 chars, constant`.** That is a slope with a measured intercept, and it is measurable as a
+   **deterministic character count**, which is immune to the 172 s wall floor. The cohort measured
+   the right thing with the wrong instrument.
+3. **But the slope's magnitude is set by irregularity, not by N.** Rung P has six distinct old
+   aliases (`st db s store repo k`) and a four-way new-alias policy with 30 collisions — a shape
+   `sed` cannot close, so native must emit per-site bytes. On a *regular* fan-out, native's payload
+   collapses to one ~120-character `sed` command and its emission cost goes to ~1 s **at any N**.
+   C1 already measured real repos as alias-uniform. **The product claim square 2 can actually
+   defend is not "fan-out" — it is "fan-out a regex cannot close."** That boundary is measurable
+   tonight and nobody has measured it.
+4. **The 57% says the falsifier was written in the wrong unit.** Refusals are not fungible: T's
+   4-in-7 refusals cost **3.3 s each (~10 s total)**; native's own patch rejection — N-2's `.cljc`
+   extension miss — cost **58.0 s**, a full re-emission, and native's rejection rate was 1 in 4
+   patch submissions (25%). **A 57% refusal rate at 3 s beats a 25% rate at 58 s**, and the
+   pre-registered falsifier "refuses more than 20% of its calls" cannot see that. Refusal *price*
+   (returns x re-emitted payload), not refusal *rate*, is the meter — and it is the same meter as
+   line 1, which is why it is the honest one.
+5. **Clause 1 fails on a two-line bug, and fixing it changes the pass line and nothing else.**
+   Glob-normalising a bare `src` to `src/**` removes all four refusals and one model return per
+   arm — worth ~3 s of 49. **It buys clause 1; it does not buy the square.**
+
+## 2. Four next-wave experiments
+
+Floors quoted and never crossed: wall 172 s at n=3, non-test actions 6.1, acceptance a gate not a
+score (v1, receipt `3e26e1c`). Every pass line below leads with a **count**, not a wall statistic.
+
+---
+
+### O1 — **E-REG: the regularity sweep** (new; the crossover that decides the square)
+
+| | |
+|---|---|
+| **question** | At fixed N=21, how irregular must a fan-out be before native's payload stops collapsing to one `sed`? And: is the pre-call gap *emission* or *thinking*? |
+| **design** | Extend `bench/fanout/gen-fanout.clj` with `--k` = number of distinct old alias bindings across the 21 owners. Cells k=1 (uniform, sed-closable), k=2, k=3, k=6 (rung P as shipped). T and N arms per cell, n=2. Identical prompt, identical N, identical site count — **only regularity varies.** |
+| **pass line (machine-scorable)** | Primary, deterministic, claimable at n=1: **emitted write-payload characters per arm** (sum of `custom_tool_call.input` length for every call whose body contains `Begin Patch`, a `sed`/`perl` rewrite, or an `alias_migration` request). Predicted native: k=1 <= 400 chars; k=6 >= 8,000. **The crossover k* is the smallest k where native payload exceeds 2,000 chars.** Secondary: the pre-call gap in seconds must track payload at 137 +/- 15 chars/s in **every** cell — if the k=1 native gap stays above 30 s at <400 chars, the mechanism is *thinking*, not emission, and line 1 of this poll is withdrawn. Gate: `rescore-FAN.sh <wt> 21` 6/6 in all cells, both arms. |
+| **prediction** | k*=3, **55%** (k*=2, 25%; k*=4+, 20%). Native payload k=1 = **180 +/- 120 chars**, 70%. Emission-rate constant holds within +/-15 chars/s in all eight native cells: **65%**. At k=1, **T loses**: T/N wall 1.0–1.4x, **75%**. |
+| **cost** | `--k` knob + canonical re-derivation ~1 agent-hour (Sol); 16 arm-runs ~50 min wall; one JVM under `flock`. |
+| **runs tonight on** | Branch `bridge/fanout-fixtures-in-git` (local + origin), server `ac1c8409` as already attested. No merge, no new repo. |
+| **one reason it is waste** | If k* turns out to be 2, the answer is "almost every real fan-out", which is too good to believe from a synthetic generator and will be attacked as fixture-shaped. Counter: it is the only experiment here that can *falsify my own mechanism claim* in the k=1 cell, and a mechanism nobody tried to kill is not a finding. |
+
+---
+
+### O2 — **E-SLOPE80: N=80, not N=40** (= the brief's (b), with the rung corrected)
+
+| | |
+|---|---|
+| **question** | Does the gap grow past the floor, and does it grow at the predicted 3.01 s per owner? |
+| **why 80 and not 40** | Arithmetic, decided before the run: predicted gap = 87.7 + 3.01 x (N-21). **At N=40 that is 145 s — inside the 172 s floor, so N=40 is a run that cannot produce a claimable wall number.** Break-even is N=49. **N=80 predicts 266 s, 1.55x the floor.** Targets nest (N=21 subset of N=80) by generator construction, so it is the same files growing. |
+| **pass line** | Primary (floor-free): **native emitted write-payload chars = 33,000 +/- 4,000; tool = 550 +/- 150; ratio >= 40x** — deterministic, claimable at n=1. Secondary (wall, claimable **only** because it is predicted above the floor): T vs N gap **>= 172 s** at n=3 each. Tertiary: **native patch-rejection rate** — 1 of 4 at N=21; a re-emission at N=80 costs ~240 s, so this is where native's variance actually lives. Gate: `rescore-FAN.sh <wt> 80` 6/6 both arms. |
+| **prediction** | char ratio >= 40x: **85%**. Wall gap >= 172 s: **75%**. Native >= 1 patch rejection in 3 arms: **65%**. Native splits into 2+ patch calls (context/output limits): **45%** — and if it does, **that is a finding, not a nuisance**: it is the first evidence of a hard ceiling on native fan-out. |
+| **cost** | Generator already takes `--n`; scorer already takes N as an argument. ~25 min setup; 6 arm-runs, native ~300 s each => **~40 min wall**. |
+| **runs tonight on** | Same branch, same attested server. Nothing merged. |
+| **one reason it is waste** | N=80 with six distinct aliases is further from any real repo than N=21 was, and C1 says real fan-outs are uniform. A 40x char ratio on a fixture nobody would ever hand a human is a **mechanism** result that a product reviewer can dismiss in one line. It only pays if O1 has already located k* on the real side of the crossover — **so O1 outranks it, and if the box can only run one, run O1.** |
+
+---
+
+### O3 — **E-ANCHOR: the real-repo anchor, fix first** (= the brief's (c), re-ordered)
+
+| | |
+|---|---|
+| **question** | Does the verb produce *correct bytes* on the cfp `store -> event-store` shape (170 files)? |
+| **why it must not run as written** | PF-4 already measured the answer to the speed question and to the correctness question. **Correctness: a quoted fully-qualified symbol in data position — `'acid.fanout.store/find-event` — comes back alias-qualified as `'store2/fetch-event`, and `requiring-resolve` of it from outside the defining namespace now fails.** The cfp anchor is *made of* those shapes. Running T vs N today measures a known defect. **Speed: cfp is alias-uniform, so by O1's mechanism native closes it with one `sed` and T loses by construction.** The pre-registration already calls this "the case native should win." So: **build the fix, then run this as a binary correctness gate, and do not report a wall row at all.** |
+| **pass line** | Binary, correctness only: **zero unmigrated or narrowed sites of the two failing shapes** (qualified symbol in binding-vector position; quoted fully-qualified symbol in data position), verified by `requiring-resolve` from a *different* namespace, not by grep; r1–r7 green; **A = 0** native bytes landing after the verb; **B = 0** model returns between the receipt and the first compile. **No wall claim is made or accepted.** |
+| **prediction** | With the fix: T passes correctness **55%**. Without the fix: T **fails, 85%** (PF-4 measured it). T wall >= N on this anchor: **80%** — stated in advance so a loss is not news. |
+| **cost** | Fix (preserve a quoted fully-qualified symbol as fully-qualified; it is a *data* position, not a call site) ~1.5 agent-hours to Sol; anchor scorer ~1 agent-hour; 2 arm-runs ~15 min. Repo present at `/home/forge/src/curtaincall-cfp`. |
+| **runs tonight on** | The fix branch off q5z; anchor cloned to `/home/forge/tmp/arms/anchor`, the working checkout never touched. |
+| **one reason it is waste** | The record already carries **two contradictory sl1-R readings** and this settles the contradiction rather than winning a square — and it costs the night's only substantive build. Counter: a program cannot ship on a contradiction, and this is the single defect on the board that would corrupt a real user's repo. **If it is not fixed, the verb should not be offered on real code, whatever the slope says.** |
+
+---
+
+### O4 — **E-SCOPE: fix the scope refusal, 3 T arms** (= the brief's (a), demoted to a chore)
+
+| | |
+|---|---|
+| **question** | Does clause 1 pass once the bare-directory spelling is accepted? |
+| **honest ranking** | This is **a pass-line repair, not an experiment.** Its expected wall saving is ~3.3 s of 49.3. Rate it last of the four and run it as a 20-minute chore *inside* O1's setup, not as a cohort of its own. |
+| **the fix, three rungs** | (1) glob-normalise: a `scope.paths` entry with no glob metacharacter that names an existing directory is read as `<dir>/**`; (2) **type the two states apart** — `found_files: 0 && scanned_files: 0` is `alias-migration-scope-matched-nothing` (a spelling refusal), `scanned_files > 0 && found_files == 0` is `alias-migration-empty-scope` (the true domain refusal); (3) **the text block must render the remedy** — *"`scope.paths` are globs; `src` matched 0 files; did you mean `src/**`?"* — plus an example test at the request boundary asserting that a bare directory commits and that the two error types are never confused. Rung (3) is the one that also closes E6's inb-3e298e. |
+| **pass line** | **Zero `alias-migration-empty-scope` refusals in 3 T arms; exactly 1 `alias_migration` call per arm, committed** (clause 1 PASS). Deterministic. Plus: the example test fails first, on the current server, with the observed bytes. |
+| **prediction** | Clause 1 passes: **90%.** T wall 46 +/- 6 s. **And the wall gap still does NOT clear the floor**: 91 s against 172 s at n=3, and against ~122 s even if T is pooled to n=6 — **85% confident this experiment does not produce a claimable wall number**, which is precisely why it must not be sold as one. To clear the floor at this gap you need n ~ 14 per arm, or a bigger rung. That is O2's job. |
+| **cost** | Fix + test ~40 min (Sol); 3 arm-runs ~10 min. |
+| **runs tonight on** | q5z tip merged with `origin/main`, same as the cohort. |
+| **one reason it is waste** | It repairs the experiment's scoreboard without moving the product, and a clean 6-of-6 pass line will read as a stronger result than it is. **If it is run, the report must state that the pass came from a two-line spelling fix and that the wall gap is still inside the floor.** |
+
+---
+
+## 3. Rating the brief's four, and the ride-along
+
+| brief item | my rating | why |
+|---|---|---|
+| **(a)** fix scope, re-run 3 T | **4th — a chore, not an experiment** | Clause 1 passes at 90%; wall gap still inside the floor at n=6 (85%). Fold into O1's setup. |
+| **(b)** scale to N=40/80 | **2nd, and N=40 is a dead cell** | Predicted N=40 gap 145 s < 172 s floor. Go straight to N=80 (266 s), and lead with emitted characters, not wall. |
+| **(c)** real-repo anchor | **3rd, and must be re-ordered** | Fix the quoted-symbol narrowing first; then run it as a **correctness gate with no wall row**. Running it today measures a known defect. |
+| **(d)** E3-L boundary control | **not a standalone experiment — it is O1's k=1 cell** | With the mechanism known, its result is now *derivable*: native's payload on a single known-site edit is ~100 chars, ~1 s of emission, so there is nothing for the verb to remove and it must lose by the round-trip. Predicted T/N = **1.05–1.35x, 80%.** Running it separately buys a confirmation of arithmetic. Its one real use — does the 137 chars/s constant hold at the low end — is free inside O1. |
+
+**If the box runs only one thing: O1.** It is the only experiment that can falsify my own mechanism
+claim, it locates the crossover that decides whether square 2 has a product behind it, and it
+makes (b) and (d) fall out as cells rather than cohorts.
+
+## 4. One line for Gene
+
+The tool arm did not win by finding the sites faster — native found them in 30 seconds; it won
+because native had to **type 8,600 characters of patch at 137 characters a second and the verb
+typed 550**, which is 86% of the whole gap and grows about three seconds per additional file —
+so the real question is not how many files, it is **how irregular they are**, because one `sed`
+closes a tidy fan-out at any size.
+
+## 16. E3 next-wave verdict (Fable, 23:01Z)
+
+| question | Sol | Opus | verdict |
+|---|---|---|---|
+| what 0.36× is | candidate signal inside the floor; mechanism real at the meter but wall could be variance | a real mechanism: WRITE-PAYLOAD EMISSION — native types 8–9.5 KB at 137 chars/s (83 s), tool emits 550 chars (7 s) = 86% of the gap; server time 1.3% | Opus's claim is falsifiable with a deterministic meter (chars emitted) — test it |
+| what sets the magnitude | N (site discovery is native's cost) → slope N=40/80 | alias IRREGULARITY k, not N — on a regular fan-out native uses one sed at any N; real repos are alias-uniform (C1) | the disagreement IS the experiment: E-REG (k = 1/2/3/6 at N=21) first, then N=80 |
+| the 57% refusals | the refusal contract failing in front of a successful verb; bare dir must be accepted or clause 1 is unreachable | the record was WRONG: next_call existed in structuredContent, executed 2/3; the text block dropped it; refusal PRICE (3 s) beats native's own patch rejection (58 s) | correction filed; q5z fix retargeted to the text-rendering CLASS ratchet + bare dir |
+| N=40 | part of the slope | a dead cell (gap 145 s < floor) | not run |
+| real-repo anchor | gated on the quoted-symbol fix; 0.59× | must not run as written; correctness gate only, no wall row | after the fix, as a correctness gate |
+| E3-L | 2/3 operational, 1.14× | = E-REG's k=1 cell, derivable | folded into E-REG |
+
+**Launch order:** (1) `--k` knob on the fixture branch (Sonnet, building); (2) the q5z fix (bare dir + text rendering of refusals, building); (3) **E-REG** — N=21, k ∈ {1,2,3,6}, T+N, n=2, primary meter = emitted write-payload chars (floor-free), plus wall and correctness; Opus predicts crossover k*=3 and a tool LOSS at k=1 (T/N 1.0–1.4×) — the result that decides whether square 2 has a product; (4) **E-SLOPE80** — N=80 only, n=3 pairs, does the wall gap clear 172 s (Opus 75%, Sol 65%).
