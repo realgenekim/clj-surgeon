@@ -116,12 +116,21 @@ make_map_rc=$?
 
 # --- 3. this arm's MCP server, bound to THIS worktree (A.5) ------------------------
 SERVER_STARTED=0
+rm -f "$A/server/spawned.pid"
 if [ "$ARM" != "N" ] && [ -n "$SERVER_SRC" ]; then
-  ( cd "$SERVER_SRC" && nohup clojure -X:clj-surgeon/mcp \
+  ( cd "$SERVER_SRC" && exec nohup clojure -X:clj-surgeon/mcp \
       :project-dir "\"$A/worktree\"" :port "$PORT" :telemetry :full \
       :telemetry-dir "\"$A/server/telemetry\"" :run-id "\"$EXP-$RUNG-$ARM-$SLOT\"" \
       :ready-file "\"$A/server/ready.edn\"" :nrepl-port :none \
-      > "$A/server/server.log" 2>&1 & )
+      > "$A/server/server.log" 2>&1 ) &
+  SERVER_PID=$!
+  # RECORD WHAT WE SPAWNED, with its start time, so cleanup can prove authorship.
+  # ready.edn is the SERVER's claim about itself; this file is THIS SCRIPT's record of
+  # what it forked, and only the second warrants a signal.  The start time is what
+  # keeps a reused pid from being mistaken for our server.
+  printf '%s %s\n' "$SERVER_PID" \
+    "$(cut -d')' -f2- "/proc/$SERVER_PID/stat" 2>/dev/null | awk '{print $20}')" \
+    > "$A/server/spawned.pid"
   SERVER_STARTED=1
   for _ in $(seq 1 90); do
     curl -fsS --max-time 3 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break
@@ -131,13 +140,7 @@ fi
 
 stop_server () {
   [ "$SERVER_STARTED" = 1 ] || return 0
-  local pid
-  pid=$(sed -n 's/.*:pid \([0-9][0-9]*\).*/\1/p' "$A/server/ready.edn" 2>/dev/null | head -n1)
-  if [ -n "$pid" ]; then
-    kill "$pid" 2>/dev/null && echo "run-arm: stopped server pid=$pid (started by this script)"
-  else
-    echo "run-arm: WARNING no pid in ready.edn; NOT signalling anything" >&2
-  fi
+  bash "$HERE/stop-server.sh" "$A"
 }
 
 # --- 4. ATTEST BEFORE THE DRIVER STARTS -------------------------------------------
