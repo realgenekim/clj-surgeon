@@ -5,10 +5,19 @@
   executable authority."
   (:require
    [cheshire.core :as json]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.parser :as parser]))
 
 (def ^:private candidate-limit 10)
 (def ^:private dispatch-vocabulary-limit 40)
+
+(def dispatch-vocabulary-character-limit
+  "Published character budget for one bounded dispatch vocabulary.
+
+  A count bound alone is not a bound: forty long dispatch spellings are still
+  kilobytes of refusal evidence."
+  2048)
 (def ^:private available-owner-character-limit 32768)
 
 (defn- normalized-name
@@ -128,7 +137,67 @@
        :omitted 0
        :truncated false})))
 
+(declare presentation-node)
+
+(defn- presentation-children
+  "Collapse every comment and whitespace run between two children to one space."
+  [children]
+  (let [marked (mapv #(if (n/whitespace-or-comment? %) ::gap (presentation-node %))
+                     children)
+        collapsed (mapcat #(if (= ::gap (first %)) [::gap] %)
+                          (partition-by #(= ::gap %) marked))
+        trimmed (->> collapsed
+                     (drop-while #(= ::gap %))
+                     reverse
+                     (drop-while #(= ::gap %))
+                     reverse)]
+    (mapv #(if (= ::gap %) (n/spaces 1) %) trimmed)))
+
+(defn- presentation-node
+  [node]
+  (if (n/inner? node)
+    (n/replace-children node (presentation-children (n/children node)))
+    node))
+
+;; @spec MCP-OP-DISPATCH-004
+(defn- presented-dispatch
+  "One dispatch spelling rendered as a single comment-free line.
+
+  The selector compares parsed dispatch values, not bytes, so dropping a
+  comment and collapsing a line break leaves a spelling the selector still
+  accepts — while a `;;` can no longer comment out the rest of a joined summary
+  line, and no entry can smuggle a newline into bounded evidence."
+  [spelling]
+  (let [text (str spelling)]
+    (try
+      (n/string (presentation-node (parser/parse-string text)))
+      (catch Exception _ text))))
+
+;; @spec MCP-OP-DISPATCH-004
+(defn- bounded-dispatch-vocabulary
+  "Return dispatch spellings inside both the count and the character budget."
+  [dispatches]
+  (loop [remaining dispatches
+         returned []
+         encoded-characters 2]
+    (if-let [dispatch (first remaining)]
+      (let [separator-characters (if (seq returned) 1 0)
+            next-count (+ encoded-characters separator-characters
+                          (count (json/generate-string dispatch)))]
+        (if (and (<= next-count dispatch-vocabulary-character-limit)
+                 (< (count returned) dispatch-vocabulary-limit))
+          (recur (next remaining) (conj returned dispatch) next-count)
+          {:vocabulary returned
+           :returned (count returned)
+           :omitted (count remaining)
+           :truncated true}))
+      {:vocabulary returned
+       :returned (count returned)
+       :omitted 0
+       :truncated false})))
+
 ;; @spec MCP-OP-DISPATCH-002
+;; @spec MCP-OP-DISPATCH-004
 (defn defmethod-owner-evidence
   "Bounded multimethod addressing evidence for one unresolved owner selector.
 
@@ -146,11 +215,15 @@
                                   (= owner-name (str (:name %)))))
                     vec))]
     (when (seq arms)
-      (let [dispatches (->> arms (keep :dispatch) (map str) distinct vec)
-            attempted (some-> remainder str/trim not-empty)
+      (let [dispatches (->> arms
+                            (keep :dispatch)
+                            (map presented-dispatch)
+                            distinct
+                            vec)
+            attempted (some-> remainder str/trim not-empty presented-dispatch)
             matched (some #{attempted} dispatches)
             example (or matched (first dispatches))
-            returned (vec (take dispatch-vocabulary-limit dispatches))]
+            bounded (bounded-dispatch-vocabulary dispatches)]
         (cond-> {:owner-kind "defmethod"
                  :name owner-name
                  :arm-count (count arms)
@@ -158,13 +231,11 @@
                                example (assoc :dispatch example))
                  :owner-form-is-exact (boolean matched)
                  :accepted-by "apply_clojure_changes changes[].forms"
-                 :dispatch-vocabulary returned
+                 :dispatch-vocabulary (:vocabulary bounded)
                  :dispatch-count (count dispatches)
-                 :dispatch-vocabulary-returned (count returned)
-                 :dispatch-vocabulary-omitted (- (count dispatches)
-                                                 (count returned))
-                 :dispatch-vocabulary-truncated (> (count dispatches)
-                                                   dispatch-vocabulary-limit)
+                 :dispatch-vocabulary-returned (:returned bounded)
+                 :dispatch-vocabulary-omitted (:omitted bounded)
+                 :dispatch-vocabulary-truncated (:truncated bounded)
                  :authority false
                  :next-action "send_defmethod_owner_form"}
           attempted (assoc :attempted-dispatch attempted))))))

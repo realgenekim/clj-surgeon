@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
+   [clj-surgeon.owner-hypotheses :as hypotheses]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -374,6 +375,64 @@
                 (str "dispatch values (5/5): \"schedule.locked\","
                      " \"schedule.unlocked\", \"agenda.published\","
                      " \"replay.marked\", \"sink.registered\"")))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(def ^:private noisy-dispatch-arms-source
+  (str "(ns cfp-scheduler-killer.noisy)\n\n"
+       "(defmulti fold-event (fn [_state payload] (:type payload)))\n\n"
+       (apply str
+              (for [index (range 60)]
+                (str "(defmethod fold-event"
+                     " [:conference.schedule/event-with-a-long-qualified-name-"
+                     index "\n"
+                     "                       ;; kept for the 2026 migration\n"
+                     "                       :legacy-arm]\n"
+                     "  [state payload]\n"
+                     "  state)\n\n")))))
+
+(deftest selector-refusal-bounds-dispatch-vocabulary-characters
+  ;; @spec MCP-OP-DISPATCH-004
+  (let [project (temp-dir)
+        _source (write-source! project "src/noisy.clj"
+                               noisy-dispatch-arms-source)
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "owner-probe" "operation" "forms"
+                      "file" "src/noisy.clj"
+                      "forms" ["fold-event"]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error? structured]} (first @calls)
+            summary (first content)
+            owner (:defmethod_owner (first (:selection_failures structured)))
+            vocabulary (:dispatch_vocabulary owner)]
+        (is error?)
+        (is (= 60 (:dispatch_count owner)))
+        (testing "the published vocabulary fits its character budget"
+          (is (<= (count (json/generate-string vocabulary))
+                  hypotheses/dispatch-vocabulary-character-limit))
+          (is (true? (:dispatch_vocabulary_truncated owner)))
+          (is (= (count vocabulary) (:dispatch_vocabulary_returned owner)))
+          (is (= (- 60 (count vocabulary)) (:dispatch_vocabulary_omitted owner))))
+        (testing "no entry can comment out or break the joined summary line"
+          (is (not-any? #(str/includes? % ";;") vocabulary))
+          (is (not-any? #(str/includes? % "\n") vocabulary))
+          (let [line (first (filter #(str/includes? % "dispatch values")
+                                    (str/split-lines summary)))]
+            (is (some? line))
+            (is (not (str/includes? line ";;")))
+            (is (str/includes? line "; truncated"))
+            (is (str/includes?
+                  line
+                  "[:conference.schedule/event-with-a-long-qualified-name-0 :legacy-arm]")))))
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))

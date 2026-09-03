@@ -10,6 +10,13 @@ is cut.
 
 ### Fixed
 
+- A published dispatch vocabulary is now bounded by characters as well as by
+  arm count, and each entry is rendered as one comment-free line. Sixty long
+  dispatch spellings used to produce kilobytes of refusal evidence, and a
+  `;;` inside one commented out the rest of the joined summary line. The
+  selector compares parsed dispatch values, so the rendered spelling is still
+  one the selector accepts.
+
 - `expect_matched` now decides "addressed" from preorder address spans
   rather than pre-image line numbers. Two matched sites on one line used to
   report "all matched sites addressed" when only one of them was edited —

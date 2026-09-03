@@ -1,6 +1,8 @@
 (ns clj-surgeon.owner-hypotheses-test
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.owner-hypotheses :as hypotheses]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (defn- records
@@ -227,3 +229,42 @@
     (is (= :ambiguous-form (:failure-kind failure)))
     (is (= ["\"schedule.locked\"" "\"schedule.unlocked\""]
            (get-in failure [:defmethod-owner :dispatch-vocabulary])))))
+
+;; ---------------------------------------------------------------------------
+;; A dispatch vocabulary bounded only by arm count is not bounded. Sixty long
+;; dispatch spellings carrying their own comments produced kilobytes of refusal
+;; evidence, and a `;;` inside one commented the rest of the line out.
+;; ---------------------------------------------------------------------------
+
+(def ^:private noisy-dispatches
+  (mapv (fn [index]
+          (str "[:conference.schedule/event-with-a-long-qualified-name-" index
+               "\n ;; kept for the 2026 migration\n :legacy-arm]"))
+        (range 60)))
+
+(deftest defmethod-owner-evidence-bounds-dispatch-vocabulary-characters
+  ;; @spec MCP-OP-DISPATCH-004
+  (let [evidence (hypotheses/defmethod-owner-evidence
+                   "fold-event" (fold-arms noisy-dispatches))
+        vocabulary (:dispatch-vocabulary evidence)
+        encoded (json/generate-string vocabulary)]
+    (is (= 60 (:dispatch-count evidence)))
+    (testing "the vocabulary fits its published character budget"
+      (is (<= (count encoded)
+              hypotheses/dispatch-vocabulary-character-limit))
+      (is (true? (:dispatch-vocabulary-truncated evidence)))
+      (is (= (count vocabulary) (:dispatch-vocabulary-returned evidence)))
+      (is (= (- 60 (count vocabulary))
+             (:dispatch-vocabulary-omitted evidence)))
+      (is (pos? (count vocabulary))))
+    (testing "every entry is one comment-free line, so a join cannot mangle it"
+      (is (not-any? #(str/includes? % ";;") vocabulary))
+      (is (not-any? #(str/includes? % "\n") vocabulary))
+      (is (not (str/includes? (str/join ", " vocabulary) ";;")))
+      (is (not (str/includes? (str/join ", " vocabulary) "\n"))))
+    (testing "the exact owner form to send is rendered the same way"
+      (let [dispatch (get-in evidence [:owner-form :dispatch])]
+        (is (not (str/includes? dispatch ";;")))
+        (is (not (str/includes? dispatch "\n")))
+        (is (= "[:conference.schedule/event-with-a-long-qualified-name-0 :legacy-arm]"
+               dispatch))))))
