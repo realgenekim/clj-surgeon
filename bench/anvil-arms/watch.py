@@ -442,6 +442,12 @@ class Tailer:
 # does not prevent another Codex session from existing on a shared box.  There is no
 # mtime rule here and no glob over a shared home: each arm gets a PRIVATE CODEX_HOME
 # and the file must name the session id the driver printed.
+# How much of the driver's own output the BINDING scan reads.  A bound read, because an
+# unbounded one on a chatty driver is its own hazard.  A session id announced past it is
+# not bound -- and the abort says exactly that, rather than claiming silence.
+BANNER_SCAN_BYTES = 65536
+LATE_SCAN_BYTES = 4 * 1024 * 1024       # how far the DIAGNOSTIC looks, after refusing
+
 UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 SESSION_ID_RE = re.compile(r"session[\s_-]*id\s*[:=]?\s*(" + UUID_RE + r")", re.I)
 ROLLOUT_PATH_RE = re.compile(r"(/\S*rollout-[^\s\"'`]*\.jsonl)")
@@ -724,9 +730,29 @@ def main() -> int:
     def driver_banner() -> str:
         try:
             with driver_out_path.open("rb") as handle:
-                return handle.read(65536).decode("utf-8", errors="replace")
+                return handle.read(BANNER_SCAN_BYTES).decode("utf-8", errors="replace")
         except OSError:
             return ""
+
+    def late_session_id() -> tuple[str, int] | None:
+        """A session id the driver DID announce, past the banner scan ceiling.
+
+        Sol round two: an id announced beyond the ceiling failed closed -- correctly --
+        and the abort said "the driver never announced a session id", which is a false
+        statement about a driver that announced one.  The ceiling stays (an unbounded
+        read of a driver's output is its own hazard); the SENTENCE has to be true.  The
+        offset is approximate: it is counted in the decoded text past the ceiling.
+        """
+        try:
+            with driver_out_path.open("rb") as handle:
+                handle.seek(BANNER_SCAN_BYTES)
+                rest = handle.read(LATE_SCAN_BYTES).decode("utf-8", errors="replace")
+        except OSError:
+            return None
+        match = SESSION_ID_RE.search(rest)
+        if not match:
+            return None
+        return match.group(1), BANNER_SCAN_BYTES + match.start(1)
 
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                             stdout=(subprocess.PIPE if args.capture_stdout
@@ -991,9 +1017,22 @@ def main() -> int:
         return 8
 
     if abort_reason in ("rollout-unbound", "rollout-ambiguous"):
-        detail = bind_error or (
-            f"the driver never announced a session id, and no rollout under "
-            f"{codex_home} names one; nothing was metered and nothing was guessed")
+        late = None if bind_error else late_session_id()
+        if bind_error:
+            detail = bind_error
+        elif late is not None:
+            session_id, offset = late
+            detail = (
+                f"the driver announced session {session_id} at about byte {offset} of "
+                f"its own output, past the {BANNER_SCAN_BYTES}-byte banner scan "
+                f"ceiling, so the binding scan never reached it; nothing was metered "
+                f"and nothing was guessed")
+        else:
+            detail = (
+                f"the driver never announced a session id in the first "
+                f"{BANNER_SCAN_BYTES} bytes of its output and none appears after them, "
+                f"and no rollout under {codex_home} names one; nothing was metered and "
+                f"nothing was guessed")
         emit({"kind": "abort", "error_type": abort_reason, "detail": detail,
               "returns": state["returns"]})
         run["abort"] = abort_reason
