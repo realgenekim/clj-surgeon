@@ -622,11 +622,15 @@ echo "== case 19: cleanup signals ONLY the server this invocation spawned =="
 # arm, could make this script signal a process it never started.  A pid is not an
 # identity: pids are reused, so the recorded start time is checked too.
 starttime_of () { cut -d')' -f2 "/proc/$1/stat" 2>/dev/null | awk '{print $20}'; }
+# A spawn record is (pid, start ticks, boot id): start ticks are counted from THIS boot
+# and repeat across reboots, so the boot id is part of the identity (Sol round two,
+# item 8, pinned by case 29).
+BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
 
 # 19a -- a pid this test really started, correctly recorded: it must be stopped
 A19A="$WORK/st-P-T-19a"; mkdir -p "$A19A/server"
 sleep 300 & P19A=$!
-printf '%s %s\n' "$P19A" "$(starttime_of "$P19A")" > "$A19A/server/spawned.pid"
+printf '%s %s %s\n' "$P19A" "$(starttime_of "$P19A")" "$BOOT_ID" > "$A19A/server/spawned.pid"
 printf '{:ok true :pid %s :project-root "%s"}\n' "$P19A" "$A19A" > "$A19A/server/ready.edn"
 bash "$HERE/stop-server.sh" "$A19A" > "$WORK/case19a.out" 2>&1
 want "case19a stop-server rc" 0 "$?"
@@ -654,7 +658,8 @@ kill -9 "$P19B" 2>/dev/null
 # 19c -- the recorded pid is live but its START TIME differs: a REUSED pid, not our server
 A19C="$WORK/st-P-T-19c"; mkdir -p "$A19C/server"
 sleep 300 & P19C=$!
-printf '%s %s\n' "$P19C" "$(( $(starttime_of "$P19C") + 4242 ))" > "$A19C/server/spawned.pid"
+printf '%s %s %s\n' "$P19C" "$(( $(starttime_of "$P19C") + 4242 ))" "$BOOT_ID" \
+  > "$A19C/server/spawned.pid"
 bash "$HERE/stop-server.sh" "$A19C" > "$WORK/case19c.out" 2>&1
 rc19c=$?
 [ "$rc19c" -ne 0 ] && ok "case19c refused (rc $rc19c) on a start-time mismatch" \

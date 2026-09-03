@@ -144,9 +144,13 @@ if [ "$ARM" != "N" ] && [ -n "$SERVER_SRC" ]; then
   # RECORD WHAT WE SPAWNED, with its start time, so cleanup can prove authorship.
   # ready.edn is the SERVER's claim about itself; this file is THIS SCRIPT's record of
   # what it forked, and only the second warrants a signal.  The start time is what
-  # keeps a reused pid from being mistaken for our server.
-  printf '%s %s\n' "$SERVER_PID" \
+  # keeps a reused pid from being mistaken for our server -- within one boot; the boot
+  # id is what keeps a pre-reboot record from being mistaken for anything at all.
+  # pid, start ticks, and the BOOT ID those ticks are counted from: start ticks repeat
+  # across reboots, and an arm directory on disk outlives a boot (Sol round two, item 8).
+  printf '%s %s %s\n' "$SERVER_PID" \
     "$(cut -d')' -f2- "/proc/$SERVER_PID/stat" 2>/dev/null | awk '{print $20}')" \
+    "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" \
     > "$A/server/spawned.pid"
   SERVER_STARTED=1
   for _ in $(seq 1 90); do
