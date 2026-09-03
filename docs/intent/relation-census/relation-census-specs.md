@@ -41,6 +41,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-017**: When clj-surgeon reads a scanned source, it shall test that source for `defmethod` arms as it is read and shall retain the text only of the sources that define arms; it shall refuse a requested source larger than `max-source-bytes` with a typed reason naming the file, its size, and the cap, before reading it; and if any `Throwable` escapes the census, clj-surgeon shall publish a typed refusal — `census-resource-exhausted` for a runtime resource failure and `census-adapter-failure` otherwise — carrying an executable narrower `next_call` and no counts.
 
+- [x] **MCP-OP-CENSUS-018**: When clj-surgeon discovers the files to census, it shall walk the workspace without following symbolic links, shall prune a skipped directory before reading it, shall stop the walk once the scanned-file cap is reached, and shall skip and count in `skipped_outside_root` every discovered path whose real location escapes the workspace root rather than refusing the census.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |

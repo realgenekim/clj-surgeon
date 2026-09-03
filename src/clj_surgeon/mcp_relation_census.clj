@@ -15,10 +15,10 @@
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.relation-census :as census]
-   [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
-   (java.nio.file Files Path)))
+   (java.nio.file FileVisitResult Files LinkOption Path SimpleFileVisitor)
+   (java.nio.file.attribute BasicFileAttributes)))
 
 (def max-scanned-files census/max-scanned-files)
 (def max-source-bytes census/max-source-bytes)
@@ -196,24 +196,61 @@
   #{".git" "node_modules" "target" ".cpcache" ".clj-kondo" ".lsp" ".shadow-cljs"
     ".calva" "out" "dist" ".idea"})
 
+(defn- source-name?
+  [^Path path]
+  (boolean (re-find #"\.clj[cs]?$" (str (.getFileName path)))))
+
+(defn- escapes-root?
+  "Does this entry's real location lie outside the canonical root?"
+  [^Path root ^Path path]
+  (try
+    (not (.startsWith (.toRealPath path (make-array LinkOption 0)) root))
+    (catch Throwable _ true)))
+
+;; @spec MCP-OP-CENSUS-018
 (defn- candidate-files
-  "Project-relative Clojure sources under one canonical root, bounded."
-  [root]
-  (let [root-file (io/file (str root))
-        prefix (inc (count (.getPath root-file)))]
-    (->> (file-seq root-file)
-         (remove (fn [f]
-                   (some skipped-directories
-                         (str/split (subs (.getPath f)
-                                          (min prefix (count (.getPath f))))
-                                    #"/"))))
-         (filter #(.isFile ^java.io.File %))
-         (filter #(re-find #"\.clj[cs]?$" (.getName ^java.io.File %)))
-         (filter #(<= (.length ^java.io.File %) max-source-bytes))
-         (map #(subs (.getPath ^java.io.File %) prefix))
-         sort
-         (take max-scanned-files)
-         vec)))
+  "Project-relative Clojure sources under one canonical root, bounded.
+
+   Walks with `Files/walkFileTree` and no `FOLLOW_LINKS`, so a symlinked
+   directory is never descended: `dev/checkouts/foo -> ../../foo` costs one
+   counted skip instead of refusing the whole census. Skip-directories are
+   pruned before they are read rather than filtered out of the result, and the
+   file cap terminates the walk rather than truncating it afterwards."
+  [^Path root]
+  (let [found (java.util.ArrayList.)
+        skipped (atom 0)
+        visitor
+        (proxy [SimpleFileVisitor] []
+          (preVisitDirectory [dir _attrs]
+            (let [^Path dir dir]
+              (if (and (not (.equals dir root))
+                       (contains? skipped-directories (str (.getFileName dir))))
+                FileVisitResult/SKIP_SUBTREE
+                FileVisitResult/CONTINUE)))
+          (visitFile [path attrs]
+            (let [^Path path path
+                  ^BasicFileAttributes attrs attrs]
+              (cond
+                (>= (.size found) census/max-scanned-files)
+                FileVisitResult/TERMINATE
+
+                (and (.isRegularFile attrs)
+                     (source-name? path)
+                     (<= (.size attrs) census/max-source-bytes))
+                (do (if (escapes-root? root path)
+                      (swap! skipped inc)
+                      (.add found (str (.relativize root path))))
+                    FileVisitResult/CONTINUE)
+
+                (and (.isSymbolicLink attrs) (escapes-root? root path))
+                (do (swap! skipped inc)
+                    FileVisitResult/CONTINUE)
+
+                :else FileVisitResult/CONTINUE)))
+          (visitFileFailed [_path _error] FileVisitResult/CONTINUE))]
+    (Files/walkFileTree root #{} Integer/MAX_VALUE visitor)
+    {:files (vec (sort found))
+     :skipped-outside-root @skipped}))
 
 ;; @spec MCP-OP-CENSUS-017
 (defn collect-inputs
@@ -308,7 +345,7 @@
 
 ;; @spec MCP-OP-CENSUS-013
 (defn- build-receipt
-  [{:keys [merged pool-size requested-pool phases scanned]}]
+  [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root]}]
   (let [counts (:counts merged)
         sites (:all-sites merged)]
     (bound-receipt
@@ -323,6 +360,8 @@
              :sites (:sites merged)
              :outside_arms (:outside-arms merged)
              :files_scanned scanned
+             :skipped_outside_root (when (pos? (or skipped-outside-root 0))
+                                     skipped-outside-root)
              :counts counts
              :by_file (into {}
                             (take max-listed-files
@@ -374,7 +413,9 @@
         canonical (.toString root)
         t0 (System/nanoTime)
         requested (when (seq files) (mapv str files))
-        scanned (or requested (candidate-files root))
+        discovered (when-not requested (candidate-files root))
+        scanned (or requested (:files discovered))
+        skipped-outside-root (:skipped-outside-root discovered 0)
         loaded (collect-inputs root scanned {})]
     (cond
       (:refusal loaded)
@@ -406,8 +447,10 @@
                    {:tool "relation_census"
                     :workspace_root canonical
                     :files (vec (take max-listed-files scanned))}
-                   {:files_scanned (count scanned)
-                    :scanned (vec (take max-listed-files scanned))})
+                   (cond-> {:files_scanned (count scanned)
+                            :scanned (vec (take max-listed-files scanned))}
+                     (pos? skipped-outside-root)
+                     (assoc :skipped_outside_root skipped-outside-root)))
           (let [declared (reduce into #{}
                                  (map #(:declared (census/census-file
                                                     (select-keys % [:file :source])))
@@ -442,6 +485,7 @@
                      :pool-size pool-size
                      :requested-pool requested-pool
                      :scanned (count scanned)
+                     :skipped-outside-root skipped-outside-root
                      :phases (-> {:discover (/ (- t1 t0) 1e6)
                                   :parse (/ (- t2 t1) 1e6)}
                                  (assoc :classify (get-in planned [:phases :classify])

@@ -285,3 +285,38 @@
       (let [result (run {:files [fixture]})]
         (is (false? (:ok result)))
         (is (= "census-adapter-failure" (:error_type result)))))))
+
+(def ^:private arm-source
+  "(defmethod fold-event \"e\" [state event]\n  (update state :xs conj (:x event)))\n")
+
+(defn- spit-file!
+  [file text]
+  (.mkdirs (.getParentFile ^java.io.File file))
+  (spit file text))
+
+;; @spec MCP-OP-CENSUS-018
+(deftest discovery-prunes-skipped-directories-and-skips-escaping-paths
+  (let [parent (temp-dir)
+        root (io/file parent "project")
+        outside (io/file parent "outside")]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      ;; arms inside a skipped directory: the walk must never descend here
+      (spit-file! (io/file root ".git/hooks/folds.clj") arm-source)
+      ;; the shape that made the tool unusable: dev/checkouts/foo -> ../../outside
+      (spit-file! (io/file outside "src/other/folds.clj") arm-source)
+      (.mkdirs (io/file root "dev/checkouts"))
+      (Files/createSymbolicLink (.toPath (io/file root "dev/checkouts/foo"))
+                                (.toPath outside)
+                                (make-array FileAttribute 0))
+      (let [result (census-tool/execute-request!
+                     {:project-root (.getPath root)} {})]
+        (is (true? (:ok result)) (str "census refused: " (:error result)))
+        (is (= 1 (:files result)))
+        (is (= ["src/app/folds.clj"] (vec (keys (:by_file result))))
+            "the .git arms were never visited and the symlink was never followed")
+        (is (= 1 (:files_scanned result)))
+        (is (= 1 (:skipped_outside_root result))
+            "the escaping path is counted, not fatal")
+        (is (= 1 (get-in result [:counts :raw]))))
+      (finally (delete-tree! parent)))))
