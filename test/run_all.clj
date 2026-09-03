@@ -34,6 +34,7 @@
    [clj-surgeon.partition-all-test]
    [clj-surgeon.platform-selector-test]
    [clj-surgeon.quoted-var-refs-test]
+   [clj-surgeon.read-hook-test]
    [clj-surgeon.recovery-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
@@ -78,6 +79,7 @@
                    'clj-surgeon.partition-all-test
                    'clj-surgeon.platform-selector-test
                    'clj-surgeon.quoted-var-refs-test
+                   'clj-surgeon.read-hook-test
                    'clj-surgeon.xray-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test

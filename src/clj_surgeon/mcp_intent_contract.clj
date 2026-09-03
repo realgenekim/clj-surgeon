@@ -113,7 +113,9 @@
           (io/file root
                    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md")
           (io/file root
-                   "docs/intent/shell-argv-safety/shell-argv-safety-specs.md")]]
+                   "docs/intent/shell-argv-safety/shell-argv-safety-specs.md")
+          (io/file root
+                   "docs/intent/read-hook/read-hook-specs.md")]]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources
