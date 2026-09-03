@@ -551,6 +551,46 @@ sys.exit(1 if fails else 0)
 PY17B
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 18: the cohort STOPS on the first refused arm =="
+# Sol, item 10: the loop recorded failure and never broke.  Executed at n=1: T emitted
+# ATTEST-MISMATCH, then N launched anyway and wrote a receipt.  An arm-run is the scarce
+# resource this whole apparatus exists to protect; spending the rest of a cohort after
+# the instrument has already refused once is spending it on evidence nobody may cite.
+C18="$WORK/cohort18"
+bash "$HERE/run-cohort.sh" --root "$C18" --exp st --rung P --arms N,T --n 1 \
+     --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+     --driver fake --fixture pf5 --worktree-src "$BASE_REPO" \
+     --base 0000000000000000000000000000000000000000 > "$WORK/case18.out" 2>&1
+rc18=$?
+[ "$rc18" -ne 0 ] && ok "case18 cohort rc = $rc18 (nonzero)" \
+  || bad "case18 cohort exited 0 after an arm was refused"
+grep -q 'COHORT-ABORT' "$WORK/case18.out" \
+  && ok "case18 typed abort: $(grep -m1 'COHORT-ABORT' "$WORK/case18.out")" \
+  || { bad "case18 no COHORT-ABORT line"; cat "$WORK/case18.out"; }
+[ -s "$C18/st-P-N-1/ATTEST-MISMATCH" ] \
+  && ok "case18 the first arm did refuse (the premise of the test)" \
+  || bad "case18 the first arm did NOT refuse — the test proves nothing"
+[ -e "$C18/st-P-T-1" ] \
+  && bad "case18 the next arm launched after a refusal: $(ls "$C18/st-P-T-1")" \
+  || ok "case18 no arm ran after the refusal"
+
+echo "== case 18b: a cohort of n<1 is refused, not silently empty =="
+# Sol, item 10, second half: n=0 exited SUCCESSFULLY with an empty cohort -- a green
+# receipt over zero evidence, which is the verdict-label-was-a-noun defect again.
+C18B="$WORK/cohort18b"
+bash "$HERE/run-cohort.sh" --root "$C18B" --exp st --rung P --arms N,T --n 0 \
+     --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+     --dry-run > "$WORK/case18b.out" 2>&1
+want "case18b n=0 rc" 64 "$?"
+grep -q 'run-cohort: --n' "$WORK/case18b.out" \
+  && ok "case18b typed refusal of n=0" || { bad "case18b n=0 was accepted"; cat "$WORK/case18b.out"; }
+for bad_n in -1 abc 1.5; do
+  bash "$HERE/run-cohort.sh" --root "$C18B" --exp st --rung P --arms N,T --n "$bad_n" \
+       --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+       --dry-run > "$WORK/case18b-$bad_n.out" 2>&1
+  want "case18b n=$bad_n rc" 64 "$?"
+done
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
