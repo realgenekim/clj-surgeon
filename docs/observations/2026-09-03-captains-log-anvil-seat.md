@@ -219,3 +219,28 @@ Inbox brought current from this seat: inb-a0f37e, d8a635, 06d376, ace545, 11a6ae
 3a9818 (fold-diff not ready for the production run until its fix round + re-review), c973d2; S9 filed as
 inb-0817fe. The session's MCP binding to 7888 gets fixed by one restart from the connector directory when
 the lanes are at a safe point; the mayor will not restart me from outside while six agents are live.
+
+## 03:39Z — study-ops security round complete (232af3e…212b045, 14 commits on 8a52931), every item red-first
+
+Item by item, witnessed on the pre-fix bytes: `#=(spit …)` had been written for ALL THREE build-file kinds
+(deps.edn, bb.edn, project.clj) — now none; the symlink-out-of-root and the `:paths` decoy both left the
+tree (5 → 1 files); the 3000-file tree went from "ok, 3000 outlined, 47 returned, 386 ms" to "refused
+`study-tree-too-large`, 0 outlined, 86 ms" (discovery split from outlining; claypoole bounded map on the
+JVM entrance only — babashka cannot load claypoole's classes and `make test-fast` runs on bb, so the kernel
+takes the mapping strategy as an argument; same shape the census branch reached independently);
+`study-oversized` and `ls-tree-refusal` no longer hand back the call just made; `source_character_count`
+real (23,811 where it said 0), cycles and the envelope budgeted, single-form deps bounded; the text total
+line agrees with the receipt under truncation; `bound-rows` charges the array's own characters (red at
+limit 36); `format "EDN"` and `formatt` refuse typed server-side; `run-ls-tree` renamed and golden'd with
+an error path; `rg --version` once; `mcp-serve-benchmark` honours MCP_PORT (a no-op assertion in the
+heap self-test corrected on the way); a parity witness compares the CLI text against a max-limit MCP
+`text` receipt. Specs STUDY-013..019. Suites: test-fast 723/5990 (baseline five), mcp JVM 404/5224
+(baseline one), oracle PASS on the branch. Flagged for the re-review: refusal messages still carry a
+host-absolute dir (inherited from `no-clojure-files`; STUDY-006 says none); `invalid-grep-pattern`'s
+continuation still carries the rejected pattern; the real character count now refuses study requests on
+files over 65,536 chars (honest, and reachable here); `forms/find-config-file` still walks to `/` and
+SCI-evaluates (fence, untouched). Lock note from the builder: `~/tmp/suite.lock` is contended by ~4 agents;
+one lock-wait timeout killed a command mid-swap and left `study.clj` at HEAD for ten minutes before the
+builder noticed and restored it — a hazard of file-swap witnesses under contention; later swaps used a
+bounded inner timeout with guaranteed restore. My full suites queued; push → re-review → queue.
+
