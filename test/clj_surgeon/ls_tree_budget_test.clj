@@ -1169,6 +1169,45 @@
                  (pr-str (:limit r))))))))
 
 ;; @spec MCP-OP-MEM-003
+(deftest a-manifest-row-through-a-symlinked-DIRECTORY-is-refused-not-read
+  ;; Round four's item 2. The lexical boundary refuses what discovery can
+  ;; never produce — an absolute row, a `..` escape — and defers to discovery
+  ;; on the rest. But a row with a symlinked DIRECTORY component is ALSO a
+  ;; shape discovery can never produce: `find` with no `-L` lists a symlinked
+  ;; `.clj` FILE and never descends a symlinked directory (measured on this
+  ;; branch, both halves). A purely lexical check passed it, and the serve
+  ;; path read and encoded a file outside the root under a valid cursor with
+  ;; no refusal — round three's item-3 outcome through a different spelling,
+  ;; and a row the branch's own EARS requirement says must refuse.
+  (with-outside-file [outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-confine-linkdir"]
+      (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+            cursor-id (:cursor-id (budget/parse-cursor (cursor-of page-1)))
+            row "src/linkdir/secret.clj"]
+        ;; Created AFTER page 1: the pinned manifest is the plain tree, and
+        ;; this row is reachable only by rewriting the manifest — the same
+        ;; tamper-only class as the `..` and absolute rows above.
+        (fs/create-sym-link (str dir "/src/linkdir") outside)
+        (is (fs/readable? (str dir "/" row))
+            "the row names a readable file, so a refusal is the guard's doing")
+        (let [cursor (repin-row! dir cursor-id 6
+                                 {:p row :h (snapshot/content-digest secret)}
+                                 5)
+              r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                   :cursor cursor})]
+          (is (map? r)
+              (str "a row whose PARENT resolves outside the pinned root must "
+                   "REFUSE; served instead: " (pr-str (entry-files r))))
+          (is (= :unconfined-manifest-row (:error-type r))
+              (str "expected a typed refusal naming the manifest row, got "
+                   (pr-str (:error-type r))))
+          (is (not (str/includes? (pr-str r) "leaked.secret"))
+              "content from outside the scan root is never encoded")
+          (is (str/includes? (pr-str (:limit r)) row)
+              (str "and the refusal NAMES the offending row path; got "
+                   (pr-str (:limit r)))))))))
+
+;; @spec MCP-OP-MEM-003
 (deftest a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered
   ;; The confinement boundary is LEXICAL and deliberately does NOT resolve
   ;; symlinks. Measured on this branch: `discover-projects` follows a
