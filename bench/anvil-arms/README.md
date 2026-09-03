@@ -8,21 +8,21 @@ The apparatus that
 > no → write them FIRST. **A cohort without a meter is a rumour.**
 
 Nothing here has run a live arm. It has been proved end to end against a fake
-driver (`make anvil-arms-self-test`, 55 assertions, ~11 s).
+driver (`make anvil-arms-self-test`, 32 cases / 278 assertions, ~50 s).
 
 ## The pieces
 
 | file | spec | what it does |
 |---|---|---|
 | `attest.sh` + `_attest_write.py` | A.4 | writes `attest.json` / `attest.edn` **before** any driver starts; exits 2 with `ATTEST-MISMATCH` on any fail-closed condition |
-| `watch.py` | A.10 | wraps the driver, tails its JSONL, writes `watch.jsonl` (one record per model return and per tool call) and `run.json`; aborts typed on zero returns |
-| `score.py` | A.7 + A.10 | predicates over `rollout.jsonl` + `watch.jsonl` → `receipt.json` + `receipt.md`; computed counts only |
+| `watch.py` | A.10 | wraps the driver, tails its JSONL **bound to one inode**, writes `watch.jsonl` (one record per model return and per tool call) and `run.json`; typed aborts on zero returns, an unresolvable make target, a rotated rollout, and an unbound session; records the driver's descendants from `/proc` and reports `orphans_after_reap` as a computed number |
+| `score.py` | A.7 + A.10 | predicates over `rollout.jsonl` + `watch.jsonl` → `receipt.json` + `receipt.md`; computed counts only, and **no receipt at all** from a stream that does not validate or a run the watcher aborted |
 | `run-arm.sh` | B.6 §5 | one arm-run: attest → watch(driver) → freeze diff → score |
 | `run-cohort.sh` | B.3 / C.4 | n slots per arm, serial, **mirrored order** |
-| `stop-server.sh` | A.5 | stops **only** the server this arm-run spawned, by recorded pid **and** recorded start time |
-| `_make_targets.py` | A.10 | resolves the worktree's Make targets with `make -n` at attest time, so a test runner behind `make verify` is metered as one |
+| `stop-server.sh` | A.5 | stops **only** the server this arm-run spawned, by recorded pid, recorded start time **and** recorded boot id |
+| `_make_targets.py` | A.10 | resolves the worktree's Make targets by **parsing the Makefile as text** at attest time — nothing is executed — so a test runner behind `make verify` is metered as one, and a target it cannot resolve is refused rather than guessed |
 | `fake-driver.sh` | PF-5 | a synthetic rollout, so the chain is provable with no arm-run budget |
-| `self-test.sh` | PF-5 | 21 cases / 162 assertions; `make anvil-arms-self-test` |
+| `self-test.sh` | PF-5 | 32 cases / 278 assertions; `make anvil-arms-self-test`, which honours `COHORT_PORTS` and refuses at preflight if a named port is held |
 | `prompts/` | B.4 | the four E3 arm prompts, extracted from the doc, hashed |
 
 ## The prompts are not typed by hand
@@ -42,6 +42,10 @@ Installed hashes (`prompts/MANIFEST.sha256`):
 e834f3d2ec28faa82430d8545489d0449f37d21093e479ae2e5b8b0dcfc2ff18  E3-L-N.md
 6f81be22f3027cb7fa99eae4c86591ed14ea888c4be4c67017ed53ef473861f2  E3-L-T.md
 ```
+
+`MANIFEST.sha256` also carries the sha256 of the **governing prose** of A.8, the
+`## B.4` parent paragraph, and B.4.1-B.4.4 — so a doc edit that changes what the
+prompts MEAN fails `--check` even when every prompt byte is identical.
 
 E6's two prompts (C.5) are **not** installed: rung Lb has to be built first
 (C.2/C.7 step 1, "deletions only"), and building it is part of E6's own pre-flight.
@@ -67,25 +71,42 @@ bash bench/anvil-arms/run-cohort.sh \
   --worktree-src /home/forge/acid/fanout/repo-21
 ```
 
-Exit codes worth knowing: `run-arm.sh` 2 = attestation refused, or `--root` outside
-`/home/forge/tmp/arms` (no driver ran); `watch.py` 4 = zero returns, 5 = idle or wall
-cap, 6 = incomplete run (a tool call whose result never arrived), 7 = the rollout
-could not be bound to the driver's own announced session; `score.py` 2 = no
-attestation or `attest_ok=false`, 3 = missing / empty / **invalid** rollout or watch
-stream — **and no receipt is written, and any stale one is deleted**;
-`run-cohort.sh` 64 = `--n` is not a positive integer, and it stops on the first
-refused arm with a `COHORT-ABORT` line.
+Exit codes worth knowing: `run-arm.sh` 2 = attestation refused, `--root` outside
+`/home/forge/tmp/arms`, or `IDENTITY-REFUSED` on an exp/rung/arm/slot component that
+is not `[A-Za-z0-9._-]{1,40}` (no driver ran, and nothing was created); `watch.py`
+4 = zero returns, 5 = idle or wall cap, 6 = incomplete run (a tool call whose result
+never arrived, **or** a `make` goal the attest-time map does not resolve), 7 = the
+rollout could not be bound to the driver's own announced session, 8 = the bound
+rollout was **rotated** — replaced or truncated — while the run was being metered;
+`score.py` 2 = no attestation or `attest_ok=false`, 3 = missing / empty / **invalid**
+rollout or watch stream, an unterminated watch stream, or **any** watcher abort —
+**and no receipt is written, and any stale one is deleted**; `run-cohort.sh` 64 =
+`--n` is not a positive integer, and it stops on the first refused arm with a
+`COHORT-ABORT` line.
 
 ## Boundaries this code enforces, not merely documents
 
-- A tool/free-choice arm's port must be one of `7907 7908 7909 7910`. `run-arm.sh`
-  refuses anything else *before* anything is contacted, so 7888 / 7894 / 7895 / 7906
-  are unreachable by construction, not by care.
+- A tool/free-choice arm's port must be one of `COHORT_PORTS` (default
+  `7907 7908 7909 7910`). `run-arm.sh` refuses anything else *before* anything is
+  contacted, so 7888 / 7894 / 7895 / 7906 are unreachable by construction, not by
+  care. `self-test.sh` honours a caller's `COHORT_PORTS` and refuses at preflight —
+  before creating anything — if any port it was given is already held.
+- Every identity component is a path segment, so each is validated and the resolved
+  arm directory must itself lie inside the validated runner root. Confining the root
+  and then building the path from unchecked caller strings confines nothing.
+- The attestation never executes the repository it is attesting. `_make_targets.py`
+  parses the Makefile as text; `make -n` still *parses*, and a parse runs `$(shell …)`
+  and any recipe line prefixed `+`.
 - `ss -ltn` **lists**; it never connects. Ports outside the cohort range are recorded
   in `listeners_observed` and are never a reason to refuse a native arm — otherwise
   another seat's live server would make every native control impossible.
-- Only a server pid this script wrote into `ready.edn` is ever signalled. No pid,
-  no signal, and a warning instead.
+- Only a server this script spawned is ever signalled, and only on a full identity
+  match: pid, `/proc` start ticks, **and** the boot id those ticks are counted from.
+  No record, no match, no signal — and a typed refusal instead.
+- An aborted arm leaves no working processes behind. The watcher walks `/proc` every
+  second while the driver lives, remembers every descendant with its start time, and
+  reaps the process group *and* each recorded pid — so a descendant that called
+  `setsid` is caught too. `orphans_after_reap` is a final scan of that set, computed.
 - `diff.patch` is frozen with a plain `git diff <base>` (never a negative pathspec:
   `git add -A -- . ":!.cpcache"` is the shell trap that cost this program every FAN
   diff), and a non-zero rc writes `DIFF-FAILED rc=<n>` into `driver.log` rather than
@@ -157,7 +178,16 @@ carries `n` (return ordinal) and `seq` (call ordinal) so order is recoverable.
   stream aborts instead of producing two "independent" witnesses that agree because
   they were derived from the same corrupted bytes.
 - Score a run whose last action has no outcome. A tool call whose result never
-  arrived is `incomplete-run`: typed, nonzero, no receipt.
+  arrived is `incomplete-run`: typed, nonzero, no receipt. So is a `make` goal the
+  attest-time map does not resolve — what it RAN is unknown, and unknown is not the
+  same as "one more non-test action", which is the exact quantity E3's pass line is
+  stated in.
+- Score a run the meter gave up on. **Any** watcher abort — idle stop, wall cap,
+  rotated rollout, zero returns — is exit 3 with no receipt. `run.json` keeps the
+  abort as the terminal fact about that arm, which is the whole answer it has.
+- Score a stream whose ending nobody witnessed. The final `end` record carrying the
+  driver's exit status and the run's wall is required: without it, a receipt's
+  `wall_s` is a number about a moment the meter never observed.
 - Leave the previous answer standing. Every abort **deletes** `receipt.json` and
   `receipt.md`; a refusal that leaves a stale receipt in the directory is not a
   refusal.

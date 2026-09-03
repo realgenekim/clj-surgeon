@@ -36,6 +36,20 @@
 #  19  cleanup signals only the pid this invocation spawned, start time verified
 #  20  every write path is confined to the runner root and the worktree
 #  21  item 7's PASS behaviours, kept as standing witnesses
+#
+# Cases 22-32 are the repairs for Sol's SECOND executed review of 2026-09-03
+# (/home/forge/tmp/sol/arms2-sol-review.md, NO-GO, 10 items), each written RED first:
+#  22  the make map is a STATIC PARSE: attest never executes the arm's Makefile
+#  23  a rollout replaced mid-run is a typed abort, never a split-brain receipt
+#  24  ANY watcher abort refuses at score time -- no receipt, ever
+#  25  a watch stream with no final `end` (rc + wall) is unterminated, not scoreable
+#  26  a descendant that leaves the PGID via setsid is reaped, and orphans are COUNTED
+#  27  a Make target the map does not resolve makes the run incomplete-run
+#  28  the B.4 PARENT paragraph is part of the hashed source contract
+#  29  a spawn record is (pid, start ticks, BOOT ID)
+#  30  every identity component is validated before it becomes a path segment
+#  31  the self-test honours the CALLER's COHORT_PORTS
+#  32  a session id past the scan ceiling fails closed AND says so truthfully
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
