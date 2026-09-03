@@ -455,11 +455,13 @@
                        (:max_files params) (assoc :max_files (:max_files params)))
                      overrides)})
 
+;; @spec MCP-OP-STUDY-019
 (def ^:private ls-tree-formats
   "The complete `format` vocabulary. The ls-tree branch skips
   `validate-inspect-params`, so this is checked here or nowhere."
   #{"names" "text" "edn"})
 
+;; @spec MCP-OP-STUDY-019
 (def ^:private ls-tree-fields
   "The complete ls-tree parameter vocabulary, checked server-side. The JSON
   schema declares `additionalProperties false`, but a schema is a contract

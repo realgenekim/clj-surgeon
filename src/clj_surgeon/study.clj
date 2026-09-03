@@ -119,6 +119,7 @@
                     (or (:source-paths m) ["src"]))
     ["src"]))
 
+;; @spec MCP-OP-STUDY-013
 (defn- read-build-file
   "Pure: read one build file's content WITHOUT evaluating anything in it.
 
@@ -138,6 +139,7 @@
       (read-string source))
     (edn/read-string source)))
 
+;; @spec MCP-OP-STUDY-013
 (defn- extract-source-paths
   "I/O wrapper: read a build file and return its source paths."
   [build-file]
