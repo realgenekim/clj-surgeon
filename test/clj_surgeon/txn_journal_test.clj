@@ -853,6 +853,69 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-006
+(deftest a-committed-journal-whose-lease-cannot-be-read-is-not-evictable
+  (testing "Opus round 2, blocker 2: the retention refcount FAILED OPEN. A
+            missing lease defaulted to `:receipt-refs 0` / `:evictable true`,
+            so deleting one file by hand let a quota sweep destroy the
+            pre-images and the committed receipt became permanently
+            un-undoable. An unknown refcount is not zero."
+    (let [ws (workspace! "lease-unreadable" 2)
+          path (first (sort (:paths ws)))]
+      (try
+        (let [h0 (bytes-of path)
+              txn (begin! ws {})
+              _ (record-scope! txn (:paths ws))
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn path)
+              _ (journal/stage! txn path "(ns f0) (def v :new)\n")
+              receipt (journal/commit! txn)
+              txid (:txid receipt)
+              opts {:state-home (:state-home ws)}
+              dir (transaction-dir ws txid)]
+          (is (:ok receipt))
+          (Files/deleteIfExists (.toPath (io/file dir "lease.edn")))
+
+          (let [row (first (filter #(= txid (:txid %))
+                                   (journal/retained-transactions (:root ws) opts)))]
+            (is (= :unreadable (:lease row))
+                "the sweep's own listing says the refcount could not be read")
+            (is (= 1 (:receipt-refs row)) "an unknown refcount is not zero")
+            (is (false? (:evictable row))))
+
+          (let [refused (journal/evict! (:root ws) txid opts)]
+            (is (false? (:ok refused)))
+            (is (= :txn-lease-unreadable (:error-type refused)))
+            (is (= :unreadable (:lease refused)) "the receipt names why")
+            (is (some? (:next_call refused))))
+          (is (= 1 (count (.listFiles (io/file dir "objects"))))
+              "the pre-image a refused eviction must not destroy is still there")
+
+          (let [undone (journal/undo! (:root ws) txid opts)]
+            (is (:ok undone))
+            (is (= h0 (bytes-of path))
+                "and the receipt is still undoable, which is the whole point"))
+
+          (spit (io/file dir "lease.edn") "{:txid ")
+          (is (= :txn-lease-unreadable
+                 (:error-type (journal/evict! (:root ws) txid opts)))
+              "an UNPARSABLE lease is the same unknown as a missing one")
+
+          (let [without (journal/forget! (:root ws) txid opts)]
+            (is (false? (:ok without))
+                "even a deliberate forget! refuses while the refcount is unknown")
+            (is (= :txn-lease-unreadable (:error-type without))))
+
+          (let [with-receipt (journal/forget! (:root ws) txid
+                                              (assoc opts :receipt receipt))]
+            (is (:ok with-receipt)
+                "a caller that PRESENTS the commit receipt may forget it")
+            (is (not (.exists dir))))
+
+          (is (false? (:ok (journal/undo! (:root ws) txid opts)))
+              "and afterwards undo! says it cannot rather than pretending"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-006
 ;; @spec MCP-OP-MEM-013
 (deftest a-failed-restoration-keeps-its-journal-and-refuses-eviction
   (testing "the second half of Sol's blocker: a failed rollback deleted the only

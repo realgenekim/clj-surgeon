@@ -1243,6 +1243,25 @@
   ^File [workspace-root txid state-home]
   (io/file (transactions-dir workspace-root state-home) txid))
 
+(defn- read-lease
+  "The lease of a retained journal, or the fail-CLOSED stand-in for one that
+   cannot be read.
+
+   `(:receipt-refs lease 0)` and `(:evictable lease true)` defaulted a journal
+   whose lease was missing to \"nobody holds it, sweep it\" - so deleting one
+   file by hand let a quota `evict!` destroy the pre-images and left a
+   committed receipt permanently un-undoable. The status survives in
+   `state.edn`; the REFCOUNT does not, and an unknown refcount is not zero. A
+   lease that cannot be read is therefore an unknown that refuses, and only an
+   explicit `forget!` by a caller that PRESENTS the commit receipt may clear
+   it."
+  [dir]
+  (if-let [lease (read-edn-file (io/file dir "lease.edn"))]
+    (assoc lease :lease :readable)
+    {:lease :unreadable
+     :receipt-refs 1
+     :evictable false}))
+
 (defn retained-transactions
   ;; @spec MCP-OP-MEM-006
   "Every journal still on disk for this workspace, with its lease.
@@ -1256,12 +1275,13 @@
      (vec (for [^File d (sort-by #(.getName ^File %)
                                  (seq (or (.listFiles dir) (make-array File 0))))
                 :when (.isDirectory d)
-                :let [lease (read-edn-file (io/file d "lease.edn"))
+                :let [lease (read-lease d)
                       state (read-edn-file (io/file d "state.edn"))]]
             {:txid (.getName d)
              :status (or (:status lease) (:status state))
-             :receipt-refs (:receipt-refs lease 0)
-             :evictable (:evictable lease true)
+             :receipt-refs (:receipt-refs lease 1)
+             :evictable (:evictable lease false)
+             :lease (:lease lease)
              :bytes (dir-bytes d)})))))
 
 (defn undo!
@@ -1283,16 +1303,38 @@
        (let [result (restore-from-journal! (.getCanonicalPath dir))]
          (assoc result :isolation compact-isolation :undone true))))))
 
+(defn- presents-receipt?
+  "True when the caller handed back the very commit receipt this journal is the
+   recovery material for. Holding the receipt is the only evidence available
+   that nobody else still needs the pre-images once the lease is unreadable."
+  [txid receipt]
+  (boolean (and (map? receipt)
+                (= txid (:txid receipt))
+                (true? (:committed receipt)))))
+
 (defn- discard-journal!
-  [workspace-root txid state-home quota-driven?]
+  [workspace-root txid {:keys [state-home receipt]} quota-driven?]
   (let [dir (journal-dir workspace-root txid state-home)
-        lease (read-edn-file (io/file dir "lease.edn"))
+        lease (read-lease dir)
         state (read-edn-file (io/file dir "state.edn"))
         status (or (:status lease) (:status state))]
     (cond
       (not (.isDirectory dir))
       (refusal :txn-journal-missing (str "No retained journal for " txid)
                {:txid txid :next_call nil})
+
+      (and (= :unreadable (:lease lease))
+           (or quota-driven? (not (presents-receipt? txid receipt))))
+      (refusal :txn-lease-unreadable
+               (str "The lease of " txid " is missing or unparsable, so how many"
+                    " receipts still hold its pre-images is UNKNOWN")
+               {:txid txid
+                :lease :unreadable
+                :status status
+                :receipt-refs 1
+                :evictable false
+                :next_call {:op :txn/forget :txid txid :receipt :the-commit-receipt}
+                :remedy "An unknown refcount is not zero. A quota sweep never reclaims this journal; only an explicit forget! by a caller that presents the commit receipt may."})
 
       (= :restore-failed status)
       (refusal :txn-journal-retained
@@ -1318,10 +1360,12 @@
 
 (defn forget!
   ;; @spec MCP-OP-MEM-006
-  "Discard a retained journal deliberately. Refuses a failed restoration."
+  "Discard a retained journal deliberately. Refuses a failed restoration, and
+   refuses a journal whose lease cannot be read unless the caller presents the
+   commit receipt in `:receipt`."
   ([workspace-root txid] (forget! workspace-root txid {}))
-  ([workspace-root txid {:keys [state-home]}]
-   (discard-journal! workspace-root txid state-home false)))
+  ([workspace-root txid opts]
+   (discard-journal! workspace-root txid opts false)))
 
 (defn evict!
   ;; @spec MCP-OP-MEM-006
@@ -1329,10 +1373,11 @@
 
    Stricter than `forget!` on purpose: a sweep that runs because disk is short
    must not silently destroy a receipt somebody is still holding, and must
-   never destroy unrepaired recovery material."
+   never destroy unrepaired recovery material - nor a journal whose refcount
+   it cannot read, which no receipt presented to a SWEEP can unlock."
   ([workspace-root txid] (evict! workspace-root txid {}))
-  ([workspace-root txid {:keys [state-home]}]
-   (discard-journal! workspace-root txid state-home true)))
+  ([workspace-root txid opts]
+   (discard-journal! workspace-root txid opts true)))
 
 (defn release-receipt!
   ;; @spec MCP-OP-MEM-006
