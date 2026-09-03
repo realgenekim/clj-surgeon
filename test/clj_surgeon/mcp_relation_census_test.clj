@@ -1156,6 +1156,154 @@
       (finally (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-ten review, item 6: validator parity.
+;;
+;; "MCP refuses string `doors`/`files`, string `pool_size`, `max_files`, and
+;; `format`; the CLI shape pass accepts or ignores all except invalid
+;; `threads`." The defect that finding names is not any one missing check —
+;; it is that there was no place where the two entrances had to agree, so
+;; drift was free and silent.
+;;
+;; `census/request-shape-rules` is that place. This witness enumerates EVERY
+;; row of it and drives BOTH entrances with a request that violates that row
+;; and nothing before it, then asserts each entrance published the name its
+;; own column of the table declares. Where the two names differ they differ
+;; only by the mapping the table itself records, and the witness reads that
+;; mapping rather than hard-coding either name:
+;;
+;;   unknown-fields        -> :unknown-arguments   (the CLI's word is argument)
+;;   doors-not-an-array    -> :doors-not-a-string  (array on the wire, one
+;;                                                  comma-separated string at
+;;                                                  the CLI)
+;;   pool-size-not-an-integer \
+;;   pool-size-out-of-range   / -> :invalid-pool-size  (many-to-one: the CLI
+;;                                                  has published one name
+;;                                                  since the op shipped, and
+;;                                                  its message names both the
+;;                                                  bound and the value)
+;;
+;; A row the CLI cannot express carries `:inexpressible` saying why, and the
+;; witness asserts the row is genuinely closed rather than merely
+;; unimplemented.
+;; ---------------------------------------------------------------------------
+
+(def ^:private shape-rule-probes
+  "For each row of the shared table: a request violating THAT row and no row
+   before it, spelled for each entrance that can express it."
+  {[:unknown-fields :present]
+   {:mcp {:nope 1} :cli {:format :edn}}
+
+   [:doors :container-type]
+   {:mcp {:doors "conj-once"} :cli {:doors [1]}}
+
+   [:doors :too-many]
+   {:mcp {:doors (vec (repeat (inc census/max-doors) "conj-once"))}
+    :cli {:doors thirty-three-doors}}
+
+   [:doors :entry-type]
+   {:mcp {:doors [1]}}
+
+   [:doors :vocabulary]
+   {:mcp {:files [fixture] :doors ["conj"]} :cli {:doors "conj"}}
+
+   [:files :container-type]
+   {:mcp {:files fixture}}
+
+   [:files :empty]
+   {:mcp {:files []}}
+
+   [:files :too-many]
+   {:mcp {:files (vec (repeat (inc census/max-requested-files) fixture))}}
+
+   [:files :entry-type]
+   {:mcp {:files [""]} :cli {:file ""}}
+
+   [:pool-size :not-an-integer]
+   {:mcp {:files [fixture] :pool_size "8"} :cli {:threads "not-a-number"}}
+
+   [:pool-size :out-of-range]
+   {:mcp {:files [fixture] :pool_size 0} :cli {:threads "0"}}})
+
+(defn- published-mcp-name
+  "The name the tool published for a refusal, whichever key carries it.
+
+   Every shape refusal publishes `error_type` \"invalid-mcp-request\" and the
+   specific name in `reason`; the door-vocabulary row is refused after
+   discovery, so its name is the `error_type` itself."
+  [result]
+  (or (:reason result) (:error_type result)))
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
+(deftest one-refusal-table-governs-both-census-entrances
+  (testing "every row of the shared table has a probe, and every probe a row"
+    (is (= (set (map (juxt :field :violation) census/request-shape-rules))
+           (set (keys shape-rule-probes)))
+        "the table and the probes have drifted apart"))
+
+  (doseq [rule census/request-shape-rules]
+    (let [key [(:field rule) (:violation rule)]
+          probe (get shape-rule-probes key)]
+
+      (testing (str "the tool refuses " key " as the table says")
+        (let [result (run (:mcp probe))]
+          (is (false? (:ok result))
+              (str key " was accepted by the tool: " (pr-str result)))
+          (is (= (name (:mcp rule)) (published-mcp-name result))
+              (str key ": the tool published "
+                   (pr-str (published-mcp-name result))
+                   ", the table says " (pr-str (:mcp rule))))))
+
+      (if (keyword? (:cli rule))
+        (testing (str "the CLI refuses " key " as the table says")
+          (let [result (binding [*out* (java.io.StringWriter.)]
+                         (core/run (merge {:op :relation-census :dir repo-root}
+                                          (:cli probe))))]
+            (is (false? (:ok result))
+                (str key " was accepted by the CLI: " (pr-str result)))
+            (is (= (:cli rule) (:error-type result))
+                (str key ": the CLI published " (pr-str (:error-type result))
+                     ", the table says " (pr-str (:cli rule))))))
+
+        (testing (str key " is closed at the CLI, not merely unimplemented")
+          (is (string? (:inexpressible (:cli rule)))
+              (str key ": the CLI column is neither a published name nor a "
+                   "stated reason the violation cannot arise"))
+          (is (not (str/blank? (:inexpressible (:cli rule)))))
+          (is (nil? (census/shape-name :cli (:field rule) (:violation rule)))
+              (str key ": the table both closes the row and names it"))
+          (is (nil? (:cli probe))
+              (str key ": the row says the CLI cannot express this "
+                   "violation, and the probes contain a CLI spelling of it"))))))
+
+  (testing "the many-to-one pool-size mapping is deliberate, not an accident"
+    (is (= :invalid-pool-size
+           (census/shape-name :cli :pool-size :not-an-integer)
+           (census/shape-name :cli :pool-size :out-of-range))
+        "the CLI's two pool-size rows no longer share one published name")
+    (is (not= (census/shape-name :mcp :pool-size :not-an-integer)
+              (census/shape-name :mcp :pool-size :out-of-range))
+        "the tool stopped distinguishing the two pool-size violations"))
+
+  (testing "the CLI op registry accepts exactly the fields the table names"
+    ;; Without this, a new CLI argument can be added to the op and the shape
+    ;; pass will refuse it as unknown — or, worse, the accepted set can be
+    ;; widened here and the op will never read the argument.
+    (is (= census/cli-census-fields
+           (set (keys (:args (get core/ops-registry :relation-census)))))
+        "the op registry and the shared table disagree about the op's arguments"))
+
+  (testing "both entrances refuse on the FIRST row a request violates"
+    (let [tool (run {:doors [1] :pool_size "8"})
+          cli (binding [*out* (java.io.StringWriter.)]
+                (core/run {:op :relation-census :dir repo-root
+                           :doors [1] :threads "not-a-number"}))]
+      (is (= "doors-not-strings" (published-mcp-name tool))
+           "pool_size won the order at the tool")
+      (is (= :doors-not-a-string (:error-type cli))
+          (str ":threads won the order at the CLI: " (pr-str cli))))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-nine finding, item 4: a refusal targeting
 ;; /tmp/census10-fx/workspace handed back
 ;; `next_call={tool:"relation_census",pool_size:8}`. Replaying it verbatim
