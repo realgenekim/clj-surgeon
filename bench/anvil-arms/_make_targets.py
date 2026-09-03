@@ -22,7 +22,10 @@ So nothing here runs.  The Makefile is PARSED as text:
     `verify: $(KAOCHA) --focus …` resolves without a make process;
   * a recipe the parse cannot trust is REFUSED with a typed reason and kept out of
     the resolved map -- `$(shell`, `$(eval`, `+$(MAKE)`, a target defined inside a
-    conditional, or a recipe still holding an unexpandable reference;
+    make conditional, a recipe still holding an unexpandable reference, or a recipe
+    whose own SHELL control flow decides which command runs (`if … then bin/kaocha`
+    is a test runner on some invocations and not others, and the text cannot say
+    which);
   * a hard `include` of a file that does not exist on disk is a file MAKE WOULD
     GENERATE: targets can be defined there that this parse cannot see at all, so the
     whole map is untrustworthy and `dynamic_refusal` is set.  attest.sh turns that
@@ -115,6 +118,12 @@ def expand(text: str, variables: dict[str, str], depth: int = 0) -> str:
         return match.group(0)
 
     return VAR_REF_RE.sub(sub, text)
+
+
+# A recipe whose CONTROL FLOW decides which command runs: `if … then bin/kaocha …`
+# runs a test runner on some invocations and not others, and the text cannot say which.
+SHELL_CONTROL_RE = re.compile(
+    r"(?m)(?:^|[;&|(]|^\s*)\s*(?:if|case|while|until|for)\s|;\s*then\b|\besac\b")
 
 
 def dynamic_reason(text: str) -> str | None:
@@ -274,6 +283,13 @@ def classify(parsed: dict) -> tuple[dict, dict, list[str], bool]:
         leftover = LEFTOVER_REF_RE.search(expanded)
         if leftover:
             refused[name] = f"unexpanded:{leftover.group(0)}"
+            continue
+        if SHELL_CONTROL_RE.search(expanded):
+            # Sol round two, item 6, in the form item 1's repair does not reach: the
+            # recipe text is fully known and STILL does not say which command runs.
+            # A target whose runner appears only on some invocations cannot be metered
+            # as either a test action or a non-test one.
+            refused[name] = "shell-conditional"
             continue
 
         expanded = expanded.strip()
