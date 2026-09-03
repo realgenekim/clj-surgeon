@@ -10,6 +10,13 @@ is cut.
 
 ### Fixed
 
+- `defmethod` dispatch values behind a `#_` discard or a `^meta` wrapper are
+  now read as the reader reads them. The outline used to emit `#_skipped`
+  and `^:meta :withmeta` as dispatch spellings, and the exact-owner selector
+  threw on both while scanning — so a single such arm made every other arm
+  in that file unaddressable. An arm whose dispatch still cannot be read now
+  matches no selector instead of failing the whole compile.
+
 - `invalid-require-policy` now reaches `apply_clojure_changes`. The refusal
   that names the field, lists `minimal` and `copy-all`, echoes what it
   received, and states the field is never defaulted used to be unreachable

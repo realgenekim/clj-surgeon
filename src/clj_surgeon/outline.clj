@@ -145,14 +145,34 @@
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 
-(defn- extract-dispatch
-  "Source spelling of a `defmethod` dispatch value: the child after the name.
+;; @spec MCP-OP-DISPATCH-001
+;; @spec MCP-OP-DISPATCH-005
+(defn defmethod-dispatch-location
+  "Zipper location of a `defmethod` form's dispatch value.
 
-   The exact spelling is returned, not a normalized value, so a caller can copy
-   it verbatim into an exact `{kind, name, dispatch}` owner form."
-  ;; @spec MCP-OP-DISPATCH-001
+   The dispatch value is not simply the third child: `#_` discards before it are
+   read and thrown away, and a `^meta` wrapper decorates the value rather than
+   being it. Both are traversed here so the location returned is the one the
+   reader — and therefore the exact-owner selector — actually sees."
   [zloc]
-  (some-> zloc z/down z/right z/right z/string))
+  (loop [location (some-> zloc z/down z/right z/right)
+         steps 0]
+    (cond
+      (or (nil? location) (< 64 steps)) nil
+      (= :uneval (z/tag location)) (recur (z/right location) (inc steps))
+      (= :meta (z/tag location)) (recur (some-> location z/down z/rightmost)
+                                        (inc steps))
+      :else location)))
+
+;; @spec MCP-OP-DISPATCH-001
+(defn- extract-dispatch
+  "Source spelling of a `defmethod` dispatch value.
+
+   The exact spelling of that value is returned, not a normalized one, so a
+   caller can copy it verbatim into an exact `{kind, name, dispatch}` owner
+   form. Discard and metadata wrappers are not part of the value."
+  [zloc]
+  (some-> (defmethod-dispatch-location zloc) z/string))
 
 (defn attached-comment-start
   "Look backwards from a form's start line to find attached comment lines.

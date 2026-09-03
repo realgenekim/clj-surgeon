@@ -2452,3 +2452,41 @@
     (is (= 2 (:addressed-matches evidence)))
     (is (= 0 (:unaddressed-match-count evidence)))
     (is (= [] (:unaddressed-matches evidence)))))
+
+;; ---------------------------------------------------------------------------
+;; The exact-owner selector reads every arm sharing a multimethod name while it
+;; looks for one. A `#_` discard or a `^meta` wrapper on any of those arms threw
+;; while scanning, so one unrelated arm made the whole file unaddressable.
+;; ---------------------------------------------------------------------------
+
+(def ^:private discarded-and-meta-arms-source
+  (str "(ns t)\n\n"
+       "(defmulti f (fn [x] x))\n\n"
+       "(defmethod f #_skipped :actual [x] (inc x))\n\n"
+       "(defmethod f ^:meta :withmeta [x] (inc x))\n\n"
+       "(defmethod f :plain [x] (inc x))\n"))
+
+(defn- dispatch-arm-transaction
+  [dispatch]
+  (transaction/compile-transaction
+    {"src/t.clj" discarded-and-meta-arms-source}
+    {:changes [{:id :one-arm
+                :in ["src/t.clj"]
+                :forms [{:kind :defmethod :name 'f :dispatch dispatch}]
+                :find "(inc x)"
+                :do [:replace "(dec x)"]
+                :expect {:matches 1}}]
+     :expect {:changes 1 :edits 1 :files 1}}))
+
+(deftest defmethod-selector-scans-past-discarded-and-metadata-dispatches
+  ;; @spec MCP-OP-DISPATCH-005
+  (testing "an ordinary arm is still addressable in that file"
+    (let [compiled (dispatch-arm-transaction ":plain")]
+      (is (:ok compiled))
+      (is (= 1 (count (mapcat :edits (:files compiled)))))))
+  (testing "the arm behind a #_ discard is addressed by its real dispatch"
+    (let [compiled (dispatch-arm-transaction ":actual")]
+      (is (:ok compiled))))
+  (testing "the arm behind ^meta is addressed by the value the metadata wraps"
+    (let [compiled (dispatch-arm-transaction ":withmeta")]
+      (is (:ok compiled)))))

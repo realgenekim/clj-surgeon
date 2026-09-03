@@ -343,3 +343,34 @@
     (testing "non-defmethod owners carry no dispatch field"
       (is (not-any? #(contains? % :dispatch)
                     (remove #(= 'defmethod (:type %)) forms))))))
+
+;; ---------------------------------------------------------------------------
+;; A dispatch value is not always the third child. `#_` discards and `^meta`
+;; wrappers made the outline emit `#_skipped` and `^:meta :withmeta`, spellings
+;; the exact-owner selector cannot use — and cannot even read without throwing.
+;; ---------------------------------------------------------------------------
+
+(def discarded-and-meta-arms
+  "(ns t)
+
+(defmulti f (fn [x] x))
+
+(defmethod f #_skipped :actual [x] x)
+
+(defmethod f #_one #_two :twice-skipped [x] x)
+
+(defmethod f ^:meta :withmeta [x] x)
+
+(defmethod f ^{:doc \"why\"} ^:inner [::sink :registered] [x] x)
+
+(defmethod f :plain [x] x)
+")
+
+(deftest outline-dispatch-skips-discards-and-unwraps-metadata
+  ;; @spec MCP-OP-DISPATCH-005
+  (let [forms (:forms (outline/outline-source "t.clj" discarded-and-meta-arms))
+        arms (filterv #(= 'defmethod (:type %)) forms)]
+    (is (= 5 (count arms)))
+    (is (= [":actual" ":twice-skipped" ":withmeta" "[::sink :registered]"
+            ":plain"]
+           (mapv :dispatch arms)))))

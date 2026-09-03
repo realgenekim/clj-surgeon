@@ -242,15 +242,24 @@
     (parse-one-form (:dispatch form-owner) ":forms dispatch"))
   forms)
 
+(def ^:private unreadable-dispatch
+  "Identity sentinel for an arm whose dispatch value cannot be read.
+
+   It is never equal to a caller's parsed dispatch, so one unreadable arm can
+   never match a selector — and, unlike a thrown exception, can never make every
+   other arm in that file unaddressable."
+  (Object.))
+
+;; @spec MCP-OP-DISPATCH-005
 (defn- defmethod-dispatch
   [record]
   (when (= 'defmethod (:type record))
-    (some-> (:source record)
-            z/of-string
-            z/down
-            z/right
-            z/right
-            z/sexpr)))
+    (try
+      (some-> (:source record)
+              z/of-string
+              outline/defmethod-dispatch-location
+              z/sexpr)
+      (catch Exception _ unreadable-dispatch))))
 
 (defn- owner-identity
   [owner-record]
