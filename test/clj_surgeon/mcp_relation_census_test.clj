@@ -372,6 +372,45 @@
           (is (seq (get-in result [:next_call :files])))))
       (finally (delete-tree! root)))))
 
+(defn- padded-source
+  "An arm-defining source of exactly `bytes` bytes, padded with a comment."
+  [bytes]
+  (str arm-source
+       (apply str (repeat (- bytes (count arm-source) 1) \;))
+       "\n"))
+
+;; @spec MCP-OP-CENSUS-028
+(deftest a-source-over-the-byte-cap-is-named-and-completion-is-not-claimed
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      (spit-file! (io/file root "src/app/at_cap.clj")
+                  (padded-source census/max-source-bytes))
+
+      (testing "a source of exactly max-source-bytes is read and censused"
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)} {})]
+          (is (true? (:ok result)) (str "refused: " (:error result)))
+          (is (true? (:read_complete result)))
+          (is (nil? (:oversized_skipped result)))
+          (is (= 2 (:files result)))
+          (is (contains? (set (keys (:by_file result))) "src/app/at_cap.clj")
+              "the source at the cap was not censused")))
+
+      (testing "one byte over the cap is named and completion is withheld"
+        (spit-file! (io/file root "src/app/over_cap.clj")
+                    (padded-source (inc census/max-source-bytes)))
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)} {})]
+          (is (true? (:ok result)) (str "refused: " (:error result)))
+          (is (false? (:read_complete result))
+              "a census that silently dropped a source claimed completion")
+          (is (= 1 (get-in result [:oversized_skipped :count])))
+          (is (= ["src/app/over_cap.clj"]
+                 (get-in result [:oversized_skipped :files])))
+          (is (= 2 (:files result)) "the skipped source was censused anyway")))
+      (finally (delete-tree! root)))))
+
 ;; @spec MCP-OP-CENSUS-021
 (deftest the-cli-plan-pool-is-the-bounded-pool-on-the-jvm
   (testing "a threads request above one runs on census_pool, not core pmap"
