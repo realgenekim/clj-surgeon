@@ -49,8 +49,9 @@ In the requirements below:
   reserved peak at or below 192 MiB, keep the 10,000-file peak within 32 MiB of
   the 1,000-file peak, keep the largest 10,000-file heap retained WHILE THE
   RESULT IS STILL REFERENCED within 2.0 MiB of the largest such value at 1,000
-  files, keep 10,000-file after-GC retention within 8 MiB of 1,000-file after-GC
-  retention, and refuse before any mutation when the request
+  files, keep the growth the call leaves behind after the result is
+  released (after-release used heap minus start) at 10,000 files within 8 MiB of
+  the same growth at 1,000 files, and refuse before any mutation when the request
   is over budget; and the battery shall report any of those lines it did not
   observe as UNMEASURED rather than as a pass, terminating in exactly one of
   PASS, FAIL or INCOMPLETE, where a run with no failures and at least one
@@ -153,6 +154,13 @@ MCP-OP-MEM-011:
   a narrow prefix touches every file but retains almost nothing, and is measured
   by a second full-match arm as well. A new arm is incomplete until the query
   that makes its result grow with N is also measured.
+- Retention while the result is referenced includes any cache or leak the call
+  created, so result-exclusive retention (held minus after-release) and
+  persistent growth (after-release minus start) are recorded as separate figures
+  and only the second is gated as the leak line. A fixed leak, a leak below the
+  slack, or one established before the 1,000-file cell is not caught by a cross-N
+  comparison, and warm-run accumulation can be absorbed into the next run's
+  start.
 - A shared build host perturbs wall time and, through GC scheduling, the sampled
   peak. The receipt records host load context; a single failing run near a line
   is re-run before it is called a regression.

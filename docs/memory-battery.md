@@ -108,7 +108,7 @@ The constants live in exactly one place: `pass-lines` in
 | `reserved-peak-over-budget` | attributable reserved peak ≤ **192 MiB** |
 | `peak-scales-with-n` | peak at 10,000 files ≤ peak at 1,000 files + **32 MiB** |
 | `held-scales-with-n` | `max(held_mb at N=10,000)` ≤ `max(held_mb at N=1,000)` + **2.0 MiB** |
-| `retained-scales-with-n` | after-GC retention at 10,000 files ≤ after-GC retention at 1,000 files + **8 MiB** |
+| `retained-scales-with-n` | persistent growth (`grow_mb`) at 10,000 files ≤ persistent growth at 1,000 files + **8 MiB** |
 | `reference-mismatch` | the bounded result must hash identically to the unbounded reference result at the same N |
 
 The key graph is peak against N. Once the bounded buffers fill it must visibly
@@ -119,8 +119,18 @@ flatten. Wall time and spill bytes may grow with N; retained heap may not.
 | column | measured | what it tells you |
 |---|---|---|
 | `peak_mb` | continuously, every 5 ms, on a daemon thread, during the call | the process-wide used-heap high-water mark, garbage included |
-| `held_mb` | after four `System/gc`s **while the result is still referenced**, minus the pre-call used heap | what the operation's result actually costs to hold — the receipt's retained size |
-| `afterGC_mb` | after four more `System/gc`s once the result is dropped | leak check: caches, memoisation, thread-locals that outlive the call |
+| `held_mb` | after four `System/gc`s **while the result is still referenced**, minus the pre-call used heap | what the call still holds with the result live — the receipt's retained size **plus** any cache or leak the call created |
+| `excl_mb` | `held` − `after-release` | result-**exclusive** retention: what actually went away when the result was dropped, so it was the result's |
+| `grow_mb` | `after-release` − `start` | **persistent growth**: what the call left behind for good. This is the gated leak figure |
+| `afterGC_mb` | after four more `System/gc`s once the result is dropped | the absolute post-release used heap (context for the two figures above) |
+
+`held_mb` is not precisely "result-retained size" — it is retention *while the
+result is referenced*, which includes a cache or a leak the call created. The two
+components are therefore recorded separately, and the leak line gates `grow_mb`,
+not the absolute `afterGC_mb`: two cells can end at the same used heap while one
+call left five times as much behind it, and comparing absolutes cannot see that.
+A fixed leak, or one established before the 1,000-file cell, still hides from a
+cross-N comparison; that is a boundary on MCP-OP-MEM-011, not a claim.
 
 `held_mb` is the number that shows an operation sizing itself by the repository.
 `afterGC_mb` staying flat is not evidence of boundedness; it only means the

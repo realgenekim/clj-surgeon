@@ -42,6 +42,10 @@
    :heap-used-peak-mb peak
    :heap-result-retained-mb held
    :heap-after-gc-mb after-gc
+   ;; result-exclusive retention: what disappeared when the result was dropped
+   :heap-held-after-release-mb (- (+ start held) after-gc)
+   ;; persistent growth: what the call left behind for good
+   :heap-after-release-start-mb (- after-gc start)
    :heap-reserved-peak-mb reserved-peak
    :oom? oom?
    :result-hash result-hash
@@ -190,8 +194,6 @@
       (is (false? (:pass? result)))
       (is (contains? (lines-of result) :retained-scales-with-n)))))
 
-;; @spec MCP-OP-MEM-001
-;; @spec MCP-OP-MEM-011
 ;; The numbers below are the ones the battery actually measured on this branch
 ;; (docs/observations/2026-09-03-memory-battery-baseline.md): the full-match
 ;; rename arm held 1.0 MiB at N=1,000 and 9.8 MiB at N=10,000. Nothing gated
@@ -237,6 +239,36 @@
       (is (contains? (set (map :line (:unmeasured result))) :held-scales-with-n))
       (is (= :incomplete (:status result))))))
 
+;; @spec MCP-OP-MEM-001
+;; @spec MCP-OP-MEM-011
+(deftest the-leak-line-gates-persistent-growth-not-the-absolute-after-gc-heap
+  (testing "identical absolute after-GC heap, different persistent growth"
+    ;; Both cells end at 45.0 MB of used heap, so the old absolute comparison saw
+    ;; no difference at all. The 10,000-file call nevertheless left 25 MB behind
+    ;; where the 1,000-file call left 5.
+    (let [cells [(cell :ls-tree 1000 :warm 120.0 45.0 :start 40.0)
+                 (cell :ls-tree 10000 :warm 120.0 45.0 :start 20.0)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (false? (:pass? result)))
+      (is (contains? (lines-of result) :retained-scales-with-n))
+      (is (= {:op :ls-tree :line :retained-scales-with-n
+              :observed 25.0 :limit 13.0 :small-n-observed 5.0 :slack-mb 8}
+             (first (filter #(= :retained-scales-with-n (:line %))
+                            (:failures result)))))))
+
+  (testing "flat persistent growth passes even as the absolute heap moves"
+    (let [cells [(cell :ls-tree 1000 :warm 120.0 45.0 :start 40.0)
+                 (cell :ls-tree 10000 :warm 120.0 65.0 :start 60.0)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (true? (:pass? result)))))
+
+  (testing "the table shows result-exclusive retention and persistent growth"
+    (let [table (battery/render-table {:xmx-mb 512 :cells (clean-cells)})]
+      (is (str/includes? table "excl_mb"))
+      (is (str/includes? table "grow_mb")))))
+
+;; @spec MCP-OP-MEM-001
+;; @spec MCP-OP-MEM-011
 (deftest a-result-that-differs-from-the-unbounded-reference-fails
   (let [cells [(cell :ls-tree 1000 :warm 120.0 50.0
                      :result-hash "bounded" :reference-hash "unbounded")]

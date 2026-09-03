@@ -200,7 +200,16 @@
             :heap-start-mb (bytes->mb start-bytes)
             :heap-used-peak-mb (bytes->mb peak-bytes)
             :heap-committed-peak-mb (bytes->mb committed-peak-bytes)
+            ;; held - start: everything the call still holds while the result is
+            ;; referenced. This is the receipt's cost PLUS any cache or leak the
+            ;; call created, which is why the next two are recorded separately.
             :heap-result-retained-mb (bytes->mb (max 0 (- held-bytes start-bytes)))
+            ;; held - after-release: result-EXCLUSIVE retention. What actually
+            ;; went away when the result was dropped, so it was the result's.
+            :heap-held-after-release-mb (bytes->mb (max 0 (- held-bytes after-bytes)))
+            ;; after-release - start: PERSISTENT growth. What the call left
+            ;; behind for good — the leak/cache figure, and the one gated.
+            :heap-after-release-start-mb (bytes->mb (max 0 (- after-bytes start-bytes)))
             :heap-after-gc-mb (bytes->mb after-bytes)
             :result-hash result-hash})))
 
@@ -220,6 +229,8 @@
      :heap-used-peak-mb (apply max (map :heap-used-peak-mb readings))
      :heap-committed-peak-mb (apply max (map :heap-committed-peak-mb readings))
      :heap-result-retained-mb (apply max (map :heap-result-retained-mb readings))
+     :heap-held-after-release-mb (apply max (map :heap-held-after-release-mb readings))
+     :heap-after-release-start-mb (apply max (map :heap-after-release-start-mb readings))
      :heap-after-gc-mb (apply max (map :heap-after-gc-mb readings))
      ;; No admission accountant exists on this branch, so no operation can
      ;; report an attributable reserved peak. Left absent on purpose: the

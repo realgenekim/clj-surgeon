@@ -189,6 +189,7 @@
   A cell: {:op :n :phase :rep :wall-ms :files :bytes
            :heap-start-mb :heap-used-peak-mb :heap-after-gc-mb
            :heap-reserved-peak-mb :heap-result-retained-mb
+           :heap-held-after-release-mb :heap-after-release-start-mb
            :oom? :result-hash :reference-hash}
 
   Output: {:status #{:pass :fail :incomplete}
@@ -223,7 +224,11 @@
                            ;; repository rather than by the work asked of it.
                            [:held-scales-with-n :heap-result-retained-mb
                             (:scale-held-slack-mb pass-lines)]
-                           [:retained-scales-with-n :heap-after-gc-mb
+                           ;; PERSISTENT growth (after-release minus start),
+                           ;; not the absolute post-GC heap: two cells can end
+                           ;; at the same used heap while one call left five
+                           ;; times as much behind it.
+                           [:retained-scales-with-n :heap-after-release-start-mb
                             (:scale-retained-slack-mb pass-lines)]]]
                       (scale-check op line field slack small large)))]
           result)
@@ -337,7 +342,8 @@
   (let [v (verdict observation)
         header (str (fmt "op" 26) (rfmt "N" 7) (rfmt "phase" 7)
                     (rfmt "wall_ms" 9) (rfmt "peak_mb" 9)
-                    (rfmt "held_mb" 9) (rfmt "afterGC_mb" 11)
+                    (rfmt "held_mb" 9) (rfmt "excl_mb" 9)
+                    (rfmt "grow_mb" 9) (rfmt "afterGC_mb" 11)
                     (rfmt "files" 7) (rfmt "bytes" 11)
                     (rfmt "OOM?" 6) (rfmt "verdict" 9))
         rows (for [c (sort-by (juxt #(str (:op %)) :n #(str (:phase %))) cells)]
@@ -347,6 +353,8 @@
                     (rfmt (:wall-ms c) 9)
                     (rfmt (:heap-used-peak-mb c) 9)
                     (rfmt (:heap-result-retained-mb c) 9)
+                    (rfmt (:heap-held-after-release-mb c) 9)
+                    (rfmt (:heap-after-release-start-mb c) 9)
                     (rfmt (:heap-after-gc-mb c) 11)
                     (rfmt (:files c) 7)
                     (rfmt (:bytes c) 11)
@@ -360,8 +368,11 @@
          (str "peak_mb = continuously sampled process-wide used-heap PEAK "
               "(not a post-GC delta); held_mb = after-GC used heap while the "
               "result is still referenced, minus start (the receipt's retained "
-              "size); afterGC_mb = after-GC used heap once the result is "
-              "released (leak check).")
+              "size, INCLUDING any cache or leak the call created); excl_mb = "
+              "held minus after-release, the result-EXCLUSIVE retention; "
+              "grow_mb = after-release minus start, the PERSISTENT growth the "
+              "call left behind (this is the gated leak figure); afterGC_mb = "
+              "absolute after-GC used heap once the result is released.")
          sep header sep]
         rows
         [sep
