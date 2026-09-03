@@ -563,7 +563,7 @@
 ;; @spec MCP-OP-CENSUS-023
 ;; @spec MCP-OP-CENSUS-031
 (defn- execute-in-context!
-  [{:keys [project-root]} {:keys [files doors pool_size]}]
+  [{:keys [project-root]} {:keys [files doors pool_size] :as params}]
   (let [root (mcp-paths/real-root project-root)
         canonical (.toString root)
         want-declared? (boolean (seq doors))
@@ -617,7 +617,10 @@
       ;; The continuation is the request the caller made, MINUS the sources it
       ;; cannot read — a call the caller may replay verbatim. It is computable
       ;; because the caller named them. When removing them leaves no request,
-      ;; there is no call to hand back and the refusal says so.
+      ;; there is no call to hand back and the refusal says so. Every other
+      ;; option the caller supplied (doors, pool_size, and any field this
+      ;; tool learns later) travels through UNCHANGED: this refusal narrows
+      ;; `files`, it does not silently drop the rest of the request.
       (let [over (oversized-among root scanned)
             removed (set over)
             remaining (when requested
@@ -626,9 +629,10 @@
                  (str (:oversized loaded) " is " (:bytes loaded)
                       " bytes; the census reads at most " census/max-source-bytes)
                  (when (seq remaining)
-                   {:tool "relation_census"
-                    :workspace_root canonical
-                    :files remaining})
+                   (assoc (dissoc params :files)
+                          :tool "relation_census"
+                          :workspace_root canonical
+                          :files remaining))
                  (cond-> (merge {:file (:oversized loaded)
                                  :bytes (:bytes loaded)
                                  :maximum census/max-source-bytes
@@ -650,7 +654,17 @@
       :else
       (let [candidates (:inputs loaded)]
         (if (empty? candidates)
-          (let [named (vec (take max-listed-files (distinct scanned)))]
+          (let [named (vec (take max-listed-files (distinct scanned)))
+                ;; The caller named these files itself. Every one of them was
+                ;; already scanned and none holds a fold arm, so no PROPER
+                ;; subset of an already-refused, caller-named list is any more
+                ;; likely to hold one: there is no narrower call to compute,
+                ;; only the identical request just refused. Discovery (no
+                ;; `files` in the request) is different — the tree walk found
+                ;; these paths, the caller never named them, and pinning them
+                ;; with `files` is a real narrower call than re-walking the
+                ;; same root.
+                explicit? (boolean requested)]
             (refusal :no-fold-arms-found
                      (str "No file defines defmethod fold-event arms. Scanned "
                           scanned-count " file(s).")
@@ -660,21 +674,33 @@
                      ;; tree whose only sources were skipped for size scans
                      ;; nothing, and handing the same root back is a call that
                      ;; refuses identically. The tool offers a call only when
-                     ;; it can name the sources to look at.
-                     (when (seq named)
+                     ;; it can name the sources to look at, AND that call is
+                     ;; not the one the caller just made.
+                     (when (and (seq named) (not explicit?))
                        {:tool "relation_census"
                         :workspace_root canonical
                         :files named})
                      (cond-> (merge {:scanned named} facts)
-                       (empty? named)
+                       (or (empty? named) explicit?)
                        (assoc :remedy
-                              (str "Nothing under " canonical
-                                   " defines defmethod fold-event arms ("
-                                   scanned-count " file(s) scanned), so no "
-                                   "narrower call can be computed: point "
-                                   "workspace_root at a directory whose "
-                                   "sources define fold arms, or name the "
-                                   "sources to census with files.")))))
+                              (cond
+                                explicit?
+                                (str "None of the file(s) this request named ("
+                                     (str/join ", " named)
+                                     ") defines defmethod fold-event arms, so "
+                                     "the call just refused is already the "
+                                     "narrowest one that can be computed: "
+                                     "point files at sources that define fold "
+                                     "arms, or omit files to census the tree.")
+
+                                (empty? named)
+                                (str "Nothing under " canonical
+                                     " defines defmethod fold-event arms ("
+                                     scanned-count " file(s) scanned), so no "
+                                     "narrower call can be computed: point "
+                                     "workspace_root at a directory whose "
+                                     "sources define fold arms, or name the "
+                                     "sources to census with files."))))))
           ;; The door symbols themselves are checked before any census runs;
           ;; whether a door is DEFINED anywhere can only be answered once the
           ;; scan has been parsed, so that half waits for the plan's own

@@ -127,15 +127,20 @@
       (is (false? (:ok result)))
       (is (= "invalid-workspace-root" (:error_type result)))))
 
-  (testing "no file defines fold arms, and the scan is named"
+  (testing "no file defines fold arms, and the scan is named explicitly"
+    ;; The caller named `helpers` itself; it was scanned and has no fold arms,
+    ;; so replaying the identical `files` list is not a narrower call. No
+    ;; `next_call`, and a remedy naming the file(s) scanned instead.
     (let [result (run {:files [helpers]})]
       (is (false? (:ok result)))
       (is (= "no-fold-arms-found" (:error_type result)))
       (is (= [helpers] (:scanned result)))
       (is (= 1 (:files_scanned result)))
       (is (nil? (:counts result)))
-      (is (= "relation_census" (get-in result [:next_call :tool])))
-      (is (= [helpers] (get-in result [:next_call :files])))))
+      (is (not (contains? result :next_call))
+          "the caller's own file list, already refused, is not a continuation")
+      (is (string? (:remedy result)))
+      (is (str/includes? (:remedy result) helpers))))
 
   (testing "an unknown door symbol is named alongside the known doors"
     (let [result (run {:files [fixture] :doors ["conj-once" "made-up-door"]})]
@@ -1346,6 +1351,8 @@
              :unknown-door (run {:files [fixture] :doors ["made-up-door"]})
              :source-too-large-only (here {:files [big]})
              :source-too-large-mixed (here {:files [big small]})
+             :source-too-large-mixed-with-options
+             (here {:files [big small] :doors ["upsert-by"] :pool_size 1})
              :no-arms-scanned (run {:files [helpers]})
              :no-arms-empty (census-tool/execute-request!
                               {:project-root (.getPath empty-root)} {})}
@@ -1390,6 +1397,27 @@
             (is (= [big] (:files_removed mixed)))
             (is (= 0 (:files_removed_omitted mixed)))))
 
+        (testing "the oversized replay carries every other option through unchanged"
+          ;; The original request named files, doors AND pool_size. The
+          ;; refusal must not be the request minus the file AND minus the
+          ;; rest of the caller's options — it is the original request with
+          ;; only the oversized path removed.
+          (let [with-options (:source-too-large-mixed-with-options mcp-refusals)
+                next-call (:next_call with-options)]
+            (is (= "source-too-large" (:error_type with-options)))
+            (is (= [small] (:files next-call)))
+            (is (= ["upsert-by"] (:doors next-call))
+                "doors was dropped from the continuation")
+            (is (= 1 (:pool_size next-call))
+                "pool_size was dropped from the continuation")
+            (is (= {:tool "relation_census"
+                    :workspace_root (.getCanonicalPath root)
+                    :files [small]
+                    :doors ["upsert-by"]
+                    :pool_size 1}
+                   next-call)
+                "the continuation is not the original request minus only the oversized file")))
+
         (testing "every named source oversized leaves no request to make"
           (let [only (:source-too-large-only mcp-refusals)]
             (is (= "source-too-large" (:error_type only)))
@@ -1411,9 +1439,13 @@
                 "the continuation is the workspace call that just refused")
             (is (string? (:remedy result)))))
 
-        (testing "a scanned file list is still a continuation worth handing back"
+        (testing "an explicitly named, arm-less file list is not its own continuation"
           (let [result (:no-arms-scanned mcp-refusals)]
-            (is (= [helpers] (get-in result [:next_call :files])))))
+            (is (= "no-fold-arms-found" (:error_type result)))
+            (is (not (contains? result :next_call))
+                "the caller's own file list, already refused, is not a continuation")
+            (is (string? (:remedy result)))
+            (is (str/includes? (:remedy result) helpers))))
 
         (testing "both CLI runtimes answer the arm-less tree with a remedy"
           (doseq [label [:jvm-no-arms :bb-no-arms]]
