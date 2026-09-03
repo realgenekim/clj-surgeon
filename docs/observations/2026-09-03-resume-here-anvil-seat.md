@@ -115,3 +115,9 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 
 - Ratchets landed (0434aae, 29090e9, ece8c1c); my suites running (`~/tmp/ratchets-*.log`, waiter b61xhgakh); push when only the baseline six fail.
 - **New prosecution item (no maven creds here; file it when they arrive), S9:** `inspect_clojure` `forms` should accept the `{kind defmethod name dispatch}` owner map — today an arm can be WRITTEN by an address it cannot be READ by; a contract change to an existing verb → needs its own witness set and a red-team; trigger: after the ratchets branch merges.
+
+## RESUME DELTA 2026-09-03T02:52Z — nine lanes
+
+- curtain-call fix rounds launched from docs/observations/2026-09-03-folddiff-lens-redteam.md: fold-diff aa14abf5d75ba48e8 (`~/src/curtaincall-cfp-folddiff`, 7 fixes incl. both sides as REFS); template-upsert abd7fc65de9301f76 (`~/src/curtaincall-cfp-tmpl`, raw-id identity); lens-followups ab73fea07362149df (`~/src/curtaincall-cfp-lens2`, slug cross-check). settings-lens aebb7b9a is GO as measured.
+- clj-surgeon fix rounds still running: census a4fe4601c68f5db01, study aab6a773af84935ee, rf2 abd835410547b9851, q5z aaa35fb0f121fdb9a. Ratchets suites: waiter b61xhgakh.
+- Merge order for Gene (curtain-call): fold → store → settings-lens → template-upsert (after fix) → lens-followups (after fix); goldens re-run at each step. The fold-diff tool runs against production only after its fix round.
