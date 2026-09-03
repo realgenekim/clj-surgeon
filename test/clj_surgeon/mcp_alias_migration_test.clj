@@ -1561,6 +1561,118 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-054
+(deftest the-receipt-detail-collision-normalises-a-remainder-that-does-not-exist
+  ;; The guard resolves the nearest EXISTING ancestor and appends the rest. The
+  ;; rest is caller text: `missing/../.clj-surgeon/alias-migration` IS the
+  ;; detail directory, and appended without normalisation it compares unequal
+  ;; to it — so the receipt is published in the directory the guard exists to
+  ;; keep it out of, under a name the detail writer's retention owns.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        sneaky (io/file workspace "missing" ".." ".clj-surgeon" "alias-migration")]
+    (try
+      (testing "the predicate"
+        (is (true? (alias-migration/receipt-detail-collision?
+                     (.getPath workspace) (.getPath sneaky) "detail-0dd1.edn"))))
+      (testing "and the verb that stands on it"
+        (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")]
+          (let [result (alias-migration/execute! (config workspace sneaky)
+                                                 (request workspace))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-receipt-detail-collision"
+                   (:error_type result)))
+            (is (true? (:source_unchanged result)))
+            (is (not (.exists details))
+                "the refusal created the directory it refused to write in"))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest a-receipt-directory-that-climbs-past-its-nearest-existing-ancestor-refuses
+  ;; A remainder that still holds `..` after normalisation names a directory
+  ;; above the ancestor whose identity was proved, so the guard cannot say what
+  ;; directory it is. An undecidable identity is a typed refusal, never a pass.
+  (let [workspace (workspace!)
+        outside-name (str "elsewhere-" (java.util.UUID/randomUUID))
+        outside (io/file (.getParentFile workspace) outside-name)
+        escaping (io/file workspace "missing" ".." ".." outside-name)]
+    (try
+      (let [result (alias-migration/execute! (config workspace escaping)
+                                             (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-receipt-dir-escapes" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (not (.exists outside))
+            "the refusal created the directory it refused to write in"))
+      (finally
+        (delete-tree! outside)
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest the-receipt-detail-collision-is-re-proved-after-the-directory-exists
+  ;; The pre-create guard decides on a path that does not exist yet, and a
+  ;; path's identity is not settled until it does: a symlink installed between
+  ;; the check and the mkdir makes the created receipt directory the detail
+  ;; directory, and the run publishes ok=true with its undo receipt sitting in
+  ;; the one place its own retention may delete it. Identity has to be re-proved
+  ;; on the directory that was CREATED, not on the one that was checked.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")
+        guard alias-migration/receipt-detail-collision?]
+    (.mkdirs details)
+    (try
+      (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")
+                    alias-migration/receipt-detail-collision?
+                    (fn [project-root receipt-dir receipt-name]
+                      (let [answer (guard project-root receipt-dir receipt-name)]
+                        ;; the race is won here: the checked path becomes a
+                        ;; symlink to the detail directory after the answer
+                        (when-not (.exists receipts)
+                          (Files/createSymbolicLink (.toPath receipts)
+                                                    (.toPath details)
+                                                    (make-array FileAttribute 0)))
+                        answer))]
+        (let [result (alias-migration/execute! (config workspace receipts)
+                                               (request workspace))]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "alias-migration-receipt-detail-collision"
+                 (:error_type result)))
+          (is (= "post-create" (:phase result)))
+          (is (true? (:source_unchanged result)))
+          (is (empty? (seq (.listFiles details)))
+              (str "a receipt was published inside the detail directory: "
+                   (mapv (fn [^java.io.File file] (.getName file))
+                         (or (seq (.listFiles details)) []))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest a-recorded-document-whose-run-id-no-longer-names-it-is-left-alone
+  ;; Defence in depth against ACCIDENTAL replacement, not against forgery. A
+  ;; document whose bytes were swapped for another run's document still carries
+  ;; the writer's marker and is still named in the manifest, but the `:run-id`
+  ;; inside it no longer names the file it sits in — so it is not the document
+  ;; this writer recorded, and retention leaves it alone. A deliberate forger
+  ;; rewrites the run-id along with the marker; this stops the copy, not the liar.
+  (let [workspace (workspace!)
+        base (- (System/currentTimeMillis) 600000)]
+    (try
+      (let [mine (mapv (fn [index] (owned-detail! workspace (+ base (* 1000 index))))
+                       (range 20))
+            swapped (first mine)
+            next-oldest (second mine)]
+        (spit swapped (slurp (last mine)))
+        (.setLastModified swapped base)
+        (owned-detail! workspace (+ base 100000))
+        (is (.exists swapped)
+            "a document carrying another run's id was deleted as ours")
+        (is (not (.exists next-oldest))
+            "retention skipped the swapped document but pruned nothing in its place"))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-047
 (deftest the-heap-guard-marks-the-transactions-write-boundary-not-its-entrance
   ;; Entering `execute-mcp-change!` is not a mutation. Spec validation, the
