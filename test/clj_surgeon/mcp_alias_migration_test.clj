@@ -340,6 +340,34 @@
       (finally
         (delete-tree! workspace)))))
 
+
+;; @spec MCP-OP-ALIAS-057
+(deftest a-bare-directory-in-scope-paths-is-that-directorys-subtree
+  ;; The exact scope EVERY tool arm of the E3-P cohort sent on its FIRST call
+  ;; (/home/forge/tmp/arms/e3/e3-P-T-1/rollout.jsonl, 2026-09-03T22:42:20.546Z):
+  ;;   scope: { paths: ["src"] }
+  ;; It selected nothing, because scope.paths are globs and the glob `src`
+  ;; matches only a path whose whole spelling is `src`. Four refusals in four of
+  ;; four arms, one model return each, on a rung whose pass line is one call.
+  ;; A scope path that IS an existing directory is that directory's subtree:
+  ;; the obvious reading, and the only one under which the caller's spelling is
+  ;; not a trap.
+  (let [workspace (workspace!)]
+    (try
+      (testing "a directory selects exactly what its explicit glob selects"
+        (is (= (alias-migration/expand-scope (.toPath (.getCanonicalFile workspace))
+                                            {:paths ["src/**"] :exclude []})
+               (alias-migration/expand-scope (.toPath (.getCanonicalFile workspace))
+                                             {:paths ["src"] :exclude []}))))
+      (testing "the cohort's exact first request commits in ONE call"
+        (let [result (execute! workspace {:scope {:paths ["src"]}
+                                          :expect {:files 12}})]
+          (is (true? (:ok result)) (pr-str result))
+          (is (true? (:committed result)))
+          (is (= 12 (:files result)))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-013
 (deftest an-indirect-reference-refuses-closed-and-names-the-file
   (let [workspace (workspace!)]
