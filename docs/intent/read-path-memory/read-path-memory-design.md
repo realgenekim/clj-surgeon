@@ -288,7 +288,7 @@ cursor writes an immutable snapshot under the workspace state root
 plus a `.rows` file): the ordered candidate list, and for every candidate its
 path and the SHA-256 of its CONTENT. Later pages are served FROM that snapshot — and only after the snapshot's own
 bytes are re-folded to the address they are filed under, on the SERVE path and
-not merely on the reuse path. Five facts become five typed refusals, and each
+not merely on the reuse path. Six facts become six typed refusals, and each
 names a DIFFERENT one:
 
 | the fact | the refusal |
@@ -298,6 +298,7 @@ names a DIFFERENT one:
 | it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
 | it did, the snapshot verified, and a row this page would serve names a path whose PARENT DIRECTORY resolves outside the scanned root (the final component is taken lexically) | `:unconfined-manifest-row`, NAMING the path |
 | it did, and a file this page must serve no longer holds its pinned content | `:stale-result-cursor`, NAMING the path |
+| it did, everything verified, and the page encoded ZERO records with rows still remaining — a continuation would carry a cursor at its own offset | `:empty-result-page`, carrying no cursor |
 
 **Verifying on reuse and trusting on serve makes the address a filename again
 on exactly the path a caller reads.** Round three's review tampered the rows so

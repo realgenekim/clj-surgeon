@@ -307,6 +307,38 @@
                 "a manifest of this root")
    :next_call (next-call request)})
 
+;; @spec MCP-OP-MEM-003
+(defn empty-page-refusal
+  "The receipt for a page that encoded ZERO records while its pinned manifest
+   still held rows to serve.
+
+   A page ADVANCES by the number of records it encoded, so a page that encodes
+   nothing advances by nothing: the continuation it would otherwise mint
+   carries a cursor at its OWN offset, and a caller following `:next_call`
+   follows it forever. The receipt would look healthy the whole way round —
+   `:returned 0` beside a `:remaining` that never falls.
+
+   Unreachable through the shipped path, and named anyway. It is unreachable
+   because two separate facts hold at once — the slice guard refuses a manifest
+   that cannot supply the rows the page promised, and both encoders `emit!`
+   exactly once per candidate — and neither is stated where a refactor of the
+   other would read it. This refusal is the statement: a page never advances by
+   zero, whatever else changes.
+
+   It carries NO cursor. A token that cannot make progress is worse than no
+   token, because it looks like progress."
+  [{:keys [offset slice] :as request}]
+  {:error-type :empty-result-page
+   :error (format (str "the page at offset %d encoded 0 of %d pinned row(s); "
+                       "a page that advances by zero would repeat forever")
+                  offset slice)
+   :limit {:kind :result-records :requested slice :observed 0 :offset offset}
+   :complete false
+   :source-unchanged true
+   :remedy (str "rescan from the start; this page cannot advance and its "
+                "cursor would name its own offset")
+   :next_call (next-call (dissoc request :next-cursor))})
+
 ;; ============================================================
 ;; Text rendering — the same receipts, in the text encoding
 ;; ============================================================

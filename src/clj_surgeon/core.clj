@@ -818,18 +818,29 @@
               ;; and a file read without proving its address is a filename.
               (if-let [rows (:rows (snapshot/verified-page abs cursor-id 0
                                                            ceiling))]
-                (encode-page abs projects (pinned-candidates abs rows)
+                (let [advanced (volatile! 0)
+                      page (encode-page
+                             abs projects (pinned-candidates abs rows)
                              output-format
                              ;; MEASURED, not asserted: the next page starts
                              ;; exactly where this one stopped, so no record
                              ;; can be skipped by a receipt that overclaims.
                              (fn [encoded]
-                               (budget/continuation
-                                 (assoc request
-                                        :returned encoded
-                                        :next-cursor (page-cursor
-                                                       cursor-id secret
-                                                       encoded)))))
+                               (vreset! advanced encoded)
+                               (when (pos? encoded)
+                                 (budget/continuation
+                                   (assoc request
+                                          :returned encoded
+                                          :next-cursor (page-cursor
+                                                         cursor-id secret
+                                                         encoded))))))]
+                  ;; A page ADVANCES by what it encoded, so a page that
+                  ;; encoded nothing would hand back a cursor at its own
+                  ;; offset. See `budget/empty-page-refusal`.
+                  (if (zero? @advanced)
+                    (render (budget/empty-page-refusal
+                              (assoc request :slice (count rows))))
+                    page))
                 (render (budget/unknown-cursor-refusal
                           (assoc base :token (page-cursor cursor-id secret
                                                           0))))))))))))
@@ -837,25 +848,30 @@
 (defn- run-pinned-page
   "A page served from a pinned manifest snapshot.
 
-   Five typed refusals guard it, and each names a DIFFERENT fact about the
-   caller's cursor: `:invalid-result-cursor` — this server did not mint that
-   token; `:unknown-result-cursor` — it did, but not for this root, the
-   snapshot is gone, the bytes filed under it no longer PROVE the manifest
-   they are filed as, or the manifest cannot supply the slice it promised;
-   `:result-cursor-out-of-range` — it did, and the position
-   is not in the manifest; `:stale-result-cursor` — it did, and a file this
-   page must serve no longer holds its pinned content.
+   Six typed refusals guard it. Four name a DIFFERENT fact about the caller's
+   cursor: `:invalid-result-cursor` — this server did not mint that token;
+   `:unknown-result-cursor` — it did, but not for this root, the snapshot is
+   gone, the bytes filed under it no longer PROVE the manifest they are filed
+   as, or the manifest cannot supply the slice it promised;
+   `:result-cursor-out-of-range` — it did, and the position is not in the
+   manifest; `:stale-result-cursor` — it did, and a file this page must serve
+   no longer holds its pinned content.
 
-   A fifth refusal states a fact about the MANIFEST rather than the cursor:
+   Two state a fact about the MANIFEST or the PAGE rather than the cursor:
    `:unconfined-manifest-row` — the token is good, the snapshot verified, and
-   one of the rows this page would serve names a path outside the scanned
-   root. It names that path and reads nothing.
+   one of the rows this page would serve names a path whose parent directory
+   resolves outside the scanned root; it names that path and reads nothing.
+   `:empty-result-page` — everything verified and the page still encoded zero
+   records with rows remaining, so the continuation it would mint would carry
+   a cursor at this page's own offset.
 
-   The snapshot is resolved by `verified-snapshot`, so the page re-folds the
-   rows on disk to their own address before it serves a single record. The
-   cost is one streaming pass over the manifest file; the alternative is
-   trusting a filename, which the round-three review turned into a silently
-   substituted candidate.
+   The snapshot and the slice come from ONE OPEN of the rows file
+   (`snapshot/verified-page`): the same pass folds the manifest digest, counts
+   the rows and cuts the slice, so the address is proved OF THE BYTES SERVED.
+   Verifying in one open and slicing in a second left a window that is not a
+   hairline but the whole fold — O(N), so it grew with the corpus — and round
+   four measured 92 of 400 page-2 reads serving a substituted candidate under
+   a valid cursor while a swapper renamed rows files into place.
 
    No discovery, no glob, no tree walk: the page reads its own slice of the
    pinned rows and nothing else."
@@ -891,10 +907,16 @@
               request (assoc base :digest (:digest snap) :total total
                              :offset offset)]
           (cond
-            ;; The manifest verified, then could not supply the slice it
-            ;; promised — the rows changed between the verifying fold and this
-            ;; read. A short page under a full receipt is the lying shape this
-            ;; whole budget exists to refuse, so it refuses instead.
+            ;; The manifest verified and still could not supply the slice
+            ;; it promised. This is the COUNT direction, and it is the SAFE
+            ;; one: a short page under a full receipt lies about how much was
+            ;; shown, never about WHAT was shown. The dangerous direction is
+            ;; DIFFERENT rows of the right length, which no count can see —
+            ;; round four served `[m06 m01 m08 m09 m10]` that way 92 times in
+            ;; 400 reads. That direction is not closed here; it is closed
+            ;; upstream by `snapshot/verified-page` folding and slicing in one
+            ;; open, so the rows below are a slice of bytes that prove the id.
+            ;; This guard remains as the arithmetic check it always was.
             (not= slice (count rows))
             (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
 
@@ -913,16 +935,28 @@
                              (page-cursor cursor-id (:secret snap) offset))))
 
             :else
-            (encode-page abs (:projects snap) (pinned-candidates abs rows)
+            (let [advanced (volatile! 0)
+                  page (encode-page
+                         abs (:projects snap) (pinned-candidates abs rows)
                          output-format
                          (fn [encoded]
-                           (when over?
+                           (vreset! advanced encoded)
+                           (when (and over? (pos? encoded))
                              (budget/continuation
                                (assoc request
                                       :returned encoded
                                       :next-cursor
                                       (page-cursor cursor-id (:secret snap)
-                                                   (+ offset encoded))))))))))) 
+                                                   (+ offset encoded)))))))]
+              ;; `over?` is derived from `(- total offset)` and the advance is
+              ;; derived from `encoded`. When they disagree in the direction
+              ;; `rows remain, nothing encoded`, the continuation would carry a
+              ;; cursor at this page's OWN offset and a caller would follow it
+              ;; forever. See `budget/empty-page-refusal`.
+              (if (and over? (zero? @advanced))
+                (render (budget/empty-page-refusal
+                          (assoc request :slice (count rows))))
+                page)))))) 
     (render (budget/invalid-cursor-refusal (assoc base :token cursor)))))
 
 (defn run-ls-tree
