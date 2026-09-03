@@ -723,6 +723,7 @@
       result)
     result))
 
+;; @spec MCP-OP-STUDY-029
 (defn- with-match-form-pattern-remedy
   [result {:keys [file inside pattern] :as opts}]
   (if (and file
@@ -731,7 +732,12 @@
            (not (str/blank? pattern))
            (not (contains? opts :match)))
     (if (str/includes? pattern "|")
-      (let [args ["rg" "-n" "--max-count" "20" pattern (str file)]]
+      ;; "--" ends option parsing, exactly as `study/grep-tree` does for the
+      ;; pattern it runs itself. This command is RENDERED for the caller to
+      ;; paste, so a pattern like "--pre=/bin/sh|x" would otherwise be handed
+      ;; to them spelled as a ripgrep flag — the same argv confusion, moved
+      ;; from our subprocess into theirs.
+      (let [args ["rg" "-n" "--max-count" "20" "--" pattern (str file)]]
         (assoc-in result [:remedies :text-search]
                   {:operation :text-search
                    :reason (str ":match-form :match accepts one EDN form pattern, not a regular expression. "
