@@ -507,21 +507,62 @@
 
 ;; @spec MCP-OP-EXTRACT-037
 (defn- skipped-tree-prefixes
-  "The canonical real paths of the trees the walk declined to enter.
+  "The canonical real paths of the trees the walk declined to enter -- the ones
+  it DECLINED, not the canonical targets of every pruned name.
 
   Canonical, not as recorded: a pruned entry may itself be a link -- `target ->
   /elsewhere` -- so comparing the recorded path against a canonical caller path
   would miss the tree it actually names. Both the entry and, for a link, its
   target are canonicalized, because either spelling can be the one a caller's
-  real path lands under."
-  [skipped-directories]
+  real path lands under.
+
+  Then subtracted: any canonical prefix that is an ancestor of a path the walk
+  READ is removed, because the walk entering a tree by one spelling is proof it
+  is not a tree the walk declined."
+  [skipped-directories read-paths]
+  (let [canonical (into #{}
+                        (comp (mapcat (fn [{:keys [dir resolves-to]}]
+                                        [dir resolves-to]))
+                              (remove nil?)
+                              (keep (fn [path]
+                                      (try (.toString (mcp-paths/real-root path))
+                                           (catch Exception _ nil)))))
+                        skipped-directories)]
+    ;; @spec MCP-OP-EXTRACT-037
+    ;; ... but a tree the walk demonstrably READ is not a tree it declined to
+    ;; enter, whatever spelling also reaches it. `target -> build_out` prunes
+    ;; the NAME `target`; `build_out` is an ordinary root-level directory the
+    ;; walk descended, and canonicalising the pruned name turned every source
+    ;; it holds into a forbidden write. `out -> src` was worse: it refused
+    ;; EVERY extraction in the workspace and named the source file itself as
+    ;; the offender, with no remedy short of deleting the link.
+    (into #{}
+          (remove (fn [tree]
+                    (let [prefix (str tree "/")]
+                      (some #(str/starts-with? (str %) prefix) read-paths))))
+          canonical)))
+
+;; @spec MCP-OP-EXTRACT-037
+(defn- walked-read-paths
+  "The canonical real paths this walk actually READ.
+
+  A discovered path that IS a symbolic link is excluded on purpose: the link is
+  a location, not a tree the walk entered, and its real file may live anywhere
+  -- including inside a pruned tree, which is the whole point of the fence. A
+  non-link entry, by contrast, was reached by descending real directories from
+  the root (the walk never descends a link), so its canonical path names a tree
+  the walk demonstrably read."
+  [paths]
   (into #{}
-        (comp (mapcat (fn [{:keys [dir resolves-to]}] [dir resolves-to]))
-              (remove nil?)
+        (comp (remove (fn [path]
+                        (try
+                          (java.nio.file.Files/isSymbolicLink
+                            (.toPath (io/file (str path))))
+                          (catch Exception _ true))))
               (keep (fn [path]
-                      (try (.toString (mcp-paths/real-root path))
+                      (try (.getCanonicalPath (io/file (str path)))
                            (catch Exception _ nil)))))
-        skipped-directories))
+        paths))
 
 ;; @spec MCP-OP-EXTRACT-037
 (defn- canonical-workspace-paths
@@ -561,7 +602,8 @@
        :source-unchanged true
        :target-unchanged true}
       (let [real-root (:root real)
-            pruned (skipped-tree-prefixes skipped-directories)
+            pruned (skipped-tree-prefixes skipped-directories
+                                          (walked-read-paths paths))
             ;; returns the pruned tree itself, so the refusal can name it
             in-pruned-tree (fn [candidate]
                              (some (fn [tree]
