@@ -184,3 +184,31 @@
           (is (not (str/includes? both "Wrong number of args")))
           (is (not (str/includes? out ":invalid-arguments"))))
         (finally (fs/delete-tree sandbox))))))
+
+;; @spec MCP-OP-SHELL-ARGV-002
+(deftest a-symlinked-root-is-descended-just-like-its-target
+  (testing "the gate and the executor must agree on what a directory is"
+    (let [sandbox (fresh-sandbox)]
+      (try
+        ;; NOT named "target": that name is in `skip-dirs` and would be
+        ;; pruned, making the comparison vacuously 0 = 0.
+        (make-project! sandbox "proj")
+        (let [target (str (fs/path sandbox "proj"))
+              link   (str (fs/path sandbox "link"))]
+          (fs/create-sym-link link target)
+          (is (= (count (find-build-files target))
+                 (count (find-build-files link)))
+              "`existing-directory?` follows symlinks (Files.isDirectory) but
+               `find` under its -P default does not descend a symlinked START
+               POINT, so the entrance accepted the root and discovery silently
+               found nothing")
+          (let [linked  (run-cli-ls-tree ":dir" link ":format" ":edn")
+                control (run-cli-ls-tree ":dir" target ":format" ":edn")]
+            (is (= 0 (:exit linked))
+                (str "a root the entrance accepted must not scan empty; stdout: "
+                     (:out linked) " stderr: " (:err linked)))
+            (is (str/includes? (:out linked) "src/core.clj")
+                "the symlinked root discovers the file its target discovers")
+            (is (= (:out control) (:out linked))
+                "and discovers exactly the same projects and files")))
+        (finally (fs/delete-tree sandbox))))))
