@@ -157,3 +157,7 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 
 - q5z pushed 23ea871 (full mcp-test incl. oracle PASS); re-review acb7e66e0b6224894 running. Study security round complete at 212b045 (unpushed); my suites waiter buh7b1v0k (`~/tmp/study2-*.log`); push when only the baseline six fail and the oracle passes; then an Opus re-review (flag: host-absolute dir in refusals; grep continuation carries the rejected pattern; 65,536-char study limit; find-config-file walk).
 - Running: rf2 round three a59ea3ce2a6b2a7fc, census a4fe4601c68f5db01, fold-diff aa14abf5d75ba48e8, template-upsert abd7fc65de9301f76, ratchets a90f9ebd74d4100af.
+
+## RESUME DELTA 2026-09-03T03:43Z
+
+- Study pushed 212b045; re-review a4bf90d6d86f75204 running — the NO-GO doc stands until it says GO. q5z re-review acb7e66e0b6224894 running. Fix rounds: rf2 round three, census, fold-diff, template-upsert, ratchets.

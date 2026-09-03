@@ -246,3 +246,5 @@ bounded inner timeout with guaranteed restore. My full suites queued; push → r
 
 
 ## 03:42Z — `bridge/q5z-alias-migration` pushed at 23ea871 (my suites: test-fast 734/6257 baseline five; full `make mcp-test` 409/4593 baseline one, oracle PASS). Re-review acb7e66e0b6224894 running (the seven probes re-run, the walk depth bound, the ceilings' refusal shape, retire-before-write, derived :committed, retention race, the hygiene gate on bb, the restored over-declare idiom on both entrances).
+
+## 03:43Z — `bridge/study-ops-mcp` pushed at 212b045 (my suites: test-fast 723/5990 baseline five; full `make mcp-test` 404/5224 baseline one, oracle PASS). Still NOT in the queue: re-review a4bf90d6d86f75204 re-runs all twelve probes plus the four flagged items (host-absolute dir in refusals, the grep continuation, the 65,536-char study limit, the claypoole/bb split) before the NO-GO is lifted.
