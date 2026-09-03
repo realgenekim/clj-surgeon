@@ -328,3 +328,6 @@ Memory added: cursor-mac-needs-an-unpublished-secret.
 GO (ten) unchanged; production fold-diff read GO at 347fe6d3 stands (tip 66325423 NO-GO on the required-var scan; round 8 building).
 No review in flight; five builders: kernel round 4 (~/src/clj-surgeon-txn), apparatus round 6 (~/src/clj-surgeon-arms), census round 9 (~/src/clj-surgeon-census), MEM-003 round 3 (~/src/clj-surgeon-stream), fold-diff round 8 (~/src/curtaincall-cfp-folddiff).
 Next on each report: push → Sol (census, apparatus, fold-diff, MEM-003 cursor surface) or Opus (kernel) → file → GO note or next round. Gene report final refresh ~13:00Z with skills/gene-report/SKILL.md.
+
+## RESUME DELTA (eighteenth refresh; commit time is the timestamp)
+Live: Sol apparatus round 6 cohort-readiness review (8017789). Builders: kernel round 4, census round 9, MEM-003 round 3, fold-diff round 8 (worktrees as before). GO (ten) unchanged; production fold-diff read GO at 347fe6d3.
