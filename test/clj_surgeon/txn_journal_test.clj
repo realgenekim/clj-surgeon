@@ -402,6 +402,35 @@
           (journal/rollback! txn))
         (finally (cleanup! ws) (cleanup! outside))))))
 
+;; @spec MCP-OP-MEM-006
+(deftest a-path-with-a-parent-traversal-segment-is-refused-before-canonicalisation
+  (testing "Sol's finding: `<root>/src/../src/f000.clj` was PINNED, because
+            getCanonicalPath deletes the `..` before the resolver that rejects
+            traversal ever sees it. Canonicalisation is not a confinement check;
+            it is what hides the need for one. The lexical refusal comes first."
+    (let [ws (workspace! "lexical-traversal" 2)
+          inside (first (sort (:paths ws)))
+          traversing (str (:root ws) "/src/../src/"
+                          (.getName (io/file inside)))]
+      (try
+        (let [before (bytes-of inside)
+              txn (begin! ws {})
+              pinned (journal/pin! txn traversing)
+              staged (journal/stage! txn traversing "(ns evil)\n")]
+          (is (false? (:ok pinned)))
+          (is (= :txn-path-outside-workspace (:error-type pinned)))
+          (is (= :lexical-parent-traversal (:cause pinned))
+              "the refusal names the lexical rule, not a canonical accident")
+          (is (false? (:ok staged)))
+          (is (= :lexical-parent-traversal (:cause staged)))
+          (is (= 0 (journal/staged-file-count txn))
+              "the traversing path reached neither the object store nor staging")
+          (is (= before (bytes-of inside)))
+          (is (:ok (journal/pin! txn inside))
+              "the same file, named without traversal, is still admitted")
+          (journal/rollback! txn))
+        (finally (cleanup! ws))))))
+
 ;; ------------------------------------------- MCP-OP-MEM-007 lock + read set
 
 ;; @spec MCP-OP-MEM-007

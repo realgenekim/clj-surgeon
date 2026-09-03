@@ -188,6 +188,7 @@ witness:
 | do not prune skip directories | pruning | RED |
 | report no reservation | accountant | RED |
 | remove path confinement | outside-workspace pin and stage | RED |
+| canonicalise before the lexical check | `..` traversal pin and stage | RED |
 
 Three of those probes are findings in their own right, and each fix is in the
 code or the tests. The first crash-recovery mutation did not go red, because

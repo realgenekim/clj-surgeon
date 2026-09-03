@@ -34,7 +34,7 @@ plan unreadable.
   the id registered wherever the witnesses live. On merge, fold this row into
   the battery's own and keep one.
 
-- [x] **MCP-OP-MEM-006**: When a mutation is staged, clj-surgeon shall pin each write-set pre-image and future file durably by digest before live mutation and shall not retain repository-wide original or future source maps.
+- [x] **MCP-OP-MEM-006**: When a mutation is staged, clj-surgeon shall pin each write-set pre-image and future file durably by digest before live mutation, shall refuse a parent-traversal segment, a relative path, or an absolute path not named under the workspace root on the RAW path before canonicalisation, and shall not retain repository-wide original or future source maps.
 
 - [x] **MCP-OP-MEM-007**: Before the first write, clj-surgeon shall hold the transaction lock and revalidate every file that influenced the plan and the SEALED SCOPE-MEMBERSHIP DIGEST it was planned against - never the member count, which cannot distinguish one set from another of the same size; and before each path's own replacement it shall copy that path's staged bytes into the path's own directory FIRST and then, while holding the workspace publish lock, recheck the path's pre-image digest and rename, so that no byte copying happens between the recheck and the rename. Because an atomic rename is not a compare-and-swap, a writer that does not take the publish lock and lands inside that residual recheck-to-rename window can still be overwritten; clj-surgeon shall bound that window to a digest recheck, one journal fsync and one rename, shall report its measured width in the receipt, and shall keep the pinned pre-image journal as its recovery.
 
@@ -53,6 +53,7 @@ plan unreadable.
 |---|---|
 | MEM-006 | "Pinning is a copy-on-write optimisation, so it can be skipped when the file is small." Pinning is the rollback guarantee; an unpinned staged path is a refusal, not a fast path. |
 | MEM-006 | "Keeping the original source string in memory is a cheaper pre-image than a file." That is the defect this kernel exists to remove. |
+| MEM-006 | "Canonicalising the path is the confinement check." `getCanonicalPath` DELETES `..` before any rule can see it, so `<root>/src/../src/in.clj` passes a canonical-only check. The lexical refusal must come first. |
 | MEM-007 | "Revalidate the files we are about to write." A caller or alias that shaped the plan can live in a file the transaction never touches. |
 | MEM-007 | "Membership is fixed once discovery has run." A file that appears after planning can introduce a new caller, so an addition is a conflict. |
 | MEM-007 | "Equal member counts mean the same scope." `[a b]` and `[c d]` have the same count. Membership is compared as a sealed digest over path, type and file identity. |
@@ -71,7 +72,7 @@ plan unreadable.
 
 | id | edge | concurrent | failure |
 |---|---|---|---|
-| MEM-006 | pinned and staged bytes exactly equal the journal quota | a second transaction cannot open while the lock is held | the last injected write fails and every path returns to `H0` |
+| MEM-006 | pinned and staged bytes exactly equal the journal quota; a path naming a file inside the root through a `..` segment | a second transaction cannot open while the lock is held | the last injected write fails and every path returns to `H0` |
 | MEM-007 | exactly the maximum read-set count; a scope whose members are swapped at an unchanged count | a read-only file drifts after sealing; a writer lands after the staged copy and before the pre-image recheck | a write-set file drifts between revalidation and its own rename; a writer lands inside the residual recheck-to-rename window and is overwritten, which the receipt reports |
 | MEM-012 | twenty thousand recorded entries | — | an unsorted entry is refused rather than written out of order |
 | MEM-013 | killed between pin and rename | killed between rename N and N+1 | a pre-image object is missing, which is reported, never assumed |
@@ -83,7 +84,7 @@ plan unreadable.
 | Requirement | Falsifying observation |
 |---|---|
 | MCP-OP-MEM-001 | A receipt is silently truncated, grows without a ceiling, or reports no attributable reserved peak. |
-| MCP-OP-MEM-006 | A staged path is written without a durable pinned pre-image, or a transaction retains a repository-wide original or future source map. |
+| MCP-OP-MEM-006 | A staged path is written without a durable pinned pre-image, or a path containing a `..` segment is pinned or staged, or a transaction retains a repository-wide original or future source map. |
 | MCP-OP-MEM-007 | A transaction commits after a file that shaped its plan changed, or after the scope gained, lost or SWAPPED a member, or without holding the lock; or bytes are copied into the target directory INSIDE the recheck-to-rename window; or a receipt omits that window. |
 | MCP-OP-MEM-012 | Recording N read-set entries makes the transaction value's per-path record count or retained string bytes grow with N. |
 | MCP-OP-MEM-013 | A crash leaves a path holding neither its pre-image nor its verified result, or recovery reports success without verifying a digest. |

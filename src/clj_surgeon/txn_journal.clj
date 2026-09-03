@@ -519,32 +519,64 @@
 
 ;; ------------------------------------------------------------- confinement
 
+(defn- outside-workspace
+  [path root cause message]
+  (refusal :txn-path-outside-workspace message
+           {:path (str path)
+            :cause cause
+            :workspace-root (str root)
+            :next_call nil}))
+
 (defn- confined-path
   "Resolve `path` as a workspace-relative source path, or return a refusal.
 
-   The journal takes absolute paths, so the path is relativised against the
-   transaction's canonical root and handed to the SAME `mcp-paths` resolver every
-   other write surface uses. A path outside the root relativises to segments
-   containing `..`, which that resolver already rejects, so this adds no second
-   confinement rule - it routes to the existing one."
+   THE LEXICAL CHECK COMES FIRST, and that ordering is the whole point.
+   `getCanonicalPath` deletes `..` segments before any resolver can object, so
+   `<root>/src/../src/in.clj` canonicalises to a path inside the root and a
+   confinement rule expressed only in terms of the canonical form never fires.
+   A parent-traversal segment, a relative path and an absolute path that does
+   not lie under the root are therefore refused on the RAW string, before
+   canonicalisation touches it.
+
+   What remains after that is the ordinary route: the path is relativised
+   against the transaction's canonical root and handed to the SAME `mcp-paths`
+   resolver every other write surface uses, so the symlink-escape and
+   not-a-regular-file rules stay in one place."
   [txn path]
   (let [root (or (:real-root txn) (mcp-paths/real-root (:workspace-root txn)))
-        absolute (.toPath (io/file (.getCanonicalPath (io/file path))))]
-    (if-not (.startsWith absolute root)
-      (refusal :txn-path-outside-workspace
-               (str path " is outside the transaction's workspace root")
-               {:path (str path)
-                :workspace-root (.toString root)
-                :next_call nil})
-      (let [relative (.toString (.relativize root absolute))
-            resolved (mcp-paths/resolve-source-path root relative)]
-        (if (:ok resolved)
-          {:ok true :path (:path resolved)}
-          (refusal :txn-path-outside-workspace
-                   (or (:error resolved) "The path is refused by workspace confinement")
-                   {:path (str path)
-                    :cause-error-type (:error_type resolved)
-                    :next_call nil}))))))
+        raw (str path)
+        segments (str/split (str/replace raw "\\" "/") #"/" -1)
+        ^File file (io/file raw)]
+    (cond
+      (some #(= ".." %) segments)
+      (outside-workspace raw root :lexical-parent-traversal
+                         (str raw " contains a parent-traversal segment and is refused"
+                              " before canonicalisation can remove it"))
+
+      (not (.isAbsolute file))
+      (outside-workspace raw root :not-absolute
+                         (str raw " is not absolute; the journal takes absolute paths"
+                              " named under the workspace's real root"))
+
+      (not (.startsWith (.toPath file) root))
+      (outside-workspace raw root :outside-root
+                         (str raw " is not named under the transaction's workspace root"))
+
+      :else
+      (let [absolute (.toPath (io/file (.getCanonicalPath file)))]
+        (if-not (.startsWith absolute root)
+          (outside-workspace raw root :outside-root
+                             (str path " is outside the transaction's workspace root"))
+          (let [relative (.toString (.relativize root absolute))
+                resolved (mcp-paths/resolve-source-path root relative)]
+            (if (:ok resolved)
+              {:ok true :path (:path resolved)}
+              (refusal :txn-path-outside-workspace
+                       (or (:error resolved) "The path is refused by workspace confinement")
+                       {:path (str path)
+                        :cause :resolver-refused
+                        :cause-error-type (:error_type resolved)
+                        :next_call nil}))))))))
 
 ;; --------------------------------------------------------------------- pin
 
