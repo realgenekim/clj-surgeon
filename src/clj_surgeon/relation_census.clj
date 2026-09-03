@@ -142,18 +142,47 @@
   "Pure pool-size kernel shared by the MCP tool and the CLI op.
 
    Accepts an integer or its decimal digits (the CLI hands every value over as
-   a string). Returns {:ok true :size n} or a typed reason."
+   a string). Returns {:ok true :size n} or a typed reason.
+
+   MAGNITUDE IS DECIDED BEFORE ANY COERCION, and the ordering is the whole
+   point. Sol's round-eleven item 6, blocking: this kernel asked its range
+   question THROUGH `(long value)`, so `pool_size` 9223372036854775808 — a
+   perfectly ordinary JSON integer, and exactly the magnitude the bound exists
+   to refuse — threw `IllegalArgumentException: Value out of range for long`
+   out of `execute-request!` instead of returning `pool-size-out-of-range`. A
+   bound enforced by an exception is not a bound: the caller gets a stack
+   trace rather than a typed reason, the maximum, and a continuation, and the
+   refusal contract MCP-OP-CENSUS-014 states never runs.
+
+   So the comparison runs on arbitrary-precision integers and `long` is
+   reached only once the value is known to fit. The CLI's text spelling is
+   read the same way — any number of digits, sign included — because
+   `:threads 9223372036854775808` and `:threads -1` are integers that are OUT
+   OF RANGE, not values that are not integers, and telling the caller the
+   wrong one of those two things sends them to fix the wrong thing.
+
+   `:value` is published as text when the magnitude does not fit a long, so
+   the refusal survives the wire it is published on."
   [value]
   (let [text (str/trim (str value))
         parsed (cond
-                 (integer? value) (long value)
-                 (re-matches #"\d{1,9}" text) (parse-long text)
-                 :else nil)]
+                 (integer? value) (bigint value)
+                 (re-matches #"[+-]?\d+" text)
+                 (try (bigint (java.math.BigInteger. text))
+                      (catch Exception _ nil))
+                 :else nil)
+        publishable (fn [n]
+                      (if (and (<= (bigint Long/MIN_VALUE) n)
+                               (<= n (bigint Long/MAX_VALUE)))
+                        (long n)
+                        (str n)))]
     (cond
       (nil? parsed) {:ok false :reason :not-an-integer :value text}
       (or (< parsed 1) (> parsed max-pool-size))
-      {:ok false :reason :out-of-range :value parsed :maximum max-pool-size}
-      :else {:ok true :size parsed})))
+      {:ok false :reason :out-of-range
+       :value (publishable parsed)
+       :maximum max-pool-size}
+      :else {:ok true :size (long parsed)})))
 
 ;; @spec MCP-OP-CENSUS-016
 (defn effective-pool-size
