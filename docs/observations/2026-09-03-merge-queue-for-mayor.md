@@ -7,7 +7,7 @@
 | 3 | clj-surgeon bridge/census-verb | ef545c5 | Sol NO-GO (6 items); round 3 building | discovery silently truncates at 4,000 and drops an over-ceiling file while claiming completion; CLI glob-then-take; "8" accepted as pool_size; duplicate paths inflate counts 512×; LLD stale. Classifier byte-identical to reference. |
 | 4 | clj-surgeon bridge/rf2-extract-rewire | 465c956 | Opus GO-WITH-FIX → treated as NO-GO (MCP entrance bypasses the walk; reviewer wrote into .git/hooks through it); round 4 building | ruling (no writes into pruned trees via links) landed fails-first |
 | 5 | clj-surgeon bridge/q5z-alias-migration | ca677bc | Sol NO-GO (6 items); round 4 building | seven fails-first witnesses (ALIAS-046..053); aggregate-bytes ceiling refuses 450 × 1.9 MB before any read = MEM-002 host |
-| 6 | clj-surgeon bridge/study-ops-mcp | round 3 building | — | E6 cohort gated on it |
+| 6 | clj-surgeon bridge/study-ops-mcp | 3a237ab | pushed, Sol round-3 re-check running | 11 items, STUDY-020..030; outline of a 126 KB file now ok; discovery 250,000 → 500 files, 8,919 → 97 ms; E6 gated on it |
 | 7 | clj-surgeon bridge/routing-doc-test | a9d8701 | **MERGED** (surgeon1, 3ebeafd/d1c5330) | restores the MCP-OP-RELAY-004 relay paragraph dropped by 01f0739; test-fast 702/5912/0 failures; 8 doc lines, one file |
 | 8 | curtain-call bridge/template-upsert | fix building | — | after fold → store → settings-lens |
 | 9 | curtain-call bridge/fold-diff-tool | round 3 building | HOLD | mayor runs bin/ directly after GO |
