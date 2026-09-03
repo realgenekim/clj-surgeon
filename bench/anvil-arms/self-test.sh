@@ -1245,6 +1245,54 @@ case "$plan30" in
   *) bad "case30 unexpected planned arm dir: $plan30";;
 esac
 
+echo "== case 31: the self-test honours the CALLER's COHORT_PORTS =="
+# Sol round two, item 10: the smoke test forcibly sets its own port, overriding the
+# COHORT_PORTS the caller exported.  Sol was reviewing on a shared box with 7909 as its
+# scope and could not run the checked-in Make target at all without crossing a port
+# boundary; the review ran a hand-edited copy instead, which is one more artifact nobody
+# can bind to this repository.  A test that will not respect the caller's port scope is
+# unrunnable exactly where running it matters.
+p31=${SELFTEST_PORT-}
+if [ -z "$p31" ]; then
+  bad "case31 the self-test derives no port from COHORT_PORTS"
+else
+  want "case31 the port under test is the first COHORT_PORTS entry" "${COHORT_PORTS%% *}" "$p31"
+fi
+n31=$(grep -n '790[7-9]\|7910' "$HERE/self-test.sh" \
+      | grep -v 'COHORT_PORTS:-' | grep -vE '^[0-9]+:[[:space:]]*#' | wc -l)
+[ "$n31" -eq 0 ] && ok "case31 no port literal outside the single default assignment" \
+  || { bad "case31 $n31 hardcoded cohort-port literal(s) survive"
+       grep -n '790[7-9]\|7910' "$HERE/self-test.sh" | grep -v 'COHORT_PORTS:-' \
+         | grep -vE '^[0-9]+:[[:space:]]*#' | head -5; }
+
+# the preflight must FAIL CLOSED on a held port, for whatever ports the caller named,
+# and it must refuse before it creates anything
+if [ -n "$p31" ]; then
+  before31=$(ls -1 "$ARMS_ROOT_BASE" 2>/dev/null | wc -l)
+  python3 -c 'import socket,sys,time
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(1); time.sleep(20)' "$p31" &
+  L31=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx "$p31" && break
+    sleep 0.3
+  done
+  if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx "$p31"; then
+    ok "case31 a listener this case started holds port $p31 (pid $L31)"
+    env COHORT_PORTS="$p31" ANVIL_ARMS_SELFTEST_DIR= bash "$HERE/self-test.sh" \
+      > "$WORK/case31.out" 2>&1
+    want "case31 preflight rc on a held port" 2 "$?"
+    grep -q 'SELFTEST-REFUSED' "$WORK/case31.out" \
+      && ok "case31 typed preflight refusal: $(grep -m1 SELFTEST-REFUSED "$WORK/case31.out" | cut -c1-90)" \
+      || { bad "case31 the self-test ran on a port it does not own"; head -3 "$WORK/case31.out"; }
+    after31=$(ls -1 "$ARMS_ROOT_BASE" 2>/dev/null | wc -l)
+    want "case31 the refused run created nothing under $ARMS_ROOT_BASE" "$before31" "$after31"
+  else
+    bad "case31 could not bind $p31 to run the witness"
+  fi
+  kill "$L31" 2>/dev/null; wait "$L31" 2>/dev/null
+fi
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
