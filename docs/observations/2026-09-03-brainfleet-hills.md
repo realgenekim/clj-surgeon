@@ -843,3 +843,12 @@ Thus 0/3 closes bare exposure on Lb—not square 3’s capability, a genuinely b
 | blind rung | 3-run screen | B: 1/3 at 45% | deferred to the next wave |
 | route-don't-ask read hook (O4) | unique to Opus, "most valuable number" | — | build tomorrow (not a measurement tonight) |
 | ratchet | required=true + per-arm connection proof | — | adopted in both cohorts: an arm without proof is VOID |
+
+## 13. Second result: E3-P (22:55Z) — 0.36× wall direction inside the floor, 3/3 correct both, pass line FAILS on refusals (57%)
+
+| arm | n | wall s | returns | non-test actions | verb calls (committed) | churn | correct |
+|---|---|---|---|---|---|---|---|
+| N native | 3 | 137.0 | 4.67 | 5.00 | 0 | +84/−84 | 3/3 |
+| T tool | 3 | 49.3 | 4.00 | 4.67 | 2.33 (1.00) | +84/−84 | 3/3 |
+
+Predictions scored: Fable "≤ 0.5x at N=21; tool 2–3 returns vs native 9–10" — wall direction right (0.36×) but inside the floor, returns wrong (native 4.67, not 9–10: Sol closes fan-out fast); Opus "wall 0.65–0.85×, all six lines pass 55%" — wall better than predicted, lines failed on refusals; Sol "60–90 s saved, inside the 172 s floor" — exactly right (87.7 s). Product defect inb-b873d0. Receipt docs/observations/2026-09-04-e3-p-cohort.md (2d32482).
