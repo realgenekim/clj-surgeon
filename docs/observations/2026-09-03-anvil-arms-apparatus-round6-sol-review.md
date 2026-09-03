@@ -120,3 +120,41 @@ The round-eight defects are fixed, but the new heredoc attack produces a genuine
 8. [self-test.sh:2380](/home/forge/tmp/sol/arms9-wt/bench/anvil-arms/self-test.sh:2380) — Blocking: an exact tally line inside an inert quoted heredoc is accepted; visible `FAIL case35d heredoc-probe` still yields rc 0 and `anvil-arms self-test: 386 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview9/heredoc-commented-tally)` ([FAIL witness](/home/forge/tmp/arms/solreview9/heredoc-commented-tally.log:395), [false-green summary](/home/forge/tmp/arms/solreview9/heredoc-commented-tally.log:455)).
 
 Every mutation was restored with `git checkout`. The checkout is clean at `59ed16a`, no review test process remains, and port 7909 is free.
+
+---
+
+# Round 10 — Sol re-check at 77e6237 (2026-09-03T13:01Z)
+
+Verdict: **GO — cohort-ready at 77e6237** (supersedes 23a7643). The runtime tally ledger closes the round-nine false green without a false failure; twelve attacks failed closed.
+
+## Sol, verbatim
+
+## GO
+
+Cohort-ready at `77e6237`. The runtime ledger closes the round-nine false-green without introducing a false failure. All requested attacks failed closed; the checkout is clean, port 7909 is free, and no self-test process remains.
+
+1. [self-test.sh:2492](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2492) — Baseline, rc 0: `anvil-arms self-test: 389 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview10/baseline)` ([witness](/home/forge/tmp/arms/solreview10/baseline.log:458)).
+
+2. [self-test.sh:2439](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2439) — Missing `tally case35d`, rc 1: `anvil-arms self-test: 384 passed, 3 failed  (workdir /home/forge/tmp/arms/solreview10/missing-tally)`; names `case35d` ([witness](/home/forge/tmp/arms/solreview10/missing-tally.log:452)).
+
+3. [self-test.sh:144](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:144) — Injected counted FAIL, rc 1: `anvil-arms self-test: 389 passed, 1 failed  (workdir /home/forge/tmp/arms/solreview10/injected-counted-fail-visible)` ([visible FAIL](/home/forge/tmp/arms/solreview10/injected-counted-fail-visible.log:390), [summary](/home/forge/tmp/arms/solreview10/injected-counted-fail-visible.log:457)).
+
+4. [self-test.sh:2432](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2432) — Orphan `case99.out`, rc 1: `anvil-arms self-test: 386 passed, 3 failed  (workdir /home/forge/tmp/arms/solreview10/orphan-case99)`; coverage, per-id, and FAIL-sum checks all fire ([witness](/home/forge/tmp/arms/solreview10/orphan-case99.log:452)).
+
+5. [self-test.sh:144](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:144) — `tally case35` over `FAIL case35d x`, rc 1: `anvil-arms self-test: 383 passed, 5 failed  (workdir /home/forge/tmp/arms/solreview10/suffix-case35-case35d)`; the exact boundary prevents suffix absorption ([witness](/home/forge/tmp/arms/solreview10/suffix-case35-case35d.log:452)).
+
+6. [self-test.sh:2442](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2442) — Duplicate `tally case35c` plus missing `case35d`, rc 1: `anvil-arms self-test: 388 passed, 5 failed  (workdir /home/forge/tmp/arms/solreview10/duplicate-case35c-missing-case35d)` ([witness](/home/forge/tmp/arms/solreview10/duplicate-case35c-missing-case35d.log:452)).
+
+7. [self-test.sh:130](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:130) — Non-canonical `tally  "case35d"` control, rc 0: `anvil-arms self-test: 389 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview10/noncanonical-valid-tally)` ([witness](/home/forge/tmp/arms/solreview10/noncanonical-valid-tally.log:458)).
+
+8. [self-test.sh:148](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:148) — Decisive inert-heredoc tally with the real call removed, rc 1: `anvil-arms self-test: 383 passed, 4 failed  (workdir /home/forge/tmp/arms/solreview10/heredoc-inert-tally)`; visible failure and case-45 diagnostic both name `case35d` ([witness](/home/forge/tmp/arms/solreview10/heredoc-inert-tally.log:396)).
+
+9. [self-test.sh:2464](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2464) — `.out` written after tally, rc 1: `anvil-arms self-test: 385 passed, 2 failed  (workdir /home/forge/tmp/arms/solreview10/late-write-after-tally)`; ledger `case35d 0 0` is rejected against two final lines ([witness](/home/forge/tmp/arms/solreview10/late-write-after-tally.log:453)).
+
+10. [self-test.sh:2449](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2449) — `tally case99` with no `.out`, rc 1: `anvil-arms self-test: 388 passed, 1 failed  (workdir /home/forge/tmp/arms/solreview10/tally-without-out)` ([witness](/home/forge/tmp/arms/solreview10/tally-without-out.log:452)).
+
+11. [self-test.sh:2415](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2415) — TAB after `case35d`, rc 1: `anvil-arms self-test: 386 passed, 2 failed  (workdir /home/forge/tmp/arms/solreview10/tab-after-id)`; tally drops the TAB-bound line, awk counts it, and reconciliation catches `1` versus `2` ([witness](/home/forge/tmp/arms/solreview10/tab-after-id.log:453)).
+
+12. [self-test.sh:2447](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:2447) — Two cases sharing `case35c.out`, rc 1: `anvil-arms self-test: 384 passed, 3 failed  (workdir /home/forge/tmp/arms/solreview10/two-cases-one-out)`; missing `case35d.out`, per-id mismatch, and sum mismatch are detected ([witness](/home/forge/tmp/arms/solreview10/two-cases-one-out.log:456)).
+
+13. [self-test.sh:115](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:115) — Writer audit: startup truncates the ledger exactly once; the only append is inside `tally` at [line 148](/home/forge/tmp/sol/arms10-wt/bench/anvil-arms/self-test.sh:148). A pre-seeded `case99 9 9` row disappeared, leaving the five legitimate rows and rc 0: `anvil-arms self-test: 389 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview10/preseed-ledger)` ([witness](/home/forge/tmp/arms/solreview10/preseed-ledger.log:451)).
