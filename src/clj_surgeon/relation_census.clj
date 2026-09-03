@@ -393,7 +393,7 @@
     :mcp :empty-file-list
     :cli {:inexpressible
           (str "the CLI names at most one source, with :file; an absent "
-               "  :file censuses the tree and is not an empty list")}}
+               ":file censuses the tree and is not an empty list")}}
 
    {:field :files
     :violation :too-many
