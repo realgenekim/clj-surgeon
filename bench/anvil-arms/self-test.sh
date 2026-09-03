@@ -2349,33 +2349,80 @@ if [ "$FAIL" -ne 0 ] && [ -s "$STDERR_LOG" ]; then
 fi
 
 echo "== case 45: every caseNN.out with ok/FAIL lines is actually tallied into PASS/FAIL =="
-# Round eight.  The python-heredoc cases (33, 34, 35c, 35d, 36, ...) print their OWN
-# `ok   caseNN ...` / `FAIL caseNN ...` lines into $WORK/caseNN.out; those lines are
-# invisible to $PASS/$FAIL unless an explicit line elsewhere in this script does
-# `grep -c '^FAIL caseNN' "$WORK/caseNN.out"` (and the matching ok line) to fold them
-# in.  A case added without that tally line can print FAIL and the suite still reports
-# "N passed, 0 failed", rc 0 -- a witness that cannot fail.  Two independent checks:
+# Round nine (Sol round eight, decisive defect).  The round-eight check ignored the
+# tally line's own FILE operand, then reconstructed an "idealised" command against
+# $f instead of the file the tally line actually names -- so a real tally line
+# `grep -c '^FAIL case35d' "$WORK/case35c.out"` (case35d's own tally, pointed at
+# case35c's file) passed both checks while the real FAIL went uncounted:
+# "386 passed, 0 failed", rc 0.  And a bare id prefix (`^FAIL case35`) matched a
+# suffixed id (`FAIL case35d ...`), masking a case-ID mismatch.
 #
-#   (a) every $WORK/caseNN.out that actually carries an ok/FAIL-prefixed line has a
-#       tally line in the script text naming that exact case id;
-#   (b) the FAIL total the script's own tally lines compute is not smaller than a
-#       plain global recount of every `^FAIL case...` line across every .out file --
-#       so a tally line that exists but undercounts (wrong file, wrong id) is caught
-#       too, not just a tally line that is missing outright.
+# Fixed by parsing every PASS/FAIL tally line CHARACTER FOR CHARACTER out of the
+# running script ($BASH_SOURCE) -- id and file operand together, never apart --
+# and comparing ids by EXACT string equality, never substring/prefix.  That closes
+# the suffix-collision hole without needing a boundary character in the grep
+# pattern text itself: the string "case35" is never equal to the string "case35d".
+#
+#   (a) every $WORK/caseNN.out that carries an ok/FAIL-prefixed line has BOTH a
+#       PASS-tally and a FAIL-tally line in the script, for an id EXACTLY equal
+#       to caseNN, pointed at the file operand EXACTLY "$WORK/caseNN.out";
+#   (b) the FAIL total obtained by RE-EXECUTING every FAIL-tally line's own
+#       parsed id+file (not an idealised reconstruction) is not smaller than a
+#       plain global recount of every `^FAIL case` line across every .out file --
+#       so a tally line that exists but names the wrong id or the wrong file is
+#       caught too, not just one that's missing outright.
 untallied45=0
 global_fail45=0
 tallied_fail45=0
+
+tally_rows45=$(python3 - "${BASH_SOURCE[0]}" <<'PYTALLY45'
+import re, sys
+src = open(sys.argv[1]).read()
+ok_pat = re.compile(
+    r"""^PASS=\$\(\(PASS \+ \$\(grep -c '\^ok   ([A-Za-z0-9_]+)' "(\$WORK/[A-Za-z0-9_]+\.out)"\)\)\)$""",
+    re.M)
+fail_pat = re.compile(
+    r"""^FAIL=\$\(\(FAIL \+ \$\(grep -c '\^FAIL ([A-Za-z0-9_]+)' "(\$WORK/[A-Za-z0-9_]+\.out)"\)\)\)$""",
+    re.M)
+for m in ok_pat.finditer(src):
+    print(f"ok\t{m.group(1)}\t{m.group(2)}")
+for m in fail_pat.finditer(src):
+    print(f"fail\t{m.group(1)}\t{m.group(2)}")
+PYTALLY45
+)
+
+declare -A ok_valid45 fail_valid45
+if [ -n "$tally_rows45" ]; then
+  while IFS=$'\t' read -r kind45 id45 file45; do
+    [ -n "$kind45" ] || continue
+    expect45="\$WORK/${id45}.out"
+    if [ "$kind45" = "ok" ]; then
+      [ "$file45" = "$expect45" ] && ok_valid45["$id45"]=1
+    else
+      [ "$file45" = "$expect45" ] && fail_valid45["$id45"]=1
+      # (b) re-execute the SAME command this tally line names -- id and file
+      # together, exactly as parsed, valid or not: the script's own arithmetic,
+      # never a second author of the logic.
+      real_file45="$WORK/${file45#\$WORK/}"
+      # boundary: the id must be followed by a space or end-of-line, exactly as
+      # every real print does ("FAIL <id> <label>") -- a bare id-prefix match
+      # would let a coarse/short id "count" a longer suffixed id's own line
+      # (e.g. "case35" silently absorbing "case35d ...").
+      bpat45="^FAIL ${id45}"'( |$)'
+      tc45=$(grep -Ec "$bpat45" "$real_file45" 2>/dev/null || true)
+      tallied_fail45=$((tallied_fail45 + ${tc45:-0}))
+    fi
+  done <<< "$tally_rows45"
+fi
+
 for f in "$WORK"/case*.out; do
   [ -e "$f" ] || continue
   base=$(basename "$f" .out)   # e.g. "case35d" -- already carries the "case" prefix
   if grep -Eq '^(ok   |FAIL )case' "$f" 2>/dev/null; then
-    if grep -qF "grep -c '^FAIL ${base}'" "$HERE/self-test.sh"; then
-      # (b) re-run the SAME command the script's own tally line names, on the SAME
-      # file -- not a second author of the logic, the tally's own arithmetic.
-      tc=$(grep -c "^FAIL ${base}" "$f" 2>/dev/null || true)
-      tallied_fail45=$((tallied_fail45 + ${tc:-0}))
+    if [ -n "${ok_valid45[$base]:-}" ] && [ -n "${fail_valid45[$base]:-}" ]; then
+      :   # both tally lines exist, each pointed at exactly "$WORK/${base}.out"
     else
-      bad "${base}.out has ok/FAIL lines but no tally line in self-test.sh"
+      bad "${base}.out has ok/FAIL lines but no exact-matching PASS+FAIL tally line in self-test.sh (want id \"${base}\" and file operand \"\$WORK/${base}.out\" exactly)"
       untallied45=$((untallied45 + 1))
     fi
   fi
@@ -2383,11 +2430,11 @@ for f in "$WORK"/case*.out; do
   global_fail45=$((global_fail45 + ${gc:-0}))
 done
 [ "$untallied45" -eq 0 ] \
-  && ok "case45 every caseNN.out with ok/FAIL lines has a tally line in self-test.sh"
+  && ok "case45 every caseNN.out with ok/FAIL lines has an exact-matching PASS+FAIL tally line in self-test.sh"
 if [ "$global_fail45" -gt "$tallied_fail45" ]; then
-  bad "case45 global FAIL recount ($global_fail45) exceeds what the tally lines counted ($tallied_fail45) -- a FAIL line exists that no tally line's own arithmetic reaches"
+  bad "case45 global FAIL recount ($global_fail45) exceeds what the tally lines' own re-executed arithmetic counted ($tallied_fail45) -- a FAIL line exists that no tally line correctly reaches"
 else
-  ok "case45 the tally lines' own FAIL count ($tallied_fail45) covers every FAIL case line on disk ($global_fail45)"
+  ok "case45 the tally lines' own re-executed FAIL count ($tallied_fail45) covers every FAIL case line on disk ($global_fail45)"
 fi
 
 echo
