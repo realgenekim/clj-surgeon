@@ -25,6 +25,15 @@ Reserved ids are not gaps to fill opportunistically. They name work Sol
 sequenced ahead of adoption, and taking one for something else would make the
 plan unreadable.
 
+- [x] **MCP-OP-MEM-001**: When a tree-scale operation terminates, clj-surgeon shall report its work and its attributable reserved peak in a bounded receipt, and shall refuse rather than truncate a receipt that would exceed its configured record or byte ceiling.
+
+  This row belongs to the memory-battery build, which owns MEM-001. It is
+  recorded here because the kernel carries two of its clauses - the streaming
+  reader's request-lowerable receipt ceiling with a server cap, and the
+  accountant's attributable reserved peak - and the traceability contract needs
+  the id registered wherever the witnesses live. On merge, fold this row into
+  the battery's own and keep one.
+
 - [x] **MCP-OP-MEM-006**: When a mutation is staged, clj-surgeon shall pin each write-set pre-image and future file durably by digest before live mutation and shall not retain repository-wide original or future source maps.
 
 - [x] **MCP-OP-MEM-007**: Before the first write, clj-surgeon shall hold the transaction lock and revalidate every file and scope-membership fact that influenced the plan.
@@ -35,9 +44,8 @@ plan unreadable.
 
 - [x] **MCP-OP-MEM-014**: When a transaction commits or refuses, clj-surgeon shall state its isolation as optimistic serializability with conflict detection and exact rollback and shall not claim snapshot isolation against a writer that ignores the lock.
 
-- [D] **MCP-OP-MEM-020**: When a scope is walked, clj-surgeon shall admit work exactly through its walk-entry, depth, per-file byte and aggregate byte ceilings, shall refuse the next unit before reading it with a narrowing `next_call`, and shall retain no file's source after the planner callback returns.
+- [x] **MCP-OP-MEM-020**: When a scope is walked, clj-surgeon shall admit work exactly through its walk-entry, depth, per-file byte and aggregate byte ceilings, shall refuse the next unit before reading it with a narrowing `next_call`, and shall retain no file's source after the planner callback returns.
 
-  Deferred in this commit: the bounded walk is the next commit in this build, and its witnesses land with it.
 
 ## Misreadings each requirement forbids
 
@@ -53,6 +61,7 @@ plan unreadable.
 | MEM-013 | "A restored file is restored." Restoration is verified against the pinned digest or it is not restoration. |
 | MEM-014 | "Hashing every file at validation time gives us a snapshot." It does not. A writer that ignores the lock can land between validation and rename. |
 | MEM-014 | "Detected therefore prevented." The racing write is detected at read-back and rolled over; the receipt must not imply it was excluded. |
+| MEM-001 | "A receipt that is too big can be truncated with a continuation." A read-only projection may paginate; a mutation receipt that hides work that was done may not. |
 | MEM-020 | "The aggregate byte ceiling can be checked from the directory entries." A file that grows during the walk must be stopped against the remaining budget, from bytes actually read. |
 | MEM-020 | "Walk entries means matching files." Then an include glob conceals an unbounded walk. |
 
@@ -71,6 +80,7 @@ plan unreadable.
 
 | Requirement | Falsifying observation |
 |---|---|
+| MCP-OP-MEM-001 | A receipt is silently truncated, grows without a ceiling, or reports no attributable reserved peak. |
 | MCP-OP-MEM-006 | A staged path is written without a durable pinned pre-image, or a transaction retains a repository-wide original or future source map. |
 | MCP-OP-MEM-007 | A transaction commits after a file that shaped its plan changed, or after the scope gained or lost a member, or without holding the lock. |
 | MCP-OP-MEM-012 | Recording N read-set entries makes the transaction value's per-path record count or retained string bytes grow with N. |
