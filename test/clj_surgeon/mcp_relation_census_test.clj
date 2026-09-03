@@ -629,6 +629,38 @@
       (is (= "unknown-door-symbol" (:error_type result)))
       (is (= "nowhere-door" (:door result))))))
 
+(def ^:private design-doc
+  "docs/intent/relation-census/relation-census-design.md")
+
+;; @spec MCP-OP-CENSUS-031
+(deftest the-low-level-design-names-the-phases-the-implementation-runs
+  (let [design (slurp design-doc)
+        mentions? (fn [needle] (boolean (str/includes? design needle)))
+        walked (run {})
+        named (run {:files [fixture]})
+        phases (set (concat (keys (:phases_elapsed_ms walked))
+                            (keys (:phases_elapsed_ms named))))]
+    (is (= #{:discover :read :classify :merge} phases)
+        "the implementation's phase set changed; the design must follow it")
+
+    (testing "every phase a receipt publishes is named in the design"
+      (is (= #{} (into #{} (remove #(mentions? (str "`" (name %) "`"))) phases))
+          "the design does not name these phases the census publishes"))
+
+    (testing "the design promises no phase the census does not run"
+      (is (false? (mentions? "`parse`"))
+          "the design still promises a parse phase")
+      (is (false? (mentions? ":parse"))
+          "the design still lists a :parse timing"))
+
+    (testing "the design states which pool each entrance actually uses"
+      (is (false? (mentions? "only the MCP route carries the claypoole pool"))
+          "the design still says the CLI has no pool")
+      (is (true? (mentions? "census_pool"))
+          "the design never names the pool the JVM CLI runs on")
+      (is (true? (mentions? "pool_size_requested"))
+          "the design never says the receipt reports the pool it asked for"))))
+
 ;; @spec MCP-OP-CENSUS-026
 (deftest the-published-surfaces-name-the-fifth-tool
   (let [text (fn [path] (str/replace (slurp path) #"\s+" " "))
