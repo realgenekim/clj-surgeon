@@ -1084,3 +1084,15 @@ closes a tidy fan-out at any size.
 Predictions scored: Opus "0/3 at 70%" RIGHT (and the mechanism: "a name and presence are not a path, and a description sentence is not one either"); Sol "R 2/3 vs B 0/3 at 55%" WRONG on R. Ratchet delivered: required=true + per-arm tools/list proof (E6-Lb's F arms lacked it). Caveat: rung Lb is not blind. Receipt docs/observations/2026-09-04-e6c-routing-plate-cohort.md (7e34015).
 
 **Fable's call, without a fourth poll on the same square (deviation from poll-each-result, reason: the fleet already rated every remaining routing lever tonight — blind rung Sol 1/3 at 45% / Opus 0/3 at 70%; route-don't-ask hook O4 is a build, not a measurement):** no further free-choice routing cohort tonight. Square 3 is decided by E6-Q (capability with a mandated arm, running); square 2 by E-REG + E-SLOPE80 (queued behind the q5z fix). Tomorrow's first build is O4 — route without asking (a read-side hook that serves clj-scoped rg/grep through the Surgeon read path, Surgeon never named), the only routing lever with a predicted non-zero number (100% routed at 85%).
+
+## 18. Fourth result: E6-Q (23:28Z) — square 3 on its own terms: a CEILING (9/9 at 6/6)
+
+| arm | run | wall s | returns | tool calls | inspect calls | probes exact | load |
+|---|---|---|---|---|---|---|---|
+| N | 1/2/3 | 32 / 41 / 41 | 3 / 4 / 3 | 2 / 3 / 3 | 0 | 6/6 ×3 | 6.1 / 7.3 / 6.0 |
+| M | 1/2/3 | 148 / 144† / 151 | 5 / 5 / 4 | 13 / 13 / 10 | 10 / 11 / 8 | 6/6 ×3 | 4.1 / 10.2 / 5.9 |
+| F | 1/2/3 | 60 / 67† / 47† | 4 / 4 / 3 | 4 / 5 / 2 | 0 / 2 / 0 | 6/6 ×3 | 5.2 / 8.9 / 9.0 |
+
+† wall void (load > 8). Predictions: Opus N 4/6 WRONG (6/6), M 6/6 right, M−N clears WRONG, F 0/3 at 80% WRONG (1/3); Sol F 3/3 exact right, N ≤ 1/3 WRONG. "Both seats modelled the native arm as grep-shaped; both were wrong the same way." Opus's own waste clause is now the finding: "if native scores 6/6, square 3 is empty" — on FIVE SMALL FILES. First non-zero free-choice adoption: 1/16. Apparatus ratchet proven: required=true + dead-port negative control (codex refuses to create the session).
+
+**Fable's call:** run the runner's recommended decisive variant NOW — E6-Q2, the same six probe shapes against reducer/core.clj (3,720 lines) and channel.clj (3,694 lines), N vs M vs F, correctness primary; if native is still 6/6, withdraw square 3 on the evidence. Runs on 7909 concurrently with E-REG (both primaries are load-insensitive; walls void above 8 and not claimed).
