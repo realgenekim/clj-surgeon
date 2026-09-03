@@ -3,7 +3,7 @@
 | # | repo / branch | head | state | note |
 |---|---|---|---|---|
 | 1 | clj-surgeon bridge/kondo-path-test | f8a9ef9 | **GO** | kills the exact-profile baseline failure; merge first |
-| 2 | clj-surgeon bridge/receipt-ratchets | 49f6e12 | pushed, Sol re-review running | GO note follows |
+| 2 | clj-surgeon bridge/receipt-ratchets | 49f6e12 | Sol GO-WITH-FIX (7 of 8 closed); round 3 building: multiline dispatch presentation, candidate-catalog schema/handler mismatch | GO note follows round 3 |
 | 3 | clj-surgeon bridge/census-verb | ef545c5 | pushed, Sol re-review running | suites baseline-only, oracle pass |
 | 4 | clj-surgeon bridge/rf2-extract-rewire | 465c956 | pushed; Sol refused by content filter → Opus re-check running | ruling (no writes into pruned trees via links) landed fails-first |
 | 5 | clj-surgeon bridge/q5z-… | round 3 building | — | |
