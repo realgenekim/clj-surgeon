@@ -11,7 +11,10 @@
    111 KB is a fifth of the per-file byte ceiling the design calls for.
 
    So before a full rewrite-clj tree is allocated, one pass over the raw string
-   estimates the tree's node count and measures its maximum nesting depth. Over
+   estimates the tree's node count and its maximum nesting depth — nesting
+   meaning every construct the READER recurses into, reader-macro prefixes as
+   well as structural delimiters, because a prefix tower 155x smaller than that
+   111 KB file overflows the same stack. Over
    a ceiling, the input is refused with a typed refusal that names the limit,
    what was observed, and a remedy — and the tree constructor is never invoked.
 
@@ -74,6 +77,15 @@
 (def ^:private ^:const CLOSE-BRACKET 93)
 (def ^:private ^:const OPEN-BRACE 123)
 (def ^:private ^:const CLOSE-BRACE 125)
+(def ^:private ^:const BANG 33)
+(def ^:private ^:const SINGLE-QUOTE 39)
+(def ^:private ^:const EQUALS 61)
+(def ^:private ^:const QUESTION 63)
+(def ^:private ^:const AT 64)
+(def ^:private ^:const CARET 94)
+(def ^:private ^:const UNDERSCORE 95)
+(def ^:private ^:const BACKTICK 96)
+(def ^:private ^:const TILDE 126)
 
 (defn- ws?
   "Clojure treats a comma as whitespace."
@@ -97,20 +109,74 @@
        (not (== c SEMICOLON))
        (not (== c BACKSLASH))))
 
+(defn- token-end
+  "Index one past the token run starting at `i`."
+  ^long [^String source ^long i ^long n]
+  (loop [j i]
+    (if (and (< j n) (token-char? (int (.charAt source j))))
+      (recur (inc j))
+      j)))
+
+(defn- reader-prefix-start? [^long c]
+  (or (== c SINGLE-QUOTE) (== c BACKTICK) (== c TILDE)
+      (== c AT) (== c CARET) (== c HASH)))
+
+(defn- prefix-length
+  "The character length of the reader-macro prefix at `i`, or 0 when there is
+   none there.
+
+   These are the constructs that make the reader ALLOCATE A WRAPPING NODE AND
+   RECURSE INTO ITS CHILD without opening a structural delimiter: quote,
+   syntax-quote, unquote, unquote-splicing, deref, metadata, var-quote,
+   discard, eval, and the two reader conditionals. A DELIMITER-only estimate
+   scores a tower of them zero — measured on anvil 2026-09-03, a 710-byte
+   `(def x @@@...y)` scanned at depth 1, was admitted, and threw
+   StackOverflowError out of the reader, killing a whole `ls-tree` scan.
+
+   Consulted only at a form-start position. Inside a token run `'`, `@` and `~`
+   are ordinary constituent characters (`foo'`), and the token branch has
+   already consumed them."
+  ^long [^String source ^long i ^long n]
+  (let [c (int (.charAt source i))
+        d (if (< (inc i) n) (int (.charAt source (inc i))) -1)]
+    (cond
+      (== c HASH)
+      (cond
+        (or (== d SINGLE-QUOTE) (== d UNDERSCORE) (== d EQUALS)) 2
+        (== d QUESTION) (if (and (< (+ i 2) n)
+                                 (== AT (int (.charAt source (+ i 2)))))
+                          3
+                          2)
+        :else 0)
+
+      (== c TILDE) (if (== d AT) 2 1)
+
+      (or (== c SINGLE-QUOTE) (== c BACKTICK) (== c AT) (== c CARET)) 1
+
+      :else 0)))
+
 ;; @spec MCP-OP-MEM-005
 (defn scan-shape
   "One pass over `source`. Returns the shape a rewrite-clj tree would take,
    without building one:
 
      {:parse-nodes        lexical node estimate
-      :parse-depth        maximum nesting depth of structural delimiters
+      :parse-depth        maximum nesting depth
       :delimiter-balance  opens minus closes; zero on well-formed source}
 
-   The estimate counts one node per opening delimiter, per token run, per
-   string, regex, and character literal, per line comment, and per whitespace
-   run — because rewrite-clj materialises whitespace and comments as nodes too.
-   Delimiters inside strings, regex literals, character literals and comments
-   are text, never structure.
+   The estimate counts one node per opening delimiter, per reader-macro prefix,
+   per token run, per string, regex, and character literal, per line comment,
+   and per whitespace run — because rewrite-clj materialises whitespace and
+   comments as nodes too.
+
+   `:parse-depth` is the depth the READER recurses to, which is not the same as
+   the delimiter depth. A reader-macro prefix (`'` `` ` `` `~` `~@` `@` `^`
+   `#'` `#_` `#=` `#?` `#?@`) wraps the form that follows it in a node and
+   recurses into it, so a run of N prefixes is N levels; they unwind at the
+   next atom, or at the delimiter that closes the form they wrapped. Counting
+   only delimiters admitted a 710-byte `@`-tower at depth 1 that then exhausted
+   the reader's stack. Delimiters inside strings, regex literals, character
+   literals and comments are text, never structure.
 
    It is an ESTIMATE and reads about 11% low against rewrite-clj's own count
    (19,528 against 21,996 for `intent_transaction.clj`), because a whitespace
@@ -120,22 +186,29 @@
 
    `:delimiter-balance` is diagnostic, never a verdict: a non-zero balance means
    unbalanced source, which the PARSER reports as a syntax error. Admission does
-   not refuse it."
+   not refuse it. It counts DELIMITERS only, so prefix accounting can never
+   disturb it."
   [^String source]
   (let [n (.length source)]
-    (loop [i 0, nodes 0, depth 0, max-depth 0]
+    ;; `ddepth` is delimiter depth and is what the balance reports. `pdepth` is
+    ;; the reader-macro levels currently open; `pending` is the innermost run of
+    ;; them, still waiting for the form it wraps. `stack` saves each open
+    ;; delimiter's `pending` so the matching close unwinds exactly those levels.
+    (loop [i 0, nodes 0, ddepth 0, pdepth 0, pending 0, max-depth 0,
+           ^ints stack (int-array 64)]
       (if (>= i n)
         {:parse-nodes nodes
          :parse-depth max-depth
-         :delimiter-balance depth}
+         :delimiter-balance ddepth}
         (let [c (int (.charAt source i))]
           (cond
+            ;; whitespace and comments do not satisfy a pending prefix
             (ws? c)
             (let [j (long (loop [j i]
                       (if (and (< j n) (ws? (int (.charAt source j))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) depth max-depth))
+              (recur j (inc nodes) ddepth pdepth pending max-depth stack))
 
             ;; line comment: to end of line
             (== c SEMICOLON)
@@ -144,9 +217,9 @@
                                (not (== NEWLINE (int (.charAt source j)))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) depth max-depth))
+              (recur j (inc nodes) ddepth pdepth pending max-depth stack))
 
-            ;; string literal, backslash escapes
+            ;; string literal, backslash escapes — an atom: it satisfies prefixes
             (== c QUOTE)
             (let [j (long (loop [j (inc i)]
                       (if (>= j n)
@@ -156,15 +229,13 @@
                             (== d BACKSLASH) (recur (+ j 2))
                             (== d QUOTE) (inc j)
                             :else (recur (inc j)))))))]
-              (recur j (inc nodes) depth max-depth))
+              (recur j (inc nodes) ddepth (- pdepth pending) 0 max-depth stack))
 
             ;; character literal: \a \newline \( \\ — consumes the delimiter
             (== c BACKSLASH)
-            (let [j (long (loop [j (+ i 2)]
-                      (if (and (< j n) (token-char? (int (.charAt source j))))
-                        (recur (inc j))
-                        j)))]
-              (recur (max j (min n (+ i 2))) (inc nodes) depth max-depth))
+            (let [j (token-end source (+ i 2) n)]
+              (recur (max j (min n (+ i 2))) (inc nodes)
+                     ddepth (- pdepth pending) 0 max-depth stack))
 
             ;; regex literal #"..." — its brackets are not structure
             (and (== c HASH)
@@ -178,21 +249,42 @@
                             (== d BACKSLASH) (recur (+ j 2))
                             (== d QUOTE) (inc j)
                             :else (recur (inc j)))))))]
-              (recur j (inc nodes) depth max-depth))
+              (recur j (inc nodes) ddepth (- pdepth pending) 0 max-depth stack))
+
+            ;; reader-macro prefix — one nesting level, unwound by the form it wraps
+            (reader-prefix-start? c)
+            (let [len (prefix-length source i n)]
+              (if (pos? len)
+                (let [pd (inc pdepth)]
+                  (recur (+ i len) (inc nodes) ddepth pd (inc pending)
+                         (max max-depth (+ ddepth pd)) stack))
+                ;; `#` that begins no prefix (`#(`, `#{`, a tagged literal)
+                (let [j (token-end source i n)]
+                  (recur (if (> j i) j (inc i)) (inc nodes)
+                         ddepth (- pdepth pending) 0 max-depth stack))))
 
             (opens? c)
-            (let [d (inc depth)]
-              (recur (inc i) (inc nodes) d (max max-depth d)))
+            (let [^ints stack (if (>= ddepth (alength stack))
+                                (java.util.Arrays/copyOf stack (* 2 (alength stack)))
+                                stack)
+                  _ (aset stack ddepth (int pending))
+                  dd (inc ddepth)]
+              (recur (inc i) (inc nodes) dd pdepth 0
+                     (max max-depth (+ dd pdepth)) stack))
 
             (closes? c)
-            (recur (inc i) nodes (dec depth) max-depth)
+            ;; unwind this level's unsatisfied prefixes, then the ones the
+            ;; closing form was itself wrapped in
+            (let [outer (if (and (pos? ddepth) (<= ddepth (alength stack)))
+                          (aget stack (dec ddepth))
+                          0)]
+              (recur (inc i) nodes (dec ddepth)
+                     (max 0 (- pdepth pending outer)) 0 max-depth stack))
 
             :else
-            (let [j (long (loop [j i]
-                      (if (and (< j n) (token-char? (int (.charAt source j))))
-                        (recur (inc j))
-                        j)))]
-              (recur (if (> j i) j (inc i)) (inc nodes) depth max-depth))))))))
+            (let [j (token-end source i n)]
+              (recur (if (> j i) j (inc i)) (inc nodes)
+                     ddepth (- pdepth pending) 0 max-depth stack))))))))
 
 ;; ============================================================
 ;; Admission

@@ -17,7 +17,7 @@ lanes own their own rows in their own leaves.
 ## Outline read path
 
 - [x] **MCP-OP-MEM-015**: When clj-surgeon outlines a source file, it shall parse the file once and shall not construct per-form source text that the outline does not return.
-- [ ] **MCP-OP-MEM-005**: Before allocating a full rewrite-clj tree, the clj-surgeon read path shall reject inputs whose lexical node estimate or nesting depth exceeds the server parser ceiling, where nesting depth counts every construct that makes the reader recurse — reader-macro prefixes as well as structural delimiters.
+- [x] **MCP-OP-MEM-005**: Before allocating a full rewrite-clj tree, the clj-surgeon read path shall reject inputs whose lexical node estimate or nesting depth exceeds the server parser ceiling, where nesting depth counts every construct that makes the reader recurse — reader-macro prefixes as well as structural delimiters.
 
 ## Falsifiers
 

@@ -199,13 +199,15 @@
             (str "prefix " (pr-str p) " contributed "
                  (- (depth-of src) 1) " of 40 nesting levels")))))
   (testing "prefixes unwind at the next atom"
-    (is (= 1 (depth-of "(def a 'x 'y 'z)"))
-        "three SEPARATE one-prefix forms are one level, not three")
-    (is (= 2 (depth-of "(def a '(x))"))
+    (is (= 1 (depth-of "(a) (b)")) "the delimiter-only baseline")
+    (is (= 2 (depth-of "(def a 'x 'y 'z)"))
+        "three SEPARATE one-prefix forms are ONE prefix level, not three")
+    (is (= 3 (depth-of "(def a '(x))"))
         "a quoted list is the quote's level plus the list's"))
   (testing "prefixes unwind at a closing delimiter"
-    (is (= (depth-of "(a) (b)") (depth-of "'(a) (b)") )
+    (is (= (depth-of "'(a)") (depth-of "'(a) '(b) '(c)"))
         "a quote consumed by its list does not leak past the close")
+    (is (= 2 (depth-of "'(a) (b)")))
     (is (zero? (:delimiter-balance (admission/scan-shape "'(a) `[b] ~@{c 1}")))
         "prefix accounting never disturbs the delimiter balance")))
 
