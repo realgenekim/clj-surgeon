@@ -436,3 +436,78 @@ retains an N-sized path collection**, roughly 1.2 MB at 10,000 files. The
 requirement now names the *CLI `ls-tree` encoder* rather than `ls-tree`, because
 the earlier wording claimed a bound the code does not hold (finding 12). A green
 battery line at 10,000 files is not "`ls-tree` is bounded in N."
+
+## OPEN BLOCKER found by the battery after the repair — the cursor made `ls-tree` output NONDETERMINISTIC
+
+The full battery, run once under the exclusive lock at
+`MEMBAT_ROOT=/home/forge/tmp/stream/membat` after all of the above landed,
+**exits 1 on `cli-ls-tree`** with a line that was green before the pinned
+snapshot:
+
+```
+verdict: FAIL (INCOMPLETE)   exit 1
+  FAIL reference-mismatch {:op :cli-ls-tree, :n 10000, :phase :fresh,
+                           :observed "ccf8e655…", :limit "f1bcbdb9…"}
+  FAIL reference-mismatch {:op :cli-ls-tree, :n 10000, :phase :warm,
+                           :observed "nondeterministic:4", :limit "f1bcbdb9…"}
+```
+
+`nondeterministic:4` is the battery reporting FOUR distinct output hashes across
+five reps of an identical operation over an identical corpus. The retention
+result is unaffected — `cli-ls-tree` held **9.5 MB at N=1,000 and 9.4 MB at
+N=10,000**, so `held-scales-with-n` passes and the two other-lane
+`held-scales-with-n` failures (`workspace-sources-read-all` 40.9 MB,
+`rename-ns-plan-full-match` 10.0 MB) are the pre-existing ones Sol also saw.
+
+### Diagnosed, not guessed
+
+Two scans of the same 10,000-file corpus at `:max-results 1000`, diffed line by
+line: **98,361 characters, exactly ONE differing line**, and it is the cursor.
+
+```
+A:    next_call: … :cursor 65a0d99d4a3c49e28cc7ac9a5757d804aa92bfe8…
+B:    next_call: … :cursor e3887b09eae84b209d48b253a0a3e58d80794f25…
+```
+
+Every one of the 1,000 records is byte-identical. The cursor-id is
+`snapshot/new-id` — two `UUID/randomUUID` values — minted fresh on every scan
+that binds the ceiling. The replaced design derived its cursor entirely from the
+tree (`<offset>:<manifest-digest>`) and was therefore deterministic, which is
+why this line was green before.
+
+### The second consequence, also measured
+
+Because the id is random rather than content-addressed, an unchanged tree gets a
+**new snapshot per scan**. Four identical scans left four snapshots totalling
+**5.4 MB** (1.4 MB of rows each), and each one paid a full 10,000-file
+content-digest pass. Within the 24-hour TTL, N ceiling-binding scans of one
+repository cost N × 1.4 MB of state and N full content passes. Nothing detects
+that the tree has not moved.
+
+### Three options, and a recommendation
+
+1. **Content-address the cursor-id and REUSE the snapshot.** Set
+   `cursor-id = manifest digest` (already a SHA-256 folded over rows that each
+   carry their file's content digest), and when a snapshot for that id already
+   exists, serve it instead of writing a new one. Output becomes deterministic
+   for an unchanged tree, the state directory holds one snapshot per distinct
+   tree state rather than per scan, and **the MAC's security properties do not
+   change**: the secret stays per-snapshot, random, and unpublished. Recommended.
+2. **Exclude `:next_call` from the battery's output hash.** Cheapest, and wrong:
+   it makes the gate blind to the one part of the result that changed, and the
+   gate exists precisely to notice that.
+3. **Re-bless the reference and accept nondeterminism.** Rejected. A reference
+   re-blessed over a `nondeterministic:4` observation cannot fail again for any
+   reason, which retires the pass line rather than satisfying it.
+
+**Option 1 is not applied here.** It moves cursor identity, which is the surface
+Sol's two blockers were about, and a change to how a MAC is keyed or addressed
+gets adversarial review before it lands rather than after. It is written down
+with its evidence so the next hand does not have to re-derive it.
+
+Note for whoever takes it: the ORIGINAL brief specified
+`mac = sha256(cursor-id ‖ offset ‖ snapshot-digest)`. That is forgeable — the
+digest is published in the receipt as `:manifest_digest`, so any holder of a
+receipt could mint any offset. The implementation correctly deviated to a
+per-snapshot secret. Option 1 keeps that deviation; do not undo it while making
+the id deterministic.
