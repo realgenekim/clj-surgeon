@@ -134,3 +134,5 @@ apply; near-miss-by-prefix on a match miss; owner names in `unaddressed_matches`
 `swipl`, absent; the `MCP-OP-ORACLE-001` Prolog gate is unverified on this box. Morning item for the mayor.
 My own suites running under the lock; push after.
 
+
+## 02:51Z — fold-diff GO-WITH-FIX (read-only receipt digests the wrong file; frontier gap unmeasured; baseline vs the whole stack; 7 fixes); settings-lens GO (measured); template-upsert GO-WITH-FIX (id canonicalisation collapses distinct ids — silent loss); lens-followups NO-GO as written (slug-only payload dropped). Verdict filed (docs/observations/2026-09-03-folddiff-lens-redteam.md); three fix rounds launched.
