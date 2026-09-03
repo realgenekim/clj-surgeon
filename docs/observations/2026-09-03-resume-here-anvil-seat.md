@@ -62,3 +62,12 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
   `flock ~/tmp/suite.lock`, push, log; tell the mayor via the log/inbox (no reply tool here).
 - Today's log: `docs/observations/2026-09-03-captains-log-anvil-seat.md`.
 - `~/acid` is not readable by forge; ports 7888–7895 are all held by other seats — pick ≥ 7900.
+
+## RESUME DELTA 02:01Z
+
+- Four lanes running (Gene: crank up parallelism): a7b68e5d3a6c673f5 study S1/S3; a02f87b29b2d27eff
+  receipt ratchets (`~/src/clj-surgeon-ratchets`); a62066cb655ae61ab lens follow-ups
+  (`~/src/curtaincall-cfp-lens2`, curtain-call cloned at `~/src/curtaincall-cfp`); ae828674aa8328b03
+  Opus red-team of study ops (read-only). Each lands → my own suites under the lock → push → log.
+- **Morning items for the mayor, add:** codex auth on this seat (401 now; Sol unavailable), maven creds,
+  connector, clj-nrepl-eval, /opt/claude-skills, crons.
