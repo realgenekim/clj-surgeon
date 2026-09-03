@@ -398,11 +398,17 @@
                     ["change-buffer/classify-exact-process-outcome"
                      "exact-verify/classify-exact-process-outcome" 2]
                     ["change-buffer/run-exact-verification!"
-                     "exact-verify/run-exact-verification!" 5]])
+                     "exact-verify/run-exact-verification!" 5]
+                    ;; origin/main's host-independent clj-kondo assertion added
+                    ;; one `expand-command` call to this reference file; the
+                    ;; var is in `public-moved-vars`, so requalifying it is the
+                    ;; correct behaviour and only this count was stale
+                    ["change-buffer/expand-command"
+                     "exact-verify/expand-command" 1]])
         result (rewire-real-caller path)]
     (is (:ok result) (pr-str (dissoc result :source)))
     (is (= :added (:require-action result)))
-    (is (= 10 (:rewrites result)))
+    (is (= 11 (:rewrites result)))
     (is (nil? (first-difference expected (:source result))))
     (testing "the :refer-bearing clojure.test entry neither refuses nor changes"
       (is (str/includes? (:source result)
