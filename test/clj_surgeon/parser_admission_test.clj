@@ -326,6 +326,62 @@
       (is (= :max-parse-depth (:reason (first (:files refused)))))
       (is (= 401 (:observed (first (:files refused))))))))
 
+(defn- scratch-ordinary-tree!
+  "A throwaway project of two ORDINARY files. Nothing here is refusable; the
+   witness forces the reader to blow up instead."
+  []
+  (let [dir (java.nio.file.Files/createTempDirectory
+              "mem005soe" (into-array java.nio.file.attribute.FileAttribute []))
+        root (.toFile dir)
+        src (io/file root "src" "fixture")]
+    (.mkdirs src)
+    (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+    (spit (io/file src "ok.clj") "(ns fixture.ok)\n(defn hello [x] (inc x))\n")
+    (spit (io/file src "overflow.clj") "(ns fixture.overflow)\n(def a 1)\n")
+    (.getPath root)))
+
+(defn- overflow-the-readers-stack!
+  "Exhaust the JVM stack the way the rewrite-clj reader does on a deep input —
+   by really recursing. A constructed `StackOverflowError` is not equivalent: it
+   is reflective, and babashka's native image refuses it."
+  [n]
+  (+ 1 (overflow-the-readers-stack! (inc n))))
+
+;; @spec MCP-OP-MEM-005
+(deftest ls-tree-survives-a-stack-overflow-with-the-estimator-blind
+  (testing "the scan-kill class is closed independent of estimator completeness"
+    ;; `overflow.clj` is an ORDINARY two-line file: admission looks at it and
+    ;; admits it, correctly. The reader then overflows anyway. That is the
+    ;; residual this witness pins — the estimator will always be an estimate,
+    ;; and the scan must not depend on it being complete. StackOverflowError is
+    ;; an Error, so the pre-existing `catch Exception` never saw it and the
+    ;; whole pmap scan died as {:FATAL "ExecutionException"}.
+    (let [root (scratch-ordinary-tree!)
+          real outline/outline
+          projects (with-redefs
+                     [outline/outline
+                      (fn [f]
+                        (if (str/includes? (str f) "overflow.clj")
+                          (overflow-the-readers-stack! 0)
+                          (real f)))]
+                     ((requiring-resolve 'clj-surgeon.core/outline-all-files)
+                      ((requiring-resolve 'clj-surgeon.core/discover-projects) root)))
+          text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+                projects root)
+          edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+               projects root)
+          refused (:parser_admission_refused (:receipt (last edn)))]
+      (is (str/includes? text "hello")
+          "the scan COMPLETED: the other file's outline is still produced")
+      (is (= 1 (:count refused))
+          "the overflow is ONE named, counted skip")
+      (is (= "src/fixture/overflow.clj" (:file (first (:files refused)))))
+      (is (= :stack-overflow-during-parse (:reason (first (:files refused)))))
+      (is (seq (:remedy (first (:files refused))))
+          "a skip a caller cannot act on is a skip nobody reads")
+      (is (str/includes? text "parser_admission_refused")
+          "the text receipt names it too"))))
+
 ;; @spec MCP-OP-MEM-005
 (deftest ls-tree-output-is-unchanged-when-nothing-is-refused
   (testing "a scan with no refusal carries no receipt entry at all"
