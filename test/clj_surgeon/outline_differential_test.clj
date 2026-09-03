@@ -6,7 +6,12 @@
    copied verbatim (functions renamed with a `legacy-` prefix only; bodies
    unchanged) from `src/clj_surgeon/outline.clj` at commit 9f48694 on
    `origin/main` — the tip of that file's history before MEM-015 (found via
-   `git log --oneline origin/main -- src/clj_surgeon/outline.clj | head -1`).
+   `git log --oneline origin/main -- src/clj_surgeon/outline.clj | head -1`),
+   RE-FROZEN on the 2026-09-03 integration branch against a28690e, which landed
+   the `defmethod` dispatch extraction on main after 9f48694 was taken. The
+   freeze must mirror the two-parse builder THIS TREE replaced, not the one an
+   older base had, or the differential reports a difference that is really the
+   frozen side being stale.
    That is the two-parse `top-level-form-records`: it parses on its own via
    `cwalk/top-level-forms` and builds each record inline, unconditionally
    including `:source`. It is deliberately NOT the current
@@ -84,6 +89,21 @@
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 
+(defn- legacy-defmethod-dispatch-location
+  [zloc]
+  (loop [location (some-> zloc z/down z/right z/right)
+         steps 0]
+    (cond
+      (or (nil? location) (< 64 steps)) nil
+      (= :uneval (z/tag location)) (recur (z/right location) (inc steps))
+      (= :meta (z/tag location)) (recur (some-> location z/down z/rightmost)
+                                        (inc steps))
+      :else location)))
+
+(defn- legacy-extract-dispatch
+  [zloc]
+  (some-> (legacy-defmethod-dispatch-location zloc) z/string))
+
 (defn- legacy-attached-comment-start
   [lines form-line]
   (let [idx (dec form-line)]
@@ -119,6 +139,9 @@
                   arglist (cond
                             user-fields (:arglist extracted)
                             name-val (legacy-extract-arglist zloc))
+                  dispatch (when (and name-val
+                                      (= :defmethod (:kind form-spec)))
+                             (legacy-extract-dispatch zloc))
                   form-line (:row m)
                   comment-start (when form-line
                                   (legacy-attached-comment-start lines form-line))
@@ -133,6 +156,7 @@
                                         name-val
                                         (symbol (str name-val))))
                 arglist (assoc :args arglist)
+                dispatch (assoc :dispatch dispatch)
                 (seq extras) (merge extras)
                 (and form-line comment-start (< comment-start form-line))
                 (assoc :comment-start comment-start))))

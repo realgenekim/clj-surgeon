@@ -277,6 +277,9 @@
                 arglist (cond
                           user-fields (:arglist extracted)
                           name-val (extract-arglist zloc))
+                dispatch (when (and name-val
+                                    (= :defmethod (:kind form-spec)))
+                           (extract-dispatch zloc))
                 form-line (:row m)
                 comment-start (when form-line
                                 (attached-comment-start lines form-line))
@@ -291,6 +294,7 @@
                                       name-val
                                       (symbol (str name-val))))
               arglist (assoc :args arglist)
+              dispatch (assoc :dispatch dispatch)
               (seq extras) (merge extras)
               (and form-line comment-start (< comment-start form-line))
               (assoc :comment-start comment-start))))
