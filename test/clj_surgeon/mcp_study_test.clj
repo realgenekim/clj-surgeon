@@ -1443,3 +1443,41 @@
         "the whole pass gets one allowance of steps-per-file x files found")
     (is (empty? (output-schema-violations response))
         "and the new receipt field does not break the tool's output schema")))
+
+;; @spec MCP-OP-STUDY-032
+;; @spec MCP-OP-STUDY-024
+(deftest the-empty-text-receipt-still-names-every-project-it-counted
+  ;; MCP-OP-STUDY-024 made a project the byte budget never reached read
+  ;; `0 shown` instead of vanishing — but only for `returned >= 1`. The
+  ;; `returned = 0` receipt was rendered from an EMPTY project vector, so the
+  ;; body was the total line alone while `project_count` still said 2: the
+  ;; same body-contradicts-its-own-receipt defect, surviving one file below
+  ;; the fix. It also left MCP-OP-STUDY-024 and MCP-OP-STUDY-030 in direct
+  ;; contradiction; STUDY-024 wins and STUDY-030's floor clause is superseded.
+  (with-scratch-project
+    "test-fixtures/study/scratch-empty-receipt"
+    (fn [dir]
+      (doseq [project ["alpha" "beta"]]
+        (fs/create-dirs (str dir "/" project))
+        (spit (str dir "/" project "/deps.edn") "{:paths [\"src\"]}")
+        (dotimes [i 50]
+          (write-clj-file! (str dir "/" project "/src/" project "/ns" i ".clj")
+                           (format "(ns %s.ns%d)" project i)
+                           (format "(defn f%d [] :ok)" i)))))
+    (fn []
+      (doseq [limit [100 1]]
+        (testing (str "limit " limit)
+          (let [response (run {"mode" "ls-tree"
+                               "dir" "test-fixtures/study/scratch-empty-receipt"
+                               "format" "text" "limit" limit})
+                lines (vec (remove str/blank?
+                                   (str/split-lines (str (:tree response)))))]
+            (is (true? (:ok response)))
+            (is (zero? (:returned response))
+                "this limit must reach no file at all")
+            (is (= 2 (:project_count response)))
+            (is (= ["── alpha (50 files; 0 shown)"
+                    "── beta (50 files; 0 shown)"
+                    "── total: 100 files; 0 shown, 100 omitted"]
+                   lines)
+                "a project counted by project_count appears in the body at every limit")))))))
