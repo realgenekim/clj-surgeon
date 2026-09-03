@@ -405,6 +405,67 @@ SESSION_ID_RE = re.compile(r"session[\s_-]*id\s*[:=]?\s*(" + UUID_RE + r")", re.
 ROLLOUT_PATH_RE = re.compile(r"(/\S*rollout-[^\s\"'`]*\.jsonl)")
 
 
+def proc_stat(pid: int) -> dict | None:
+    """`state`, `ppid` and `starttime` for one pid, or None if it is gone.
+
+    Everything up to the LAST ')' is the pid and the comm (which may itself contain
+    spaces and parentheses), so the tail begins at stat field 3: state, ppid, ... and
+    starttime is its 20th token.  starttime is what distinguishes a recorded process
+    from whatever later wears its number.
+    """
+    try:
+        raw = pathlib.Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
+        return None
+    head, _, tail = raw.rpartition(")")
+    if not head:
+        return None
+    fields = tail.split()
+    if len(fields) < 20:
+        return None
+    try:
+        return {"state": fields[0], "ppid": int(fields[1]), "starttime": fields[19]}
+    except ValueError:
+        return None
+
+
+def descendants_of(root_pid: int) -> dict[int, str]:
+    """Every live descendant of `root_pid` right now -> its start time.
+
+    Sol round two, item 5: the reap walked the driver's process GROUP, and a
+    descendant that calls setsid is in a different group by definition.  It is still
+    a CHILD, though -- setsid(1) does not fork when it is not already a group leader,
+    and even when it does, the process is a child until its parent dies.  So the
+    descendant set is walked from /proc while the driver is alive, and remembered.
+    """
+    children: dict[int, list[int]] = {}
+    starts: dict[int, str] = {}
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        pid = int(entry)
+        info = proc_stat(pid)
+        if info is None:
+            continue
+        children.setdefault(info["ppid"], []).append(pid)
+        starts[pid] = info["starttime"]
+    found: dict[int, str] = {}
+    root = proc_stat(root_pid)
+    if root is not None:
+        found[root_pid] = starts.get(root_pid, "")
+    stack = [root_pid]
+    seen = {root_pid}
+    while stack:
+        cur = stack.pop()
+        for kid in children.get(cur, ()):
+            if kid in seen:
+                continue
+            seen.add(kid)
+            found[kid] = starts.get(kid, "")
+            stack.append(kid)
+    return found
+
+
 class RolloutBindingError(RuntimeError):
     pass
 
@@ -500,7 +561,7 @@ def main() -> int:
         rollout_path.write_text("")
 
     t0 = time.time()
-    state = {"returns": 0, "seq": 0, "open": {}, "last_event": t0}
+    state = {"returns": 0, "seq": 0, "open": {}, "last_event": t0, "last_scan": 0.0}
 
     def emit(record: dict) -> None:
         record = {"t": utcnow(),
@@ -646,6 +707,40 @@ def main() -> int:
                 continue
         return found
 
+    # Every descendant this watcher has EVER seen alive, pid -> start time.  A group
+    # walk at abort time cannot see a process that left the group, and a process that
+    # left the group is exactly the one worth catching.
+    recorded: dict[int, str] = {}
+
+    def record_descendants() -> None:
+        for pid, start in descendants_of(proc.pid).items():
+            if pid in (os.getpid(), os.getppid(), 1):
+                continue
+            recorded.setdefault(pid, start)
+
+    def still_alive(pid: int, start: str) -> bool:
+        info = proc_stat(pid)
+        if info is None or info["state"] == "Z":
+            return False
+        return not start or info["starttime"] == start
+
+    def signal_recorded(sig: int) -> None:
+        """Signal each RECORDED pid individually, start time verified.
+
+        A pid alone is not an identity -- pids are reused -- so a recorded pid whose
+        start time has changed is somebody else's process and is never signalled.
+        """
+        for pid, start in recorded.items():
+            if pid in (os.getpid(), os.getppid(), 1) or not still_alive(pid, start):
+                continue
+            try:
+                os.kill(pid, sig)
+            except Exception:
+                pass
+
+    def live_recorded() -> list[int]:
+        return sorted(pid for pid, start in recorded.items() if still_alive(pid, start))
+
     def kill_group(sig: int) -> None:
         if driver_pgid == os.getpgrp():
             return                      # never signal the group this watcher lives in
@@ -705,6 +800,9 @@ def main() -> int:
 
             done = proc.poll() is not None
             now = time.time()
+            if now - state["last_scan"] >= 1.0:
+                state["last_scan"] = now
+                record_descendants()
             if (codex_home is not None and tailer is None
                     and now - t0 > args.zero_return_window):
                 abort_reason = "rollout-unbound"
@@ -734,17 +832,32 @@ def main() -> int:
                 break
             time.sleep(args.poll)
     finally:
+        # One last snapshot while the driver may still be alive: a descendant that left
+        # the group is visible as a CHILD only until its parent dies.
+        record_descendants()
         if abort_reason:
-            # signal the GROUP, not the pid: the driver's children are the orphans
+            # the GROUP first -- and then every pid recorded while the driver lived,
+            # because a descendant that called setsid is not in that group
             kill_group(signal.SIGTERM)
+            signal_recorded(signal.SIGTERM)
             time.sleep(2)
             kill_group(signal.SIGKILL)
+            signal_recorded(signal.SIGKILL)
         driver_rc = proc.wait()
         driver_group_orphans = len(group_members()) if abort_reason else 0
         if driver_group_orphans:
             time.sleep(1)
             kill_group(signal.SIGKILL)
             driver_group_orphans = len(group_members())
+        # COMPUTED, never assumed: a final /proc scan of the pids actually recorded.
+        # An arm that leaves a process behind contaminates the next one, so the reap
+        # runs on every path -- and whatever survives it is reported by pid.
+        orphan_pids = live_recorded()
+        if orphan_pids:
+            kill_group(signal.SIGKILL)
+            signal_recorded(signal.SIGKILL)
+            time.sleep(1)
+            orphan_pids = live_recorded()
         if tailer is not None:
             retained = tailer.snapshot()
             rotation_detail = tailer.rotation
@@ -796,6 +909,9 @@ def main() -> int:
         "driver_pid": proc.pid,
         "driver_pgid": driver_pgid,
         "driver_group_orphans": driver_group_orphans,
+        "descendants_recorded": len(recorded),
+        "orphans_after_reap": len(orphan_pids),
+        "orphan_pids": orphan_pids,
         "rollout_path": str(rollout_path),
         "rollout_binding": rollout_binding,
         "rollout_rotation": rotation_detail,
