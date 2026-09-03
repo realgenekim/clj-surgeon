@@ -1480,3 +1480,113 @@
         (spit (io/file root "deps.edn") "{:paths [\"src\"] :aliases {:x {}}}\n")
         (is (nil? (extract/candidate-compile-aliases (.getPath root))))
         (finally (delete-recursive! root))))))
+
+;; ============================================================
+;; rf2 red-team fixes (2026-09-03 verdict, docs/observations/
+;; 2026-09-03-rf2-q5z-redteam.md). The reviewer's own probes are the fixtures.
+;; ============================================================
+
+(defn- symlink!
+  "Create `link` pointing at `target`, both as strings."
+  [link target]
+  (java.nio.file.Files/createSymbolicLink
+    (java.nio.file.Paths/get (str link) (make-array String 0))
+    (java.nio.file.Paths/get (str target) (make-array String 0))
+    (make-array java.nio.file.attribute.FileAttribute 0)))
+
+(defn- escaping-caller-project!
+  "The reviewer's probe: a project whose `src/vendor` is a DIRECTORY symlink to
+  a sibling directory outside the project root, with a proved caller inside it.
+
+  Returns {:root <project> :outside <dir outside the root> :base <both>}."
+  []
+  (let [base (java.io.File/createTempFile "extract-escape" "")
+        _ (.delete base)
+        _ (.mkdirs base)
+        root (io/file base "proj")
+        outside (io/file base "outside")
+        src (io/file root "src" "app")]
+    (.mkdirs src)
+    (.mkdirs outside)
+    (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+    (spit (io/file src "core.clj")
+          (str "(ns app.core\n"
+               "  (:require\n"
+               "   [clojure.string :as str]))\n\n"
+               "(defn moved-one [x] (str/upper-case x))\n\n"
+               "(defn stays [x] (moved-one x))\n"))
+    (spit (io/file outside "other.clj")
+          (str "(ns app.other\n"
+               "  (:require\n"
+               "   [app.core :as core]))\n\n"
+               "(defn go [x] (core/moved-one x))\n"))
+    (symlink! (io/file root "src" "vendor") "../../outside")
+    {:base base :root root :outside outside}))
+
+;; @spec MCP-OP-EXTRACT-024
+(deftest a-caller-path-that-escapes-the-project-root-refuses-before-any-write
+  (let [{:keys [base root outside]} (escaping-caller-project!)
+        source (io/file root "src" "app" "core.clj")
+        target (io/file root "src" "app" "moved.clj")
+        escaped (io/file outside "other.clj")
+        before-outside (slurp escaped)
+        before-source (slurp source)]
+    (try
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[moved-one]
+                                      :to (.getPath target)
+                                      :alias "moved"
+                                      :compile-check false})]
+        (testing "the escape is a typed refusal that names the path"
+          (is (= :caller-path-outside-root (:error-type result))
+              (str "expected a typed refusal, got: "
+                   (pr-str (select-keys result [:error-type :error :applied]))))
+          (is (str/includes? (str (:path result)) "vendor")
+              "the refusal names the offending path")
+          (is (not (true? (:applied result)))))
+
+        (testing "nothing outside the root was written"
+          (is (= before-outside (slurp escaped))
+              "the file behind the directory symlink must be byte-identical"))
+
+        (testing "the transaction aborted before any write inside the root too"
+          (is (= before-source (slurp source)))
+          (is (not (.exists target)))))
+      (finally (delete-recursive! base)))))
+
+;; @spec MCP-OP-EXTRACT-024
+(deftest a-symlinked-caller-file-inside-the-root-is-still-rewired
+  (testing "a link whose real target is inside the root is admitted, and the
+            write replaces the LINK with a regular file, exactly as before"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")
+          hidden (io/file root ".git")
+          real (io/file hidden "real_caller.clj")
+          link (io/file src "linked.clj")]
+      (try
+        (.mkdirs hidden)
+        (spit real (str "(ns app.real-caller\n"
+                        "  (:require\n"
+                        "   [app.core :as core]))\n\n"
+                        "(defn go [x] (core/moved-two x))\n"))
+        (let [before-real (slurp real)]
+          ;; the walk already skips /.git/, so ONLY the link is discovered
+          (symlink! link "../../.git/real_caller.clj")
+          (let [source (io/file src "core.clj")
+                target (io/file src "moved.clj")
+                result (extract/execute! {:file (.getPath source)
+                                          :forms '[moved-one moved-two]
+                                          :to (.getPath target)
+                                          :alias "moved"
+                                          :compile-check false})]
+            (is (nil? (:error-type result))
+                (str "an in-root symlink must not refuse: "
+                     (pr-str (:error result))))
+            (is (true? (:applied result)))
+            (is (str/includes? (slurp link) "[app.moved :as moved]")
+                "the linked caller was rewired")
+            (is (false? (java.nio.file.Files/isSymbolicLink (.toPath link)))
+                "atomic-write! replaces the link itself, never following it")
+            (is (= before-real (slurp real))
+                "so the link's real target is untouched — today's behaviour")))
+        (finally (delete-recursive! root))))))

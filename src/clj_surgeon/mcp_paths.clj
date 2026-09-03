@@ -147,3 +147,39 @@
                  :missing-parent-directories canonical-missing})))))
       (catch Exception error
         (path-refusal :invalid-target-path (.getMessage error) relative)))))
+
+;; @spec MCP-OP-EXTRACT-024
+(defn resolve-discovered-source-path
+  "Confine one path a filesystem WALK produced -- absolute or process-relative --
+  to the canonical project root.
+
+  A walk hands back locations, not the portable project-relative strings
+  `resolve-source-path` admits, so the location is first canonicalized through
+  its parent directory -- the component a rename/replace primitive follows -- and
+  then confined by exactly that same gate. One rule, two entry points: a
+  discovered path and a caller-supplied one cannot be admitted by different
+  reasoning."
+  [^Path root path]
+  (try
+    (let [lexical (.normalize
+                    (.toAbsolutePath
+                      (Paths/get (str path) (make-array String 0))))
+          parent (.getParent lexical)
+          file-name (.getFileName lexical)]
+      (if (or (nil? parent) (nil? file-name))
+        (path-refusal :invalid-source-path
+                      "Discovered path has no parent directory"
+                      (str path))
+        (let [real-parent (.toRealPath parent (make-array LinkOption 0))]
+          (if-not (.startsWith real-parent root)
+            (path-refusal
+              :path-outside-project
+              "Discovered path's directory resolves outside the configured project root"
+              (str path))
+            (resolve-source-path
+              root
+              (.toString (.relativize root (.resolve real-parent file-name))))))))
+    (catch java.nio.file.NoSuchFileException _
+      (path-refusal :source-file-not-found "Source file does not exist" (str path)))
+    (catch Exception error
+      (path-refusal :invalid-source-path (.getMessage error) (str path)))))

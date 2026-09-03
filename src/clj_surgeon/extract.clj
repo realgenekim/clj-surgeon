@@ -19,6 +19,7 @@
    [clj-surgeon.extract-rewire :as extract-rewire]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.forms :as forms]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
@@ -137,6 +138,46 @@
   [root path]
   (file-path->ns-name (workspace-relative-path root path)
                       (or (source-paths-in-root root) ["src" "test" "dev"])))
+
+
+;; @spec MCP-OP-EXTRACT-024
+(defn- confine-workspace-paths
+  "Refuse the FIRST workspace path that resolves outside the project root.
+
+  Returns nil when every path is confined, or one typed refusal naming the
+  offending path. Called twice on purpose -- once where the walk turns the
+  workspace into a read set, and once in the instant before the first
+  `atomic-write!` -- because rewiring turns that read set into a WRITE set and
+  the filesystem can change between proving a plan and committing it. A path
+  that escapes is never dropped quietly: silently skipping a caller would ship a
+  half-rewired workspace under a success receipt."
+  [root paths]
+  (let [real (try {:root (mcp-paths/real-root root)}
+                  (catch Exception error {:error (.getMessage error)}))]
+    (if-let [root-error (:error real)]
+      {:ok false
+       :error (str "The extraction project root could not be resolved: "
+                   root-error)
+       :error-type :project-root-unresolvable
+       :root (str root)
+       :source-unchanged true
+       :target-unchanged true}
+      (let [real-root (:root real)]
+        (some (fn [path]
+                (let [resolved (mcp-paths/resolve-discovered-source-path
+                                 real-root path)]
+                  (when-not (:ok resolved)
+                    {:ok false
+                     :error (str "A workspace path resolves outside the "
+                                 "extraction project root and was refused "
+                                 "before any write: " path)
+                     :error-type :caller-path-outside-root
+                     :path (str path)
+                     :root (.toString real-root)
+                     :refusal (select-keys resolved [:error_type :error])
+                     :source-unchanged true
+                     :target-unchanged true})))
+              paths)))))
 
 (defn- project-root-for-source
   [file source-paths]
@@ -1173,39 +1214,48 @@
           target-ns (file-path->ns-name to source-paths)
           project-root (project-root-for-source file source-paths)
           source-canonical-path (.getCanonicalPath (io/file file))
-          workspace-sources
+          discovered
           (->> (file-seq (io/file project-root))
                (filter #(.isFile %))
                (filter #(re-matches #".*\.clj[sc]?$" (.getName %)))
                (remove #(= source-canonical-path (.getCanonicalPath %)))
                (remove #(str/includes? (.getPath %) "/.git/"))
-               (map (fn [workspace-file]
-                      [(.getPath workspace-file) (slurp workspace-file)]))
-               (into (sorted-map)))]
-      (compile-plan
-        {:file file
-         :source source
-         :forms forms
-         :to to
-         :target-ns target-ns
-         :workspace-sources workspace-sources
-         :require-policy require-policy
-         :project-root (str project-root)
-         :compile-aliases (or (not-empty (normalize-aliases compile-alias))
-                              (declared-compile-aliases project-root))
-         :public-forms (or public public-forms [])
-         ;; @spec MCP-OP-EXTRACT-011
-         ;; When the caller does not name the promotions, DERIVE them. The
-         ;; planner already computes exactly which moved private forms a
-         ;; remaining owner must call; shipping one of them still private, as
-         ;; rf1 did twice, is a success receipt for a namespace that will not
-         ;; compile. Deriving is only a default: a supplied :public stays
-         ;; authoritative, and a wrong one still refuses.
-         :derive-required-public-forms
-         (not (or (contains? opts :public) (contains? opts :public-forms)))
-         :doc doc
-         :alias alias
-         :rewire-callers rewire-callers}))
+               (mapv #(.getPath %)))
+          ;; @spec MCP-OP-EXTRACT-024
+          ;; Confine the read set at the moment the walk produces it: this is
+          ;; where a directory symlink turns a path that LOOKS like it is under
+          ;; the root into one that is not.
+          escape (confine-workspace-paths project-root discovered)
+          workspace-sources
+          (when-not escape
+            (into (sorted-map)
+                  (map (fn [path] [path (slurp path)]) discovered)))]
+      (if escape
+        escape
+        (compile-plan
+          {:file file
+           :source source
+           :forms forms
+           :to to
+           :target-ns target-ns
+           :workspace-sources workspace-sources
+           :require-policy require-policy
+           :project-root (str project-root)
+           :compile-aliases (or (not-empty (normalize-aliases compile-alias))
+                                (declared-compile-aliases project-root))
+           :public-forms (or public public-forms [])
+           ;; @spec MCP-OP-EXTRACT-011
+           ;; When the caller does not name the promotions, DERIVE them. The
+           ;; planner already computes exactly which moved private forms a
+           ;; remaining owner must call; shipping one of them still private, as
+           ;; rf1 did twice, is a success receipt for a namespace that will not
+           ;; compile. Deriving is only a default: a supplied :public stays
+           ;; authoritative, and a wrong one still refuses.
+           :derive-required-public-forms
+           (not (or (contains? opts :public) (contains? opts :public-forms)))
+           :doc doc
+           :alias alias
+           :rewire-callers rewire-callers})))
     (catch Exception error
       {:ok false
        :error-type :extraction-snapshot-failed
@@ -1258,6 +1308,13 @@
             target-file (io/file to)
             source-file (io/file file)
             receipt-error (receipt-refusal receipt-out source-file target-file)
+            ;; @spec MCP-OP-EXTRACT-024
+            ;; A delay, so the confinement check runs exactly where the cond
+            ;; forces it -- after every staleness fence and before the first
+            ;; write -- and runs once.
+            caller-escape (delay (confine-workspace-paths
+                                   (:_project-root p)
+                                   (map :file caller-plans)))
             receipt (extraction-receipt
                       {:source-file source-file
                        :target-file target-file
@@ -1298,6 +1355,14 @@
            :file file
            :source-unchanged true
            :target-unchanged true}
+
+          ;; @spec MCP-OP-EXTRACT-024
+          ;; The last thing checked before the first byte is written: every
+          ;; caller path is re-confined against the project root here, not only
+          ;; where the walk found it, because the plan was proved against a
+          ;; filesystem that has had every preceding check's worth of time to
+          ;; change.
+          @caller-escape @caller-escape
 
           :else
           (do
