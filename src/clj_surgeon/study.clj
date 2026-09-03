@@ -374,39 +374,62 @@
           #{}))
       (catch Exception _e #{}))))
 
+;; @spec MCP-OP-STUDY-022
+(defn compile-pattern
+  "Compile one caller-supplied regular expression, or nil when the engine
+   rejects it or it is not even a string.
+
+   `re-pattern` used to be called PER FILE inside `ns-grep-hit?`: an
+   uncompilable pattern such as \"[\" threw a raw `PatternSyntaxException`
+   out of the read entrance — no typed error, no `read_complete`, no
+   continuation — and a compilable one paid a fresh compile for every file in
+   the tree."
+  [pattern]
+  (try
+    (when (string? pattern)
+      (re-pattern pattern))
+    (catch Exception _e nil)))
+
 ;; @spec MCP-OP-STUDY-012
 (defn- ns-grep-hit?
   "Pure: true if a source file's SCAN-RELATIVE path plausibly names a
-   namespace matching pattern. Tests the relative path as given and again
-   with '_' turned into '-', because the Clojure require convention keeps a
-   file's path in lockstep with its declared namespace (path segment <-> ns
-   segment, '_' <-> '-'). Takes the path already relativized to the scanned
-   dir — never the absolute filesystem path, whose ancestor directories
-   (e.g. a checkout named `…-store` or `…-study`) could spuriously match.
-   Never opens or parses the file — this is a path/namespace filter, never a
-   file-contents filter (that is `grep`, via `filter-projects-by-hits`)."
-  [pattern rel-path]
-  (let [re (re-pattern pattern)]
-    (boolean (or (re-find re rel-path)
-                 (re-find re (str/replace rel-path "_" "-"))))))
+   namespace matching the ALREADY COMPILED pattern. Tests the relative path as
+   given and again with '_' turned into '-', because the Clojure require
+   convention keeps a file's path in lockstep with its declared namespace
+   (path segment <-> ns segment, '_' <-> '-'). Takes the path already
+   relativized to the scanned dir — never the absolute filesystem path, whose
+   ancestor directories (e.g. a checkout named `…-store` or `…-study`) could
+   spuriously match. Never opens or parses the file — this is a path/namespace
+   filter, never a file-contents filter (that is `grep`, via
+   `filter-projects-by-hits`)."
+  [re rel-path]
+  (boolean (or (re-find re rel-path)
+               (re-find re (str/replace rel-path "_" "-")))))
 
 ;; @spec MCP-OP-STUDY-012
+;; @spec MCP-OP-STUDY-022
 (defn filter-projects-by-ns-grep
   "Pure: keep only files whose path/namespace — relative to dir, never the
    absolute filesystem path — matches pattern. Narrower than
    `filter-projects-by-hits`/`grep`, which searches file bodies and matches
    any line containing the pattern — comments, strings, and unrelated
-   substrings included. Drops projects left with no files."
+   substrings included. Drops projects left with no files.
+
+   The pattern is compiled ONCE here; an uncompilable one is refused by
+   `ls-tree` long before this."
   [projects dir pattern]
   (let [dir-path (fs/path dir)
+        re (compile-pattern pattern)
         rel (fn [f] (str (fs/relativize dir-path (fs/path f))))]
-    (->> projects
-         (map (fn [project]
-                (update project :files
-                        (fn [files]
-                          (filterv #(ns-grep-hit? pattern (rel %)) files)))))
-         (remove #(empty? (:files %)))
-         vec)))
+    (if-not re
+      []
+      (->> projects
+           (map (fn [project]
+                  (update project :files
+                          (fn [files]
+                            (filterv #(ns-grep-hit? re (rel %)) files)))))
+           (remove #(empty? (:files %)))
+           vec))))
 
 (defn filter-projects-by-hits
   "Pure: given a set of matching file paths and a list of projects, filter
@@ -744,6 +767,16 @@
      :dir dir
      :ns-grep ns-grep
      :error "Error: :ns-grep must not start with '-'"}
+
+    ;; Compiled once, here, under a guard. `re-pattern` ran per file, so
+    ;; `:ns-grep "["` left the read entrance as a raw PatternSyntaxException.
+    (and ns-grep (nil? (compile-pattern ns-grep)))
+    {:ok false
+     :error-type :invalid-ns-grep-pattern
+     :dir dir
+     :ns-grep ns-grep
+     :error (format "Error: :ns-grep %s is not a valid regular expression"
+                    (pr-str ns-grep))}
 
     (nil? (canonical-scan-root dir))
     {:ok false

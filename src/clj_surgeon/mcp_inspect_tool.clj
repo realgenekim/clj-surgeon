@@ -468,6 +468,53 @@
   with a well-behaved client, not a server-side check."
   #{:mode :dir :grep :ns_grep :format :limit :max_files :workspace_root})
 
+;; @spec MCP-OP-STUDY-022
+(def ^:private ls-tree-parameter-types
+  "The JSON type each ls-tree parameter must carry, checked server-side.
+
+  The published schema's `type` is a contract with a well-behaved client, not
+  a check: `grep: 5` sailed past the `^-` guard — `str/starts-with?`
+  stringifies its argument — reached ripgrep as the pattern \"5\", and came
+  back in a receipt whose `grep` was an integer. That violates this tool's own
+  OUTPUT schema, so the caller saw `isError` and no `error_type` at all.
+  `limit: \"x\"` did the same through `invalid-study-limit`, which echoed the
+  string back into an integer-typed field."
+  {:mode {:pred string? :expected "string"}
+   :dir {:pred string? :expected "string"}
+   :grep {:pred string? :expected "string"}
+   :ns_grep {:pred string? :expected "string"}
+   :format {:pred string? :expected "string"}
+   :limit {:pred integer? :expected "integer"}
+   :max_files {:pred integer? :expected "integer"}
+   :workspace_root {:pred string? :expected "string"}})
+
+(defn- json-type-name
+  [value]
+  (cond
+    (nil? value) "null"
+    (boolean? value) "boolean"
+    (string? value) "string"
+    (integer? value) "integer"
+    (number? value) "number"
+    (sequential? value) "array"
+    (map? value) "object"
+    :else "unknown"))
+
+;; @spec MCP-OP-STUDY-022
+(defn- ls-tree-type-errors
+  "Every supplied ls-tree parameter whose JSON type is wrong, named with what
+  was expected and what arrived. Values are never echoed: the whole failure
+  mode being fixed is a wrongly typed value reaching the receipt."
+  [params]
+  (vec (for [[key {:keys [pred expected]}] (sort-by key ls-tree-parameter-types)
+             :let [value (get params key)]
+             :when (and (contains? params key)
+                        (some? value)
+                        (not (pred value)))]
+         {:parameter (name key)
+          :expected expected
+          :actual (json-type-name value)})))
+
 (defn- ls-tree-request-arguments
   "The arguments of the call just made, shaped as a continuation is.
 
@@ -523,7 +570,8 @@
         max-files (or (:max_files params) study/default-max-scan-files)
         root (mcp-paths/real-root project-root)
         unknown-fields (vec (sort (map name (remove ls-tree-fields (keys params)))))
-        resolved (mcp-paths/resolve-directory-path root dir)]
+        type-errors (ls-tree-type-errors params)
+        resolved (when (string? dir) (mcp-paths/resolve-directory-path root dir))]
     (cond
       ;; The ls-tree branch never reaches `validate-inspect-params`, so its own
       ;; vocabulary is checked here or nowhere. Before this, an unknown key was
@@ -533,11 +581,32 @@
       (ls-tree-refusal
         params :unknown-parameter
         "inspect_clojure ls-tree received an unknown parameter"
-        {:dir dir
-         :unknown unknown-fields
-         :supported (vec (sort (map name ls-tree-fields)))
-         :remedy "Remove the unknown parameter; the ls-tree vocabulary is fixed."}
+        ;; `:dir` only when it IS a string: this branch runs before the type
+        ;; check, and an integer `dir` in the receipt is the very defect the
+        ;; type check exists to stop.
+        (cond-> {:unknown unknown-fields
+                 :supported (vec (sort (map name ls-tree-fields)))
+                 :remedy "Remove the unknown parameter; the ls-tree vocabulary is fixed."}
+          (string? dir) (assoc :dir dir))
         (ls-tree-next-call params {}))
+
+      ;; Beside the format enum, and before anything interprets a parameter:
+      ;; a wrongly typed value cannot be scanned with, and must never reach the
+      ;; receipt, where it breaks the tool's own output schema.
+      (seq type-errors)
+      (ls-tree-refusal
+        params :invalid-parameter-type
+        "inspect_clojure ls-tree received a parameter of the wrong type"
+        (cond-> {:invalid type-errors
+                 :remedy (str "Send each parameter with its declared JSON "
+                              "type; grep and ns_grep are strings, limit and "
+                              "max_files are integers.")}
+          (string? dir) (assoc :dir dir))
+        ;; The corrective move is known, so the continuation drops the
+        ;; rejected values instead of handing them straight back.
+        (ls-tree-next-call
+          (apply dissoc params (map (comp keyword :parameter) type-errors))
+          {}))
 
       (and (contains? params :format)
            (not (contains? ls-tree-formats (:format params))))

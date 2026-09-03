@@ -596,6 +596,81 @@
       (is (true? (:ok response)))
       (is (= "edn" (:format response))))))
 
+(defn- output-schema-violations
+  "Every receipt key whose value contradicts the type `inspect-output-schema`
+   declares for it. The MCP adapter validates structured output against that
+   schema, so a violation is exactly what reaches a caller as `isError` with
+   no `error_type` — the failure this guards against."
+  [receipt]
+  (let [matches? (fn [declared value]
+                   (some (fn [type]
+                           (case type
+                             "string" (string? value)
+                             "integer" (integer? value)
+                             "number" (number? value)
+                             "boolean" (boolean? value)
+                             "object" (map? value)
+                             "array" (sequential? value)
+                             "null" (nil? value)
+                             true))
+                         (if (vector? declared) declared [declared])))]
+    (vec (for [[field schema] (:properties inspect-tool/inspect-output-schema)
+               :let [key (keyword field)
+                     declared (:type schema)]
+               :when (and declared (contains? receipt key)
+                          (not (matches? declared (get receipt key))))]
+           {:field field :value (pr-str (get receipt key))}))))
+
+;; @spec MCP-OP-STUDY-022
+(deftest ls-tree-refuses-an-uncompilable-ns-grep-with-a-typed-error
+  ;; `ns_grep` compiled its pattern with `re-pattern` once PER FILE and under
+  ;; no guard, so `"["` threw a raw PatternSyntaxException out of the read
+  ;; entrance — the adapter turned it into `mcp-adapter-failure` carrying a
+  ;; Java message, with no error_type, no read_complete and no continuation.
+  (testing "an uncompilable ns_grep is a typed refusal, not an exception"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "ns_grep" "["})]
+      (is (false? (:ok response)))
+      (is (= "invalid-ns-grep-pattern" (:error_type response)))
+      (is (false? (:read_complete response)))
+      (is (true? (:source_unchanged response)))
+      (is (string? (:next_action response)))
+      (is (not= "mcp-adapter-failure" (:error_type response)))
+      (is (empty? (output-schema-violations response)))))
+  (testing "a compilable ns_grep still scans"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "ns_grep" "logging"})]
+      (is (true? (:ok response)))
+      (is (empty? (output-schema-violations response))))))
+
+;; @spec MCP-OP-STUDY-022
+(deftest ls-tree-refuses-a-wrongly-typed-parameter-server-side
+  ;; `ns_grep 5` threw a ClassCastException out of the entrance. `grep 5` was
+  ;; worse: it passed the `^-` guard (`starts-with?` stringifies its
+  ;; argument), scanned for the pattern "5", and returned a receipt whose
+  ;; `grep` was an integer — which fails this tool's own OUTPUT schema and
+  ;; reaches the caller as `isError` with no error_type at all. `limit "x"`
+  ;; did the same through `invalid-study-limit`, which echoed the string into
+  ;; an integer-typed field.
+  (testing "a wrongly typed parameter is a typed refusal, not a scan"
+    (doseq [[label request expected-parameter]
+            [["grep" {"mode" "ls-tree" "dir" fixture-dir "grep" 5} "grep"]
+             ["limit" {"mode" "ls-tree" "dir" fixture-dir "limit" "x"} "limit"]
+             ["max_files" {"mode" "ls-tree" "dir" fixture-dir "max_files" "x"} "max_files"]
+             ["ns_grep" {"mode" "ls-tree" "dir" fixture-dir "ns_grep" 5} "ns_grep"]]]
+      (testing label
+        (let [response (run request)]
+          (is (false? (:ok response)))
+          (is (= "invalid-parameter-type" (:error_type response)))
+          (is (= [expected-parameter] (map :parameter (:invalid response))))
+          (is (false? (:read_complete response)))
+          (is (true? (:source_unchanged response)))
+          (is (not= "mcp-adapter-failure" (:error_type response)))
+          (is (nil? (:tree response)))
+          (is (nil? (:files response)))
+          (is (empty? (output-schema-violations response))
+              "a receipt that breaks its own output schema reaches the caller as isError")
+          (is (nil? (get-in response [:next_call :arguments (keyword expected-parameter)]))
+              "the continuation must not repeat the rejected value"))))))
+
 ;; @spec MCP-OP-STUDY-007
 (deftest ls-tree-refusal-serves-no-continuation-identical-to-the-request
   ;; `ls-tree-refusal` attached `{:dir "."}` unconditionally, so a failed
