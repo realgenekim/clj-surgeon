@@ -894,7 +894,7 @@ memory-battery:
 	$(MEMBAT_ENV) MEMBAT_MODE=battery \
 	  clojure -J-Xmx$(MEMBAT_XMX) -M:clj-surgeon/memory-battery
 
-# memory-battery-self-test:
+memory-battery-self-test:
 	@# Millisecond-scale. Proves the generator is deterministic, the verdict
 	@# applies the published pass lines exactly, and the battery is absent from
 	@# every fast gate. This one IS wired into `make test`.
@@ -912,15 +912,8 @@ txn-kernel-warning-check:
 test-fast:
 	bb test/run_all.clj
 
-MEMORY_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
-
-# The memory namespaces are deliberately outside test-fast and mcp-test: they
-# spawn child JVMs at explicit heap ceilings, write hundreds of megabytes of
-# synthetic scope, and cost minutes of wall. The target carries the whole
-# red-to-green history: the frozen read dies of OutOfMemoryError at -Xmx256m on
-# a 600-file scope every ceiling admits, the same arm completes when the scope
-# fits, and the same scenario at the same ceiling completes through the
-# transaction journal with output parity against the unbounded reference.
+# ============================================================
+# MEM-005 parser-admission red witness (heavy; NOT in make test)
 # ============================================================
 # Isolates the memory battery's two adversarial SHAPE findings to one
 # `outline-source` call per JVM, each at an explicit -Xmx, so the defect is
@@ -933,6 +926,18 @@ memory-red:
 	@flock /home/forge/tmp/suite.lock \
 	  bb bench/parser_admission/red_witness.clj --root "$(PARSER_RED_ROOT)" \
 	     --expect "$(PARSER_RED_EXPECT)"
+
+# ============================================================
+# MEM-020 transaction-kernel memory witness (heavy; NOT in make test)
+# ============================================================
+# The memory namespaces are deliberately outside test-fast and mcp-test: they
+# spawn child JVMs at explicit heap ceilings, write hundreds of megabytes of
+# synthetic scope, and cost minutes of wall. This target carries the whole
+# red-to-green history: the frozen read dies of OutOfMemoryError at -Xmx256m on
+# a 600-file scope every ceiling admits, the same arm completes when the scope
+# fits, and the same scenario at the same ceiling completes through the
+# transaction journal with output parity against the unbounded reference.
+MEMORY_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
 
 memory-red-kernel:
 	@# The TRANSACTION KERNEL's OOM witness (bridge/txn-journal). It arrived as
