@@ -574,6 +574,13 @@
   "Census collection writes inside fold arms. Reads only; writes nothing."
   [{:keys [dir file doors threads]}]
   (let [doors-arg doors
+        ;; The SAME pure pass the entrance (`run`) runs ahead of its config
+        ;; load, called again here so an in-process caller of this op
+        ;; function gets the identical refusal without going through the CLI
+        ;; dispatch. Pure, so running it twice costs nothing and cannot
+        ;; differ.
+        shape-refusal (relation-census/validate-cli-request-shape
+                        {:threads threads})
         pool (when (some? threads) (relation-census/coerce-pool-size threads))
         parsed-doors (if doors
                        (relation-census/parse-doors
@@ -594,13 +601,8 @@
                   :oversized (:oversized-skipped @scan)}
                  :kebab)]
     (cond
-      (and pool (not (:ok pool)))
-      {:ok false
-       :error-type :invalid-pool-size
-       :error (str ":threads must be an integer between 1 and "
-                   relation-census/max-pool-size
-                   " (got " (pr-str threads) ")")
-       :next-command "clj-surgeon :op :relation-census :dir . :threads 8"}
+      (some? shape-refusal)
+      shape-refusal
 
       (map? parsed-doors)
       {:ok false
@@ -1127,6 +1129,12 @@
                        :category  :read}
 
     :relation-census  {:handler   run-relation-census
+                       ;; Pure request-shape validation the ENTRANCE runs
+                       ;; before it loads project aliases: MCP-OP-CENSUS-016
+                       ;; says a malformed request refuses before any
+                       ;; filesystem work, and config discovery is filesystem
+                       ;; work.
+                       :shape     #'relation-census/validate-cli-request-shape
                        :aliases   [:census]
                        :desc      "Classify every collection write inside defmethod fold-event arms"
                        :args      {:dir     {:desc "Root directory to scan (default: .)"}
@@ -1470,12 +1478,13 @@
       (throw (ex-info "Provide exactly one of :spec or :spec-file"
                       {:error-type :missing-spec-input})))))
 
-(defn run [{:keys [op] :as opts}]
+(defn- run-op
+  "Dispatch one shape-validated request. Loads project aliases first."
+  [canonical {:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
     (forms/init-from-file! anchor))
-  (let [canonical (resolve-op op)
-        opts (if (or (#{:change :change!} canonical)
+  (let [opts (if (or (#{:change :change!} canonical)
                      (and (= :show-form canonical)
                           (or (contains? opts :spec)
                               (contains? opts :spec-file))))
@@ -1521,6 +1530,22 @@
                    opts))]
     (if (string? result) (println result) (pp/pprint result))
     result))
+
+(defn run [{:keys [op] :as opts}]
+  (let [canonical (resolve-op op)
+        ;; The op's PURE request-shape pass, ahead of every filesystem call
+        ;; this entrance makes — `run-op`'s config load included. Sol's
+        ;; round-nine finding was that ordering: `bb … :threads
+        ;; not-a-number` refused only after this entrance had stat'ed the
+        ;; workspace, read its `.clj-surgeon.edn`, and walked the ancestor
+        ;; chain. "Before any filesystem work" (MCP-OP-CENSUS-016) has to
+        ;; mean the entrance, not just the op body; the round-eight witness
+        ;; instrumented the op body and was blind to exactly this frame.
+        shape-refusal (when-let [shape (:shape (get ops-registry canonical))]
+                        (shape opts))]
+    (if shape-refusal
+      (do (pp/pprint shape-refusal) shape-refusal)
+      (run-op canonical opts))))
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.

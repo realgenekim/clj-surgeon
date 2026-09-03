@@ -156,6 +156,49 @@
       :else {:ok true :size parsed})))
 
 ;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(defn validate-cli-request-shape
+  "Pure request-shape validation for the CLI/babashka relation-census request.
+
+   Returns nil when the request's shape is acceptable, and the typed refusal
+   otherwise. It reads its argument and nothing else: no path is resolved, no
+   directory is stat'ed, no `.clj-surgeon.edn` is looked for.
+
+   It exists so `clj-surgeon.core/run` can refuse a malformed request BEFORE
+   it loads project aliases. Sol's round-nine finding was that ordering:
+   `bb … :threads not-a-number` returned `invalid-pool-size` only after the
+   entrance had stat'ed the workspace, stat'ed and read its
+   `.clj-surgeon.edn`, and walked the ancestor chain for more — filesystem
+   work on a request the tool had already decided it would not honour.
+   MCP-OP-CENSUS-016 says \"before any filesystem work\", and config
+   discovery is filesystem work.
+
+   It is a SIBLING of the MCP entrance's `validate-request-shape` rather than
+   the same function, and the reason is mechanical, not stylistic: that one
+   lives in `clj-surgeon.mcp-relation-census`, which requires
+   `clj-surgeon.census-pool` and through it claypoole, a dependency babashka
+   cannot load (`Could not locate com/climate/claypoole.bb, …`). A require of
+   it from `clj-surgeon.core` would not slow the bb entrance down, it would
+   delete it. What the two entrances DO share is the predicate underneath
+   both — `coerce-pool-size`, above — so the CLI's `:threads` and the tool's
+   `pool_size` cannot disagree about which values are integers in range. The
+   CLI has no equivalent of the other two shape checks: every CLI argument
+   arrives as a string, so `doors` and `files` have no type to violate here.
+
+   The continuation is a full command, not a caption in an argument position
+   (MCP-OP-CENSUS-014)."
+  [{:keys [threads]}]
+  (let [pool (when (some? threads) (coerce-pool-size threads))]
+    (when (and pool (not (:ok pool)))
+      {:ok false
+       :error-type :invalid-pool-size
+       :error (str ":threads must be an integer between 1 and "
+                   max-pool-size
+                   " (got " (pr-str threads) ")")
+       :next-command "clj-surgeon :op :relation-census :dir . :threads 8"})))
+
+;; @spec MCP-OP-CENSUS-016
 (defn effective-pool-size
   "The pool a census may actually use: never more than the box has processors.
 
