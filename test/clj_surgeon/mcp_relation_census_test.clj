@@ -9,6 +9,7 @@
    [babashka.process :as proc]
    [cheshire.core :as json]
    [clj-surgeon.core :as core]
+   [clj-surgeon.forms :as forms]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-relation-census :as census-tool]
    [clj-surgeon.mcp-workspace :as workspace]
@@ -905,6 +906,101 @@
       (is (= "invalid-mcp-request" (:error_type result)))
       (is (= "doors-not-strings" (:reason result))
           (str "invalid-workspace-root won instead: " (pr-str result))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-nine finding, and the blind spot in the witness above.
+;;
+;; The MCP entrance refused `doors=[1]` having made zero filesystem syscalls.
+;; The babashka entrance did not: `bb … :threads not-a-number` returned
+;; `invalid-pool-size` only AFTER it had `stat`ed the workspace, `stat`ed and
+;; READ its `.clj-surgeon.edn`, and walked the ancestor chain looking for more.
+;; That work is not in `run-relation-census` at all — it is in `core/run`, the
+;; top-level dispatch, which loads project aliases BEFORE it dispatches to any
+;; op.
+;;
+;; The witness above could never have seen it: it wraps `core/census-root` and
+;; `core/census-sources`, functions the OP BODY calls, and the defect is one
+;; frame above them, in the ENTRANCE. A witness blind to its own subject
+;; returns a green that means nothing. These two count at the first filesystem
+;; touch on the entrance itself.
+;;
+;; The bb CLI is a real subprocess, so an in-process counter cannot reach it.
+;; Its meter here is the filesystem: a workspace whose `.clj-surgeon.edn` is
+;; unparseable EDN, which `forms/read-config` THROWS on. A run that loads
+;; config before it validates the request shape cannot return the shape
+;; refusal — it returns the config error instead. That is a behavioural meter,
+;; deterministic and portable, where an strace shim would be neither. (The
+;; syscall count was taken by hand at both shas and reported with the round:
+;; 3 filesystem syscalls naming the workspace before the refusal at 459f46e,
+;; 0 after.)
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(deftest the-cli-entrance-validates-the-request-shape-before-it-loads-any-config
+  (testing "core/run — the dispatch babashka runs — touches nothing before refusing"
+    (let [config-loads (atom 0)
+          root-calls (atom 0)
+          read-calls (atom 0)]
+      (with-redefs [forms/init-from-file!
+                    (counting config-loads forms/init-from-file!)
+                    core/census-root (counting root-calls core/census-root)
+                    core/census-sources (counting read-calls core/census-sources)]
+        (let [result (binding [*out* (java.io.StringWriter.)]
+                       (core/run {:op :relation-census
+                                  :dir repo-root
+                                  :threads "not-a-number"}))]
+          (is (false? (:ok result)))
+          (is (= :invalid-pool-size (:error-type result)))
+          (is (= 0 @config-loads)
+              (str "the CLI entrance resolved and read .clj-surgeon.edn "
+                   "before it validated the request shape"))
+          (is (= 0 @root-calls)
+              "the CLI's routing resolver ran before threads was validated")
+          (is (= 0 @read-calls)
+              "the CLI's source reader ran before threads was validated")))))
+
+  (testing "a valid request still loads the config it needs"
+    ;; The ordering fix must not turn config loading OFF; it moves it after
+    ;; the pure pass. A witness that only proves absence would pass a broken
+    ;; entrance that never loads aliases at all.
+    (let [config-loads (atom 0)]
+      (with-redefs [forms/init-from-file!
+                    (counting config-loads forms/init-from-file!)]
+        (binding [*out* (java.io.StringWriter.)]
+          (core/run {:op :relation-census :file (str repo-root "/" fixture)}))
+        (is (= 1 @config-loads)
+            "the entrance stopped loading project aliases for a valid request")))))
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(deftest the-babashka-entrance-refuses-before-it-reads-the-workspace-config
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      ;; The trap: unparseable EDN. Reaching it at all is the defect.
+      (spit (io/file root ".clj-surgeon.edn") "{:aliases {\"x\" }\n")
+
+      (testing "a malformed :threads refuses on shape, not on the config it never read"
+        (let [result (bb-cli ":op" "relation-census" ":dir" (.getPath root)
+                             ":threads" "not-a-number")]
+          (is (false? (:ok result))
+              (str "the bb entrance did not refuse: " (pr-str result)))
+          (is (= :invalid-pool-size (:error-type result))
+              (str "the bb entrance loaded the workspace config before it "
+                   "validated the request shape: " (pr-str result)))))
+
+      (testing "a well-shaped request still reaches that config, and still trips it"
+        ;; The same trap, proving the meter is live: a request whose shape is
+        ;; valid DOES load the config, so the assertion above is about order,
+        ;; not about the config having become unreachable.
+        (let [result (bb-cli ":op" "relation-census" ":dir" (.getPath root))]
+          (is (= :invalid-arguments (:error-type result))
+              (str "the trap never fired, so the refusal above proves nothing: "
+                   (pr-str result)))))
+      (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-032
