@@ -213,7 +213,14 @@
                                       (interpose ["-o"])
                                       (apply concat))
                                  [")" "-prune"])
-            args (concat ["find" (find-start-token dir)]
+            ;; -H: follow a symlink given as the START POINT only.
+            ;; `existing-directory?` uses Files.isDirectory, which follows
+            ;; links, so a symlinked root PASSES the entrance gate; find's -P
+            ;; default would then refuse to descend it and discovery would
+            ;; return nothing for a root the gate accepted. -H makes the gate
+            ;; and the executor answer the same question. It does NOT follow
+            ;; links found inside the tree, so the walk stays acyclic.
+            args (concat ["find" "-H" (find-start-token dir)]
                          prune-tokens
                          ["-o" "("
                           "-name" "deps.edn"
@@ -262,7 +269,9 @@
     (try
       (let [result (babashka.process/shell
                      {:out :string :err :string :continue true}
-                     "find" (find-start-token dir)
+                     ;; -H for the same reason as find-build-files: a source
+                     ;; path may itself be reached through a symlinked root.
+                     "find" "-H" (find-start-token dir)
                      "(" "-name" "*.clj"
                      "-o" "-name" "*.cljs"
                      "-o" "-name" "*.cljc" ")" "-print0")]
