@@ -35,9 +35,15 @@
       receipt about a token this server had minted. A refusal is not enough;
       the receipt has to be true.
 
-   3. A PAGE READS ONLY ITS SLICE. Page 2 does no discovery, no glob and no
-      tree walk; it seeks `offset` lines into the pinned row file and takes
-      `limit`. That closes the `O(pages x N)` re-walk the same review found.
+   3. A PAGE RETAINS ONLY ITS SLICE. Page 2 does no discovery, no glob and no
+      tree walk; it streams the pinned row file ONCE — folding every row to
+      prove the manifest's address, keeping only the rows `[offset, offset +
+      limit)` — and reads nothing else. That closes the `O(pages x N)`
+      re-walk the same review found: what a page pays per row is a fold, not
+      a stat and not a glob, and what it HOLDS is the page. The fold is not
+      optional and never was; verifying an address means reading the bytes
+      that carry it, and doing it in the same open as the slice is what makes
+      the verification true of the bytes served.
 
    4. A SNAPSHOT IS ADDRESSED BY WHAT IT CONTAINS, AND WHERE. `cursor-id` IS
       the manifest digest — folded over every row's position, project, path
@@ -77,9 +83,10 @@
    — would let any holder of a receipt mint a cursor for any offset. The key
    stays a per-snapshot random secret written only inside the snapshot file.
 
-   MEMORY. Nothing here retains a row. The snapshot is WRITTEN streaming — one
-   row rendered, digested, written and dropped — and READ streaming, a
-   transducer over `line-seq` that keeps only the slice a page will encode.
+   MEMORY. Nothing here retains a row it does not serve. The snapshot is
+   WRITTEN streaming — one row rendered, digested, written and dropped — and
+   READ streaming: `fold-slice` walks `line-seq` once, folds every row into
+   the digest and drops it, and retains only the rows the page will encode.
    The heap cost is one 64 KB block buffer plus the page, whatever N is.
 
    SEMANTICS THIS BUYS, AND ITS PRICE. A continuation is a SNAPSHOT read, not

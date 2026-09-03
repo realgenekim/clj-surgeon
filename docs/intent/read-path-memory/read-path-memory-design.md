@@ -360,8 +360,10 @@ caller reads as a complete result.
 The snapshot costs nothing a scan under the ceiling would otherwise pay: a
 result at or under `R` needs no cursor, so it pins nothing, stats nothing and
 digests nothing. When it does pin, it is written STREAMING — one row rendered,
-digested, written and dropped — and read streaming, a transducer over
-`line-seq` keeping only the slice the page encodes. Heap is one 64 KB block
+digested, written and dropped — and read streaming: one pass over `line-seq`
+that folds every row into the manifest digest and drops it, RETAINING only the
+slice the page encodes. The fold is what proves the address, so a page pays one
+fold per row and holds one page. Heap is one 64 KB block
 buffer plus the page, at N = 10 and at N = 10,000 alike. The meta file is
 written last and renamed into place, so a snapshot is complete or absent; a
 crash mid-write leaves rows nobody can address and a cursor that resolves to

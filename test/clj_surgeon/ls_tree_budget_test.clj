@@ -1283,15 +1283,18 @@
 
 ;; @spec MCP-OP-MEM-003
 (deftest a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered
-  ;; The confinement boundary is LEXICAL and deliberately does NOT resolve
-  ;; symlinks. Measured on this branch: `discover-projects` follows a
-  ;; symlinked `.clj` whose target is outside the root and encodes it on a
-  ;; fresh scan. A serve-path check that resolved symlinks would therefore
-  ;; refuse a page for a tree the fresh scan encodes whole — a page-1/page-2
-  ;; divergence introduced by the guard itself. So the guard refuses what
-  ;; DISCOVERY can never produce (absolute paths, `..` escapes) and defers to
-  ;; discovery on what it can. This witness pins that choice: change it and
-  ;; this fails, which is the point.
+  ;; The confinement boundary resolves a row's PARENT and leaves its LEAF
+  ;; lexical. This witness pins the leaf half. Measured on this branch:
+  ;; `discover-projects` follows a symlinked `.clj` FILE whose target is
+  ;; outside the root and encodes it on a fresh scan, so a serve-path check
+  ;; that resolved the leaf would refuse a page for a tree the fresh scan
+  ;; encodes whole — a page-1/page-2 divergence introduced by the guard
+  ;; itself. The parent half is pinned by
+  ;; `a-manifest-row-through-a-symlinked-DIRECTORY-is-refused-not-read`, and
+  ;; the two together are the rule: refuse what DISCOVERY can never produce
+  ;; (absolute paths, `..` escapes, a symlinked DIRECTORY component) and defer
+  ;; to discovery on what it can. Change either and one of them fails, which
+  ;; is the point.
   (with-outside-file [_outside secret]
     (with-project [dir fixture-count "ls-tree-budget-confine-symlink"]
       (fs/create-sym-link (str dir "/src/fixt/zlinked.clj") secret)
