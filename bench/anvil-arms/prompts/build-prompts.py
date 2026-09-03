@@ -3,7 +3,9 @@
 
 The prompts are NOT typed by hand.  They are extracted verbatim from the fenced
 blocks of `docs/observations/2026-09-04-e3-e6-prestaged.md` (sections B.4.1 to
-B.4.4) and, for the two rung-L arms, derived from
+B.4.4) -- from BOUNDED sections, each ending at the next heading of its level, so a
+lookup can never reach into the section after it -- and, for the two rung-L arms,
+derived from
 `docs/observations/2026-09-02-acid-rung-L/L-prompt-main.md` by the three edits
 B.4.4 names -- each of which asserts that it actually matched, so a doc edit that
 moves the text fails loudly instead of silently producing a different prompt.
@@ -18,6 +20,7 @@ from __future__ import annotations
 import argparse
 import filecmp
 import hashlib
+import re
 import pathlib
 import shutil
 import subprocess
@@ -35,19 +38,54 @@ KAOCHA_FOCUS = "bin/kaocha --focus marvin-voice-remote.bridge3-new-test"
 
 NAMES = ["E3-P-N", "E3-P-T", "E3-L-N", "E3-L-T"]
 
+# Every section whose PROSE governs what the prompts are or how they are derived.
+# Its hash goes in the manifest, so a prose edit fails --check even when every
+# fence, every prompt and every prompt hash is byte-identical.
+GOVERNING_SECTIONS = [
+    ("A.8",   "## A.8 "),
+    ("B.4.1", "### B.4.1 "),
+    ("B.4.2", "### B.4.2 "),
+    ("B.4.3", "### B.4.3 "),
+    ("B.4.4", "### B.4.4 "),
+]
+
 
 class BuildError(RuntimeError):
     pass
 
 
-def fences_after(doc: str, heading: str) -> list[str]:
-    """Every fenced block that follows `heading`, in document order."""
+HEADING_RE = re.compile(r"^(#{1,6})\s")
+
+
+def section(doc: str, heading: str) -> str:
+    """The text of `heading`'s section, BOUNDED BY THE NEXT HEADING of its level.
+
+    Sol, item 9: the old lookup ran from a loose heading match to END OF FILE, so a
+    section could silently borrow a fence -- or a whole meaning -- from the sections
+    after it, and nothing downstream could tell.  A section is bounded or it is not
+    a section.
+    """
     idx = doc.find(heading)
     if idx < 0:
         raise BuildError(f"heading not found in doc: {heading!r}")
+    if doc.find(heading, idx + 1) >= 0:
+        raise BuildError(f"heading is not unique in doc: {heading!r}")
+    level = len(HEADING_RE.match(heading).group(1))
+    lines = doc[idx:].split("\n")
+    out = [lines[0]]
+    for line in lines[1:]:
+        match = HEADING_RE.match(line)
+        if match and len(match.group(1)) <= level:
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
+def fences_in(text: str) -> list[str]:
+    """Every fenced block inside `text`, in order.  An unterminated fence is an error."""
     blocks: list[str] = []
     cur: list[str] | None = None
-    for line in doc[idx:].split("\n"):
+    for line in text.split("\n"):
         if line.startswith("```"):
             if cur is None:
                 cur = []
@@ -57,15 +95,39 @@ def fences_after(doc: str, heading: str) -> list[str]:
             continue
         if cur is not None:
             cur.append(line)
+    if cur is not None:
+        raise BuildError("unterminated fence inside a bounded section")
     return blocks
 
 
-def fence_after(doc: str, heading: str, which: int = 1) -> str:
-    """Return the body of the `which`-th fenced block that follows `heading`."""
-    blocks = fences_after(doc, heading)
+def fence_in_section(doc: str, heading: str, which: int = 1) -> str:
+    """The `which`-th fenced block THIS SECTION OWNS.  Never the next section's."""
+    blocks = fences_in(section(doc, heading))
     if len(blocks) < which:
-        raise BuildError(f"fence #{which} not found after {heading!r}")
+        raise BuildError(
+            f"fence #{which} not found inside section {heading!r} "
+            f"(it owns {len(blocks)}); the lookup is bounded and will not "
+            f"reach into the following section")
     return blocks[which - 1]
+
+
+def prose_of(text: str) -> str:
+    """A section with its fenced blocks removed: the GOVERNING PROSE.
+
+    The fences say what the prompt is; the prose says what the prompt MEANS and how
+    it is derived ("exactly three edits").  Both are the source contract, so both are
+    hashed into the manifest -- otherwise a prose edit changes the instruction and
+    leaves every hash identical.
+    """
+    kept: list[str] = []
+    inside = False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            inside = not inside
+            continue
+        if not inside:
+            kept.append(line.rstrip())
+    return "\n".join(kept).strip() + "\n"
 
 
 def require(condition: bool, message: str) -> None:
@@ -125,16 +187,19 @@ def derive_rung_l(l_prompt: str, ritual: str, tooling: str) -> str:
     return text
 
 
-def build(out: pathlib.Path) -> dict[str, str]:
-    doc = DOC.read_text()
-    l_prompt = L_PROMPT.read_text()
+def build(out: pathlib.Path, doc_path: pathlib.Path | None = None,
+          l_prompt_path: pathlib.Path | None = None) -> dict[str, str]:
+    doc = (doc_path or DOC).read_text()
+    l_prompt = (l_prompt_path or L_PROMPT).read_text()
 
-    shared_body = fence_after(doc, "### B.4.1 ")
-    p_native = fence_after(doc, "### B.4.2 ")
-    p_tool = fence_after(doc, "### B.4.3 ")
-    ritual = fence_after(doc, "## A.8 ")
-    l_native = fence_after(doc, "### B.4.4 ", which=1)
-    l_tool = fence_after(doc, "### B.4.4 ", which=2)
+    shared_body = fence_in_section(doc, "### B.4.1 ")
+    p_native = fence_in_section(doc, "### B.4.2 ")
+    p_tool = fence_in_section(doc, "### B.4.3 ")
+    ritual = fence_in_section(doc, "## A.8 ")
+    l_native = fence_in_section(doc, "### B.4.4 ", which=1)
+    l_tool = fence_in_section(doc, "### B.4.4 ", which=2)
+    require(len(fences_in(section(doc, "### B.4.4 "))) == 2,
+            "B.4.4 must own exactly two fences (the two §5 TOOLING blocks)")
 
     require("4. RITUAL" in shared_body, "B.4.1 body lost its §4 RITUAL section")
     require(shared_body.rstrip().endswith("TOOLCALLS: <n>."),
@@ -164,6 +229,11 @@ def build(out: pathlib.Path) -> dict[str, str]:
         (out / f"{name}.sha256").write_text(digest + "\n")
         digests[name] = digest
     manifest = "".join(f"{digests[n]}  {n}.md\n" for n in NAMES)
+    for label, heading in GOVERNING_SECTIONS:
+        prose = prose_of(section(doc, heading))
+        digest = hashlib.sha256(prose.encode()).hexdigest()
+        digests[f"section:{label}"] = digest
+        manifest += f"{digest}  section:{label}\n"
     (out / "MANIFEST.sha256").write_text(manifest)
     return digests
 
@@ -171,19 +241,24 @@ def build(out: pathlib.Path) -> dict[str, str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(HERE))
+    ap.add_argument("--doc", default=str(DOC),
+                    help="the pre-registration doc the prompts are extracted from")
+    ap.add_argument("--l-prompt", default=str(L_PROMPT))
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
+    doc_path = pathlib.Path(args.doc)
+    l_prompt_path = pathlib.Path(args.l_prompt)
 
     try:
         if not args.check:
-            digests = build(pathlib.Path(args.out))
+            digests = build(pathlib.Path(args.out), doc_path, l_prompt_path)
             for name in NAMES:
                 print(f"{digests[name]}  {name}.md")
             return 0
 
         installed = pathlib.Path(args.out)
         with tempfile.TemporaryDirectory() as tmp:
-            build(pathlib.Path(tmp))
+            build(pathlib.Path(tmp), doc_path, l_prompt_path)
             drift = []
             for name in NAMES:
                 for suffix in (".md", ".sha256"):
@@ -205,7 +280,8 @@ def main() -> int:
                             check=False,
                         )
                 return 3
-        print("prompts match the doc (4 files + manifest)")
+        print(f"prompts match {doc_path} (4 files + manifest with "
+              f"{len(GOVERNING_SECTIONS)} governing-prose hashes)")
         return 0
     except BuildError as exc:
         print(f"PROMPT-BUILD-FAILED {exc}", file=sys.stderr)
