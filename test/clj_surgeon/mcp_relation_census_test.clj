@@ -2629,3 +2629,111 @@
               (str "the bb refusal does not name the repeated flag: "
                    (pr-str result))))
         (finally (delete-tree! parent))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-eleven review, item 8: `:dir` is outside shape validation.
+;;
+;; `:dir [1]` returned a GENERIC `:invalid-arguments` carrying
+;; "No implementation of method: :as-file of protocol: Coercions found for
+;; class: clojure.lang.PersistentVector" — a coercion accident from three
+;; frames down, not a typed refusal naming the field. And `:dir ""` was worse
+;; than untyped: it stat'ed the config ancestors, SCANNED THE CWD, and
+;; SUCCEEDED, answering about whatever directory the process happened to be
+;; standing in rather than the workspace the caller (failed to) name.
+;;
+;; `:dir` is the CLI's anchor. Every other refusal's continuation is built
+;; from it, so a request whose anchor is unusable cannot produce a faithful
+;; continuation for any later row — which is why it joins the shared table
+;; ahead of `doors`, `files` and `threads` rather than beside them.
+;;
+;; The meter is strace, not an in-process counter: the config ancestor walk
+;; happens inside the bb subprocess, where no `with-redefs` can see it. The
+;; witness carries its own liveness check — a well-shaped request from the
+;; same cwd DOES name `.clj-surgeon.edn` in the trace — so a green here is
+;; about ORDER and not about the trace having gone blind.
+;; ---------------------------------------------------------------------------
+
+(defn- strace-file-log
+  "Run the bb CLI under strace from `cwd`; return the file-syscall trace text."
+  [cwd & args]
+  (let [log (io/file cwd "strace.log")]
+    (apply proc/shell {:out :string :err :string :continue true :dir (str cwd)}
+           "strace" "-f" "-e" "trace=file" "-o" (.getPath log)
+           "bb" "-cp" (str repo-root "/src") "-m" "clj-surgeon.core" args)
+    (if (.exists log) (slurp log) "")))
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+(deftest the-cli-anchor-is-validated-before-any-filesystem-touch
+  (testing "the shared table owns :dir, and the CLI publishes its name"
+    (is (some? (census/shape-rule :dir :type))
+        ":dir is not a row of the shared refusal table")
+    (is (= :dir-not-a-string (census/shape-name :cli :dir :type))
+        "the table does not publish a CLI name for a malformed :dir"))
+
+  (testing "a malformed :dir refuses typed, in process, before any scan"
+    (doseq [value ["" "   " [1] {:a 1} 7]]
+      (let [root-calls (atom 0)
+            read-calls (atom 0)
+            config-loads (atom 0)
+            result (with-redefs [forms/init-from-file!
+                                 (counting config-loads forms/init-from-file!)
+                                 core/census-root
+                                 (counting root-calls core/census-root)
+                                 core/census-sources
+                                 (counting read-calls core/census-sources)]
+                     (binding [*out* (java.io.StringWriter.)]
+                       (core/run {:op :relation-census :dir value})))]
+        (is (false? (:ok result))
+            (str ":dir " (pr-str value) " was accepted: " (pr-str result)))
+        (is (= :dir-not-a-string (:error-type result))
+            (str ":dir " (pr-str value) " refused as "
+                 (pr-str (:error-type result)) ": " (pr-str result)))
+        (is (= 0 @config-loads @root-calls @read-calls)
+            (str ":dir " (pr-str value) " reached the filesystem: "
+                 @config-loads " config load(s), " @root-calls
+                 " root resolution(s), " @read-calls " scan(s)")))))
+
+  (testing "the babashka entrance names no config ancestor for a malformed :dir"
+    (let [cwd (temp-dir)]
+      (try
+        (spit-file! (io/file cwd "src/app/folds.clj") arm-source)
+        (spit (io/file cwd ".clj-surgeon.edn") "{:aliases {}}")
+        (testing "liveness: a well-shaped request DOES read that config"
+          (let [trace (strace-file-log cwd ":op" "relation-census" ":dir" ".")]
+            (is (str/includes? trace ".clj-surgeon.edn")
+                "the strace meter never saw the config read it exists to see")))
+        (doseq [value ["" "[1]"]]
+          (let [trace (strace-file-log cwd ":op" "relation-census" ":dir" value)]
+            (is (not (str/includes? trace ".clj-surgeon.edn"))
+                (str ":dir " (pr-str value)
+                     " walked the cwd's config ancestors before it was "
+                     "refused: "
+                     (pr-str (vec (take 4 (filter #(str/includes?
+                                                     % ".clj-surgeon.edn")
+                                                  (str/split-lines trace)))))))))
+        (finally (delete-tree! cwd)))))
+
+  (testing "the bb entrance refuses rather than censusing the cwd"
+    (let [cwd (temp-dir)]
+      (try
+        (spit-file! (io/file cwd "src/app/one.clj") arm-source)
+        (spit-file! (io/file cwd "src/app/two.clj") arm-source)
+        (doseq [value ["" "[1]"]]
+          (let [result (bb-cli-in cwd ":op" "relation-census" ":dir" value)]
+            (is (not (true? (:ok result)))
+                (str ":dir " (pr-str value) " censused the cwd: "
+                     (pr-str result)))
+            (is (= :dir-not-a-string (:error-type result))
+                (str ":dir " (pr-str value) " refused as "
+                     (pr-str (:error-type result)) ": " (pr-str result)))))
+        (finally (delete-tree! cwd)))))
+
+  (testing "a well-shaped :dir is still accepted"
+    (let [cwd (temp-dir)]
+      (try
+        (spit-file! (io/file cwd "src/app/one.clj") arm-source)
+        (let [result (bb-cli-in cwd ":op" "relation-census" ":dir" ".")]
+          (is (true? (:ok result)) (str "a valid :dir refused: " (pr-str result)))
+          (is (= 1 (:files result))))
+        (finally (delete-tree! cwd))))))
