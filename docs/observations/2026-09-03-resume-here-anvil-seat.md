@@ -131,3 +131,7 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
   aa14abf5d75ba48e8, template-upsert abd7fc65de9301f76 (waiting on its suite), lens-followups ab73fea07362149df.
 - Rule for every builder prompt from now on: NEVER `git add -A`; `.cpcache/` is ignored on main (ef5a538)
   but branches cut earlier lack the ignore line.
+
+## RESUME DELTA 2026-09-03T03:19Z
+
+- lens-followups pushed 934716dc (my run 1055/13171/0). curtain-call merge order stands: fold → store → settings-lens → template-upsert (fix round abd7fc65de9301f76 still running) → lens-followups. rf2 pushed 5ccb4f0, re-review a9f6694ffe16d0d1e running. Fix rounds running: census, study, q5z, fold-diff, ratchets.
