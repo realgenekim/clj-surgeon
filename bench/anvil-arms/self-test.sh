@@ -851,6 +851,65 @@ want "case22c conditional target not resolved" null \
 want "case22c an unconditional target beside it still resolves" "echo building" \
      "$(jqf "$MK22C/map.json" targets.build)"
 
+echo "== case 24: ANY watcher abort refuses at score time — no receipt, ever =="
+# Sol round two, item 3: an abort was merely appended to `notes`.  Sol's probe stopped a
+# run on the idle timeout -- watcher rc 5 -- and the scorer returned 0 and wrote a
+# citeable receipt over a run the meter had given up on.  A receipt whose own notes say
+# the meter stopped is worse than no receipt: it terminates the investigation.
+mk24 () {                       # mk24 <suffix> -> a fresh arm dir holding case 1's evidence
+  local d="$WORK/st-P-N-24$1"
+  rm -rf "$d"; mkdir -p "$d"
+  cp "$A1/attest.json" "$A1/rollout.jsonl" "$A1/watch.jsonl" "$A1/run.json" "$d/"
+  printf '%s' "$d"
+}
+inject_abort () {               # inject_abort <dir> <error_type>  (before the final end)
+  python3 - "$1/watch.jsonl" "$2" <<'PY24'
+import json, sys
+path, kind = sys.argv[1], sys.argv[2]
+recs = [json.loads(l) for l in open(path) if l.strip()]
+end = recs.pop() if recs and recs[-1].get("kind") == "end" else None
+ms = recs[-1]["ms_since_start"] if recs else 0
+recs.append({"t": "2026-09-03T00:00:00Z", "ms_since_start": ms, "kind": "abort",
+             "error_type": kind, "detail": "injected by case 24", "returns": 3})
+if end is not None:
+    recs.append(end)
+open(path, "w").write("".join(json.dumps(r) + "\n" for r in recs))
+PY24
+}
+
+for kind in idle-stop max-wall zero-returns rollout-rotated; do
+  D=$(mk24 "-$kind")
+  inject_abort "$D" "$kind"
+  python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d["abort"]=sys.argv[2];open(p,"w").write(json.dumps(d,indent=2))' \
+    "$D/run.json" "$kind"
+  printf '{"stale":true}\n' > "$D/receipt.json"
+  python3 "$HERE/score.py" "$D" > "$WORK/case24-$kind.out" 2>&1
+  want "case24 $kind score rc" 3 "$?"
+  [ -e "$D/receipt.json" ] && bad "case24 $kind a receipt survived a watcher abort" \
+    || ok "case24 $kind no receipt.json — the stale one was removed too"
+  grep -q "SCORE-ABORT watch-abort:$kind" "$WORK/case24-$kind.out" \
+    && ok "case24 $kind typed refusal names the abort" \
+    || { bad "case24 $kind untyped refusal"; cat "$WORK/case24-$kind.out"; }
+  want "case24 $kind run.json still carries the abort as the terminal fact" "$kind" \
+       "$(jqf "$D/run.json" abort)"
+done
+
+# run.json alone is enough: an abort recorded there and nowhere else still refuses
+D=$(mk24 -runjson)
+python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d["abort"]="idle-stop";open(p,"w").write(json.dumps(d,indent=2))' \
+  "$D/run.json"
+python3 "$HERE/score.py" "$D" > "$WORK/case24-runjson.out" 2>&1
+want "case24 run.json-only abort score rc" 3 "$?"
+[ -e "$D/receipt.json" ] && bad "case24 run.json recorded an abort and a receipt was written" \
+  || ok "case24 run.json-only abort: no receipt.json written"
+
+# the control: the same evidence with no abort anywhere still scores
+D=$(mk24 -control)
+python3 "$HERE/score.py" "$D" > "$WORK/case24-control.out" 2>&1
+want "case24 control (no abort) score rc" 0 "$?"
+[ -s "$D/receipt.json" ] && ok "case24 control still produces a receipt" \
+  || bad "case24 control lost its receipt — the refusal is too broad"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
