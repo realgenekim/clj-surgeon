@@ -61,7 +61,7 @@ help:
 	@echo "  make test-fast                 Run ordinary tests without a real analyzer"
 	@echo "  make analyzer-contract-test    Run the serialized real-analyzer contracts"
 	@echo "  make mcp-test                  Run focused JVM MCP contract and hot-reload tests"
-	@echo "  make mcp-smoke                 Verify initialize, four-tool discovery, and refusal over stdio"
+	@echo "  make mcp-smoke                 Verify initialize, five-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make mcp-reload                Reload live Clojure and publish changed tool schemas"

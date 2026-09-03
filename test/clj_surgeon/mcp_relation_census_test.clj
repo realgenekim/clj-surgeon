@@ -92,7 +92,7 @@
       (is (every? #(not (neg? %)) (vals (:phases_elapsed_ms result))))
       (is (str/starts-with? (:next_action result) "review the raw sites")))
 
-    (testing "the published receipt is bounded and carries no file text"
+    (testing "the published receipt is bounded and carries only bounded excerpts"
       (let [bytes (count (.getBytes (json/generate-string result) "UTF-8"))]
         (is (<= bytes 4096) (str "receipt was " bytes " bytes")))
       (is (not (str/includes? (json/generate-string result) "defmethod fold-event"))))))
@@ -485,3 +485,33 @@
       (is (false? (:ok result)))
       (is (= "unknown-door-symbol" (:error_type result)))
       (is (= "nowhere-door" (:door result))))))
+
+;; @spec MCP-OP-CENSUS-026
+(deftest the-published-surfaces-name-the-fifth-tool
+  (let [text (fn [path] (str/replace (slurp path) #"\s+" " "))
+        readme (text "README.md")
+        claude (text "CLAUDE.md")
+        skill (text "skills/clj-surgeon/references/mcp-advanced.md")
+        mirror (text ".claude/skills/clj-surgeon/references/mcp-advanced.md")
+        contract (text "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")]
+    (testing "the tool count is five"
+      (is (str/includes? readme "registers exactly five clj-surgeon tools"))
+      (is (not (str/includes? readme "exactly four clj-surgeon tools")))
+      (is (str/includes? contract "today's five tools"))
+      (is (not (str/includes? contract "today's four tools"))))
+
+    (testing "every published surface names the census"
+      (doseq [[label body] [["README.md" readme]
+                            ["CLAUDE.md" claude]
+                            ["skill reference" skill]
+                            ["skill mirror" mirror]]]
+        (is (str/includes? body "relation_census")
+            (str label " does not name relation_census"))))
+
+    (testing "the surfaces say what the census is not, and that it enumerates"
+      (is (str/includes? claude "not an enforcement gate"))
+      (is (str/includes? readme "enumerates"))
+      (is (str/includes? skill "enumerates the workspace tree"))
+      (is (str/includes? census-tool/census-tool-description
+                         "enumerates the workspace tree")
+          "the tool's own description hides that it walks a tree"))))

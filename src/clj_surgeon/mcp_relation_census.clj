@@ -28,6 +28,7 @@
 (def max-listed-unrecognised 5)
 
 ;; @spec MCP-OP-CENSUS-009
+;; @spec MCP-OP-CENSUS-026
 (def census-tool-description
   (str
     "Census every collection write inside `defmethod fold-event` arms and "
@@ -43,7 +44,9 @@
     "(conj-once, cons-once, upsert-by, conj-distinct-by, cons-distinct-by). "
     "The plan phase is parallel and the answer is pool-size independent. "
     "This verb reads only; it writes nothing and it is not an enforcement "
-    "gate: it locates review work and never claims to prove idempotency."))
+    "gate: it locates review work and never claims to prove idempotency. It is "
+    "the one clj-surgeon tool that enumerates the workspace tree, so point it "
+    "at the workspace you mean."))
 
 (def census-tool-schema
   {:type "object"

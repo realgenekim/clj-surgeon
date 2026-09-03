@@ -222,7 +222,7 @@
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
 
-(deftest http-protocol-exposes-four-tools-and-structured-read-evidence
+(deftest http-protocol-exposes-five-tools-and-structured-read-evidence
   (let [project (temp-dir)
         source-file (io/file project "src/demo.clj")
         _created (.mkdirs (.getParentFile source-file))

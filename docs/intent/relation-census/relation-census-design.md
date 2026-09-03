@@ -130,3 +130,25 @@ The capability is exposed as the `relation_census` MCP tool and as the
 `:relation-census` CLI op. The CLI is the same pure kernel with a `map`-shaped
 plan phase; only the MCP route carries the claypoole pool, so the babashka CLI
 keeps loading without the JVM dependency.
+
+## Enumeration posture
+
+`workspace_root` is unrestricted for every clj-surgeon tool: the caller names
+the workspace and the path fence confines every read to it. The census inherits
+that posture, but it is the first tool that ENUMERATES a tree rather than
+reading paths the caller named, so it is worth stating plainly what the walk
+does and does not do:
+
+- it walks with `Files/walkFileTree` and no `FOLLOW_LINKS`, so a symlinked
+  directory is never descended;
+- a discovered path whose real location escapes the root is skipped and counted
+  in `skipped_outside_root`, never read;
+- `.git`, `node_modules`, `target` and their relatives are pruned before they
+  are read, not filtered out afterwards;
+- the walk terminates at `max-scanned-files`, and a source above
+  `max-source-bytes` is never read;
+- only the sources that define arms are retained, and the receipt carries
+  one-line excerpts, never file text.
+
+A caller who points the census at a workspace is asking for that workspace to be
+enumerated. Nothing outside it is read.
