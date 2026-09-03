@@ -1031,6 +1031,131 @@
       (finally (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-ten review, item 4 (blocking): the CLI shape validator is
+;; incomplete.
+;;
+;; Round ten made the CLI ENTRANCE validate its request shape before it loads
+;; project aliases — for ONE field. `validate-cli-request-shape` destructured
+;; `{:keys [threads]}` and read nothing else, so every other malformed shape
+;; still travelled through `run-op`'s config load first: `bb … :doors conj`
+;; against a workspace whose `.clj-surgeon.edn` is unparseable EDN returned
+;; the EDN error, not the door refusal, having `stat`ed that workspace twice
+;; and opened its config once (hand-run strace at 48c64ac: 3 filesystem
+;; syscalls naming the workspace before the refusal).
+;;
+;; Sol also found `:format edn` and `:max-files 1` — arguments the
+;; `:relation-census` op does not accept and that the MCP tool refuses as
+;; unknown fields — accepted SILENTLY at the CLI. A silently ignored argument
+;; is worse than a refused one: the caller believes a bound was applied that
+;; never existed.
+;;
+;; The rule is the WHOLE shape, not one field of it. Every refusal shape the
+;; pure pass can own must refuse with the entrance's own counter still at
+;; zero.
+;; ---------------------------------------------------------------------------
+
+(def ^:private thirty-three-doors
+  (str/join "," (map #(str "door-" %) (range (inc census/max-doors)))))
+
+(def ^:private cli-shape-refusals
+  "One malformed CLI request per refusal shape the pure pass owns.
+
+   `:opts` is the request as an in-process opts map; `:args` is the same
+   request as the argument strings babashka is handed. Both spellings must
+   produce the same typed refusal, and both must produce it before the
+   entrance touches the filesystem."
+  [{:label :unknown-argument-format
+    :opts {:format :edn} :args [":format" "edn"]
+    :error-type :unknown-arguments}
+   {:label :unknown-argument-max-files
+    :opts {:max-files 1} :args [":max-files" "1"]
+    :error-type :unknown-arguments}
+   {:label :doors-not-a-string
+    :opts {:doors [1]} :args [":doors" "[1]"]
+    :error-type :doors-not-a-string}
+   {:label :too-many-doors
+    :opts {:doors thirty-three-doors} :args [":doors" thirty-three-doors]
+    :error-type :too-many-doors}
+   {:label :unknown-door-symbol
+    :opts {:doors "conj"} :args [":doors" "conj"]
+    :error-type :unknown-door-symbol}
+   {:label :file-not-a-string
+    :opts {:file ""} :args [":file" ""]
+    :error-type :file-not-a-string}
+   {:label :threads-not-an-integer
+    :opts {:threads "not-a-number"} :args [":threads" "not-a-number"]
+    :error-type :invalid-pool-size}
+   {:label :threads-out-of-range
+    :opts {:threads "0"} :args [":threads" "0"]
+    :error-type :invalid-pool-size}])
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(deftest the-cli-entrance-validates-every-field-before-it-loads-any-config
+  (doseq [{:keys [label opts error-type]} cli-shape-refusals]
+    (testing (str "the CLI entrance refuses " label " before it reads a byte")
+      (let [config-loads (atom 0)
+            root-calls (atom 0)
+            read-calls (atom 0)]
+        (with-redefs [forms/init-from-file!
+                      (counting config-loads forms/init-from-file!)
+                      core/census-root (counting root-calls core/census-root)
+                      core/census-sources (counting read-calls core/census-sources)]
+          (let [result (binding [*out* (java.io.StringWriter.)]
+                         (core/run (merge {:op :relation-census :dir repo-root}
+                                          opts)))]
+            (is (false? (:ok result))
+                (str label " was accepted: " (pr-str result)))
+            (is (= error-type (:error-type result))
+                (str label " refused as " (pr-str (:error-type result))
+                     ": " (pr-str result)))
+            (is (= 0 @config-loads)
+                (str label ": the CLI entrance resolved and read "
+                     ".clj-surgeon.edn before it validated the request shape"))
+            (is (= 0 @root-calls)
+                (str label ": the CLI's routing resolver ran before the "
+                     "shape was validated"))
+            (is (= 0 @read-calls)
+                (str label ": the CLI's source reader ran before the shape "
+                     "was validated"))))))))
+
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(deftest the-babashka-entrance-refuses-every-malformed-field-before-the-config
+  ;; The bb CLI is a real subprocess, so no in-process counter can reach it.
+  ;; Its meter is the filesystem itself: a workspace whose `.clj-surgeon.edn`
+  ;; is unparseable EDN, which `forms/read-config` THROWS on. An entrance
+  ;; that loads config before it validates shape cannot return the shape
+  ;; refusal — it returns the config error instead. This is Sol's exact
+  ;; scenario, widened from `:threads` to every field.
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      (spit (io/file root ".clj-surgeon.edn") "{:aliases {\"x\" }\n")
+      (doseq [{:keys [label args error-type]} cli-shape-refusals]
+        (testing (str "bb refuses " label " on shape, not on the config it never read")
+          (let [result (apply bb-cli ":op" "relation-census"
+                              ":dir" (.getPath root) args)]
+            (is (false? (:ok result))
+                (str label " did not refuse: " (pr-str result)))
+            (is (= error-type (:error-type result))
+                (str label ": the bb entrance loaded the workspace config "
+                     "before it validated the request shape: "
+                     (pr-str result))))))
+
+      (testing "a well-shaped request still reaches that config, and still trips it"
+        ;; The meter's liveness check: a valid request DOES load the config,
+        ;; so every assertion above is about ORDER, not about the config
+        ;; having quietly become unreachable.
+        (let [result (bb-cli ":op" "relation-census" ":dir" (.getPath root))]
+          (is (= :invalid-arguments (:error-type result))
+              (str "the trap never fired, so the refusals above prove "
+                   "nothing: " (pr-str result)))))
+      (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-nine finding, item 4: a refusal targeting
 ;; /tmp/census10-fx/workspace handed back
 ;; `next_call={tool:"relation_census",pool_size:8}`. Replaying it verbatim
