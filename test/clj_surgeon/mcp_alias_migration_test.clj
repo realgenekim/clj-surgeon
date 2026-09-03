@@ -1427,6 +1427,168 @@
       (finally
         (delete-tree! workspace)))))
 
+(defn- owned-detail!
+  "One detail document written by the production writer, stamped `stamp`."
+  [workspace stamp]
+  (let [relative (alias-migration/write-details! (.toPath workspace) {:files []})
+        file (io/file workspace relative)]
+    (.setLastModified file stamp)
+    file))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest detail-pruning-deletes-only-documents-it-can-prove-it-wrote
+  ;; A name prefix says a file COULD be ours; it is not consent to delete it.
+  ;; A caller keeping twenty `detail-*.edn` files of its own in this directory
+  ;; watched retention take one of them, because prefix matching was standing
+  ;; in for ownership. Ownership is now proved twice — the manifest this writer
+  ;; keeps, and a marker inside the document — and neither is a guess about
+  ;; somebody else's file.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        base (- (System/currentTimeMillis) 600000)]
+    (.mkdirs receipt-dir)
+    (.mkdirs details)
+    (try
+      (let [callers (mapv (fn [index]
+                            (let [file (io/file details
+                                                (str "detail-caller-" index ".edn"))]
+                              (spit file (str "{:version 1 :caller " index "}"))
+                              (.setLastModified file (+ base index))
+                              file))
+                          (range 20))
+            ;; twenty documents this writer really did write, so the run below
+            ;; reaches the bound and has one of its OWN to prune
+            mine (mapv (fn [index] (owned-detail! workspace (+ base 100000 index)))
+                       (range 20))
+            result (alias-migration/execute! (config workspace receipt-dir)
+                                             (request workspace))
+            gone (remove (fn [^java.io.File file] (.exists file)) callers)]
+        (is (:ok result) (pr-str result))
+        (testing "every one of the caller's twenty files is still there"
+          (is (= 20 (count callers)))
+          (is (empty? gone)
+              (str "retention deleted files it never wrote: "
+                   (mapv (fn [^java.io.File file] (.getName file)) gone))))
+        (testing "and its own twenty-first is what it pruned instead"
+          (is (= 19 (count (filter (fn [^java.io.File file] (.exists file)) mine))))
+          (is (.exists (io/file workspace (:details_path result))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest a-recorded-document-whose-marker-is-gone-is-no-longer-this-writers-to-delete
+  ;; The manifest alone is not proof either. A file the caller replaced under a
+  ;; name this writer once used is the caller's file now, so retention skips it
+  ;; and takes the next document it can still prove it wrote.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        base (- (System/currentTimeMillis) 600000)]
+    (try
+      (let [mine (mapv (fn [index] (owned-detail! workspace (+ base (* 1000 index))))
+                       (range 20))
+            stripped (first mine)
+            next-oldest (second mine)]
+        ;; the caller overwrites the oldest candidate; the manifest still names
+        ;; it, but the bytes on disk are no longer the document we wrote
+        (spit stripped "{:version 1 :files [] :owner \"someone-else\"}")
+        (.setLastModified stripped base)
+        (owned-detail! workspace (+ base 100000))
+        (is (.exists stripped)
+            "a manifest entry whose file lost its marker was deleted anyway")
+        (owned-detail! workspace (+ base 200000))
+        (is (.exists stripped)
+            "the unmarked file was taken on the next pass instead")
+        (is (not (.exists next-oldest))
+            "retention skipped the unmarked file but pruned nothing in its place")
+        (testing "and the manifest itself is never a pruning candidate"
+          (let [manifest-name (ns-resolve 'clj-surgeon.mcp-alias-migration
+                                          'detail-manifest-name)]
+            (is (some? manifest-name)
+                "the writer keeps no manifest, so it cannot name what it owns")
+            (when manifest-name
+              (is (.exists (io/file details @manifest-name)))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest the-receipt-detail-collision-refuses-before-it-creates-the-directory
+  ;; A refusal that first mkdirs the very directory it is refusing to write in
+  ;; has mutated the tree it reports untouched.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")]
+    (try
+      (is (not (.exists details)) "the fixture already created the directory")
+      (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")]
+        (let [result (alias-migration/execute! (config workspace details)
+                                               (request workspace))]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "alias-migration-receipt-detail-collision" (:error_type result)))
+          (is (true? (:source_unchanged result)))
+          (is (not (.exists details))
+              "the refusal created the directory it refused to write in")))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-054
+(deftest the-receipt-detail-collision-sees-through-a-symlinked-twin
+  ;; Textual absolute-path equality is not directory identity: a symlink and
+  ;; the directory it points at are one directory, and a guard written on
+  ;; strings misses exactly the aliasing it exists to catch.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        twin (io/file workspace "receipts-link")
+        guard (ns-resolve 'clj-surgeon.mcp-alias-migration
+                          'receipt-detail-collision?)]
+    (.mkdirs details)
+    (Files/createSymbolicLink (.toPath twin) (.toPath details)
+                              (make-array FileAttribute 0))
+    (try
+      (testing "the predicate"
+        (is (true? (guard (.getPath workspace) (.getPath twin)
+                          "detail-0dd1.edn"))))
+      (testing "and the verb that stands on it"
+        (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")]
+          (let [result (alias-migration/execute! (config workspace twin)
+                                                 (request workspace))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-receipt-detail-collision"
+                   (:error_type result)))
+            (is (true? (:source_unchanged result))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-047
+(deftest the-heap-guard-marks-the-transactions-write-boundary-not-its-entrance
+  ;; Entering `execute-mcp-change!` is not a mutation. Spec validation, the
+  ;; frozen read, compilation, receipt staging and the whole-file hash preflight
+  ;; all run inside the kernel BEFORE a source byte is written, so a marker set
+  ;; at the call to it tells the caller its tree may have been written when the
+  ;; kernel refused with every file byte-identical and no receipt published.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (with-redefs [transaction/execute-mcp-change!
+                    (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+        (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                               (request workspace))]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "alias-migration-resource-exhausted" (:error_type result)))
+          (is (true? (:source_unchanged result))
+              "the kernel was entered but never reached its write boundary")
+          (is (false? (:mutation_attempted result)))
+          (is (= "correct_request" (:next_action result)))
+          (testing "and the tree agrees with the refusal"
+            (doseq [[relative expected] (:pre corpus)]
+              (is (= expected (slurp (io/file workspace relative))) relative)))
+          (testing "and no receipt was published for a call that never wrote"
+            (is (empty? (filter (fn [^java.io.File file]
+                                  (str/ends-with? (.getName file) ".edn"))
+                                (.listFiles receipt-dir)))))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-043
 (deftest a-rolled-back-retire-failure-deletes-its-undo-receipt
   (let [workspace (workspace!)
