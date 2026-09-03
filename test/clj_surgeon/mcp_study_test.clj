@@ -512,6 +512,87 @@
       (is (false? (:ok response)))
       (is (= "invalid-study-limit" (:error_type response))))))
 
+
+;; @spec MCP-OP-STUDY-016
+(deftest a-study-receipt-counts-the-source-it-read
+  ;; `source_character_count` was hardcoded 0 for every study operation and
+  ;; for outline, so the receipt understated what it read AND the per-request
+  ;; source budget in `enforce-output-budget` could never see a study read.
+  (let [expected (count (slurp real-file))]
+    (doseq [[operation extra]
+            [["deps" {"limit" 16384}]
+             ["deps" {"form" "dep-tree" "limit" 16384}]
+             ["topo" {"limit" 16384}]
+             ["ls-deps" {"form" "extraction-closure" "limit" 16384}]
+             ["ls-extract" {"form" "extraction-closure" "limit" 16384}]
+             ["outline" {}]]]
+      (testing (str operation " " (pr-str extra))
+        (let [result (result-of (one operation extra))]
+          (is (= expected (:source_character_count result))
+              "the receipt must report the bytes it actually read"))))))
+
+;; @spec MCP-OP-STUDY-016
+(deftest topo-counts-and-bounds-its-cycles
+  ;; `:cycles` was outside the budget entirely and `form_count` counted only
+  ;; `:sorted`, so a file that is ALL cycle reported `form_count 0` while
+  ;; listing every cycle member whatever the limit said.
+  (with-scratch-project
+    "test-fixtures/study/scratch-cycles"
+    (fn [dir]
+      (apply write-clj-file!
+             (str dir "/src/cyc.clj")
+             "(ns cyc)"
+             (concat
+               [(str "(declare "
+                     (str/join " " (map #(str "f" %) (range 40)))
+                     ")")]
+               (map #(format "(defn f%d [] (f%d))" % (mod (inc %) 40))
+                    (range 40)))))
+    (fn []
+      (let [file "test-fixtures/study/scratch-cycles/src/cyc.clj"
+            request (fn [limit]
+                      (result-of
+                        (run {"requests" [{"operation" "topo"
+                                           "file" file
+                                           "limit" limit}]
+                              "expect" {"requests" 1 "files" 1}})))]
+        (testing "an all-cycle file reports the forms it found"
+          (let [result (request 16384)]
+            (is (empty? (get-in result [:topo :sorted]))
+                "nothing can be topologically ordered in a pure cycle")
+            (is (seq (get-in result [:topo :cycles])))
+            (is (pos? (:form_count result))
+                "form_count counted only :sorted, so it reported 0 here")
+            (is (= (count (get-in result [:topo :cycles])) (:returned result)))
+            (is (= (count (slurp file)) (:source_character_count result)))))
+        (testing "and charges them to the same byte budget"
+          (let [limit 200
+                result (request limit)]
+            (is (true? (:truncated result)))
+            (is (pos? (:omitted result)))
+            (is (< (count (get-in result [:topo :cycles]))
+                   (:form_count result)))
+            (is (<= (inspect/json-character-count (:topo result)) limit)
+                "the whole topo payload, cycles included, stays inside limit")))))))
+
+;; @spec MCP-OP-STUDY-016
+(deftest an-atomic-study-payload-refuses-instead-of-exceeding-its-budget
+  (testing "one adjacency row is atomic and cannot be silently oversized"
+    (let [response (one "deps" {"form" "dep-tree" "limit" 20})]
+      (is (false? (:ok response)))
+      (is (= "study-output-limit" (:error_type response)))
+      (is (= 20 (:limit response)))
+      (is (pos? (:required response)))))
+  (testing "an extraction closure charges its envelope, not only its forms"
+    (let [response (one "ls-extract" {"form" "extraction-closure" "limit" 20})]
+      (is (false? (:ok response)))
+      (is (= "study-output-limit" (:error_type response)))))
+  (testing "a closure that fits its envelope stays inside the whole budget"
+    (let [limit 400
+          result (result-of (one "ls-extract" {"form" "extraction-closure"
+                                               "limit" limit}))]
+      (is (<= (inspect/json-character-count (:closure result)) limit)))))
+
 ;; ============================================================
 ;; Refusals
 ;; ============================================================

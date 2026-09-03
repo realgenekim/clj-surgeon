@@ -557,7 +557,7 @@
    :operation "outline"
    :file (:file request)
    :file_hash (:hash snapshot)
-   :source_character_count 0
+   :source_character_count (count (:source snapshot))
    :outline (json-data
               (outline/outline-source
                 (:file request) (:source snapshot) {}
@@ -665,13 +665,17 @@
   [request]
   (or (:limit request) study-default-limit))
 
+;; @spec MCP-OP-STUDY-016
 (defn- study-base
   [request snapshot limit]
   {:id (:id request)
    :operation (:operation request)
    :file (:file request)
    :file_hash (:hash snapshot)
-   :source_character_count 0
+   ;; The bytes actually read, not a hardcoded zero. `forms`, `match`, and
+   ;; `xray` always reported this; the study operations reported 0, which also
+   ;; meant they were invisible to the per-request source budget.
+   :source_character_count (count (:source snapshot))
    :limit limit})
 
 (defn- study-truncation
@@ -737,17 +741,25 @@
                        "The receipt is already at the maximum limit; request one exact form instead.")}
       raisable? (assoc :next-call (study-next-call request {:limit raised})))))
 
+;; @spec MCP-OP-STUDY-016
 (defn- deps-result
   [request snapshot]
   (let [limit (study-limit request)
         source (:source snapshot)]
     (if (:form request)
       (if-let [row (study/deps source {:form (:form request)})]
-        (study-truncation
-          (assoc (study-base request snapshot limit)
-                 :returned 1
-                 :deps (json-data row))
-          request false 0)
+        ;; One adjacency row is atomic: it cannot be truncated at row
+        ;; granularity, so it refuses like every other atomic result rather
+        ;; than being returned over the caller's budget.
+        (let [normalized (json-data row)
+              required (json-character-count normalized)]
+          (if (> required limit)
+            (study-oversized request required limit)
+            (study-truncation
+              (assoc (study-base request snapshot limit)
+                     :returned 1
+                     :deps normalized)
+              request false 0)))
         (study-missing-form request source))
       (let [rows (mapv json-data (study/deps source {}))
             [kept omitted truncated?] (bound-rows rows limit)]
@@ -758,17 +770,37 @@
                  :deps kept)
           request truncated? omitted)))))
 
+;; @spec MCP-OP-STUDY-016
 (defn- topo-result
+  "Topological ordering, with EVERY row it returns charged to the budget.
+
+  `:cycles` was unbounded — an all-cycle file returned every cycle member
+  whatever the limit — and `form_count` counted only `:sorted`, so the same
+  file reported `form_count 0` while listing its forms."
   [request snapshot]
   (let [limit (study-limit request)
         kernel (json-data (study/topo (:source snapshot)))
-        [kept omitted truncated?] (bound-rows (:sorted kernel) limit)]
-    (study-truncation
-      (assoc (study-base request snapshot limit)
-             :returned (count kept)
-             :form_count (count (:sorted kernel))
-             :topo (assoc kernel :sorted kept))
-      request truncated? omitted)))
+        envelope-cost (json-character-count (assoc kernel :sorted [] :cycles []))]
+    (if (> envelope-cost limit)
+      (study-oversized request envelope-cost limit)
+      (let [row-budget (- limit envelope-cost)
+            [sorted-kept sorted-omitted sorted-truncated?]
+            (bound-rows (:sorted kernel) row-budget)
+            [cycles-kept cycles-omitted cycles-truncated?]
+            (bound-rows (:cycles kernel)
+                        (max 0 (- row-budget
+                                  (json-character-count sorted-kept))))]
+        (study-truncation
+          (assoc (study-base request snapshot limit)
+                 :returned (+ (count sorted-kept) (count cycles-kept))
+                 :form_count (+ (count (:sorted kernel))
+                                (count (:cycles kernel)))
+                 :topo (assoc kernel
+                              :sorted sorted-kept
+                              :cycles cycles-kept))
+          request
+          (or sorted-truncated? cycles-truncated?)
+          (+ sorted-omitted cycles-omitted))))))
 
 (defn- ls-deps-result
   [request snapshot]
@@ -786,20 +818,29 @@
             request false 0)))
       (study-missing-form request source))))
 
+;; @spec MCP-OP-STUDY-016
 (defn- ls-extract-result
+  "Minimal extractable closure, with the closure's own non-`:forms` keys —
+  target, required requires, and the rest of the envelope — charged to the
+  same budget the forms are. Only `:forms` was bounded before, so the receipt
+  could exceed `limit` by the size of everything around them."
   [request snapshot]
   (let [limit (study-limit request)
         source (:source snapshot)
         kernel (json-data (study/ls-extract source {:form (:form request)}))]
     (if (empty? (:forms kernel))
       (study-missing-form request source)
-      (let [[kept omitted truncated?] (bound-rows (:forms kernel) limit)]
-        (study-truncation
-          (assoc (study-base request snapshot limit)
-                 :returned (count kept)
-                 :form_count (count (:forms kernel))
-                 :closure (assoc kernel :forms kept))
-          request truncated? omitted)))))
+      (let [envelope-cost (json-character-count (assoc kernel :forms []))]
+        (if (> envelope-cost limit)
+          (study-oversized request envelope-cost limit)
+          (let [[kept omitted truncated?]
+                (bound-rows (:forms kernel) (- limit envelope-cost))]
+            (study-truncation
+              (assoc (study-base request snapshot limit)
+                     :returned (count kept)
+                     :form_count (count (:forms kernel))
+                     :closure (assoc kernel :forms kept))
+              request truncated? omitted)))))))
 
 (defn- evaluate-request
   [request snapshot]
