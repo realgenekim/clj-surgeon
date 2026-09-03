@@ -783,6 +783,11 @@
     :unknown-door-symbol
     :file-not-a-string
     :file-not-found
+    ;; Sol's round-fourteen item 7. A separate name from `:file-not-found`
+    ;; because the remedy differs: the file is THERE, and what must change is
+    ;; what may read it. A `:cause` field on a shared name would also be
+    ;; invisible to the enumeration witness below, which drives on the name.
+    :file-not-readable
     :invalid-pool-size
     :source-too-large
     :too-many-walk-entries

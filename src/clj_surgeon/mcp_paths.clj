@@ -44,7 +44,19 @@
 (defn resolve-source-path
   "Resolve one lexically valid relative source path inside canonical root.
 
-  Symlinks may point within the root, but escapes and non-regular files refuse."
+  Symlinks may point within the root, but escapes, non-regular files, and
+  files this process may not READ refuse.
+
+  Readability is asked HERE, beside regularity, and not in a `try` around the
+  caller's `slurp`. Sol's round-fourteen item 7: a chmod-000 source passed
+  every question this resolver used to ask — it exists, it is regular, its
+  real path is under the root — so it resolved `:ok true` and the
+  `java.io.FileNotFoundException (Permission denied)` escaped from `slurp`
+  past every typed branch to the census's catch-all, which reported a
+  permission bit as `census-adapter-failure` with a resource-exhaustion
+  remedy. A path the process cannot read and a path that is not there are the
+  SAME fact to every caller of this fn: a name the next call must not carry.
+  Deciding that in one place is what makes them answer alike."
   [^Path root relative]
   (if-not (relative-source-path? relative)
     (path-refusal
@@ -67,6 +79,15 @@
               (not (Files/isRegularFile real (make-array LinkOption 0)))
               (path-refusal :source-not-regular-file
                             "Source path is not a regular file"
+                            relative)
+
+              ;; Asked AFTER regularity so a directory is still reported as a
+              ;; directory rather than as a permission problem, and BEFORE
+              ;; `:ok true` so that nothing this fn admits can fail in the
+              ;; caller's reader.
+              (not (Files/isReadable real))
+              (path-refusal :source-not-readable
+                            "Source file exists but this process may not read it"
                             relative)
 
               :else

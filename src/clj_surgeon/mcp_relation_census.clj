@@ -770,10 +770,12 @@
                    (and requested (empty? remaining))
                    (assoc :remedy
                           (str "Every source this request named is unreadable "
-                               "through the project fence, so the request minus "
-                               "them is not a request and no narrower call can "
-                               "be computed: name a source that exists under "
-                               "the workspace root with files, or omit files to "
+                               "through the project fence — missing, outside "
+                               "it, or there but not readable by this process "
+                               "— so the request minus them is not a request "
+                               "and no narrower call can be computed: name a "
+                               "source that exists and is readable under the "
+                               "workspace root with files, or omit files to "
                                "census the tree."))
 
                    (not requested)

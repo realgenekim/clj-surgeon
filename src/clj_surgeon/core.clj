@@ -678,6 +678,37 @@
                     "source that exists with :file, or point :dir at a "
                     "directory to census its tree.")}
 
+      ;; @spec MCP-OP-CENSUS-014
+      ;; Sol's round-fourteen item 7, the CLI half. `fs/exists?` is true of a
+      ;; chmod-000 file, so the branch above let it through and it threw the
+      ;; same untyped `java.io.FileNotFoundException` out of `census-sources`
+      ;; that the missing `:file` threw before round thirteen — an
+      ;; `:invalid-arguments` whose entire payload was the path.
+      ;;
+      ;; It gets its OWN name rather than `:file-not-found` with a
+      ;; `:cause :permission-denied`. The two refusals have different
+      ;; remedies — "name a source that exists" against "the source is there,
+      ;; fix what may read it" — and a caller who must read a second field to
+      ;; learn which remedy applies has been handed a branch dressed as a
+      ;; type. The enumeration witness drives on the type NAME, so a distinct
+      ;; name is also what makes this refusal impossible to ship unexercised;
+      ;; a `:cause` on a shared name is invisible to it.
+      ;;
+      ;; No continuation, for the same reason the missing `:file` gets none:
+      ;; the file this op was given IS the request.
+      (and (string? file) (not (fs/readable? file)))
+      {:ok false
+       :error-type :file-not-readable
+       :anchor anchor
+       :error (str file " exists but cannot be read")
+       :file file
+       :remedy (str file " exists but this process may not read it, and the "
+                    "one source this op was given IS the request, so the "
+                    "request minus it is not a request and no narrower "
+                    "command can be computed: make the file readable, name a "
+                    "readable source with :file, or point :dir at a directory "
+                    "to census its tree.")}
+
       (:oversized @scan)
       {:ok false
        :error-type :source-too-large

@@ -399,6 +399,18 @@
   (.mkdirs (.getParentFile ^java.io.File file))
   (spit file text))
 
+(defn- deny-reads!
+  "Make `file` unreadable to every user, returning it."
+  ^java.io.File [^java.io.File file]
+  (.setReadable file false false)
+  file)
+
+(defn- allow-reads!
+  "Restore owner-readable permissions on `file`, whatever the test did to it."
+  [^java.io.File file]
+  (when (.exists file)
+    (.setReadable file true true)))
+
 ;; @spec MCP-OP-CENSUS-018
 (deftest discovery-prunes-skipped-directories-and-skips-escaping-paths
   (let [parent (temp-dir)
@@ -3104,6 +3116,11 @@
         workspace (io/file parent "workspace")
         empty-ws (io/file parent "empty")
         broken (io/file parent "broken")
+        ;; A chmod-000 source lives in a tree of its OWN. Every other drive
+        ;; here walks `workspace`, and an unreadable entry inside it would
+        ;; refuse those walks `unreadable-source-path` instead of the refusal
+        ;; each one exists to probe.
+        denied-file (io/file parent "denied/src/a/denied.clj")
         named #(.getCanonicalPath ^java.io.File %)]
     (try
       (spit-file! (io/file workspace "src/a/one.clj") arm-source)
@@ -3111,6 +3128,8 @@
       (spit-file! (io/file workspace "src/b/three.clj") arm-source)
       (.mkdirs (io/file empty-ws "src"))
       (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
+      (spit-file! denied-file arm-source)
+      (deny-reads! denied-file)
       (let [drives
             (concat
               ;; Every row of the shared table the CLI can express, driven
@@ -3162,6 +3181,15 @@
                 :root workspace
                 :expect-anchor (str (named workspace) "/src/a/missing.clj")
                 :opts {:file (str (named workspace) "/src/a/missing.clj")}}
+               ;; Sol's round-fourteen item 7: the denied-`:file` refusal,
+               ;; enumerated so IT cannot ship unexercised either. Same shape
+               ;; as the missing one — the anchor is the file the caller
+               ;; named — and a separate row because it is a separate name.
+               {:label :file-not-readable
+                :error-type :file-not-readable
+                :root workspace
+                :expect-anchor (.getCanonicalPath denied-file)
+                :opts {:file (.getCanonicalPath denied-file)}}
                {:label :no-fold-arms-found
                 :error-type :no-fold-arms-found
                 :root empty-ws
@@ -3248,7 +3276,9 @@
               (is (str/starts-with? (str (anchor-argument command)) "/")
                   (str label " continuation anchor is not absolute: "
                        command))))))
-      (finally (delete-tree! parent)))))
+      (finally
+        (allow-reads! denied-file)
+        (delete-tree! parent)))))
 
 ;; @spec MCP-OP-CENSUS-014
 (deftest a-post-scan-door-refusal-censuses-the-workspace-the-caller-named
@@ -3924,18 +3954,6 @@
 ;; enumeration witness drives on the type name, so a distinct name is also what
 ;; makes this refusal impossible to ship unexercised.
 ;; ---------------------------------------------------------------------------
-
-(defn- deny-reads!
-  "Make `file` unreadable to every user, returning it."
-  ^java.io.File [^java.io.File file]
-  (.setReadable file false false)
-  file)
-
-(defn- allow-reads!
-  "Restore owner-readable permissions on `file`, whatever the test did to it."
-  [^java.io.File file]
-  (when (.exists file)
-    (.setReadable file true true)))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-016
