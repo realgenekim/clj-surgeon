@@ -926,3 +926,53 @@
         (is (true? (:source-unchanged r)))
         (is (not (str/includes? (pr-str r) "mod001.clj"))
             "and the substituted file is never encoded")))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-continuation-receipt-is-measured-from-the-page-it-describes
+  (with-project [dir fixture-count "ls-tree-budget-measured-returned"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (cursor-of page-1)]
+      (testing "on a healthy page the receipt's :returned IS the record count"
+        (let [p2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                    :cursor cursor})
+              rc (get-in (receipt p2) [:receipt :result_ceiling])]
+          (is (= 5 (count (entry-files p2))))
+          (is (= (count (entry-files p2)) (:returned rc))
+              "the number in the receipt is the number of records beside it")))
+      (testing "a manifest that cannot supply the slice it promised REFUSES"
+        ;; The reviewer's item 2 through the one door verification cannot
+        ;; close: the rows file changes BETWEEN the verifying fold and the
+        ;; slice read. Interposing on `read-rows` reproduces that race
+        ;; deterministically — it is the only way a verified snapshot can
+        ;; hand the encoder fewer rows than the page promised.
+        (let [v (var snapshot/read-rows)
+              real @v]
+          (alter-var-root v (constantly
+                              (fn [root id off lim]
+                                (vec (take 2 (real root id off lim))))))
+          (try
+            (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                       :cursor cursor})
+                  rc (get-in (receipt r) [:receipt :result_ceiling])]
+              (is (map? r)
+                  (str "a short slice must refuse, not encode a short page "
+                       "under a receipt that claims a full one; encoded "
+                       (count (entry-files r)) " record(s), receipt claimed "
+                       ":returned " (:returned rc) " :remaining "
+                       (:remaining rc)))
+              (is (= :unknown-result-cursor (:error-type r))
+                  (str "expected a typed refusal, got " (pr-str (:error-type r))))
+              (is (nil? (cursor-of r))
+                  "and it offers no continuation cursor; a page that holds
+                   nothing must never hand back a token that says `more`"))
+            (finally (alter-var-root v (constantly real))))))
+      (testing "an ABSENT rows file is a refusal, never a page of nothing"
+        (let [cursor-id (:cursor-id (budget/parse-cursor cursor))]
+          (fs/delete (rows-path dir cursor-id))
+          (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor cursor})]
+            (is (map? r)
+                (str "with no rows on disk the page encoded "
+                     (count (entry-files r)) " record(s) and still claimed a "
+                     "receipt"))
+            (is (= :unknown-result-cursor (:error-type r)))))))))
