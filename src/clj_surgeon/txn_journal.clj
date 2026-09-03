@@ -426,7 +426,7 @@
         ^java.lang.ProcessHandle handle (when pid (process-handle pid))
         dead? (or (nil? handle) (not (.isAlive handle)))
         age (- (long (or now-ms (System/currentTimeMillis))) (.lastModified lock))]
-    (boolean (and dead? (>= age legacy-lock-break-age-ms)))))
+    (boolean (and dead? (>= age (long legacy-lock-break-age-ms))))))
 
 (def ^:private breakable-causes
   "The causes that PROVE the recorded holder is gone.
