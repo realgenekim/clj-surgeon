@@ -137,6 +137,13 @@
   [^Path root ^Path candidate]
   (str/replace (.toString (.relativize root candidate)) "\\" "/"))
 
+(def max-unreadable-paths
+  "How many unreadable scope paths one refusal names.
+
+  The count is exact; the list is bounded, because a refusal whose length grows
+  with the tree is a refusal that cannot be published."
+  20)
+
 (def max-scope-depth
   "Segment bound on one scope walk, counted from the project root.
 
@@ -151,6 +158,7 @@
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-037
 ;; @spec MCP-OP-ALIAS-048
+;; @spec MCP-OP-ALIAS-049
 (defn scan-scope
   "Every confined project-relative Clojure source under scope.paths, or a scan
   refusal.
@@ -171,6 +179,8 @@
         default-fs (FileSystems/getDefault)
         found (java.util.ArrayList.)
         too-deep (volatile! nil)
+        unreadable (java.util.ArrayList.)
+        unreadable-count (volatile! 0)
         depth-of (fn [^Path candidate]
                    (.getNameCount (.relativize root ^Path candidate)))
         record-too-deep!
@@ -209,19 +219,38 @@
                                        matchers))
                         (.add found relative))))
                   FileVisitResult/CONTINUE))))
-          (visitFileFailed [_file _error]
+          ;; @spec MCP-OP-ALIAS-049
+          (visitFileFailed [file _error]
+            (let [^Path candidate file]
+              ;; a subtree the walk would have pruned anyway is not in scope,
+              ;; so its unreadability says nothing about the scope
+              (when-not (contains? skipped-directories
+                                   (str (.getFileName candidate)))
+                (vswap! unreadable-count inc)
+                (when (< (.size unreadable) max-unreadable-paths)
+                  (.add unreadable (relative-path root candidate)))))
             FileVisitResult/CONTINUE))]
     (Files/walkFileTree root
                         (EnumSet/noneOf FileVisitOption)
                         Integer/MAX_VALUE
                         visitor)
-    (if-let [deep @too-deep]
+    (cond
+      @too-deep
+      (let [deep @too-deep]
+        {:ok false
+         :error-type :alias-migration-scope-too-deep
+         :path (:path deep)
+         :depth (:depth deep)
+         :max-depth max-scope-depth})
+
+      ;; @spec MCP-OP-ALIAS-049
+      (pos? @unreadable-count)
       {:ok false
-       :error-type :alias-migration-scope-too-deep
-       :path (:path deep)
-       :depth (:depth deep)
-       :max-depth max-scope-depth}
-      {:ok true :files (vec (sort found))})))
+       :error-type :alias-migration-scope-unreadable
+       :unreadable-paths (vec unreadable)
+       :unreadable-count @unreadable-count}
+
+      :else {:ok true :files (vec (sort found))})))
 
 ;; @spec MCP-OP-ALIAS-004
 (defn expand-scope
@@ -281,6 +310,7 @@
 ;; @spec MCP-OP-ALIAS-039
 ;; @spec MCP-OP-ALIAS-046
 ;; @spec MCP-OP-ALIAS-048
+;; @spec MCP-OP-ALIAS-049
 (defn plan!
   "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
@@ -310,6 +340,21 @@
                              (:path scan) ", or flatten that tree; the bound is "
                              "refused rather than truncated so no file can "
                              "silently leave the found count.")})
+
+      ;; @spec MCP-OP-ALIAS-049
+      (= :alias-migration-scope-unreadable (:error-type scan))
+      (refusal :alias-migration-scope-unreadable
+               (str (:unreadable-count scan)
+                    " path(s) under scope.paths could not be read, so what the"
+                    " scope contains is not knowable: "
+                    (str/join ", " (:unreadable-paths scan)))
+               {:unreadable_paths (:unreadable-paths scan)
+                :unreadable_count (:unreadable-count scan)
+                :next_call nil
+                :remedy (str "Make those paths readable, or exclude them "
+                             "through scope.paths, and resend. Continuing past "
+                             "them would silently shrink the scope and hand "
+                             "back a found count that omits whatever they hold.")})
 
       (> scanned max-scope-files)
       (refusal :alias-migration-scope-too-large

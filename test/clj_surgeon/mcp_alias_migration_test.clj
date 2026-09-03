@@ -575,6 +575,13 @@
       (finally
         (delete-tree! workspace)))))
 
+(defn- requiring-source
+  "One minimal namespace that requires from.lib and calls from.var once."
+  [namespace-name]
+  (str "(ns " namespace-name "\n  (:require\n   ["
+       fixture/from-lib " :as store]))\n\n"
+       "(defn one [id] (store/" fixture/from-var " id))\n"))
+
 (defn- deep-relative-path
   "One project-relative path of exactly `segments` segments ending in a source."
   [segments]
@@ -588,10 +595,7 @@
         receipt-dir (io/file workspace "receipts")
         deep (deep-relative-path 65)
         shallow "src/shallow.clj"
-        requiring (fn [namespace-name]
-                    (str "(ns " namespace-name "\n  (:require\n   ["
-                         fixture/from-lib " :as store]))\n\n"
-                         "(defn one [id] (store/" fixture/from-var " id))\n"))]
+        requiring requiring-source]
     (.mkdirs receipt-dir)
     (try
       (is (= 65 (count (str/split deep #"/"))))
@@ -614,6 +618,37 @@
         ;; deep.one requiring the retired lib
         (is (= (slurp (io/file workspace deep)) (requiring "deep.one"))))
       (finally
+        (delete-tree! workspace)))))
+
+(defn- chmod!
+  [mode ^java.io.File target]
+  (shell/sh "chmod" mode (.getPath target)))
+
+;; @spec MCP-OP-ALIAS-049
+(deftest an-unreadable-subtree-refuses-instead-of-silently-shrinking-the-scope
+  (let [workspace (bare-workspace!)
+        receipt-dir (io/file workspace "receipts")
+        locked (io/file workspace "src" "locked")]
+    (.mkdirs receipt-dir)
+    (try
+      (write-tree! workspace {"src/open.clj" (requiring-source "open.one")
+                              "src/locked/hidden.clj" (requiring-source "locked.one")})
+      (chmod! "000" locked)
+      (if (seq (.listFiles locked))
+        ;; a privileged process cannot be denied, so it cannot witness denial
+        (is true "this process reads a 000 directory; denial is unobservable here")
+        (let [result (alias-migration/execute!
+                       (config workspace receipt-dir)
+                       (cap-request workspace {:expect {:files 2}}))]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "alias-migration-scope-unreadable" (:error_type result))
+              "an unreadable subtree was dropped from scope in silence")
+          (is (= ["src/locked"] (:unreadable_paths result)))
+          (is (= 1 (:unreadable_count result)))
+          (is (true? (:source_unchanged result)))
+          (is (false? (:mutation_attempted result)))))
+      (finally
+        (chmod! "755" locked)
         (delete-tree! workspace)))))
 
 (defn- sparse-source!
