@@ -25,7 +25,8 @@ Meters, and why each exists:
                 INSIDE the write.  Wall is that stamp minus attest.json's
                 `start_utc`; it is never hand-typed and never self-reported.
 
-Exit codes: 0 metered; 2 usage / unattested arm; 4 zero returns; 5 idle or wall cap.
+Exit codes: 0 metered; 2 usage / unattested arm; 4 zero returns; 5 idle or wall cap;
+6 incomplete run (a tool call whose result never arrived).
 The driver's own exit status is recorded in run.json, never conflated with these.
 """
 from __future__ import annotations
@@ -138,8 +139,29 @@ def command_position_tokens(script: str) -> list[list[str]]:
     return out
 
 
-def is_test_command(script: str) -> tuple[bool, str | None]:
-    """True when a TEST RUNNER stands at command position in `script`."""
+MAX_MAKE_DEPTH = 4          # a target may reach a runner through another target
+
+
+def load_make_map(path) -> dict | None:
+    """The target -> expanded-recipe map `_make_targets.py` wrote at attest time."""
+    try:
+        data = json.loads(pathlib.Path(path).read_text())
+    except Exception:
+        return None
+    targets = data.get("targets") if isinstance(data, dict) else None
+    return targets if isinstance(targets, dict) and targets else None
+
+
+def is_test_command(script: str, make_map: dict | None = None,
+                    _depth: int = 0) -> tuple[bool, str | None]:
+    """True when a TEST RUNNER stands at command position in `script`.
+
+    `make <target>` is resolved through `make_map` -- the expansion `make -n` printed
+    at attest time -- and NEVER guessed from the target's name.  Sol, item 4: any
+    Make target wrapping Kaocha whose name does not match MAKE_TEST_TARGET bypassed
+    the meter entirely, so `make verify` counted a whole test run as a non-test action.
+    The name rule stays as a fallback for a run with no map.
+    """
     for tokens in command_position_tokens(script):
         head, rest = tokens[0], tokens[1:]
         base = os.path.basename(head)
@@ -148,15 +170,26 @@ def is_test_command(script: str) -> tuple[bool, str | None]:
             for j, tok in enumerate(rest):
                 if tok.startswith("-"):
                     continue
-                hit, why = is_test_command(tok)
+                hit, why = is_test_command(tok, make_map, _depth)
                 if hit:
                     return True, why
                 break
             continue
         if base in TEST_BASENAMES:
             return True, head
-        if base == "make" and any(MAKE_TEST_TARGET.match(a) for a in rest if not a.startswith("-")):
-            return True, f"make {' '.join(rest)}"
+        if base == "make":
+            operands = [a for a in rest if not a.startswith("-")]
+            if any(MAKE_TEST_TARGET.match(a) for a in operands):
+                return True, f"make {' '.join(rest)}"
+            if make_map and _depth < MAX_MAKE_DEPTH:
+                for target in operands:
+                    recipe = make_map.get(target)
+                    if not recipe:
+                        continue
+                    hit, why = is_test_command(recipe, make_map, _depth + 1)
+                    if hit:
+                        return True, f"make {target} -> {why}"
+            continue
         if base == "clojure" and any(CLOJURE_TEST_ALIAS.match(a) for a in rest):
             return True, f"clojure {' '.join(rest[:2])}"
         if base == "bb" and any(a.endswith("run_all.clj") or a.startswith("test/") for a in rest):
@@ -333,6 +366,8 @@ def main() -> int:
                     help="discover the newest matching rollout written after start")
     ap.add_argument("--capture-stdout", action="store_true",
                     help="the driver writes its JSONL on stdout (claude -p stream-json)")
+    ap.add_argument("--make-map", default=None,
+                    help="target -> expanded-recipe map (default <arm>/make-targets.json)")
     ap.add_argument("--zero-return-window", type=float, default=300.0)
     ap.add_argument("--idle-timeout", type=float, default=900.0)
     ap.add_argument("--max-wall", type=float, default=3600.0)
@@ -360,6 +395,9 @@ def main() -> int:
     if start_dt is None:
         print("watch: attest.json has no parseable start_utc", file=sys.stderr)
         return 2
+
+    make_map = load_make_map(pathlib.Path(args.make_map) if args.make_map
+                             else arm / "make-targets.json")
 
     watch_path = arm / "watch.jsonl"
     watch_path.write_text("")
@@ -390,7 +428,8 @@ def main() -> int:
             state["seq"] += 1
             args_text = event.get("args") or ""
             script = _shell_script(args_text)
-            test_call, why = is_test_command(script) if script else (False, None)
+            test_call, why = (is_test_command(script, make_map) if script
+                              else (False, None))
             tool = event.get("tool") or "unknown"
             short_tool = tool.split("__")[-1]
             is_patch = (
@@ -453,14 +492,23 @@ def main() -> int:
                 record["output_head"] = output[:4000]
             emit(record)
 
-    def flush_open(reason: str) -> None:
-        for record in list(state["open"].values()):
+    def flush_open(reason: str) -> int:
+        """Emit every call still open, and RETURN HOW MANY there were.
+
+        Sol, item 3: these were flushed as `no-output`, the watcher exited 0, and the
+        scorer wrote a citeable receipt over a run whose last action has no outcome.
+        A call with no result is missing evidence about what the tool did -- the run
+        is incomplete, and an incomplete run is a typed refusal, not a smaller number.
+        """
+        pending = list(state["open"].values())
+        for record in pending:
             record.pop("started_ms", None)
             record.pop("ts_event", None)
             record["outcome"] = "no-output"
             record["error_type"] = reason
             emit(record)
         state["open"].clear()
+        return len(pending)
 
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE if args.capture_stdout else None,
@@ -544,7 +592,7 @@ def main() -> int:
         if stdout_sink is not None:
             stdout_sink.close()
 
-    flush_open("driver-ended-before-output")
+    incomplete = flush_open("driver-ended-before-output")
 
     end_utc = utcnow()
     end_dt = parse_utc(end_utc)
@@ -567,6 +615,7 @@ def main() -> int:
         "returns": state["returns"],
         "calls": calls,
         "abort": abort_reason,
+        "calls_without_output": incomplete,
         "watch_jsonl": str(watch_path),
     }
 
@@ -581,15 +630,26 @@ def main() -> int:
               f"driver_rc={driver_rc}", file=sys.stderr)
         return 4
 
+    if incomplete and not abort_reason:
+        abort_reason = "incomplete-run"
+        run["abort"] = abort_reason
+
     if abort_reason:
         emit({"kind": "abort", "error_type": abort_reason,
-              "detail": f"returns={state['returns']} calls={calls}",
+              "detail": f"returns={state['returns']} calls={calls} "
+                        f"calls_without_output={incomplete}",
               "returns": state["returns"]})
 
     emit({"kind": "end", "end_utc": end_utc, "wall_s": wall_s,
           "returns": state["returns"], "calls": calls, "driver_rc": driver_rc})
     (arm / "run.json").write_text(json.dumps(run, indent=2) + "\n")
     sink.close()
+
+    if incomplete:
+        print(f"WATCH-ABORT incomplete-run arm={arm.name} "
+              f"calls_without_output={incomplete} returns={state['returns']} "
+              f"calls={calls} driver_rc={driver_rc}", file=sys.stderr)
+        return 6
 
     print(f"watch: arm={arm.name} returns={state['returns']} calls={calls} "
           f"wall_s={wall_s} driver_rc={driver_rc} abort={abort_reason}")

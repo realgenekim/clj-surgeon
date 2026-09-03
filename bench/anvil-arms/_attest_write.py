@@ -83,6 +83,8 @@ def main() -> int:
         "attest_sha256": env("ATTEST_SHA"),
         "watch_sha256": env("WATCH_SHA"),
         "score_sha256": env("SCORE_SHA"),
+        "make_targets": env("MAKE_TARGETS"),
+        "make_targets_sha256": env("MAKE_TARGETS_SHA"),
         "mcp_url": os.environ.get("MCP_URL", "") or None,
         "mcp_port": port,
         "expected_server_sha": expected or UNV,

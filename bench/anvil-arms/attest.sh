@@ -77,6 +77,8 @@ RUNNER_SHA=$(sha_of "$RUNNER")
 ATTEST_SHA=$(sha_of "$HERE/attest.sh")
 WATCH_SHA=$(sha_of "$HERE/watch.py")
 SCORE_SHA=$(sha_of "$HERE/score.py")
+MAKE_TARGETS=${MAKE_TARGETS:-$A/make-targets.json}
+MAKE_TARGETS_SHA=$(sha_of "$MAKE_TARGETS")
 
 # --- listener inventory: LOCAL LISTING ONLY, we contact nothing here ---------------
 # `ss -ltn` lists; it does not connect.  We never curl a port outside COHORT_PORTS.
@@ -130,6 +132,7 @@ fi
 # --- refusal evaluation + the write, in one place ---------------------------------
 export A ARM PORT EXP RUNG SLOT GROUP MODEL DRIVER RUNNER MCP_URL PROMPT BASE \
        WORKTREE WORKTREE_HEAD PROMPT_SHA RUNNER_SHA ATTEST_SHA WATCH_SHA SCORE_SHA \
+       MAKE_TARGETS MAKE_TARGETS_SHA \
        LISTENERS HEALTHZ PORT_PID READY_PID READY_PROJECT_ROOT SERVER_PROJECT_HEAD \
        SERVER_CWD SERVER_SHA MCP_ABSENT_PROOF EXPECTED_SERVER_SHA PORT_IN_RANGE UNV
 

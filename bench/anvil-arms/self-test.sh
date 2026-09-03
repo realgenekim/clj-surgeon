@@ -27,6 +27,19 @@ WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/anvil-arms-selftest
 CLEAN=${ANVIL_ARMS_SELFTEST_KEEP:-0}
 PASS=0; FAIL=0
 
+# The ONLY port this self-test names.  The apparatus default (7907-7910) is a range
+# a shared box may not entirely own -- on 2026-09-03 another seat's JVM held 7908 and
+# every native arm correctly refused with `mcp-absent-proof: cohort port(s) 7908 are
+# listening`.  That refusal is the instrument working; scoping it here keeps the smoke
+# test measuring the apparatus rather than the box's other tenants.  A real cohort must
+# likewise set COHORT_PORTS to the ports it actually holds.
+export COHORT_PORTS=7907
+if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907; then
+  echo "SELFTEST-REFUSED: port 7907 already has a listener; this self-test owns it." >&2
+  echo "Stop that server (only one you started) and re-run.  Nothing was executed." >&2
+  exit 2
+fi
+
 ok   () { PASS=$((PASS+1)); printf 'ok   %s\n' "$1"; }
 bad  () { FAIL=$((FAIL+1)); printf 'FAIL %s\n' "$1"; }
 want () { # want <label> <expected> <actual>
@@ -298,7 +311,7 @@ want "case12 run.json abort" incomplete-run "$(jqf "$A12/run.json" abort)"
 want "case12 run.json calls_without_output" 1 "$(jqf "$A12/run.json" calls_without_output)"
 [ -e "$A12/receipt.json" ] && bad "case12 a receipt was written over an incomplete run" \
   || ok "case12 no receipt.json written"
-grep -q 'SCORE-ABORT incomplete-run' "$A12/driver.log" \
+grep -q 'SCORE-ABORT incomplete-run' "$WORK/case12.out" \
   && ok "case12 SCORE-ABORT incomplete-run" || bad "case12 scorer did not refuse the incomplete run"
 
 echo "== case 13: a test runner reached through a non-test-named Make target =="

@@ -37,7 +37,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from watch import (  # noqa: E402  (same-directory module, deliberate)
     APPLY_PATCH_CMD_RE, COMMITTING_VERBS, _shell_script,
-    is_test_command, normalize, parse_utc, patch_targets,
+    is_test_command, load_make_map, normalize, parse_utc, patch_targets,
 )
 
 READ_VERBS = {"inspect_clojure"}
@@ -85,17 +85,16 @@ def validate_rollout(records: list[dict]) -> None:
     Sol duplicated a rollout and reversed one; both produced receipts asserting
     `sources.agree=true`, because two witnesses derived from the SAME corrupted
     stream always agree.  Agreement is only evidence once the stream itself is.
+
+    Structure is checked BEFORE ordering, in two passes, so a given corruption
+    always reports the same reason: a duplicated stream is `duplicate-call-id`
+    and a reversed one is `output-before-call`, whatever the driver's timestamp
+    resolution happened to be that second.
     """
-    prev_ts = None
+    # pass 1 -- call identity and correlation
     seen: set = set()
     open_ids: set = set()
     for lineno, obj in enumerate(records, 1):
-        stamp = obj.get("timestamp") or obj.get("t")
-        ts = parse_utc(stamp) if stamp else None
-        if ts is not None:
-            if prev_ts is not None and ts < prev_ts:
-                raise StreamError(f"out-of-order-timestamp rollout:{lineno} ({stamp})")
-            prev_ts = ts
         for event in normalize(obj):
             call_id = event.get("call_id")
             if call_id is None:
@@ -113,6 +112,17 @@ def validate_rollout(records: list[dict]) -> None:
                     raise StreamError(
                         f"duplicate-call-output {call_id!r} rollout:{lineno}")
                 open_ids.discard(call_id)
+
+    # pass 2 -- time never runs backwards
+    prev_ts = None
+    for lineno, obj in enumerate(records, 1):
+        stamp = obj.get("timestamp") or obj.get("t")
+        ts = parse_utc(stamp) if stamp else None
+        if ts is None:
+            continue
+        if prev_ts is not None and ts < prev_ts:
+            raise StreamError(f"out-of-order-timestamp rollout:{lineno} ({stamp})")
+        prev_ts = ts
 
 
 def validate_watch(records: list[dict]) -> None:
@@ -178,8 +188,13 @@ def abort(arm: pathlib.Path, code: int, reason: str) -> int:
     return code
 
 
-def rollout_meters(rollout: list[dict]) -> dict:
-    """Predicates 1-3, re-derived from the raw rollout, independent of the watcher."""
+def rollout_meters(rollout: list[dict], make_map: dict | None = None) -> dict:
+    """Predicates 1-3, re-derived from the raw rollout, independent of the watcher.
+
+    It reads the SAME attest-time make map the watcher used, so the two witnesses
+    differ only where the streams differ -- never because one of them could see
+    through `make verify` and the other could not.
+    """
     returns = calls = test_calls = 0
     for obj in rollout:
         for event in normalize(obj):
@@ -188,7 +203,7 @@ def rollout_meters(rollout: list[dict]) -> dict:
             elif event["kind"] == "call":
                 calls += 1
                 script = _shell_script(event.get("args") or "")
-                if script and is_test_command(script)[0]:
+                if script and is_test_command(script, make_map)[0]:
                     test_calls += 1
     return {"returns": returns, "total_actions": calls, "test_actions": test_calls,
             "non_test_actions": calls - test_calls}
@@ -216,7 +231,8 @@ def score(arm: pathlib.Path, args) -> int:
     if not rollout:
         return abort(arm, 3, f"unparseable-rollout {rollout_path}")
 
-    raw = rollout_meters(rollout)
+    make_map = load_make_map(arm / "make-targets.json")
+    raw = rollout_meters(rollout, make_map)
     if raw["returns"] == 0:
         return abort(arm, 3, f"zero-returns {rollout_path}")
 
@@ -235,6 +251,12 @@ def score(arm: pathlib.Path, args) -> int:
     wcalls = [w for w in watch if w.get("kind") == "call"]
     wreturns = [w for w in watch if w.get("kind") == "return"]
     aborts = [w for w in watch if w.get("kind") == "abort"]
+    no_output = [w for w in wcalls if w.get("outcome") == "no-output"]
+    if no_output or any(a.get("error_type") == "incomplete-run" for a in aborts):
+        return abort(arm, 3, f"incomplete-run {watch_path} "
+                             f"({len(no_output)} tool call(s) whose result never "
+                             f"arrived; seq="
+                             f"{[c.get('seq') for c in no_output]})")
     if not wreturns:
         return abort(arm, 3, f"zero-metered-returns {watch_path} "
                              f"(the rollout shows {raw['returns']} returns; the meter shows none)")
@@ -437,6 +459,7 @@ def score(arm: pathlib.Path, args) -> int:
             "prompt_path": attest.get("prompt_path"),
             "prompt_sha256": attest.get("prompt_sha256"),
             "runner_sha256": attest.get("runner_sha256"),
+            "make_targets_sha256": attest.get("make_targets_sha256"),
             "watch_sha256": attest.get("watch_sha256"),
             "score_sha256": attest.get("score_sha256"),
             "mcp_url": attest.get("mcp_url"),

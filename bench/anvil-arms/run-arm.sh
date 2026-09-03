@@ -106,6 +106,14 @@ BASE_SHA=$(tr -d '[:space:]' < "$A/base.sha")
 cp "$PROMPT" "$A/prompt.md" || { echo "run-arm: cannot copy prompt" >&2; exit 2; }
 sha256sum "$A/prompt.md" | cut -d' ' -f1 > "$A/prompt.sha256"
 
+# --- 2b. resolve this worktree's Make targets to the commands they RUN -------------
+# `make -n` prints a recipe and executes nothing.  The watcher and the scorer both
+# read this map, so a test runner behind a target whose NAME does not say "test"
+# (e.g. `make verify`) is metered as a test action instead of a non-test one.
+python3 "$HERE/_make_targets.py" "$A/worktree" "$A/make-targets.json" >> "$A/driver.log" 2>&1
+make_map_rc=$?
+[ $make_map_rc -eq 0 ] || echo "run-arm: make targets unresolved (rc=$make_map_rc)" >> "$A/driver.log"
+
 # --- 3. this arm's MCP server, bound to THIS worktree (A.5) ------------------------
 SERVER_STARTED=0
 if [ "$ARM" != "N" ] && [ -n "$SERVER_SRC" ]; then
@@ -135,7 +143,7 @@ stop_server () {
 # --- 4. ATTEST BEFORE THE DRIVER STARTS -------------------------------------------
 EXP="$EXP" RUNG="$RUNG" SLOT="$SLOT" MODEL="$MODEL" DRIVER="$DRIVER_NAME" \
 RUNNER="$HERE/run-arm.sh" MCP_URL="$URL" PROMPT="$A/prompt.md" \
-COHORT_PORTS="$COHORT_PORTS" \
+COHORT_PORTS="$COHORT_PORTS" MAKE_TARGETS="$A/make-targets.json" \
   bash "$HERE/attest.sh" "$A" "$ARM" "$PORT" "$EXPECTED_SERVER_SHA"
 attest_rc=$?
 if [ $attest_rc -ne 0 ]; then
