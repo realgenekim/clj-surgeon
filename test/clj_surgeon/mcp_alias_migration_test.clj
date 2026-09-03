@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.alias-migration-fixture :as fixture]
+   [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -2424,5 +2425,98 @@
         (is (= 12 (:files_still_migrated result)))
         (is (= 0 (:files_restored result)))
         (is (= 12 (count (still-migrated workspace)))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest the-kernels-rolled-back-key-is-the-undos-answer-not-the-migrations
+  ;; A REAL undo, failed at its seventh write, with no field of it faked.
+  ;;
+  ;; `commit-compiled!` mints `{:error "Transaction write failed; all files
+  ;; restored" :rolled-back true}` — and no `:ok` — when the transaction IT was
+  ;; running got put back. The transaction it is running here is the UNDO, and
+  ;; recovery restores each file to the state that transaction READ, which is
+  ;; the MIGRATED content. So `:rolled-back true` on an `execute-undo!` result
+  ;; means the undo was reversed and the alias migration is STILL IN PLACE.
+  ;;
+  ;; Reading it as the migration's own answer — publishing `rolled_back true`,
+  ;; `files_still_migrated 0`, `source_unchanged true` — would report a
+  ;; restored tree over twelve migrated files, which is the single false green
+  ;; this whole requirement family exists to forbid. `rolled-back?` therefore
+  ;; reads the undo's `:ok`, and the tree below is the authority on why.
+  (let [workspace (workspace!)
+        receipts (io/file workspace "receipts")]
+    (.mkdirs receipts)
+    (try
+      (let [committed (alias-migration/execute! (config workspace receipts)
+                                                (request workspace))
+            _ (is (:ok committed) (pr-str committed))
+            _ (is (= 12 (count (still-migrated workspace)))
+                  "the fixture migration did not change twelve files")
+            real-write file-ops/atomic-write!
+            writes (atom 0)
+            rollback (with-redefs [file-ops/atomic-write!
+                                   (fn [file text]
+                                     (when (= 7 (swap! writes inc))
+                                       (throw (java.io.IOException.
+                                                "injected undo write failure")))
+                                     (real-write file text))]
+                       (transaction/execute-undo!
+                         {:receipt (:undo_receipt committed)}))]
+        (testing "the kernel mints the shape the reviewer read as a rollback"
+          (is (nil? (:ok rollback)) (pr-str rollback))
+          (is (true? (:rolled-back rollback)) (pr-str rollback))
+          (is (str/includes? (str (:error rollback)) "all files restored")
+              (pr-str (:error rollback))))
+        (testing "and the tree it describes is the MIGRATED one"
+          (is (= 12 (count (still-migrated workspace)))
+              (str "recovery restored the undo's own reads — the migrated "
+                   "content — so every file is still migrated; "
+                   ":rolled-back true is the undo's answer, not the "
+                   "migration's"))
+          (doseq [[relative expected] (:post corpus)]
+            (when (contains? (:pre corpus) relative)
+              (is (= expected (slurp (io/file workspace relative))) relative)))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-refusal-never-reads-the-undos-rolled-back-key-as-the-migrations
+  ;; The verb-level pin for the shape proved above. An undo that comes back
+  ;; `{:rolled-back true, :recovery all-restored}` with no `:ok` has left every
+  ;; file MIGRATED, and the refusal must say so. This is the assertion that
+  ;; makes `(or (:ok rollback) (:rolled-back rollback))` — the reading that
+  ;; looks like a one-line fix for a false RED — impossible to land: it would
+  ;; publish `rolled_back true`, `files_still_migrated 0` and
+  ;; `source_unchanged true` over twelve migrated files.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (let [result (post-write-redirect!
+                     workspace details receipts
+                     (fn [_]
+                       {:error "Transaction write failed; all files restored"
+                        :error-type :transaction-write-failed
+                        :rolled-back true
+                        :recovery (mapv (fn [file]
+                                          {:file file :status :restored})
+                                        (still-migrated workspace))}))
+            migrated (still-migrated workspace)]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= 12 (count migrated))
+            "the undo left every file migrated and the scenario says otherwise")
+        (is (false? (:rolled_back result))
+            "the undo's own rollback was published as the migration's")
+        (is (false? (:source_unchanged result))
+            "twelve files are migrated and source_unchanged said true")
+        (is (= 12 (:files_still_migrated result)))
+        (is (= 0 (:files_restored result)))
+        (is (= (count migrated) (:files_still_migrated result)))
+        (is (true? (:mutation_attempted result)))
+        (is (= "review_receipt" (:next_action result)))
+        (is (str/includes? (str (:error result)) "rollback FAILED")
+            (pr-str (:error result))))
       (finally
         (delete-tree! workspace)))))

@@ -1148,6 +1148,27 @@
       (str path)))
 
 ;; @spec MCP-OP-ALIAS-056
+(defn- undo-restored-the-migration?
+  "Did this `execute-undo!` result put the pre-migration bytes back?
+
+  It is the undo transaction's `:ok`, and it is NEVER its `:rolled-back`.
+  `commit-compiled!` mints `{:error \"Transaction write failed; all files
+  restored\" :rolled-back true}` — with no `:ok` at all — when the transaction
+  IT was running got put back, and the transaction running here is the UNDO.
+  Recovery restores each file to the state that transaction READ, which is the
+  MIGRATED content, so `:rolled-back true` on this result means the undo was
+  reversed and the alias migration is STILL IN PLACE.
+
+  That shape reads exactly like a false RED — `rolled_back false` and
+  \"rollback FAILED\" over a result whose own prose says every file was
+  restored — and the one-line reading that would fix it,
+  `(or (:ok rollback) (:rolled-back rollback))`, publishes `source_unchanged
+  true` over twelve migrated files instead. The name exists so the question is
+  asked once, in words, rather than re-derived at three call sites."
+  [rollback]
+  (boolean (:ok rollback)))
+
+;; @spec MCP-OP-ALIAS-056
 (def ^:private undo-recovery-unmigrated-statuses
   "Per-file recovery statuses that PROVE a file no longer carries the migration.
 
@@ -1740,7 +1761,7 @@
           fault
           (let [rollback (transaction/execute-undo!
                            {:receipt (:receipt-file result)})
-                rolled-back? (boolean (:ok rollback))
+                rolled-back? (undo-restored-the-migration? rollback)
                 ;; @spec MCP-OP-ALIAS-056
                 ;; the count the prose repeats is the MEASURED one, read back
                 ;; out of the report rather than counted off the plan twice
@@ -1783,7 +1804,7 @@
               (:retire-error retired)
               (let [rollback (transaction/execute-undo!
                                {:receipt (:receipt-file result)})
-                    rolled-back? (boolean (:ok rollback))
+                    rolled-back? (undo-restored-the-migration? rollback)
                     ;; @spec MCP-OP-ALIAS-056
                     report (rollback-report rolled-back? rollback
                                             (:receipt-file result)
@@ -1819,7 +1840,7 @@
                                               (:path retire-source)))
                         rollback (transaction/execute-undo!
                                    {:receipt (:receipt-file result)})
-                        rolled-back? (boolean (:ok rollback))
+                        rolled-back? (undo-restored-the-migration? rollback)
                         ;; @spec MCP-OP-ALIAS-056
                         report (rollback-report rolled-back? rollback
                                                 (:receipt-file result)
