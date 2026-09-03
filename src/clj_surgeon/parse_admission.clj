@@ -197,20 +197,30 @@
     ;; receipt reports: an unmatched close drives it negative and the scan
     ;; carries on, so the PARSER still reports the syntax error it owns.
     ;; `sdepth` is the structural nesting depth — the same count floored at
-    ;; zero — and is the ONLY one that may index `stack` or feed `max-depth`.
+    ;; zero — and is the ONLY one that may index a stack or feed `max-depth`.
     ;; One value cannot be both a signed balance and an array subscript: it was,
     ;; and an ordinary extra `)` indexed the array at -1.
     ;; `pdepth` is the reader-macro levels currently open; `pending` is the
-    ;; innermost run of them, still waiting for the form it wraps. `stack` saves
-    ;; each open delimiter's `pending` so the matching close unwinds exactly
-    ;; those levels.
-    (loop [i 0, nodes 0, ddepth 0, sdepth 0, pdepth 0, pending 0, max-depth 0,
-           ^ints stack (int-array 64)]
+    ;; innermost run of them; `owed` is how many FORMS that run still needs
+    ;; before it unwinds — one for every prefix except `^`, which needs two.
+    ;; `stack`/`ostack` save each open delimiter's `pending`/`owed` so the
+    ;; matching close restores exactly what it interrupted.
+    (loop [i 0, nodes 0, ddepth 0, sdepth 0, pdepth 0, pending 0, owed 0,
+           max-depth 0, ^ints stack (int-array 64), ^ints ostack (int-array 64)]
       (if (>= i n)
         {:parse-nodes nodes
          :parse-depth max-depth
          :delimiter-balance ddepth}
-        (let [c (int (.charAt source i))]
+        (let [c (int (.charAt source i))
+              ;; what an ATOM at `i` would leave behind: it satisfies one owed
+              ;; form, and only when none remain does the whole prefix run
+              ;; unwind. `'''x` unwinds three levels on one atom; `^:a x` needs
+              ;; the metadata AND the value before its one level unwinds.
+              o (dec owed)
+              sat? (not (pos? o))
+              apdepth (if sat? (- pdepth pending) pdepth)
+              apending (if sat? 0 pending)
+              aowed (if sat? 0 o)]
           (cond
             ;; whitespace and comments do not satisfy a pending prefix
             (ws? c)
@@ -218,7 +228,8 @@
                       (if (and (< j n) (ws? (int (.charAt source j))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) ddepth sdepth pdepth pending max-depth stack))
+              (recur j (inc nodes) ddepth sdepth pdepth pending owed
+                     max-depth stack ostack))
 
             ;; line comment: to end of line
             (== c SEMICOLON)
@@ -227,7 +238,8 @@
                                (not (== NEWLINE (int (.charAt source j)))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) ddepth sdepth pdepth pending max-depth stack))
+              (recur j (inc nodes) ddepth sdepth pdepth pending owed
+                     max-depth stack ostack))
 
             ;; `#!` — the reader treats a shebang as a line comment, anywhere
             (and (== c HASH)
@@ -238,7 +250,8 @@
                                (not (== NEWLINE (int (.charAt source j)))))
                         (recur (inc j))
                         j)))]
-              (recur j (inc nodes) ddepth sdepth pdepth pending max-depth stack))
+              (recur j (inc nodes) ddepth sdepth pdepth pending owed
+                     max-depth stack ostack))
 
             ;; string literal, backslash escapes — an atom: it satisfies prefixes
             (== c QUOTE)
@@ -250,13 +263,15 @@
                             (== d BACKSLASH) (recur (+ j 2))
                             (== d QUOTE) (inc j)
                             :else (recur (inc j)))))))]
-              (recur j (inc nodes) ddepth sdepth (- pdepth pending) 0 max-depth stack))
+              (recur j (inc nodes) ddepth sdepth apdepth apending aowed
+                     max-depth stack ostack))
 
             ;; character literal: \a \newline \( \\ — consumes the delimiter
             (== c BACKSLASH)
             (let [j (token-end source (+ i 2) n)]
               (recur (max j (min n (+ i 2))) (inc nodes)
-                     ddepth sdepth (- pdepth pending) 0 max-depth stack))
+                     ddepth sdepth apdepth apending aowed
+                     max-depth stack ostack))
 
             ;; regex literal #"..." — its brackets are not structure
             (and (== c HASH)
@@ -270,42 +285,70 @@
                             (== d BACKSLASH) (recur (+ j 2))
                             (== d QUOTE) (inc j)
                             :else (recur (inc j)))))))]
-              (recur j (inc nodes) ddepth sdepth (- pdepth pending) 0 max-depth stack))
+              (recur j (inc nodes) ddepth sdepth apdepth apending aowed
+                     max-depth stack ostack))
 
-            ;; reader-macro prefix — one nesting level, unwound by the form it wraps
+            ;; reader-macro prefix — one nesting level, unwound by the form(s)
+            ;; it wraps
             (reader-prefix-start? c)
             (let [len (prefix-length source i n)]
               (if (pos? len)
-                (let [pd (inc pdepth)]
-                  (recur (+ i len) (inc nodes) ddepth sdepth pd (inc pending)
-                         (max max-depth (+ sdepth pd)) stack))
+                (let [pd (inc pdepth)
+                      ;; `^` consumes TWO forms — the metadata and the value it
+                      ;; decorates — so its level must NOT unwind on the first
+                      ;; one. Letting the metadata satisfy it scored
+                      ;; `^:a ^:b ^:c x` at depth 1 against a real 4, and a
+                      ;; 2,810-byte two-line file at depth 2 against a real 701:
+                      ;; admitted, and then a StackOverflowError out of the
+                      ;; reader. A prefix that opens a level the estimator
+                      ;; cannot see is the estimator being blind, not lenient.
+                      k (if (== c CARET) 2 1)
+                      ow (+ (max 0 (dec owed)) k)]
+                  (recur (+ i len) (inc nodes) ddepth sdepth pd (inc pending) ow
+                         (max max-depth (+ sdepth pd)) stack ostack))
                 ;; `#` that begins no prefix (`#(`, `#{`, a tagged literal)
                 (let [j (token-end source i n)]
                   (recur (if (> j i) j (inc i)) (inc nodes)
-                         ddepth sdepth (- pdepth pending) 0 max-depth stack))))
+                         ddepth sdepth apdepth apending aowed
+                         max-depth stack ostack))))
 
             (opens? c)
-            (let [^ints stack (if (>= sdepth (alength stack))
+            (let [grow? (>= sdepth (alength stack))
+                  ^ints stack (if grow?
                                 (java.util.Arrays/copyOf stack (* 2 (alength stack)))
                                 stack)
+                  ^ints ostack (if grow?
+                                 (java.util.Arrays/copyOf ostack (* 2 (alength ostack)))
+                                 ostack)
                   _ (aset stack sdepth (int pending))
+                  _ (aset ostack sdepth (int owed))
                   sd (inc sdepth)]
-              (recur (inc i) (inc nodes) (inc ddepth) sd pdepth 0
-                     (max max-depth (+ sd pdepth)) stack))
+              (recur (inc i) (inc nodes) (inc ddepth) sd pdepth 0 0
+                     (max max-depth (+ sd pdepth)) stack ostack))
 
             (closes? c)
-            ;; unwind this level's unsatisfied prefixes, then the ones the
-            ;; closing form was itself wrapped in. An UNMATCHED close only drives
-            ;; the balance negative: `sdepth` floors at zero, so the stack is
-            ;; never indexed out of bounds and the scan never throws.
-            (let [outer (if (pos? sdepth) (aget stack (dec sdepth)) 0)]
+            ;; The closed form is ONE form for the run that wrapped it. Unwind
+            ;; this level's own unsatisfied prefixes always; unwind the ones the
+            ;; closing form was itself wrapped in only when it was their LAST
+            ;; owed form. An UNMATCHED close only drives the balance negative:
+            ;; `sdepth` floors at zero, so no stack is indexed out of bounds and
+            ;; the scan never throws.
+            (let [outer-pending (if (pos? sdepth) (aget stack (dec sdepth)) 0)
+                  outer-owed (if (pos? sdepth) (aget ostack (dec sdepth)) 0)
+                  pd (- pdepth pending)
+                  co (dec outer-owed)
+                  csat? (not (pos? co))]
               (recur (inc i) nodes (dec ddepth) (max 0 (dec sdepth))
-                     (max 0 (- pdepth pending outer)) 0 max-depth stack))
+                     (max 0 (if csat? (- pd outer-pending) pd))
+                     (if csat? 0 outer-pending)
+                     (if csat? 0 co)
+                     max-depth stack ostack))
 
             :else
             (let [j (token-end source i n)]
               (recur (if (> j i) j (inc i)) (inc nodes)
-                     ddepth sdepth (- pdepth pending) 0 max-depth stack))))))))
+                     ddepth sdepth apdepth apending aowed
+                     max-depth stack ostack))))))))
 
 ;; ============================================================
 ;; The scan's own cost

@@ -50,6 +50,16 @@
   [prefix n]
   (str "(def x " (str/join (repeat n prefix)) "y)\n"))
 
+(defn- meta-tower
+  "A source whose single form carries `n` consecutive METADATA prefixes —
+   `(def x ^:a ^:a ... ^:a y)`, the shape real Clojure produces.
+
+   `^` is the one reader macro that consumes TWO forms, the metadata and the
+   value it decorates, so a run of N of them is N levels the reader recurses
+   through even though nothing here opens a delimiter."
+  [n]
+  (str "(def x " (str/join (repeat n "^:a ")) "y)\n"))
+
 (defn- repo-sources
   "Every Clojure-family source under src/, test/ AND bench/, as [path source]
    pairs.
@@ -313,11 +323,29 @@
   (testing "a run of N prefixes is N nesting levels, per prefix family"
     ;; Every one of these makes the rewrite-clj reader allocate a wrapping node
     ;; and recurse into its child. A delimiter-only estimate scores them ZERO.
-    (doseq [p ["'" "`" "~" "~@" "@" "^" "#'" "#_" "#=" "#?" "#?@"]]
+    ;; `^` is NOT in this list: `(def x ^^^^...^^y)` is a run of bare carets
+    ;; with nothing between them, which is not valid Clojure and is the one
+    ;; caret shape the old scan happened to count. The field shape is
+    ;; `^:a ^:b ^:c x`, and it has its own witness below — the witness that
+    ;; passed on a shape the field does not produce is why the `^` undercount
+    ;; shipped.
+    (doseq [p ["'" "`" "~" "~@" "@" "#'" "#_" "#=" "#?" "#?@"]]
       (let [src (prefix-tower p 40)]
         (is (<= 40 (depth-of src))
             (str "prefix " (pr-str p) " contributed "
                  (- (depth-of src) 1) " of 40 nesting levels")))))
+  (testing "`^` consumes TWO forms, so the metadata does not satisfy it"
+    ;; Measured on anvil 2026-09-03 before this: every one of these scanned at
+    ;; depth 1, and the 700-deep shape below at depth 2 — a CONSTANT for any N,
+    ;; which is the estimator being blind rather than lenient.
+    (is (= 3 (depth-of "^:a ^:b ^:c x"))
+        "three metadata levels, not one")
+    (is (= 2 (depth-of "^String ^:private x"))
+        "a type hint and a flag are two levels")
+    (is (= 1 (depth-of "^:a x"))
+        "one metadata level, unwound by the VALUE and not by the metadata")
+    (is (< (depth-of (meta-tower 10)) (depth-of (meta-tower 50)))
+        "the count grows with N instead of pinning at a constant"))
   (testing "prefixes unwind at the next atom"
     (is (= 1 (depth-of "(a) (b)")) "the delimiter-only baseline")
     (is (= 2 (depth-of "(def a 'x 'y 'z)"))
@@ -367,6 +395,38 @@
             (str "the refusal cost " (/ refusal-ns 1e6) " ms against "
                  (/ one-scan-ns 1e6) " ms for one bare scan of the same bytes — "
                  "it should be ONE scan and no parse"))))))
+
+;; @spec MCP-OP-MEM-005
+(deftest a-metadata-tower-is-refused-before-it-overflows-the-reader
+  (testing "the 2,810-byte two-line file the estimator could not see"
+    ;; Measured on anvil 2026-09-03: `(def x ^:a x700 y)` scanned at parse-depth
+    ;; 2 — the SAME 2 at 50, 700 and 2000 levels — was admitted, and threw
+    ;; StackOverflowError out of the reader. It survived `ls-tree` only because
+    ;; the tree-scale caller now catches Error and names the skip; every
+    ;; single-file entrance still died. A file this size is not a pathological
+    ;; input, which is what made a constant-depth reading dangerous.
+    (let [src (meta-tower 700)
+          calls (atom 0)
+          real z/of-string]
+      (is (= 2810 (count src)))
+      (is (< (:max-parse-depth admission/default-ceilings) (depth-of src))
+          (str "the metadata tower scans at depth " (depth-of src)
+               ", at or under the shipped ceiling "
+               (:max-parse-depth admission/default-ceilings)))
+      (let [r (with-redefs [z/of-string (fn [& args] (swap! calls inc) (apply real args))]
+                (admission/refusal "meta-tower.clj" src
+                                   admission/default-ceilings))]
+        (is (= :max-parse-depth (:reason r)))
+        (is (= 701 (:observed r)) "one level per `^`, plus the def list")
+        (is (zero? @calls) "no tree constructor was invoked"))))
+  (testing "counting `^` honestly costs this repository's corpus nothing"
+    ;; The longest metadata run in this repository is 1, so the corpus max
+    ;; depth is unchanged at 22 against the shipped ceiling of 150 — the same
+    ;; result the round-1 prefix fix had, and for the same reason.
+    (let [deepest (apply max (map (comp depth-of second) (repo-sources)))]
+      (is (>= (:max-parse-depth admission/default-ceilings) deepest)
+          (str "counting metadata as nesting refused a real source at depth "
+               deepest)))))
 
 ;; ------------------------------------------------------------------
 ;; every read-path tree constructor, not only the outline's two
