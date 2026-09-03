@@ -292,13 +292,19 @@
      :observed (cond-> (.size found) @exceeded inc)}))
 
 ;; @spec MCP-OP-CENSUS-017
+;; @spec MCP-OP-CENSUS-030
 (defn collect-inputs
   "Read each scanned path through the project fence, retaining only arm sources.
 
    The census needs the text of a file only if that file defines arms, so each
    source is tested as it is read and dropped when it does not. Nothing but the
    arm-defining sources is ever held at once, and a source above
-   `max-source-bytes` is refused rather than read."
+   `max-source-bytes` is refused rather than read.
+
+   The path SET is canonicalised as it is read: a caller may name one source
+   many times, by the same string or by different strings that resolve to one
+   real path, and each repeat is collapsed and counted in `:duplicates` instead
+   of multiplying every figure in the receipt."
   ([root relatives] (collect-inputs root relatives {}))
   ([root relatives {:keys [declared?]}]
    (reduce
@@ -308,6 +314,9 @@
            (not (:ok resolved))
            (reduced (assoc acc :refusal resolved :file relative))
 
+           (contains? (:seen acc) (str (:canonical resolved)))
+           (update acc :duplicates inc)
+
            (> (Files/size ^Path (:canonical resolved)) census/max-source-bytes)
            (reduced (assoc acc
                            :oversized relative
@@ -315,7 +324,9 @@
 
            :else
            (let [source (slurp (:path resolved))
-                 acc (update acc :read inc)]
+                 acc (-> acc
+                         (update :seen conj (str (:canonical resolved)))
+                         (update :read inc))]
              (if (census/defines-arms? source)
                (update acc :inputs conj {:file relative :source source})
                ;; Not an arm file: its text is dropped here. Only its top-level
@@ -325,7 +336,7 @@
                  declared?
                  (update :declared into
                          (census/source-declared-names source))))))))
-     {:inputs [] :read 0 :declared #{}}
+     {:inputs [] :read 0 :declared #{} :seen #{} :duplicates 0}
      relatives)))
 
 ;; ---------------------------------------------------------------------------
@@ -426,9 +437,10 @@
 
 ;; @spec MCP-OP-CENSUS-013
 ;; @spec MCP-OP-CENSUS-028
+;; @spec MCP-OP-CENSUS-030
 (defn- build-receipt
   [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root
-           oversized reserved]}]
+           oversized duplicates reserved]}]
   (let [counts (:counts merged)
         sites (:all-sites merged)
         unrecognised (census/unrecognised-summary
@@ -451,6 +463,7 @@
              :sites (:sites merged)
              :outside_arms (:outside-arms merged)
              :files_scanned scanned
+             :duplicates_collapsed (when (pos? (or duplicates 0)) duplicates)
              :skipped_outside_root (when (pos? (or skipped-outside-root 0))
                                      skipped-outside-root)
              :counts counts
@@ -530,7 +543,9 @@
         ;; finish is refused, never partially read and published as complete.
         loaded (when-not (:exceeded? discovered)
                  (collect-inputs root scanned {:declared? want-declared?}))
-        t-read (System/nanoTime)]
+        t-read (System/nanoTime)
+        duplicates (:duplicates loaded 0)
+        scanned-count (- (count scanned) duplicates)]
     (cond
       (:exceeded? discovered)
       (ceiling-refusal discovered canonical)
@@ -559,12 +574,13 @@
         (if (empty? candidates)
           (refusal :no-fold-arms-found
                    (str "No file defines defmethod fold-event arms. Scanned "
-                        (count scanned) " file(s).")
+                        scanned-count " file(s).")
                    {:tool "relation_census"
                     :workspace_root canonical
-                    :files (vec (take max-listed-files scanned))}
-                   (cond-> {:files_scanned (count scanned)
-                            :scanned (vec (take max-listed-files scanned))}
+                    :files (vec (take max-listed-files (distinct scanned)))}
+                   (cond-> {:files_scanned scanned-count
+                            :scanned (vec (take max-listed-files
+                                                (distinct scanned)))}
                      (pos? skipped-outside-root)
                      (assoc :skipped_outside_root skipped-outside-root)))
           ;; The door symbols themselves are checked before any census runs;
@@ -604,7 +620,8 @@
                      :oversized (:oversized discovered)
                      :pool-size pool-size
                      :requested-pool requested-pool
-                     :scanned (count scanned)
+                     :scanned scanned-count
+                     :duplicates duplicates
                      :skipped-outside-root skipped-outside-root
                      :phases (cond-> {:read (/ (- t-read t-discovered) 1e6)
                                       :classify (get-in planned [:phases :classify])
