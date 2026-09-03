@@ -976,3 +976,35 @@
                      (count (entry-files r)) " record(s) and still claimed a "
                      "receipt"))
             (is (= :unknown-result-cursor (:error-type r)))))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-cursor-from-a-TWIN-root-is-unknown-and-never-merely-invalid
+  ;; The `:unknown-result-cursor` receipt says a cursor from ANOTHER ROOT does
+  ;; not resolve at all. Two identical checkouts fold to one manifest digest,
+  ;; so once the twin has itself been scanned the cursor DOES resolve — to the
+  ;; twin's meta — and falls through to the mac check, refusing
+  ;; `:invalid-result-cursor`: "this server did not mint that token", about a
+  ;; token this server minted, with the remedy text for a forgery. A refusal
+  ;; is not enough; the receipt has to be TRUE.
+  (let [a (make-project! fixture-count "ls-tree-budget-twin-a")
+        b (make-project! fixture-count "ls-tree-budget-twin-b")]
+    (try
+      (let [page-a (core/run-ls-tree {:dir a :format :edn :max-results 5})
+            page-b (core/run-ls-tree {:dir b :format :edn :max-results 5})
+            cursor-a (cursor-of page-a)
+            id-a (:cursor-id (budget/parse-cursor cursor-a))
+            id-b (:cursor-id (budget/parse-cursor (cursor-of page-b)))]
+        (is (and (some? id-a) (some? id-b)) "both twins pinned a manifest")
+        (is (not= id-a id-b)
+            (str "a manifest address must name WHICH repository page 2 is a "
+                 "page of, not merely what is in it; twins shared the address "
+                 (pr-str id-a)))
+        (let [r (core/run-ls-tree {:dir b :format :edn :max-results 5
+                                   :cursor cursor-a})]
+          (is (map? r) "a cursor is never portable between roots")
+          (is (= :unknown-result-cursor (:error-type r))
+              (str "a cursor from another root is UNKNOWN here, not forged; "
+                   "got " (pr-str (:error-type r))))
+          (is (str/includes? (:remedy r) "root")
+              "and the remedy names the reason it refused")))
+      (finally (fs/delete-tree a) (fs/delete-tree b)))))
