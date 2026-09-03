@@ -187,3 +187,7 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
   linked by id; a ceiling's witness asserts behaviour AT the ceiling, never the constant."
 - Memory plan: reconcile Sol (`~/tmp/sol/memory-sol-answer.md`) and Opus (a2d936e48f3423a0c) answers →
   ordered builds, smallest measurable win first, each with its MEM intent and a heap receipt.
+
+## RESUME DELTA 2026-09-03T04:17Z
+
+- Memory build brief clauses (Gene): (1) LID intents MCP-OP-MEM- for every new requirement; (2) the no-OOM proof is `make memory-battery` (100/1k/10k files, -Xmx512m, numeric pass lines), NOT in the fast suites; fast suites keep only ms-scale admission/ceiling/receipt witnesses; battery = merge gate for MEM changes, linked by intent id. Decision card sent (A keep in-memory snapshot / B disk-pinned pre-image / C tiers; recommend B); awaiting Gene's letter; tier-1 (read verbs) is authorised and starts when study round three + census land.
