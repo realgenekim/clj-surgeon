@@ -17,6 +17,7 @@
    [clj-surgeon.ls-tree-snapshot :as snapshot]
    [clj-surgeon.result-budget :as budget]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -1008,3 +1009,117 @@
           (is (str/includes? (:remedy r) "root")
               "and the remedy names the reason it refused")))
       (finally (fs/delete-tree a) (fs/delete-tree b)))))
+
+;; ============================================================
+;; Confinement — one resolver at the check and at the read
+;;
+;; Item 1 means a naively tampered manifest is a MISS before any row is
+;; resolved, so a witness for the ROW RESOLVER has to build a snapshot that
+;; PASSES verification: re-folded, re-filed under the address its own bytes
+;; prove, and re-authenticated with its own secret. That is the state anyone
+;; with write access to the state root reaches once item 1 lands, and the only
+;; state in which the resolver is load-bearing. Building it any other way
+;; would witness item 1 twice and items 3-4 not at all.
+;; ============================================================
+
+(defn- repin-row!
+  "Overwrite row `i` of the pinned manifest of `cursor-id` with `row-patch`,
+   re-file the whole snapshot under the address its new rows actually fold to,
+   and return a genuine cursor for `offset` in it. The secret is carried over,
+   so the mac verifies and the snapshot verifies."
+  [dir cursor-id i row-patch offset]
+  (let [d (str (snapshot/cursor-dir dir))
+        m (edn/read-string (slurp (str d "/" cursor-id ".edn")))
+        lines (rows-lines dir cursor-id)
+        lines* (assoc lines i (pr-str (merge (edn/read-string (nth lines i))
+                                             row-patch)))
+        tmp (io/file d "repin-build.rows.tmp")]
+    (spit tmp (str (str/join "\n" lines*) "\n"))
+    (let [[id n] (snapshot/rows-digest dir tmp)]
+      (spit (str d "/" id ".rows") (slurp tmp))
+      (fs/delete tmp)
+      (spit (str d "/" id ".edn")
+            (pr-str (assoc m :cursor-id id :digest id :total n)))
+      (budget/cursor-token id offset (snapshot/mac id offset (:secret m))))))
+
+(defmacro ^:private with-outside-file
+  "A readable `.clj` file OUTSIDE any scan root, bound as [dir file]."
+  [[dir-sym file-sym] & body]
+  `(let [~dir-sym (str (fs/create-temp-dir {:prefix "ls-tree-OUTSIDE-THE-ROOT"}))
+         ~file-sym (str ~dir-sym "/secret.clj")]
+     (spit ~file-sym "(ns leaked.secret)\n(def token :outside-the-scan-root)\n")
+     (try ~@body (finally (fs/delete-tree ~dir-sym)))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-manifest-row-that-escapes-the-root-with-dot-dot-is-refused-not-read
+  (with-outside-file [outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-confine-rel"]
+      (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+            cursor-id (:cursor-id (budget/parse-cursor (cursor-of page-1)))
+            escape (str "../" (fs/file-name outside) "/secret.clj")
+            cursor (repin-row! dir cursor-id 6
+                               {:p escape :h (snapshot/content-digest secret)}
+                               5)
+            r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                 :cursor cursor})]
+        (is (map? r)
+            (str "a row that resolves outside the pinned root must REFUSE; "
+                 "served instead: " (pr-str (entry-files r))))
+        (is (not (str/includes? (pr-str r) "leaked.secret"))
+            "content from outside the scan root is never encoded")
+        (is (str/includes? (pr-str (:limit r)) escape)
+            (str "and the refusal NAMES the offending row path; got "
+                 (pr-str (:limit r))))
+        (is (false? (:complete r)))
+        (is (true? (:source-unchanged r)))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-manifest-row-with-an-absolute-path-is-refused-not-thrown
+  (with-outside-file [_outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-confine-abs"]
+      (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+            cursor-id (:cursor-id (budget/parse-cursor (cursor-of page-1)))
+            cursor (repin-row! dir cursor-id 6
+                               {:p secret :h (snapshot/content-digest secret)}
+                               5)
+            r (try (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                      :cursor cursor})
+                   (catch Exception e {:threw (str (class e) ": " (.getMessage e))}))]
+        (is (nil? (:threw r))
+            (str "an absolute row path must be a typed receipt, never a throw "
+                 "out of the operation; got " (pr-str (:threw r))))
+        (is (map? r) (str "served instead: " (pr-str (entry-files r))))
+        (is (not (str/includes? (pr-str r) "leaked.secret"))
+            "content from outside the scan root is never encoded")
+        (is (str/includes? (pr-str (:limit r)) secret)
+            (str "and the refusal NAMES the offending row path; got "
+                 (pr-str (:limit r))))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered
+  ;; The confinement boundary is LEXICAL and deliberately does NOT resolve
+  ;; symlinks. Measured on this branch: `discover-projects` follows a
+  ;; symlinked `.clj` whose target is outside the root and encodes it on a
+  ;; fresh scan. A serve-path check that resolved symlinks would therefore
+  ;; refuse a page for a tree the fresh scan encodes whole — a page-1/page-2
+  ;; divergence introduced by the guard itself. So the guard refuses what
+  ;; DISCOVERY can never produce (absolute paths, `..` escapes) and defers to
+  ;; discovery on what it can. This witness pins that choice: change it and
+  ;; this fails, which is the point.
+  (with-outside-file [_outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-confine-symlink"]
+      (fs/create-sym-link (str dir "/src/fixt/zlinked.clj") secret)
+      (let [whole (core/run-ls-tree {:dir dir :format :edn})
+            p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+            p2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                  :cursor (cursor-of p1)})
+            p3 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                  :cursor (cursor-of p2)})]
+        (is (some #{"src/fixt/zlinked.clj"} (entry-files whole))
+            "the fresh scan follows the symlink — this is the measured fact
+             the lexical boundary defers to")
+        (is (= (entry-files whole)
+               (into (into (entry-files p1) (entry-files p2)) (entry-files p3)))
+            "and the pages concatenate to exactly the fresh scan, symlink
+             included: the guard never diverges from discovery")
+        (is (nil? (cursor-of p3)) "the last page carries no cursor")))))
