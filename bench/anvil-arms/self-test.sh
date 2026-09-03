@@ -1304,6 +1304,45 @@ s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(1); time.sleep(20)' "$p31" &
   kill "$L31" 2>/dev/null; wait "$L31" 2>/dev/null
 fi
 
+echo "== case 32: a session id past the scan ceiling fails closed AND says so truthfully =="
+# Sol round two, round-two probes: "ID after the 64 KiB banner scan ceiling: rc 7/3, no
+# receipt -- fail closed, though the diagnostic incorrectly says no ID was announced."
+# The refusal is right and the sentence is false.  A diagnostic that misnames the cause
+# sends the next reader to look for a driver that never spoke, when the driver spoke and
+# the scan stopped short -- and this apparatus has already been taken down once by a
+# verdict word printed over a fact nobody checked.
+A32="$WORK/st-P-N-32"; mkdir -p "$A32"
+git clone -q --no-hardlinks "$BASE_REPO" "$A32/worktree"
+printf '%s\n' "$BASE_SHA" > "$A32/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A32/prompt.md"
+EXP=st RUNG=P SLOT=32 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A32" N - "" > /dev/null 2>&1
+CH32="$A32/codex-home"
+env CODEX_HOME="$CH32" python3 "$HERE/watch.py" --arm "$A32" --codex-home "$CH32" \
+  --zero-return-window 30 --poll 0.2 \
+  -- env CODEX_HOME="$CH32" bash "$HERE/fake-driver.sh" "$A32" ceiling \
+  > "$WORK/case32.out" 2>&1
+want "case32 watch rc" 7 "$?"
+grep -q 'WATCH-ABORT rollout-unbound' "$WORK/case32.out" \
+  && ok "case32 still fails closed: rollout-unbound" \
+  || { bad "case32 a rollout was bound past the scan ceiling"; cat "$WORK/case32.out"; }
+[ -e "$A32/receipt.json" ] && bad "case32 a receipt was written for an unbound rollout" \
+  || ok "case32 no receipt.json written"
+grep -q 'never announced a session id' "$WORK/case32.out" \
+  && bad "case32 the diagnostic says no ID was announced about a driver that announced one" \
+  || ok "case32 the diagnostic does not claim the driver was silent"
+grep -q '33333333-4444-5555-6666-777777777777' "$WORK/case32.out" \
+  && ok "case32 the diagnostic quotes the id the driver DID announce" \
+  || { bad "case32 the diagnostic does not name the announced id"; cat "$WORK/case32.out"; }
+grep -q '65536' "$WORK/case32.out" \
+  && ok "case32 the diagnostic names the scan ceiling it stopped at" \
+  || bad "case32 the diagnostic does not say where the scan stopped"
+
+# the control: a driver that really is silent must still be described as silent
+grep -q 'never announced a session id' "$WORK/case16b.out" \
+  && ok "case32 a genuinely silent driver is still reported as silent (case 16b)" \
+  || { bad "case32 the silent-driver wording was lost"; cat "$WORK/case16b.out"; }
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
