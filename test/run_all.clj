@@ -31,6 +31,7 @@
    [clj-surgeon.outermost-test]
    [clj-surgeon.outline-test]
    [clj-surgeon.owner-hypotheses-test]
+   [clj-surgeon.parser-admission-test]
    [clj-surgeon.partition-all-test]
    [clj-surgeon.platform-selector-test]
    [clj-surgeon.quoted-var-refs-test]
@@ -76,6 +77,7 @@
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
                    'clj-surgeon.owner-hypotheses-test
+                   'clj-surgeon.parser-admission-test
                    'clj-surgeon.partition-all-test
                    'clj-surgeon.platform-selector-test
                    'clj-surgeon.quoted-var-refs-test
