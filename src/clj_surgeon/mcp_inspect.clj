@@ -104,10 +104,10 @@
 ;; @spec MCP-OP-FIELD-006
 (defn- missing-fields-evidence
   [path required missing]
-  (cond-> {:missing (vec missing)
-           :required (vec (sort required))}
-    (minimal-request-shape path required)
-    (assoc :minimal_request (minimal-request-shape path required))))
+  (let [shape (minimal-request-shape path required)]
+    (cond-> {:missing (vec missing)
+             :required (vec (sort required))}
+      shape (assoc :minimal_request shape))))
 
 (defn- validate-fields!
   [value allowed required path]

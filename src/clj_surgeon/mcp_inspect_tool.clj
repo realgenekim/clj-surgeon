@@ -937,8 +937,11 @@
     (let [{:keys [kind name dispatch]} (:owner_form owner)
           vocabulary (:dispatch_vocabulary owner)]
       (str
-        (format "  owner is a multimethod · %d defmethod arms share the name %s\n"
-                (:arm_count owner) (:name owner))
+        (format "  owner is a multimethod · %s the name %s\n"
+                (if (= 1 (:arm_count owner))
+                  "1 defmethod arm shares"
+                  (str (:arm_count owner) " defmethod arms share"))
+                (:name owner))
         (format "  send this exact owner form to %s: {kind: %s, name: %s%s}\n"
                 (:accepted_by owner)
                 (pr-str kind)

@@ -2490,3 +2490,22 @@
   (testing "the arm behind ^meta is addressed by the value the metadata wraps"
     (let [compiled (dispatch-arm-transaction ":withmeta")]
       (is (:ok compiled)))))
+
+(deftest expect-matched-separates-an-unreadable-file-from-an-unusable-pattern
+  ;; @spec MCP-OP-MATCHED-003
+  (let [compiled (one-line-transaction "(f 1)" "(g 1)")
+        broken "(ns broken)\n\n(defn go [] (f 1"
+        unreadable (assoc-in compiled [:original-sources "src/one_line.clj"]
+                             broken)]
+    (testing "an unusable pattern is named as one"
+      (let [result (transaction/matched-basis-evidence
+                     compiled (assoc (one-line-basis) :match "(a) (b)"))]
+        (is (= :expect-matched-invalid-pattern (:error-type result)))))
+    (testing "a file the pattern cannot be evaluated against is not"
+      (let [result (transaction/matched-basis-evidence
+                     unreadable
+                     (assoc (one-line-basis)
+                            :file-hash (structural-lens/source-hash broken)))]
+        (is (= :expect-matched-unreadable-source (:error-type result)))
+        (is (= "src/one_line.clj" (:file result)))
+        (is (true? (:source-unchanged result)))))))

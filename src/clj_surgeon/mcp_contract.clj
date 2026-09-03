@@ -74,6 +74,7 @@
 (def ^:private prewrite-error-types
   #{:expect-matched-stale
     :expect-matched-invalid-pattern
+    :expect-matched-unreadable-source
     :invalid-mcp-request
     :invalid-transaction-spec
     :invalid-changes

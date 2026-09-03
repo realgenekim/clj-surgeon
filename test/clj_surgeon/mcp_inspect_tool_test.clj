@@ -3,6 +3,7 @@
    [cheshire.core :as json]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -436,6 +437,54 @@
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))
+
+(deftest selector-refusal-summary-says-one-defmethod-arm-in-the-singular
+  ;; @spec MCP-OP-DISPATCH-003
+  (let [project (temp-dir)
+        _source (write-source!
+                  project "src/one.clj"
+                  (str "(ns one)\n\n"
+                       "(defmulti fold-event (fn [_state payload] (:type payload)))\n\n"
+                       "(defmethod fold-event \"only.arm\"\n"
+                       "  [state payload]\n"
+                       "  state)\n"))
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "owner-probe" "operation" "forms"
+                      "file" "src/one.clj"
+                      "forms" ["fold-event"]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error?]} (first @calls)
+            summary (first content)]
+        (is error?)
+        (is (str/includes?
+              summary
+              "owner is a multimethod · 1 defmethod arm shares the name fold-event"))
+        (is (not (str/includes? summary "1 defmethod arms"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest missing-field-evidence-computes-its-minimal-shape-once
+  ;; @spec MCP-OP-FIELD-001
+  (let [calls (atom 0)
+        original @#'clj-surgeon.mcp-inspect/minimal-request-shape]
+    (with-redefs [clj-surgeon.mcp-inspect/minimal-request-shape
+                  (fn [path required]
+                    (swap! calls inc)
+                    (original path required))]
+      (let [evidence (#'clj-surgeon.mcp-inspect/missing-fields-evidence
+                       ["requests" 0] #{"file" "id" "operation"} ["file"])]
+        (is (= {"file" "src/example.clj" "id" "r1" "operation" "outline"}
+               (:minimal_request evidence)))
+        (is (= 1 @calls))))))
 
 (deftest selector-refusal-summary-names-the-miss-and-hypothesis-without-authority
   ;; @spec MCP-OP-READ-DIAG-002 MCP-OP-READ-DIAG-003 MCP-OP-READ-CONT-001

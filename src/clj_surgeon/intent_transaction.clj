@@ -1581,7 +1581,9 @@
       :else
       (let [found (structural-lens/find-subforms source {:match match})]
         (cond
-          (:error found)
+          ;; The pattern and the file are separate causes and get separate
+          ;; labels: only the caller can fix an unusable pattern.
+          (= :invalid-match (:error-type found))
           {:error-type :expect-matched-invalid-pattern
            :error (str "expect_matched.match must be exactly one complete "
                        "Clojure form: " (:error found))
@@ -1589,6 +1591,17 @@
            :match match
            :source-unchanged true
            :remedy "Resend the exact pattern string the match receipt echoed."}
+
+          (:error found)
+          {:error-type :expect-matched-unreadable-source
+           :error (str "expect_matched could not be evaluated against "
+                       public-file ": " (:error found))
+           :file public-file
+           :match match
+           :source-unchanged true
+           :remedy (str "Repair " public-file " so it parses, re-run the "
+                        "inspect_clojure match, and resend expect_matched from "
+                        "that receipt.")}
 
           (not= expected-count (:match-count found))
           (stale "match_count"

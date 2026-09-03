@@ -942,14 +942,24 @@
           (when-let [total (:matched_count result)]
             (let [unaddressed (:unaddressed_matches result)
                   lines (str/join ", " (map :line unaddressed))]
-              (if (zero? (long (or (:unaddressed_match_count result) 0)))
-                (format "\n✓ prior match basis · all %d matched sites addressed"
-                        (long total))
-                (format (str "\n⚠ prior match basis · %d of %d matched sites "
+              (cond
+                (zero? (long total))
+                (str "\n✓ prior match basis · the pattern matched no site "
+                     "in this snapshot")
+
+                (zero? (long (or (:unaddressed_match_count result) 0)))
+                (format "\n✓ prior match basis · %s addressed"
+                        (if (= 1 (long total))
+                          "the 1 matched site"
+                          (str "all " (long total) " matched sites")))
+
+                :else
+                (format (str "\n⚠ prior match basis · %d of %d matched site%s "
                              "not addressed by this transaction (pre-image "
                              "line%s %s%s)")
                         (long (:unaddressed_match_count result))
                         (long total)
+                        (if (= 1 (long total)) "" "s")
                         (if (= 1 (count unaddressed)) "" "s")
                         lines
                         (if (:unaddressed_matches_truncated result)

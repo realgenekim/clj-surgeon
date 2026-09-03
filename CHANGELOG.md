@@ -10,6 +10,14 @@ is cut.
 
 ### Fixed
 
+- Receipt and refusal wording no longer contradicts its own numbers: a
+  one-arm multimethod says "1 defmethod arm shares", a basis whose pattern
+  matched nothing says so instead of claiming "all 0 matched sites
+  addressed", and one matched site is singular. A prior-match failure caused
+  by an unreadable file is now labelled `expect-matched-unreadable-source`
+  rather than blamed on the caller's pattern, and the minimal-shape lookup
+  is computed once instead of twice.
+
 - The published minimal request shapes are now pinned to the live validators:
   every registered example is embedded in a complete request and validated,
   and adding an example without a validator carrier fails the suite. A

@@ -2146,6 +2146,57 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest a-basis-that-matched-nothing-does-not-claim-all-sites-addressed
+  ;; @spec MCP-OP-MATCHED-001
+  (let [[workspace _source-file] (folds-workspace!)]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              {"changes" [(folds-change "flag0")]
+               "expect_matched"
+               {"file" "src/folds.clj"
+                "file_hash" (structural-lens/source-hash folds-file-source)
+                "match" "(no-such-form _)"
+                "count" 0}})
+            summary (mcp-tool/concise-summary (assoc result :elapsed_ms 0.0))]
+        (is (:ok result) (pr-str result))
+        (is (= 0 (:matched_count result)))
+        (is (= 0 (:unaddressed_match_count result)))
+        (is (str/includes?
+              summary
+              "✓ prior match basis · the pattern matched no site in this snapshot"))
+        (is (not (str/includes? summary "all 0 matched sites addressed"))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest expect-matched-refusal-names-the-transaction-files-it-did-read
+  ;; @spec MCP-OP-MATCHED-002
+  (let [[workspace source-file] (folds-workspace!)
+        other-file (io/file workspace "src/other.clj")]
+    (try
+      (spit other-file "(ns other)\n")
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              {"changes" [(folds-change "flag0")]
+               "expect_matched"
+               {"file" "src/other.clj"
+                "file_hash" (structural-lens/source-hash folds-file-source)
+                "match" folds-guard-pattern
+                "count" 19}})]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "expect-matched-stale" (:error_type result)))
+        (is (= "file_not_in_transaction" (:mismatch result)))
+        (is (= "src/other.clj" (:file result)))
+        (testing "the files it did read are named project-relative, not absolute"
+          (is (= ["src/folds.clj"] (:transaction_files result))))
+        (is (= folds-file-source (slurp source-file))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest expect-matched-count-too-low-refuses-before-any-write
   ;; @spec MCP-OP-MATCHED-002
   ;; @spec MCP-OP-FIELD-006
