@@ -297,8 +297,23 @@ names a DIFFERENT one:
 | it did, but this root holds no such snapshot (another root — twins included — pruned, expired), or the rows filed under it no longer PROVE that address, or they cannot supply the slice they promised | `:unknown-result-cursor` |
 | it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
 | it did, the snapshot verified, and a row this page would serve names a path whose PARENT DIRECTORY resolves outside the scanned root (the final component is taken lexically) | `:unconfined-manifest-row`, NAMING the path |
-| it did, and a file this page must serve no longer holds its pinned content | `:stale-result-cursor`, NAMING the path |
+| it did, and `stale-row`'s digest check — taken ONCE, at page start, against every candidate's source file — found the file no longer matched its pinned content | `:stale-result-cursor`, NAMING the path |
 | it did, everything verified, and the page encoded ZERO records with rows still remaining — a continuation would carry a cursor at its own offset | `:empty-result-page`, carrying no cursor |
+
+**`:stale-result-cursor` is a boundary, not a read-time seal.** The digest
+check above runs ONCE per candidate, at page start; the encoder reopens each
+candidate's source file separately, after that check. A source file that
+changes in that window is not re-checked, so a page can carry fresh bytes of
+the correct, in-root, pinned file under a receipt that reports no staleness —
+measured at 15–19 of 400 page-2 reads under a deliberate live swap of an
+already-pinned source file (round-five review, 200-file corpus; unchanged from
+14 of 400 at the prior worktree, so the window is pre-existing, not a
+regression). The path served is always the pinned path and it is always
+inside the scanned root: this check never lets a different file, or a file
+outside the root, stand in for the one that was pinned. Closing the window
+would cost a second digest of every candidate per page and would still leave
+the gap between the encoder's own read and its parse — see the falsifier
+table's "source read window" row.
 
 **Verifying on reuse and trusting on serve makes the address a filename again
 on exactly the path a caller reads.** Round three's review tampered the rows so
