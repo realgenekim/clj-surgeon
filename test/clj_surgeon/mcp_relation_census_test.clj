@@ -2704,7 +2704,12 @@
         "the table does not publish a CLI name for a malformed :dir"))
 
   (testing "a malformed :dir refuses typed, in process, before any scan"
-    (doseq [value ["" "   " [1] {:a 1} 7]]
+    ;; `"   "` is NOT in this list, and its absence is the point of Sol's
+    ;; round-twelve item 1: whitespace is a legal relative path, so the row
+    ;; refuses the EMPTY string and non-strings, and nothing else.
+    ;; `a-cli-anchor-carries-the-path-bytes-the-caller-gave` holds the other
+    ;; side of that line.
+    (doseq [value ["" [1] {:a 1} 7]]
       (let [root-calls (atom 0)
             read-calls (atom 0)
             config-loads (atom 0)
