@@ -492,6 +492,85 @@
       (Files/deleteIfExists (.toPath lock))
       false)))
 
+(def ^:private displaced-claims
+  "How many claims a break has renamed away and then FAILED to put back.
+
+   A refusal nobody counts is indistinguishable from silent loss. The restore
+   refuses whenever a third acquirer landed in the gap, and the claim that was
+   renamed away then survives only inside the tombstone: its owner's
+   `release-lock!` finds a LOCK that does not name it, returns false, and
+   learns nothing. This is the bucket that makes that visible, and both
+   callers report it beside the outcome that produced it."
+  (atom 0))
+
+(defn displaced-claim-count
+  "How many claims this process has displaced without restoring them.
+
+   Non-zero is an alarm, not an archive: each one is a holder that lost the
+   project lock without being told."
+  []
+  @displaced-claims)
+
+(defn- displaced-line
+  "The typed, counted line a refused restore is reported as, or nil.
+
+   Both callers used to keep `(:broken outcome)` alone, so `:restored false`
+   and its cause were discarded and the refusal named the third acquirer with
+   no hint that a claim had been displaced - a silent refusal with no owner."
+  [outcome]
+  (when (false? (:restored outcome))
+    (assoc (select-keys outcome [:cause :restored :restore-cause
+                                 :restore-path :restore-message :tombstone])
+           :displaced-claims-total (displaced-claim-count))))
+
+(defn- restore-by-move!
+  "The restore for a filesystem with no hard links at all.
+
+   `Files/move` with ATOMIC_MOVE and no REPLACE_EXISTING is the weakest form
+   that is still honest: the existence check is the JDK's, not the kernel's,
+   so this path is CHECK-THEN-ACT and says so rather than claiming otherwise.
+   ext4 - where this kernel and every one of its witnesses run - never reaches
+   it, because `link(2)` is available there."
+  [^File tomb ^File lock]
+  (if (.exists lock)
+    (do (swap! displaced-claims inc)
+        {:restored false :restore-cause :lock-reappeared :restore-path :no-hard-links})
+    (try
+      (Files/move (.toPath tomb) (.toPath lock)
+                  ^"[Ljava.nio.file.CopyOption;"
+                  (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE]))
+      {:restored true :restore-path :no-hard-links}
+      (catch Exception cause
+        (swap! displaced-claims inc)
+        {:restored false :restore-cause :restore-failed
+         :restore-path :no-hard-links :restore-message (.getMessage cause)}))))
+
+(defn- restore-lock!
+  "Put a claim that was renamed away back, without clobbering whoever arrived.
+
+   `Files/move` with no REPLACE_EXISTING READS as create-if-absent and is not
+   one: the JDK stats the target and then calls `rename(2)`, and POSIX rename
+   replaces unconditionally, so a third acquirer that creates its LOCK between
+   those two syscalls is destroyed silently - measured, 145 of 423 third-party
+   claims in one 2,000-break storm. `Files/createLink` IS create-if-absent at
+   the kernel level: `link(2)` fails EEXIST, and it is the same primitive
+   `write-lock!` acquires with. The tombstone is unlinked only once the link
+   has succeeded, so a refused restore leaves the displaced claim on disk
+   under a name its caller is told."
+  [^File tomb ^File lock]
+  (try
+    (Files/createLink (.toPath lock) (.toPath tomb))
+    (Files/deleteIfExists (.toPath tomb))
+    {:restored true}
+    (catch java.nio.file.FileAlreadyExistsException _
+      (swap! displaced-claims inc)
+      {:restored false :restore-cause :lock-reappeared})
+    (catch UnsupportedOperationException _ (restore-by-move! tomb lock))
+    (catch Exception cause
+      (swap! displaced-claims inc)
+      {:restored false :restore-cause :restore-failed
+       :restore-message (.getMessage cause)})))
+
 (defn- break-lock!
   "Take EXACTLY the stale claim that was read out of the way, or nothing.
 
@@ -513,32 +592,33 @@
    The residual is two adjacent renames with no I/O between them, in place of
    an unbounded read-judge-delete window; a third acquirer that lands in that
    gap is refused by the restore rather than silently joined."
-  [transactions-dir claim txid]
-  (let [^File lock (lock-file transactions-dir)
-        ^File tomb (io/file transactions-dir (str "LOCK.broken." txid))]
-    (try
-      (Files/move (.toPath lock) (.toPath tomb)
-                  ^"[Ljava.nio.file.CopyOption;"
-                  (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
-                                          StandardCopyOption/REPLACE_EXISTING]))
-      (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
-        (if (and (some? (:content claim))
-                 (= (:content claim) moved-content)
-                 (= (:file-key claim) (lock-file-key tomb)))
-          {:broken true
-           :tombstone (.getName tomb)
-           :content-sha256 (:content-sha256 claim)}
-          ;; somebody else's claim: put it back untouched and break nothing
-          {:broken false
-           :cause :holder-changed
-           :restored (try (Files/move (.toPath tomb) (.toPath lock)
-                                      (make-array CopyOption 0))
-                          true
-                          (catch Exception _ false))}))
-      (catch java.nio.file.NoSuchFileException _
-        {:broken false :cause :lock-vanished})
-      (catch Exception cause
-        {:broken false :cause :break-failed :message (.getMessage cause)}))))
+  ([transactions-dir claim txid] (break-lock! transactions-dir claim txid nil))
+  ([transactions-dir claim txid opts]
+   (let [^File lock (lock-file transactions-dir)
+         ^File tomb (io/file transactions-dir (str "LOCK.broken." txid))]
+     (try
+       (Files/move (.toPath lock) (.toPath tomb)
+                   ^"[Ljava.nio.file.CopyOption;"
+                   (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                           StandardCopyOption/REPLACE_EXISTING]))
+       (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
+         (if (and (some? (:content claim))
+                  (= (:content claim) moved-content)
+                  (= (:file-key claim) (lock-file-key tomb)))
+           {:broken true
+            :tombstone (.getName tomb)
+            :content-sha256 (:content-sha256 claim)}
+           ;; somebody else's claim: put it back untouched and break nothing
+           (do
+             ;; the seam a witness needs to put a third acquirer in the gap
+             (when-let [hook (:before-restore opts)] (hook tomb))
+             (let [outcome (restore-lock! tomb lock)]
+               (cond-> (merge {:broken false :cause :holder-changed} outcome)
+                 (false? (:restored outcome)) (assoc :tombstone (.getName tomb)))))))
+       (catch java.nio.file.NoSuchFileException _
+         {:broken false :cause :lock-vanished})
+       (catch Exception cause
+         {:broken false :cause :break-failed :message (.getMessage cause)})))))
 
 (defn- write-lock!
   "Create the LOCK ALREADY populated, or fail because one exists.
@@ -580,20 +660,23 @@
    holder's lock is never broken, however old it is."
   [transactions-dir txid opts]
   (let [^File lock (lock-file transactions-dir)]
-    (loop [attempt 0 broken nil]
+    (loop [attempt 0 broken nil displaced nil]
       (if (try-write-lock! lock txid)
-        (if broken {:ok true :lock-broken broken} {:ok true})
+        (cond-> {:ok true}
+          broken (assoc :lock-broken broken)
+          displaced (assoc :lock-break-displaced displaced))
         (let [claim (read-lock-claim lock)
               holder (:holder claim)
               cause (stale-holder holder)]
           (if (and (contains? breakable-causes cause) (zero? attempt))
             (do (when-let [hook (:before-break opts)] (hook claim))
-                (let [outcome (break-lock! transactions-dir claim txid)]
+                (let [outcome (break-lock! transactions-dir claim txid opts)]
                   (recur (inc attempt)
                          (if (:broken outcome)
                            (merge (lock-broken-line holder cause)
                                   (select-keys outcome [:tombstone :content-sha256]))
-                           broken))))
+                           broken)
+                         (or (displaced-line outcome) displaced))))
             (let [legacy? (= cause :legacy-format)]
               (refusal :txn-lock-held
                        (if legacy?
@@ -607,6 +690,9 @@
                                 :next_call {:op :txn/recover
                                             :workspace_root nil}
                                 :remedy "Wait for the holder, or run recovery if its process is gone."}
+                         displaced
+                         (assoc :lock-break-displaced displaced)
+
                          legacy?
                          (assoc :holder-format :pid-only
                                 :lock-format-expected lock-format
@@ -703,13 +789,21 @@
                                  :staged {}
                                  :written []
                                  :scope-walk scope-walk})}
-                        (:lock-broken lock) (assoc :lock-broken (:lock-broken lock)))]
+                        (:lock-broken lock)
+                        (assoc :lock-broken (:lock-broken lock))
+
+                        (:lock-break-displaced lock)
+                        (assoc :lock-break-displaced (:lock-break-displaced lock)))]
               (write-state! txn :open {:started-at (str (java.time.Instant/now))})
               (append-journal! txn (str "begin\t" txid))
               (when-let [broken (:lock-broken lock)]
                 ;; the break is durable evidence, not only a return value
                 (append-journal! txn (str "lock-broken\t" (:pid broken) "\t"
                                          (name (:cause broken)))))
+              (when-let [displaced (:lock-break-displaced lock)]
+                ;; so is a claim this acquisition moved and could not put back
+                (append-journal! txn (str "lock-displaced\t" (:tombstone displaced) "\t"
+                                          (name (:restore-cause displaced)))))
               txn)))))))
 
 ;; -------------------------------------------------------------- read set
@@ -1793,7 +1887,7 @@
    old, and refuses when either half is missing. `:now-ms` supplies the clock
    that age is measured against, so a witness can pin the boundary exactly."
   ([workspace-root] (recover! workspace-root {}))
-  ([workspace-root {:keys [state-home break-legacy-lock now-ms]}]
+  ([workspace-root {:keys [state-home break-legacy-lock now-ms] :as opts}]
    (let [transactions (workspace/transactions-dir workspace-root state-home)
          dir (io/file transactions)
          candidates (when (.isDirectory dir)
@@ -1845,14 +1939,19 @@
                            (or (not= cause :legacy-format)
                                (and break-legacy-lock
                                     (legacy-lock-dead? lock holder now-ms))))
-           broken (when breakable?
-                    (let [outcome (break-lock! transactions claim
-                                               (str "recover-" (new-txid)))]
-                      (when (:broken outcome)
-                        (merge (lock-broken-line holder cause)
-                               (select-keys outcome [:tombstone :content-sha256])))))]
+           outcome (when breakable?
+                     (do (when-let [hook (:before-break opts)] (hook claim))
+                         (break-lock! transactions claim
+                                      (str "recover-" (new-txid)) opts)))
+           broken (when (:broken outcome)
+                    (merge (lock-broken-line holder cause)
+                           (select-keys outcome [:tombstone :content-sha256])))
+           ;; a break that moved a claim and could not put it back is a
+           ;; refusal with an owner, not a silent success
+           displaced (displaced-line outcome)]
        (cond-> {:ok (every? :ok results)
                 :transactions-recovered (count results)
                 :isolation compact-isolation
                 :paths (vec (mapcat :paths results))}
-         broken (assoc :lock-broken broken))))))
+         broken (assoc :lock-broken broken)
+         displaced (assoc :lock-break-displaced displaced))))))
