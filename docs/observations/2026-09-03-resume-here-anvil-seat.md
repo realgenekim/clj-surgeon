@@ -309,3 +309,8 @@ GO (nine) unchanged; fold-diff production read GO at 347fe6d3 stands; none of th
 Live reviews: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Opus MEM-005 round 3 (52c5d85), Opus kernel round 3 (eb22036). Builders: MEM-003 round 2 (~/src/clj-surgeon-stream), fold-diff round 7 (~/src/curtaincall-cfp-folddiff).
 Gene report: docs/observations/2026-09-03-gene-report-night.md is in the skills/gene-report format (09b5d54); final refresh ~13:00Z with that skill.
 GO (nine) unchanged; none merged yet by the mayor.
+
+## RESUME DELTA (fourteenth refresh; commit time is the timestamp)
+GO (ten): + parser-admission 52c5d85 (MEM-005; merge after read-path-memory b7ef23d + memory-battery 5534e94). Follow-ups: inb-114faa (estimator-blind tagged-literal / hat-meta towers; scan_ms sum + false zero).
+Live: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Opus kernel round 3 (eb22036); builders MEM-003 round 2 (~/src/clj-surgeon-stream), fold-diff round 7 (~/src/curtaincall-cfp-folddiff).
+Next memory leaf after MEM-003 lands: MEM-004 (workspace-sources read-all streaming fold/spill — the last battery RED row besides the ungated rename planner).
