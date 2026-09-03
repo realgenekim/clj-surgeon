@@ -3,7 +3,7 @@
 | # | repo / branch | head | state | note |
 |---|---|---|---|---|
 | 1 | clj-surgeon bridge/kondo-path-test | f8a9ef9 | **MERGED** (acda1b3, surgeon1, 2026-09-03 04:47Z) | main baseline: exact-profile failure gone |
-| 2 | clj-surgeon bridge/receipt-ratchets | fe7a1a1 | round 3 pushed; Sol re-check running | multiline dispatch → one physical line (pr-str re-escape); candidate schema narrowed (option a); collateral pre-existing handler-identity assertion filed to inbox |
+| 2 | clj-surgeon bridge/receipt-ratchets | fe7a1a1 | Sol GO-WITH-FIX (1 item: regex-literal newline); round 4 building + absorbing main | multiline dispatch → one physical line (pr-str re-escape); candidate schema narrowed (option a); collateral pre-existing handler-identity assertion filed to inbox |
 | 3 | clj-surgeon bridge/census-verb | ef545c5 | Sol NO-GO (6 items); round 3 building | discovery silently truncates at 4,000 and drops an over-ceiling file while claiming completion; CLI glob-then-take; "8" accepted as pool_size; duplicate paths inflate counts 512×; LLD stale. Classifier byte-identical to reference. |
 | 4 | clj-surgeon bridge/rf2-extract-rewire | 465c956 | Opus GO-WITH-FIX → treated as NO-GO (MCP entrance bypasses the walk; reviewer wrote into .git/hooks through it); round 4 building | ruling (no writes into pruned trees via links) landed fails-first |
 | 5 | clj-surgeon bridge/q5z-alias-migration | ca677bc | Sol NO-GO (6 items); round 4 building | seven fails-first witnesses (ALIAS-046..053); aggregate-bytes ceiling refuses 450 × 1.9 MB before any read = MEM-002 host |
