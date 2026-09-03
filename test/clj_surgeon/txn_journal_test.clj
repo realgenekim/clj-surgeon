@@ -2938,3 +2938,57 @@
                      (pr-str (:broken-locks late))))
             (is (not (.exists tomb)))))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-break-that-cannot-record-itself-does-not-happen
+  (testing "Opus round 7, finding 1, the other half. `stamp-broken-at!`
+            swallowed its own write failure and returned the clock regardless,
+            so `break-by-link!` unlinked the LOCK on a success it had not
+            achieved: the claim was destroyed and NOTHING on disk recorded
+            that a break had taken it. Worse, the `:phase :linked` marker the
+            failed write was supposed to overwrite stayed, so the completed
+            break wore the marker of an interrupted one and the next recovery
+            reverted it - the path by which a real break's evidence was
+            deleted. A break the kernel could not record is a break that did
+            not happen: the write failure is typed, the LOCK is left exactly
+            as it was, our own extra link is dropped, and the refusal is
+            reported to the caller rather than swallowed."
+    (let [ws (workspace! "break-evidence-unrecordable" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          ;; the sidecar the break must write is replaced by a DIRECTORY
+          ;; between the recheck and the stamp: an ordinary I/O failure at the
+          ;; one write that records the break, with the link already claimed
+          block! (fn [^java.io.File tomb]
+                   (let [side (io/file dir (str "LOCK.broken-at."
+                                                (subs (.getName tomb)
+                                                      (count "LOCK.broken."))))]
+                     (Files/deleteIfExists (.toPath side))
+                     (.mkdirs side)
+                     (spit (io/file side "occupied") "x")))]
+      (try
+        (plant-lock! ws {:txid "CRASHED-HOLDER"
+                         :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (let [before (slurp lock)
+              result (journal/recover! (:root ws)
+                                       (assoc opts :before-unlink block!))
+              tombs (filter #(str/starts-with? (.getName ^java.io.File %)
+                                               "LOCK.broken.")
+                            (seq (.listFiles dir)))]
+          (is (nil? (:lock-broken result))
+              (str "a break that could not write its own evidence is not a "
+                   "break that happened: " (pr-str result)))
+          (is (= :evidence-unrecordable
+                 (get-in result [:lock-break-refused :cause]))
+              (str "and the refusal reaches the caller, typed: "
+                   (pr-str result)))
+          (is (.isFile lock)
+              "the claim it could not record taking is exactly where it was")
+          (is (= before (slurp lock))
+              "byte for byte")
+          (is (empty? tombs)
+              (str "and the half-made evidence is not left behind: "
+                   (pr-str (map #(.getName ^java.io.File %) tombs)))))
+        (finally (cleanup! ws))))))

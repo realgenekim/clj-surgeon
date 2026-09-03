@@ -657,13 +657,32 @@
           :else :unreadable))
       (catch Exception _ :unreadable))))
 
+(defn- delete-quietly!
+  "Unlink a path if it is there, and never throw for it.
+
+   Used only where the path is one this code created and the caller is
+   already on a failure route: a cleanup that throws turns a typed refusal
+   into an untyped one and loses the cause the caller needs."
+  [^File f]
+  (try (Files/deleteIfExists (.toPath f)) (catch Exception _ false)))
+
 (defn- stamp-broken-at!
   "Write the break's OWN creation time into the tombstone's sidecar, and
-   return it.
+   return it - or NIL when that write did not happen.
 
    Separate from the mtime half because it is safe to call while the tombstone
    is still a second link to the LOCK: it writes a DIFFERENT file, and touches
-   no shared inode."
+   no shared inode.
+
+   IT RETURNS NIL ON A FAILED WRITE, and that return value is load-bearing.
+   It used to swallow the exception and return the clock regardless, so
+   `break-by-link!` unlinked the LOCK on a success this function had not
+   achieved: the claim was destroyed and nothing on disk recorded that a break
+   had taken it. Worse, the `:phase :linked` marker this write is what
+   overwrites, so the completed break wore the marker of an interrupted one
+   and the next recovery reverted it - the path by which a real break's
+   evidence was deleted. A break the kernel could not record is a break that
+   did not happen."
   [^File tomb]
   (let [now (System/currentTimeMillis)]
     (try
@@ -671,8 +690,8 @@
             (pr-str {:tombstone (.getName tomb)
                      :broken-at (str (java.time.Instant/ofEpochMilli now))
                      :broken-at-ms now}))
-      (catch Exception _ nil))
-    now))
+      now
+      (catch Exception _ nil))))
 
 (defn- touch-tombstone!
   "Give the tombstone's own inode the break's creation time, and return it.
@@ -710,7 +729,12 @@
    still a second link to a live LOCK, because setting mtime through one link
    sets it on the inode both names."
   [^File tomb]
-  (touch-tombstone! tomb (stamp-broken-at! tomb)))
+  (let [stamped (stamp-broken-at! tomb)]
+    ;; the mtime half is set from the clock even when the sidecar write
+    ;; failed, so the evidence is still retired on a time this run produced
+    ;; rather than on the age it inherited from the claim it broke
+    (touch-tombstone! tomb (or stamped (System/currentTimeMillis)))
+    stamped))
 
 (defn- mark-break-linked!
   "Record in the tombstone's OWN sidecar that a break has claimed the evidence
@@ -1104,14 +1128,27 @@
           ;; `:phase :linked` marker, and recovery would revert real evidence.
           ;; The reverse crash - stamped, LOCK not yet unlinked - is still an
           ;; interrupted break, and the inode rule types it.
-          (let [broken-at (stamp-broken-at! tomb)]
-            (Files/deleteIfExists (.toPath lock))
-            (touch-tombstone! tomb broken-at)
-            {:broken true
-             :tombstone (.getName tomb)
-             :content-sha256 (:content-sha256 claim)
-             :broken-at-ms broken-at
-             :break-path :link}))
+          (if-let [broken-at (stamp-broken-at! tomb)]
+            (do
+              (Files/deleteIfExists (.toPath lock))
+              (touch-tombstone! tomb broken-at)
+              {:broken true
+               :tombstone (.getName tomb)
+               :content-sha256 (:content-sha256 claim)
+               :broken-at-ms broken-at
+               :break-path :link})
+            ;; the break cannot write its own creation time, so it cannot be
+            ;; recorded - and an unrecorded break is a destroyed claim with
+            ;; nothing on disk saying who took it, plus a tombstone still
+            ;; wearing the `:phase :linked` marker for recovery to revert.
+            ;; Leave the LOCK exactly where it is, drop our own extra link,
+            ;; and hand the caller the cause.
+            (do (delete-quietly! (broken-at-file tomb))
+                (delete-quietly! tomb)
+                {:broken false
+                 :cause :evidence-unrecordable
+                 :restored true
+                 :restore-path :lock-never-left})))
         ;; not the claim that was judged. The LOCK never left, so there is
         ;; nothing to put back and nothing to displace: drop our own link,
         ;; and the marker that said we held it.
@@ -1129,6 +1166,28 @@
       (break-by-move! transactions-dir lock tomb claim opts))
     (catch Exception cause
       {:broken false :cause :break-failed :message (.getMessage cause)})))
+
+(def ^:private break-refusal-causes
+  "The break outcomes that are a REFUSAL with an owner rather than a failure.
+
+   Both reach the caller as `:lock-break-refused`, because a refusal nobody
+   hears is indistinguishable from a silent loss: recovery once dropped the
+   `:tombstone-exists` case entirely and returned an ordinary success having
+   broken nothing."
+  #{:tombstone-exists :evidence-unrecordable})
+
+(defn- break-refusal-remedy
+  "What a caller can actually do about a refused break."
+  [cause]
+  (case cause
+    :evidence-unrecordable
+    (str "The break could not write the evidence file that records when it "
+         "happened, so it left the claim alone: an unrecorded break is a "
+         "destroyed claim with nothing on disk naming who took it. Check that "
+         "the transactions directory is writable and has space, then retry.")
+    (str "A tombstone of that name already exists, so breaking would destroy "
+         "the evidence of an earlier break. Retry with a different :txid, or "
+         "retire the tombstone by running recovery.")))
 
 (defn- break-lock!
   "Take EXACTLY the stale claim that was read out of the way, or nothing.
@@ -1237,7 +1296,8 @@
                                                         :break-path]))
                            broken)
                          (or (displaced-line outcome) displaced)
-                         (or (when (= :tombstone-exists (:cause outcome))
+                         (or (when (contains? break-refusal-causes
+                                               (:cause outcome))
                                (select-keys outcome [:cause :tombstone]))
                              refused-break))))
             (let [legacy? (= cause :legacy-format)]
@@ -1259,11 +1319,8 @@
                          refused-break
                          (assoc :lock-break-refused
                                 (assoc refused-break
-                                       :remedy (str "A tombstone of that name already exists, so "
-                                                    "breaking would destroy the evidence of an "
-                                                    "earlier break. Retry with a different "
-                                                    ":txid, or retire the tombstone by running "
-                                                    "recovery.")))
+                                       :remedy (break-refusal-remedy
+                                                 (:cause refused-break))))
 
                          legacy?
                          (assoc :holder-format :pid-only
@@ -2728,7 +2785,7 @@
            ;; nobody heard: recovery dropped it entirely, so the one verb
            ;; whose job is to clear a stale lock returned an ordinary success
            ;; having broken nothing
-           refused-break (when (= :tombstone-exists (:cause outcome))
+           refused-break (when (contains? break-refusal-causes (:cause outcome))
                            (select-keys outcome [:cause :tombstone]))]
        (cond-> {:ok (every? :ok results)
                 :transactions-recovered (count results)
