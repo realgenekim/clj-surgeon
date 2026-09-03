@@ -900,6 +900,80 @@
         (delete-tree! workspace)
         (delete-tree! outside)))))
 
+;; @spec MCP-OP-ALIAS-055
+(deftest the-file-ceiling-refusal-narrows-to-the-largest-fitting-subtree
+  ;; A constant-size next_call DOES exist for the aggregate ceilings: it is not
+  ;; a list of exclusions but one narrowing prefix, derived from the walk's own
+  ;; per-directory aggregates.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        wide (io/file workspace "src" "wide")]
+    (.mkdirs receipt-dir)
+    (try
+      (.mkdirs wide)
+      (dotimes [index 2500]
+        (spit (io/file wide (str "f" index ".clj")) (str "(ns wide.f" index ")\n")))
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-scope-too-large" (:error_type result)))
+        (let [next-call (:next_call result)
+              rendered (json/generate-string next-call)]
+          (is (some? next-call)
+              "the aggregate ceiling refused with no executable remedy")
+          (when next-call
+            (is (<= (count rendered) 512)
+                (str "next_call is " (count rendered) " characters"))
+            (is (= ["src/acid/fanout/**"] (get-in next-call ["scope" "paths"]))
+                "the narrowing prefix is not the largest subtree that fits")
+            (is (<= (:would_select_files result) alias-migration/max-scope-files))
+            (is (pos? (:would_select_files result)))
+            (testing "and the replay commits"
+              (let [replayed (alias-migration/execute!
+                               (config workspace receipt-dir)
+                               (json/parse-string rendered true))]
+                (is (:ok replayed) (pr-str replayed))
+                (is (= 12 (:files replayed)))
+                (doseq [[relative expected] (:post corpus)]
+                  (is (= expected (slurp (io/file workspace relative)))
+                      relative)))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-055
+(deftest the-byte-ceiling-refusal-narrows-to-the-largest-fitting-subtree
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        per-file 1900000
+        files 450]
+    (.mkdirs receipt-dir)
+    (try
+      (dotimes [index files]
+        (sparse-source! (io/file workspace "src" "wide" (str "f" index ".clj"))
+                        per-file))
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-scope-too-large-bytes" (:error_type result)))
+        (let [next-call (:next_call result)
+              rendered (json/generate-string next-call)]
+          (is (some? next-call)
+              "the aggregate byte ceiling refused with no executable remedy")
+          (when next-call
+            (is (<= (count rendered) 512)
+                (str "next_call is " (count rendered) " characters"))
+            (is (= ["src/acid/fanout/**"] (get-in next-call ["scope" "paths"])))
+            (is (<= (:would_select_bytes result) alias-migration/max-scope-bytes))
+            (is (pos? (:would_select_bytes result)))
+            (testing "and the replay commits"
+              (let [replayed (alias-migration/execute!
+                               (config workspace receipt-dir)
+                               (json/parse-string rendered true))]
+                (is (:ok replayed) (pr-str replayed))
+                (is (= 12 (:files replayed))))))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
 
