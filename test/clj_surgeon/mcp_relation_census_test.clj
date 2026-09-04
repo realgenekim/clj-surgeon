@@ -6507,3 +6507,155 @@
                        ": " (pr-str weights)))))))
       (finally
         (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Opus's round-seventeen NO-GO item 3. `core/denied-ancestor`'s docstring says
+;; "the nearest EXISTING ancestor DIRECTORY"; the code never asks
+;; `fs/directory?`. A mode-644 regular file is readable and NOT executable, so
+;; it satisfies `(when-not (and readable? executable?))` — and an ordinary
+;; source file in a path prefix, `src/app/afile.clj/x.clj`, is reported as a
+;; denied DIRECTORY.
+;;
+;; Three defects in one. The refusal states a falsehood: that file is readable,
+;; and it is not a directory. The remedy cannot be followed: it is already
+;; readable, and making it more readable changes nothing. And the two entrances
+;; publish DIFFERENT CAUSES for the same observation — the tool says
+;; `not-found` (ENOTDIR did not resolve), the CLI says `parent-denied` — which
+;; is precisely what the shared `mcp-paths/source-refusal-causes` vocabulary
+;; was added in round sixteen to make impossible, and what the round-sixteen
+;; witness asserts for the symlink loop and the long name but not for this
+;; shape.
+;;
+;; So the witness is the reviewer's whole ten-shape enumeration rather than an
+;; eleventh case, and it is TOTAL against the vocabulary: every cause
+;; `source-refusal-causes` declares for a NAMED source is covered by a row, so
+;; a cause added to that set without a parity row fails here.
+;; ---------------------------------------------------------------------------
+
+(def ^:private by-design-divergences
+  "The two rows where the entrances answer DIFFERENT QUESTIONS, with the
+   reason, so that a divergence is either declared here or a defect.
+
+   The CLI's `:file` is an absolute operator-named path with no lexical fence:
+   there is no project root for it to be outside of, and no extension rule for
+   it to violate, so the CLI reaches the filesystem and finds nothing while the
+   tool refuses lexically before it stats anything. Both are right about the
+   question they were asked."
+  {:escape "the CLI's :file has no project root to be outside of"
+   :wrong-extension "the CLI's :file has no relative-source-path rule"})
+
+(defn- source-parity-rows!
+  "One tree per shape, built under `parent`, with the relative path to drive."
+  [^java.io.File parent]
+  (let [ws (io/file parent "ws")
+        outside (io/file parent "outside")
+        long-name (str "src/app/"
+                       (str/join "/" (repeat 12 (apply str (repeat 90 \n))))
+                       ".clj")]
+    (spit-file! (io/file ws "src/app/arm.clj") arm-source)
+    (spit-file! (io/file ws "src/app/afile.clj") "(ns app.afile)")
+    (spit-file! (io/file ws "src/app/denied.clj") arm-source)
+    (deny-reads! (io/file ws "src/app/denied.clj"))
+    (spit-file! (io/file ws "src/app/locked/inner.clj") arm-source)
+    (deny-traversal! (io/file ws "src/app/locked"))
+    (.mkdirs (io/file ws "src/app/dirnamed.clj"))
+    (spit-file! (io/file outside "escape.clj") arm-source)
+    (spit-file! (io/file ws "src/app/notes.txt") "(ns app.notes)")
+    (java.nio.file.Files/createSymbolicLink
+      (.toPath (io/file ws "src/app/loopa.clj"))
+      (.toPath (io/file "loopb.clj")) (make-array FileAttribute 0))
+    (java.nio.file.Files/createSymbolicLink
+      (.toPath (io/file ws "src/app/loopb.clj"))
+      (.toPath (io/file "loopa.clj")) (make-array FileAttribute 0))
+    (java.nio.file.Files/createSymbolicLink
+      (.toPath (io/file ws "src/app/escape.clj"))
+      (.toPath (io/file "../../../outside/escape.clj"))
+      (make-array FileAttribute 0))
+    {:ws ws
+     :fifo (mkfifo! (io/file ws "src/app/pipe.clj"))
+     :rows [{:shape :missing :path "src/app/missing.clj" :cause :not-found}
+            {:shape :denied-file :path "src/app/denied.clj"
+             :cause :permission-denied}
+            {:shape :denied-parent :path "src/app/locked/inner.clj"
+             :cause :parent-denied}
+            {:shape :dir-named-clj :path "src/app/dirnamed.clj"
+             :cause :not-a-regular-file}
+            {:shape :fifo :path "src/app/pipe.clj"
+             :cause :not-a-regular-file}
+            {:shape :symlink-loop :path "src/app/loopa.clj" :cause :not-found}
+            {:shape :name-too-long :path long-name :cause :not-found}
+            ;; The finding. A readable regular file in a path PREFIX.
+            {:shape :enotdir-component :path "src/app/afile.clj/x.clj"
+             :cause :not-found}
+            {:shape :escape :path "src/app/escape.clj"
+             :cause :outside-project}
+            {:shape :wrong-extension :path "src/app/notes.txt"
+             :cause :not-a-relative-source-path}]}))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(deftest the-two-entrances-name-the-same-cause-for-the-same-observation
+  (let [parent (temp-dir)]
+    (try
+      (let [{:keys [ws rows]} (source-parity-rows! parent)
+            named (.getCanonicalPath ^java.io.File ws)
+            observed
+            (doall
+              (for [{:keys [shape path cause]} rows]
+                (let [tool (census-tool/execute-request!
+                             {:project-root named} {:files [path]})
+                      cli (refusal-or-throw
+                            #(core/run-relation-census
+                               {:file (str named "/" path)}))]
+                  {:shape shape :expected cause
+                   :tool (:cause tool) :cli (:cause cli)})))]
+
+        (testing "every named-source cause the shared vocabulary declares has a row"
+          ;; Derived totality, with three declared exclusions and the reason
+          ;; for each. `:directory-denied` is the WALK's cause and has its own
+          ;; witness; `:read-failed-after-fence` is raised BETWEEN the fence
+          ;; and the open, so no path can provoke it; `:unresolvable-source-path`
+          ;; is the `:else` of the resolver's exception analysis and needs a
+          ;; throw that is not the filesystem answering. Every other member is
+          ;; a row above, so a cause added to the vocabulary without a parity
+          ;; row fails here.
+          (is (= (disj mcp-paths/source-refusal-causes
+                       :directory-denied :read-failed-after-fence
+                       :unresolvable-source-path)
+                 (set (map :cause rows)))
+              (str "vocabulary: " (pr-str mcp-paths/source-refusal-causes)
+                   "; rows: " (pr-str (set (map :cause rows))))))
+
+        (doseq [{:keys [shape expected tool cli]} observed]
+          (testing (str shape " is named from the shared vocabulary")
+            (is (contains? mcp-paths/source-refusal-causes
+                           (some-> tool keyword))
+                (str shape ": the tool published " (pr-str tool))))
+
+          (if-let [reason (get by-design-divergences shape)]
+            (testing (str shape " diverges BY DESIGN, and the tool is still right")
+              (is (= (name expected) tool)
+                  (str shape ": the tool published " (pr-str tool)
+                       ", not " (pr-str (name expected)) " — " reason)))
+            (testing (str shape " gets ONE cause from both entrances")
+              (is (contains? mcp-paths/source-refusal-causes cli)
+                  (str shape ": the CLI published " (pr-str cli)))
+              (is (= (name expected) tool)
+                  (str shape ": the tool published " (pr-str tool)))
+              (is (= expected cli)
+                  (str shape ": the CLI published " (pr-str cli)))
+              (is (= (some-> cli name) tool)
+                  (str shape ": CLI " (pr-str cli) " vs tool "
+                       (pr-str tool))))))
+
+        (testing "the ENOTDIR remedy does not tell the caller to chmod a source file"
+          (let [cli (refusal-or-throw
+                      #(core/run-relation-census
+                         {:file (str named "/src/app/afile.clj/x.clj")}))]
+            (is (not (str/includes? (str (:remedy cli)) "afile.clj readable"))
+                (str "the CLI asks the caller to make a readable regular file "
+                     "readable: " (pr-str (:remedy cli)))))))
+      (finally
+        (allow-traversal! (io/file parent "ws/src/app/locked"))
+        (allow-reads! (io/file parent "ws/src/app/denied.clj"))
+        (delete-tree! parent)))))
