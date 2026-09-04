@@ -138,6 +138,15 @@
       (empty? declared-arms)
       (failed "the battery script declares no arms to check the receipt against")
 
+      ;; :arms is compared as a VECTOR -- order-sensitive -- while the
+      ;; verdict key set below is compared as a SET. That asymmetry is
+      ;; deliberate and stricter than the spec's word "equal": a receipt
+      ;; whose :arms permutes the battery script's declared order is
+      ;; rejected even though it names the same arms, which is fail-closed
+      ;; in the right direction (round eleven, Opus finding 7). The cost is
+      ;; that a future reordering of the script's own `(def arms [...])`
+      ;; literal would red every existing receipt until the battery is
+      ;; re-run -- an accepted trade, not an oversight.
       (not= (vec declared-arms) (vec (:arms record)))
       (failed (str "the receipt declares arms " (pr-str (:arms record))
                    " but the battery script declares "
