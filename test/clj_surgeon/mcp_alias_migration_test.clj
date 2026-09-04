@@ -1543,6 +1543,53 @@
       (str label " · " (:text site)))))
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- refusal-call-sites-in
+  "Every `(refusal <kind> …)` CALL of one source, read with the READER.
+
+  Round-sixteen review finding 2: these sites were found by a per-LINE regex,
+  `#\"\\(refusal\\s\"`, which is wrong in both directions — a call whose kind
+  begins on the next line matches nothing (the line ends after `(refusal`),
+  and the word `refusal` inside a string or a comment matches everything. Both
+  were reproduced on planted counterexamples. A call site is a FORM: it spans
+  as many lines as it likes, and a string or a comment cannot be one BY
+  CONSTRUCTION, because the reader never yields them as a list.
+
+  The namespace already reads this same text with this same reader for
+  `:error-type` value sites; deciding a call site by text in a file you are
+  already parsing is the defect class this requirement has now paid for twice.
+
+  Each site carries its kind expression, its enclosing TOP-LEVEL form (a bare
+  symbol forwards or mints according to what it was bound to) and its ROW,
+  read from the parser's own position metadata rather than counted by hand."
+  [text]
+  (let [root (try (parser/parse-string-all text) (catch Exception _ nil))]
+    (when root
+      (for [top-level (significant-children root)
+            candidate (node-seq top-level)
+            :when (= :list (n/tag candidate))
+            :let [kids (significant-children candidate)]
+            :when (and (= 'refusal (node-value (first kids)))
+                       (>= (count kids) 2))]
+        {:kind (second kids)
+         :context top-level
+         :row (:row (meta candidate))}))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- literal-refusal-kinds-in
+  "Every kind spelled as a KEYWORD LITERAL at a `(refusal …)` call of `text`.
+
+  Read as forms for the same reason the guard is: the regex this replaces,
+  `#\"\\(refusal :([a-z][a-z0-9-]*)\"`, is anchored on a single space, so a
+  literal kind written on the line BELOW its `(refusal` was missed by the
+  enumeration and by the guard that exists to catch what the enumeration
+  cannot see — the one hole that hides a kind twice over."
+  [text]
+  (for [site (refusal-call-sites-in text)
+        :let [value (node-value (:kind site))]
+        :when (and (keyword? value)
+                   (re-matches #"[a-z][a-z0-9-]*" (name value)))]
+    (name value)))
+;; @spec MCP-OP-ALIAS-059
 (defn- dynamic-refusal-kind-sites-in
   "Every `(refusal <non-literal>` site of ONE source, unmarked.
 
@@ -1552,24 +1599,22 @@
   another scanned source already minted, and such a site declares itself with
   the marker `forwarded-refusal-kind` in the twelve lines above it.
 
+  Sites are read as FORMS by `refusal-call-sites-in`; only the MARKER is still
+  a line window, because a marker is a comment and a comment is a line.
+
   Taken as TEXT rather than as a namespace so a witness can plant a site and
   drive this directly; `dynamic-refusal-kind-sites` is the same scan over the
   reachable set."
   [label text]
   (let [lines (vec (str/split-lines text))
-        line-offsets (reductions + 0 (map (comp inc count) lines))
-        ;; @spec MCP-OP-ALIAS-059
-        ;; the marked site's own kind EXPRESSION, read with the reader from
-        ;; the `(refusal` on that line — the marker is checked against the
-        ;; shape, never merely counted
-        kind-node
-        (fn [index line]
-          (when-let [column (str/index-of line "(refusal")]
-            (try
-              (second (significant-children
-                        (parser/parse-string
-                          (subs text (+ (nth line-offsets index) column)))))
-              (catch Exception _ nil))))
+        marked?
+        (fn [row]
+          (let [index (max 0 (dec (or row 1)))]
+            (boolean
+              (some #(str/includes? % "forwarded-refusal-kind")
+                    (subvec lines
+                            (max 0 (- index 12))
+                            (min (count lines) (inc index)))))))
         ;; only a source whose OWN `refusal` takes the kind as its first
         ;; argument can spell a kind at the call site at all; where the kind
         ;; is a literal inside the constructor the `:error_type "…"` scan
@@ -1578,17 +1623,16 @@
         (boolean
           (re-find #"\(defn-?\s+refusal\s*\n?\s*\[\s*(error-type|kind)\b" text))]
     (vec
-      (for [[index line] (map-indexed vector lines)
-            :when own-refusal-constructor?
-            :when (and (re-find #"\(refusal\s" line)
-                       (not (re-find #"\(refusal\s+:[a-z]" line))
-                       (not (re-find #"defn-?\s+refusal" line)))
-            :when (not (and (some #(str/includes? % "forwarded-refusal-kind")
-                                  (subvec lines (max 0 (- index 12))
-                                          (inc index)))
-                            (when-let [node (kind-node index line)]
-                              (forwarded-kind-expression? node))))]
-        (str label ":" (inc index))))))
+      (for [site (when own-refusal-constructor? (refusal-call-sites-in text))
+            :let [value (node-value (:kind site))]
+            ;; a keyword literal is the kind itself, and `literal-refusal-kinds-in`
+            ;; already enumerated it
+            :when (not (and (keyword? value)
+                            (re-matches #"[a-z][a-z0-9-]*" (name value))))
+            :when (not (and (marked? (:row site))
+                            (forwarded-kind-expression? (:kind site)
+                                                        (:context site))))]
+        (str label ":" (:row site))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- dynamic-refusal-kind-sites
@@ -1625,11 +1669,6 @@
                 "src/clj_surgeon/mcp_tool.clj · entrance slice"
                 (router-entrance-slice)))))
 
-;; @spec MCP-OP-ALIAS-059
-(defn- literal-refusal-kinds-in
-  "Every kind spelled as a KEYWORD LITERAL at a `(refusal …)` call of `text`."
-  [text]
-  (map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" text)))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
