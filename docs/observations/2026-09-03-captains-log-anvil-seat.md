@@ -1184,3 +1184,7 @@ O2: the enumerated exclusion set was one exclusion mechanism among three (empty 
 ## 03:59Z — admit-gate landing composed on the trunk (MCP/gate-landing-2026-09-04 @ 3860952); fresh-clone review launched; /tmp cleaned (2.4 GB of finished fixtures)
 
 The composition record's honest line: "no System/exit outside -main" is NOT literally true on the trunk (13 sites, 3 in run-ls-tree with an owed-fix note) — what is proven is that the merge adds none. The two pre-existing suite failures every gate review had to discount are gone on the trunk, so mcp-test and bb both run fully green — the "a second failure is a number a tired reader can miss" risk is closed by the trunk moving, not by this branch. The shared 16 GiB /tmp filled to 100% mid-composition (one ENOSPC); this seat's finished fixture dirs were 2.4 GB of it — cleaned; a per-lane fixture cleanup at lane end is the ratchet (added to every future brief).
+
+## 04:05Z — mayor 2340Z (received 03:59Z): Gene's feature-thread study — filed inb-55e00e, study written (docs/observations/2026-09-04-feature-thread-study.md), Sol's independent position running; Gene asked "Did you get latest from mayor on use case ls tree?" — answered yes with the position
+
+Verdict in one line: not a new square — square 3 plus a completeness receipt; a verb would lose on one thread (E6-Q ×2); build the repo-local `bin/feature-thread` script with named ABSENT legs first, run E-THREAD on social-media-writer, and only a measured false-complete rate in native earns a verb design (relation over cheap evidence, never a JS parser).
