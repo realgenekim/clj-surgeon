@@ -941,12 +941,21 @@
 
 ;; @spec MCP-OP-THREAD-020
 (deftest the-budget-default-and-the-elision-order-are-edit-aware
-  (testing "the default fits the six-leg receipt with every body"
+  (testing "the default fits the six-leg receipt with every LEG body"
     (is (= 28672 ft/default-budget-bytes))
-    (let [{:keys [structured]} (thread! fixture-root)]
-      (is (empty? (:elided structured))
-          (str "the default budget elided " (pr-str (map :leg (:elided structured)))
-               "; the whole point of raising it was that it must not"))))
+    (let [{:keys [structured] :as r} (thread! fixture-root)]
+      ;; @spec MCP-OP-THREAD-047
+      ;; The only thing the default cuts is the OPPORTUNISTIC peer bodies —
+      ;; three co-menu-item definitions the caller did not ask for. Every leg,
+      ;; the sibling, the anchor context and all three peer ROWS ride.
+      (is (= #{"peers"} (set (map :leg (:elided structured))))
+          (str "the default budget elided "
+               (pr-str (map :leg (:elided structured)))))
+      (doseq [l (:legs (full r))
+              :when (= "FOUND" (:status l))]
+        (is (string? (:body l))
+            (str "the default budget cut the body of " (:id l))))
+      (is (= 3 (count (:peers (leg structured "menu-caller")))))))
 
   (testing "the stated order elides context first and the edit sites last"
     (is (= [:peers :sibling :after-context :verify-detail :governance-template
@@ -2158,24 +2167,30 @@
                            "function openTransformFromSelection"))
         (is (str/starts-with? (str (:boundary p)) "brace-window(lexed,closed"))))
 
-    (testing "a peer with NO definition is named absent, with the search run"
-      (doseq [id ["expound" "bulletize"]]
+    (testing "on the real tree all three Edit-menu peers ARE defined"
+      ;; Round six: `expound` and `bulletize` read ABSENT here only because the
+      ;; fixture's redaction had omitted `resources/public/js/app-safe.js`,
+      ;; where the real repository defines both. The file is in the fixture now
+      ;; (MCP-OP-THREAD-004 recall table), so the honest expectation is FOUND.
+      (doseq [[id from] {"expound" 342 "bulletize" 175}]
         (let [p (by-id id)]
-          (is (= "ABSENT" (:status p)) (str id " was " (:status p)))
-          (is (seq (str (:searched p)))
-              (str id " is called absent with no search behind it"))
-          (is (nil? (:body p))))))
+          (is (= "FOUND" (:status p)) (str id " was " (:status p)))
+          (is (= "resources/public/js/app-safe.js" (:file p)))
+          (is (= from (:from p))))))
 
     (testing "and the text face carries them"
       (is (str/includes? text "peer openTransformFromSelection"))
       (is (str/includes? text "peer expound")))
 
-    (testing "the default budget still holds the whole thread WITH its peers"
-      (let [{:keys [structured]} (thread! fixture-root)]
-        (is (empty? (:elided structured))
-            (str "the default budget elided "
-                 (pr-str (map :leg (:elided structured)))))
-        (is (= 3 (count (:peers (leg structured "menu-caller")))))))
+    (testing "the default budget still holds every peer ROW"
+      (let [{:keys [structured]} (thread! fixture-root)
+            rows (:peers (leg structured "menu-caller"))]
+        (is (= 3 (count rows)))
+        (is (every? #(and (:file %) (:from %) (:sha256 %) (:refetch %)) rows)
+            "a peer row lost its locator at the default budget")
+        (is (= #{"peers"} (set (map :leg (:elided structured))))
+            (str "the default budget cut more than the opportunistic peer"
+                 " bodies: " (pr-str (map :leg (:elided structured)))))))
 
     (testing "and under pressure peer bodies go FIRST, before the sibling"
       (let [{:keys [structured] :as r} (thread! fixture-root {:budget_bytes 24000})
@@ -2190,6 +2205,79 @@
             "a cut peer must keep its range, its hash and its refetch")
         (is (:body (leg (full r) "menu-caller"))
             "the menu leg's OWN body is not cut by the peers step")))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND SIX -- round-five spec item 5: the REAL-REPO recall table, as a witness
+;; ---------------------------------------------------------------------------
+
+(def real-repo-recall
+  "The recall this verb returns on social-media-writer @2df99c98 for four
+  subjects, verbatim from the read-only clone. The fixture is redacted
+  line-preservingly from that same tree, so it must return the SAME table — file
+  and range and status — and a change in either one shows up here."
+  {"saveDraft"
+   {:also ["/api/save"]
+    :status "COMPLETE (5 of 5)"
+    :legs {"menu-caller" ["src/writer/views/components.clj" 98 101 "FOUND"]
+           "js-function" ["resources/public/js/editor-controller.js" 505 571 "FOUND"]
+           "route" ["src/writer/routes.clj" 2121 2121 "FOUND"]
+           "handler" ["src/writer/handlers/book_workshop.clj" 1922 1985 "FOUND"]
+           "tests" ["test/js/editor_conflict_quarantine_test.js" 185 199 "FOUND"]
+           "implementation" [nil nil nil "N/A"]}}
+
+   "openTransformFromSelection"
+   {:also ["/api/transform/apply"]
+    :status "COMPLETE (5 of 5)"
+    :legs {"menu-caller" ["src/writer/views/components.clj" 102 113 "FOUND"]
+           "js-function" ["resources/public/js/editor-commands.js" 332 344 "FOUND"]
+           "route" ["src/writer/routes.clj" 2144 2144 "FOUND"]
+           "handler" ["src/writer/handlers/chat.clj" 324 352 "FOUND"]
+           "tests" ["test/writer/spa_lint_test.clj" 509 521 "FOUND"]
+           "implementation" [nil nil nil "N/A"]}}
+
+   "expound"
+   {:also []
+    :status "INCOMPLETE (2 of 5)"
+    :legs {"menu-caller" ["src/writer/views/components.clj" 102 113 "FOUND"]
+           "js-function" ["resources/public/js/app-safe.js" 342 368 "FOUND"]
+           "route" [nil nil nil "ABSENT"]
+           "handler" [nil nil nil "ABSENT"]
+           "tests" [nil nil nil "ABSENT"]
+           "implementation" [nil nil nil "N/A"]}}
+
+   "formatDraft"
+   {:also ["/api/transform/format" "mechanical-format"]
+    :status "COMPLETE (6 of 6)"
+    :legs {"menu-caller" ["src/writer/views/components.clj" 102 113 "FOUND"]
+           "js-function" ["resources/public/js/editor-commands.js" 389 454 "FOUND"]
+           "route" ["src/writer/routes.clj" 2148 2148 "FOUND"]
+           "handler" ["src/writer/handlers/transform.clj" 606 680 "FOUND"]
+           "tests" ["test/writer/handlers/transform_apply_test.clj" 349 384 "FOUND"]
+           "implementation" ["src/writer/handlers/transform.clj" 81 132 "FOUND"]}}})
+
+;; @spec MCP-OP-THREAD-004
+;; @spec MCP-OP-THREAD-044
+(deftest the-real-repo-recall-table-reproduces-on-the-fixture
+  (doseq [[subject {:keys [also status legs]}] (sort real-repo-recall)]
+    (testing subject
+      (let [{:keys [structured]}
+            (call! {:subject subject :also also
+                    :config smw-conventions
+                    :budget_bytes 32768
+                    :scope {:workspace_root fixture-root}})]
+        (is (= status (:status structured))
+            (str subject " recalled " (:status structured)))
+        (doseq [[id [file from to st]] (sort legs)]
+          (let [l (leg structured id)]
+            (is (= st (:status l))
+                (str subject "/" id " is " (:status l) ", table says " st))
+            (is (= file (:file l))
+                (str subject "/" id " named " (:file l) ", table says " file))
+            (is (= from (:from l))
+                (str subject "/" id " starts at " (:from l) ", table says "
+                     from))
+            (is (= to (:to l))
+                (str subject "/" id " ends at " (:to l) ", table says " to))))))))
 
 ;; @spec MCP-OP-THREAD-049
 (deftest the-next-call-block-says-when-the-digests-were-taken
@@ -2280,7 +2368,7 @@
           peers (:peers (leg (full r) "menu-caller"))
           located (filter ft/located? peers)]
       (is (= 3 (count peers)))
-      (is (= 1 (count located)))
+      (is (= 3 (count located)))
       (is (every? #(nil? (:body %)) peers)
           "a peer body rode when the caller said not to")
       (doseq [p located]
@@ -2315,13 +2403,44 @@
           (str "requested peer bodies were cut before the sibling: "
                (pr-str cut)))))
 
-  (testing "by default the peers ride WITH their bodies when the budget has room"
-    (let [r (thread! fixture-root)
+  (testing "peer bodies ride unasked-for whenever the budget HAS room"
+    (let [r (thread! fixture-root {:budget_bytes 32768})
           p (first (filter #(= "openTransformFromSelection" (:identifier %))
                            (:peers (leg (full r) "menu-caller"))))]
       (is (= "FOUND" (:status p)))
       (is (str/includes? (str (:body p)) "function openTransformFromSelection")
-          "at the DEFAULT budget the peer body rides — the T3b read is gone")))
+          "with room, the peer body rides — the T3b read is gone"))
+    (testing "and when it does not, the ledger says so and the rows stay"
+      (let [{:keys [structured]} (thread! fixture-root)
+            cut (first (filter #(= "peers" (:leg %)) (:elided structured)))]
+        (is (some? cut) "the default budget cuts three peer bodies")
+        (is (str/includes? (:reason cut) "peer bodies dropped"))
+        (is (= 3 (count (:peers (leg structured "menu-caller"))))))))
+
+  (testing "a peer with NO definition is named absent, with the search quoted"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-ghostpeer"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/views.clj"
+                     (str "(ns views)\n"
+                          "(def menu\n  [{:onclick \"go()\"}\n"
+                          "   {:onclick \"neverDefined()\"}])\n"))
+        (write-file! root "src/routes.clj" "(ns routes)\n(def table [[\"/api/go\" {}]])\n")
+        (write-file! root "src/handlers.clj" "(ns handlers)\n(defn handle-go [r] r)\n")
+        (write-file! root "test/t.clj" "(ns t)\n(deftest x (post \"/api/go\"))\n")
+        (write-file! root "js/commands.js" "function go() { return 1; }\n")
+        (let [{:keys [structured]}
+              (call! {:subject "go" :also ["/api/go"]
+                      :config alias-conventions
+                      :scope {:workspace_root (.getPath root)}})
+              p (first (:peers (leg structured "menu-caller")))]
+          (is (= "neverDefined" (:identifier p)))
+          (is (= "ABSENT" (:status p)))
+          (is (str/includes? (str (:searched p)) "neverDefined")
+              (str "an absent peer with no search behind it: " (pr-str p)))
+          (is (nil? (:body p))))
+        (finally (delete-tree! root)))))
 
   (testing "peer_bodies is admitted like any other field"
     (let [{:keys [structured]} (thread! fixture-root {:peer_bodies "yes"})]

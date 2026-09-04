@@ -57,6 +57,33 @@ after it had the five owners): `docs/intent/registry.edn`,
 `test/writer/intent_contract_test.clj`, the `Makefile` test target. The verb
 RETURNS this, in the `rules` row, rather than refusing it.
 
+## The recall table (round six)
+
+Round-five spec item 5: the fixture must return the SAME recall the real
+repository does, for four subjects, so the table is a witness rather than a
+claim in a log. That needed eight more files, each a line-preserving redaction
+of its upstream bytes keeping only the ranges the recall names, plus `tests.edn`
+(exact) and the `:aliases` map of `deps.edn` for the verify row's
+`runs_namespace` (MCP-OP-THREAD-048). The table
+(`the-real-repo-recall-table-reproduces-on-the-fixture`):
+
+| subject | status | route | handler | tests |
+|---|---|---|---|---|
+| `formatDraft` | COMPLETE (6 of 6) | routes.clj L2148 | transform.clj L606-680 | transform_apply_test.clj L349-384 |
+| `saveDraft` | COMPLETE (5 of 5) | routes.clj **L2121** | book_workshop.clj L1922-1985 | editor_conflict_quarantine_test.js L185-199 |
+| `openTransformFromSelection` | COMPLETE (5 of 5) | routes.clj L2144 | chat.clj L324-352 | spa_lint_test.clj L509-521 |
+| `expound` | INCOMPLETE (2 of 5) | ABSENT | ABSENT | ABSENT |
+
+Two facts the redaction had been HIDING, both now visible here:
+
+* `saveDraft`'s route leg was reported at **L392-L445** — the docstring of
+  `(defn handle-save "POST /api/save — …" …)` — and the thread `COMPLETE
+  (5 of 5)`. The decoy was inside the blanked region, so the fixture could not
+  hold the bug (MCP-OP-THREAD-044).
+* `expound` and `bulletize` were reported as peers "defined nowhere". They are
+  both defined, in `resources/public/js/app-safe.js`, which the redaction had
+  omitted entirely.
+
 ## Warm-up meter
 
 The human baseline in the transcript is SIX batched read rounds, with
