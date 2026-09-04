@@ -19,7 +19,7 @@
    [clojure.java.shell :as shell]
    [clojure.set :as set]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.test :refer [deftest is testing use-fixtures]])
   (:import
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute)))
@@ -5008,3 +5008,55 @@
     (is (str/includes? text (str "next_call · " encoded))
         (str "the next_call is rendered last and never elided; everything "
              "else gives ground before it does"))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 1 (MCP-OP-ADMIT-133): the refusal enumeration was
+;; derived by SCANNING SOURCE, and a kind built dynamically left it green
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private observed-refusal-kinds
+  "Every `:error-type` the admit entrance actually published during this
+  namespace's run.
+
+  Round three enumerated the gate's refusal kinds by reading five source
+  files for literal shapes. That derivation was already wrong -- it missed
+  `:workspace-lock-unavailable`, which this suite drives live -- and it was
+  wrong in a way no witness could detect, because a kind built dynamically
+  has no literal to scan for. The reviewer planted exactly such a kind and
+  both enumeration witnesses stayed green.
+
+  So the enumeration is derived from EXECUTION instead. The recording point
+  is the gate's own refusal constructor, which every published receipt passes
+  through, and the driver is this whole suite: every kind any of its tests
+  provokes is seen, including the ones no fixture was written for on
+  purpose."
+  (atom #{}))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- record-and-check-refusal-kinds
+  [run-tests!]
+  (reset! observed-refusal-kinds #{})
+  (let [original admit/execute-request!]
+    (with-redefs [admit/execute-request!
+                  (fn [& args]
+                    (let [receipt (apply original args)]
+                      (when (and (map? receipt) (false? (:ok receipt)))
+                        (swap! observed-refusal-kinds conj (:error-type receipt)))
+                      receipt))]
+      (run-tests!)))
+  (testing "MCP-OP-ADMIT-133: the enumeration is the set the entrance produces"
+    (let [observed (into (sorted-set) (map name) @observed-refusal-kinds)
+          enumerated (admit-refusal-kinds-in-source)]
+      (is (seq observed) "the suite drove no refusal at all; the driver is broken")
+      (is (empty? (clojure.set/difference observed enumerated))
+          (str "the entrance published kinds the enumeration has never heard "
+               "of: " (pr-str (clojure.set/difference observed enumerated))))
+      (is (empty? (clojure.set/difference enumerated observed))
+          (str "the enumeration claims kinds no fixture drives, so nothing "
+               "proves they exist or that their text is a superset: "
+               (pr-str (clojure.set/difference enumerated observed))))
+      (is (= enumerated observed)
+          (str "enumerated " (count enumerated) ", observed " (count observed))))))
+
+(use-fixtures :once record-and-check-refusal-kinds)
