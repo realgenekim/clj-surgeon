@@ -3401,21 +3401,34 @@
               reason reasons
               verify ["focused" "none"]
               allow? [true false]
-              absent? [true false]]
+              absent? [true false]
+              ;; @spec MCP-OP-ADMIT-126
+              lint [{:ran true :ok true} {:ran true :ok false}
+                    {:ran false :ok false} nil]]
         (let [verification {:verification_status status
                             :verification_reasons (if reason [reason] [])
+                            :lint_delta lint
                             :tests (cond-> {:profile_absent absent?}
                                      reason (assoc :reason reason))}
               refusal (admit/incomplete-commit-refusal-reason
                         verification verify allow?)
-              waived? (and allow? absent?)]
+              ;; @spec MCP-OP-ADMIT-126
+              ;; The waiver buys the ONE honest case: a tree with no focused
+              ;; profile, where the analyzer did answer, at status partial,
+              ;; under verify focused. Anything else is zero detectors and a
+              ;; caller's flag.
+              analyzer-read? (and (true? (:ran lint))
+                                  (not (false? (:ok lint))))
+              waived? (and allow? absent? analyzer-read?
+                           (= :partial status)
+                           (= "focused" verify))]
           (if waived?
             (is (nil? refusal)
-                (str "the one waiver: " status " " reason))
+                (str "the one waiver: " status " " reason " lint=" (pr-str lint)))
             (is (some? refusal)
                 (str "must refuse: status=" status " reason=" reason
                      " verify=" verify " allow_partial=" allow?
-                     " profile_absent=" absent?))))))
+                     " profile_absent=" absent? " lint=" (pr-str lint)))))))
     (testing "complete always commits"
       (doseq [verify ["focused" "none"]
               allow? [true false]
@@ -3424,6 +3437,71 @@
                     {:verification_status :complete
                      :tests {:profile_absent absent?}}
                     verify allow?)))))))
+
+;; @spec MCP-OP-ADMIT-126
+(deftest allow-partial-waives-only-a-half-verification-that-happened
+  (let [dead-analyzer
+        {:admit-lint-runner (fn [_ _] {:ran false :ok false
+                                       :status :unverified
+                                       :error-type :clj-kondo-unavailable
+                                       :error (str "clj-kondo did not produce"
+                                                   " readable findings")})}
+        live-analyzer {:admit-lint-runner (fn [_ _] {:ran true :ok true})}
+        drive (fn [config params]
+                ;; Through the production path, to a real tree, and the write
+                ;; is read back off disk rather than believed from a field.
+                (let [root (temp-dir)]
+                  (try
+                    (write-sources! root core-test-sources)
+                    (let [result (admit/execute-request!
+                                   (merge {:project-root (.getPath root)}
+                                          config)
+                                   (merge {:patch clean-multi-file-patch
+                                           :mode "commit"}
+                                          params))]
+                      (assoc (select-keys result
+                                          [:ok :committed :error-type
+                                           :verification_status
+                                           :detectors_not_run])
+                             :wrote?
+                             (not= core-source
+                                   (slurp (io/file root "src/app/core.clj")))))
+                    (finally (delete-tree! root)))))]
+    (testing "W1 dead analyzer, no profile: zero detectors ran, nothing waived"
+      (let [result (drive dead-analyzer {:verify "focused"
+                                         :allow_partial true})]
+        (is (false? (:wrote? result))
+            (str "allow_partial wrote the workspace with the analyzer dead "
+                 "and the suite absent -- the state MCP-OP-ADMIT-124 exists "
+                 "to name, waived by a gate that never read the word"))
+        (is (false? (:ok result)))
+        (is (false? (:committed result)))
+        (is (= :verification-incomplete (:error-type result)))
+        (is (= :unverified (:verification_status result)))))
+    (testing "W2 verify none plus allow_partial is rung L one rung over"
+      (let [result (drive live-analyzer {:verify "none" :allow_partial true})]
+        (is (false? (:wrote? result))
+            (str "a gate a caller can turn off is a caller's gate; "
+                 "MCP-OP-ADMIT-120 closed verify none and allow_partial "
+                 "re-opened it on every repository without a profile"))
+        (is (false? (:ok result)))
+        (is (false? (:committed result)))
+        (is (= :unverified (:verification_status result)))))
+    (testing "W3 verify none without the flag still refuses, unchanged"
+      (let [result (drive live-analyzer {:verify "none"})]
+        (is (false? (:wrote? result)))
+        (is (false? (:ok result)))))
+    (testing "W4 live analyzer, genuinely absent profile: still commits"
+      (let [result (drive live-analyzer {:verify "focused"
+                                         :allow_partial true})]
+        (is (true? (:ok result)))
+        (is (true? (:committed result)))
+        (is (true? (:wrote? result))
+            "the one honest case the waiver was written for must survive")
+        (is (= :partial (:verification_status result)))
+        (is (= [{:detector "focused-tests" :reason :no-focused-test-profile}]
+               (:detectors_not_run result))
+            "and the receipt still names the half that did not run")))))
 
 ;; @spec MCP-OP-ADMIT-118
 (deftest a-profile-that-names-no-command-is-not-an-absent-profile
