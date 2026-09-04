@@ -1724,3 +1724,22 @@ anvil-seat-one-shots. A kill I did not need: I killed NC/NS on a false reading o
 ## 19:35Z GitHub Actions for MCP/main: seat token has the workflow scope (no mayor request needed); Curtain Call basis fetched (build-and-deploy.yml: setup-java@v4, setup-clojure@12.5, cache@v4; no matrix — ours adds one); builder launched on bridge/gha based on bridge/suite-spike (fast+integration gate, battery MATRIX from the lane manifest, nightly, receipt job for ~/bin/land)
 
 ## 19:36Z NC/NS scored: slim plate a MISS as a native-side lever (30/6.5 min vs 54/11.2 min; reads 7 vs 16 dominate); churn removed as designed; T5 is where the contract is measured
+
+## 19:5xZ Process defect, mine: the admit-gate merge reached origin before its gates finished
+
+`land` merged 97157953 onto MCP/main in the seat checkout at 19:29Z and ran the gates there; at 19:35Z, 19:38Z and 19:44Z I
+committed records in the same checkout and pushed — each push carried the merge (8d32d619) beneath it. The JVM suite on
+the merged tree was already green and the branch's fresh-clone bb/oracle/hygiene/audit were green, so nothing unverified
+by anyone reached the trunk, but the landing command's promise ("push only if every gate is green") was broken by its
+neighbour. Fix: `land` now runs in its own worktree (/home/forge/src/clj-surgeon-land), swapped in after this run; memory
+landing-runs-in-its-own-worktree. Had a gate gone red the remedy would have been a revert commit, never a force push.
+
+## 19:51Z — usage watch: tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim, untimed run === rc 0 end 19:51Z; window since 2026-08-30T15:00Z)
+
+## 19:51Z ADMIT GATE LANDED on MCP/main (merge 8d32d619; gates on the merged tree: mcp-test 919/15214/0, bb, oracle, hygiene, audit ok)
+
+Sixth landing of the night, fifteen rounds. The gate is the untested ≥2× wall lever: arm G runs next — the SMW edit written
+through admit_clojure_patch as one call (patches + the named verify), receipt injected; the control is native with the
+same gate mandated and no receipt. Pre-registration: G raw ≤ 12, agent-run suite invocations 0 (the gate runs them), wall
+< 4 min; withdrawal if G raw > 18 or the gate refuses the agent's patch twice on the same reason (then the finding is the
+gate's contract, not the claim).
