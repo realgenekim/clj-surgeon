@@ -5476,6 +5476,38 @@
           (str "the guard rejected its own enumerated kind " kind)))
     (is (map? (admit/checked-refusal-kind! {:ok true :error-type nil})))))
 
+;; @spec MCP-OP-ADMIT-137
+(deftest every-receipt-the-renderer-calls-a-refusal-is-checked-as-one
+  ;; Round four's guard fired on `(false? (:ok receipt))`; `summary` branches
+  ;; on truthiness, `(if (:ok result) ...)`. So a receipt whose `:ok` was
+  ;; anything falsey-but-not-false -- `nil`, most obviously -- was RENDERED to
+  ;; the caller as a refusal, under a kind nothing had enumerated, and the
+  ;; guard never looked at it. `refusal` merges its caller's data map last, so
+  ;; the override is one keyword away, and this guard exists precisely because
+  ;; "nobody would write that" was wrong the round before.
+  ;;
+  ;; The claim is a relation between the two predicates, not a list of values:
+  ;; whatever the RENDERER calls a refusal, the GUARD must check. Neither side
+  ;; is copied here.
+  (let [planted (keyword (str "planted" "-nil-ok-kind"))]
+    (is (not (contains? admit/admit-refusal-kinds planted)))
+    (doseq [ok [true false nil 0 "" "false" :no]]
+      (let [receipt {:ok ok :operation :admit-patch-refused :mode "preview"
+                     :error-type planted :error "e" :elapsed_ms 1.0
+                     :source-unchanged true :next_call nil}
+            refusal-text? (str/starts-with? (#'admit/summary receipt)
+                                            "admit_clojure_patch refused")
+            checked? (try (admit/checked-refusal-kind! receipt) false
+                          (catch IllegalArgumentException _ true))]
+        (is (or (not refusal-text?) checked?)
+            (str ":ok " (pr-str ok) " renders to the caller as a refusal and "
+                 "the guard never checked its kind"))))
+    (testing "and :ok nil in particular, at the bound"
+      (is (thrown-with-msg?
+            IllegalArgumentException #"refusal kind is not enumerated"
+            (admit/checked-refusal-kind!
+              {:ok nil :operation :admit-patch-refused :error-type planted}))))))
+
 ;; @spec MCP-OP-ADMIT-133
 (def ^:private admit-refusal-kinds-not-reachable-from-the-entrance
   "Kinds the source scan finds in the files the gate calls that the entrance
