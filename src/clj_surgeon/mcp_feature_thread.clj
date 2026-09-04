@@ -4119,8 +4119,10 @@
     "Return one cross-language feature as an EDIT BASIS in a single call: the "
     "five leg roles this repository declares (menu caller, script function, "
     "route, handler, tests -- whatever its own conventions name), each FOUND "
-    "with an exact line range, an evidence and boundary label, a sha256 of the "
-    "body bytes and the body, or ABSENT with every search that was run quoted. "
+    "with an exact line range, an evidence and boundary label, a sha256 over "
+    "exactly what `sed -n '<from>,<to>p' <file>` prints (the range's lines, "
+    "each with its trailing newline) and the body, or ABSENT with every search "
+    "that was run quoted. "
     "Also: an anchor per leg saying where a NEW sibling goes; the sibling "
     "feature the subject should mirror, bodies elided to ranges; and a rules "
     "row -- the path the handler routes through, the statuses it refuses with, "
@@ -4138,11 +4140,18 @@
     "lexer-driven brace matches labelled brace-window(lexed,closed), "
     "downgrading to a labelled line window when the counter does not close; "
     "this verb never parses JavaScript and never presents a window as a matched "
-    "body. Status is COMPLETE only when every declared leg is FOUND. Before any "
-    "edit, re-hash each leg's range and compare it to the sha256 the receipt "
-    "carried: a mismatch is a refusal for a stale pre-image, never a retry. "
-    "Leg roles are repository data, read from .clj-surgeon/feature-thread.edn "
-    "or passed inline as config; the verb infers no file roles of its own."))
+    "body. A hit that sits inside a string literal, a comment or a regex "
+    "literal and only MENTIONS the subject is CANDIDATE with the reason named "
+    "and no anchor -- a call spelling like {:onclick \"formatDraft()\"} and a "
+    "route literal are code and stay FOUND. Status is COMPLETE only when every "
+    "declared leg is FOUND. Do NOT re-hash the ranges before editing: the "
+    "per-leg sha256 is the human-checkable detail of what was read, and the "
+    "pre-image gate is admit_clojure_patch, which BINDS the whole-file digests "
+    "in next_call.expect_pre_sha256 at write time and answers a mismatch with "
+    "a typed refusal. Leg roles are repository data, read from "
+    ".clj-surgeon/feature-thread.edn under the workspace root -- resolved "
+    "through symlinks and refused if it escapes that root -- or passed inline "
+    "as config; the verb infers no file roles of its own."))
 
 ;; @spec MCP-OP-THREAD-001
 (defn handle-feature-thread
