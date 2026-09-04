@@ -26,6 +26,7 @@
   (:require
    [clojure.test :as t]
    [clj-surgeon.mcp-relation-census-test]
+   [clj-surgeon.mcp-relation-census-launcher-test]
    [clj-surgeon.mcp-relation-census-round20-test]))
 
 (def battery
@@ -58,13 +59,13 @@
    ;; eighteen's rule authorised a read outside the censused tree, and round
    ;; nineteen replaced the rule rather than adding a witness beside it.
    ['clj-surgeon.mcp-relation-census-test/no-census-reads-a-source-whose-real-path-leaves-the-workspace :r19]
-   ['clj-surgeon.mcp-relation-census-test/every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit :r19]
+   ['clj-surgeon.mcp-relation-census-launcher-test/every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit :r19]
    ['clj-surgeon.mcp-relation-census-test/no-refusal-names-the-workspace-root-in-its-prose :r19]
    ['clj-surgeon.mcp-relation-census-test/no-refusal-SITE-renders-a-raw-workspace-root-into-prose :r19]
    ;; Round twenty — the witnesses that close round nineteen's two blocking
    ;; findings: the bound is over the value AS PRINTED, and the containment
    ;; fence fails CLOSED.
-   ['clj-surgeon.mcp-relation-census-round20-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]])
+   ['clj-surgeon.mcp-relation-census-launcher-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]
