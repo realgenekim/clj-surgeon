@@ -3,6 +3,7 @@
 #
 #   sabotage-FAN.sh <fixtures-dir> <N> [scratch-dir]
 #   sabotage-FAN.sh --selftest-k [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-backslash [N] [seed] [scratch-dir]
 #
 # A scorer that has never gone red is a verdict label, not a meter (this program's
 # `verdict-label-was-a-noun` scar).  This harness builds the CORRECT tree (repo-N with
@@ -91,6 +92,87 @@ if [ "${1:-}" = "--selftest-k" ]; then
   echo "sabotage-FAN --selftest-k: $KPASS passed, $KFAIL failed"
   [ $KFAIL -eq 0 ]
   exit $?
+fi
+
+# --- self-test: CHECK 1 on a legal POSIX tree containing a directory literally ----
+# named backslash (a single "\" byte, not an escape) -----------------------------
+#   sabotage-FAN.sh --selftest-backslash [N] [seed] [scratch-dir]
+#
+# Defect inb-9c18e2: `git diff --name-only` C-quotes any path containing a backslash
+# regardless of core.quotePath, so a raw manifest path with a literal "\" component
+# never string-matches the quoted spelling git prints -- CHECK 1 reports the two
+# owners both missing (raw spelling) and extra (quoted spelling) even though the
+# migration is byte-identical to canonical.  This witness:
+#   - takes gen-fanout's own repo-N/canonical-N/manifest-N.edn at k=6 as the base,
+#   - plants two owners as BYTE COPIES of ns_003 and ns_005 under a directory named
+#     exactly one backslash (src/acid/fanout/\/), committed as the pre-migration BASE,
+#   - derives the matching canonical the same way (byte copies into the same paths),
+#   - extends the manifest to N+2 targets for the two new owners,
+#   - simulates the migration by copying canonical/src over the worktree -- no server,
+#   - asserts CHECK 1 reports missing=0 extras=0 (the correct, fixed reading).
+# Pre-fix (git diff --name-only, no -z) this goes RED with missing=2 extras=2.
+if [ "${1:-}" = "--selftest-backslash" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/home/forge/tmp/fan-selftest-backslash}
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  T3="src/acid/fanout/ns_003.clj"; T5="src/acid/fanout/ns_005.clj"
+  BS_T3="src/acid/fanout/\\/ns_003.clj"; BS_T5="src/acid/fanout/\\/ns_005.clj"
+
+  rm -rf "$SCRATCH/repo"; mkdir -p "$SCRATCH/repo"
+  cp -r "$SCRATCH/gen/repo-$N/." "$SCRATCH/repo/"
+  ( cd "$SCRATCH/repo" && git init -q . \
+      && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" )
+  mkdir -p "$SCRATCH/repo/src/acid/fanout/\\"
+  cp "$SCRATCH/repo/$T3" "$SCRATCH/repo/$BS_T3"
+  cp "$SCRATCH/repo/$T5" "$SCRATCH/repo/$BS_T5"
+  ( cd "$SCRATCH/repo" && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q \
+           -m "fanout: plant two owners under a directory literally named backslash (pre-migration)" )
+  BASE=$(git -C "$SCRATCH/repo" rev-parse HEAD)
+
+  rm -rf "$SCRATCH/canonical"; mkdir -p "$SCRATCH/canonical"
+  cp -r "$SCRATCH/gen/canonical-$N/." "$SCRATCH/canonical/"
+  mkdir -p "$SCRATCH/canonical/src/acid/fanout/\\"
+  cp "$SCRATCH/gen/canonical-$N/$T3" "$SCRATCH/canonical/$BS_T3"
+  cp "$SCRATCH/gen/canonical-$N/$T5" "$SCRATCH/canonical/$BS_T5"
+
+  cat > "$SCRATCH/extend-manifest.clj" <<'CLJEOF'
+(require '[clojure.pprint :as pp])
+(let [[in out t3-path t5-path bs-t3 bs-t5 n2-str] *command-line-args*
+      n2 (Integer/parseInt n2-str)
+      m (read-string (slurp in))
+      t3 (first (filter #(= (:file %) t3-path) (:targets m)))
+      t5 (first (filter #(= (:file %) t5-path) (:targets m)))
+      new3 (assoc t3 :file bs-t3 :ns "acid.fanout.owner3")
+      new5 (assoc t5 :file bs-t5 :ns "acid.fanout.owner5")
+      m2 (-> m (assoc :n n2) (update :targets #(vec (concat % [new3 new5]))))]
+  (spit out (with-out-str (pp/pprint m2))))
+CLJEOF
+  N2=$((N + 2))
+  bb "$SCRATCH/extend-manifest.clj" "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/manifest-$N2.edn" \
+    "$T3" "$T5" "$BS_T3" "$BS_T5" "$N2"
+
+  # simulate the migration: copy canonical src over the worktree -- no server
+  cp -r "$SCRATCH/canonical/src/." "$SCRATCH/repo/src/"
+
+  OUT=$(bb "$HERE/fan_check.clj" "$SCRATCH/repo" "$SCRATCH/manifest-$N2.edn" "$SCRATCH/canonical" "$BASE" 2>&1)
+  RC=$?
+  CHECK1=$(printf '%s\n' "$OUT" | grep '^CHECK 1 ' | head -1)
+  echo "SELFTEST-BACKSLASH: $CHECK1"
+  if printf '%s' "$CHECK1" | grep -q 'PASS' \
+     && printf '%s' "$CHECK1" | grep -q 'missing=0' \
+     && printf '%s' "$CHECK1" | grep -q 'extras=0'; then
+    echo "SELFTEST-BACKSLASH: PASS -- CHECK 1 correctly reads a directory literally named backslash (missing=0 extras=0)"
+    exit 0
+  else
+    echo "SELFTEST-BACKSLASH: FAIL -- CHECK 1 misreads the backslash-named directory (want missing=0 extras=0)"
+    exit 1
+  fi
 fi
 
 FIX=${1:-/home/forge/tmp/arms/e3/fanout}; N=${2:-21}
