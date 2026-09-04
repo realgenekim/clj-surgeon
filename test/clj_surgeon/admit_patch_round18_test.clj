@@ -232,7 +232,13 @@
             (is (= (.lastModified source) (.lastModified source-copy))
                 (str "an incremental verify sees the tree's own times, not"
                      " 'now': source " (.lastModified source)
-                     " copy " (.lastModified source-copy)))))
+                     " copy " (.lastModified source-copy)))
+            ;; @spec MCP-OP-TMPHYG-001
+            ;; A witness that calls `overlay-snapshot!` directly owns the
+            ;; directory it returns: nothing else deletes it, and the lane's
+            ;; temp-leak ratchet fails the whole run on a leak rather than a
+            ;; failing test.
+            (delete-tree-nofollow! (:root overlay))))
         (finally (delete-tree-nofollow! root)))))
   (testing "a command that cannot be LAUNCHED is not reported as a deadline"
     (let [root (temp-dir)]
@@ -502,7 +508,9 @@
             (doseq [directory ["node_modules" "target" ".cpcache" ".venv"
                                "dist" "build"]]
               (is (not (.exists (io/file (:root overlay) directory)))
-                  (str directory " reached the overlay"))))
+                  (str directory " reached the overlay")))
+            ;; @spec MCP-OP-TMPHYG-001
+            (delete-tree-nofollow! (:root overlay)))
           (finally (delete-tree-nofollow! root)))))
     (testing "the exclusion list is configurable, not hardcoded"
       (let [root (temp-dir)]
@@ -512,7 +520,9 @@
                                                  #{".git"})]
             (is (true? (:ok overlay)) (pr-str overlay))
             (is (= 8 (:files overlay)) (pr-str (:files overlay)))
-            (is (.exists (io/file (:root overlay) "node_modules/left-pad/index.js"))))
+            (is (.exists (io/file (:root overlay) "node_modules/left-pad/index.js")))
+            ;; @spec MCP-OP-TMPHYG-001
+            (delete-tree-nofollow! (:root overlay)))
           (finally (delete-tree-nofollow! root)))))))
 
 ;; @spec MCP-OP-ADMIT-162
