@@ -2159,3 +2159,56 @@
     (is (str/includes? text "(defn- reader-cond? [zloc]")
         "include_source asks for the source; the text must carry it")
     (is (str/includes? text "reader-cond?@37-39"))))
+
+;; ============================================================
+;; match / xray may never drop evidence silently (O2 round 2)
+;; ============================================================
+;; Reviewer finding 4 (2026-09-03), measured at 26e4810 through
+;; `mcp-operation/invoke!`: `match "(defn- _ _ _)"` on `analyze.clj` returned
+;; `match_count=7`, seven matches and 3,529 characters of compact JSON in
+;; `structuredContent`, and 206 characters of TEXT containing NO match source
+;; at all — because `compact-json` returned nil above 1,024 characters and the
+;; whole line vanished inside a `when-let`. The text still read
+;; `✓ terminal evidence · read_complete=true · next action none`. A text-only
+;; caller was told the answer was complete and handed none of it, with no flag
+;; to contradict it. The pre-O2 `ls-tree` at least said `read_complete=false`.
+
+;; @spec MCP-OP-STUDY-041
+(deftest match-text-carries-every-match-body-above-the-old-1024-cap
+  (let [response (one "match" {"match" "(defn- _ _ _)"})
+        result (result-of response)
+        text (summary-of response)]
+    (is (= 7 (:match_count result)))
+    (is (< 1024 (count (json/generate-string
+                         (mapv #(select-keys % [:inside :source])
+                               (:matches result)))))
+        "the evidence must be above the cap that used to erase it")
+    (is (= 7 (count (evidence-rows text))))
+    (doseq [match (:matches result)]
+      (is (str/includes? text (first (str/split-lines (:source match))))
+          (format "TEXT must carry the body of %s" (:inside match))))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest xray-text-carries-its-value
+  (let [response (one "xray" {"expression"
+                                 "(-> (form 'reader-cond?) (xray count))"})
+        result (result-of response)
+        text (summary-of response)]
+    (is (contains? result :value))
+    (is (str/includes? text (str "value " (:value result))))))
+
+;; @spec MCP-OP-STUDY-041
+;; @spec MCP-OP-STUDY-040
+(deftest dropped-evidence-is-never-reported-as-terminal
+  (let [response (one "match" {"match" "(defn- _ _ _)"})
+        abridged (assoc response :text_evidence_limit 300)
+        text (inspect-tool/inspect-summary (assoc abridged :elapsed_ms 1.0))]
+    (is (< (count (evidence-rows text)) 7)
+        "the allowance must actually bite, or the witness proves nothing")
+    (is (not (str/includes?
+               text "✓ terminal evidence · read_complete=true · next action none"))
+        "a text block that dropped evidence may never call the read terminal")
+    (is (str/includes? text "! text abridged · read_complete=true"))
+    (is (str/includes? text "structuredContent.results[request-1]")
+        "and it must name where the evidence it dropped can be read")
+    (is (str/includes? text "narrow the request"))))
