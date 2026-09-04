@@ -5124,7 +5124,62 @@
                    budget "-byte number the gate calls a budget"))
           (is (false? (:ok published))
               "a call that cannot be carried inside the budget must refuse")
-          (is (= :next-call-exceeds-public-budget (:error-type published))))))))
+          (is (contains? #{:next-call-exceeds-public-budget
+                           :receipt-exceeds-public-budget}
+                         (:error-type published))
+              (str "and it refuses under one of the two oversize kinds: "
+                   (pr-str (:error-type published))))
+          (is (contains? admit/admit-refusal-kinds (:error-type published))))))
+    (testing "AT the budget the call fits and the ENVELOPE is what does not"
+      ;; the exact 271-byte class the review measured: the call is legal, the
+      ;; receipt carrying it is not, and the refusal says which
+      (let [published (publish budget)]
+        (is (= :receipt-exceeds-public-budget (:error-type published))
+            (str "at exactly the budget the call itself is legal; what fails "
+                 "is the receipt around it: " (pr-str (:error-type published))))
+        (is (> (:receipt_bytes published) budget))
+        (is (= budget (:public_byte_budget published)))
+        (is (seq (:largest_fields published))
+            "and it names the fields that dominate")))))
+
+;; @spec MCP-OP-ADMIT-139
+(deftest a-preview-whose-receipt-cannot-fit-refuses-through-the-entrance
+  ;; The same rule through the real entrance, on the field that has no
+  ;; trimmer. `hashes` carries one entry per path and is a MAP, so the
+  ;; bounded-payload machinery -- which shortens vectors -- cannot touch it.
+  ;; Thirty files under 200-character directory names put the receipt past
+  ;; the budget while the follow-up call itself is still legal, so this is the
+  ;; receipt refusal and not the next_call one.
+  (let [root (temp-dir)
+        n 30
+        dir-a (apply str (repeat 200 "a"))
+        path (fn [i] (str "src/" dir-a "/" (apply str (repeat 200 "c")) i ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns n" i ")\n\n(defn f\n  [x]\n  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns n" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [receipt (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})]
+        (is (false? (:ok receipt))
+            (str "a receipt this large must refuse, not publish: "
+                 (write-refusal/json-bytes receipt) " bytes"))
+        (is (= :receipt-exceeds-public-budget (:error-type receipt))
+            (str "got " (pr-str (:error-type receipt))))
+        (is (<= (write-refusal/json-bytes receipt)
+                write-refusal/public-byte-budget)
+            "and the refusal itself fits the budget it names")
+        (is (> (:receipt_bytes receipt) write-refusal/public-byte-budget))
+        (is (= write-refusal/public-byte-budget (:public_byte_budget receipt)))
+        (is (str/includes? (:remedy receipt) "fewer files")))
+      (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-ADMIT-135
 (deftest a-next-call-that-alone-exceeds-the-public-budget-is-a-typed-refusal

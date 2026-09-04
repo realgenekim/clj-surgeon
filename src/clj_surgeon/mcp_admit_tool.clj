@@ -224,6 +224,7 @@
     :invalid-workspace-root
     :namespace-form-removed
     :next-call-exceeds-public-budget
+    :receipt-exceeds-public-budget
     :no-op-patch
     :overlapping-hunks
     :patch-does-not-apply
@@ -1916,7 +1917,29 @@
         (telemetry/emit! state :tool.call event))))
   receipt)
 
+;; @spec MCP-OP-ADMIT-136
+;; `summary-characters` renders the text face; it lives with the renderer,
+;; below, and is declared here because the bound is applied at the one point
+;; every receipt passes.
+(declare summary-characters)
+
+;; @spec MCP-OP-ADMIT-136
+;; @spec MCP-OP-ADMIT-139
+(defn- public-faces-fit?
+  "Both faces of one candidate receipt inside the ONE budget.
+
+  The structured face is measured as the JSON the caller receives -- envelope
+  included, which is the 271 bytes round four charged to nobody -- and the
+  text face as the block that spells every one of its leaves. A candidate
+  fits only when both do."
+  [candidate]
+  (and (<= (write-refusal/json-bytes candidate)
+           write-refusal/public-byte-budget)
+       (<= (summary-characters candidate)
+           write-refusal/public-byte-budget)))
+
 ;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-139
 (defn- oversize-next-call-refusal
   "A next_call the public budget cannot carry is a typed refusal naming its
   size -- never a pointer, and never a silently truncated call.
@@ -1931,42 +1954,98 @@
 
   Round three's answer, a pointer at structuredContent, is the same failure
   one level down: the reader this text block exists for is the one who cannot
-  read structuredContent."
+  read structuredContent.
+
+  The decision is made on the RECEIPT that would carry the call, envelope
+  included, and after the payload has been trimmed -- not on the call's
+  characters alone. Round four compared the call's length to the budget, so a
+  next_call of exactly 32,640 characters was published inside a receipt of
+  32,911 bytes: 271 bytes of keys, quotes and braces charged to nobody, over
+  the very number the refusal text calls a budget (MCP-OP-ADMIT-139). And it
+  fires only when the next_call is the REASON the receipt cannot fit: a
+  receipt too large for other reasons states its elision and publishes, as it
+  always has."
   [receipt]
   (when-let [call (:next_call receipt)]
-    (let [encoded (json/generate-string call)
-          characters (count encoded)]
+    (let [characters (count (json/generate-string call))]
       (when (> characters write-refusal/public-byte-budget)
+        (let [receipt-bytes (write-refusal/json-bytes receipt)]
         (merge (empty-receipt (or (:mode receipt) "preview"))
                {:ok false
                 :operation :admit-patch-refused
                 :error-type :next-call-exceeds-public-budget
                 :error (str "this receipt's next_call is " characters
-                            " characters and the public payload budget is "
-                            write-refusal/public-byte-budget
-                            "; it cannot be published verbatim, and a"
-                            " next_call a caller cannot send back byte for"
-                            " byte is not a next_call")
+                            " characters and the receipt that would carry it"
+                            " is " receipt-bytes " bytes; the public payload"
+                            " budget is " write-refusal/public-byte-budget
+                            " bytes, envelope included, so this call cannot be"
+                            " published verbatim, and a next_call a caller"
+                            " cannot send back byte for byte is not a"
+                            " next_call")
                 :next_call_characters characters
+                :receipt_bytes receipt-bytes
                 :public_byte_budget write-refusal/public-byte-budget
                 :blocked_next_call_for (:error-type receipt)
                 :source-unchanged (:source-unchanged receipt)
-                :remedy (str "narrow the request so its follow-up call fits "
+                :remedy (str "narrow the request so its follow-up call and the"
+                             " receipt carrying it fit "
                              write-refusal/public-byte-budget
-                             " characters; fewer files in one patch is the"
+                             " bytes; fewer files in one patch is the"
                              " lever, because expect_pre_sha256 carries one"
-                             " digest per file")})))))
+                             " digest per file")}))))))
 
-;; @spec MCP-OP-ADMIT-136
-;; `summary-characters` renders the text face; it lives with the renderer,
-;; below, and is declared here because the bound is applied at the one point
-;; every receipt passes.
-(declare summary-characters)
+;; @spec MCP-OP-ADMIT-139
+(defn- oversize-receipt-refusal
+  "A receipt the public budget cannot carry, after every trimmable collection
+  has been trimmed, is a typed refusal naming its size -- never a payload
+  published over the number the gate calls a budget.
+
+  Round four bounded only the trimmable collections and only as JSON. A
+  sixty-file preview under 200-character directory names published a
+  125,104-byte receipt with `:ok true`, because `hashes` carries one entry per
+  path and is not a trimmable vector; the same receipt's text was 185,060
+  characters. The refusal names the bytes, the characters, the budget and the
+  fields that dominate, because the field that dominates is the one a caller
+  can do something about."
+  [receipt]
+  (when-not (public-faces-fit? receipt)
+    (let [bytes (write-refusal/json-bytes receipt)
+          characters (summary-characters receipt)
+          largest (->> (dissoc receipt :ok :operation :mode)
+                       (map (fn [[k v]]
+                              [(name k) (write-refusal/json-bytes {k v})]))
+                       (sort-by second >)
+                       (take 5)
+                       (mapv (fn [[k n]] {:field k :bytes n})))]
+      (merge (empty-receipt (or (:mode receipt) "preview"))
+             {:ok false
+              :operation :admit-patch-refused
+              :error-type :receipt-exceeds-public-budget
+              :error (str "this receipt is " bytes " bytes of JSON and "
+                          characters " characters of text; the public payload"
+                          " budget is " write-refusal/public-byte-budget
+                          " bytes and both faces must fit it, so the receipt"
+                          " cannot be published -- publishing it over the"
+                          " budget, or shortening its text below its own"
+                          " structure, are the two answers this gate refuses")
+              :receipt_bytes bytes
+              :receipt_text_characters characters
+              :public_byte_budget write-refusal/public-byte-budget
+              :largest_fields largest
+              :blocked_receipt_for (:error-type receipt)
+              :source-unchanged (:source-unchanged receipt)
+              :remedy (str "narrow the request until its receipt fits "
+                           write-refusal/public-byte-budget
+                           " bytes; fewer files in one patch is the lever,"
+                           " because the receipt carries one entry per file in"
+                           " files, hashes and the follow-up call's"
+                           " expect_pre_sha256")}))))
 
 ;; @spec MCP-OP-ADMIT-069
 ;; @spec MCP-OP-ADMIT-133
 ;; @spec MCP-OP-ADMIT-135
 ;; @spec MCP-OP-ADMIT-136
+;; @spec MCP-OP-ADMIT-139
 (defn- bound-receipt
   "Fit one public receipt inside the shared MCP payload budget, refusing
   outright when its next_call alone cannot fit, and refusing to publish a
@@ -1976,7 +2055,9 @@
   through, and it sits OUTSIDE every `catch` on that path -- so a kind built
   dynamically, or forwarded out of another namespace's ex-data, cannot be
   laundered into the public surface by the enumeration never having heard of
-  it. The oversize check runs first so its own refusal is checked too.
+  it.   The oversize check runs LAST, on the receipt that would actually be
+  published, so that the envelope and the trimming are both counted before it
+  decides (MCP-OP-ADMIT-139); the guard then runs over its refusal too.
 
   The payload bound is ONE pass against ONE budget with TWO faces: a
   candidate fits only when its JSON fits `public-byte-budget` AND the text
@@ -1987,17 +2068,19 @@
   reset the cumulative omission record; a second budget would be a second
   budget."
   [receipt]
-  (-> (or (oversize-next-call-refusal receipt) receipt)
-      checked-refusal-kind!
-      (write-refusal/bound-public-refusal pr-str)
-      ;; @spec MCP-OP-ADMIT-136
-      (write-refusal/bound-public-payload
-        trimmable-receipt-keys
-        (fn [candidate]
-          (and (<= (write-refusal/json-bytes candidate)
-                   write-refusal/public-byte-budget)
-               (<= (summary-characters candidate)
-                   write-refusal/public-byte-budget))))))
+  (let [bounded (-> receipt
+                    checked-refusal-kind!
+                    (write-refusal/bound-public-refusal pr-str)
+                    ;; @spec MCP-OP-ADMIT-136
+                    (write-refusal/bound-public-payload
+                      trimmable-receipt-keys public-faces-fit?))]
+    ;; @spec MCP-OP-ADMIT-139
+    ;; The oversize decision is taken AFTER trimming, on the receipt that
+    ;; would actually be published, and the guard runs last so the refusal's
+    ;; own kind is checked too.
+    (checked-refusal-kind! (or (oversize-next-call-refusal bounded)
+                              (oversize-receipt-refusal bounded)
+                              bounded))))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry point
