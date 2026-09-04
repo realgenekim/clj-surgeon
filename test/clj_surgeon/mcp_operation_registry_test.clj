@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-operation-registry-test
+(ns ^{:lane :fast} clj-surgeon.mcp-operation-registry-test
   (:require
    [clj-surgeon.mcp-server :as server]
    [clojure.test :refer [deftest is testing]]))

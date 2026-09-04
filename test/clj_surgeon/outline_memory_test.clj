@@ -1,4 +1,4 @@
-(ns clj-surgeon.outline-memory-test
+(ns ^{:lane :fast} clj-surgeon.outline-memory-test
   "Read-path allocation and parse-count witnesses for the outline projection.
 
    These are JVM-only witnesses: they read

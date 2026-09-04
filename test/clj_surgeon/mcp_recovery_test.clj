@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-recovery-test
+(ns ^{:lane :fast} clj-surgeon.mcp-recovery-test
   (:require
    [clj-surgeon.mcp-recovery :as recovery]
    [clojure.java.io :as io]

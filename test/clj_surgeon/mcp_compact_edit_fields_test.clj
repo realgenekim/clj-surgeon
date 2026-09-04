@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-compact-edit-fields-test
+(ns ^{:lane :fast} clj-surgeon.mcp-compact-edit-fields-test
   (:require
    [clj-surgeon.mcp-compact-edit-fields :as compact-edit-fields]
    [clojure.test :refer [deftest is testing]]))

@@ -1,4 +1,4 @@
-(ns clj-surgeon.admit-patch-test
+(ns ^{:lane :battery} clj-surgeon.admit-patch-test
   "Witness tests for the admit_clojure_patch form-identity gate.
 
   Fixtures are literal source pairs and real unified diffs generated from

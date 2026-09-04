@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-hot-verify-test
+(ns ^{:lane :integration} clj-surgeon.mcp-hot-verify-test
   (:require
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clojure.java.io :as io]

@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-extraction-test
+(ns ^{:lane :fast} clj-surgeon.mcp-extraction-test
   (:require
    [clj-surgeon.extract :as extract]
    [clj-surgeon.mcp-extraction :as extraction]

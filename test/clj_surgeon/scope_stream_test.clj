@@ -1,4 +1,4 @@
-(ns clj-surgeon.scope-stream-test
+(ns ^{:lane :fast} clj-surgeon.scope-stream-test
   "Witnesses for the bounded streaming scope reader.
 
    Every ceiling witness has Sol's shape: exactly at the limit succeeds, and one

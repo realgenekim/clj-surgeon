@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-operation-async-test
+(ns ^{:lane :fast} clj-surgeon.mcp-operation-async-test
   (:require
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]

@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-relation-census-test
+(ns ^{:lane :battery} clj-surgeon.mcp-relation-census-test
   "Wire-level witnesses for the relation_census MCP tool.
 
    The census subject is real bytes: `test-fixtures/relation-census/folds.clj`

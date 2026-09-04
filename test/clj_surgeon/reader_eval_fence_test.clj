@@ -1,4 +1,4 @@
-(ns clj-surgeon.reader-eval-fence-test
+(ns ^{:lane :battery} clj-surgeon.reader-eval-fence-test
   "THE FENCE between a reader and a caller-influenced byte.
 
    Opus's round-twenty-one BLOCKING finding. Round twenty closed the

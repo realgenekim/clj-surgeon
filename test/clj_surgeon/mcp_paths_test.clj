@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-paths-test
+(ns ^{:lane :fast} clj-surgeon.mcp-paths-test
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.mcp-paths :as paths]

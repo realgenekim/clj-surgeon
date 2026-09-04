@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-telemetry-test
+(ns ^{:lane :fast} clj-surgeon.mcp-telemetry-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-telemetry :as telemetry]

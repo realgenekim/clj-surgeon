@@ -25,10 +25,16 @@
    Returns {:namespaces [syms]} on success."
   [lanes explicit]
   (if (seq explicit)
-    ;; RED (TEST-ISO-001): an explicitly named namespace is run whether or not
-    ;; the manifest declares a lane for it. The refusal is what this round
-    ;; must build.
-    {:namespaces (vec explicit)}
+    ;; @spec TEST-ISO-001 -- a namespace with no lane declaration is a TYPED
+    ;; REFUSAL naming its subject and its remedy, never a silent skip. A
+    ;; skip is indistinguishable from a green suite with less in it, which is
+    ;; the failure mode `mcp-formatter-test` has been living in unnoticed.
+    (let [undeclared (vec (remove lm/manifest explicit))]
+      (if (seq undeclared)
+        {:refusal :lane-undeclared
+         :namespaces undeclared
+         :message (str/join "\n" (map lm/refusal-message undeclared))}
+        {:namespaces (vec explicit)}))
     (let [unknown (vec (remove (set lm/lanes) lanes))]
       (if (seq unknown)
         {:refusal :unknown-lane
@@ -37,6 +43,28 @@
                           (str/join ", " unknown)
                           (str/join ", " (map name lm/lanes)))}
         {:namespaces (vec (mapcat lm/namespaces-for lanes))}))))
+
+(defn lane-metadata-refusal
+  "@spec TEST-ISO-001 -- after loading, every namespace must CARRY the lane
+   the manifest assigned it. Checked at runtime, not only by a source scan:
+   a scan reads a spelling, `the-ns` reads what the JVM actually loaded, and
+   only the second can catch a file whose ns form the reader took differently
+   than the scan did. Returns nil when every namespace agrees."
+  [namespaces]
+  (let [wrong (vec (keep (fn [n]
+                           (let [want (lm/lane-of n)
+                                 got (:lane (meta (find-ns n)))]
+                             (when (not= want got)
+                               (format "%s declares :lane %s but the manifest assigns %s"
+                                       n (pr-str got) (pr-str want)))))
+                         namespaces))]
+    (when (seq wrong)
+      {:refusal :lane-metadata-mismatch
+       :namespaces wrong
+       :message (str "lane-refused: " (count wrong)
+                     " namespace(s) whose own ns metadata disagrees with "
+                     "clj-surgeon.lane-manifest (TEST-ISO-001):\n  "
+                     (str/join "\n  " wrong))})))
 
 (defn- parse-lanes
   [args]
@@ -61,6 +89,9 @@
         _ (println (format "lanes: %s -- %d namespace(s)"
                            (str/join "+" (map name lanes)) (count namespaces)))
         _ (doseq [n namespaces] (require n))
+        _ (when-let [{:keys [message]} (lane-metadata-refusal namespaces)]
+            (binding [*out* *err*] (println message))
+            (System/exit 96))
         tmp-root root
         tmp-before (tmp-leak/tmp-entries)
         result (apply run-tests namespaces)

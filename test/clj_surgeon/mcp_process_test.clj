@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-process-test
+(ns ^{:lane :battery} clj-surgeon.mcp-process-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-process :as process]

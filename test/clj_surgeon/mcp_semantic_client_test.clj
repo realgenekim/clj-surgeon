@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-semantic-client-test
+(ns ^{:lane :fast} clj-surgeon.mcp-semantic-client-test
   (:require
    [clj-surgeon.mcp-semantic-client :as semantic]
    [clojure.test :refer [deftest is]])

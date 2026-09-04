@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-create-files-test
+(ns ^{:lane :fast} clj-surgeon.mcp-create-files-test
   "Characterization contract for the create_files transaction verb.
 
   create_files creates absent Clojure or EDN files inside the same frozen

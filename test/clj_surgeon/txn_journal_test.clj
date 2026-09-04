@@ -1,4 +1,4 @@
-(ns clj-surgeon.txn-journal-test
+(ns ^{:lane :battery} clj-surgeon.txn-journal-test
   "Witnesses for the disk-journaled transaction kernel.
 
    Every ceiling witness has Sol's shape: the request exactly at the limit

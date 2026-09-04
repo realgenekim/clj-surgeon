@@ -1,4 +1,4 @@
-(ns clj-surgeon.census-pool-test
+(ns ^{:lane :fast} clj-surgeon.census-pool-test
   "Unit witnesses for the census plan-phase pool.
 
    The pool is the one place claypoole is used. What must hold is narrow and

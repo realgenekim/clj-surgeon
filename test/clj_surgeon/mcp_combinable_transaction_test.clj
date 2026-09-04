@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-combinable-transaction-test
+(ns ^{:lane :fast} clj-surgeon.mcp-combinable-transaction-test
   "Characterization contract for the combinable-transaction steering note.
 
   A caller that commits an edits-only transaction and then, seconds later, a

@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-workspace-test
+(ns ^{:lane :fast} clj-surgeon.mcp-workspace-test
   (:require
    [clj-surgeon.mcp-workspace :as workspace]
    [clojure.java.io :as io]

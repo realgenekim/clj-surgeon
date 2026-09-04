@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-prepared-wire-test
+(ns ^{:lane :battery} clj-surgeon.mcp-prepared-wire-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]

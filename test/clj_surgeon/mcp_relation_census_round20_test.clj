@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-relation-census-round20-test
+(ns ^{:lane :fast} clj-surgeon.mcp-relation-census-round20-test
   "Round-twenty PARITY witnesses for the relation-census lane.
 
    A namespace of its own, and the reason is a gate rather than taste: the

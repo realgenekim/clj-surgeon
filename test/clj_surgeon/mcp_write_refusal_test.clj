@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-write-refusal-test
+(ns ^{:lane :fast} clj-surgeon.mcp-write-refusal-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-tool :as mcp-tool]

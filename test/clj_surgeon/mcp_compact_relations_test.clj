@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-compact-relations-test
+(ns ^{:lane :fast} clj-surgeon.mcp-compact-relations-test
   (:require
    [clj-surgeon.core :as core]
    [clj-surgeon.experiments.mcp-candidate-admission :as admission]

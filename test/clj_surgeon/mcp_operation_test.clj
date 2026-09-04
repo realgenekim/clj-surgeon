@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-operation-test
+(ns ^{:lane :fast} clj-surgeon.mcp-operation-test
   (:require
    [cheshire.core :as json]
    [clojure.test :refer [deftest is testing]])

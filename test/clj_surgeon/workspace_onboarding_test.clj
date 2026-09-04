@@ -1,4 +1,4 @@
-(ns clj-surgeon.workspace-onboarding-test
+(ns ^{:lane :fast} clj-surgeon.workspace-onboarding-test
   (:require
    [babashka.fs :as fs]
    [cheshire.core :as json]

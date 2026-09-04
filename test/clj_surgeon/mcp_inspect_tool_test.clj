@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-inspect-tool-test
+(ns ^{:lane :fast} clj-surgeon.mcp-inspect-tool-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-change-buffer :as change-buffer]

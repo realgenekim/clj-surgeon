@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-intent-contract-test
+(ns ^{:lane :fast} clj-surgeon.mcp-intent-contract-test
   (:require
    [clj-surgeon.mcp-intent-contract]
    [clj-surgeon.tmp-leak-support :as tmp-leak]

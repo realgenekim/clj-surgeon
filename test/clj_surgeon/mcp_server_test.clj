@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-server-test
+(ns ^{:lane :integration} clj-surgeon.mcp-server-test
   (:require
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-program-tool :as program-tool]

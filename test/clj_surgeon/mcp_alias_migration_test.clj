@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-alias-migration-test
+(ns ^{:lane :battery} clj-surgeon.mcp-alias-migration-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.alias-migration :as planner]
