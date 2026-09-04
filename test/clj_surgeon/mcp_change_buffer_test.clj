@@ -728,20 +728,25 @@
   ;; shape directly by binding *executable-path* to a directory that is NOT
   ;; one of the five paved ones.
   (testing "an executable absent from every paved directory resolves via PATH"
+    ;; A fictitious name, not "clj-kondo": this seat's own clj-kondo already
+    ;; lives in a paved directory (/usr/local/bin), which would find the
+    ;; SEAT's binary there and mask the PATH-resolution branch under test --
+    ;; exactly the class of ambient-precondition failure this fix exists for.
     (let [path-dir (tmp-leak/track!
                      temp-roots
                      (.toFile (java.nio.file.Files/createTempDirectory
                                 "clj-surgeon-change-buffer-path-"
                                 (make-array java.nio.file.attribute.FileAttribute 0))))
-          fake-clj-kondo (io/file path-dir "clj-kondo")]
-      (spit fake-clj-kondo "#!/bin/sh\nexit 0\n")
-      (.setExecutable fake-clj-kondo true)
+          executable-name "clj-surgeon-fake-tool-9483a4"
+          fake-tool (io/file path-dir executable-name)]
+      (spit fake-tool "#!/bin/sh\nexit 0\n")
+      (.setExecutable fake-tool true)
       (binding [process-env/*executable-path* (.getPath path-dir)]
-        (let [resolved (change-buffer/expand-command ["clj-kondo" "--lint"] [])]
-          (is (= (.getCanonicalPath fake-clj-kondo)
+        (let [resolved (change-buffer/expand-command [executable-name "--lint"] [])]
+          (is (= (.getCanonicalPath fake-tool)
                  (.getCanonicalPath (io/file (first resolved)))))
           (is (.isAbsolute (io/file (first resolved)))
-              (str "resolved clj-kondo must be an absolute path, not a bare name: "
+              (str "resolved executable must be an absolute path, not a bare name: "
                    (first resolved)))
           (is (= ["--lint"] (rest resolved)))))))
 

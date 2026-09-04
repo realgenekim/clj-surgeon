@@ -17,6 +17,7 @@
    [clojure.string :as str]
    [rewrite-clj.zip :as z])
   (:import
+   (java.io File)
    (java.nio.charset StandardCharsets)
    (java.nio.file LinkOption Path Paths)
    (java.security MessageDigest)
@@ -1245,22 +1246,56 @@
        :remedy "Copy next_call and set exactly one keep, replace, delete, or compact edit per site."}
       {:ok true})))
 
+(defn- resolve-in-directory
+  [executable directory]
+  (let [candidate (io/file directory executable)]
+    (when (and (.isFile candidate) (.canExecute candidate))
+      (.getPath candidate))))
+
+;; @spec MCP-OP-VERIFY-011
 (defn expand-command
+  "Expand a project- or process-owned command template and resolve its bare
+  executable name to an absolute path.
+
+  Resolution order: the five paved directories first (host conventions this
+  repo has always shipped), THEN the runtime `PATH` -- so a bare executable
+  that only `setup-clojure`'s tool cache puts on `PATH` (a CI runner) still
+  resolves, not only one the seat happens to keep in /usr/local/bin. When
+  nothing in either search resolves, refuse with a typed error naming the
+  requested executable and the complete list of directories searched, rather
+  than handing a caller a bare name that a later exec turns into a confusing
+  \"No such file or directory\". See docs/observations/2026-09-04-gha-round1.md
+  finding 1."
   [command files]
   (let [expanded (vec (mapcat #(if (= "{files}" %) files [%]) command))
         executable (first expanded)
-        search-paths ["/opt/homebrew/opt/node@20/bin"
-                      "/opt/homebrew/bin"
-                      "/usr/local/bin"
-                      "/usr/bin"
-                      "/bin"]
+        paved-paths ["/opt/homebrew/opt/node@20/bin"
+                     "/opt/homebrew/bin"
+                     "/usr/local/bin"
+                     "/usr/bin"
+                     "/bin"]
+        runtime-path-dirs (let [path-env (or process-env/*executable-path*
+                                             (System/getenv "PATH")
+                                             "")]
+                            (vec (remove str/blank?
+                                        (str/split path-env
+                                                   (re-pattern
+                                                     (java.util.regex.Pattern/quote
+                                                       (str File/pathSeparator)))))))
+        searched-directories (into (vec paved-paths) runtime-path-dirs)
         resolved (when-not (str/includes? executable "/")
-                   (some (fn [directory]
-                           (let [candidate (io/file directory executable)]
-                             (when (and (.isFile candidate) (.canExecute candidate))
-                               (.getPath candidate))))
-                         search-paths))]
-    (assoc expanded 0 (or resolved executable))))
+                   (or (some (partial resolve-in-directory executable) paved-paths)
+                       (some (partial resolve-in-directory executable) runtime-path-dirs)))]
+    (cond
+      (str/includes? executable "/") expanded
+      resolved (assoc expanded 0 resolved)
+      :else
+      (throw (ex-info
+               (str "Unable to resolve executable \"" executable
+                    "\" in any paved directory or on the runtime PATH")
+               {:error-type :executable-unresolved
+                :requested-executable executable
+                :searched-directories searched-directories})))))
 
 (defn- bytes->hex
   [bytes]
