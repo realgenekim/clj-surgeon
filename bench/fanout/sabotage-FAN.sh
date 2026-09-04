@@ -2,12 +2,15 @@
 # sabotage-FAN.sh — prove the FAN scorer can go RED before any cohort trusts it green.
 #
 #   sabotage-FAN.sh <fixtures-dir> <N> [scratch-dir]
-#   sabotage-FAN.sh --selftest-k [N] [seed] [scratch-dir]
-#   sabotage-FAN.sh --selftest-backslash [N] [seed] [scratch-dir]
-#   sabotage-FAN.sh --selftest-listing-failure [N] [seed] [scratch-dir]
-#   sabotage-FAN.sh --selftest-whitespace-path [N] [seed] [scratch-dir]
-#   sabotage-FAN.sh --selftest-incomplete-listing [N] [seed] [scratch-dir]
-#   sabotage-FAN.sh --selftest-pruned-walk [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-<mode> [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-list
+#
+# The self-test MODES ARE NOT LISTED HERE AS A NUMBER.  A hand-maintained count is a
+# claim about a file that changes without it: the round-3 review found the request
+# asking for "all seven self-test modes" against a tree that exposed six.  So
+# `--selftest-list` derives the roster from THIS FILE's own dispatch lines, every
+# self-test run prints that same roster before its first assertion, and the count is
+# computed, never typed.
 #
 # A scorer that has never gone red is a verdict label, not a meter (this program's
 # `verdict-label-was-a-noun` scar).  This harness builds the CORRECT tree (repo-N with
@@ -26,6 +29,23 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# --- the self-test roster, DERIVED from this file's own dispatch ------------------
+# `selftest_modes` greps the very lines that decide which mode runs, so the printed
+# list cannot drift from the modes that exist -- which a typed count already did once.
+selftest_modes () {
+  sed -n 's/^if \[ "\${1:-}" = "\(--selftest-[a-z-]*\)" \];.*/\1/p' "${BASH_SOURCE[0]}" \
+    | grep -v -- '^--selftest-list$'
+}
+print_selftest_roster () {
+  echo "sabotage-FAN: self-test modes ($(selftest_modes | wc -l | tr -d ' ')): $(selftest_modes | tr '\n' ' ')"
+}
+
+if [ "${1:-}" = "--selftest-list" ]; then
+  print_selftest_roster
+  selftest_modes
+  exit 0
+fi
+
 # --- self-test: the --k irregularity knob on gen-fanout.clj -----------------------
 #   sabotage-FAN.sh --selftest-k [N] [seed] [scratch-dir]
 # Witnesses, for each k in {1,2,3,6} at the given N/seed (default 21/7 — the E3-P rung):
@@ -39,6 +59,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 #     2026-09-04-e3-p-cohort.md)
 #   - rescore-FAN.sh passes 6/6 against each k's own canonical-N
 if [ "${1:-}" = "--selftest-k" ]; then
+  print_selftest_roster
   N=${2:-21}; SEED=${3:-7}
   SCRATCH=${4:-/home/forge/tmp/fan-selftest-k}
   rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
@@ -116,6 +137,7 @@ fi
 #   - asserts CHECK 1 reports missing=0 extras=0 (the correct, fixed reading).
 # Pre-fix (git diff --name-only, no -z) this goes RED with missing=2 extras=2.
 if [ "${1:-}" = "--selftest-backslash" ]; then
+  print_selftest_roster
   N=${2:-21}; SEED=${3:-7}
   SCRATCH=${4:-/home/forge/tmp/fan-selftest-backslash}
   rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
@@ -310,6 +332,7 @@ fi
 # migrates it correctly, and asserts CHECK 1 reads it present (missing=0 extras=0)
 # rather than reporting it missing.
 if [ "${1:-}" = "--selftest-whitespace-path" ]; then
+  print_selftest_roster
   N=${2:-21}; SEED=${3:-7}
   SCRATCH=${4:-/tmp/fanout-r2-fx/selftest-whitespace-path}
   rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
@@ -387,8 +410,9 @@ fi
 # line, and no `CHECK 1 file-set: PASS` line -- and the full six-check gate must not
 # report 6/6 with either shim on PATH.
 if [ "${1:-}" = "--selftest-incomplete-listing" ]; then
+  print_selftest_roster
   N=${2:-21}; SEED=${3:-7}
-  SCRATCH=${4:-/tmp/fanout-r3-fx/selftest-incomplete-listing}
+  SCRATCH=${4:-/home/forge/tmp/fanout-r3-fx/selftest-incomplete-listing}
   rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
   IPASS=0; IFAIL=0
   ok()  { IPASS=$((IPASS+1)); echo "SELFTEST-INCOMPLETE-LISTING $1: PASS $2"; }
@@ -509,8 +533,9 @@ fi
 # gate both fail closed under STOCK git, no PATH shim. The directory is restored
 # (chmod 755) on every exit path, including failure, via a trap.
 if [ "${1:-}" = "--selftest-pruned-walk" ]; then
+  print_selftest_roster
   N=${2:-21}; SEED=${3:-7}
-  SCRATCH=${4:-/tmp/fanout-r3-fx/selftest-pruned-walk}
+  SCRATCH=${4:-/home/forge/tmp/fanout-r3-fx/selftest-pruned-walk}
   rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
   PPASS=0; PFAIL=0
   ok()  { PPASS=$((PPASS+1)); echo "SELFTEST-PRUNED-WALK $1: PASS $2"; }
@@ -572,6 +597,393 @@ if [ "${1:-}" = "--selftest-pruned-walk" ]; then
 
   echo "sabotage-FAN --selftest-pruned-walk: $PPASS passed, $PFAIL failed"
   [ $PFAIL -eq 0 ]
+  exit $?
+fi
+
+# --- self-test: a COORDINATED git shim that forges the BASE inventory -------------
+# (Sol round-3 review, finding 2, BLOCKER) ----------------------------------------
+#   sabotage-FAN.sh --selftest-shimmed-baseline [N] [seed] [scratch-dir]
+#
+# Round 3 closed "ls-files lies" by cross-checking git's untracked listing against an
+# independent filesystem walk of src/.  But the OTHER side of that cross-check --
+# "what src/ held at the base commit" -- was itself fetched with `git ls-tree`
+# through the same PATH-resolved binary.  One shim that (a) returns an empty
+# `ls-files` and (b) appends the planted extra to `ls-tree` therefore makes the walk
+# and the baseline agree on a lie, `unreported` empty, and the full gate 6/6 GREEN
+# with a real untracked extra file on disk.
+#
+# This witness plants one untracked extra the manifest does not own and runs four
+# ways.  `bin-bless-extra` is the reviewer's coordinated shim.  `bin-forge-object`
+# is the same shim plus a `cat-file` that returns bytes which are not the requested
+# object -- it exists to prove that the fix's authority is CONTENT ADDRESSING, not
+# the name of a subcommand: a binary asked for object <id> must return bytes whose
+# sha1 IS <id>, and no shim can satisfy that without telling the truth.
+#
+# The two routes the shim can take are both covered:
+#   - PATH-shimmed  : the scorer must never resolve `git` through PATH at all, so
+#                     the shim is not executed and the REAL listing catches the extra
+#   - FAN_GIT-shimmed: the adversary's binary IS the one the scorer runs -- the
+#                     strictly harder case -- and the content-addressed base
+#                     inventory must catch the forged `ls-tree`
+if [ "${1:-}" = "--selftest-shimmed-baseline" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/home/forge/tmp/fanout-r4-fx/selftest-shimmed-baseline}
+  print_selftest_roster
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  BPASS=0; BFAIL=0
+  ok()  { BPASS=$((BPASS+1)); echo "SELFTEST-SHIMMED-BASELINE $1: PASS $2"; }
+  bad() { BFAIL=$((BFAIL+1)); echo "SELFTEST-SHIMMED-BASELINE $1: FAIL $2"; }
+  REALGIT=${FAN_REAL_GIT:-/usr/bin/git}
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  rm -rf "$SCRATCH/repo"; mkdir -p "$SCRATCH/repo"
+  cp -r "$SCRATCH/gen/repo-$N/." "$SCRATCH/repo/"
+  ( cd "$SCRATCH/repo" && "$REALGIT" init -q . \
+      && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" )
+  BASE=$("$REALGIT" -C "$SCRATCH/repo" rev-parse HEAD)
+
+  # the CORRECT migration -- so the only defect present is the untracked extra
+  cp -r "$SCRATCH/gen/canonical-$N/src/." "$SCRATCH/repo/src/"
+  EXTRA='src/acid/fanout/extra.clj'
+  printf '(ns acid.fanout.extra)\n;; untracked, the manifest does not own it\n' \
+    > "$SCRATCH/repo/$EXTRA"
+
+  # --- shim A: ls-files lies EMPTY and ls-tree falsely blesses the extra as base ---
+  mkdir -p "$SCRATCH/bin-bless-extra"
+  cat > "$SCRATCH/bin-bless-extra/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = ls-files ]; then exit 0; fi
+  if [ "\$arg" = ls-tree ]; then "$REALGIT" "\$@"; printf '$EXTRA\0'; exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-bless-extra/git"
+
+  # --- shim B: the same, plus a cat-file that returns bytes that are not the object -
+  mkdir -p "$SCRATCH/bin-forge-object"
+  cat > "$SCRATCH/bin-forge-object/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = ls-files ]; then exit 0; fi
+  if [ "\$arg" = ls-tree ]; then "$REALGIT" "\$@"; printf '$EXTRA\0'; exit 0; fi
+  if [ "\$arg" = cat-file ]; then printf 'forged-object-bytes'; exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-forge-object/git"
+
+  fan () { bb "$HERE/fan_check.clj" "$SCRATCH/repo" "$SCRATCH/gen/manifest-$N.edn" \
+             "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1; }
+
+  # --- control: real git, no shim, must catch the extra -----------------------------
+  OUT=$(fan); RC=$?
+  C1=$(printf '%s\n' "$OUT" | grep '^CHECK 1 ' | head -1)
+  echo "SELFTEST-SHIMMED-BASELINE control: $C1"
+  if [ $RC -ne 0 ] && printf '%s' "$C1" | grep -q 'FAIL' && printf '%s' "$C1" | grep -q 'extras=1'; then
+    ok "control real-git" "CHECK 1 correctly catches the untracked extra -- $C1"
+  else
+    bad "control real-git" "expected CHECK 1 FAIL extras=1, got rc=$RC: $C1"
+  fi
+
+  # --- route 1: the shim is on PATH only (the reviewer's exact attack) ---------------
+  OUT=$(PATH="$SCRATCH/bin-bless-extra:$PATH" fan); RC=$?
+  echo "SELFTEST-SHIMMED-BASELINE path-shimmed: rc=$RC"
+  printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] && ! printf '%s' "$OUT" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "path-shimmed fail-closed" "rc=$RC, no CHECK 1 PASS -- a PATH shim never becomes the scorer's git"
+  else
+    bad "path-shimmed fail-closed" "rc=$RC -- a PATH-resolved git let a coordinated shim bless the extra"
+  fi
+
+  # --- route 2: the adversary's binary IS the scorer's git --------------------------
+  OUT=$(PATH="$SCRATCH/bin-bless-extra:$PATH" FAN_GIT="$SCRATCH/bin-bless-extra/git" fan); RC=$?
+  echo "SELFTEST-SHIMMED-BASELINE fan-git-shimmed: rc=$RC"
+  printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] \
+     && printf '%s' "$OUT" | grep -q 'ERROR base-inventory mismatch' \
+     && ! printf '%s' "$OUT" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "fan-git-shimmed fail-closed" "rc=$RC, named base-inventory mismatch, no false PASS"
+  else
+    bad "fan-git-shimmed fail-closed" "rc=$RC -- want a 'ERROR base-inventory mismatch' line and no PASS line"
+  fi
+
+  # --- route 3: the shim also forges cat-file -> content addressing must refuse ------
+  OUT=$(PATH="$SCRATCH/bin-forge-object:$PATH" FAN_GIT="$SCRATCH/bin-forge-object/git" fan); RC=$?
+  echo "SELFTEST-SHIMMED-BASELINE forged-object: rc=$RC"
+  printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] \
+     && printf '%s' "$OUT" | grep -q 'ERROR base-inventory object' \
+     && ! printf '%s' "$OUT" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "forged-object fail-closed" "rc=$RC, named base-inventory object, no false PASS"
+  else
+    bad "forged-object fail-closed" "rc=$RC -- want a 'ERROR base-inventory object' line and no PASS line"
+  fi
+
+  # --- the same through the full six-check gate, both routes ------------------------
+  RSOUT=$(PATH="$SCRATCH/bin-bless-extra:$PATH" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+    bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1); RSRC=$?
+  echo "SELFTEST-SHIMMED-BASELINE full-gate path-shimmed: rc=$RSRC"
+  printf '%s\n' "$RSOUT" | sed 's/^/    /'
+  if [ $RSRC -ne 0 ] && ! printf '%s' "$RSOUT" | grep -q '6/6 checks passed'; then
+    ok "full-gate path-shimmed" "rescore-FAN did not report 6/6 with the coordinated shim on PATH"
+  else
+    bad "full-gate path-shimmed" "rescore-FAN reported 6/6 (or rc=0) -- the coordinated shim reached a false GREEN"
+  fi
+
+  RSOUT=$(PATH="$SCRATCH/bin-bless-extra:$PATH" FAN_GIT="$SCRATCH/bin-bless-extra/git" \
+    FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+    bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1); RSRC=$?
+  echo "SELFTEST-SHIMMED-BASELINE full-gate fan-git-shimmed: rc=$RSRC"
+  printf '%s\n' "$RSOUT" | sed 's/^/    /'
+  if [ $RSRC -ne 0 ] && ! printf '%s' "$RSOUT" | grep -q '6/6 checks passed'; then
+    ok "full-gate fan-git-shimmed" "rescore-FAN did not report 6/6 with the adversary's binary as its git"
+  else
+    bad "full-gate fan-git-shimmed" "rescore-FAN reported 6/6 (or rc=0) -- the coordinated shim reached a false GREEN"
+  fi
+
+  echo "sabotage-FAN --selftest-shimmed-baseline: $BPASS passed, $BFAIL failed"
+  [ $BFAIL -eq 0 ]
+  exit $?
+fi
+
+# --- self-test: directory ENTRIES the walk cannot classify (Sol round-3 review, ---
+# finding 3, BLOCKER) --------------------------------------------------------------
+#   sabotage-FAN.sh --selftest-symlink-entries [N] [seed] [scratch-dir]
+#
+# The round-3 walk recorded only `.isFile` paths and recursed on `.isDirectory` --
+# both of which FOLLOW symlinks -- and silently ignored everything else.  Git does
+# neither: it inventories a symlink as ONE leaf path (mode 120000) and never looks
+# through it.  So a symlink to an EMPTY directory, a dangling symlink and a FIFO all
+# vanished from the walk entirely, and with a successful-but-empty `ls-files` the
+# complete gate reported 6/6; a symlink to a NONEMPTY directory was worse than
+# missing -- the walk reported the path THROUGH the link, which is a path git can
+# never list.
+#
+# Each sub-case gets its own repo, so each is a single-defect witness:
+#   A linked-empty     symlink -> empty dir      (walk saw nothing at all)
+#   B oddity           FIFO                      (neither isFile nor isDirectory)
+#   C linked-file.clj  symlink -> regular file   (walk followed it and called it a file)
+#   D linked-dangling  symlink -> nowhere        (walk saw nothing at all)
+#   E linked-dir       symlink -> nonempty dir   (walk descended THROUGH the link)
+# The walk must inventory every one of them as exactly one classified entry -- a
+# symlink leaf, or a named error -- never a silent skip and never a path through a
+# link.
+if [ "${1:-}" = "--selftest-symlink-entries" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/home/forge/tmp/fanout-r4-fx/selftest-symlink-entries}
+  print_selftest_roster
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  SPASS=0; SFAIL=0
+  ok()  { SPASS=$((SPASS+1)); echo "SELFTEST-SYMLINK-ENTRIES $1: PASS $2"; }
+  bad() { SFAIL=$((SFAIL+1)); echo "SELFTEST-SYMLINK-ENTRIES $1: FAIL $2"; }
+  REALGIT=${FAN_REAL_GIT:-/usr/bin/git}
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  # the external targets the links point at -- OUTSIDE the repo, so nothing the walk
+  # finds through a link could ever be a path git can list.
+  mkdir -p "$SCRATCH/ext-empty" "$SCRATCH/ext-nonempty"
+  printf '(ns through.link)\n' > "$SCRATCH/ext-nonempty/through-link.clj"
+  printf '(ns ext.file)\n'     > "$SCRATCH/ext-file.clj"
+
+  # a shim whose `ls-files` succeeds and reports NOTHING: the stated threat model, and
+  # the only way to isolate the walk from git's own (correct) untracked listing.
+  mkdir -p "$SCRATCH/bin-empty"
+  cat > "$SCRATCH/bin-empty/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = ls-files ]; then exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-empty/git"
+
+  mk_repo () {   # mk_repo <dir> -> echoes the base sha
+    rm -rf "$1"; mkdir -p "$1"; cp -r "$SCRATCH/gen/repo-$N/." "$1/"
+    ( cd "$1" && "$REALGIT" init -q . \
+        && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil add -A . \
+        && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" ) >/dev/null
+    cp -r "$SCRATCH/gen/canonical-$N/src/." "$1/src/"
+    "$REALGIT" -C "$1" rev-parse HEAD
+  }
+
+  probe () { bb "$HERE/fan_check.clj" --probe-walk "$1" 2>&1; }
+  gate  () { PATH="$SCRATCH/bin-empty:$PATH" FAN_GIT="$SCRATCH/bin-empty/git" \
+               bb "$HERE/fan_check.clj" "$1" "$SCRATCH/gen/manifest-$N.edn" \
+                  "$SCRATCH/gen/canonical-$N" "$2" 2>&1; }
+
+  # want_probe <case> <grep-pattern> <human>
+  want_probe () {
+    if printf '%s\n' "$PROBE" | grep -qF -- "$2"; then
+      ok "$1 probe" "$3"
+    else
+      bad "$1 probe" "want a WALK-PROBE line containing '$2' ($3); got: $(printf '%s' "$PROBE" | tr '\n' '|' | cut -c1-300)"
+    fi
+  }
+  # deny_probe <case> <grep-pattern> <human>
+  deny_probe () {
+    if printf '%s\n' "$PROBE" | grep -qF -- "$2"; then
+      bad "$1 probe-deny" "a WALK-PROBE line still contains '$2' ($3)"
+    else
+      ok "$1 probe-deny" "$3"
+    fi
+  }
+  # want_closed <case> <grep-pattern> <human>
+  want_closed () {
+    if [ "$RC" -ne 0 ] && printf '%s' "$OUT" | grep -q -- "$2" \
+       && ! printf '%s' "$OUT" | grep -q 'CHECK 1 file-set: PASS'; then
+      ok "$1 fail-closed" "rc=$RC, $3"
+    else
+      bad "$1 fail-closed" "rc=$RC -- want nonzero rc, a line matching '$2' ($3), and no CHECK 1 PASS line; got: $(printf '%s' "$OUT" | grep '^CHECK 1' | head -1)"
+    fi
+  }
+
+  # ---- A: symlink to an EMPTY directory --------------------------------------------
+  RA="$SCRATCH/a"; BA=$(mk_repo "$RA"); ln -s "$SCRATCH/ext-empty" "$RA/src/linked-empty"
+  PROBE=$(probe "$RA"); OUT=$(gate "$RA" "$BA"); RC=$?
+  echo "SELFTEST-SYMLINK-ENTRIES A linked-empty: rc=$RC $(printf '%s' "$OUT" | grep '^CHECK 1' | head -1)"
+  want_probe "A linked-empty" "WALK-PROBE symlink src/linked-empty -> dir" "inventoried as one symlink leaf whose target is a directory"
+  deny_probe "A linked-empty" "WALK-PROBE file src/linked-empty" "not recorded as a regular file"
+  want_closed "A linked-empty" 'src/linked-empty' "the gate names src/linked-empty"
+
+  # ---- B: a FIFO (an entry that is neither file, directory nor symlink) -------------
+  RB="$SCRATCH/b"; BB=$(mk_repo "$RB"); mkfifo "$RB/src/oddity"
+  PROBE=$(probe "$RB"); OUT=$(gate "$RB" "$BB"); RC=$?
+  echo "SELFTEST-SYMLINK-ENTRIES B fifo: rc=$RC $(printf '%s' "$OUT" | grep '^CHECK 1' | head -1)"
+  want_probe "B fifo" "WALK-PROBE error :unclassifiable-entry src/oddity" "an entry the walk cannot classify is a named error"
+  want_closed "B fifo" 'unclassifiable-entry' "the gate refuses on the unclassifiable entry"
+
+  # ---- C: symlink to a regular file ------------------------------------------------
+  RC_DIR="$SCRATCH/c"; BC=$(mk_repo "$RC_DIR"); ln -s "$SCRATCH/ext-file.clj" "$RC_DIR/src/linked-file.clj"
+  PROBE=$(probe "$RC_DIR"); OUT=$(gate "$RC_DIR" "$BC"); RC=$?
+  echo "SELFTEST-SYMLINK-ENTRIES C linked-file: rc=$RC $(printf '%s' "$OUT" | grep '^CHECK 1' | head -1)"
+  want_probe "C linked-file" "WALK-PROBE symlink src/linked-file.clj -> file" "inventoried as a symlink leaf, exactly as git lists it"
+  deny_probe "C linked-file" "WALK-PROBE file src/linked-file.clj" "not silently promoted to a regular file by following the link"
+  want_closed "C linked-file" 'src/linked-file.clj' "the gate names src/linked-file.clj"
+
+  # ---- D: a DANGLING symlink -------------------------------------------------------
+  RD="$SCRATCH/d"; BD=$(mk_repo "$RD"); ln -s "$SCRATCH/nowhere-at-all" "$RD/src/linked-dangling"
+  PROBE=$(probe "$RD"); OUT=$(gate "$RD" "$BD"); RC=$?
+  echo "SELFTEST-SYMLINK-ENTRIES D dangling: rc=$RC $(printf '%s' "$OUT" | grep '^CHECK 1' | head -1)"
+  want_probe "D dangling" "WALK-PROBE symlink src/linked-dangling -> dangling" "a dangling link is still one inventoried entry"
+  want_closed "D dangling" 'src/linked-dangling' "the gate names src/linked-dangling"
+
+  # ---- E: symlink to a NONEMPTY directory -- the walk must not descend --------------
+  RE="$SCRATCH/e"; BE=$(mk_repo "$RE"); ln -s "$SCRATCH/ext-nonempty" "$RE/src/linked-dir"
+  PROBE=$(probe "$RE"); OUT=$(gate "$RE" "$BE"); RC=$?
+  echo "SELFTEST-SYMLINK-ENTRIES E linked-dir: rc=$RC $(printf '%s' "$OUT" | grep '^CHECK 1' | head -1)"
+  want_probe "E linked-dir" "WALK-PROBE symlink src/linked-dir -> dir" "inventoried as one symlink leaf"
+  deny_probe "E linked-dir" "src/linked-dir/through-link.clj" "the walk never descends through a link"
+  want_closed "E linked-dir" 'src/linked-dir' "the gate names src/linked-dir"
+  if printf '%s' "$OUT" | grep -q 'src/linked-dir/through-link.clj'; then
+    bad "E linked-dir no-follow" "the gate reported a path THROUGH the link -- a path git can never list"
+  else
+    ok "E linked-dir no-follow" "the gate reported the link itself, not a path through it"
+  fi
+
+  echo "sabotage-FAN --selftest-symlink-entries: $SPASS passed, $SFAIL failed"
+  [ $SFAIL -eq 0 ]
+  exit $?
+fi
+
+# --- self-test: a directory that is READABLE but NOT SEARCHABLE -------------------
+# (Sol round-3 review, finding 4, BLOCKER) ----------------------------------------
+#   sabotage-FAN.sh --selftest-unsearchable-dir [N] [seed] [scratch-dir]
+#
+# The round-3 walk inferred pruning from `dirs-found` vs `dirs-entered`, i.e. from
+# `.listFiles` returning null.  At mode 0400 `.listFiles` returns the NAMES (opendir
+# needs r), but every child stat fails (that needs x), so `.isFile`/`.isDirectory`
+# were both false and each child was dropped with the two counters still equal and
+# `:pruned` empty.  Counting directories is not a completeness proof: every NAME a
+# successful listing returns must become exactly one classified entry or a named
+# error, and a directory that cannot be entered is an error at ANY mode.
+#
+# Modes covered: 0400 (readable, not searchable -- the reviewer's false 6/6), 0200
+# (searchable-ish but not readable), 0000, and a 0400 directory ONE LEVEL UP so the
+# whole subtree below it is unreachable.  Every mode is restored on every exit path.
+if [ "${1:-}" = "--selftest-unsearchable-dir" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/home/forge/tmp/fanout-r4-fx/selftest-unsearchable-dir}
+  print_selftest_roster
+  chmod -R u+rwX "$SCRATCH" 2>/dev/null || true
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  UPASS=0; UFAIL=0
+  ok()  { UPASS=$((UPASS+1)); echo "SELFTEST-UNSEARCHABLE-DIR $1: PASS $2"; }
+  bad() { UFAIL=$((UFAIL+1)); echo "SELFTEST-UNSEARCHABLE-DIR $1: FAIL $2"; }
+  REALGIT=${FAN_REAL_GIT:-/usr/bin/git}
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  mkdir -p "$SCRATCH/bin-empty"
+  cat > "$SCRATCH/bin-empty/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = ls-files ]; then exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-empty/git"
+
+  restore_all () { chmod -R u+rwX "$SCRATCH" 2>/dev/null || true; }
+  trap restore_all EXIT
+
+  mk_repo () {   # mk_repo <dir> -> echoes the base sha; plants src/probe/outer/blocked/
+    rm -rf "$1"; mkdir -p "$1"; cp -r "$SCRATCH/gen/repo-$N/." "$1/"
+    ( cd "$1" && "$REALGIT" init -q . \
+        && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil add -A . \
+        && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" ) >/dev/null
+    cp -r "$SCRATCH/gen/canonical-$N/src/." "$1/src/"
+    mkdir -p "$1/src/probe/outer/blocked"
+    printf '(ns probe.outer.blocked.residue)\n(require (quote acid.fanout.store))\n' \
+      > "$1/src/probe/outer/blocked/residue.clj"
+    "$REALGIT" -C "$1" rev-parse HEAD
+  }
+
+  # case <label> <dir-to-chmod-rel> <mode> <path the error must name>
+  run_case () {
+    local label=$1 reld=$2 mode=$3 want=$4 dir="$5"
+    local base; base=$(mk_repo "$dir")
+    chmod "$mode" "$dir/$reld"
+    local probe out rc
+    probe=$(bb "$HERE/fan_check.clj" --probe-walk "$dir" 2>&1)
+    out=$(PATH="$SCRATCH/bin-empty:$PATH" FAN_GIT="$SCRATCH/bin-empty/git" \
+            bb "$HERE/fan_check.clj" "$dir" "$SCRATCH/gen/manifest-$N.edn" \
+               "$SCRATCH/gen/canonical-$N" "$base" 2>&1); rc=$?
+    chmod 755 "$dir/$reld"
+    echo "SELFTEST-UNSEARCHABLE-DIR $label (mode $mode): rc=$rc $(printf '%s' "$out" | grep '^CHECK 1' | head -1)"
+    if printf '%s\n' "$probe" | grep -qF "WALK-PROBE error :unenterable-dir $want"; then
+      ok "$label probe" "the walk names $want as an unenterable directory at mode $mode"
+    else
+      bad "$label probe" "want 'WALK-PROBE error :unenterable-dir $want'; got: $(printf '%s' "$probe" | grep -E 'WALK-PROBE (error|dirs)' | tr '\n' '|' | cut -c1-300)"
+    fi
+    if [ $rc -ne 0 ] \
+       && printf '%s' "$out" | grep -q 'unenterable-dir' \
+       && printf '%s' "$out" | grep -qF "$want" \
+       && ! printf '%s' "$out" | grep -q 'CHECK 1 file-set: PASS'; then
+      ok "$label fail-closed" "rc=$rc, typed unenterable-dir error naming $want, no false PASS"
+    else
+      bad "$label fail-closed" "rc=$rc -- want a typed 'unenterable-dir' error naming $want and no CHECK 1 PASS line"
+    fi
+    printf 'SELFTEST-UNSEARCHABLE-DIR %s restored-mode=%s path=%s\n' \
+      "$label" "$(stat -c '%a' "$dir/$reld")" "$dir/$reld"
+  }
+
+  run_case "0400-readable-not-searchable" "src/probe/outer/blocked" 400 "src/probe/outer/blocked" "$SCRATCH/r400"
+  run_case "0200-not-readable"            "src/probe/outer/blocked" 200 "src/probe/outer/blocked" "$SCRATCH/r200"
+  run_case "0000-no-access"               "src/probe/outer/blocked" 000 "src/probe/outer/blocked" "$SCRATCH/r000"
+  run_case "0400-one-level-up"            "src/probe"               400 "src/probe"               "$SCRATCH/rup"
+
+  restore_all
+  trap - EXIT
+
+  echo "sabotage-FAN --selftest-unsearchable-dir: $UPASS passed, $UFAIL failed"
+  [ $UFAIL -eq 0 ]
   exit $?
 fi
 
