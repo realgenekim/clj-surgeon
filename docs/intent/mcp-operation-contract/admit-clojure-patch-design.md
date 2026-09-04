@@ -878,6 +878,19 @@ real `git diff` payloads could not be read past their second file section.
 - [x] **MCP-OP-ADMIT-120**: A commit shall require `verification_status` complete regardless of the `verify` argument; `verify: "none"` shall refuse a commit rather than waive one, and the refusal's `next_call` shall propose `verify: "focused"` as the call that could lift it. Verification may still be declined in `preview`, which is where an unverified answer belongs. *(z8)*
 - [x] **MCP-OP-ADMIT-108**: If `expect_pre_sha256` does not name exactly the files the patch touches, then clj-surgeon's refusal shall list the files the patch touches, the files that were named, and the difference in both directions, so the caller can repair the call without a second preview. *(z4)*
 
+Field replay E-GATE-R, 2026-09-04. Fourteen real 21-file patches from the
+frozen native corpus were replayed through the shipped verb. On all fourteen
+`lint_delta` came back `{ran false, error-type clj-kondo-unavailable}` — not
+because clj-kondo was absent, but because its EDN output (11,999 to 21,883
+bytes) was cut at the 12,000-byte visible-bytes limit the receipt budget
+imposes on every process read, so `edn/read-string` failed. Whether a k=1
+patch was verified at all was decided by the digit count of a temp-directory
+suffix; at k=2 and above it failed every time. The receipt said `unverified`
+rather than clean, so nothing was falsely green — but the gate's substantive
+detector had never run on a real input.
+
+- [ ] **MCP-OP-ADMIT-121**: If the analyzer's output exceeds the byte ceiling the gate reads it under, then clj-surgeon shall publish the typed failure `analyzer-output-truncated` naming the ceiling, the observed output size, the detector, and a remedy naming both routes out — raise the ceiling or narrow the patch — and shall reserve `clj-kondo-unavailable` for an analyzer that did not answer at all.
+
 # #Witness Failure Baseline
 
 The witness tests in `test/clj_surgeon/admit_patch_test.clj` were written and

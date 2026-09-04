@@ -3483,3 +3483,69 @@
         (is (empty? (form-identity/refusal-hazards (:hazards result)))
             "nothing in this patch is refusal-class any more"))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; The analyzer read ceiling
+;; ---------------------------------------------------------------------------
+
+(defn- analyzer-heavy-images
+  "One image set whose clj-kondo findings exceed the shipped 12,000-byte read
+  cap, in the shape the field replay met: many small namespaces, each carrying
+  several findings the analyzer names.
+
+  Pre and post are identical, so a runner that reads the output in full must
+  publish a delta of zero over a positive baseline; a runner that cannot read
+  it must say so in a type of its own."
+  [file-count]
+  (mapv (fn [index]
+          (let [tag (format "%02d" index)
+                source (str "(ns fx.ns-" tag "\n"
+                            "  (:require\n"
+                            "   [clojure.string :as str]\n"
+                            "   [clojure.set :as set]))\n"
+                            "\n"
+                            "(defn widen-" tag "\n"
+                            "  [value]\n"
+                            "  (let [unused-alpha 1\n"
+                            "        unused-beta 2\n"
+                            "        unused-gamma 3]\n"
+                            "    value))\n")]
+            {:file (str "src/fx/ns_" tag ".clj")
+             :pre source
+             :post source}))
+        (range file-count)))
+
+;; @spec MCP-OP-ADMIT-121
+(deftest analyzer-output-over-the-read-ceiling-is-typed-not-unavailable
+  (let [root (temp-dir)
+        images (analyzer-heavy-images 24)]
+    (try
+      (testing "a read that hit the ceiling is a failure of its own"
+        (let [result (admit/default-lint-runner
+                       {:project-root (.getPath root)
+                        :admit-analyzer-visible-bytes 2000}
+                       images)]
+          (is (false? (:ran result)))
+          (is (= :analyzer-output-truncated (:error-type result))
+              (str "the analyzer ran and answered; the gate could not read the "
+                   "answer, which is not the same fact as an absent analyzer"))
+          (is (= 2000 (:cap result)) "the refusal names the ceiling it hit")
+          (is (> (long (:observed-bytes result)) 2000)
+              "the refusal names the size that exceeded it")
+          (is (= "clj-kondo" (:detector result)))
+          (is (string? (:remedy result)))
+          (is (str/includes? (str (:remedy result)) "2000"))
+          (is (str/includes? (str (:remedy result)) "narrow")
+              "the remedy names both routes: raise the ceiling or narrow the patch")
+          (is (str/includes? (str (:error result))
+                             (str (:observed-bytes result))))))
+      (testing "an absent analyzer keeps the type that describes it"
+        (let [result (admit/default-lint-runner
+                       {:project-root (.getPath root)
+                        :admit-analyzer-command
+                        ["clj-kondo-absent-by-design" "--lint" "{files}"]}
+                       images)]
+          (is (false? (:ran result)))
+          (is (= :clj-kondo-unavailable (:error-type result))
+              "clj-kondo-unavailable is reserved for an analyzer that did not answer")))
+      (finally (delete-tree! root)))))
