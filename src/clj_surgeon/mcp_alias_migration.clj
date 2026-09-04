@@ -170,6 +170,28 @@
   [pattern]
   (.getPathMatcher (FileSystems/getDefault) (str "glob:" pattern)))
 
+;; @spec MCP-OP-ALIAS-051
+(defn glob-parse-error
+  "The glob parser's own message for one unparseable pattern, or nil.
+
+  `getPathMatcher` is handed CALLER TEXT, and it throws
+  `PatternSyntaxException` on an unclosed group, class or escape — `src/{**` is
+  one keystroke from `src/{clj,cljs}/**`. The throw had no catch anywhere on
+  the path: `execute!` catches `OutOfMemoryError` only and
+  `mcp-operation/invoke!` catches nothing, so it surfaced as
+  `mcp-adapter-failure`, a receipt carrying no `source_unchanged`, no
+  `mutation_attempted`, no remedy and no next_call, whose text is raw JSON that
+  never passes through the refusal summary. Compiling the pattern here, before
+  the walk, turns that class into the typed refusal the rest of this verb
+  publishes — and the parser's own message is the only thing that tells the
+  caller WHERE the spelling broke, so it travels in the refusal."
+  [pattern]
+  (try
+    (glob-matcher pattern)
+    nil
+    (catch Exception error
+      (or (.getMessage error) (.getName (class error))))))
+
 (defn- relative-path
   [^Path root ^Path candidate]
   (str/replace (.toString (.relativize root candidate)) "\\" "/"))
@@ -266,26 +288,15 @@
 ;; @spec MCP-OP-ALIAS-048
 ;; @spec MCP-OP-ALIAS-049
 ;; @spec MCP-OP-ALIAS-050
-(defn scan-scope
-  "Every confined project-relative Clojure source under scope.paths, or a scan
-  refusal.
+(defn- scan-parsed-scope
+  "The bounded walk itself, over globs already proved parseable.
 
-  `Files/walkFileTree` is called with an empty option set, so `FOLLOW_LINKS` is
-  off: a symlinked directory is reported once and never descended. A link cycle
-  inside the root therefore terminates, and a directory link pointing out of the
-  root is never entered — the realpath gate downstream then has nothing to
-  refuse rather than a whole foreign tree. Build output and version-control
-  directories are pruned as whole subtrees rather than filtered afterwards.
-
-  Depth is checked per entry rather than handed to `walkFileTree` as its
-  `maxDepth`, because that parameter truncates silently and this bound must be
-  observable to the caller.
-
-  Every visitor callback returns TERMINATE once the entry ceiling is crossed,
-  read failures included. A ceiling that counts an entry class it will not stop
-  on is not a ceiling for that class."
-  [^Path root {:keys [paths exclude]}]
-  (let [matchers (mapv glob-matcher (mapcat #(scope-glob-patterns root %) paths))
+  Split from `scan-scope` so pattern COMPILATION happens before the first
+  filesystem entry is visited: a `PatternSyntaxException` raised half-way
+  through a walk is a throw with a partial answer behind it, and this verb owes
+  its caller a typed refusal it can read the tree's state from."
+  [^Path root patterns exclude]
+  (let [matchers (mapv glob-matcher patterns)
         excluded (set exclude)
         default-fs (FileSystems/getDefault)
         found (java.util.ArrayList.)
@@ -398,6 +409,51 @@
        :unreadable-count @unreadable-count}
 
       :else {:ok true :files (vec (sort found))})))
+
+;; @spec MCP-OP-ALIAS-004
+;; @spec MCP-OP-ALIAS-037
+;; @spec MCP-OP-ALIAS-048
+;; @spec MCP-OP-ALIAS-049
+;; @spec MCP-OP-ALIAS-050
+(defn scan-scope
+  "Every confined project-relative Clojure source under scope.paths, or a scan
+  refusal.
+
+  `Files/walkFileTree` is called with an empty option set, so `FOLLOW_LINKS` is
+  off: a symlinked directory is reported once and never descended. A link cycle
+  inside the root therefore terminates, and a directory link pointing out of the
+  root is never entered — the realpath gate downstream then has nothing to
+  refuse rather than a whole foreign tree. Build output and version-control
+  directories are pruned as whole subtrees rather than filtered afterwards.
+
+  Depth is checked per entry rather than handed to `walkFileTree` as its
+  `maxDepth`, because that parameter truncates silently and this bound must be
+  observable to the caller.
+
+  Every visitor callback returns TERMINATE once the entry ceiling is crossed,
+  read failures included. A ceiling that counts an entry class it will not stop
+  on is not a ceiling for that class."
+  [^Path root {:keys [paths exclude]}]
+  (let [expanded (mapv (fn [entry]
+                         {:entry entry
+                          :patterns (scope-glob-patterns root entry)})
+                       paths)
+        unparseable (first
+                      (keep (fn [{:keys [entry patterns]}]
+                              (when-let [pattern (first (filter glob-parse-error
+                                                                patterns))]
+                                {:entry entry
+                                 :pattern pattern
+                                 :cause (glob-parse-error pattern)}))
+                            expanded))]
+    (if unparseable
+      ;; @spec MCP-OP-ALIAS-051
+      {:ok false
+       :error-type :alias-migration-scope-path-refused
+       :path (:entry unparseable)
+       :pattern (:pattern unparseable)
+       :cause (:cause unparseable)}
+      (scan-parsed-scope root (mapcat :patterns expanded) exclude))))
 
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-058
@@ -595,6 +651,34 @@
         scanned (count relatives)
         expected (get-in request [:expect :files])]
     (cond
+      ;; @spec MCP-OP-ALIAS-051
+      ;; the glob never compiled, so no file was visited and the tree's state
+      ;; is known exactly: untouched. The parser's own message is the only
+      ;; thing that says WHERE the spelling broke, so it is quoted rather than
+      ;; summarised, and no next_call is computable — a malformed pattern has
+      ;; no mechanical correction, only the one the caller meant.
+      (= :alias-migration-scope-path-refused (:error-type scan))
+      (refusal :alias-migration-scope-path-refused
+               (str "scope.paths entry " (pr-str (:path scan))
+                    " is not a parseable glob"
+                    (when-not (= (:path scan) (:pattern scan))
+                      (str " — it names a directory, and the subtree pattern "
+                           (pr-str (:pattern scan)) " derived from it"))
+                    ": " (:cause scan)
+                    ". No file was visited, so what the scope contains is not"
+                    " known.")
+               {:path (:path scan)
+                :pattern (:pattern scan)
+                :cause (:cause scan)
+                :next_call nil
+                :remedy (str "Correct the glob and resend. The parser reported "
+                             (pr-str (:cause scan))
+                             "; an unclosed {group}, [class] or trailing \\ is "
+                             "the usual cause — src/{clj,cljs}/** is one "
+                             "keystroke from src/{**. No next_call is composed "
+                             "because only the caller knows which paths the "
+                             "pattern was meant to select.")})
+
       ;; @spec MCP-OP-ALIAS-048
       (= :alias-migration-scope-too-deep (:error-type scan))
       (refusal :alias-migration-scope-too-deep
