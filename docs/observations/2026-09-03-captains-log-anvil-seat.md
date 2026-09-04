@@ -1480,3 +1480,4 @@ The round-four verb on social-media-writer: COMPLETE (6 of 6) in 1.86 s over 240
 ## 12:05Z — study-ops r6 (Sol): NO-GO — the declaration and the audit disagreed by construction (a pointer is not a value, but the substring test said it was); round 7 gives both sides one predicate and makes carriage a whole token at the leaf's own position. gate r6: Sol's filter refused (23rd); Opus.
 ## 12:13Z — T3 (round-four receipt): 19 raw, ZERO source reads before the first patch (at call 5), one later read for the test-alias mapping, correct sites — the pre-registered edit-basis line for T3 is MET: the receipt closes discovery entirely; what is left is the write path (4 patches + 5 suite runs) and the repo ceremony. Gates re-running.
 ## 12:13Z — T3 gates verified: JS_EXIT=0 CLJ_EXIT=0  (twelve arms verified green).
+## 12:23Z — T3b: 18 raw (T3 pair 19/18); MEM-003 r6: Sol's filter refused (24th); Opus.
