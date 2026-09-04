@@ -418,7 +418,7 @@
 (defn- ls-tree-render
   [projects dir output-format total]
   (case output-format
-    "edn"   (inspect/json-data (study/format-ls-tree-edn projects dir))
+    "edn"   (inspect/json-data (study/format-ls-tree-edn-entries projects dir))
     "names" (inspect/json-data (study/format-ls-tree-names projects dir))
     ;; The true discovered count travels with the text rendering so its total
     ;; line cannot contradict the receipt's own file_count.

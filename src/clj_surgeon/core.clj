@@ -172,6 +172,7 @@
 ;; :ls-tree — directory-wide namespace map (kernel in clj-surgeon.study)
 ;; ============================================================
 
+;; @spec MCP-OP-SHELL-ARGV-002
 (defn run-ls-tree
   "CLI entrance: one study kernel scan, then print. No second implementation.
 

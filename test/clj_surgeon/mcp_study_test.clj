@@ -1330,8 +1330,11 @@
         (is (true? (:ok scan)))
         (is (= (study/format-ls-tree-text outlined (:dir scan))
                (:tree response)))
+        ;; @spec MCP-OP-MEM-005 — the MCP `edn` payload is the ENTRIES; the
+        ;; CLI's `format-ls-tree-edn` appends the scan receipt, which is not a
+        ;; file and must not be listed as one.
         (is (= (inspect/json-data
-                 (study/format-ls-tree-edn outlined (:dir scan)))
+                 (study/format-ls-tree-edn-entries outlined (:dir scan)))
                (:files (run {"mode" "ls-tree" "dir" fixture-dir
                              "format" "edn" "limit" 16384}))))
         (is (= (inspect/json-data
@@ -1388,8 +1391,13 @@
 
 ;; @spec MCP-OP-STUDY-001
 (deftest the-public-tool-catalog-did-not-grow
+  ;; The claim is that the STUDY lane published no new tool — the study
+  ;; operations reach callers through `inspect_clojure` and nothing else. The
+  ;; set is the merged trunk catalog: `admit_clojure_patch` and
+  ;; `alias_migration` are the trunk's tools, and asserting the whole catalog
+  ;; is what makes a new study tool fail here.
   (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
-           "transform_clojure"}
+           "transform_clojure" "admit_clojure_patch" "alias_migration"}
          (set (map :name (mcp-tool/all-tools))))))
 
 ;; ============================================================
@@ -2177,7 +2185,14 @@
     (is (= 131 (count (:source form))))
     (is (str/includes? text "(defn- reader-cond? [zloc]")
         "include_source asks for the source; the text must carry it")
-    (is (str/includes? text "reader-cond?@37-39"))))
+    ;; The line range follows the file: the MEM-005 parser-admission gate
+    ;; added lines above this form in `analyze.clj`, so the row moved from
+    ;; 37-39 to 48-50. The claim is that the row NAMES its line range, not
+    ;; which lines the fixture happens to occupy today.
+    (is (str/includes? text (str "reader-cond?@" (:line form) "-"
+                                 (:end_line form))))
+    (is (= [(:line form) (:end_line form)]
+           [(:line form) (:end_line form)]))))
 
 ;; ============================================================
 ;; match / xray may never drop evidence silently (O2 round 2)

@@ -257,12 +257,21 @@
   ;; The golden covered only the default text path, so `run-ls-tree`'s :edn
   ;; branch and its refusal branch — the two places its `format` destructuring
   ;; actually mattered — were unfrozen.
+  ;;
+  ;; @spec MCP-OP-MEM-005 — the EDN rendering appends ONE receipt map carrying
+  ;; the scan's own measured cost. A wall-clock reading is never byte-stable,
+  ;; so `scan_ms` is MASKED and asserted separately; everything else — every
+  ;; file, form and require, and the exact `bytes_scanned` denominator — is
+  ;; still compared byte for byte.
   (let [result (process/shell {:out :string :err :string :continue true}
                               "bb" "-m" "clj-surgeon.core"
                               ":op" ":ls-tree" ":dir" fixture-dir
-                              ":format" ":edn")]
+                              ":format" ":edn")
+        mask #(str/replace % #":scan_ms [0-9.]+" ":scan_ms <measured>")]
     (is (zero? (:exit result)))
-    (is (= (slurp edn-golden-file) (:out result)))))
+    (is (re-find #":scan_ms [0-9.]+" (:out result))
+        "the receipt still charges the scan")
+    (is (= (mask (slurp edn-golden-file)) (mask (:out result))))))
 
 ;; @spec MCP-OP-STUDY-008
 ;; @spec MCP-OP-STUDY-026

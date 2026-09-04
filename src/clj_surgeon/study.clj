@@ -15,6 +15,7 @@
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parse-admission :as admission]
    [clojure.edn :as edn]
    [clojure.string :as str]))
 
@@ -87,35 +88,78 @@
   (let [rel (str (fs/relativize root path))]
     (boolean (some skip-dirs (str/split rel #"/")))))
 
+;; @spec MCP-OP-SHELL-ARGV-001
+(defn- existing-directory?
+  "True only when `path` names an existing directory. Never throws: a string
+   that is not a legal path (an embedded NUL, say) is simply not a directory."
+  [path]
+  (try (boolean (fs/directory? (str path)))
+       (catch Exception _e false)))
+
+;; @spec MCP-OP-SHELL-ARGV-001
+(defn- find-start-token
+  "Render a directory as a `find` start-point token. A RELATIVE path beginning
+   with `-` would be parsed by find as an OPTION rather than a path, so prefix
+   it with `./`. Absolute paths are already unambiguous."
+  [path]
+  (let [s (str path)]
+    (if (str/starts-with? s "-") (str "./" s) s)))
+
+;; @spec MCP-OP-SHELL-ARGV-003
+(defn- nul-separated-paths
+  "Split NUL-delimited command output into paths, dropping the empty trailing
+   token. Never trims: leading or trailing whitespace, and NEWLINES, are legal
+   inside a path and are data, not framing. `str/split-lines` turned one real
+   path into two fictional ones and silently dropped the project (Andon pull
+   inb-d27b79, 2026-09-03)."
+  [out]
+  (->> (str/split (str out) #"\u0000")
+       (remove #(= "" %))
+       vec))
+
 ;; @spec MCP-OP-STUDY-014
+;; @spec MCP-OP-SHELL-ARGV-001
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-build-files
   "Find deps.edn, project.clj, bb.edn under dir, skipping hidden/cache dirs.
    Uses system find with -prune for speed (~10x faster than fs/glob on large trees).
 
    Every hit is re-resolved against the canonical scan root: `find` reports a
    symlink by the LINK's own name, so a `deps.edn` symlinked out of the root
-   would otherwise be slurped and read as a build file."
+   would otherwise be slurped and read as a build file.
+
+   `-H` follows a symlink given as the START POINT only. `existing-directory?`
+   uses Files.isDirectory, which follows links, so a symlinked root PASSES the
+   entrance gate; find's `-P` default would then refuse to descend it and
+   discovery would return nothing for a root the gate accepted. `-H` makes the
+   gate and the executor answer the same question, and it does NOT follow links
+   found inside the tree, so MCP-OP-STUDY-014's confinement and
+   MCP-OP-STUDY-035's named `:paths` skip are both unchanged.
+
+   Output is `-print0`: a directory name may contain a newline, and that is
+   data, not a separator."
   [root dir]
-  (try
-    (let [;; argv, never `sh -c`: a workspace-confined directory name must not
-          ;; be able to reach a shell from the MCP read entrance.
-          prune-args (concat ["("]
-                             (drop 1 (mapcat #(vector "-o" "-name" %) skip-dirs))
-                             [")" "-prune" "-o"
-                              "(" "-name" "deps.edn"
-                              "-o" "-name" "project.clj"
-                              "-o" "-name" "bb.edn" ")" "-print"])
-          result (apply babashka.process/shell
-                        {:out :string :err :string :continue true}
-                        "find" (str dir) prune-args)]
-      (if (zero? (:exit result))
-        (->> (str/split-lines (str/trim (:out result)))
-             (remove str/blank?)
-             (filter #(some? (mcp-paths/real-path-within root %)))
-             sort
-             vec)
-        []))
-    (catch Exception _e [])))
+  (if-not (existing-directory? dir)
+    []
+    (try
+      (let [;; argv, never `sh -c`: a workspace-confined directory name must not
+            ;; be able to reach a shell from the MCP read entrance.
+            prune-args (concat ["("]
+                               (drop 1 (mapcat #(vector "-o" "-name" %) skip-dirs))
+                               [")" "-prune" "-o"
+                                "(" "-name" "deps.edn"
+                                "-o" "-name" "project.clj"
+                                "-o" "-name" "bb.edn" ")" "-print0"])
+            result (apply babashka.process/shell
+                          {:out :string :err :string :continue true}
+                          "find" "-H" (find-start-token dir) prune-args)]
+        (if (zero? (:exit result))
+          (->> (nul-separated-paths (:out result))
+               (filter #(some? (mcp-paths/real-path-within root %)))
+               sort
+               vec)
+          []))
+      (catch Exception _e []))))
 
 (defn source-paths-from-config
   "Pure: given a build filename and its parsed content, return source paths.
@@ -195,10 +239,13 @@
                                [")" "-prune" "-o"
                                 "(" "-name" "*.clj"
                                 "-o" "-name" "*.cljs"
-                                "-o" "-name" "*.cljc" ")" "-print"])
+                                "-o" "-name" "*.cljc" ")" "-print0"])
+            ;; -P (find's default) on purpose: MCP-OP-STUDY-035 names a
+            ;; `:paths` entry that IS a symlink as a typed skip rather than
+            ;; descending it, and that skip is decided before this walk runs.
             result (apply babashka.process/shell
                           {:out :string :err :string :continue true}
-                          "find" (str dir) prune-args)]
+                          "find" (find-start-token dir) prune-args)]
         (when (zero? (:exit result))
           (into []
                 (comp (remove str/blank?)
@@ -208,7 +255,7 @@
                                                      root path)]
                                 [path (str canonical)])))
                       (take limit))
-                (str/split-lines (str/trim (:out result))))))
+                (nul-separated-paths (:out result)))))
       (catch Exception _e nil))))
 
 ;; @spec MCP-OP-STUDY-021
@@ -445,7 +492,7 @@
             args (if rg?
                    ;; ripgrep: fast, respects .gitignore automatically
                    ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
-                   ["rg" "-li"
+                   ["rg" "-li" "--null"
                     "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
                     "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
                     "--" pattern (str dir)]
@@ -453,7 +500,7 @@
                    (let [exclude-args (mapcat #(vector "--exclude-dir" %)
                                               [".git" ".cpcache" ".gitlibs" "target"
                                                "node_modules" ".clj-kondo" ".lsp" ".shadow-cljs"])]
-                     (concat ["grep" "-rliE"
+                     (concat ["grep" "-rliEZ"
                               "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
                               "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
                              exclude-args
@@ -462,7 +509,9 @@
                           {:out :string :err :string :continue true}
                           args)]
         (if (zero? (:exit result))
-          (set (str/split-lines (str/trim (:out result))))
+          ;; @spec MCP-OP-SHELL-ARGV-003 — NUL-delimited: a matching path may
+          ;; contain a newline, and line-splitting invented two paths from one.
+          (set (nul-separated-paths (:out result)))
           #{}))
       (catch Exception _e #{}))))
 
@@ -656,13 +705,63 @@
          (remove #(empty? (:files %)))
          vec)))
 
+;; @spec MCP-OP-MEM-005
 (defn- safe-outline
-  "Run outline on a file, returning error map on parse errors."
+  "Run outline on a file, returning error map on parse errors.
+
+   A parser-admission refusal (MCP-OP-MEM-005) is kept TYPED rather than
+   flattened to a message: the entry carries `:refusal`, `:reason`, `:limit`
+   and `:observed` so the scan's receipt can name and count it. It stays a
+   per-file skip — before this, a file deep enough to exhaust the reader's
+   stack threw a StackOverflowError, which is an `Error` and not an
+   `Exception`, and killed the whole scan."
   [file]
   (try
     (outline/outline file)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+                 :file file
+                 :error (ex-message e))
+          {:file file :error (str (ex-message e))})))
+    (catch StackOverflowError _
+      ;; @spec MCP-OP-MEM-005
+      ;; The estimator is an ESTIMATE, and this catch is what makes the
+      ;; scan-kill class closed WITHOUT depending on it being complete. An
+      ;; Error is not an Exception, so before this one overflowing file killed
+      ;; the whole scan and no file's outline came back at all.
+      (let [r (admission/stack-overflow-refusal file)]
+        (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
+               :file file
+               :error (str "parser admission refused "
+                           (admission/public-ceiling-name (:reason r))
+                           ": " file))))
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
+
+;; @spec MCP-OP-MEM-005
+(defn- admission-refusals
+  "Every parser-admission refusal in a scan, as receipt rows in path order."
+  [projects dir]
+  (vec
+    (for [{:keys [outlines]} projects
+          [f result] outlines
+          :when (= :parser_admission_refused (:refusal result))]
+      {:file (str (fs/relativize (fs/path dir) (fs/path f)))
+       :reason (:reason result)
+       :limit (:limit result)
+       :observed (:observed result)
+       :remedy (:remedy result)})))
+
+;; @spec MCP-OP-MEM-005
+(defn- scan-resources
+  "The scan's own cost, carried as metadata on the projects vector
+   `outline-take` returned. Zeroed when a caller assembled the projects some
+   other way."
+  [projects]
+  (or (::scan-resources (meta projects))
+      (admission/meter-resources nil)))
 
 ;; @spec MCP-OP-STUDY-021
 (defn total-file-count
@@ -707,24 +806,37 @@
    claypoole pool (`clj-surgeon.parallel/bounded-map`)."
   ([projects n cache] (outline-take projects n cache map))
   ([projects n cache map-fn]
-   (let [wanted (vec (take n (files-in-scan-order projects)))
+   (let [meter (admission/new-meter)
+         wanted (vec (take n (files-in-scan-order projects)))
          missing (->> (map second wanted)
                       distinct
                       (remove #(contains? @cache %))
                       vec)]
+     ;; @spec MCP-OP-MEM-005 — charge the admission scan against THIS scan
+     ;; only. The meter is made here and closed over lexically, then rebound
+     ;; inside each worker: two concurrent scans each charge their own, and
+     ;; the count does not depend on binding conveyance surviving a change of
+     ;; executor (`map-fn` may be a claypoole pool).
      (when (seq missing)
-       (swap! cache into (map-fn (fn [file] [file (safe-outline file)]) missing)))
+       (swap! cache into
+              (map-fn (fn [file]
+                        (binding [admission/*scan-meter* meter]
+                          [file (safe-outline file)]))
+                      missing)))
      (let [outlines @cache
            by-project (group-by first wanted)]
        ;; Projects with no outlines are KEPT, carrying their `:files`. A
        ;; project the receipt's byte budget did not reach is still a project
        ;; the scan found: dropping it here made it vanish from the body while
        ;; `project_count` still counted it.
-       (->> (map-indexed vector projects)
-            (mapv (fn [[index project]]
-                    (assoc project :outlines
-                           (mapv (fn [[_ file]] [file (get outlines file)])
-                                 (get by-project index []))))))))))
+       (with-meta
+         (->> (map-indexed vector projects)
+              (mapv (fn [[index project]]
+                      (assoc project :outlines
+                             (mapv (fn [[_ file]] [file (get outlines file)])
+                                   (get by-project index []))))))
+         ;; @spec MCP-OP-MEM-005
+         {::scan-resources (admission/meter-resources meter)})))))
 
 ;; @spec MCP-OP-STUDY-015
 (defn outline-all
@@ -816,11 +928,39 @@
        (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
        (.append sb (format "── total: %d files; %d shown, %d omitted\n"
                            total-files shown-files (- total-files shown-files))))
+     ;; @spec MCP-OP-MEM-005
+     ;; A refused file is a named, counted skip — never a silent one and never
+     ;; a dead scan. Nothing is appended when nothing was refused, so an
+     ;; ordinary scan's output is byte-identical to before this control
+     ;; existed, and the scan's own cost is charged INSIDE the refusal block
+     ;; for the same reason; the EDN receipt carries it unconditionally.
+     (let [refused (admission-refusals projects dir)]
+       (when (seq refused)
+         (.append sb (format "── parser_admission_refused: %d file(s)\n"
+                             (count refused)))
+         (doseq [{:keys [file reason limit observed]} refused]
+           ;; A stack-overflow skip measured nothing, so it names no limit.
+           (.append sb (if (and limit observed)
+                         (format "   %s  %s limit %d, observed %d\n"
+                                 file
+                                 (admission/public-ceiling-name reason)
+                                 limit observed)
+                         (format "   %s  %s\n"
+                                 file
+                                 (admission/public-ceiling-name reason)))))
+         (let [{:keys [scan_ms bytes_scanned]} (scan-resources projects)]
+           (.append sb (format "── resources: scan_ms %s, bytes_scanned %s\n"
+                               scan_ms bytes_scanned)))))
      (str sb))))
 
-(defn format-ls-tree-edn
-  "Pure: format ls-tree results as EDN vector.
-   Expects projects with :outlines already computed."
+(defn format-ls-tree-edn-entries
+  "Pure: one entry per outlined file and nothing else.
+
+   The MCP `ls-tree` payload is a FILE LIST bounded by a byte budget, so it
+   takes the entries alone: a trailing receipt map inside the payload would be
+   read as another file, and `scan_ms` is a measured wall-clock reading whose
+   width varies run to run, which the entrance's determinism witnesses forbid
+   in a bounded payload. The MCP receipt carries its own resource accounting."
   [projects dir]
   (vec
     (for [{:keys [outlines]} projects
@@ -829,6 +969,25 @@
       (-> result
           (assoc :file rel-path)
           (dissoc :forward-refs)))))
+
+;; @spec MCP-OP-MEM-005
+(defn format-ls-tree-edn
+  "Pure: format ls-tree results as the CLI's EDN vector.
+
+   ONE trailing receipt map is always appended. It carries `:resources`
+   unconditionally — the scan's own cost with its `bytes_scanned` denominator,
+   because a scan regression appears on ORDINARY scans and a meter wired to
+   the rare refusal branch is one nobody ever sees move — and it names and
+   counts `:parser_admission_refused` only when something actually was
+   refused. The human TEXT rendering keeps the older, quieter contract."
+  [projects dir]
+  (let [entries (format-ls-tree-edn-entries projects dir)
+        refused (admission-refusals projects dir)
+        receipt (cond-> {:resources (scan-resources projects)}
+                  (seq refused)
+                  (assoc :parser_admission_refused
+                         {:count (count refused) :files refused}))]
+    (conj entries {:receipt receipt})))
 
 ;; @spec MCP-OP-STUDY-011
 (defn format-ls-tree-names

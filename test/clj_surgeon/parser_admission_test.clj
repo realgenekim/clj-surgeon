@@ -577,11 +577,11 @@
 (deftest ls-tree-completes-and-counts-a-refused-file
   (testing "one adversarial file is a named, counted skip, not a dead scan"
     (let [root (scratch-tree!)
-          projects ((requiring-resolve 'clj-surgeon.core/outline-all-files)
-                    ((requiring-resolve 'clj-surgeon.core/discover-projects) root))
-          text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+          projects ((requiring-resolve 'clj-surgeon.study/outline-all)
+                    (:projects ((requiring-resolve 'clj-surgeon.study/ls-tree) {:dir root})))
+          text ((requiring-resolve 'clj-surgeon.study/format-ls-tree-text)
                 projects root)
-          edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+          edn ((requiring-resolve 'clj-surgeon.study/format-ls-tree-edn)
                projects root)
           receipt (:receipt (last edn))
           refused (:parser_admission_refused receipt)]
@@ -632,11 +632,11 @@
                         (if (str/includes? (str f) "overflow.clj")
                           (overflow-the-readers-stack! 0)
                           (real f)))]
-                     ((requiring-resolve 'clj-surgeon.core/outline-all-files)
-                      ((requiring-resolve 'clj-surgeon.core/discover-projects) root)))
-          text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+                     ((requiring-resolve 'clj-surgeon.study/outline-all)
+                      (:projects ((requiring-resolve 'clj-surgeon.study/ls-tree) {:dir root}))))
+          text ((requiring-resolve 'clj-surgeon.study/format-ls-tree-text)
                 projects root)
-          edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+          edn ((requiring-resolve 'clj-surgeon.study/format-ls-tree-edn)
                projects root)
           refused (:parser_admission_refused (:receipt (last edn)))]
       (is (str/includes? text "hello")
@@ -657,11 +657,11 @@
     ;; only in bench/. The first draft of `scan-shape` was 638x slower and every
     ;; test passed, which is exactly the regression a receipt figure catches.
     (let [root (scratch-tree!)
-          projects ((requiring-resolve 'clj-surgeon.core/outline-all-files)
-                    ((requiring-resolve 'clj-surgeon.core/discover-projects) root))
-          edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+          projects ((requiring-resolve 'clj-surgeon.study/outline-all)
+                    (:projects ((requiring-resolve 'clj-surgeon.study/ls-tree) {:dir root})))
+          edn ((requiring-resolve 'clj-surgeon.study/format-ls-tree-edn)
                projects root)
-          text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+          text ((requiring-resolve 'clj-surgeon.study/format-ls-tree-text)
                 projects root)
           {:keys [scan_ms bytes_scanned]} (get-in (last edn) [:receipt :resources])]
       (is (number? scan_ms) "the EDN receipt carries no :resources block")
@@ -698,10 +698,11 @@
           small (tree! 2)
           big (tree! 40)
           scan (fn [root]
-                 (let [projects ((requiring-resolve 'clj-surgeon.core/outline-all-files)
-                                 ((requiring-resolve 'clj-surgeon.core/discover-projects)
-                                  root))
-                       edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+                 (let [projects ((requiring-resolve 'clj-surgeon.study/outline-all)
+                                 (:projects
+                                  ((requiring-resolve 'clj-surgeon.study/ls-tree)
+                                   {:dir root})))
+                       edn ((requiring-resolve 'clj-surgeon.study/format-ls-tree-edn)
                             projects root)]
                    (get-in (last edn) [:receipt :resources])))
           a (future (scan small))
@@ -725,12 +726,13 @@
       (.mkdirs src)
       (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
       (spit (io/file src "ok.clj") "(ns fixture.ok)\n(defn hello [x] (inc x))\n")
-      (let [projects ((requiring-resolve 'clj-surgeon.core/outline-all-files)
-                      ((requiring-resolve 'clj-surgeon.core/discover-projects)
-                       (.getPath root)))
-            edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+      (let [projects ((requiring-resolve 'clj-surgeon.study/outline-all)
+                      (:projects
+                       ((requiring-resolve 'clj-surgeon.study/ls-tree)
+                        {:dir (.getPath root)})))
+            edn ((requiring-resolve 'clj-surgeon.study/format-ls-tree-edn)
                  projects (.getPath root))
-            text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+            text ((requiring-resolve 'clj-surgeon.study/format-ls-tree-text)
                   projects (.getPath root))]
         ;; The text contract is unchanged: nothing about a refusal, and no
         ;; resources line, so a human reading an ordinary scan sees exactly what

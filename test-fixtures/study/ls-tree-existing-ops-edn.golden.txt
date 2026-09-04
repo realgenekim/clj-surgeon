@@ -249,4 +249,5 @@
   :requires
   ["[clojure.string :as str]"
    "[myapp.db.queries :as queries]"
-   "[myapp.lib.jsutils :as jsu]"]}]
+   "[myapp.lib.jsutils :as jsu]"]}
+ {:receipt {:resources {:scan_ms 25.702, :bytes_scanned 6783}}}]

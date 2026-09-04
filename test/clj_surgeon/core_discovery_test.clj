@@ -1,7 +1,8 @@
 (ns clj-surgeon.core-discovery-test
   "Shell-safety and NUL-delimited witnesses for project discovery.
 
-   Andon pull, 2026-09-03. `clj-surgeon.core/find-build-files` interpolated the
+   Andon pull, 2026-09-03. `find-build-files` (then in `clj-surgeon.core`, now the
+   `clj-surgeon.study` kernel) interpolated the
    caller-supplied `:dir` (equivalently `workspace_root` on any entrance that
    reaches project discovery) into a command STRING and ran it through
    `sh -c`. Any `:dir` carrying `;`, `$(...)`, backticks, or `&&` executed
@@ -17,14 +18,29 @@
    [babashka.fs :as fs]
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clj-surgeon.study]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [rewrite-clj.node :as rn]
    [rewrite-clj.parser :as rp]))
 
-(def ^:private find-build-files
-  "Private discovery helper under test; the reviewer's direct reproduction."
-  #'clj-surgeon.core/find-build-files)
+(defn- find-build-files
+  "Private discovery helper under test; the reviewer's direct reproduction.
+
+   The kernel moved from `clj-surgeon.core` to `clj-surgeon.study` when the
+   `ls-tree` op gained an MCP entrance (one kernel, two entrances). The witness
+   follows the kernel rather than the namespace it used to live in. `study`'s
+   arity is `[root dir]` because every hit is re-resolved against the canonical
+   scan ROOT; the reviewer's reproduction scans a root and passes it as both.
+   The root is canonicalized to a `Path` exactly as the production entrance
+   does — the confinement compare is `Path.startsWith(Path)`, and a raw string
+   root silently confines nothing."
+  [dir]
+  (#'clj-surgeon.study/find-build-files
+   (try (.toRealPath (java.nio.file.Paths/get (str dir) (make-array String 0))
+                     (make-array java.nio.file.LinkOption 0))
+        (catch Exception _e (fs/path (str dir))))
+   dir))
 
 (defn- fresh-sandbox
   "Create and return a unique sandbox directory for one witness.
