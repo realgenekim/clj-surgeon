@@ -2949,3 +2949,80 @@
               (is (= (ft/sha256-hex slice) (:sha256 l))
                   (str "leg " (:id l) " L" (:from l) "-L" (:to l))))))
         (finally (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-EIGHT REVIEW, finding 6 (BLOCKING): text is not a superset of the
+;; DELIVERED structured face for accepted CUSTOM conventions. Every delivered
+;; leg carried an internal `elide` leaf whose value ("menu", "js-function",
+;; "tests") had no spelling anywhere in the text; four of 58 live receipts
+;; failed the leaf check.
+;;
+;; The named SMW case passed only because its conventional words occur
+;; coincidentally elsewhere in the receipt, which is exactly why the check has
+;; to be GENERATIVE over random leg names: a property witnessed on one case
+;; whose words collide by luck is not witnessed at all.
+;;
+;; This walk is deliberately INDEPENDENT of `ft/leaf-paths` -- the defect was
+;; that `leaf-paths` treats a keyword as a non-leaf while the JSON wire renders
+;; it as a string, so a witness built on `leaf-paths` is blind to its own
+;; subject.
+;; ---------------------------------------------------------------------------
+
+(defn- wire-leaves
+  "Every leaf of a structured receipt AS THE CLIENT RECEIVES IT: keywords
+  included, because JSON renders `:menu` as `\"menu\"`."
+  [node path]
+  (cond
+    (map? node) (mapcat (fn [[k v]] (wire-leaves v (conj path (name k)))) node)
+    (sequential? node) (mapcat (fn [i v] (wire-leaves v (conj path (str i))))
+                               (range) node)
+    (keyword? node) [[path (subs (str node) 1)]]
+    (or (string? node) (number? node) (boolean? node)) [[path node]]
+    :else []))
+
+(defn- random-conventions
+  "The named case's leg KINDS and globs under randomly spelled names, so no
+  value in the receipt can be spelled in the text by coincidence."
+  [^java.util.Random rng]
+  (let [token (fn [] (apply str "zq"
+                            (repeatedly 8 #(char (+ (int \a) (.nextInt rng 26))))))]
+    (assoc smw-conventions
+           :repo-label (token)
+           :legs (mapv #(assoc % :id (token)) (:legs smw-conventions)))))
+
+(deftest text-is-a-superset-of-structured-for-any-custom-convention
+  (testing "over randomly named custom conventions, every wire leaf is in the text"
+    (doseq [seed (range 12)]
+      (let [rng (java.util.Random. seed)
+            conventions (random-conventions rng)
+            {:keys [text structured]}
+            (call! {:subject (:subject dequote-seeds)
+                    :also (:also dequote-seeds)
+                    :config conventions
+                    :budget_bytes 32768
+                    :scope {:workspace_root fixture-root}})
+            leaves (wire-leaves (dissoc structured :elapsed_ms) [])
+            missing (remove (fn [[_ v]] (str/includes? text (str v))) leaves)]
+        (is (< 100 (count leaves))
+            (str "seed " seed ": the receipt is too thin to be a witness"))
+        (is (empty? missing)
+            (str "seed " seed ": " (count missing) " of " (count leaves)
+                 " structured leaves are not spelled in the text: "
+                 (str/join " · " (map (fn [[p v]] (str (str/join "." p)
+                                                       "=" (pr-str v)))
+                                      (take 6 missing)))))))))
+
+(deftest the-delivered-face-carries-no-internal-routing-keys
+  (testing "`elide` is elision plumbing and is not part of either face"
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 32768})]
+      (doseq [l (:legs structured)]
+        (is (nil? (:elide l))
+            (str "leg " (:id l) " publishes the internal elide class "
+                 (pr-str (:elide l)))))
+      (is (not (str/includes? (json/generate-string structured) "\"elide\""))
+          "the internal elision class reached the wire")))
+
+  (testing "and `leaf-paths` sees a keyword, because the wire does"
+    (is (= [[["k"] "menu"]] (ft/leaf-paths {:k :menu} []))
+        "a keyword leaf is invisible to leaf-paths, so ensure-superset cannot
+         backstop it -- the exact hole finding 6 walked through")))
