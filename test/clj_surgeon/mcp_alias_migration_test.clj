@@ -5143,6 +5143,82 @@
           "nil's rendering changed shape")
       (is (= "[nil 1]" (mcp-tool/bounded-pr-str [nil 1] ceiling))
           "a nil element inside a vector is dropped rather than rendered"))))
+;; @spec MCP-OP-ALIAS-059
+;; Round-fifteen review finding 1: an allowlist BY TYPE admits every SUBTYPE.
+;; `print-safe-leaf?` admitted everything satisfying `number?` — that is
+;; `(instance? Number …)` — and `print-method`'s own `Number` implementation is
+;; `print-simple`, which writes `(str o)`. `java.lang.Number` is not final, so a
+;; proxy or an anonymous subclass carries an arbitrary `toString` straight
+;; through the leaf branch the renderer treats as safe: a throwing one escapes
+;; `bounded-pr-str` and a looping one hangs it, exactly the two failures the
+;; round-fourteen fix closed for every OTHER class.
+(defn- throwing-number
+  "A `java.lang.Number` whose `toString` throws — `number?` is true of it."
+  []
+  (proxy [Number] []
+    (toString [] (throw (ex-info "number toString exploded" {})))
+    (intValue [] 0)
+    (longValue [] 0)
+    (floatValue [] (float 0.0))
+    (doubleValue [] 0.0)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- looping-number
+  "A `java.lang.Number` whose `toString` never returns."
+  []
+  (proxy [Number] []
+    (toString [] (loop [] (recur)))
+    (intValue [] 0)
+    (longValue [] 0)
+    (floatValue [] (float 0.0))
+    (doubleValue [] 0.0)))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-fact-renderer-admits-only-the-exact-numeric-classes-it-prints
+  (let [ceiling mcp-tool/max-refusal-fact-characters]
+    (testing "a Number whose toString throws does not escape the renderer"
+      (let [hostile (throwing-number)]
+        (is (number? hostile)
+            "the witness's own subject is not a Number, so it proves nothing")
+        (let [result (try (mcp-tool/bounded-pr-str hostile ceiling)
+                          (catch Throwable t
+                            (str "<threw " (.getSimpleName (class t)) ">")))]
+          (is (not (str/starts-with? result "<threw"))
+              (str "bounded-pr-str propagated a Number's own toString "
+                   "exception: " result))
+          (is (str/includes? result "#object[")
+              (str "a Number the renderer cannot print safely rendered no "
+                   "identity marker at all: " result)))))
+    (testing "a Number whose toString never returns does not hang the renderer"
+      ;; the deref timeout guards the WITNESS; the renderer's own guard is
+      ;; asserted by the value it returns inside it
+      (let [hostile (looping-number)
+            work (future (mcp-tool/bounded-pr-str hostile ceiling))
+            result (deref work 30000 ::timed-out)]
+        (is (not= ::timed-out result)
+            "bounded-pr-str hung inside a Number's toString that never returns")
+        (when-not (= ::timed-out result)
+          (is (str/includes? (str result) "#object[")
+              (str "a hostile Number rendered no identity marker: " result)))))
+    (testing "a lazy sequence whose realisation never returns is bounded too"
+      ;; the character ceiling cannot fire on a seq that never yields its
+      ;; first element, so the renderer needs a TIME bound as well as a
+      ;; character bound
+      (let [hostile (lazy-seq (loop [] (recur)))
+            work (future (mcp-tool/bounded-pr-str hostile ceiling))
+            result (deref work 30000 ::timed-out)]
+        (is (not= ::timed-out result)
+            (str "bounded-pr-str hung realising a lazy sequence whose body "
+                 "never returns"))))
+    (testing "every numeric class the program really emits renders as before"
+      (doseq [value [(long 7) (int 7) (short 7) (byte 7)
+                     (double 7.5) (float 7.5)
+                     (bigint 7) (biginteger 7) (bigdec "7.50") (/ 22 7)
+                     "text" :kw 'sym true false nil]]
+        (is (= (pr-str value) (mcp-tool/bounded-pr-str value ceiling))
+            (str "the rendering of " (pr-str value) " ("
+                 (if (nil? value) "nil" (.getName (class value)))
+                 ") changed shape"))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-enumeration-reaches-the-routers-entrance-slice-and-every-spelling
