@@ -2015,9 +2015,14 @@
    O2 round 4 (§5): the fit measures the FINALIZED envelope — the bytes the
    publisher publishes — so a result with no clock is not one it can measure.
    `public-bytes` measures at the same clock, so a witness compares like with
-   like."
+   like.
+
+   O2 round 6 (§4): the envelope is what the FINALIZER recorded adding, so a
+   witness that wants a finalized result stamps one rather than spelling one.
+   `(assoc result :elapsed_ms 0.0)` produced a map that LOOKED finalized, and
+   that confusion between spelling and construction is MCP-OP-STUDY-049."
   [result]
-  (assoc result :elapsed_ms 0.0))
+  (mcp-operation/stamp-envelope result {:elapsed_ms 0.0}))
 
 (defn- public-bytes
   "The complete public pair as a client is handed it. Text AND receipt are
@@ -3407,7 +3412,7 @@
   "One result as a client is handed it: fitted, clocked, and rendered."
   [raw]
   (let [published (assoc (inspect-tool/fit-public-result
-                           (assoc raw :elapsed_ms 1.0))
+                           (mcp-operation/stamp-envelope raw {:elapsed_ms 1.0}))
                          :elapsed_ms 1.0)
         text (inspect-tool/inspect-summary published)]
     {:published published
@@ -3425,8 +3430,9 @@
       (let [mid (quot (+ low high) 2)]
         (if (nil? (:text_evidence_limit
                     (inspect-tool/fit-public-result
-                      (assoc (synthetic-refusal (apply str (repeat mid "c")))
-                             :elapsed_ms 1.0))))
+                      (mcp-operation/stamp-envelope
+                        (synthetic-refusal (apply str (repeat mid "c")))
+                        {:elapsed_ms 1.0}))))
           (recur (inc mid) high mid)
           (recur low (dec mid) best))))))
 
@@ -3589,8 +3595,9 @@
   ;; rather than stopping a constant short of it.
   (let [exact (largest-unelided-cause)
         published (assoc (inspect-tool/fit-public-result
-                           (assoc (synthetic-refusal (apply str (repeat exact "c")))
-                                  :elapsed_ms 1.0))
+                           (mcp-operation/stamp-envelope
+                             (synthetic-refusal (apply str (repeat exact "c")))
+                             {:elapsed_ms 1.0}))
                          :elapsed_ms 1.0)
         bytes (inspect-tool/mcp-result-byte-count
                 (inspect-tool/inspect-summary published) published)]
@@ -3719,7 +3726,9 @@
       ;; obeys is the PUBLIC OUTPUT BUDGET, so the witness moves to a cause
       ;; that genuinely cannot fit.
       (let [huge (apply str (repeat 20000 "c"))
-            published (assoc (inspect-tool/fit-public-result (synthetic huge))
+            published (assoc (inspect-tool/fit-public-result
+                               (mcp-operation/stamp-envelope
+                                 (synthetic huge) {:elapsed_ms 1.0}))
                              :elapsed_ms 1.0)
             text (inspect-tool/inspect-summary published)]
         (is (not (str/includes? text huge)))
@@ -4222,7 +4231,7 @@
                 [["top-level elapsed_ms" {:elapsed_ms 1.0}]
                  ["a nested measured block" {:measured nested-measured}]]]
           (testing shape
-            (let [raw (merge domain envelope)
+            (let [raw (mcp-operation/stamp-envelope domain envelope)
                   fitted (inspect-tool/fit-public-result raw)
                   published (inspect-tool/mcp-result-byte-count
                               (inspect-tool/inspect-summary fitted) fitted)]
@@ -4232,10 +4241,11 @@
                       (false? (:ok fitted)))
                   "an over-budget result is a typed truncation or a refusal")
               (testing "and a SUBSTITUTE the gate builds carries the envelope"
-                (let [huge (merge domain envelope
-                                  {:tree (apply str
-                                                (repeat
-                                                  (* 40 1024) "x"))})
+                (let [huge (mcp-operation/stamp-envelope
+                                 (assoc domain
+                                        :tree (apply str
+                                                     (repeat (* 40 1024) "x")))
+                                 envelope)
                       substitute (inspect-tool/fit-public-result huge)]
                   (is (false? (:ok substitute))
                       "the fixture must actually reach the refusal rung")
@@ -4510,3 +4520,4 @@
       (is (thrown? IllegalArgumentException
                    (inspect-tool/fit-public-result impostor))
           "and the gate must refuse to measure it"))))
+

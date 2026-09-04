@@ -1547,9 +1547,15 @@
   7): this copied `:elapsed_ms` by name, so the MEM-003 landing that nests
   the clock under `measured` would have made every substitute drop it
   silently — a gate that loses the envelope of the result it replaces is
-  measuring one thing and publishing another."
+  measuring one thing and publishing another.
+
+  @spec MCP-OP-STUDY-049 — the substitute is STAMPED, not merely merged, so
+  it is `finalized?` for the same reason the result it replaces was: the
+  publisher put the envelope there. Merging alone produced a map that carried
+  the envelope's keys without having been finalized — the very confusion
+  between spelling and construction this spec removes."
   [substitute measured]
-  (merge substitute (mcp-operation/envelope measured)))
+  (mcp-operation/stamp-envelope substitute (mcp-operation/envelope measured)))
 
 (defn enforce-public-result-budget
   "Refuse an oversized public result without returning partial source."
@@ -2039,26 +2045,67 @@
 
   Reached only when `structuredContent` ALONE crosses the declared budget: at
   that point no rendering choice can help, and a caller that is handed the
-  result anyway has been told a bound the tool does not keep."
+  result anyway has been told a bound the tool does not keep.
+
+  @spec MCP-OP-STUDY-049 — the substitute is MEASURED before it is returned.
+  A gate that builds a replacement and does not weigh it is enforcing a
+  budget on one map and publishing another; Sol's O2 round-5 review section 4
+  walked out of here with 81,861 bytes against a 32,768-byte cap because the
+  envelope it copied was a caller's 40,000-character blob. Identifying the
+  envelope by construction removes that particular door; weighing the
+  substitute removes the class, whatever a future envelope turns out to
+  carry. Where even the minimal refusal cannot be paid for, this THROWS —
+  the same trade MCP-OP-STUDY-046 makes and for the same reason: a substitute
+  larger than the budget is a defect in this namespace, not a bad request,
+  and there is no honest receipt left to return."
   [result required-bytes]
-  (cond-> (with-envelope
-            {:ok false
-             :operation "inspect_clojure"
-             :error_type "inspect-output-limit"
-             :scope "public_result"
-             :error (format (str "The complete inspect_clojure result is %d bytes; "
-                                 "the public MCP output budget is %d")
-                            required-bytes max-public-result-bytes)
-             :required {:public_result_bytes required-bytes}
-             :limits {:public_result_bytes max-public-result-bytes}
-             :read_complete false
-             :source_unchanged true
-             :remedy (str "Lower limit, narrow dir/grep/ns_grep, or request "
-                          "fewer forms so the complete result fits the public "
-                          "output budget.")
-             :next_action "narrow_scope"}
-            result)
-    (:mode result) (assoc :mode (:mode result))))
+  (let [fits? (fn [candidate]
+                (<= (mcp-result-byte-count (inspect-summary candidate)
+                                           candidate)
+                    max-public-result-bytes))
+        full (cond-> (with-envelope
+                       {:ok false
+                        :operation "inspect_clojure"
+                        :error_type "inspect-output-limit"
+                        :scope "public_result"
+                        :error (format (str "The complete inspect_clojure result is %d bytes; "
+                                            "the public MCP output budget is %d")
+                                       required-bytes max-public-result-bytes)
+                        :required {:public_result_bytes required-bytes}
+                        :limits {:public_result_bytes max-public-result-bytes}
+                        :read_complete false
+                        :source_unchanged true
+                        :remedy (str "Lower limit, narrow dir/grep/ns_grep, or request "
+                                     "fewer forms so the complete result fits the public "
+                                     "output budget.")
+                        :next_action "narrow_scope"}
+                       result)
+               (:mode result) (assoc :mode (:mode result)))
+        ;; Every byte here is a constant of this namespace or a number: no
+        ;; caller-supplied value, and no mode, reaches it.
+        minimal (mcp-operation/stamp-envelope
+                  {:ok false
+                   :operation "inspect_clojure"
+                   :error_type "inspect-output-limit"
+                   :scope "public_result"
+                   :error "The complete inspect_clojure result exceeds the public MCP output budget"
+                   :required {:public_result_bytes required-bytes}
+                   :limits {:public_result_bytes max-public-result-bytes}
+                   :read_complete false
+                   :source_unchanged true
+                   :remedy "Narrow the request so the complete result fits the public output budget."
+                   :next_action "narrow_scope"}
+                  {})]
+    (cond
+      (fits? full) full
+      (fits? minimal) minimal
+      :else
+      (throw (IllegalArgumentException.
+               (format (str "the public budget gate built a substitute of %d "
+                            "bytes against a %d-byte budget; there is no "
+                            "honest receipt smaller than this one")
+                       (mcp-result-byte-count (inspect-summary minimal) minimal)
+                       max-public-result-bytes))))))
 
 ;; @spec MCP-OP-STUDY-040
 (def public-fit-samples

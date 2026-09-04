@@ -23,57 +23,101 @@
                  (object-array [(double elapsed-ms)])))
 
 ;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-049
 (def envelope-keys
-  "The top-level keys the FINALIZER adds to a domain result — the request
+  "The top-level keys the FINALIZER may add to a domain result — the request
   envelope, in whatever shape the wire gives it.
 
-  Declared HERE, in the namespace that owns the envelope, because two other
-  places need to know it without knowing its shape: the public budget gate
-  measures the FINAL published envelope, and every substitute the gate builds
-  from scratch must carry the envelope of the result it replaces.
+  This is a statement about the FINALIZER's vocabulary, checked by a witness.
+  It is NOT how the envelope is identified: `finalize-result` records exactly
+  what it added, and `envelope` reads that record. A domain result may
+  legitimately carry a top-level key spelled `:measured`, and it is domain
+  data.
 
   `finalize-result` adds `:elapsed_ms` today. The MEM-003 landing nests the
   request clock and its siblings under `measured`. Both are named, and a
-  witness fails if the finalizer ever adds a third key that is not.
-
-  Field evidence (Opus O2 round-4 review, 2026-09-04, section 7): the budget
-  gate copied `:elapsed_ms` by name and guarded on `(contains? result
-  :elapsed_ms)`, so the moment the wire nests the clock every substitute would
-  silently lose it and the fit would throw on the first request instead of
-  measuring the result. Neither is a wire change — both are one namespace
-  assuming a shape another namespace owns."
+  witness fails if the finalizer ever adds a third key that is not."
   #{:elapsed_ms :measured})
 
-;; @spec MCP-OP-STUDY-040
-(defn envelope
-  "The envelope of a finalized result, as a map to merge into a substitute."
-  [result]
-  (select-keys result envelope-keys))
+;; @spec MCP-OP-STUDY-049
+(def ^:private envelope-meta-key
+  "Where a finalized result records the envelope its finalizer added.
+
+  METADATA, not a key: a key would be forgeable by the domain in exactly the
+  way key NAMES were, and it would travel into `structuredContent`. Metadata
+  survives `assoc`, `dissoc` and `cond->` — every mutation the budget gate
+  performs on a candidate — and disappears at serialization, which is where it
+  stops being anyone's business."
+  ::envelope)
+
+;; @spec MCP-OP-STUDY-049
+(defn stamp-envelope
+  "Merge `added` into `result` AND record that the publisher is what added it.
+
+  The only way to become `finalized?`. Field evidence (Sol O2 round-5 review,
+  2026-09-04, section 4): while the envelope was a set of NAMES, a domain
+  result carrying a 40,000-character `measured.user_blob` was read as
+  publisher metadata and merged into an `inspect-output-limit` substitute
+  that was never measured — 81,861 bytes against a 32,768-byte cap. The
+  collision is not a bad name; it is asking the wrong question. Who added a
+  key is a fact about construction, and only the constructor knows it."
+  [result added]
+  (when-not (map? added)
+    (throw (IllegalArgumentException.
+             (str "the envelope a finalizer records must be a map, not "
+                  (pr-str added)))))
+  (vary-meta (merge result added) assoc envelope-meta-key added))
 
 ;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-049
+(defn envelope
+  "The envelope of a finalized result, as a map to merge into a substitute.
+
+  Read from the CONSTRUCTION record, never by matching key names."
+  [result]
+  (or (get (meta result) envelope-meta-key) {}))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-049
 ;; @spec MCP-OP-TIME-003
 (defn request-elapsed-ms
   "The request clock, wherever the envelope carries it.
 
-  A renderer needs the number, not its address. Reading `:elapsed_ms` at the
-  top level is one shape of the envelope, and the moment the wire nests the
-  clock under `measured` every text block would render `nil` and throw — the
-  same class as the budget gate naming one shape, one layer up."
+  A renderer needs the number, not its address. It reads the number the
+  RECEIPT PUBLISHES — the top-level `:elapsed_ms`, else the nested
+  `measured.elapsed_ms` — because the text block must agree with
+  `structuredContent`, and a stage that rewrites the published clock (a
+  fixed-clock witness, a job that re-times itself) has changed what the
+  receipt says. Rendering the finalizer's original number over the published
+  one would make the text disagree with the receipt it summarizes.
+
+  The CONSTRUCTION record is the FALLBACK, for a result whose envelope the
+  publisher has not yet merged into the map.
+
+  Reading a NUMBER off a spelling is not the hazard MCP-OP-STUDY-049 exists
+  for: the hazard is deciding WHOSE key a key is and copying it into a
+  substitute. `envelope` and `finalized?` make that decision, and they read
+  the construction record only."
   [result]
-  (if (contains? result :elapsed_ms)
-    (:elapsed_ms result)
-    (get-in result [:measured :elapsed_ms])))
+  (let [carried (envelope result)]
+    (cond
+      (contains? result :elapsed_ms) (:elapsed_ms result)
+      (some? (get-in result [:measured :elapsed_ms]))
+      (get-in result [:measured :elapsed_ms])
+      (contains? carried :elapsed_ms) (:elapsed_ms carried)
+      :else (get-in carried [:measured :elapsed_ms]))))
 
 ;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-049
 (defn finalized?
   "Does this result carry the envelope the publisher publishes?
 
   A result with no envelope is not one the publisher could publish, so
   measuring it would reintroduce the gap the 64-byte publish reserve used to
-  paper over. The question is asked about the envelope, never about one of
-  its shapes."
+  paper over. The question is asked of the CONSTRUCTION record: a map that
+  merely spells `:elapsed_ms` was not finalized, it was written."
   [result]
-  (boolean (some #(contains? result %) envelope-keys)))
+  (contains? (meta result) envelope-meta-key))
 
 (defn- finalize-result
   [domain-result started-ns finished-ns]
@@ -89,7 +133,7 @@
                        :started-ns started-ns
                        :finished-ns finished-ns
                        :elapsed-ms elapsed-ms})))
-    (assoc domain-result :elapsed_ms elapsed-ms)))
+    (stamp-envelope domain-result {:elapsed_ms elapsed-ms})))
 
 ;; @spec MCP-OP-RESULT-001
 ;; @spec MCP-OP-RESULT-002
