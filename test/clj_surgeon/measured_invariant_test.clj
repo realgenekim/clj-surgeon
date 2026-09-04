@@ -712,16 +712,43 @@
             (.delete (io/file root))))))))
 
 ;; @spec MCP-OP-TIME-005
+(def ^:private reflective-namespace-spelling
+  "The measured namespace named as a QUOTED SYMBOL, a STRING or a KEYWORD.
+
+  Every var-resolution API in Clojure takes a namespace this way, and none of
+  them respects `^:private`: `(ns-resolve 'clj-surgeon.measured
+  'unwrap-readings)` reaches the private tag-stripper at any depth. The
+  round-five review's blocking finding 2 is that the naming rule was anchored
+  on the SLASH -- `clj-surgeon.measured/` -- and this spelling has a space
+  after the namespace instead, so the rule fell through returning nil and there
+  was no `measured/` token for the verb scan to check either.
+
+  The sanctioned require `[clj-surgeon.measured :as measured]` names the
+  namespace bare, after a `[` or a space, so it is not this. Nothing under the
+  scanned roots needs to resolve a measured var at runtime, which is why this
+  can be an offence outright rather than a heuristic."
+  #"(?:'|\(quote\s+|\"|:)clj-surgeon\.measured(?![-\w.])")
+
+(def ^:private var-resolution-api
+  "The verbs that turn a namespace name back into a var.
+
+  The spelling rule above catches the ARGUMENT; this catches the CALL, so a
+  resolution whose namespace argument is built some way the first regex does
+  not spell is still an offence as long as both sit on one line."
+  #"\b(?:ns-resolve|requiring-resolve|find-var|ns-interns|ns-publics|ns-map|intern)\b|\(\s*(?:resolve|var)\s")
+
 (defn- measured-naming-offence
   "Why `code` names the measured namespace outside the sanctioned require, or
    nil when it does not.
 
-   Three doors, each of which defeats every `measured/`-spelled scan in this
+   Four doors, each of which defeats every `measured/`-spelled scan in this
    file, and prose that merely MENTIONS the namespace is none of them."
   [code]
   (cond
     (re-find #"clj-surgeon\.measured/" code) :fully-qualified
     (not (re-find #"clj-surgeon\.measured(?![-\w.])" code)) nil
+    (or (re-find reflective-namespace-spelling code)
+        (re-find var-resolution-api code)) :reflective
     (re-find #":refer" code) :refer
     (re-find #":use" code) :use
     (when-let [m (re-find #"clj-surgeon\.measured\s+:as\s+([\w-]+)" code)]
