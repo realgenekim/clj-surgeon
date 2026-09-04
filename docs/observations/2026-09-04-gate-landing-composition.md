@@ -36,7 +36,11 @@ before the andon hardening — which is why the eight conflicts exist at all.
 | `215acf8` | composition fix: the gate branch's own catalog witness had not met `alias_migration` |
 | `1bb0c9d` | composition fix: register the admit lane in the trunk's drift ratchet; six tools moves two hot-reload counts |
 
-**Pushed tip: `1bb0c9d` (`MCP/gate-landing-2026-09-04`).**
+| `fc2efb6` | this record |
+
+**Pushed tip: `fc2efb6` (`MCP/gate-landing-2026-09-04`); last code commit `1bb0c9d`.** Every gate
+figure below was measured at `1bb0c9d`; `fc2efb6` adds only this document. The tip was re-checked
+after pushing and corrected here rather than by amending a pushed commit.
 
 ## Merge table — every conflict and its resolution
 
@@ -309,7 +313,7 @@ integrator's own fixture copy contributed 387 MB and was cut to 9.4 MB). Not rep
 was available; the re-run is green. Operational note for anyone else composing here: keep fixture
 copies out of `/tmp`, or copy only `bin/` and `probe/`.
 
-## Gates — ran-lines, verbatim, at the pushed tip `1bb0c9d`
+## Gates — ran-lines, verbatim, at the code tip `1bb0c9d`
 
 All JVM suites through `~/bin/suite-run`; `clojure -M:clj-surgeon/mcp-test` invoked directly,
 never `make mcp-test`. No server started on any port; `make mcp-smoke` speaks to a stdio child
