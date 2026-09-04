@@ -1131,3 +1131,216 @@ Wall void in 11/16 (E6-Q2 alongside; load to 18.1). Headline rests on emitted ch
 **Apparatus lessons (runner):** three distinct spellings of the same tool call across 16 arms; a syntax-keyed scorer reported real T arms as writes=0 — now keyed on emitted request content ("a meter that recognises a call by its syntax measures the model's phrasing, not its work"). One completed arm destroyed by a runner whose first act was rm -rf; ratchet applied (refuses to delete a dir holding rollout.jsonl without FORCE=1). Driver fault WATCH-ABORT rollout-rotated voided one arm twice; re-run clean.
 
 **Standing squares:** 1 gate (E3-P pass line; O2 r2 / q5z r11 in review), **2 fan-out — first WIN on record, load-immune**, 4 proof before write (unmeasured). Withdrawn: single edit at a known site; square 3 (E6-Q, E6-Q2). Fleet poll on the E6-Q2 + E-REG pair launched (Sol + Opus): what drives native's payload if not irregularity, is E-SLOPE80 still worth its wall, and is the first-call refusal a schema or a description fix.
+
+## 21. Fleet poll on the E6-Q2 + E-REG pair — Opus, verbatim (00:37Z)
+
+# Opus — poll on the E6-Q2 + E-REG pair (square 3 withdrawn; square 2's first load-immune win)
+
+*forge@anvil, 2026-09-04. Read-only: `2026-09-04-e6q2-bigfile-cohort.md`,
+`2026-09-04-ereg-irregularity-cohort.md`, `2026-09-03-brainfleet-hills.md` §16–§20 (plus §15,
+which is my own E3-P poll and is the claim under attack here). No code run, nothing edited.*
+
+**Standing disclosure before anything else:** E-REG was built to kill my mechanism claim and it
+killed half of it. P1, P2 and P3 all MISSED. The irregularity story was mine, it was wrong, and
+the honest reading is the runner's, not a rescue of mine. Everything below is written with that
+in front of me.
+
+---
+
+## 1. If irregularity is not the driver of native's payload, what is?
+
+**It is the transcription volume of the patch artefact itself — line count × line width — which
+is set by the harness's literal-context patch format, not by any property of the change.** The
+agent is not paying for the *semantics* of the rename; it is paying to retype the file's
+neighbourhood around each site because `apply_patch` demands literal context.
+
+The arithmetic is already in E-REG and nobody has written it down. Canonical churn is
+**+84/−84 at every k** — same N, same files, same sites, same edit size, only the alias *names*
+vary. That is 168 diff lines over 21 files = 8 changed lines per file; add a path header and the
+~3 context lines per hunk that `apply_patch` requires and you get ~15 emitted lines per file,
+~315 lines per patch. Measured mean per patch call: **8,550 / 8,190 / 8,951 chars at k = 2 / 3 /
+6 → ~27 chars per emitted line, and ~410 chars per owner.** The per-owner constant is flat
+across the sweep precisely because the *line count* is flat across the sweep. k moves the
+characters inside the changed lines; it cannot move the number of lines, and the number of lines
+is the bill.
+
+**Falsifiable statement (F1).** *Native's emitted write payload is linear in the transcribed
+patch's line count at 27 ± 5 chars/line, with a fixed per-file overhead of ~1 header + 6 context
+lines, and is invariant to semantic irregularity. Concretely: at fixed N = 21 owners and fixed k,
+doubling the changed lines per file (two migration sites per owner instead of one) moves native's
+payload from ~8,500 to **15,000–18,000 chars**, while the tool's stays at 900 ± 400.*
+
+**Cheapest experiment that refutes it — E-HUNK, 4 arm-runs.** Same generator, same 21 owners,
+k = 2 fixed. Two cells: H1 = 1 site per owner (the shipped shape, +84/−84), H2 = 2 sites per
+owner (+168/−168, *identical* file count, identical alias set, identical discovery problem).
+**Native arms only, n = 2 per cell** — the claim is about native's payload, so tool arms buy
+nothing and the E-REG T cells are already the comparator. Primary meter: emitted write-payload
+chars (load-immune). **Refutation:** if H2's mean payload is inside ±20% of H1's, line count is
+not the driver and the cost is per-file overhead or discovery, and F1 dies. ~15 min wall.
+
+**Named rider hypothesis (F2), because it is the one that actually endangers the program.**
+The reason native never reached for `sed` — including at k = 1, where one would close it — may
+not be capability. `ereg-k1-N-2` *did* compress, programmatically, once in two runs. **The
+default patch affordance is a prompt-level fact, and it was never varied.** F2: *native's literal
+transcription at k = 1 is an artefact of `apply_patch` being the offered write path; explicitly
+licensing a scripted rewrite collapses it.* This is experiment #1 in §5, and it matters more than
+F1 because it attacks tonight's headline rather than a mechanism footnote.
+
+---
+
+## 2. Is "fan-out a regex cannot close" still the right claim for square 2?
+
+**No. Retire it.** It was my sentence, it was a claim about *irregularity*, and E-REG refuted the
+irregularity driver (k6/k1 = 2.49×, needed ≥3×; per-patch payload flat at 5,262/8,550/8,190/8,951;
+zero `sed` in 8 of 8 native arms *including k = 1*). Continuing to say "a regex cannot close it"
+now asserts the opposite of what we measured — the regex *could* close k = 1 and native still
+didn't use it. Keeping the sentence would be re-narrating a refuted mechanism as a survivor.
+
+**The restatement a sceptic cannot dodge:**
+
+> On a 21-owner alias migration, **8 of 8 unprompted native runs hand-transcribed a full patch —
+> 7,377 to 16,531 emitted characters at a measured 137–154 chars/s — including the perfectly
+> uniform k = 1 case that a single `sed` would close, while the verb committed a byte-identical
+> result in one request of 485–1,260 characters; both arms passed the same 6/6 gate and were
+> `diff -r` clean against the same frozen canonical.**
+
+It is dodge-proof because every noun in it is a count from a frozen receipt: characters, not wall
+(11 of 16 walls void); byte-identity against a canonical, not a judge; 8 of 8, not a mean. The
+claim is now about **how agents actually behave**, not about what a script could theoretically do
+— which is weaker as a theorem and stronger as a product claim, since a product is sold against
+observed behaviour.
+
+**What it still lacks, in the order a reviewer will attack it:**
+
+1. **The counterfactual.** No native arm was ever *offered* a scripted rewrite. Until E-AFFORD
+   runs, "native does not use the regex even when it could" means "even when nobody mentioned
+   it," and that is one prompt line away from collapsing. This is the load-bearing gap.
+2. **A second caller.** Every character in the claim is `gpt-5.6-sol` at high reasoning effort.
+   A behavioural law measured on one model is a model fact, not an agent fact.
+3. **A second harness.** `apply_patch` is the affordance under test; a native arm with
+   Bash + Edit may price the same job differently.
+4. **A real repo.** Fixtures are generated, and C1 says real fan-outs are alias-uniform — i.e.
+   **the real-world cell is k = 1, the exact cell most exposed to attacks 1 and 3.**
+5. **Any N but 21.** The law is linear in N by construction; nobody has looked for where it breaks.
+
+---
+
+## 3. E-SLOPE80 — for, against, verdict
+
+**For.** (a) The meter changed under it in the right direction: emitted chars are load-immune, so
+N = 80 is claimable at n = 1–2 without a single valid wall, which is the opposite of the problem
+that gated it. (b) It is the only place the emission law can *break*: ~33,000 chars is at or past
+the caller's comfortable single-output size, so N = 80 is where native most plausibly splits its
+patch or spontaneously scripts — and a spontaneous script at scale is a **product boundary**, not
+a nuisance. (c) Setup is nearly free: the generator already takes `--n`, the scorer already takes
+N, the canonical derivation is proven at four k values.
+
+**Against.** (a) Its entire original justification was wall — "does the gap clear the 172 s floor"
+— and that justification is dead: wall is void under load and the box is shared. (b) The char
+prediction is **arithmetic, not an experiment**: 80 × 410 = 32,800, and I already predicted
+33,000 ± 4,000 in O2 before any of this ran. Measuring a number you can compute is the definition
+of waste. (c) It is the most expensive cell on the board — native arms at N = 80 run ~300 s. (d)
+k = 6 at N = 80 is further from any real repo than N = 21 was; a reviewer dismisses it in one
+line, exactly as I wrote in O2's own waste clause. (e) The fleet's evidence says the exposed
+flank is the affordance question, and N = 80 does not touch it.
+
+**COMMIT: RE-DESIGN.** Do not run it as written. The wall primary, the n = 3 pairs, and the k = 6
+shape are all obsolete; the strategy-switch question is the only non-derivable thing left in it.
+
+**The re-design — E-CEILING80.** N = 80, **k = 1** (the real-repo shape, per C1), n = 3 native
++ 2 tool = **5 arm-runs**, no wall claim anywhere in the document. Primary meter (load-immune):
+emitted write-payload chars, **plus patch-call count, plus a three-way strategy classifier**
+(literal-patch / programmatic-generation / stream-edit) keyed on emitted *request content* — never
+on call syntax, per E-REG's own apparatus lesson that three spellings of one call appeared across
+sixteen arms. Secondary: native patch-rejection/re-emission count. The experiment is no longer
+"how big is the slope"; it is **"does native change strategy when the patch stops fitting."**
+
+---
+
+## 4. The first-call refusal (6 of 8 T arms): schema, description, or routing?
+
+**It is a SCHEMA fix, and the evidence that decides it is that the model already had the
+description.** MCP ships the JSON schema in `tools/list`; the model read it and still emitted a
+flat `old_lib/old_var/new_lib/new_var/alias_policy/expected_files` shape in 4 of 8 E-REG arms —
+and the same class fired 12 times in E6-Q2 (`file` at the request root instead of inside
+`requests`; missing `expect`), *and the coordinator hit both by hand on his first two calls
+before any arm ran*. Three independent callers, one human and two model contexts, all guessed
+**flat when the tool demands nested groups**. When the documentation is present and the prior
+still wins three-quarters of the time, the prior is the specification. **Meet it.**
+
+| # | fix | what it is | predicted effect on tool wall | predicted effect on the *claimable* meter | cost | payoff/cost |
+|---|---|---|---|---|---|---|
+| 1 | **Schema: accept-and-normalise** | Accept the flat alias-migration shape and map it to nested; hoist a root-level `file` into a one-element `requests`; treat an unknown `verification_profile` as the default with a `warning` field instead of a hard refusal. Return `ok: true` with `normalized_from: "flat-v0"` in **both** structuredContent and the text block | mean T wall **34 s → 27–29 s (−15 to −20%)**; T returns 3–5 → 3 modal; refused first calls **6/8 → ≤1/8** (75%) | **~0.** The refusal costs ~120 chars of re-emission out of ~926 | small: a coercion layer + boundary tests | **highest** |
+| 1b | **Capability advertisement** | Do not advertise a verb whose provider is down (`prepare-change` → `semantic-provider-unavailable` ×5 in E6-Q2 = *every* call, on a task with nothing to change) | removes 5 refusals and ~6 wasted actions per E6-Q2-shaped cohort | ~0 | small | high |
+| 2 | **Description: worked nested example** | A full example request in the tool description | −0 to −3 s; refusals −25% relative (40%) | ~0 | ~20 min | low — do it *inside* fix 1, never instead of it |
+| 3 | **Routing** | Any exposure/plate intervention | **0 s** | 0 | — | **last** |
+
+Routing is last on measured evidence, not taste: adoption is **0/19 on routing interventions**
+(§17, plate 0/3 and bare 0/3), and this is not a routing failure at all — the agent already chose
+the verb; it mis-typed the arguments.
+
+**The uncomfortable corollary, stated plainly so nobody sells the fix as a result:** the refusal
+is a **wall cost, and wall is void**. On emitted characters — the only meter this program can
+currently claim — fixing it buys roughly nothing. It is a **build worth doing for the product**
+(it removes a tax every real user pays on their first call), and it is **not an experiment**. It
+must not be reported as a cohort win, for the same reason O4 was demoted to a chore in §15.
+
+---
+
+## 5. The next three experiments, ranked
+
+Floors respected and never crossed: wall 172 s at n = 3 (so no wall is primary anywhere below),
+non-test actions 6.1, acceptance is a gate and never a score. Every primary below is a count.
+**Total cost: 20 arm-runs.** All three are vs-native functional measurements, so the launch mix
+stays at 100% functional.
+
+### #1 — E-AFFORD: the `sed` counterfactual (falsifies tonight's headline before Gene quotes it)
+
+| | |
+|---|---|
+| **hypothesis** | Native's literal transcription at k = 1 is an artefact of the offered write path, not of capability. Explicitly licensing a scripted/stream-edit rewrite collapses native's payload in the uniform cell and erases the tool's character win there — the cell C1 says real repos live in. `ereg-k1-N-2` (1,929 chars, generated programmatically, once in two runs) is the existence proof that the capability is present and merely not default. |
+| **primary meter (load-immune)** | Emitted write-payload characters per arm, plus a 3-way strategy classifier (literal-patch / programmatic-generation / stream-edit) keyed on emitted **request content**, never on call syntax. |
+| **n** | 3 cells × n = 3 native arms: {k=1 default}, {k=1 sed-licensed}, {k=6 sed-licensed}. Zero new tool arms — E-REG's T cells (749 chars at k=1, 828 at k=6) are the comparator. |
+| **predicted numbers** | k=1 default replicates at **5,000 ± 3,000 chars**, ≥2 of 3 literal-patch (80%). k=1 sed-licensed: **median 1,100 chars, ≥2 of 3 arms under 2,000** (70%). **T/N char ratio at k=1 falls from 7.0× to 1.0–1.8×** (65%). k=6 sed-licensed: **3,500 ± 2,000**, ratio still ≥3× (60%) — a stream editor cannot close 6 aliases with 30 collisions in one command. |
+| **cost** | **9 arm-runs**, ~35 min wall; no build (one prompt §5 variant), reuses the E-REG fixtures and payload scorer unchanged. |
+| **withdrawal condition (written first)** | If sed-licensed native at k=1 emits **≥4,000 chars in ≥2 of 3 arms**, F2 is dead, the affordance flank is closed, and "native does not reach for the regex even when it could" stands as a behavioural law for this caller — stop attacking it. Conversely, if the k=1 ratio falls **below 1.5×**, square 2's headline is rewritten to *"irregular or large fan-out"* **before** any report quotes the uniform cell, and E-REG's k=1 row is annotated in place. |
+
+### #2 — E-EXTRACT: square 4, the verbs with no native equivalent
+
+| | |
+|---|---|
+| **hypothesis** | E6-Q2's own closing question. On `:extract!` (move a var family from a 3,700-line namespace into a new one and repair every caller, require, and declare), native must emit the moved code **twice** — deleted from source, added to target — so its payload is ~2× the moved bytes while the tool's stays constant; and this is the first task since sl1 where native's **correctness** is at genuine risk (cyclic requires, `declare` repair, `refer` chains) rather than at a ceiling. |
+| **primary meter (load-immune)** | (i) **Binary correctness gate**: the namespace loads and the worktree is `diff -r` byte-identical to a frozen canonical (the E-REG gate shape, which is deterministic and order-free); (ii) emitted write-payload chars. No wall claim. |
+| **n** | 3 native + 3 tool = 6 arms, on `reducer/core.cljc` and `channel.clj` — the same two big files E6-Q2 already planted and proved loadable, so the fixture cost is mostly paid. |
+| **predicted numbers** | 250-line extraction → native **15,000 ± 6,000 chars**; tool **500–900**; ratio **≥18× (75%)**. The number that decides the square: **native correct ≤2 of 3 (60%)**, tool **3 of 3 (65%)**. |
+| **cost** | **6 arm-runs** + ~1.5 agent-hours to freeze the canonical and the loader gate. |
+| **withdrawal condition (written first)** | If native scores **3/3 correct AND emits <5,000 chars** in ≥2 of 3 arms, **square 4 is withdrawn on the evidence for this caller**, on exactly the terms square 3 was withdrawn tonight — written down now so a second null cannot be re-narrated afterwards as "the extraction was too easy." |
+
+### #3 — E-CEILING80: where the emission law breaks (the re-designed E-SLOPE80)
+
+| | |
+|---|---|
+| **hypothesis** | The ~410-chars-per-owner law is linear only while the patch fits one comfortable output. At N = 80 (~33,000 chars) native either splits into multiple patch calls or spontaneously scripts. Either answer bounds the tool's win region, which is a product fact nobody has. |
+| **primary meter (load-immune)** | Emitted write-payload chars **+ patch-call count + strategy classifier** (same content-keyed classifier as #1). Secondary: native patch-rejection/re-emission count. |
+| **n** | 3 native + 2 tool at N = 80, **k = 1**. |
+| **predicted numbers** | Native **≥25,000 chars in ≥2 of 3** (60%); native **splits into ≥2 patch calls in ≥2 of 3** (60%); tool **600–1,500 chars** (85%); ratio **≥20×** (65%); ≥1 native re-emission in 3 arms (55%). |
+| **cost** | **5 arm-runs**, ~30 min wall + ~25 min setup (`--n` exists, scorer takes N). |
+| **withdrawal condition (written first)** | If **≥2 of 3 native arms emit <6,000 chars at N = 80** (spontaneous scripting at scale), the emission law is **bounded to N ≲ 40**, square 2's product claim is restricted to mid-size fan-out in the same document that reports it, and no N = 80 win is claimed. |
+
+**Explicitly not ranked, and why:** the schema fix (§4) is a build, not an experiment — on the
+claimable meter it buys ~0. Any further routing or free-choice-exposure cohort: 0/19 on record;
+route without asking, or ride the gate. E-ANCHOR still gates on the quoted-symbol fix and remains
+a correctness gate with no wall row, unchanged from §15.
+
+---
+
+## 6. One sentence for Gene
+
+Tonight proved the fan-out win is real and **load-proof** — on the same 21-file rename the plain
+agent hand-types 7,377 to 16,531 characters at about 145 a second while the verb sends 485 to
+1,260, and it wins every cell including the perfectly tidy one — and it proved the **read** side
+is not ours, because on the two biggest files in the repo the plain agent answered **54 of 54**
+structural questions in **three tool calls** by windowing over its own search hits, so square 3
+is withdrawn on its own pre-registered terms; what tonight did **not** prove is that the fan-out
+win survives an agent that is simply *told it may use `sed`* — nobody ever offered it one — and
+that is the one experiment I would run before either of us quotes the number.
