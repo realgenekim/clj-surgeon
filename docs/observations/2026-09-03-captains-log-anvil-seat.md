@@ -1659,3 +1659,12 @@ acceptance question goes to Gene with the morning report. Killed one orphaned JV
 (load 16.9 with the spike's two concurrent clones running as designed).
 
 ## 17:54Z — usage watch (untimed run, 3 min at load 11, window since 2026-08-30T15:00Z "until": "2026-09-04T17:50:46.926236Z"): tools "admit_clojure_patch": 1 "inspect_clojure": 148 ; inspect_clojure "count": 148 median 96 ms p90 331 ms max 8405 ms (collector figures verbatim; ok/refused split not in the tail captured — full JSON at /var/tmp/forge/usage-untimed.log)
+
+## 18:06Z admit gate r14 (Opus): GO-WITH-FIX; the merge is red and merge-tree cannot see it
+
+Green + green = red. The trunk's census landing changed the admit entrance's refusal vocabulary in the gate lane's own
+test file, git auto-merged the text, and the lane's own set-equality witness (ADMIT-133) caught the drift on the merged
+tree — exactly the check the landing protocol runs and the reason it runs on the MERGED tree, never on the tip. Two
+records to carry: a semantic conflict hides behind "Auto-merging"; and a --no-local clone does not carry
+remote-tracking refs, so merge evidence names the fetched trunk sha. Round fifteen is the merge round; on its green the
+lane LANDS and arm G runs. Also to correct in the r13 build record: the RED commit exited 1, not 3.
