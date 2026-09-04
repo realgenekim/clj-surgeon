@@ -2293,3 +2293,131 @@
         (when (:remedy response)
           (is (str/includes? text (:remedy response))
               "the text carries the remedy"))))))
+
+;; ============================================================
+;; Rendered rows EQUAL receipt rows, in order (O2 round 2)
+;; ============================================================
+;; Reviewer finding 9 (2026-09-03): the O2 witnesses caught row LOSS and not
+;; row DISAGREEMENT. Mutating `ls-tree-payload-text` to drop 40% of the rows
+;; produced 7 failures and dropping the payload produced 15 — but REVERSING
+;; the row order produced 49 pass / 0 fail, and adding a phantom row the
+;; receipt does not contain produced 49 pass / 0 fail. A disagreement is
+;; structurally impossible in the shipped code, which is the right design;
+;; nothing held a future refactor to it. These witnesses do.
+
+(defn- ls-tree-rendered-rows
+  "The payload rows a client actually reads out of an ls-tree text block."
+  [text]
+  (->> (str/split-lines text)
+       (drop 2)
+       (take-while #(not (re-matches #"^[!✓→].*" %)))
+       (remove str/blank?)
+       vec))
+
+(defn- ls-tree-receipt-rows
+  [result]
+  (->> (str/split-lines (str/trim (:tree result)))
+       (remove str/blank?)
+       vec))
+
+;; @spec MCP-OP-STUDY-041
+(deftest rendered-rows-equal-receipt-rows-in-order-for-every-mode
+  (doseq [[label operation extra]
+          [["deps" "deps" {"limit" 16384}]
+           ["topo" "topo" {"limit" 16384}]
+           ["ls-deps" "ls-deps" {"form" "extraction-closure" "limit" 16384}]
+           ["ls-extract" "ls-extract" {"form" "extraction-closure"
+                                       "limit" 16384}]
+           ["outline" "outline" {}]
+           ["forms" "forms" {"forms" ["reader-cond?" "splicing-rcond?"]
+                             "expect" {"forms" 2}}]
+           ["match" "match" {"match" "(defn- _ _ _)"}]
+           ["xray" "xray" {"expression"
+                           "(-> (form 'reader-cond?) (xray count))"}]]]
+    (testing label
+      (let [response (one operation extra)
+            result (result-of response)
+            rows (inspect/result-rows result)]
+        (is (seq rows) "a mode with no rows proves nothing here")
+        (is (= rows (evidence-rows (summary-of response)))
+            "the rendered rows are the receipt's rows, in the receipt's order")))))
+
+;; @spec MCP-OP-STUDY-036
+;; @spec MCP-OP-STUDY-041
+(deftest ls-tree-rendered-rows-equal-its-receipt-rows-in-order
+  (with-tmp-project
+    #(build-toy-project! % 10)
+    (fn [config]
+      (let [result (inspect-tool/execute-ls-tree
+                     config {:mode "ls-tree" :dir "." :format "text"})]
+        (is (= (ls-tree-receipt-rows result)
+               (ls-tree-rendered-rows (text-block result))))))))
+
+(defn- with-mutation
+  "Run `thunk` with `mutate` wrapped around `target`, then restore it."
+  [target mutate thunk]
+  (let [original @target]
+    (try
+      (alter-var-root target (constantly (mutate original)))
+      (thunk)
+      (finally
+        (alter-var-root target (constantly original))))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest a-reordered-or-invented-row-fails-the-equality-witness
+  ;; The ratchet itself. Without these two mutations the equality assertion
+  ;; above could be satisfied by a renderer that agrees on the SET of rows and
+  ;; lies about their order or their number — the exact pair the O2 suite
+  ;; missed.
+  (let [response (one "deps" {"limit" 16384})
+        result (result-of response)
+        agree? #(= (inspect/result-rows result)
+                   (evidence-rows (summary-of response)))]
+    (is (agree?) "baseline agrees")
+    (testing "reversed row ORDER must fail"
+      (with-mutation
+        #'clj-surgeon.mcp-inspect/render-evidence
+        (fn [original]
+          (fn [result allowance]
+            (update (original result allowance) :lines #(vec (reverse %)))))
+        #(is (not (agree?))
+             "a renderer that reverses the rows must not pass")))
+    (testing "a phantom row the receipt does not contain must fail"
+      (with-mutation
+        #'clj-surgeon.mcp-inspect/render-evidence
+        (fn [original]
+          (fn [result allowance]
+            (update (original result allowance) :lines
+                    #(conj (vec %) "    · phantom-row defn@1 → (none)"))))
+        #(is (not (agree?))
+             "a renderer that invents a row must not pass")))
+    (is (agree?) "and the mutation is restored")))
+
+;; @spec MCP-OP-STUDY-036
+;; @spec MCP-OP-STUDY-041
+(deftest a-reordered-or-invented-ls-tree-row-fails-the-equality-witness
+  (with-tmp-project
+    #(build-toy-project! % 10)
+    (fn [config]
+      (let [result (inspect-tool/execute-ls-tree
+                     config {:mode "ls-tree" :dir "." :format "text"})
+            agree? #(= (ls-tree-receipt-rows result)
+                       (ls-tree-rendered-rows (text-block result)))]
+        (is (agree?) "baseline agrees")
+        (testing "reversed row ORDER must fail"
+          (with-mutation
+            #'clj-surgeon.mcp-inspect-tool/ls-tree-payload-block
+            (fn [original]
+              (fn [result]
+                (update (original result) :text
+                        #(str/join "\n" (reverse (str/split-lines %))))))
+            #(is (not (agree?)))))
+        (testing "a phantom row must fail"
+          (with-mutation
+            #'clj-surgeon.mcp-inspect-tool/ls-tree-payload-block
+            (fn [original]
+              (fn [result]
+                (update (original result) :text
+                        #(str % "\n  99: defn phantom-form []"))))
+            #(is (not (agree?)))))
+        (is (agree?) "and the mutation is restored")))))
