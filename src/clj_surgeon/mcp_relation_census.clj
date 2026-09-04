@@ -1262,7 +1262,14 @@
                                      "arms, or omit files to census the tree.")
 
                                 (empty? named)
-                                (str "Nothing under " canonical
+                                ;; Opus's round-nineteen item 4. The CLI twin
+                                ;; (core.clj) was repaired in round nineteen
+                                ;; and this one was not, so the tool published
+                                ;; its absolute root in prose while the rule
+                                ;; said neither entrance may. The root has ONE
+                                ;; name.
+                                (str "Nothing under "
+                                     census/workspace-root-token
                                      " defines defmethod fold-event arms ("
                                      scanned-count " file(s) scanned), so no "
                                      "narrower call can be computed: point "
