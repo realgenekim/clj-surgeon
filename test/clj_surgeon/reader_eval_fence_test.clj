@@ -115,6 +115,118 @@
           (finally (fs/delete-tree root)))))))
 
 ;; ---------------------------------------------------------------------------
+;; The CONFIGURATION half of the same vector: the build file's :paths
+;; ---------------------------------------------------------------------------
+
+(defn- plant-escaping-paths-tree!
+  "A directory holding one real source and a build file whose `:paths` names a
+   tree OUTSIDE it. Returns the outside tree.
+
+   This is the round-23 review's finding 3, and it is deliberately the SAME
+   premise as the reader plant above with the payload changed from code to
+   data: the caller's only power is to write a file in a directory, and the
+   question is whether the op will follow what that file says."
+  [^java.io.File root build-file-name entry]
+  (let [src (io/file root "src")
+        outside (io/file root "..", (str (.getName root) "-outside"))]
+    (.mkdirs src)
+    (spit (io/file src "a.clj") "(ns a)
+")
+    (.mkdirs outside)
+    (spit (io/file outside "secret.clj")
+          "(ns secret-outside)
+(def token :leaked)
+")
+    (spit (io/file root build-file-name)
+          (case build-file-name
+            "project.clj" (str "(defproject x \"1\" :source-paths [" (pr-str entry) "])
+")
+            (str "{:paths [" (pr-str entry) "]}
+")))
+    outside))
+
+;; @spec MCP-OP-SHELL-ARGV-006
+(deftest no-real-launcher-follows-a-build-file-path-out-of-the-tree
+  ;; The reviewer's plant, at both REAL launchers, in both spellings. Before
+  ;; the fence: exit 0, and the op enumerated and printed a tree the caller
+  ;; never named — namespace, requires, and every def name with its line
+  ;; range. `secret-outside` standing in stdout IS the finding.
+  ;; The matrix is deliberately asymmetric, and the reason is wall clock, not
+  ;; coverage. One `:jvm` drive costs ~65 s on this box (a cold JVM plus the
+  ;; full test classpath plus compiling `core`); one `:bb` drive costs ~0.3 s.
+  ;; What varies per BUILD FILE is `source-paths-from-config`, whose
+  ;; three-shape parity the reader witness above already drives at both
+  ;; launchers; what varies per SPELLING is the fence itself, which is this
+  ;; witness's subject. So both spellings run at BOTH launchers, and the
+  ;; second and third build-file shapes run at the cheap one. A matrix that
+  ;; is too slow to run is a witness that gets deleted.
+  (doseq [[runtime build-files]
+          [[:jvm ["deps.edn"]]
+           [:bb ["deps.edn" "bb.edn" "project.clj"]]]
+          build-file build-files
+          [label entry] [[:relative "../%s-outside"]
+                         [:absolute :absolute]]]
+    (testing (str runtime " / " build-file " / " (name label))
+      (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                            "escaping-paths-fence"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))
+            spelled (if (= entry :absolute)
+                      (.getPath (io/file (.getParentFile root)
+                                         (str (.getName root) "-outside")))
+                      (format entry (.getName root)))
+            outside (plant-escaping-paths-tree! root build-file spelled)]
+        (try
+          (let [{:keys [out exit]}
+                (run-launcher runtime [":op" ":ls-tree" ":dir" (.getPath root)])]
+            (is (not (str/includes? out "secret-outside"))
+                (str "the " (name runtime) " launcher FOLLOWED " build-file
+                     "'s :paths out of the tree the caller named and printed "
+                     "the namespace it found there — entry " (pr-str spelled)
+                     ", exit " exit
+                     ", stdout " (pr-str (subs out 0 (min 400 (count out))))))
+            (is (not (str/includes? out "def token"))
+                (str "the " (name runtime) " launcher printed a def name from "
+                     "outside the caller's tree — exit " exit))
+            ;; The refusal names the entry AS SPELLED, never the tree it
+            ;; targeted: the target is the fact about the box, the spelling is
+            ;; the fact about the request.
+            (is (not (str/includes? out (.getCanonicalPath outside)))
+                (str "the refusal named the TARGET tree absolutely rather than "
+                     "the entry the caller spelled — stdout "
+                     (pr-str (subs out 0 (min 400 (count out)))))))
+          (finally
+            (fs/delete-tree root)
+            (fs/delete-tree outside)))))))
+
+;; @spec MCP-OP-SHELL-ARGV-006
+(deftest a-non-string-paths-entry-never-reaches-io-file
+  ;; The round-23 review's §2 parity divergence, which is the tell for this
+  ;; finding: bb read a 10,001-deep nested vector out of `:paths` fine and
+  ;; then died one frame later inside `io/file`, because nothing validated
+  ;; that the entries were strings. Same input, two launchers, two exits.
+  (doseq [runtime [:jvm :bb]]
+    (testing (name runtime)
+      (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                            "nonstring-paths-fence"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))]
+        (try
+          (.mkdirs (io/file root "src"))
+          (spit (io/file root "src" "a.clj") "(ns a)
+")
+          (spit (io/file root "deps.edn") "{:paths [[\"src\"] 42 :src]}
+")
+          (let [{:keys [out err exit]}
+                (run-launcher runtime [":op" ":ls-tree" ":dir" (.getPath root)])]
+            (is (not (str/includes? (str out err) "Coercions"))
+                (str "a non-string :paths entry reached io/file and threw the "
+                     "protocol error instead of being refused — exit " exit
+                     ", stderr " (pr-str (subs err 0 (min 300 (count err))))))
+            (is (not (str/includes? (str out err) "StackOverflow"))
+                (str "a non-string :paths entry overflowed rather than being "
+                     "refused — exit " exit)))
+          (finally (fs/delete-tree root)))))))
+
+;; ---------------------------------------------------------------------------
 ;; The class: no evaluating reader anywhere in src/
 ;; ---------------------------------------------------------------------------
 
