@@ -170,6 +170,10 @@
   [pattern]
   (.getPathMatcher (FileSystems/getDefault) (str "glob:" pattern)))
 
+(defn- relative-path
+  [^Path root ^Path candidate]
+  (str/replace (.toString (.relativize root candidate)) "\\" "/"))
+
 ;; @spec MCP-OP-ALIAS-057
 (defn scope-glob-patterns
   "The glob patterns one `scope.paths` entry selects under `root`.
@@ -189,25 +193,31 @@
   Resolution is lexical-then-checked: an entry that escapes the root, is
   absolute, or is the root itself contributes no subtree pattern, so the
   confinement the walk performs afterwards is never handed a wider tree than the
-  caller named."
+  caller named.
+
+  The subtree pattern is built from the entry NORMALISED AGAINST THE ROOT and
+  never from the caller's raw text. The check and the pattern must agree about
+  which directory the entry names, or the entry is detected as a directory and
+  then handed a glob that can never match it: `./src` was read as a directory
+  and published as the patterns `[\"./src\" \"./src/**\"]`, neither of which
+  matches a project-relative path, so it selected zero files and earned the
+  `scope-matches-nothing` refusal this requirement exists to end — as did
+  `src/.`, `src//`, and every other spelling of the same directory."
   [^Path root pattern]
   (let [trimmed (str/replace pattern #"/+$" "")
-        directory?
-        (and (not (str/blank? trimmed))
-             (not (str/starts-with? trimmed "/"))
-             (not (str/includes? trimmed "\u0000"))
-             (try
-               (let [candidate (.normalize (.resolve root trimmed))]
-                 (and (.startsWith candidate root)
-                      (not (.equals candidate root))
-                      (Files/isDirectory candidate (make-array LinkOption 0))))
-               (catch Exception _ false)))]
+        subtree
+        (when (and (not (str/blank? trimmed))
+                   (not (str/starts-with? trimmed "/"))
+                   (not (str/includes? trimmed "\u0000")))
+          (try
+            (let [candidate (.normalize (.resolve root trimmed))]
+              (when (and (.startsWith candidate root)
+                         (not (.equals candidate root))
+                         (Files/isDirectory candidate (make-array LinkOption 0)))
+                (str (relative-path root candidate) "/**")))
+            (catch Exception _ nil)))]
     (cond-> [pattern]
-      directory? (conj (str trimmed "/**")))))
-
-(defn- relative-path
-  [^Path root ^Path candidate]
-  (str/replace (.toString (.relativize root candidate)) "\\" "/"))
+      subtree (conj subtree))))
 
 (def max-walk-entries
   "Ceiling on the RAW entries one scope walk visits, filtered or not.
