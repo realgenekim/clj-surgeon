@@ -1300,3 +1300,7 @@ The surgeon seat runs clojure-lsp directly on this Linux box (user surgeon, 7890
 ## 05:45Z — mayor URGENT (Gene, verbatim: "I notice anvil is nearing 98% context; maybe one thing you can do is tell it to compact as it nears 50% context window, but before it does, get a "resume here" prompt, and you feed it after compcation -- or use the slash compact command to thread it into it?")
 
 Done before this entry: the full resume note pushed (89e8dadc), the post-compaction prompt delivered to Gene in chat, and now the Memento pointer moved to LINE 1 of CLAUDE.md on MCP/main. The seat cannot run /compact itself and cannot measure its own context; the pulse line now carries `ctx=unmeasured-by-seat` rather than a guessed number, and the standing change is adopted: refresh the note and ask Gene to compact at the next lane boundary whenever the mayor's meter shows under 40% remaining. Eight agents in flight; their outputs are on branches and in verdict files, so a compaction loses the brief, not the work — which is why the note carries every brief.
+
+## 05:45Z — FAN scorer LANDED on MCP/main (f2fa8be9, Sol r5 GO) — the second landing beyond the six-lane integration
+
+Five rounds for a scorer: each fix closed the reviewer's attack and left the same attack one layer down until r4 moved the trust root (object store, content-addressed) and r5 closed the last PATH-resolved input. Apparatus reviewed to the product's standard because it graded seven published cohorts, and the retroactive check passed: no published verdict moved.
