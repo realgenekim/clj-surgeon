@@ -1528,3 +1528,5 @@ The blocking item (an unowned battery receipt in the fast gate) closed by a coun
 battery into a merge gate; the round-nine brief asks Sol to argue whether a counted skip is an honest gate and to break the
 battery on a fresh clone to see what goes red. The order witness (MCP-OP-ADMIT-151) shows five failures when the ladder runs
 before the cheap move. Fresh-clone gates green. One .PHONY conflict vs the trunk, composed at landing.
+
+## 14:50Z — usage watch: collector zero/timeout (rc 0) — check root; last 3 lines: make: *** [Makefile:1028: study-agent-usage] Terminated 
