@@ -32,13 +32,17 @@
    - `no-real-launcher-evaluates-a-build-file-it-discovers` drives the
      instance through BOTH real launchers and asserts the side effect never
      happened.
-   This namespace rides the `mcp-test` lane and NOT `test-fast`, for a
-   mechanical reason worth writing down: `test-fast` is `bb test/run_all.clj`,
-   so `(System/getProperty \"java.class.path\")` inside it is BABASHKA's
+   This namespace rides the `:battery` lane and NOT the babashka lane, for a
+   mechanical reason worth writing down: the babashka lane is
+   `bb test/run_all.clj` (`make test-bb` since the 2026-09-04 rename), so
+   `(System/getProperty \"java.class.path\")` inside it is BABASHKA's
    classpath and the `:jvm` launcher drive cannot be built from it. Registered
    in `run_all` the JVM half of this witness fails for a reason that has
    nothing to do with its subject, which is the worst kind of red. The census
    launcher witnesses live in the same lane for the same reason.
+
+   It is `:battery` rather than the merge gate because it drives ~20 cold
+   launchers: round one measured it at 494 of CI's 521 s.
 
    - `no-source-in-this-repository-calls-the-evaluating-reader` is the CLASS
      ratchet: it PARSES every source under `src/` and fails on any call to
