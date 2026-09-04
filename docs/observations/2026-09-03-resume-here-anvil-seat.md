@@ -456,3 +456,6 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## RESUME DELTA 07:17Z
 - Lanes: feature_thread r2 building (Opus, on ~/src/clj-surgeon-thread; r1 NO-GO folded in); q5z r17 building; tmp-leak r2 building; gate r5 building; MEM-003 r5 building; census r21 Sol review; O2 r5 Sol review. All reviews except O2/census are on Opus after Sol filter refusals (14 tonight). Trunk MCP/main last landing: the FAN scorer (804febcb). Foreground: the tweezer waits on feature_thread r2 for the measured replay (baseline 17 calls; target zero reads before the write).
+
+## RESUME DELTA 07:29Z
+- feature_thread r2 = 9139b2c5 (Sol r3 review running: ft3.log / ft3-sol-review.md). REPLAY in progress: clone /home/forge/tmp/replay/smw-base @ 2df99c98; arms N / T1 / T2 pre-registered in the log; receipt for the clone to be computed from the nREPL (port 43791, root = the clone); counts from the codex logs (exec_command + apply_patch), never from the driver.
