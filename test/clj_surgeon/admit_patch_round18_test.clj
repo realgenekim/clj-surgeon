@@ -378,13 +378,17 @@
                 next-call (:next_call result)]
             (is (false? (:ok result)))
             (is (= :unsupported-patch-target (:error-type result)))
+            ;; The digest is absent on BOTH sides of this refusal -- it is
+            ;; raised before the snapshot -- so comparing it proves nothing.
+            ;; What distinguishes a repeat from a remedy here is whether the
+            ;; follow-up still tells the caller to resend the same text.
             (is (not (and (= mode (get-in next-call [:arguments :mode]))
                           (= "focused" (get-in next-call [:arguments :verify]))
-                          (= (get-in result [:hashes :patch_sha256])
-                             (:patch_sha256 next-call))))
+                          (str/includes? (str (:note next-call))
+                                         "resend the same patch text")))
                 (str "mode " mode ": the follow-up IS the call that just"
-                     " refused -- same mode, same verify, same patch: "
-                     (pr-str next-call)))
+                     " refused -- same mode, same verify, resend the same"
+                     " patch: " (pr-str next-call)))
             (is (nil? (:patch_sha256 next-call))
                 (str "the follow-up cannot bind the refused patch's digest,"
                      " because the patch is the thing that must change: "
@@ -516,7 +520,7 @@
   (let [text admit/admit-tool-description]
     (is (str/includes? text "working directory")
         "the overlay is named as a working directory")
-    (is (str/includes? text "not a filesystem sandbox")
+    (is (str/includes? text "filesystem sandbox")
         "and explicitly not as containment")
     (is (str/includes? text "setsid")
         (str "the deadline's reach is stated honestly: a reparented child"

@@ -82,6 +82,12 @@
     "command is a plain line, which is split and exec'd and NEVER handed to "
     "a shell, or an array of arguments -- send [\"sh\", \"-c\", \"…\"] "
     "if a shell is what you want. "
+    ;; @spec MCP-OP-ADMIT-162
+    ;; Said plainly and briefly, because both halves used to read as
+    ;; containment to a naive reader and neither is.
+    "FENCE: the copy is the working directory, NOT a filesystem sandbox -- the "
+    "command runs with this server's authority. At the deadline the "
+    "descendants seen then are killed; a setsid child survives. "
     "REPORT: the change as form identity -- which top-level owners changed, "
     "added or vanished; which bytes moved with no structural reason; which "
     "comments, metadata, reader conditionals or #_ discards were disturbed; "
@@ -395,7 +401,53 @@
                   " stop constructing it"))))
   receipt)
 
+;; @spec MCP-OP-ADMIT-161
+(defn- repeats-the-refused-call?
+  "Whether one follow-up is the call that just refused.
+
+  Mode, verify and the patch digest together ARE the call: the arguments map
+  also carries a `workspace_root` the caller may never have spelled, so
+  comparing maps passes vacuously."
+  [context candidate]
+  (and (= (or (:mode context) "preview")
+          (get-in candidate [:arguments :mode]))
+       (= (:verify context) (get-in candidate [:arguments :verify]))
+       (= (patch-digest (:patch context)) (:patch_sha256 candidate))))
+
+;; @spec MCP-OP-ADMIT-161
+(defn- non-repeating-next-call
+  "A follow-up the caller can act on, never the one that just refused.
+
+  An agent that follows `next_call` loops forever on a call byte-identical to
+  the refused one, and the live arm did exactly that twice. Where the only
+  thing that can lift a refusal is a different PATCH, the follow-up says so
+  and drops the digest that binds it to this one -- a digest is an assertion
+  about bytes the caller must now change."
+  [context candidate]
+  (if (repeats-the-refused-call? context candidate)
+    (assoc candidate
+           :patch_sha256 nil
+           :note (str "this refusal is a fact about the patch text, so"
+                      " resending it cannot lift it; send a DIFFERENT patch"
+                      " that repairs what the error names, in the patch"
+                      " field"))
+    candidate))
+
+;; @spec MCP-OP-ADMIT-157
+;; @spec MCP-OP-ADMIT-162
+(defn- verify-verdict
+  "The verification's own verdict, or nothing where there was no verification.
+
+  `verify: \"none\"` runs no check, so `(nil? blocked)` answered `true` --
+  the reading a caller acts on -- while `verification_complete` said `false`
+  on the same receipt. Two fields disagreeing in the direction that flatters
+  the patch is worse than one absent field."
+  [verify blocked]
+  (when (contains? #{"focused" "inline"} verify)
+    (nil? blocked)))
+
 ;; @spec MCP-OP-ADMIT-055
+;; @spec MCP-OP-ADMIT-161
 (defn- refusal
   [context error-type message & [data]]
   (merge (empty-receipt (or (:mode context) "preview"))
@@ -403,7 +455,9 @@
           :operation :admit-patch-refused
           :error-type error-type
           :error message
-          :next_call (next-call context "preview" error-type)}
+          :next_call (non-repeating-next-call
+                       context
+                       (next-call context "preview" error-type))}
          data))
 
 ;; ---------------------------------------------------------------------------
@@ -914,14 +968,23 @@
 (def inline-overlay-max-bytes 268435456)
 
 ;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-162
 (def inline-overlay-skipped-directories
-  "Directory names the overlay never copies.
+  "Directory names the overlay never copies, by default.
 
-  `.git` is the whole of it, and deliberately so: excluding `target`,
-  `node_modules` or a build cache would break the very commands a caller
-  sends. A command whose verification needs git history is out of scope and
-  the receipt says the overlay is not a clone."
-  #{".git"})
+  `.git` was the whole of it, on the reasoning that excluding a build tree
+  would break the very commands a caller sends. Round seventeen measured the
+  other side of that: the ceiling's REACH, not the copy's wall cost, is what
+  an ordinary repository meets first -- a tree with `node_modules` or a
+  populated `target/` passes 20,000 files without being a large project, and
+  the field repository that motivated this round is a JavaScript/Clojure tree.
+  These are directories a verify command REBUILDS or reinstalls rather than
+  reads; a command that genuinely needs one declares the exclusion list it
+  wants, which is why this is a default and not a constant.
+
+  A command whose verification needs git history is out of scope, and the
+  receipt says the overlay is not a clone."
+  #{".git" "node_modules" "target" ".cpcache" ".venv" "dist" "build"})
 
 ;; @spec MCP-OP-ADMIT-153
 ;; @spec MCP-OP-ADMIT-156
@@ -1095,7 +1158,7 @@
 
   Stops the moment either ceiling is passed, so an oversized tree costs a walk
   rather than a copy."
-  [^java.io.File root]
+  [^java.io.File root skipped]
   (let [^Path root-path (.normalize (.toPath root))]
     (loop [pending (vec (or (seq (.listFiles root)) [])) files [] bytes 0]
       (cond
@@ -1123,7 +1186,7 @@
                    bytes)
 
             (Files/isDirectory current-path no-follow)
-            (if (contains? inline-overlay-skipped-directories (.getName current))
+            (if (contains? skipped (.getName current))
               (recur rest-pending files bytes)
               (recur (into rest-pending (or (seq (.listFiles current)) []))
                      files bytes))
@@ -1178,10 +1241,13 @@
   existed nowhere (MCP-OP-ADMIT-159).
 
   Returns `{:ok true :root <File>}` or a typed refusal map."
-  [project-root images]
+  ([project-root images]
+   (overlay-snapshot! project-root images inline-overlay-skipped-directories))
+  ;; @spec MCP-OP-ADMIT-162
+  ([project-root images skipped]
   (let [source-root (.getAbsoluteFile (io/file (str project-root)))
         ^Path source-path (.normalize (.toPath source-root))
-        walk (overlay-source-files source-root)
+        walk (overlay-source-files source-root skipped)
         escaping (when-not (:over-ceiling walk)
                    (overlay-escaping-entry source-path (:files walk)))]
     (cond
@@ -1247,7 +1313,7 @@
               (do (.mkdirs (.getParentFile target))
                   (spit target post)))))
         {:ok true :root root :files (count (:files walk))
-         :bytes (:bytes walk)}))))
+         :bytes (:bytes walk)})))))
 
 ;; @spec MCP-OP-ADMIT-153
 ;; @spec MCP-OP-ADMIT-156
@@ -1740,7 +1806,11 @@
         ;; of the workspace with the post-images written over it.
         overlay (when inline?
                   (try
-                    (overlay-snapshot! (:project-root config) images)
+                    ;; @spec MCP-OP-ADMIT-162
+                    (overlay-snapshot!
+                      (:project-root config) images
+                      (or (:inline-overlay-skipped-directories config)
+                          inline-overlay-skipped-directories))
                     (catch Exception error
                       {:ok false
                        :error-type :inline-verify-overlay-unavailable
@@ -2401,11 +2471,32 @@
               (if (seq passthrough)
               ;; A preview that returned ok here would advertise a commit that
               ;; is guaranteed to refuse. Both modes say the same thing.
-              (refusal context :unsupported-patch-target
-                       (str "The gate admits Clojure and EDN sources only; "
-                            "apply these natively: "
-                            (str/join ", " passthrough))
-                       {:files (mapv passthrough-file passthrough)})
+              ;; @spec MCP-OP-ADMIT-161
+              ;; The one refusal an agent meets most on a real mixed-language
+              ;; repository, and the one whose follow-up used to be the call
+              ;; that refused. The remedy the gate CAN name exactly is the
+              ;; reduced patch, so it names both halves of it.
+              (let [admitted (vec (sort (remove (set passthrough) targets)))]
+                (refusal context :unsupported-patch-target
+                         (str "The gate admits Clojure and EDN sources only; "
+                              "apply these natively: "
+                              (str/join ", " passthrough))
+                         {:files (mapv passthrough-file passthrough)
+                          :next_call
+                          (assoc (next-call context "propose"
+                                            :unsupported-patch-target)
+                                 :patch_sha256 nil
+                                 :note
+                                 (str "apply these files natively, outside"
+                                      " the gate: " (str/join ", " passthrough)
+                                      (if (seq admitted)
+                                        (str "; then resend a patch containing"
+                                             " only the files the gate admits: "
+                                             (str/join ", " admitted))
+                                        "; no file in this patch is one the"
+                                        )
+                                      ". No digest is carried because the"
+                                      " patch itself must change."))}))
               ;; Exclusive write authority spans the whole admission in
               ;; commit mode: the snapshot, the hazard analysis, the
               ;; verification run, and the write. A compare-and-swap answers
@@ -2627,7 +2718,7 @@
                                         :committed false
                                         :mutation_attempted false
                                         :source-unchanged true
-                                        :verify_ok (nil? blocked)
+                                        :verify_ok (verify-verdict verify blocked)
                                         :next_call (next-call context
                                                               "commit" nil)})
 
@@ -2680,20 +2771,40 @@
                                           ;; verify that can lift it is the
                                           ;; caller's own commands.
                                           :next_call
-                                          (next-call
+                                          (->
+                                            (next-call
                                             (assoc context :verify
                                                    (if (= :no-focused-test-profile
                                                           reason)
-                                                     {:commands
-                                                      ["<your project's test command, e.g. make test>"]}
+                                                     ;; @spec MCP-OP-ADMIT-161
+                                                     ;; A sendable EXAMPLE,
+                                                     ;; not a placeholder: the
+                                                     ;; angle brackets that
+                                                     ;; used to stand here are
+                                                     ;; in the gate's own
+                                                     ;; metacharacter set, so
+                                                     ;; the affordance refused
+                                                     ;; when it was sent back.
+                                                     {:commands [["make" "test"]]}
                                                      "focused"))
                                             "propose"
-                                            :verification-incomplete)}))
+                                            :verification-incomplete)
+                                            (assoc :note
+                                                   (str "the commands are an"
+                                                        " EXAMPLE and are sent"
+                                                        " as they stand;"
+                                                        " replace them with"
+                                                        " this project's own"
+                                                        " verification"
+                                                        " commands, then"
+                                                        " resend the same"
+                                                        " patch text in the"
+                                                        " patch field")))}))
 
                                 (= "preview" mode)
                                 (merge base verification
                                        {:operation :admit-patch-preview
-                                        :verify_ok (nil? blocked)
+                                        :verify_ok (verify-verdict verify blocked)
                                         :next_call (next-call context "commit" nil)}
                                        (when blocked
                                          (merge
@@ -2744,7 +2855,7 @@
                                                               :mutation_attempted true
                                                               :source-unchanged false
                                                               ;; @spec MCP-OP-ADMIT-157
-                                                              :verify_ok (nil? blocked)
+                                                              :verify_ok (verify-verdict verify blocked)
                                                               :lock_scope scope
                                                               :next_call nil})
                                                 lock-path
