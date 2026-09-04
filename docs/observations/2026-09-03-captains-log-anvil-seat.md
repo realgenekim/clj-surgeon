@@ -1402,3 +1402,4 @@ Round 20 found read-string with reader-eval in parse-val and fixed parse-val; th
 ## 08:04Z — Gene report written (docs/observations/2026-09-04-gene-report-0815z.md); replicates N2 + T1b launched for the variance floor.
 ## 08:13Z — replicate T1b: 22 raw, 2 reads before the first patch, correct sites — reproduces T1 (24/2). N2 at 33 raw and 16 reads with no patch yet.
 ## 08:13Z — q5z r17: Sol's filter refused (17th tonight); Opus fallback. T1b gates verified green (five arms verified so far).
+## 08:15Z — MEM-003 r5 built (dc6ee93f): the door is closed at the namespace — no public var of measured yields a number, proven by calling every one of them; the clock class is derived from the JDK, not typed. Sol r5 review launched. Builder reports ~6,100 leaked suite temp dirs under /var/tmp/forge (disk, not RAM; mine from the replay suites + the JVM suites): sweep after the arms finish, own entries only.
