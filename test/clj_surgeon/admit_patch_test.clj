@@ -5815,3 +5815,101 @@
         (is (str/includes? (:remedy receipt) "fewer files")
             "and the lever that would change the answer"))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: no caller-supplied field is echoed verbatim into a receipt
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-140
+(defn- published-at-handler-edge
+  "Drive `handle-admit-clojure-patch` and return what the CALLBACK receives.
+
+  `mcp-operation/invoke!` hands the callback the receipt as its third
+  argument, so this is the structuredContent a client is given -- not the
+  receipt some inner function returned. The oversize `mode` finding was
+  reachable only here, which is why the witness lives at this edge."
+  [root params]
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        captured (atom nil)]
+    (try
+      (reset! config-atom (stub-config root))
+      (admit/handle-admit-clojure-patch
+        nil params
+        (fn [content error? result]
+          (reset! captured {:text (first content)
+                            :error? error?
+                            :result result})))
+      @captured
+      (finally (reset! config-atom previous)))))
+
+;; @spec MCP-OP-ADMIT-140
+(deftest a-caller-supplied-mode-is-never-echoed-verbatim-into-a-receipt
+  ;; Round five's blocking finding. `execute-in-context!` took the caller's
+  ;; `mode` into `context` and `refusal` merged
+  ;; `(empty-receipt (or (:mode context) "preview"))`, so a 60,000-character
+  ;; mode landed in `:mode` -- an identity key reduction may never drop and
+  ;; `cut` never shortens. The published structuredContent was 61,214 bytes,
+  ;; 28,574 past the 32,640 its own sentence called the budget, with
+  ;; `receipt_reduced`, `receipt_omitted_fields` and `payload_truncated` all
+  ;; absent, blaming a 389-character `next_call`.
+  (let [root (temp-dir)
+        huge (apply str (repeat 60000 "m"))]
+    (try
+      (write-sources! root base-sources)
+      (let [{:keys [result text]}
+            (published-at-handler-edge
+              root {"patch" clean-multi-file-patch "verify" "focused"
+                    "mode" huge})]
+        (is (false? (:ok result))
+            "a mode outside the enum is a refusal")
+        (is (= :invalid-admit-request (:error-type result))
+            (str "and a typed one: " (pr-str (:error-type result))))
+        (is (<= (write-refusal/json-bytes result)
+                write-refusal/public-byte-budget)
+            (str "the published receipt is " (write-refusal/json-bytes result)
+                 " bytes, past the " write-refusal/public-byte-budget
+                 "-byte number the gate calls a budget"))
+        (is (<= (count (str text)) write-refusal/public-byte-budget)
+            "and so is the text face a text-only client reads")
+        (is (not= huge (:mode result))
+            "the caller's 60,000 characters must not be the receipt's mode")
+        (is (contains? #{"preview" "commit"} (:mode result))
+            (str "an unusable mode leaves the receipt carrying the default,"
+                 " not the caller's string: " (pr-str (:mode result))))
+        (is (str/includes? (str (:error result)) "mode")
+            "the refusal names the field it refused")
+        (is (str/includes? (str (:error result)) "mmm")
+            "and quotes enough of the value for the caller to recognise it")
+        (is (< (count (str (:error result))) 2000)
+            (str "with the value CUT, not echoed: the sentence is "
+                 (count (str (:error result))) " characters")))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-140
+(deftest no-identity-key-can-be-the-reason-a-receipt-exceeds-the-budget
+  ;; The class, not the instance. `mode` was the caller-reachable one; the
+  ;; hole is the identity-key set as a whole, because reduction may not drop
+  ;; any of them and `cut` shortens only `error` and `remedy`.
+  (let [bulk (apply str (repeat 60000 "z"))
+        budget write-refusal/public-byte-budget]
+    (doseq [key [:mode :error :remedy :source-unchanged
+                 :mutation_attempted :pre_image_binding :lock_scope
+                 :verification_complete :verification_status :elapsed_ms
+                 :operation]]
+      (let [published (#'admit/bound-receipt
+                        (assoc {:ok false
+                                :operation :admit-patch-refused
+                                :mode "preview"
+                                :error-type :invalid-patch
+                                :error "e"
+                                :files []}
+                               key bulk))]
+        (is (<= (write-refusal/json-bytes published) budget)
+            (str "bulk in the identity key " key " published "
+                 (write-refusal/json-bytes published) " bytes, past " budget))
+        (is (<= (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
+                budget)
+            (str "and its text face for " key " is "
+                 (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
+                 " characters, past " budget))))))
