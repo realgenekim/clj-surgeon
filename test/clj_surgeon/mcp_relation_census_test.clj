@@ -7147,6 +7147,21 @@
      {:label :invalid-arguments
       :error-type :invalid-arguments
       :args [":op" ":relation-census" ":doors" (str "[1" big "]")]}
+     ;; Opus's round-nineteen item 1, blocking. Every drive above builds its
+     ;; hostile argument as a STRING, and `core/parse-val` mints a KEYWORD
+     ;; from any CLI value beginning with `:` and reads any value beginning
+     ;; with `[`. So the caller controls a leaf the round-nineteen bound never
+     ;; looked at, and the same declared name printed 20,287 bytes with a
+     ;; 10,001-character run and no marker. Two more drives, same name, one
+     ;; character of difference in what the caller typed.
+     {:label :duplicate-argument-keyword
+      :error-type :duplicate-argument
+      :args [":op" ":relation-census"
+             ":doors" (str ":" big) ":doors" (str ":" big)]}
+     {:label :duplicate-argument-symbol
+      :error-type :duplicate-argument
+      :args [":op" ":relation-census"
+             ":doors" (str "[" big "]") ":doors" (str "[" big "]")]}
      ;; Both dispatch refusals for an op nobody defines: `run-op`'s, which the
      ;; launcher reaches for an ordinary invocation, and `-main`'s, which it
      ;; reaches under `--help`. Two sites, one name, and only one of them was
@@ -7157,6 +7172,20 @@
      {:label :unknown-operation-under-help
       :error-type :unknown-operation
       :args [":op" big ":help" "true"]}]))
+
+(defn- printed-leaf-lengths
+  "The RENDERED length of every leaf a parsed refusal carries.
+
+   `pr-str`, and every leaf rather than every string, because Opus's
+   round-nineteen item 1 is exactly the gap between those two measures: what
+   the caller reads is printed output, and a 10,001-character keyword is
+   10,002 characters on their terminal however `string?` answers about it. A
+   bound that asks `string?` is a bound on the type the author happened to
+   picture."
+  [parsed]
+  (->> (tree-seq coll? seq parsed)
+       (remove coll?)
+       (map #(count (pr-str %)))))
 
 ;; @spec MCP-OP-CENSUS-014
 (deftest every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit
@@ -7184,10 +7213,7 @@
                    (pr-str (:error-type parsed)))))
 
         (testing (str runtime " " label " is bounded at the launcher's exit")
-          (let [longest (->> (tree-seq coll? seq parsed)
-                             (filter string?)
-                             (map count)
-                             (reduce max 0))]
+          (let [longest (reduce max 0 (printed-leaf-lengths parsed))]
             (is (<= longest ceiling)
                 (str runtime " " label " published a " longest
                      "-character field, over the " ceiling
@@ -7205,6 +7231,112 @@
               (str runtime " " label " published "
                    (alength (.getBytes (str out) "UTF-8"))
                    " bytes")))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND TWENTY, item 1 — Opus's round-nineteen BLOCKING finding.
+;;
+;; Round nineteen gave the launcher ONE bounded exit and called the bound
+;; total. It was not. `census/bound-refusal` postwalked STRINGS only, and
+;; `core/parse-val` mints a KEYWORD out of any CLI value beginning with `:`
+;; and READS any value beginning with `[` or `{`, so the caller controls a
+;; non-string leaf that rides straight through the bound. Measured by the
+;; reviewer at the real launchers, and reproduced at this branch's tip:
+;;
+;;   jvm-dup-keyword EXIT=1 BYTES=20287 MAX_A_RUN=10001 MARKERS=0 :duplicate-argument
+;;   bb-dup-keyword  EXIT=1 BYTES=20226 MAX_A_RUN=10001 MARKERS=0 :duplicate-argument
+;;   jvm-dup-symbol  EXIT=1 BYTES=20289 MAX_A_RUN=10001 MARKERS=0 :duplicate-argument
+;;   jvm-kw-vector   EXIT=1 BYTES=11667 MAX_A_RUN=10001 MARKERS=1 :doors-not-a-string
+;;   jvm-map         EXIT=1 BYTES=11672 MAX_A_RUN=10001 MARKERS=1 :doors-not-a-string
+;;
+;; The last two are the OP's own entrance exit, not the launcher's, so this is
+;; one root cause reaching two exits: a bound applied to one type inside a
+;; value is not a bound on the value.
+;;
+;; The round-nineteen witness was blind twice over — every drive built its
+;; hostile argument as a string, and the assertion filtered the parsed tree
+;; with `string?` before measuring — which is the round-eighteen lesson one
+;; frame over: an enumeration that describes a subset of what an entrance
+;; emits is green over the rest.
+;;
+;; THE RULE: THE BOUND IS OVER THE VALUE AS PRINTED, not over one type inside
+;; it. A keyword, a symbol, a vector of them and a nested map are bounded
+;; exactly as a string is, at BOTH real launchers and at both exits, and this
+;; witness drives all four through both as subprocesses.
+;; ---------------------------------------------------------------------------
+
+(defn- printed-value-drives
+  "One drive per non-string shape `core/parse-val` can mint from CLI text.
+
+   Two exits, deliberately: `:duplicate-argument` is the LAUNCHER's own
+   refusal, raised by `parse-args` before dispatch; `:doors-not-a-string` is
+   the OP's entrance exit. One root cause reaches both, so one witness drives
+   both."
+  []
+  (let [big (hostile-argument)]
+    [{:label :keyword-at-the-launchers-exit
+      :error-type :duplicate-argument
+      :args [":op" ":relation-census"
+             ":doors" (str ":" big) ":doors" (str ":" big)]}
+     {:label :symbol-at-the-launchers-exit
+      :error-type :duplicate-argument
+      :args [":op" ":relation-census"
+             ":doors" (str "[" big "]") ":doors" (str "[" big "]")]}
+     {:label :keyword-vector-at-the-ops-exit
+      :error-type :doors-not-a-string
+      :args [":op" ":relation-census" ":dir" "." ":doors" (str "[:" big "]")]}
+     {:label :nested-map-at-the-ops-exit
+      :error-type :doors-not-a-string
+      :args [":op" ":relation-census" ":dir" "." ":doors" (str "{:k :" big "}")]}]))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value
+  (let [drives (printed-value-drives)
+        marker-slack 64
+        ;; AT the ceiling, never at a constant: the assertion moves when the
+        ;; declared bound moves, which is what makes it a witness for the rule
+        ;; rather than for today's number.
+        ceiling (+ census/max-refusal-field-chars marker-slack)]
+
+    (testing "every driven name is DECLARED at the exit it leaves through"
+      (doseq [{:keys [label error-type]} drives]
+        (is (contains? (into census/launcher-refusal-types
+                             census/cli-refusal-types)
+                       error-type)
+            (str label " drives " (pr-str error-type)
+                 ", which neither declared refusal set contains, so no "
+                 "enumeration witness could see it"))))
+
+    (doseq [runtime [:jvm :bb]
+            {:keys [label error-type args]} drives]
+      (let [{:keys [out exit parsed]} (raw-launcher runtime args)]
+        (testing (str runtime " " label " refuses as the declared type")
+          (is (= 1 exit)
+              (str runtime " " label " exited " exit ": " (pr-str out)))
+          (is (map? parsed)
+              (str runtime " " label " printed no readable refusal: "
+                   (pr-str (subs (str out) 0 (min 400 (count (str out)))))))
+          (is (= error-type (:error-type parsed))
+              (str runtime " " label " refused "
+                   (pr-str (:error-type parsed)))))
+
+        (testing (str runtime " " label " is bounded AS PRINTED")
+          (let [longest (reduce max 0 (printed-leaf-lengths parsed))]
+            (is (<= longest ceiling)
+                (str runtime " " label " published a leaf that RENDERS as "
+                     longest " characters, over the " ceiling
+                     "-character ceiling — the bound is enforced on one type "
+                     "inside the value rather than on the value")))
+          (is (str/includes? (str out) "[truncated:")
+              (str runtime " " label
+                   " truncated nothing and said nothing: the caller's own "
+                   "10,001-character argument came back whole"))
+          (is (not (re-find (re-pattern (str "a{" hostile-argument-length "}"))
+                            (str out)))
+              (str runtime " " label
+                   " echoed the whole hostile argument back"))
+          (is (< (alength (.getBytes (str out) "UTF-8")) 8192)
+              (str runtime " " label " published "
+                   (alength (.getBytes (str out) "UTF-8")) " bytes")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; ROUND NINETEEN, item 4 — Sol's round-eighteen item 4.

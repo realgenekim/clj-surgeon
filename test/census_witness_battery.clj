@@ -59,7 +59,11 @@
    ['clj-surgeon.mcp-relation-census-test/no-census-reads-a-source-whose-real-path-leaves-the-workspace :r19]
    ['clj-surgeon.mcp-relation-census-test/every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit :r19]
    ['clj-surgeon.mcp-relation-census-test/no-refusal-names-the-workspace-root-in-its-prose :r19]
-   ['clj-surgeon.mcp-relation-census-test/no-refusal-SITE-renders-a-raw-workspace-root-into-prose :r19]])
+   ['clj-surgeon.mcp-relation-census-test/no-refusal-SITE-renders-a-raw-workspace-root-into-prose :r19]
+   ;; Round twenty — the witnesses that close round nineteen's two blocking
+   ;; findings: the bound is over the value AS PRINTED, and the containment
+   ;; fence fails CLOSED.
+   ['clj-surgeon.mcp-relation-census-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]
