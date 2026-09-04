@@ -180,3 +180,25 @@ wait 1 → **5–7 raw calls vs native ~38**; pre-write reads 0; suite runs 1. W
 landing contract did not remove the ceremony and the claim is restricted to "edit basis + gate". If native with the gate
 offered also drops below 12, the gate is the whole effect and the contract is withdrawn. The receipt alone tops out near 2×;
 the contract plus the gate is where 10× lives, if it lives.
+
+## Wall clock by turn species (Gene, 2026-09-04 16:4xZ: "2x multiples or more based on wall clock time")
+
+From the codex rollout timestamps; a turn's wall = time until the next call (so it includes the model's thinking before that call).
+
+| arm | wall min | turns | repo rules | code reads | bd ceremony | write | verify | wait |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| N | 8.7 | 32 | 1.0 | 4.0 | 0.5 | 0.6 | 1.5 | 1.5 |
+| N2 | 11.0 | 50 | 3.7 | 2.3 | 0.5 | 1.5 | 1.5 | 0 |
+| N3 | 7.4 | 33 | 1.9 | 3.2 | 0.3 | 0.5 | 0.9 | 0 |
+| T3 | 6.4 | 19 | 1.3 | 0 | 1.9 | 0.9 | 1.6 | 0.8 |
+| T3b | 6.0 | 18 | 3.3 | 0 | 0.4 | 0.5 | 1.2 | 0.2 |
+| T4 | 5.6 | 19 | 1.0 | 0 | 2.3 | 0.8 | 0.8 | 0.6 |
+| T4b | 6.2 | 18 | 0.5 | 0 | 2.4 | 0.9 | 2.3 | 0.4 |
+
+Reading: the receipt removed the code reads entirely (~3.2 of native's ~9 min) — that is the whole 1.45× and it is done; no
+further receipt polish buys wall. In the receipt arms bd ceremony + repo rules = 3.3 of 6 min (over half); the bd ceremony
+is 2+ min in T4/T4b, WORSE than native (long bead descriptions, then the .local_version fight). Verify + write ≈ 2.3 min and
+grows under load. Levers by wall: (1) the SMW landing contract (bd chain, untrack .local_version, CLAUDE.md distilled) ≈ −3 min,
+native included; (2) the admit gate (write + verify in one call) ≈ −1.5 min quiet, more under load. Projected: 9 → ~3 → ~2 min,
+3–4× on wall from two levers, neither of which is another feature_thread round. Standing meter from here: wall per species
+(this script), not call counts. Refocus ratified in principle by Gene: no fractional gains where the juice is squeezed.

@@ -1602,3 +1602,17 @@ bucket — a refusal nobody hears is the same class as round nine's. The filter 
 review on the same tip; the round-twelve builder closes Sol's item meanwhile on its own worktree. GO-WITH-FIX is not GO.
 
 ## 16:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 16:52Z census LANDED (merge bafc273a); four builds and two verdicts recorded; wall-clock refocus
+
+Fifth landing of the night. Gates on the MERGED tree: mcp-test 865/13023/0, bb 840/6919/0, oracle, hygiene, census
+battery exit 0 (17 min under load 5–7, mostly the reader-eval fence's six cold JVM launches). Records that waited on it:
+gate r11 Opus completion GO-WITH-FIX (five escapes, present-but-nil = absent, read-eval on), r12 built b489a276, r13
+building; feature_thread r8 built 3dfe0895 with Sol r9 review running; study-ops r10 built dda9fa29 with Sol r11 running.
+
+Gene's ruling this morning, in substance: chase 2× multiples on WALL CLOCK, not fractional gains where the juice is
+squeezed. By the wall decomposition (replay doc): the receipt's whole effect (−3.2 min of code reads) is done; the
+receipt arms spend over half their 6 min on bd ceremony + repo rules; verify + write ≈ 2.3 min. Levers: the SMW landing
+contract (≈ −3 min, native included; needs Gene's go on his repo) and the admit gate (arm G). feature_thread freezes after
+its landing review. Reviews already in flight run to completion; no new polish rounds are launched on any lane unless the
+finding is a landing blocker.
