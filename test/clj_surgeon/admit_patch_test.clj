@@ -7682,3 +7682,34 @@
         (is (some? (:payload_omitted_bytes receipt))
             "and still reports the JSON figure beside it"))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-158
+;; The kind's ENUMERATION driver, and it has to live in this leaf rather than
+;; beside its siblings in `clj-surgeon.admit-patch-round18-test`: the recorder
+;; that proves `admit-refusal-kinds` is exactly the set the entrance produces
+;; is a `:once` fixture over THIS namespace, so a kind driven only from
+;; another leaf reads as enumerated-but-never-driven. The behaviour itself --
+;; three modes, a linked directory, a cycle, and an in-workspace link
+;; recreated as a link -- is witnessed there.
+(deftest an-entry-resolving-outside-the-workspace-refuses-by-name
+  (let [root (temp-dir)
+        outside (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [victim (io/file outside "victim.txt")]
+        (spit victim "PRECIOUS-CONTENT-DO-NOT-TOUCH\n")
+        (Files/createSymbolicLink (.toPath (io/file root "innocent-link.txt"))
+                                  (.toPath victim)
+                                  (make-array FileAttribute 0))
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands ["true"]}})]
+          (is (false? (:ok result)))
+          (is (= :inline-verify-overlay-escape (:error-type result)))
+          (is (str/includes? (str (:error result)) "innocent-link.txt")
+              (pr-str (:error result)))
+          (is (= "PRECIOUS-CONTENT-DO-NOT-TOUCH\n" (slurp victim))
+              "the file the link pointed at is byte-identical")))
+      (finally (delete-tree! root) (delete-tree! outside)))))

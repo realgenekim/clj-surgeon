@@ -30,7 +30,7 @@
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
-   (java.nio.file Files)
+   (java.nio.file CopyOption Files LinkOption Path)
    (java.nio.file.attribute FileAttribute)))
 
 (def max-patch-bytes
@@ -301,6 +301,11 @@
     :duplicate-definition
     :duplicate-patch-target
     :hunk-truncated
+    ;; @spec MCP-OP-ADMIT-158
+    ;; The workspace holds an entry that resolves outside itself, so the
+    ;; overlay refuses rather than dereferencing it. A fact about the tree,
+    ;; refused in every mode.
+    :inline-verify-overlay-escape
     :invalid-admit-request
     :invalid-patch
     :invalid-relative-source-path
@@ -1045,39 +1050,102 @@
 
     :else {:error :not-a-vocabulary}))
 
+;; @spec MCP-OP-ADMIT-158
+(def ^:private no-follow
+  "The link option every overlay filesystem test carries.
+
+  A `java.io.File` predicate has no such option: `.isDirectory` and `.exists`
+  FOLLOW a symbolic link, which is how round seventeen's review descended out
+  of a workspace through a link and truncated every file beneath its target."
+  (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
+
+;; @spec MCP-OP-ADMIT-158
+(defn- inside-root?
+  [^Path root ^Path candidate]
+  (.startsWith (.normalize candidate) root))
+
+;; @spec MCP-OP-ADMIT-158
+(defn- symlink-target-path
+  "Where one symbolic link points, resolved against its OWN directory."
+  [^Path link]
+  (.normalize (.resolve (.getParent link) (Files/readSymbolicLink link))))
+
 ;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-158
 (defn- overlay-source-files
-  "Every file the overlay would copy, with a running byte count.
+  "Every entry the overlay would copy, with its WORKSPACE-RELATIVE spelling.
+
+  Two things changed here after round seventeen, and both are the same rule:
+  the walk decides what an entry IS without dereferencing it, and it carries
+  the entry's own relative path rather than recomputing one from a canonical
+  target. A canonical path is a fact about where a link POINTS; the overlay is
+  a copy of the tree's own SHAPE, and deriving a destination from the former
+  is how a copy lands outside the directory it is copying into.
 
   Stops the moment either ceiling is passed, so an oversized tree costs a walk
   rather than a copy."
   [^java.io.File root]
-  (loop [pending [root] files [] bytes 0]
-    (cond
-      (or (< inline-overlay-max-files (count files))
-          (< inline-overlay-max-bytes bytes))
-      {:over-ceiling true :files (count files) :bytes bytes}
+  (let [^Path root-path (.normalize (.toPath root))]
+    (loop [pending (vec (or (seq (.listFiles root)) [])) files [] bytes 0]
+      (cond
+        (or (< inline-overlay-max-files (count files))
+            (< inline-overlay-max-bytes bytes))
+        {:over-ceiling true :files (count files) :bytes bytes}
 
-      (empty? pending) {:files files :bytes bytes}
+        (empty? pending) {:files files :bytes bytes}
 
-      :else
-      (let [^java.io.File current (peek pending)
-            rest-pending (pop pending)]
-        (cond
-          (not (.exists current)) (recur rest-pending files bytes)
-
-          (.isDirectory current)
-          (if (and (not= current root)
-                   (contains? inline-overlay-skipped-directories
-                              (.getName current)))
+        :else
+        (let [^java.io.File current (peek pending)
+              rest-pending (pop pending)
+              ^Path current-path (.toPath current)
+              relative (str (.relativize root-path current-path))]
+          (cond
+            (not (Files/exists current-path no-follow))
             (recur rest-pending files bytes)
-            (recur (into rest-pending (or (seq (.listFiles current)) []))
-                   files bytes))
 
-          :else (recur rest-pending (conj files current)
-                       (+ bytes (.length current))))))))
+            ;; A link is an ENTRY, never a door. Recording it without
+            ;; descending is also why a symlink cycle cannot hang this walk.
+            (Files/isSymbolicLink current-path)
+            (recur rest-pending
+                   (conj files {:file current :relative relative
+                                :kind :symlink})
+                   bytes)
+
+            (Files/isDirectory current-path no-follow)
+            (if (contains? inline-overlay-skipped-directories (.getName current))
+              (recur rest-pending files bytes)
+              (recur (into rest-pending (or (seq (.listFiles current)) []))
+                     files bytes))
+
+            :else
+            (recur rest-pending
+                   (conj files {:file current :relative relative :kind :file})
+                   (+ bytes (.length current)))))))))
+
+;; @spec MCP-OP-ADMIT-158
+(defn- overlay-escaping-entry
+  "The first entry that would take the copy outside the tree it is copying.
+
+  Returned AS THE WORKSPACE SPELLS IT. A silent skip would be the same class
+  of defect as the dereference it replaces -- the caller would get a green
+  about a snapshot missing a file it never heard about."
+  [^Path source-path entries]
+  (first
+    (keep (fn [{:keys [^java.io.File file relative kind]}]
+            (let [^Path resolved (.resolve source-path ^String relative)]
+              (cond
+                (not (inside-root? source-path resolved)) relative
+
+                (and (= :symlink kind)
+                     (not (inside-root? source-path
+                                        (symlink-target-path (.toPath file)))))
+                relative
+
+                :else nil)))
+          entries)))
 
 ;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-158
 (defn overlay-snapshot!
   "The workspace as this patch would leave it, in a directory of its own.
 
@@ -1089,11 +1157,20 @@
   the gate is not about to write, which is the failure mode this whole gate
   exists to prevent.
 
+  The copy is a `Files/copy` carrying NOFOLLOW_LINKS rather than an `io/copy`:
+  a stream copy dereferences a link, which is how this loop opened a file
+  outside the workspace for read and write at once and truncated it
+  (MCP-OP-ADMIT-158).
+
   Returns `{:ok true :root <File>}` or a typed refusal map."
   [project-root images]
-  (let [source-root (io/file (str project-root))
-        walk (overlay-source-files source-root)]
-    (if (:over-ceiling walk)
+  (let [source-root (.getAbsoluteFile (io/file (str project-root)))
+        ^Path source-path (.normalize (.toPath source-root))
+        walk (overlay-source-files source-root)
+        escaping (when-not (:over-ceiling walk)
+                   (overlay-escaping-entry source-path (:files walk)))]
+    (cond
+      (:over-ceiling walk)
       {:ok false
        :error-type :inline-verify-workspace-too-large
        :error (str "inline verification copies the workspace into a snapshot"
@@ -1102,14 +1179,50 @@
                    inline-overlay-max-bytes " bytes; run the commands"
                    " yourself, or declare a focused-test profile whose"
                    " command is pointed at {snapshot}")}
+
+      ;; @spec MCP-OP-ADMIT-158
+      escaping
+      {:ok false
+       :error-type :inline-verify-overlay-escape
+       :error (str "inline verification copies the workspace into a snapshot,"
+                   " and this workspace holds an entry that resolves outside"
+                   " itself: " escaping
+                   ". The overlay never follows a link out of the tree it is"
+                   " copying -- nothing was read, copied or written -- because"
+                   " a destination derived from a link's target lands outside"
+                   " the overlay root and truncates the file it points at."
+                   " Remove or exclude the entry, run the commands yourself,"
+                   " or declare a focused-test profile.")}
+
+      :else
       (let [root (temp-tree! "clj-surgeon-admit-overlay")
-            source-path (.toPath (.getCanonicalFile source-root))]
-        (doseq [^java.io.File file (:files walk)]
-          (let [relative (str (.relativize source-path
-                                           (.toPath (.getCanonicalFile file))))
-                target (io/file root relative)]
-            (.mkdirs (.getParentFile target))
-            (io/copy file target)))
+            ^Path root-path (.normalize (.toPath (.getAbsoluteFile root)))]
+        (doseq [{:keys [^java.io.File file relative kind]} (:files walk)]
+          (let [^Path target-path (.normalize (.resolve root-path ^String relative))]
+            ;; The pre-scan above already refused every escaping entry, so a
+            ;; destination outside the root here is a broken invariant rather
+            ;; than a caller's tree -- and an invariant breach on a write path
+            ;; is a crash, never a silent skip.
+            (when-not (inside-root? root-path target-path)
+              (throw (IllegalStateException.
+                       (str "overlay destination escaped its root: " relative))))
+            (.mkdirs (.getParentFile (.toFile target-path)))
+            (if (= :symlink kind)
+              ;; @spec MCP-OP-ADMIT-158
+              ;; A link is recreated as a link, with its target rewritten to
+              ;; the overlay's own copy of what it pointed at. Copying the raw
+              ;; target would leave a link into the real workspace, so a
+              ;; command writing through it would write to the tree the
+              ;; overlay exists to keep untouched.
+              (let [inside (.relativize source-path
+                                        (symlink-target-path (.toPath file)))
+                    link-target (.relativize (.getParent target-path)
+                                             (.resolve root-path inside))]
+                (Files/createSymbolicLink target-path link-target
+                                          (make-array FileAttribute 0)))
+              (Files/copy (.toPath file) target-path
+                          (into-array CopyOption
+                                      [LinkOption/NOFOLLOW_LINKS])))))
         (doseq [{:keys [file operation post]} images]
           (let [target (io/file root file)]
             (if (= :delete operation)
@@ -1393,6 +1506,11 @@
     ;; check that did not happen, never half a verification.
     :inline-verify-overlay-unavailable
     :inline-verify-workspace-too-large
+    ;; @spec MCP-OP-ADMIT-158
+    ;; Reachable as a reason only in the interval between the overlay's
+    ;; refusal and the receipt branch that turns it into a typed refusal of
+    ;; its own; enumerated here so no path can publish it as a silent skip.
+    :inline-verify-overlay-escape
     :inline-verify-not-run
     ;; @spec MCP-OP-ADMIT-118
     :focused-test-profile-has-no-command})
@@ -2397,6 +2515,31 @@
                                   blocked (::blocking verification)
                                   verification (dissoc verification ::blocking)]
                               (cond
+                                ;; @spec MCP-OP-ADMIT-158
+                                ;; An entry that resolves outside the
+                                ;; workspace is a fact about the TREE, not the
+                                ;; result of a check -- the same carve-out
+                                ;; MCP-OP-ADMIT-157 makes for a duplicate
+                                ;; definition -- so it refuses in EVERY mode.
+                                ;; Publishing it as a check that could not run
+                                ;; would let `propose` answer `ok=true` about
+                                ;; a workspace the gate refuses to copy.
+                                (= :inline-verify-overlay-escape
+                                   (get-in verification [:tests :reason]))
+                                (merge base verification
+                                       {:ok false
+                                        :operation :admit-patch-refused
+                                        :committed false
+                                        :mutation_attempted false
+                                        :source-unchanged true
+                                        :verify_ok false
+                                        :error-type :inline-verify-overlay-escape
+                                        :error (get-in verification
+                                                       [:tests :overlay_error])
+                                        :next_call
+                                        (next-call context "preview"
+                                                   :inline-verify-overlay-escape)})
+
                                 ;; @spec MCP-OP-ADMIT-157
                                 ;; `propose` is the loop: run the same checks
                                 ;; in the same snapshot, publish the same
