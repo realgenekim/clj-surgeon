@@ -1230,3 +1230,5 @@ Two record corrections worth the line: an EARS clause (STUDY-046) had encoded a 
 ## 04:53Z — Sol's filter refused two more reviews (MEM-003 r3 — the clock/partition lane; FAN scorer r4 — the object-store/chmod lane) → Opus fallbacks launched with the identical briefs; q5z r14 Sol verdict is GO-WITH-FIX (filing when its log exits)
 
 Refusal tally tonight: MEM-003 r3 (earlier), fold-diff r9, census r16, census r17, admit-gate r1, MEM-003 r3 again, FAN r4 — seven; Sol reviewed census r18, q5z r12–r14, O2 r2–r4, FAN r1–r3 without refusal. The pattern: anything whose fixtures involve permissions, symlinks, lock contention, or a hash-verified trust root trips the filter; pure receipt/rendering lanes pass. Gene's rule (Sol first) stands and each fallback is named here.
+
+## 05:00Z — Gene: "gene report" — pasted in full to chat and filed as docs/observations/2026-09-04-gene-report-0455z.md (table first; wins/losses; learnings→ratchets; one action per lane)
