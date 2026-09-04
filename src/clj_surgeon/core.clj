@@ -557,6 +557,45 @@
        :cause :permission-denied
        :error (str given " exists but cannot be read")})))
 
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn census-read-refusal
+  "A read that failed AFTER the fence admitted the path, as a fence refusal.
+
+   Opus's round-sixteen NO-GO items 1 and 3, blocking. Round sixteen gave the
+   MCP reader this catch (`mcp-relation-census/read-failure-refusal`) and left
+   this entrance's reader a bare `(slurp p)`, so the identical mode-flip storm
+   answered at the two entrances differently:
+
+     MCP  {:OK 14502, \"unreadable-source-path\" 5498}
+     CLI  {:file-not-readable 16523, :census-adapter-failure 1623, :OK 1854}
+
+   and each of those 1,623 carried round fourteen's REJECTED receipt —
+   `census-adapter-failure`, `exhausted` false, and a resource-exhaustion
+   remedy telling a request that named ONE file to point `:dir` at a directory
+   it knows is smaller. That is the sentence the round-fifteen fix was written
+   under, recurring with the entrances swapped: a rule that lives in one branch
+   is a rule the other branches break.
+
+   The fence answering does not end the question. Between the check and the
+   read the filesystem may change, and it does — a mode flipped by another
+   process, an ordinary editor's atomic save. The two are the SAME fact to a
+   continuation, a name the next call must not carry, so they answer alike:
+   the type the fence gives a path it may not read, and a cause that says the
+   read is what failed rather than the check.
+
+   The exception's own MESSAGE is not published, for the reason
+   MCP-OP-CENSUS-014 states globally: `FileNotFoundException` renders as
+   \"<absolute path> (Permission denied)\", and a refusal that leaks the
+   server's absolute root tells the caller a fact about the box instead of a
+   fact about their request."
+  [given ^Throwable error]
+  {:error-type :file-not-readable
+   :cause :read-failed-after-fence
+   :error (str given " passed the fence and then could not be read; its mode "
+               "or its existence changed under the census ("
+               (.getName (class error)) ")")})
+
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-028
 ;; @spec MCP-OP-CENSUS-032
@@ -607,30 +646,56 @@
         :duplicates (:duplicates discovered 0)}
 
        :else
-       (reduce
-         (fn [acc p]
-           ;; The fence, on EVERY member, before the open. Stopping at the
-           ;; first refusable path is what the MCP entrance's `collect-inputs`
-           ;; does, for the same reason: nothing after it can be trusted
-           ;; either, and the refusal names the one the walk tripped on.
-           (if-let [refused (census-source-refusal p)]
-             (reduced (assoc acc :unreadable (assoc refused :file (relative p))))
-             (let [source (slurp p)
-                   acc (update acc :scanned inc)]
-               (if (relation-census/defines-arms? source)
-                 (update acc :inputs conj {:file (relative p)
-                                           :source source})
-                 (cond-> acc
-                   declared?
-                   (update :declared into
-                           (relation-census/source-declared-names source)))))))
-         {:scanned 0
-          :inputs []
-          :declared #{}
-          :oversized-skipped (vec (:oversized discovered))
-          :skipped-outside-root (:skipped-outside-root discovered 0)
-          :duplicates (:duplicates discovered 0)}
-         paths)))))
+       (let [;; WHERE the path came from, decided once. A `:file` request IS
+             ;; the request, so the refusal names it exactly as the caller
+             ;; spelled it and no narrowing exists; a walk member is named
+             ;; project-relative and there is no request to narrow. The MCP
+             ;; entrance decides the same two provenances from `requested`.
+             from-request? (boolean file)
+             shown (fn [p] (if from-request? (str file) (relative p)))
+             provenance (if from-request? :request :walk)]
+         (reduce
+           (fn [acc p]
+             ;; The fence, on EVERY member, before the open. Stopping at the
+             ;; first refusable path is what the MCP entrance's `collect-inputs`
+             ;; does, for the same reason: nothing after it can be trusted
+             ;; either, and the refusal names the one the walk tripped on.
+             (if-let [refused (census-source-refusal p)]
+               (reduced (assoc acc :unreadable
+                               (assoc refused
+                                      :file (shown p)
+                                      :provenance provenance)))
+               ;; The typed catch at the READ. Opus's round-sixteen items 1
+               ;; and 3: the fence has answered, and between that answer and
+               ;; this open the filesystem may change. `IOException` and not
+               ;; `Throwable`, exactly as `collect-inputs` catches it: an
+               ;; exhaustion is a different fact and keeps its own answer at
+               ;; the op's catch-all.
+               (let [read (try {:source (slurp p)}
+                               (catch java.io.IOException error
+                                 {:unreadable error}))]
+                 (if-let [error (:unreadable read)]
+                   (reduced (assoc acc :unreadable
+                                   (assoc (census-read-refusal (shown p) error)
+                                          :file (shown p)
+                                          :provenance provenance)))
+                   (let [source (:source read)
+                         acc (update acc :scanned inc)]
+                     (if (relation-census/defines-arms? source)
+                       (update acc :inputs conj {:file (relative p)
+                                                 :source source})
+                       (cond-> acc
+                         declared?
+                         (update :declared into
+                                 (relation-census/source-declared-names
+                                   source)))))))))
+           {:scanned 0
+            :inputs []
+            :declared #{}
+            :oversized-skipped (vec (:oversized discovered))
+            :skipped-outside-root (:skipped-outside-root discovered 0)
+            :duplicates (:duplicates discovered 0)}
+           paths))))))
 
 ;; @spec MCP-OP-CENSUS-021
 ;; @spec MCP-OP-CENSUS-031
@@ -962,8 +1027,16 @@
       ;; remedy rather than a continuation. There is no continuation to
       ;; compute: the path came from the WALK and not from the request, so
       ;; there is no request to narrow.
+      ;; The remedy is chosen by PROVENANCE, not by the type. Opus's
+      ;; round-sixteen item 1: a read that failed after the fence on the ONE
+      ;; source a `:file` request named reached this branch, and the walk's
+      ;; wording told a one-file request that the path "came from the
+      ;; workspace walk" and to remove or repair it — a remedy about a tree the
+      ;; caller never asked for. A `:file` request IS the request, so it earns
+      ;; the same wording every other named-source refusal above earns.
       (:unreadable @scan)
-      (let [{:keys [error-type error cause parent file]} (:unreadable @scan)
+      (let [{:keys [error-type error cause parent file provenance]}
+            (:unreadable @scan)
             root (census-root dir)]
         (cond-> (merge
                   {:ok false
@@ -972,14 +1045,27 @@
                    :error error
                    :file file
                    :remedy
-                   (str file " came from the workspace walk, not from the "
-                        "request, so there is no request to narrow and no "
-                        "narrower command can be computed: remove or repair "
-                        "it under " root
-                        (when parent
-                          (str " (the directory " parent
-                               " is what this process may not read)"))
-                        ", or name a readable regular file with :file.")}
+                   (if (= :request provenance)
+                     (str file " passed the fence and then could not be read "
+                          "— its mode or its existence changed under the "
+                          "census — and the one source this op was given IS "
+                          "the request, so the request minus it is not a "
+                          "request and no narrower command can be computed: "
+                          "make " file " readable and stable, name another "
+                          "readable regular file with :file, or point :dir at "
+                          "a directory to census its tree.")
+                     (str file " came from the workspace walk, not from the "
+                          "request, so there is no request to narrow and no "
+                          "narrower command can be computed: remove or repair "
+                          "it under " root
+                          (when parent
+                            (str " (the directory " parent
+                                 " is what this process may not read)"))
+                          (when (= :read-failed-after-fence cause)
+                            (str " (it passed the fence and then could not be "
+                                 "read; its mode or its existence changed "
+                                 "under the census)"))
+                          ", or name a readable regular file with :file."))}
                   (facts))
           cause (assoc :cause cause)
           parent (assoc :parent parent)))
