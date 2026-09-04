@@ -1,6 +1,7 @@
 (ns clj-surgeon.workspace-onboarding
   "Install the bounded project-local Codex entrance for one repo-rooted stack."
   (:require
+   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
@@ -422,6 +423,8 @@
                     (.directory (io/file directory))
                     .inheritIO
                     .start)]
+    ;; @spec TEST-ISO-002
+    (spawn/record! (.pid process) command)
     {:command command :exit (.waitFor process)}))
 
 (defn- require-command!

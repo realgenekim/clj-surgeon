@@ -35,6 +35,7 @@
    spawned is the verifier being blind to its own subject."
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
+   [clj-surgeon.spawn-ledger :as spawn]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str])
@@ -386,7 +387,10 @@
      :var-roots (var-root-identities)
      :globals (global-container-values)
      :threads (live-non-daemon-threads)
-     :processes (descendant-processes)}))
+     :processes (descendant-processes)
+     ;; @spec TEST-ISO-002 -- the append-only launch record. Cheap (a deref)
+     ;; and, unlike the pid set, not erased by the child exiting.
+     :spawns (spawn/snapshot)}))
 
 (defn probe-after
   "The paired snapshot. Identical content to `probe`; the process set is read
@@ -394,8 +398,9 @@
    against the namespace that just finished."
   [repo-root]
   (let [processes (descendant-processes)
+        spawns (spawn/snapshot)
         p (probe repo-root)]
-    (assoc p :processes processes)))
+    (assoc p :processes processes :spawns spawns)))
 
 ;; ---------------------------------------------------------------------------
 ;; The fold. Verdicts only, and PURE -- every one of these is reachable from a
@@ -414,15 +419,46 @@
   (format "%s VIOLATION in %s -- %s: %s" intent namespace resource detail))
 
 (defn process-violations
-  "@spec TEST-ISO-002"
+  "@spec TEST-ISO-002 -- TWO independent observations of the same rule, because
+   neither one alone can see a child process.
+
+   the LIVE PID DIFF   `ProcessHandle/descendants` across the window. Sees a
+                       child that is still running -- a server, a hung
+                       analyzer, anything the namespace forgot to reap. It
+                       CANNOT see a child that already exited, and a test that
+                       waits for its child is precisely that case.
+
+   the SPAWN LEDGER    `clj-surgeon.spawn-ledger`, appended to by every
+                       repository-owned spawn helper at the moment of launch.
+                       Sees the EVENT, so exiting does not erase it. It cannot
+                       see a raw `ProcessBuilder` a test builds itself -- that
+                       is the source scan's and the pid diff's half.
+
+   The round-three landing review's finding 6 is the case where only the
+   second one fires: `/bin/sh -c 'printf cold-ok'` through the production
+   cold-verify helper, waited on to completion, inside a `:fast` namespace
+   whose lane rule reads `No child process`.
+
+   A pid seen by both is reported ONCE, as the live-descendant kind, which is
+   the more serious of the two."
   [ns-sym before after]
   (let [new-pids (set/difference (set (keys (:processes after)))
-                                 (set (keys (:processes before))))]
-    (mapv (fn [pid]
-            (violation "TEST-ISO-002" ns-sym "process spawn"
-                       (format "pid %d is a live descendant that did not exist before this namespace ran: %s"
-                               pid (get-in after [:processes pid]))))
-          (sort new-pids))))
+                                 (set (keys (:processes before))))
+        recorded (spawn/recorded-between (:spawns before) (:spawns after))
+        exited (remove (comp new-pids :pid) recorded)]
+    (into
+     (mapv (fn [pid]
+             (violation "TEST-ISO-002" ns-sym "process spawn"
+                        (format "pid %d is a live descendant that did not exist before this namespace ran: %s"
+                                pid (get-in after [:processes pid]))))
+           (sort new-pids))
+     (mapv (fn [{:keys [pid command]}]
+             (violation "TEST-ISO-002" ns-sym "process spawn"
+                        (format (str "pid %d was launched by this namespace through a "
+                                     "repository spawn helper and has already exited, so no "
+                                     "live-descendant snapshot can see it: %s")
+                                pid command)))
+           exited))))
 
 (defn- entry-diff
   "Names that appeared, or whose stamp moved, between two `dir-entries` maps."

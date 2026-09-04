@@ -1,6 +1,7 @@
 (ns clj-surgeon.worktree-lifecycle-io
   "Bounded Git, Supacode, plan, journal, and single-target apply adapter."
   (:require
+   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
    [clj-surgeon.worktree-lifecycle :as lifecycle]
    [clojure.edn :as edn]
@@ -114,6 +115,8 @@
                       (.directory (io/file directory))
                       (.redirectErrorStream false)
                       .start)
+          ;; @spec TEST-ISO-002
+          _ (spawn/record! (.pid process) argv)
           out (slurp (.getInputStream process))
           err (slurp (.getErrorStream process))
           exit (.waitFor process)]

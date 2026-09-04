@@ -22,6 +22,7 @@
    authoring time is not a ratchet (the marker-audit lesson)."
   (:require
    [clj-surgeon.ns-isolation :as iso]
+   [clj-surgeon.spawn-ledger :as spawn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -41,7 +42,8 @@
    :var-roots {}
    :globals {}
    :threads {}
-   :processes {}})
+   :processes {}
+   :spawns []})
 
 (defn- messages [vs] (mapv iso/message vs))
 
@@ -71,6 +73,89 @@
     (testing "a child that was ALREADY running is not attributed to this namespace"
       (let [pre (assoc (empty-snapshot) :processes {4242 "an inherited child"})]
         (is (empty? (of-intent (iso/violations subject pre after) "TEST-ISO-002")))))))
+
+
+;; @spec TEST-ISO-002
+(deftest a-child-that-already-exited-fails-by-pid-and-command-line
+  ;; THE ROUND-THREE LANDING REVIEW'S FINDING 6, as a witness. The pid diff
+  ;; above can only see a child that is STILL RUNNING. `mcp-inspect-tool-test`
+  ;; drove `/bin/sh -c 'printf cold-ok'` through the production cold-verify
+  ;; helper and WAITED for it, so at the closing snapshot there was nothing to
+  ;; see -- a declared `:fast` namespace, whose lane rule reads `No child
+  ;; process`, spawning one that no control could observe. Recording the
+  ;; LAUNCH is what survives the child.
+  (let [before (empty-snapshot)
+        after (assoc (empty-snapshot) :spawns
+                     [{:pid 5150 :command "/bin/sh -c printf cold-ok" :at-ns 1}])
+        vs (of-intent (iso/violations subject before after) "TEST-ISO-002")]
+    (is (= 1 (count vs)))
+    (is (= "process spawn" (:resource (first vs))))
+    (let [m (iso/message (first vs))]
+      (is (str/includes? m "5150"))
+      (is (str/includes? m "/bin/sh -c printf cold-ok")
+          (str "the refusal must name what was spawned: " m))
+      (is (str/includes? m "already exited")
+          (str "and must say why no snapshot could have seen it: " m)))))
+
+;; @spec TEST-ISO-002
+(deftest a-spawn-seen-by-both-observations-is-reported-once
+  ;; A child that is still alive is in the pid diff AND in the ledger. Two
+  ;; lines for one child would teach a reader to skim the count.
+  (let [before (empty-snapshot)
+        after (assoc (empty-snapshot)
+                     :processes {5150 "/bin/sh -c sleep 60"}
+                     :spawns [{:pid 5150 :command "/bin/sh -c sleep 60" :at-ns 1}])
+        vs (of-intent (iso/violations subject before after) "TEST-ISO-002")]
+    (is (= 1 (count vs)) (pr-str (messages vs)))
+    (is (str/includes? (iso/message (first vs)) "live descendant")
+        "the more serious kind wins")))
+
+;; @spec TEST-ISO-002
+(deftest the-probe-really-reads-the-ledger-not-only-the-planted-map
+  ;; THE PROBE, END TO END, WITHOUT SPAWNING ANYTHING. A planted map proves
+  ;; the fold; it cannot prove `probe` looks at the ledger at all -- `:spawns`
+  ;; could return `[]` forever and every witness above would stay green. This
+  ;; drives the REAL ledger through the REAL probes: `record!` is the exact
+  ;; call the four production spawn helpers make, so what is exercised here is
+  ;; the wiring, not a stand-in. Fast-lane-safe because appending to an atom
+  ;; is not a child process.
+  (let [repo (System/getProperty "user.dir")
+        before (iso/probe repo)
+        _ (spawn/record! 424242 ["/bin/sh" "-c" "witness-only-never-executed"])
+        after (iso/probe-after repo)
+        vs (of-intent (iso/violations subject before after) "TEST-ISO-002")]
+    (is (= 1 (count vs))
+        (str "the probe did not carry the ledger across the window: "
+             (pr-str (messages vs))))
+    (is (str/includes? (iso/message (first vs)) "424242"))
+    (is (str/includes? (iso/message (first vs)) "witness-only-never-executed"))))
+
+;; @spec TEST-ISO-002
+(deftest every-src-spawn-site-records-into-the-ledger
+  ;; THE SRC HALF, held closed by enumeration. The ledger can only see a spawn
+  ;; a helper reports, so a new `ProcessBuilder` in src/ that does not call
+  ;; `record!` re-opens exactly the hole finding 6 came through -- silently,
+  ;; because nothing would go red.
+  ;;
+  ;; This is a SOURCE SCAN and says so: it enumerates the spelling
+  ;; `ProcessBuilder.` and requires the same file to spell `spawn/record!`. It
+  ;; cannot see a spawn through reflection, through a library, or through a
+  ;; name it does not know, and it does not check that the record is on the
+  ;; same code path. The behavioural half is the probe witness above; this is
+  ;; the index that keeps the enumeration honest.
+  (let [files (->> (file-seq (io/file "src"))
+                   (filter #(.isFile ^java.io.File %))
+                   (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
+                   sort)
+        offenders (for [^java.io.File f files
+                        :let [src (slurp f)]
+                        :when (str/includes? src "ProcessBuilder.")
+                        :when (not (str/includes? src "spawn/record!"))]
+                    (.getPath f))]
+    (is (empty? offenders)
+        (str (count offenders) " src spawn site(s) that do not append to "
+             "clj-surgeon.spawn-ledger, so a child they start and reap is "
+             "invisible to TEST-ISO-002: " (str/join ", " offenders)))))
 
 ;; ---------------------------------------------------------------------------
 ;; TEST-ISO-003 -- writes
