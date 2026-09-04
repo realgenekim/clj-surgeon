@@ -1112,7 +1112,10 @@
           "an internal reserve subtraction must never leak into a refusal")
       (is (nil? (:receipt_bytes structured))
           "receipt_bytes means text+structured everywhere or it is absent")
-      (is (integer? (:text_bytes structured))))))
+      (is (nil? (:text_bytes structured))
+          "text_bytes means the DELIVERED text everywhere or it is absent")
+      (is (integer? (:would_be_text_bytes structured))
+          "the refusal still says how big the receipt would have been"))))
 
 ;; @spec MCP-OP-THREAD-027
 (deftest subject-and-also-have-named-admission-ceilings

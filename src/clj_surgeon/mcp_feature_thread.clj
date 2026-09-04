@@ -2127,14 +2127,29 @@
   appended here, so a text-reading client can never be told less than a
   structure-reading one. Its own witness reintroduces a dropped field and
   watches the line appear."
-  [text result]
-  (let [missing (->> (leaf-paths result [])
-                     (remove (fn [[_ v]] (str/includes? text (str v))))
-                     (map (fn [[p v]] (str (str/join "." p) "=" (pr-str v))))
-                     distinct)]
-    (if (seq missing)
-      (str text "\n structured-only · " (str/join " · " missing))
-      text)))
+  ([text result] (ensure-superset text result text #{}))
+  ([text result haystack] (ensure-superset text result haystack #{}))
+  ([text result haystack vouched]
+   ;; @spec MCP-OP-THREAD-026
+   ;; `haystack` is the DESIGNED text WITHOUT the operation clock. The clock's
+   ;; digits are not evidence that a leaf was reported: with
+   ;; `elapsed_ms=229.543396` the leaf `sibling.legs.3.bytes=396` was "found"
+   ;; inside the clock and dropped, so the delivered text came out 28 bytes
+   ;; shorter than the `text_bytes` the receipt printed about itself, on 1 run
+   ;; in 25 (round-three review, 3.1).
+   ;;
+   ;; `vouched` names the leaf paths the EXCLUDED tail carries by construction,
+   ;; and it is exactly one: `receipt-tail` spells `elapsed_ms=<v>` whenever
+   ;; that leaf exists. Exempting it by PATH rather than by substring is the
+   ;; whole point -- a substring test over the clock is the defect above.
+   (let [missing (->> (leaf-paths result [])
+                      (remove (fn [[p _]] (contains? vouched p)))
+                      (remove (fn [[_ v]] (str/includes? haystack (str v))))
+                      (map (fn [[p v]] (str (str/join "." p) "=" (pr-str v))))
+                      distinct)]
+     (if (seq missing)
+       (str text "\n structured-only · " (str/join " · " missing))
+       text))))
 
 ;; @spec MCP-OP-THREAD-018
 (defn- co-primary-line
@@ -2316,15 +2331,16 @@
                                  " sha256:" (:sha256 %)
                                  " refetch=" (:refetch %))
                            elisions)
-        designed (str/join "\n" (remove nil?
-                                        (concat [header] body-lines
-                                                [sibling-line rules-line]
-                                                elision-lines
-                                                [(receipt-tail
-                                                   (:elapsed_ms result))])))]
+        without-clock (str/join "\n" (remove nil?
+                                             (concat [header] body-lines
+                                                     [sibling-line rules-line]
+                                                     elision-lines)))
+        designed (str without-clock "\n" (receipt-tail (:elapsed_ms result)))]
     (ensure-superset designed
                      (dissoc result :receipt_bytes :text_bytes
-                             :structured_bytes))))
+                             :structured_bytes)
+                     without-clock
+                     #{["elapsed_ms"]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Budget: measured on the FINAL rendered receipt, elided in a stated order
@@ -2489,14 +2505,20 @@
                                    " budget of " budget " this request asked"
                                    " for")
                        :budget_bytes budget
-                       :text_bytes total
+                       ;; @spec MCP-OP-THREAD-026
+                       ;; NOT `text_bytes`: this counts the receipt that could
+                       ;; not be sent, and `text_bytes` means the delivered text
+                       ;; everywhere else (round-three review, 3.1).
+                       :would_be_text_bytes total
                        :subject (:subject result)
                        :status (:status result)
                        :remedy (str "Raise budget_bytes (hard cap "
                                     hard-cap-bytes ") or narrow scope.paths.")}]
+          ;; The TEXT is re-rendered by `summary` from this map, so the string
+          ;; here is diagnostic only; the map is the subject.
           [(str "feature_thread refused · " (:error_type refusal) " · "
                 (:error refusal) "\nremedy · " (:remedy refusal)
-                "\nfacts · budget_bytes=" budget " text_bytes=" total
+                "\nfacts · budget_bytes=" budget " would_be_text_bytes=" total
                 " subject=" (:subject result) " status=" (:status result))
            refusal])
 
@@ -2752,12 +2774,26 @@
   [result]
   (if (:ok result)
     (render-receipt result)
-    (ensure-superset
-      (str "feature_thread refused · " (:error_type result)
-           "\n→ " (:error result)
-           (when-let [remedy (:remedy result)] (str "\nremedy · " remedy))
-           "\n" (receipt-tail (:elapsed_ms result)))
-      result)))
+    (let [without-clock (str "feature_thread refused · " (:error_type result)
+                             "\n→ " (:error result)
+                             (when-let [remedy (:remedy result)]
+                               (str "\nremedy · " remedy))
+                             ;; @spec MCP-OP-THREAD-026
+                             ;; The count on a refusal is NOT `text_bytes`: it
+                             ;; describes the receipt that could not be sent.
+                             ;; The text reader must see the same NAME the
+                             ;; structured reader does, not just the digits
+                             ;; (round-three review, 3.1).
+                             (when-let [wb (:would_be_text_bytes result)]
+                               (str "\nfacts · would_be_text_bytes=" wb
+                                    " budget_bytes=" (:budget_bytes result)
+                                    " — the text delivered is this refusal,"
+                                    " not that receipt")))]
+      (ensure-superset
+        (str without-clock "\n" (receipt-tail (:elapsed_ms result)))
+        result
+        without-clock
+        #{["elapsed_ms"]}))))
 
 (def feature-thread-schema
   {:type "object"
@@ -2812,6 +2848,7 @@
     "rules" {:type "object"}
     "elided" {:type "array" :items {:type "object"}}
     "budget_bytes" {:type "integer"}
+    "would_be_text_bytes" {:type "integer"}
     "receipt_bytes" {:type "integer"}
     "workspace_root" {:type "string"}
     "error_type" {:type "string"}
