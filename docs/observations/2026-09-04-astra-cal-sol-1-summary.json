@@ -1,0 +1,33 @@
+{
+  "recorded_utc": "2026-09-04T22:44:36.060588+00:00",
+  "arm": "cal-sol-1",
+  "model": "gpt-5.6-sol",
+  "client": "0.153.3",
+  "task": "21-owner63-site uniform-alias migration",
+  "correctness": "six external checks pass; canonical source matches; protected test bytes unchanged",
+  "wall_s": 122.3,
+  "independent_acceptance_wall_s": 0.36752552608959377,
+  "contaminated": true,
+  "clean_comparison_eligible": false,
+  "timing_exclusion": "one-second load samples exceed10; maximum13.19",
+  "runtime_observations": {
+    "outer_actions": 8,
+    "shell_executions": 7,
+    "native_patch_events": 1,
+    "patched_clojure_files": 21,
+    "behavioral_test_invocations": 1,
+    "namespace_load_invocations": 1
+  },
+  "watcher_return_count": 5,
+  "watcher_return_semantics": "assistant messages; not model API round trips",
+  "artifact_root": "/var/tmp/forge/astra-program/arms/cal-sol-1",
+  "artifact_sha256": {
+    "attest.json": "f85bb3e639f9df23fac6c8a4391ec4a1daf9a4f8585343592eb30e6b1bb269be",
+    "run.json": "a0a8364030ba94deee8f90b70ce7c8d7b1c6fe5704640e54db92465b30a0a896",
+    "adapter-result.json": "ee21b02c0c69589cc116d8265730783fad90350f177218c241f22ed886b19085",
+    "gate.json": "69b84e1b58ea47b03e7a8785499efb861da829b5a23e54569440d72baab28e39",
+    "independent-acceptance.json": "82a660ebdc4acee84268cc69e79b8ed0f92112c1dffde68951bd22fa5f69cf9c",
+    "contamination.json": "ef349cdee89e59fe9233372dcd8cfe152306d6c520a71b60c746fcde8d878415",
+    "diff.patch": "5a8e0027d64ac1c815e29d3b16873da0f597267f3fe6a2b5f2860a31bf885a8c"
+  }
+}

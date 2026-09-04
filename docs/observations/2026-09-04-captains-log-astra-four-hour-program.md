@@ -51,3 +51,11 @@ Dogfood produced two avoidable schema refusals: repository guidance said setincl
 A new80-owner, six-old-alias instance was generated with seed20260904:120collisions, newfixture basef4c66bb79e972f6af927418c8d86d911e3587493. Canonical positive control passes all6checks; unchanged negative fails. This is a new instance of an existing family, not evidence of cross-family generalization, and has no measured model arm yet.
 
 Capacity is now directed: Fable paused nonessential builders at checkpoints; owns22:40–23:00 timed window, Astra23:00–23:20. Shared23:20–23:30 reserved for focused verification. An independent suite-spike review is authorized read-only during timed windows; its JVM probes wait for the verification slot. No publicmain merge or push.
+
+## Astra — 2026-09-04T22:58:39.564011+00:00 — First clean Astra native task
+
+cal-astra-1 completed at22:56:04Z:52.2s watcher task wall (52.7s for the surrounding watcher subprocess), independentacceptance0.537s, all6checks pluscanonical/protectedguards green. Observedmodelgpt-6-astra, pinnedclient0.153.3, maxload3.16. Fourouterexecactions; the source-reading strategy grouped normalized bodies and emitted a guardedPython transformation rather than a literal21-file patch. These are one-arm mechanism observations, not a crossmodel speedclaim.
+
+Fable accepted SUSPEND-ALL until23:20 and handed off the window after its last modelarm. Our new parentwrapper underwent executed independent review: root-symlink, launchfailure and unboundedchildcleanup defects were fixed; nine tests and extra protected-test/detached-grandchild probes passed. FrozenparentSHA d9abb7b8eecd4004f12e37ae35873660c5acd1df6e6b39f703e1917a4ee6b6ee.
+
+Fable E-THREAD old wall.txt starts beforeflock, so it includes queue wait. That cohort remains useful for discovery completeness; task clocks are being recovered from session-bound runtime events. Future runner now records lockrequest/acquire/taskstart/end separately and refuses artifactoverwrite. No16-second estimatedtail may be called an observedduration.

@@ -1,0 +1,9 @@
+# Astra measurement amendment 1
+
+Recorded 2026-09-04T22:48:12.223549+00:00 after one native migration, before any tool model migration or Astra migration. Frozen prompts, client, models, adapter, watcher and acceptance remain unchanged.
+
+The first Sol native observation passed acceptance but exceeded the declared host-load threshold. Preserve it in every all-observations table and exclude it from the clean timing floor. After the originally scheduled calibration pairs, repeat any contaminated calibration identities once with explicit fresh `-cleanretry` suffixes if time permits. Retain failed or contaminated retries too. Do not repeat based on fast/slow wall or correctness. If fewer than six clean controls exist for a model, its variance-floor requirement remains unmet and comparisons are exploratory. This is an explicit expansion of the run ceiling by the number of contaminated calibration arms, constrained by the original four-hour deadline.
+
+The watcher field `returns` measures assistant messages, not model API round trips. Keep its raw value under that name only with this definition. Supplement action taxonomy from runtime CommandExecution/FileChange records when unambiguously bound to outer call intervals. Never execute or interpret arbitrary wrapper JavaScript to infer behavior, and do not treat raw/watch agreement as an independent taxonomy check. Unknown/ambiguous action categories stay unknown.
+
+The parent wrapper adds one-second load samples, observed slot wait and external acceptance clocks. Its source hash is attached to each new receipt. Earlier manually supervised cal-sol-1 keeps its original inline sampler and separately measured acceptance. Report contamination separately for task and external acceptance intervals. No amendment retroactively changes a recorded wall or task verdict.
