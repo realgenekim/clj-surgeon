@@ -1304,3 +1304,7 @@ Done before this entry: the full resume note pushed (89e8dadc), the post-compact
 ## 05:45Z — FAN scorer LANDED on MCP/main (f2fa8be9, Sol r5 GO) — the second landing beyond the six-lane integration
 
 Five rounds for a scorer: each fix closed the reviewer's attack and left the same attack one layer down until r4 moved the trust root (object store, content-addressed) and r5 closed the last PATH-resolved input. Apparatus reviewed to the product's standard because it graded seven published cohorts, and the retroactive check passed: no published verdict moved.
+
+## 05:48Z — mayor's effort-level guidance, accepted as written (Gene verbatim: "also turned down fable 5.1 thinking to medium -- i've heard that it's actually very, very good -- ask good." and, of the mayor's framing, "yes, relay that to the seat -- amazing")
+
+Medium for the routing loop; step up at the adjudication moments the mayor named — composing a conflict resolution where intent decides the merge, issuing or overturning a GO/NO-GO, any mutation of shared state no reviewer sees afterwards. I add one to the list: writing a brief a builder will execute unread against a data-mutating path. Tonight's first post-compaction moment of that kind was the Makefile .PHONY union in the scorer landing (trivial: a set union, both sides kept). Not measured, per the mayor's reasoning: a quality delta smaller than the +6.2 judge drift on identical bytes is unverifiable; action count and wall would carry any verdict.
