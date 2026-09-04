@@ -19,10 +19,62 @@
    [clojure.java.shell :as shell]
    [clojure.set :as set]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing use-fixtures]])
+   [clojure.test :as t :refer [deftest is testing use-fixtures]])
   (:import
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute)))
+
+;; ---------------------------------------------------------------------------
+;; The precondition skip bucket
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-147
+;; @spec MCP-OP-ADMIT-150
+(def precondition-skips
+  "Every precondition this run could not check, recorded as it happens.
+
+  Round seven's reviewer ruled the previous shape blocking: an absent battery
+  receipt was three ordinary FAILURES, so `clojure -M:clj-surgeon/mcp-test`
+  on a fresh clone was red for a reason unrelated to the gate, and the merge
+  gate a GO rests on could not be reproduced from the tip alone. A gate owns
+  its fixtures or names a precondition that never reads as red.
+
+  This suite does not own the recovery battery's receipt -- the battery is a
+  timing bound with a busy-spinning watcher, deliberately outside the fast
+  lane -- so the absence is recorded HERE, in a named bucket the summary
+  line prints, and the lane that DOES own it (`make test`) runs the battery
+  before this suite so the bucket is zero there."
+  (atom []))
+
+;; @spec MCP-OP-ADMIT-147
+;; @spec MCP-OP-ADMIT-150
+(defn skip-precondition!
+  "Record one unmet precondition: counted, named, never a failure.
+
+  `t/inc-report-counter` puts the count inside `run-tests`' own summary map,
+  so the number travels with the run rather than in a `println` inside a
+  suite that prints thousands of lines."
+  [message]
+  (swap! precondition-skips conj message)
+  (t/inc-report-counter :precondition-skipped)
+  message)
+
+;; @spec MCP-OP-ADMIT-147
+;; @spec MCP-OP-ADMIT-150
+(defmethod t/report :summary
+  [m]
+  (t/with-test-out
+    (println "\nRan" (:test m) "tests containing"
+             (+ (:pass m) (:fail m) (:error m)) "assertions.")
+    (println (:fail m) "failures," (:error m) "errors.")
+    ;; The bucket is part of the SUMMARY, printed in both states, so a
+    ;; non-zero count is visible at the same place a reader already looks for
+    ;; the failure count -- and each skip names the exact command that clears
+    ;; it.
+    (let [skipped (or (:precondition-skipped m) 0)]
+      (println skipped "preconditions skipped.")
+      (doseq [message @precondition-skips]
+        (println "  SKIPPED ·" message)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixtures
@@ -5332,35 +5384,68 @@
       ;; gate. A receipt that is PRESENT and contradicts the exemption is a
       ;; loud failure.
       ;; @spec MCP-OP-ADMIT-147
-      ;; The precondition is an ASSERTION, not a println. Round six measured
-      ;; what stdout costs: `clj-surgeon.admit-patch-test` ran 4,141
-      ;; assertions on a clone with no battery receipt and 4,143 on a machine
-      ;; that had run the battery, so the exemption silently rested on the
-      ;; structural checks alone and the only notice was one line inside a
-      ;; suite that prints thousands. The assertion count is now the SAME in
-      ;; both states, and an absent receipt is a named, counted, visibly
-      ;; non-zero failure carrying the receipt path and the exact command
-      ;; that writes it.
+      ;; @spec MCP-OP-ADMIT-150
+      ;; The precondition is COUNTED, not a println and not a failure. Round
+      ;; six measured what stdout costs: `clj-surgeon.admit-patch-test` ran
+      ;; 4,141 assertions on a clone with no battery receipt and 4,143 on a
+      ;; machine that had run the battery, so the exemption silently rested
+      ;; on the structural checks alone and the only notice was one line
+      ;; inside a suite that prints thousands. Round seven made it three
+      ;; failing assertions, and the reviewer ruled THAT blocking for the
+      ;; opposite reason: this suite does not OWN the receipt, so a fresh
+      ;; clone went red on `clojure -M:clj-surgeon/mcp-test` for a reason
+      ;; unrelated to the gate and the claimed merge gate could not be
+      ;; reproduced from the tip. Both readings are satisfied by a named,
+      ;; counted, visibly non-zero SKIP -- printed by the summary line, never
+      ;; by this test -- spending the SAME number of assertions in both
+      ;; states, with `make test` owning the battery so the bucket is zero on
+      ;; the lane that claims the proof.
       (let [receipt (io/file
                       "target/admit-transaction-recovery-battery-receipt.edn")
             present? (.exists receipt)
             record (when present? (read-string (slurp receipt)))]
-        (is present?
-            (str "PRECONDITION UNMET · no battery receipt at "
-                 (.getPath receipt) " · run `" target "` to prove " kind
-                 " by execution rather than by the structural checks alone"))
-        (is (and present?
-                 (contains? (set (:kinds-published record)) kind))
-            (str "the battery ran and did NOT publish the kind its"
-                 " exemption claims: " kind " · receipt "
-                 (pr-str record)))
-        (is (and present? (= target (:target record)))
-            "the receipt names the target that wrote it"))
+        (if present?
+          (do
+            (is (contains? (set (:kinds-published record)) kind)
+                (str "the battery ran and did NOT publish the kind its"
+                     " exemption claims: " kind " · receipt "
+                     (pr-str record)))
+            (is (= target (:target record))
+                "the receipt names the target that wrote it")
+            (is (string? (:at record))
+                (str "the receipt does not say when it was written: "
+                     (pr-str record))))
+          (let [message (skip-precondition!
+                          (str "no battery receipt at " (.getPath receipt)
+                               " · run `" target "` to prove " kind
+                               " by execution rather than by the structural"
+                               " checks alone"))]
+            (is (= 1 (count (filter #{message} @precondition-skips)))
+                "the absent receipt was recorded once in the counted bucket")
+            (is (pos? (count @precondition-skips))
+                "the counted bucket must be visibly non-zero, never silent")
+            (is (str/includes? message target)
+                (str "the skip must name the command that clears it: "
+                     message)))))
       (is (str/includes? (slurp makefile) (str "\n" target-name ":"))
           (str "the Makefile has no such target: " target))
       (is (not (str/includes? (slurp makefile)
                               (str "mcp-test: " target-name)))
-          "a battery target must not be wired into the fast gate"))))
+          "a battery target must not be wired into the fast gate")
+      ;; @spec MCP-OP-ADMIT-150
+      ;; A skip bucket is only honest if SOME lane drives it to zero. The
+      ;; battery stays out of the fast gate (the assertion above), so the
+      ;; merge lane that claims the whole proof must run it: the exemption
+      ;; names its evidence, and this names the lane that produces it.
+      (let [recipe (second (re-find #"(?m)^test:\n((?:\t.*\n)+)"
+                                    (slurp makefile)))]
+        (is (some? recipe)
+            "the Makefile has no `test:` recipe to own the battery")
+        (is (str/includes? (str recipe) target-name)
+            (str "`make test` does not run " target
+                 " · nothing in the repository drives the skip bucket"
+                 " to zero, so the exemption rests on a fixture no lane owns"
+                 " · recipe: " (pr-str recipe)))))))
 
 ;; @spec MCP-OP-ADMIT-133
 (defn- record-and-check-refusal-kinds
