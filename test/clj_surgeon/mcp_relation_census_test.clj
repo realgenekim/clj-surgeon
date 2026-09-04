@@ -6554,17 +6554,31 @@
 ;; a cause added to that set without a parity row fails here.
 ;; ---------------------------------------------------------------------------
 
-(def ^:private by-design-divergences
-  "The two rows where the entrances answer DIFFERENT QUESTIONS, with the
-   reason, so that a divergence is either declared here or a defect.
-
-   The CLI's `:file` is an absolute operator-named path with no lexical fence:
-   there is no project root for it to be outside of, and no extension rule for
-   it to violate, so the CLI reaches the filesystem and finds nothing while the
-   tool refuses lexically before it stats anything. Both are right about the
-   question they were asked."
-  {:escape "the CLI's :file has no project root to be outside of"
-   :wrong-extension "the CLI's :file has no relative-source-path rule"})
+;; ---------------------------------------------------------------------------
+;; ROUND NINETEEN, item 3 — Sol's round-eighteen item 3.
+;;
+;; Round eighteen's brief claimed "a ten-shape parity enumeration, all
+;; agreeing." The reviewer ran it and found EIGHT agreeing and two declared
+;; divergences that were not refusals at all but successful CLI reads:
+;;
+;;   escape          expected outside-project           cli nil  agree false
+;;   wrong-extension expected not-a-relative-source-path cli nil agree false
+;;
+;; Two defects in one sentence. The first is that the claim was false: a
+;; witness whose green depends on a hand-written exemption table cannot be
+;; quoted as "all agreeing", because the table is where the disagreement went.
+;; The second is that the exemptions were the divergence Sol's item 2 calls
+;; blocking, plus its lexical sibling.
+;;
+;; Both are closed rather than re-declared. `escape` agrees because round
+;; nineteen's containment fence refuses it (item 2); `wrong-extension` agrees
+;; because a source the CLI is NAMED must carry a source extension, which is
+;; the rule the CLI's own walk has always applied to every member it discovers
+;; (`census/source-name-pattern`) and which the tool applies lexically. The
+;; exemption table is GONE, and the witness now PRINTS the enumeration it
+;; compared and asserts the disagreeing set is empty — so "all agreeing" is a
+;; computed fact with a printed derivation rather than a sentence in a brief.
+;; ---------------------------------------------------------------------------
 
 (defn- source-parity-rows!
   "One tree per shape, built under `parent`, with the relative path to drive."
@@ -6648,27 +6662,57 @@
               (str "vocabulary: " (pr-str mcp-paths/source-refusal-causes)
                    "; rows: " (pr-str (set (map :cause rows))))))
 
+        ;; The enumeration is PRINTED, one line per shape, with the agreement
+        ;; each row computed. Sol's round-eighteen item 3: the previous brief
+        ;; claimed all ten agreed while two rows were successful CLI reads
+        ;; parked in an exemption table. A claim about a set is checkable only
+        ;; when the set and its verdicts are on the page.
+        (println "PARITY-ENUMERATION:")
+        (doseq [{:keys [shape expected tool cli]} observed]
+          (println (format "  %-20s expected %-28s tool %-28s cli %-28s agree %s"
+                           (name shape) (name expected)
+                           (pr-str tool) (pr-str cli)
+                           (= (name expected) tool (some-> cli name)))))
+
+        (testing "the enumeration this witness printed is the one it compared"
+          (is (= (set (map :shape rows)) (set (map :shape observed)))
+              (str "printed: " (pr-str (set (map :shape observed)))
+                   "; declared: " (pr-str (set (map :shape rows)))))
+          (is (= 10 (count observed))
+              (str "the enumeration is " (count observed)
+                   " shapes, not the ten this witness reports")))
+
+        (testing "EVERY shape in the printed enumeration agrees"
+          ;; No exemption table. A divergence is a defect, and the set of them
+          ;; is asserted empty rather than listed somewhere a reader has to
+          ;; find before they can discount the claim.
+          (let [disagreeing (into (sorted-set)
+                                  (comp (remove (fn [{:keys [expected tool cli]}]
+                                                  (= (name expected) tool
+                                                     (some-> cli name))))
+                                        (map :shape))
+                                  observed)]
+            (is (= #{} disagreeing)
+                (str "these shapes do not get one cause from both entrances: "
+                     (pr-str disagreeing) " — full enumeration: "
+                     (pr-str (vec observed))))))
+
         (doseq [{:keys [shape expected tool cli]} observed]
           (testing (str shape " is named from the shared vocabulary")
             (is (contains? mcp-paths/source-refusal-causes
                            (some-> tool keyword))
                 (str shape ": the tool published " (pr-str tool))))
 
-          (if-let [reason (get by-design-divergences shape)]
-            (testing (str shape " diverges BY DESIGN, and the tool is still right")
-              (is (= (name expected) tool)
-                  (str shape ": the tool published " (pr-str tool)
-                       ", not " (pr-str (name expected)) " — " reason)))
-            (testing (str shape " gets ONE cause from both entrances")
-              (is (contains? mcp-paths/source-refusal-causes cli)
-                  (str shape ": the CLI published " (pr-str cli)))
-              (is (= (name expected) tool)
-                  (str shape ": the tool published " (pr-str tool)))
-              (is (= expected cli)
-                  (str shape ": the CLI published " (pr-str cli)))
-              (is (= (some-> cli name) tool)
-                  (str shape ": CLI " (pr-str cli) " vs tool "
-                       (pr-str tool))))))
+          (testing (str shape " gets ONE cause from both entrances")
+            (is (contains? mcp-paths/source-refusal-causes cli)
+                (str shape ": the CLI published " (pr-str cli)))
+            (is (= (name expected) tool)
+                (str shape ": the tool published " (pr-str tool)))
+            (is (= expected cli)
+                (str shape ": the CLI published " (pr-str cli)))
+            (is (= (some-> cli name) tool)
+                (str shape ": CLI " (pr-str cli) " vs tool "
+                     (pr-str tool)))))
 
         (testing "the ENOTDIR remedy does not tell the caller to chmod a source file"
           (let [cli (refusal-or-throw
