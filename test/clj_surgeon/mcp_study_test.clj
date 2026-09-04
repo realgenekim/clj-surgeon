@@ -4028,19 +4028,14 @@
 ;; spelling is short enough to collide is distinguishable from the other
 ;; values it could have held.
 
-(defn- collidable-spelling?
-  "Is this value's spelling short enough to appear in a text for a reason
-   that has nothing to do with this leaf?
-
-   WRITTEN OUT BY HAND. A witness that asks the production predicate whether
-   the production renderer got it right is one mechanism agreeing with
-   itself — the exact shape of the round-three escape this file already
-   carries a witness for."
-  [value]
-  (or (number? value)
-      (boolean? value)
-      (nil? value)
-      (and (string? value) (< (count value) 8))))
+;; O2 round 7 (Sol O2 round-6 review, §3): both audits below used to be SCOPED
+;; to collidable spellings — numbers, booleans, and strings under eight
+;; characters — on the reasoning that a distinctive spelling is carried by its
+;; own characters. That reasoning is what the review killed: a distinctive
+;; value can be carried as a SUBSTRING of a longer decoy, and one value spelled
+;; at two pointers cannot be two independently removable facts. Under
+;; MCP-OP-STUDY-051 a leaf is carried only by its OWN pointer line, so the
+;; scoping has nothing left to justify it: both audits now walk EVERY leaf.
 
 (defn- map-scalar-paths
   "Every scalar leaf reachable by a MAP KEY, as the path to it. A vector
@@ -4077,14 +4072,7 @@
                   ;; shifts its siblings, which is a different receipt rather
                   ;; than the same one missing a leaf.
                   (when (and (keyword? (last path))
-                             (not (inspect/leaf-excluded? path))
-                             ;; Scoped to the leaves the label rule promises
-                             ;; to make recoverable. A DISTINCTIVE spelling is
-                             ;; carried by its own characters under the
-                             ;; standing MCP-OP-STUDY-044 contract, and a
-                             ;; receipt that spells one fact twice cannot make
-                             ;; each copy independently removable.
-                             (collidable-spelling? (get-in result path)))
+                             (not (inspect/leaf-excluded? path)))
                     (let [without (if (= 1 (count path))
                                     (dissoc result (first path))
                                     (update-in result (butlast path)
@@ -4094,7 +4082,8 @@
           (map-scalar-paths result))))
 
 ;; @spec MCP-OP-STUDY-044
-(deftest the-text-depends-on-every-collidable-receipt-leaf
+;; @spec MCP-OP-STUDY-051
+(deftest the-text-depends-on-every-receipt-leaf
   ;; The dissoc-dependency audit, as a ratchet. A leaf the rendering does not
   ;; read is a leaf the text cannot be carrying, whatever a substring test
   ;; says about it.
@@ -4125,8 +4114,8 @@
                      "carried — " (pr-str (take 6 independent))))))))))
 
 (defn- indistinguishable-leaves
-  "Every collidable leaf that some OTHER value of the same type could replace
-   without changing one byte of the published text."
+  "Every leaf — collidable or distinctive — that some OTHER value of the same
+   type could replace without changing one byte of the published text."
   [result]
   (let [text (inspect-tool/inspect-summary result)
         paths (into [] (remove inspect/leaf-excluded?) (map-scalar-paths result))
@@ -4138,20 +4127,21 @@
     (into []
           (keep (fn [path]
                   (let [value (get-in result path)]
-                    (when (collidable-spelling? value)
-                      (when-let [decoy (first
-                                         (filter
-                                           #(= text (rendering
-                                                      (assoc-in result path %)))
-                                           (remove #(= % value)
-                                                   (filter #(same-type? value %)
-                                                           (concat [0 1 true false "clj" "none"]
-                                                                   (take 60 values))))))]
-                        [path value decoy])))))
+                    (when-let [decoy (first
+                                       (filter
+                                         #(= text (rendering
+                                                    (assoc-in result path %)))
+                                         (remove #(= % value)
+                                                 (filter #(same-type? value %)
+                                                         (concat [0 1 true false "clj" "none"
+                                                                  "XXaaaaaaaaaaaaaaaaYY"]
+                                                                 (take 60 values))))))]
+                      [path value decoy]))))
           paths)))
 
 ;; @spec MCP-OP-STUDY-044
-(deftest a-short-spelling-is-carried-by-its-label-not-by-coincidence
+;; @spec MCP-OP-STUDY-051
+(deftest no-value-of-the-same-type-renders-the-same-text
   (with-tmp-project
     (fn [dir]
       (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
@@ -4664,3 +4654,101 @@
                           (count (:dropped-labels block))
                           (count (inspect/uncarried-leaves text result))
                           allowance)))))))))
+
+;; ============================================================
+;; O2 ROUND 7 — a substring of a decoy is not a rendering of a fact
+;; (Sol O2 round-6 review, §3)
+;; ============================================================
+;; Two coincidences the reviewer PLANTED, both of which published `2 of 2
+;; rendered` over a fact that was nowhere in the text:
+;;
+;;   `decoy: XXabcdefghijklmnopYY`   carries `target = abcdefghijklmnop`
+;;   `alpha: <long value>`           carries `beta = <the same long value>`
+;;
+;; In each case a caller reading the text cannot find the fact, cannot tell
+;; which pointer the characters belong to, and cannot remove one fact without
+;; removing the other. Carriage has to mean the WHOLE LINE the renderer
+;; emitted for THAT leaf.
+
+(defn- carriage-report
+  "What one `fact-block` rendering says about itself, and what an audit of the
+   text it produced says back. `:orphans` are the leaves the block counted as
+   RENDERED whose own pointer line is nowhere in the section."
+  [result budget]
+  (let [block (inspect/fact-block "" result budget)
+        section (or (inspect/fact-section block) "")
+        lines (set (str/split-lines section))
+        dropped (set (:dropped-labels block))
+        orphans (into []
+                      (comp (map (fn [[path _]] (inspect/leaf-label path)))
+                            (remove dropped)
+                            (remove (fn [label]
+                                      (some #(str/starts-with?
+                                               % (str "  " label))
+                                            lines))))
+                      (remove (fn [[path _]] (inspect/leaf-excluded? path))
+                              (inspect/receipt-leaf-pairs result)))]
+    {:section section
+     :shown (:shown block)
+     :total (:total block)
+     :declared (count dropped)
+     :audited (count (inspect/uncarried-leaves section result))
+     :orphans orphans}))
+
+;; @spec MCP-OP-STUDY-051
+(deftest a-value-inside-a-longer-decoy-is-not-a-rendered-fact
+  ;; A sixteen-character distinctive value that occurs in the text ONLY inside
+  ;; a longer value's line. It has no line of its own; the text names no
+  ;; pointer for it; and the header counted it rendered.
+  (let [result {:ok true
+                :decoy "XXabcdefghijklmnopYY"
+                :target "abcdefghijklmnop"}]
+    ;; Budget 90 pays for the declaration and the `decoy` line, and not for
+    ;; the `target` line — the reviewer's exact rung.
+    (doseq [budget [90 100 120]]
+      (testing (str "budget " budget)
+        (let [report (carriage-report result budget)]
+          (is (empty? (:orphans report))
+              (format (str "budget %d: %d leaves counted as rendered have no "
+                           "pointer line of their own — %s; section %s")
+                      budget (count (:orphans report)) (pr-str (:orphans report))
+                      (pr-str (:section report))))
+          (is (= (:declared report) (:audited report))
+              (format "budget %d: declared %d against audited %d"
+                      budget (:declared report) (:audited report))))))
+    ;; And the value is DECOY-SUBSTITUTABLE at the failing rung: a different
+    ;; sixteen-character value renders the same bytes, which is the proof that
+    ;; the text never carried this leaf at all.
+    (let [budget 90
+          rendered (fn [r] (:section (carriage-report r budget)))]
+      (is (not= (rendered result)
+                (rendered (assoc result :target "ponmlkjihgfedcba")))
+          "replacing the target value left the rendering byte-identical"))))
+
+;; @spec MCP-OP-STUDY-051
+;; @spec MCP-OP-STUDY-047
+(deftest one-value-at-two-pointers-is-two-independently-removable-facts
+  ;; MCP-OP-STUDY-044 named this residual and left it standing: "a receipt
+  ;; that spells one fact twice does not make each copy independently
+  ;; recoverable." A pointer line each closes it.
+  (let [twin "the-same-distinctive-value-rendered-twice"
+        result {:ok true :alpha twin :beta twin}]
+    (doseq [budget [100 120 140 160]]
+      (testing (str "budget " budget)
+        (let [report (carriage-report result budget)]
+          (is (empty? (:orphans report))
+              (format (str "budget %d: %d leaves counted as rendered have no "
+                           "pointer line of their own — %s; section %s")
+                      budget (count (:orphans report)) (pr-str (:orphans report))
+                      (pr-str (:section report))))
+          (is (= (:declared report) (:audited report))
+              (format "budget %d: declared %d against audited %d"
+                      budget (:declared report) (:audited report))))))
+    ;; Removability, one leaf at a time, at a budget that renders both.
+    (let [rendered (fn [r] (:section (carriage-report r 200)))
+          whole (rendered result)]
+      (is (not= whole (rendered (dissoc result :beta)))
+          "removing `beta` left the rendering byte-identical: one line was
+           doing the work of two facts")
+      (is (not= whole (rendered (dissoc result :alpha)))
+          "removing `alpha` left the rendering byte-identical"))))
