@@ -338,9 +338,17 @@
     (is (= "alias-migration-alias-policy-exhausted" (:error_type plan)))
     (is (= "src/demo.clj" (:file plan)))
     (is (= ["store2" "st2" "es" "store-2"] (:collided_bindings plan)))
-    (is (= ["store2" "st2" "es" "store-2" "store-2-2"]
-           (get-in plan [:next_call "to" "alias_policy"]))
-        "the next_call appends one more policy entry")))
+    ;; @spec MCP-OP-ALIAS-008
+    ;; This assertion used to PIN the defect: it required the next_call to
+    ;; append `store-2-2`, an alias_policy entry the caller never sent. A
+    ;; next_call is the caller's request with one field corrected and may not
+    ;; answer with a value the caller's own request forbids.
+    (is (nil? (:next_call plan))
+        "an exhausted policy was answered with an alias outside it")
+    (is (str/includes? (str (:remedy plan)) "exhausted")
+        "the remedy does not say the policy is exhausted")
+    (is (str/includes? (str (:remedy plan)) "src/demo.clj")
+        "the remedy does not name the file")))
 
 ;; @spec MCP-OP-ALIAS-007
 ;; @spec MCP-OP-ALIAS-007
