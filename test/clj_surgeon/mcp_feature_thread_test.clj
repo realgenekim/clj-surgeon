@@ -1865,3 +1865,83 @@
             "a cut peer must keep its range, its hash and its refetch")
         (is (:body menu)
             "the menu leg's OWN body is not cut by the peers step")))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR / round-three spec 5 -- the two defects the real-repo recall found
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-040
+(deftest the-implementation-leg-never-takes-a-definition-from-a-test-file
+  (testing "the automatic leg does not inherit the TEST leg's globs"
+    (let [globs (:globs (ft/implementation-leg smw-conventions))]
+      (is (seq globs))
+      (is (not-any? #(str/starts-with? % "test/") globs)
+          (str "`implementation` means the definition the seed names, and a"
+               " definition inside a test file is a double, not the"
+               " implementation; globs were " (pr-str globs)))
+      (is (some #{"resources/public/js/*.js"} globs)
+          "it still inherits the non-test script globs")
+      (is (some #{"src/**/*.clj"} globs))))
+
+  ;; The real-repo shape, exactly: the seed's own definition is already the
+  ;; js-function leg, so the implementation leg EXCLUDES that range and takes
+  ;; the next definition-shaped hit -- which, with the test globs inherited,
+  ;; is a stub inside a test file. On social-media-writer @2df99c98 that made
+  ;; `formatDraft` report `implementation FOUND
+  ;; test/js/editor_conflict_response_test.js` and read `4 of 6`.
+  (testing "a stub in a test file is not the implementation of a located leg"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-testimpl")]
+      (try
+        (write-file! scratch "test/js/ghost_def_test.js"
+                     "function formatDraft() {\n  return 'stub';\n}\n")
+        (let [;; the subject ALONE, as the real replay called it: with
+              ;; `mechanical-format` in `also` the leg finds that Clojure
+              ;; definition first and the defect never shows.
+              {:keys [structured]}
+              (call! {:subject "formatDraft"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})
+              impl (leg structured "implementation")]
+          (is (not (str/starts-with? (str (:file impl)) "test/"))
+              (str "the implementation leg was located inside a test file: "
+                   (:file impl) " L" (:from impl))))
+        (finally (delete-tree! scratch))))))
+
+;; @spec MCP-OP-THREAD-041
+(deftest an-absent-leg-says-whether-it-could-search-at-all
+  (testing "a leg with no seed of its kind names the missing INPUT and a remedy"
+    (let [{:keys [text structured]}
+          (call! {:subject "formatDraft"
+                  :config smw-conventions
+                  :scope {:workspace_root fixture-root}})
+          route (leg structured "route")]
+      (is (= "ABSENT" (:status route)))
+      (is (= "no-seed-of-this-leg-kind" (:absent_cause route))
+          (str "the route leg said " (pr-str (:absent_cause route))
+               "; `no seed of the kind this leg needs` is jargon with no"
+               " remedy, and it is indistinguishable from `I searched and"
+               " found nothing`"))
+      (is (str/includes? (str (:remedy route)) "also")
+          "a caller must be told how to supply the seed")
+      (is (str/includes? text "no-seed-of-this-leg-kind"))))
+
+  (testing "a leg that DID search and found nothing says that instead"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-cause")]
+      (try
+        (delete-tree! (io/file scratch "resources/public/js"))
+        (let [{:keys [structured]} (thread! (.getPath scratch))
+              js (leg structured "js-function")]
+          (is (= "ABSENT" (:status js)))
+          (is (= "searched-and-absent" (:absent_cause js)))
+          (is (seq (:searches js))))
+        (finally (delete-tree! scratch)))))
+
+  (testing "either way the leg is COUNTED"
+    (let [{:keys [structured]}
+          (call! {:subject "formatDraft"
+                  :config smw-conventions
+                  :scope {:workspace_root fixture-root}})]
+      (is (contains? (set (:legs_missing structured)) "route")
+          (str "an unnamed route is counted as missing, deliberately: the verb"
+               " cannot tell an unnamed route from an absent one, and the safe"
+               " direction is INCOMPLETE")))))
