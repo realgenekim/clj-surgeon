@@ -1094,8 +1094,9 @@
                     :remedy (str directory " came from the workspace walk, "
                                  "not from the request, so there is no "
                                  "request to narrow and no narrower call can "
-                                 "be computed: make " directory " readable "
-                                 "under the workspace root, remove it, or "
+                                 "be computed: "
+                                 (census/directory-repair-phrase directory)
+                                 ", remove it, or "
                                  "name the sources to census with files. A "
                                  "census is a completeness claim, and a "
                                  "subtree this process may not enter cannot "

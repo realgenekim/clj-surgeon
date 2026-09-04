@@ -2475,19 +2475,30 @@
              (core/run-relation-census {:dir undecodable-probe-path
                                         :format :edn})}]
 
-        (testing "no MCP refusal serialises a placeholder"
-          (doseq [[label result] mcp-refusals]
-            (let [wire (json/generate-string result)]
-              (is (false? (:ok result)) (str label " did not refuse"))
-              (is (not (str/includes? wire "<"))
-                  (str label " carries a placeholder: " wire)))))
+        ;; Round nineteen, item 4. `census/workspace-root-token` is `<workspace_
+        ;; root>`, which is angle-bracketed on purpose — no relative path can
+        ;; be mistaken for it — and it is now the root's one name in PROSE at
+        ;; both entrances. It is the OPPOSITE of the caption this witness
+        ;; refuses: a caption stands where an ARGUMENT belongs and cannot be
+        ;; run, while the token stands in a sentence beside an `:anchor`,
+        ;; `:dir` or `workspace_root` that carries the real path. So it is
+        ;; removed before the placeholder question is asked, and asserted for
+        ;; separately by `no-refusal-names-the-workspace-root-in-its-prose`.
+        (let [without-token #(str/replace (str %) census/workspace-root-token "")]
 
-        (testing "no CLI refusal, on either runtime, serialises a placeholder"
-          (doseq [[label result] cli-refusals]
-            (let [wire (pr-str result)]
-              (is (false? (:ok result)) (str label " did not refuse: " wire))
-              (is (not (str/includes? wire "<"))
-                  (str label " carries a placeholder: " wire)))))
+          (testing "no MCP refusal serialises a placeholder"
+            (doseq [[label result] mcp-refusals]
+              (let [wire (json/generate-string result)]
+                (is (false? (:ok result)) (str label " did not refuse"))
+                (is (not (str/includes? (without-token wire) "<"))
+                    (str label " carries a placeholder: " wire)))))
+
+          (testing "no CLI refusal, on either runtime, serialises a placeholder"
+            (doseq [[label result] cli-refusals]
+              (let [wire (pr-str result)]
+                (is (false? (:ok result)) (str label " did not refuse: " wire))
+                (is (not (str/includes? (without-token wire) "<"))
+                    (str label " carries a placeholder: " wire))))))
 
         (testing "the oversized refusal is the same request minus the file"
           (let [mixed (:source-too-large-mixed mcp-refusals)]
@@ -2554,9 +2565,22 @@
               (is (not (contains? result :next-command))
                   (str label " hands back a call it cannot compute"))
               (is (string? (:remedy result)))
+              ;; Round nineteen, item 4: the remedy names the tree it
+              ;; scanned by the root's ONE name, and the absolute path it
+              ;; scanned is in `:dir` and `:anchor` — the fields a reader
+              ;; checks their request against and a replay reads. Naming it
+              ;; both ways in one receipt is the defect Sol's round-eighteen
+              ;; item 4 recorded, one refusal over.
               (is (str/includes? (str (:remedy result))
-                                 (.getCanonicalPath empty-root))
-                  (str label " remedy does not name the directory it scanned"))
+                                 census/workspace-root-token)
+                  (str label " remedy does not name the tree it scanned"))
+              (is (= (.getCanonicalPath empty-root) (:dir result))
+                  (str label " lost the absolute tree it scanned: "
+                       (pr-str (:dir result))))
+              (is (= (.getCanonicalPath empty-root)
+                     (:absolute (:anchor result)))
+                  (str label " lost the workspace the caller named: "
+                       (pr-str (:anchor result))))
               (is (str/includes? (str (:remedy result)) "0 file(s) scanned")
                   (str label " remedy does not say what it scanned")))))
 
@@ -7291,6 +7315,15 @@
                 (is (str/includes? (pr-str (:remedy result))
                                    census/workspace-root-token)
                     (str entrance " remedy does not use the root's one name: "
+                         (pr-str (:remedy result))))
+                ;; Routing the absolute root out exposed the sentence
+                ;; underneath it: a remedy telling the caller to make the root
+                ;; readable UNDER the root is not followable, and the tool has
+                ;; been saying its own version of that since round seventeen.
+                (is (not (re-find #"<workspace_root>[^.]*under <workspace_root>"
+                                  (str (:remedy result))))
+                    (str entrance " tells the caller to make a directory "
+                         "readable under itself: "
                          (pr-str (:remedy result))))))
             (finally (allow-traversal! denied-root)))))
 

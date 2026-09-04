@@ -1204,9 +1204,12 @@
       ;; a root the walk cannot enter is recorded walk-relative as `""` and
       ;; interpolated into three sentences. Same function as the tool, so the
       ;; two entrances cannot drift apart on what they call the root.
+      ;; Sol's round-eighteen item 4: this remedy named the same subject twice
+      ;; in one sentence, once by the token and once by the server's absolute
+      ;; path. The root has ONE name; the absolute path is in `:anchor`, which
+      ;; is where a reader checks their request and where a replay reads it.
       (let [directory (relation-census/shown-directory
-                        (:unreadable-directory @scan))
-            root (census-root dir)]
+                        (:unreadable-directory @scan))]
         (merge
           {:ok false
            :error-type :file-not-readable
@@ -1218,8 +1221,8 @@
                        "this census cannot claim to have read the tree")
            :remedy (str directory " came from the workspace walk, not from "
                         "the request, so there is no request to narrow and no "
-                        "narrower command can be computed: make " directory
-                        " readable under " root
+                        "narrower command can be computed: "
+                        (relation-census/directory-repair-phrase directory)
                         ", remove it, or name the sources to census with "
                         ":file. A census is a completeness claim, and a "
                         "subtree this process may not enter cannot be counted "
@@ -1234,9 +1237,12 @@
       ;; caller never asked for. A `:file` request IS the request, so it earns
       ;; the same wording every other named-source refusal above earns.
       (:unreadable @scan)
+      ;; Sol's round-eighteen item 4, the same class one branch over: the
+      ;; walk-provenance wording named the root absolutely. The subject here is
+      ;; a MEMBER, named project-relative, so the tree it is under is named by
+      ;; the root's one name.
       (let [{:keys [error-type error cause parent file provenance]}
-            (:unreadable @scan)
-            root (census-root dir)]
+            (:unreadable @scan)]
         (cond-> (merge
                   {:ok false
                    :error-type error-type
@@ -1256,7 +1262,7 @@
                      (str file " came from the workspace walk, not from the "
                           "request, so there is no request to narrow and no "
                           "narrower command can be computed: remove or repair "
-                          "it under " root
+                          "it under " relation-census/workspace-root-token
                           (when parent
                             (str " (the directory " parent
                                  " is what this process may not read)"))
@@ -1282,7 +1288,11 @@
              ;; Nothing was found, so there is no subtree to narrow to and no
              ;; command to compute: the refusal names what it scanned instead
              ;; of captioning the directory the caller was supposed to pick.
-             :remedy (str "Nothing under " (census-root dir)
+             ;; Sol's round-eighteen item 4. `:dir` above carries the
+             ;; absolute root, which is the field a reader checks and a replay
+             ;; reads; the SENTENCE uses the root's one name.
+             :remedy (str "Nothing under "
+                          relation-census/workspace-root-token
                           " defines defmethod fold-event arms ("
                           (:scanned @scan) " file(s) scanned), so no narrower "
                           "command can be computed: point :dir at a directory "

@@ -112,6 +112,28 @@
   (let [shown (str rel-dir)]
     (if (str/blank? shown) workspace-root-token shown)))
 
+;; @spec MCP-OP-CENSUS-018
+(defn directory-repair-phrase
+  "The \"make X readable\" clause of the remedy for a directory the WALK could
+   not enter.
+
+   Round nineteen, item 4. Routing the last absolute root out of the CLI's
+   remedy exposed the sentence underneath it: when the unreadable directory IS
+   the root, both entrances said \"make <workspace_root> readable under
+   <workspace_root>\" — the CLI once the token replaced its absolute path, and
+   the tool since round seventeen, where the clause read \"under the workspace
+   root\" and nobody read it beside a subject that was the root. A remedy that
+   tells the caller to make a directory readable under itself is not
+   followable.
+
+   One function for both entrances, for the reason `shown-directory` next to it
+   exists: these are the same two sentences, and the last time they were
+   written twice they published the same empty name twice."
+  [directory]
+  (if (= directory workspace-root-token)
+    (str "make " workspace-root-token " itself readable")
+    (str "make " directory " readable under " workspace-root-token)))
+
 (def discovery-fact-keys
   "The discovery facts, in the CLI's key style mapped to the tool's.
 
