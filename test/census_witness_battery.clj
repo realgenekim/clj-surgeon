@@ -19,8 +19,20 @@
    Run (the alias's `:main-opts` name the suite runner, so the battery is
    driven over the same classpath rather than through the alias):
 
+     make census-battery
+
+   which is exactly:
+
      java -cp \"$(clojure -Spath -M:clj-surgeon/mcp-test)\" \\
           clojure.main -m census-witness-battery
+
+   Round twenty-one's reviewer could not check the builder's battery figure
+   because there was no target to run: the composition lived in this file and
+   the RUN lived in a sentence, so `grep -rn \"census battery\"` over docs
+   and logs found nothing and the reviewer defined their own battery instead,
+   over five namespaces, and got numbers that could not be compared with the
+   builder's. A battery quoted in a receipt has to be a target someone else
+   can run, so it is one now.
 
    Exits non-zero on any MISSING var, failure or error."
   (:require
@@ -67,7 +79,14 @@
    ;; fence fails CLOSED.
    ['clj-surgeon.mcp-relation-census-launcher-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]
    ['clj-surgeon.mcp-relation-census-launcher-test/no-census-reads-a-source-when-its-workspace-does-not-resolve :r20]
-   ['clj-surgeon.mcp-relation-census-round20-test/the-two-entrances-refuse-an-unresolvable-workspace-alike :r20]])
+   ['clj-surgeon.mcp-relation-census-round20-test/the-two-entrances-refuse-an-unresolvable-workspace-alike :r20]
+   ;; Round twenty-two — the witnesses that close round twenty-one's two
+   ;; census findings: a caller-controlled argument may not reach an untyped
+   ;; Error, and a `:dir` that is not a tree is refused with the name the
+   ;; other entrance already publishes.
+   ['clj-surgeon.mcp-relation-census-launcher-test/a-deeply-nested-argument-never-reaches-the-reader :r22]
+   ['clj-surgeon.mcp-relation-census-launcher-test/the-launchers-last-resort-catch-is-over-throwable :r22]
+   ['clj-surgeon.mcp-relation-census-round20-test/the-two-entrances-name-one-observation-for-every-root-shape :r22]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]
