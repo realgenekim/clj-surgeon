@@ -968,9 +968,20 @@
   unrepresentable rather than merely detected."
   [result extra-lines]
   (let [structural (refusal-structural-text result extra-lines)
+        ;; @spec MCP-OP-STUDY-044
+        ;; @spec MCP-OP-STUDY-040
+        ;; DERIVED, never fixed. A refusal renders no rows, so the whole
+        ;; allowance the fit imposes is the receipt-fact allowance; with
+        ;; nothing imposed the complete rendering travels. Field evidence
+        ;; (Sol O2 round-3 review, section 4): a fixed 8,192-character
+        ;; allowance dropped `error`, `path` and four more leaves out of a
+        ;; 21,847-byte result under a 32,768-byte budget, and declared the
+        ;; drop as though the budget had forced it.
         facts (inspect/fact-section
-                (inspect/fact-block structural result
-                                    inspect/max-evidence-characters))]
+                (inspect/fact-block
+                  structural result
+                  (or (:text_evidence_limit result)
+                      inspect/unbounded-evidence)))]
     (if facts (str structural "\n\n" facts) structural)))
 
 ;; @spec MCP-OP-STUDY-036
@@ -1131,7 +1142,7 @@
                     (if (:text_evidence_limit result)
                       (max 0 (- (:text_evidence_limit result)
                                 (count (or payload ""))))
-                      inspect/max-evidence-characters)))]
+                      inspect/unbounded-evidence)))]
       (if facts (str structural "\n\n" facts) structural))))
 
 (def inspect-schema

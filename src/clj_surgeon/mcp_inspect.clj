@@ -674,26 +674,61 @@
 
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
+(def unbounded-evidence
+  "The allowance a rendering gets when NOTHING narrower has been imposed.
+
+  The superset property is the default; an elision is an exception the PUBLIC
+  OUTPUT BUDGET forces, and `fit-public-result` is the only thing that can
+  force it — it measures the whole candidate and imposes
+  `:text_evidence_limit` when, and only when, the complete rendering does not
+  fit.
+
+  Field evidence (Sol O2 round-3 review, section 4): the refusal renderer
+  spent a FIXED 8,192-character receipt-fact allowance regardless of the
+  budget, so a refusal with 10,921 bytes of unspent room still dropped its
+  `error`, its `path`, and four more leaves. A fixed allowance is a second
+  budget nobody declared, and it makes MCP-OP-STUDY-044's `where the output
+  budget forces` untrue at the only place a caller can check it."
+  Long/MAX_VALUE)
+
+;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-040
 (defn fact-block
-  "The bounded receipt-fact section, and whether any fact was dropped.
+  "The bounded receipt-fact section, whether any fact was dropped, and WHICH.
 
   Facts are dropped WHOLE and only from the tail, exactly as rows are: the
-  same bound governs both, because both are the receipt."
+  same bound governs both, because both are the receipt. The JSON pointer of
+  every dropped fact is carried out, so the rendering can name it: a caller
+  who is told that six of twelve facts are elsewhere, and not which six, has
+  to diff the receipt against the text to find out."
   [structural-text result budget]
-  (let [lines (receipt-fact-lines structural-text result)
-        total (count lines)]
-    (loop [remaining lines kept [] used 0]
-      (if-let [line (first remaining)]
-        (let [cost (inc (count line))]
+  (let [entries (receipt-fact-entries structural-text result)
+        total (count entries)]
+    (loop [remaining entries kept [] used 0]
+      (if-let [entry (first remaining)]
+        (let [cost (inc (count (:line entry)))]
           (if (> (+ used cost) budget)
-            {:lines kept :shown (count kept) :total total :dropped true}
-            (recur (next remaining) (conj kept line) (+ used cost))))
-        {:lines kept :shown (count kept) :total total :dropped false}))))
+            {:lines (mapv :line kept)
+             :shown (count kept)
+             :total total
+             :dropped true
+             :dropped-labels (mapv :label remaining)}
+            (recur (next remaining) (conj kept entry) (+ used cost))))
+        {:lines (mapv :line kept)
+         :shown (count kept)
+         :total total
+         :dropped false
+         :dropped-labels []}))))
 
 ;; @spec MCP-OP-STUDY-044
 (defn fact-section
   "The rendered receipt-fact section, or nil when the structural rendering
-  already carried every leaf."
+  already carried every leaf.
+
+  An elision NAMES what it dropped. `receipt facts · 3 of 9 rendered` tells a
+  caller that six leaves are missing; `dropped: error, path, …` tells it
+  which, which is the difference between knowing where to look and having to
+  reconstruct the receipt to find out."
   [block]
   (when (or (seq (:lines block)) (:dropped block))
     (str/join
@@ -704,6 +739,8 @@
                  (if (:dropped block)
                    " · the complete receipt is in structuredContent"
                    ""))]
+        (when (:dropped block)
+          [(str "  dropped: " (str/join ", " (:dropped-labels block)))])
         (:lines block)))))
 
 (defn- kernel-refusal
@@ -1683,9 +1720,14 @@
           blocks-dropped (:dropped kept)
           rows-abridged? (or (pos? blocks-dropped)
                              (boolean (some :abridged blocks)))
+          ;; @spec MCP-OP-STUDY-044
+          ;; The ROW allowance is a rendering default (MCP-OP-STUDY-041); the
+          ;; FACT allowance is the superset guarantee, and a guarantee bounded
+          ;; by a constant is not one. Unimposed it is unbounded, and the
+          ;; public output budget is the only thing that narrows it.
           fact-budget (if imposed
                         (max 0 (- limit (:used kept)))
-                        max-evidence-characters)
+                        unbounded-evidence)
           headline (cond-> [(plural (:request_count result) "request")
                             (plural (:file_count result) "file")]
                      (pos? forms) (conj (plural forms "form"))

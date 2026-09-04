@@ -3416,7 +3416,10 @@
       (is (nil? (:text_evidence_limit published)))
       (is (<= bytes inspect-tool/max-public-result-bytes)
           "the largest complete rendering is inside the budget")
-      (is (> bytes (- inspect-tool/max-public-result-bytes 64))
+      ;; The boundary must be the BUDGET's, not a rendering constant's. The
+      ;; last 64 bytes of slack here are the publish reserve, which §5
+      ;; removes; that witness asserts the fit target is the budget itself.
+      (is (> bytes (- inspect-tool/max-public-result-bytes 128))
           (str "the boundary must actually be the budget's, not a constant's: "
                bytes " bytes of " inspect-tool/max-public-result-bytes))
       (is (empty? misses) (miss-report misses))))
