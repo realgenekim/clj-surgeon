@@ -842,6 +842,54 @@
    ["dev/experiments/formatter_process_canary.clj" "run-canary!"]
    {:calls 1 :why "a canary report line, printed to stdout, never an MCP result"}})
 
+(defn- scan-one-planted-line
+  "Scan a one-line-bodied function planted under a scratch root."
+  [pattern body]
+  (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                           (str "measured-one-line-" (System/nanoTime))))
+        victim (io/file root "clj_surgeon" "planted_line.clj")]
+    (.mkdirs (.getParentFile victim))
+    (spit victim
+          (str "(ns clj-surgeon.planted-line)\n\n"
+               "(defn publish-a-receipt\n"
+               "  [subject]\n"
+               "  " body ")\n"))
+    (try (scan pattern root)
+         (finally (.delete victim)
+                  (.delete (.getParentFile victim))
+                  (.delete (io/file root))))))
+
+;; @spec MCP-OP-TIME-005
+;; @spec MCP-OP-TIME-006
+(deftest an-allow-list-count-counts-CALLS-and-not-matching-lines
+  (testing "round-six review §6: a matching line absorbs unlimited extra calls"
+    ;; `sites` folded over lines and conjed ONE hit per line on which the
+    ;; pattern matched. So a declared count was a count of matching LINES, and
+    ;; a line that already matched absorbed an unlimited number of further
+    ;; clock reads or laundering calls without moving it. The reviewer found it
+    ;; live in the tree rather than in theory: `worktree_lifecycle/
+    ;; valid-future-expiry?` is one line carrying TWO `Instant/parse` reads and
+    ;; was declared `:reads 1` with `(= declared scanned)` green.
+    ;;
+    ;; The scan is the ONLY defence for every producer under `src/` -- the
+    ;; behavioural witnesses drive `finalize-result` with a `(constantly ...)`
+    ;; execute, so they see the publication boundary and nothing upstream of
+    ;; it. A counting rule with a per-line ceiling of one is a hole in the only
+    ;; line of defence the producers have.
+    (let [site {["src/clj_surgeon/planted_line.clj" "publish-a-receipt"] 2}]
+      (is (= site (scan-one-planted-line
+                    clock-pattern
+                    "{:a (System/nanoTime) :b (System/currentTimeMillis)}"))
+          "two clock reads on ONE line counted as fewer than two")
+      (is (= site (scan-one-planted-line
+                    clock-pattern
+                    "{:a (Instant/parse subject) :b (Instant/parse subject)}"))
+          "the reviewer's own shape -- two reads of the SAME spelling on one line")
+      (is (= site (scan-one-planted-line
+                    escape-hatch-pattern
+                    "{:a (measured/value subject) :b (measured/value subject)}"))
+          "two laundering calls on ONE line counted as fewer than two"))))
+
 ;; @spec MCP-OP-TIME-005
 (deftest no-raw-clock-read-lives-outside-the-measured-namespace
   (testing "a published clock reading cannot be CONSTRUCTED outside the partition"
