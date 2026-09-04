@@ -5864,12 +5864,12 @@
   argument, so this is the structuredContent a client is given -- not the
   receipt some inner function returned. The oversize `mode` finding was
   reachable only here, which is why the witness lives at this edge."
-  [root params]
+  [root params & [config-overrides]]
   (let [config-atom (deref #'admit/runtime-config)
         previous @config-atom
         captured (atom nil)]
     (try
-      (reset! config-atom (stub-config root))
+      (reset! config-atom (merge (stub-config root) config-overrides))
       (admit/handle-admit-clojure-patch
         nil params
         (fn [content error? result]
@@ -6050,6 +6050,87 @@
             (str "the fact section rendered " (count (str rendered))
                  " characters against a budget of " budget))))))
 
+;; @spec MCP-OP-ADMIT-144
+(def ^:private sentence-cut-ceiling
+  "The number of characters `reduce-receipt-to-budget`'s `cut` keeps.
+
+  A sentence shorter than this was never cut, whatever a receipt says about
+  it."
+  200)
+
+;; @spec MCP-OP-ADMIT-144
+(def ^:private cut-marker
+  "The words `cut` appends to a sentence it shortened."
+  "[cut to fit the public payload")
+
+;; @spec MCP-OP-ADMIT-143
+(defn- receipt-self-description-holds?
+  "Does this receipt's own account of itself match what it published?
+
+  Not a size check: a receipt can be inside the budget and still be lying
+  about how it got there. `receipt_reduced` without `receipt_omitted_fields`
+  is a claim with no content; `payload_truncated` without `payload_omitted`
+  is the same; a receipt that names a budget names THE budget; and a receipt
+  reduction could not bring inside the budget says so."
+  [receipt]
+  (let [budget write-refusal/public-byte-budget
+        problems
+        (cond-> []
+          (and (:receipt_reduced receipt)
+               (empty? (:receipt_omitted_fields receipt))
+               (not (:error_truncated receipt))
+               (not (:receipt_identity_bounded receipt)))
+          (conj "receipt_reduced with nothing named as dropped")
+
+          (and (:payload_truncated receipt)
+               (nil? (:payload_omitted receipt)))
+          (conj "payload_truncated with no payload_omitted")
+
+          (and (:public_byte_budget receipt)
+               (not= budget (:public_byte_budget receipt)))
+          (conj "the receipt names a budget that is not the budget")
+
+          (and (> (write-refusal/json-bytes receipt) budget)
+               (not (:receipt_over_budget receipt)))
+          (conj "over budget without saying so")
+
+          ;; @spec MCP-OP-ADMIT-144
+          ;; The converse, which round six had no clause for and which round
+          ;; six's own replacement path produced on the ordinary wide-fan-out
+          ;; refusal: a 1,672-byte receipt -- 5% of the budget -- publishing
+          ;; `receipt_over_budget true` and a residual of 30,179 bytes it is
+          ;; not, because the annotation was computed on a candidate whose
+          ;; `next_call` was then dropped and never re-derived.
+          (and (:receipt_over_budget receipt)
+               (<= (write-refusal/json-bytes receipt) budget))
+          (conj (str "says it is over budget while inside it: "
+                     (write-refusal/json-bytes receipt) " bytes of "
+                     budget))
+
+          ;; @spec MCP-OP-ADMIT-144
+          ;; And the same for the sentences. `error_truncated` tells a reader
+          ;; the words in front of them are incomplete and the rest is in a
+          ;; server log they cannot open. Round six published a 49-character
+          ;; manual-recovery remedy -- `restore src/a/f000.clj from version
+          ;; control by hand` -- wearing that label.
+          (let [sentences (->> [:error :remedy]
+                               (filter #(some? (get receipt %)))
+                               (map #(str (get receipt %))))]
+            (and (:error_truncated receipt)
+                 (seq sentences)
+                 (every? (fn [text]
+                           (and (< (count text) sentence-cut-ceiling)
+                                (not (str/includes? text cut-marker))))
+                         sentences)))
+          (conj (str "error_truncated on sentences shorter than the "
+                     sentence-cut-ceiling "-character cut ceiling and"
+                     " carrying no cut marker"))
+
+          (and (:receipt_identity_bounded receipt)
+               (empty? (:receipt_identity_bounded receipt)))
+          (conj "an empty identity-bounding record"))]
+    (if (seq problems) problems true)))
+
 ;; ---------------------------------------------------------------------------
 ;; Round six: the kind and the safety claim are untouchable at every rung
 ;; ---------------------------------------------------------------------------
@@ -6111,7 +6192,19 @@
                    budget))
           (is (<= (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
                   budget)
-              (str "and so is its text face at `" rung "`")))))
+              (str "and so is its text face at `" rung "`"))
+          ;; @spec MCP-OP-ADMIT-144
+          ;; Round six kept the kind at every rung and never asked whether the
+          ;; receipt it had just measured at 1,414 bytes was telling the truth
+          ;; about how it got there. It was not: `receipt_over_budget true`,
+          ;; a residual of 36,315 bytes, `receipt_unreducible_fields` naming a
+          ;; `next_call` it did drop, and a 49-character manual-recovery
+          ;; remedy labelled as cut.
+          (is (true? (receipt-self-description-holds? published))
+              (str "the receipt's own account of itself at `" rung "`: "
+                   (pr-str (receipt-self-description-holds? published))
+                   " -- published " (write-refusal/json-bytes published)
+                   " bytes, remedy " (pr-str (:remedy published)))))))
     (testing "the oversize call is NAMED as omitted rather than silently gone"
       (let [published (#'admit/bound-receipt (assoc base :next_call huge-call))]
         (is (nil? (:next_call published))
@@ -6126,7 +6219,15 @@
             "and the budget that would have to change")
         (let [text (#'admit/summary (assoc published :elapsed_ms 1.0))]
           (is (str/includes? text "next_call_omitted=true")
-              "and the text-only reader is told the same"))))
+              "and the text-only reader is told the same"))
+        ;; @spec MCP-OP-ADMIT-144
+        (is (true? (receipt-self-description-holds? published))
+            (str "and it does not describe itself falsely: "
+                 (pr-str (receipt-self-description-holds? published))))
+        (is (not (some #{"next_call"} (:receipt_unreducible_fields published)))
+            (str "a next_call that WAS dropped is not listed among the fields"
+                 " reduction says it could not drop: "
+                 (pr-str (:receipt_unreducible_fields published))))))
     (testing "a receipt that was NOT otherwise a refusal still becomes one"
       ;; the enumerated `:next-call-exceeds-public-budget` kind keeps a
       ;; fixture that drives it, and it carries its own safety claims forward
@@ -6141,45 +6242,154 @@
         (is (false? (:source-unchanged published)))
         (is (<= (write-refusal/json-bytes published) budget))))))
 
+
+;; ---------------------------------------------------------------------------
+;; Round seven: a receipt that fits never says it does not
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-141
+;; @spec MCP-OP-ADMIT-144
+(deftest a-receipt-that-fits-never-says-it-is-over-budget
+  ;; Round six's finding 1. The most common wide-fan-out refusal this gate
+  ;; publishes -- a many-file patch with one blocking clj-kondo finding --
+  ;; came back at 1,672 bytes, 5% of the budget, saying `receipt_over_budget
+  ;; true` with a residual of 30,179 bytes, and carrying a 52-character error
+  ;; sentence marked as cut to fit a budget it is 0.16% of, pointing an MCP
+  ;; client at a server log it cannot read. The mechanism: `bound-receipt`
+  ;; ran the whole reduction ladder BEFORE considering an oversize
+  ;; `next_call` that reduction is not allowed to touch, so the ladder cut
+  ;; sentences and stamped the terminal annotations to make room for a call
+  ;; that was about to be dropped -- and nothing re-derived them afterwards.
+  (let [budget write-refusal/public-byte-budget
+        root (temp-dir)
+        n 60
+        deep (apply str (repeat 200 "d"))
+        path (fn [i] (str "src/" deep "/f" (format "%03d" i) ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns n" i ")\n\n(defn f\n  [x]\n"
+                                 "  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns n" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))
+        blocking-lint (fn [_ _]
+                        {:ran true :ok false
+                         :introduced-count 1 :removed-count 0
+                         :blocking-introduced
+                         [{:file (path 0) :row 5 :level "error"
+                           :type "unused-binding" :message "unused binding x"}]})]
+    (try
+      (write-sources! root (merge base-sources sources))
+      (let [{:keys [result text]}
+            (published-at-handler-edge root {"patch" patch "verify" "focused"}
+                                       {:admit-lint-runner blocking-lint})
+            bytes (write-refusal/json-bytes result)
+            chars (count (str text))]
+        (is (= :verification-failed (:error-type result))
+            (str "fixture must refuse on the lint finding: "
+                 (pr-str (:error-type result))))
+        (is (<= bytes budget)
+            (str "the published receipt is " bytes " bytes, past " budget))
+        (is (<= chars budget)
+            (str "and its text face is " chars " characters"))
+        (is (true? (receipt-self-description-holds? result))
+            (str "a " bytes "-byte receipt describing itself: "
+                 (pr-str (receipt-self-description-holds? result))))
+        (is (not (:receipt_over_budget result))
+            (str "a " bytes "-byte receipt says it is over a " budget
+                 "-byte budget, with a residual of "
+                 (pr-str (:receipt_residual_bytes result))))
+        (is (not (:error_truncated result))
+            (str "and calls its "
+                 (count (str (:error result)))
+                 "-character error sentence truncated: "
+                 (pr-str (:error result))))
+        (is (not (str/includes? (str (:error result)) cut-marker))
+            "the sentence a caller reads carries a cut marker it did not earn")
+        (is (not (str/includes? (str text) "receipt_over_budget=true"))
+            "and the text-only reader is told the same falsehood"))
+      (finally (delete-tree! root))))
+  (testing "the safety-critical recovery remedy reaches the caller whole"
+    ;; Round six published `restore src/a/f000.clj from version control by
+    ;; hand` -- 49 characters, the one instruction a human needs after a
+    ;; failed rollback -- with a marker saying it was incomplete.
+    (let [remedy "restore src/a/f000.clj from version control by hand"
+          published (#'admit/bound-receipt
+                      {:ok false :operation :admit-patch-refused
+                       :mode "commit"
+                       :error-type :transaction-recovery-required
+                       :error "the rollback could not restore src/a/f000.clj"
+                       :remedy remedy
+                       :source-unchanged false :mutation_attempted true
+                       :next_call
+                       {:tool "admit_clojure_patch"
+                        :arguments {:mode "commit"
+                                    :expect_pre_sha256
+                                    {"src/app/core.clj"
+                                     (apply str (repeat 40000 "a"))}}}})]
+      (is (= remedy (:remedy published))
+          (str "the recovery instruction was altered: "
+               (pr-str (:remedy published))))
+      (is (not (:error_truncated published)))
+      (is (not (:receipt_over_budget published)))
+      (is (true? (receipt-self-description-holds? published))
+          (pr-str (receipt-self-description-holds? published)))))
+  (testing "bound-receipt cannot return a genuinely over-budget receipt"
+    ;; Round six's advisory 10c. Every identity value is separately bounded,
+    ;; both sentences are cuttable, everything else is droppable, and the
+    ;; next_call has its own typed answer -- so MCP-OP-ADMIT-141's terminal
+    ;; annotation has no live surface at the entrance. That is the claim
+    ;; worth asserting, rather than witnessing the annotation on a function
+    ;; the entrance never publishes from.
+    (let [budget write-refusal/public-byte-budget
+          bulk (apply str (repeat 60000 "z"))
+          huge-call {:tool "admit_clojure_patch"
+                     :arguments {:expect_pre_sha256
+                                 {"src/app/core.clj"
+                                  (apply str (repeat 40000 "a"))}}}
+          shapes {"bulk in every identity key"
+                  (into {:ok false :operation :admit-patch-refused
+                         :error-type :invalid-patch}
+                        (for [k [:mode :error :remedy :source-unchanged
+                                 :mutation_attempted :pre_image_binding
+                                 :lock_scope :verification_status
+                                 :verification_complete]]
+                          [k bulk]))
+                  "bulk in every identity key AND an oversize next_call"
+                  (into {:ok false :operation :admit-patch-refused
+                         :error-type :invalid-patch :next_call huge-call}
+                        (for [k [:mode :error :remedy :pre_image_binding
+                                 :lock_scope :verification_status]]
+                          [k bulk]))
+                  "bulk in droppable fields too"
+                  (into {:ok false :operation :admit-patch-refused
+                         :error-type :invalid-patch :next_call huge-call
+                         :hazards (vec (repeat 200 bulk))
+                         :files (vec (repeat 200 bulk))}
+                        (for [k [:mode :error :remedy :lock_scope]]
+                          [k bulk]))}]
+      (doseq [[label receipt] shapes]
+        (testing label
+          (let [published (#'admit/bound-receipt receipt)]
+            (is (<= (write-refusal/json-bytes published) budget)
+                (str label " published "
+                     (write-refusal/json-bytes published) " bytes"))
+            (is (not (:receipt_over_budget published))
+                (str label " reached the terminal annotation through the"
+                     " entrance: " (pr-str (:receipt_residual_bytes
+                                            published))))
+            (is (true? (receipt-self-description-holds? published))
+                (str label ": "
+                     (pr-str (receipt-self-description-holds?
+                               published))))))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Round six: every field a caller can influence, driven with bulk
 ;; ---------------------------------------------------------------------------
-
-;; @spec MCP-OP-ADMIT-143
-(defn- receipt-self-description-holds?
-  "Does this receipt's own account of itself match what it published?
-
-  Not a size check: a receipt can be inside the budget and still be lying
-  about how it got there. `receipt_reduced` without `receipt_omitted_fields`
-  is a claim with no content; `payload_truncated` without `payload_omitted`
-  is the same; a receipt that names a budget names THE budget; and a receipt
-  reduction could not bring inside the budget says so."
-  [receipt]
-  (let [budget write-refusal/public-byte-budget
-        problems
-        (cond-> []
-          (and (:receipt_reduced receipt)
-               (empty? (:receipt_omitted_fields receipt))
-               (not (:error_truncated receipt))
-               (not (:receipt_identity_bounded receipt)))
-          (conj "receipt_reduced with nothing named as dropped")
-
-          (and (:payload_truncated receipt)
-               (nil? (:payload_omitted receipt)))
-          (conj "payload_truncated with no payload_omitted")
-
-          (and (:public_byte_budget receipt)
-               (not= budget (:public_byte_budget receipt)))
-          (conj "the receipt names a budget that is not the budget")
-
-          (and (> (write-refusal/json-bytes receipt) budget)
-               (not (:receipt_over_budget receipt)))
-          (conj "over budget without saying so")
-
-          (and (:receipt_identity_bounded receipt)
-               (empty? (:receipt_identity_bounded receipt)))
-          (conj "an empty identity-bounding record"))]
-    (if (seq problems) problems true)))
 
 ;; @spec MCP-OP-ADMIT-143
 (deftest every-field-a-caller-can-influence-is-driven-with-bulk
