@@ -1600,3 +1600,5 @@ with three seats on the box, not code. Scheduling remains the fix: cap concurren
 Sol got as far as the mixed-type key attack (my brief's own suggestion) and found it fails closed but outside the typed
 bucket — a refusal nobody hears is the same class as round nine's. The filter then refused the rest. Opus completes the
 review on the same tip; the round-twelve builder closes Sol's item meanwhile on its own worktree. GO-WITH-FIX is not GO.
+
+## 16:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
