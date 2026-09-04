@@ -510,20 +510,36 @@
                 :source_character_count 1234 :elapsed_ms 12.5}
         summary (inspect/concise-summary result)]
     ;; @spec MCP-OP-STUDY-044
-    ;; O2 round 3: the envelope is unchanged and one line joins it — the
-    ;; receipt-fact section. `source_character_count` is the one leaf the
-    ;; envelope does not already carry verbatim, because the footer renders
-    ;; it grouped as `1,234`, and the criterion is the value the receipt
-    ;; spells. Nothing else here is new, and nothing is projected away.
+    ;; O2 round 5: every COLLIDABLE leaf — every number, every boolean, and
+    ;; every spelling shorter than `min-distinctive-spelling` — is carried by
+    ;; its LABEL, so the whole envelope prints as `pointer=spelling` rather
+    ;; than being reported carried because its characters happen to occur in
+    ;; the headline. `2` in `2 requests` is not evidence that the text carries
+    ;; `request_count`; `request_count=2` is. This is a deliberate, measured
+    ;; behaviour change and it is what the round-four review's section 4
+    ;; found missing.
+    ;;
+    ;; The status line SPELLS the receipt's own `read_complete`. This fixture
+    ;; carries none, so it reads `null` — a text that says what the receipt
+    ;; says, rather than a constant that agrees with it by luck.
     (is (= (str "inspect_clojure\n"
                 "  2 requests · 1 file · 3 forms · 2 matches\n\n"
                 "✓ all requests resolved\n"
                 "✓ ordered snapshot\n"
                 "✓ hashes attached\n"
-                "✓ terminal evidence · read_complete=true · next action none\n"
+                "✓ terminal evidence · read_complete=null · next action none\n"
                 "\n"
-                "  receipt facts · 1 of 1 rendered\n"
-                "  source_character_count: 1234\n"
+                "  receipt facts · 10 of 10 rendered\n"
+                "  ok=true\n"
+                "  operation=inspect_clojure\n"
+                "  request_count=2\n"
+                "  file_count=1\n"
+                "  results[0].operation=forms\n"
+                "  results[0].form_count=3\n"
+                "  results[1].operation=match\n"
+                "  results[1].match_count=2\n"
+                "  source_character_count=1234\n"
+                "  elapsed_ms=12.5\n"
                 "  1,234 source characters · 12.50 ms")
            summary))
     (is (not (.contains summary "(defn")))))

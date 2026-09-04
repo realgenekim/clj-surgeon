@@ -1118,15 +1118,24 @@
            ;; rows had been dropped and that it held the complete tree.
            (cond
              (:truncated result)
-             (format "! bounded receipt · %d file%s omitted · read_complete=false"
+             ;; @spec MCP-OP-STUDY-044
+             ;; Spelled from the receipt, never as a constant: the literal
+             ;; `read_complete=true` is the label form the carriage predicate
+             ;; looks for, and a constant that agrees with the receipt makes
+             ;; the leaf look carried by a line that never read it.
+             (format "! bounded receipt · %d file%s omitted · read_complete=%s"
                      (:omitted result)
-                     (if (= 1 (:omitted result)) "" "s"))
+                     (if (= 1 (:omitted result)) "" "s")
+                     (inspect/leaf-spelling (:read_complete result)))
 
              (:abridged block)
-             "! receipt complete · read_complete=true · this text is not"
+             (str "! receipt complete · read_complete="
+                  (inspect/leaf-spelling (:read_complete result))
+                  " · this text is not")
 
              :else
-             "✓ complete tree · read_complete=true")
+             (str "✓ complete tree · read_complete="
+                  (inspect/leaf-spelling (:read_complete result))))
            (ls-tree-continuation-line result)
            (when (and (:truncated result) (:remedy result))
              (str "→ " (:remedy result)))

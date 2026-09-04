@@ -575,6 +575,50 @@
       (and (coll? value) (empty? value))))
 
 ;; @spec MCP-OP-STUDY-044
+(def min-distinctive-spelling
+  "How many characters a leaf's spelling needs before its APPEARANCE in a text
+  is evidence that the text carries THAT leaf.
+
+  A short spelling collides. Field evidence (Opus O2 round-4 review,
+  2026-09-04, section 4): on a real `outline` receipt `file_read_count` could
+  be changed from 1 to 0 with the published text BYTE-IDENTICAL — the text's
+  only `1`s meaning `request_count` and `file_count` — and
+  `results[0].platforms[0]` from the characters c-l-j to the characters
+  n-o-n-e, while
+  `uncarried-leaves` reported zero misses for both. The same class round three
+  blocked on, moved from the value-less shapes to `{any value whose spelling
+  occurs elsewhere in the text}`.
+
+  Sixteen characters is the width at which a spelling stops being a word the
+  rendering already contains: it covers every mode name, every `next_action`,
+  every short form name and `operation` itself, and leaves hashes, paths, and
+  source lines to be carried by their own characters. Measured against eight:
+  sixteen costs 3.5% more on a small read (an `outline` of a three-form file,
+  3,799 bytes against 3,669) and covers `operation`, every mode name, and
+  every short form name that eight leaves open."
+  16)
+
+;; @spec MCP-OP-STUDY-044
+(defn collidable-leaf?
+  "Can this leaf's spelling appear in a text for a reason that has nothing to
+  do with this leaf?
+
+  A number or a boolean has no self-identifying characters AT ALL — `1`, `0`
+  and `true` occur in counts, line numbers, clocks and flags throughout any
+  rendering — and a short string or keyword collides with words the rendering
+  already contains. Such a leaf is carried by its LABEL or not at all, exactly
+  as a value-less leaf is: `pointer=spelling` is the only rendering of it a
+  reader can attribute to the leaf.
+
+  This SUBSUMES `value-less-leaf?`, which stays as the narrower statement of
+  why `null`, `{}`, `[]` and a blank string can never be carried by value."
+  [value]
+  (or (value-less-leaf? value)
+      (number? value)
+      (boolean? value)
+      (< (count (leaf-spelling value)) min-distinctive-spelling)))
+
+;; @spec MCP-OP-STUDY-044
 (defn labelled-leaf
   "`results[0].platforms=[]` — the ONE spelling that carries a value-less
   leaf, and the exact string its witness looks for."
@@ -587,11 +631,13 @@
 
   ONE predicate, used both by the renderer that guarantees the property and by
   the witness that checks it, so the two can never drift apart. A multi-line
-  value is carried when every one of its non-blank lines is; a VALUE-LESS leaf
-  is carried only as `pointer=spelling`, because nothing else about it can be
-  found in a text block."
+  value is carried when every one of its non-blank lines is; a COLLIDABLE leaf
+  — value-less, numeric, boolean, or spelled in fewer than
+  `min-distinctive-spelling` characters — is carried only as
+  `pointer=spelling`, because a short spelling found in the text is not
+  evidence that the text carries THIS leaf."
   [text path value]
-  (if (value-less-leaf? value)
+  (if (collidable-leaf? value)
     (str/includes? text (labelled-leaf path value))
     (let [rendered (leaf-spelling value)]
       (if (str/includes? rendered "\n")
@@ -633,7 +679,7 @@
   field added tomorrow therefore travels into the text the day it is added,
   and only a member of `text-excluded-leaf-keys` can keep it out.
 
-  A value-less leaf prints as `pointer=spelling` — the only rendering of it a
+  A COLLIDABLE leaf prints as `pointer=spelling` — the only rendering of it a
   reader can attribute to the leaf — and every other leaf as `pointer: value`.
 
   Field evidence (Sol O2 round-2 review, section 3): the round-2 renderer
@@ -651,7 +697,7 @@
           [entries text]
           (let [rendered (leaf-spelling value)
                 line (cond
-                       (value-less-leaf? value)
+                       (collidable-leaf? value)
                        (str "  " (labelled-leaf path value))
 
                        (str/includes? rendered "\n")
@@ -1802,21 +1848,35 @@
                  "✓ all requests resolved\n"
                  "✓ ordered snapshot\n"
                  "✓ hashes attached\n"
+                 ;; @spec MCP-OP-STUDY-044
+                 ;; The status line SPELLS the receipt's own `read_complete`
+                 ;; rather than a constant that happens to agree with it.
+                 ;; Field evidence (Opus O2 round-4 review, section 4): the
+                 ;; literal `read_complete=true` is exactly the label form the
+                 ;; carriage predicate looks for, so the leaf was reported
+                 ;; carried by a string that never read it — removing
+                 ;; `:read_complete` from the receipt left the published text
+                 ;; byte-identical in every mode.
                  (cond
                    (:truncated result)
-                   (str "! bounded receipt · read_complete=false · next action "
-                        (:next_action result) "\n")
+                   (str "! bounded receipt · read_complete="
+                        (leaf-spelling (:read_complete result))
+                        " · next action " (:next_action result) "\n")
 
                    ;; @spec MCP-OP-STUDY-041
                    ;; Never "terminal evidence · next action none" over
                    ;; evidence the text dropped: the receipt is complete,
                    ;; this rendering is not.
                    abridged?
-                   (str "! text abridged · read_complete=true · next action "
+                   (str "! text abridged · read_complete="
+                        (leaf-spelling (:read_complete result))
+                        " · next action "
                         "read_structured_content_or_narrow_request\n")
 
                    :else
-                   "✓ terminal evidence · read_complete=true · next action none\n")
+                   (str "✓ terminal evidence · read_complete="
+                        (leaf-spelling (:read_complete result))
+                        " · next action none\n"))
                  (when (pos? blocks-dropped)
                    (format (str "! text abridged · %d of %d result block%s "
                                 "rendered · the complete receipt is in "
