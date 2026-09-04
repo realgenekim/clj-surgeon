@@ -25,7 +25,8 @@
    Exits non-zero on any MISSING var, failure or error."
   (:require
    [clojure.test :as t]
-   [clj-surgeon.mcp-relation-census-test]))
+   [clj-surgeon.mcp-relation-census-test]
+   [clj-surgeon.mcp-relation-census-round20-test]))
 
 (def battery
   "Every named witness this program's review rounds produced, with the round
@@ -63,7 +64,7 @@
    ;; Round twenty — the witnesses that close round nineteen's two blocking
    ;; findings: the bound is over the value AS PRINTED, and the containment
    ;; fence fails CLOSED.
-   ['clj-surgeon.mcp-relation-census-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]])
+   ['clj-surgeon.mcp-relation-census-round20-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]

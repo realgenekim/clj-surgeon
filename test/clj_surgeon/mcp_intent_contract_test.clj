@@ -194,6 +194,7 @@
    "docs/intent/prepared-request/prepared-request-specs.md"
    "docs/intent/read-path-memory/read-path-memory-specs.md"
    "docs/intent/read-request-normalization/read-request-normalization-specs.md"
+   "docs/intent/relation-census/relation-census-specs.md"
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
    "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
    "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
@@ -217,7 +218,8 @@
    "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/memory/memory-transaction-specs.md"
    "docs/intent/read-path-memory/read-path-memory-specs.md"
-   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"])
+   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
+   "docs/intent/relation-census/relation-census-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"
