@@ -809,8 +809,27 @@
               (.resolve (.toRealPath parent
                                      (make-array java.nio.file.LinkOption 0))
                         (.getFileName named))))
-          (.toRealPath (.toPath (java.io.File. (census-root dir)))
-                       (make-array java.nio.file.LinkOption 0)))
+          (let [^java.nio.file.Path real
+                (.toRealPath (.toPath (java.io.File. (census-root dir)))
+                             (make-array java.nio.file.LinkOption 0))]
+            ;; Opus's round-twenty-one item 3. `toRealPath` succeeds on a
+            ;; regular FILE, so "is there a tree here at all" was never
+            ;; asked, and `:dir <a file>` produced
+            ;; `{:error-type :no-fold-arms-found, :files-scanned 0}` — the
+            ;; shape of a COMPLETENESS CLAIM over a tree that was never a
+            ;; tree, while the MCP entrance refused the identical request
+            ;; `invalid-workspace-root` and this same launcher refused it
+            ;; `workspace-root-not-a-directory` one op over, under
+            ;; `:ls-tree`. One entrance disagreeing with the other is the
+            ;; class this fence exists to close; one entrance disagreeing
+            ;; with ITSELF is that class with the excuse removed.
+            ;;
+            ;; A workspace is a TREE. `existing-directory?` is not reused
+            ;; here deliberately: that predicate asks about the caller's
+            ;; string, and the question at this point is about the path the
+            ;; caller's string RESOLVED to, which is what every later fence
+            ;; measures against.
+            (when (.isDirectory (.toFile real)) real)))
         (catch Exception _ nil))
       {:error-type :invalid-workspace-root
        :error (str relation-census/workspace-root-token " is not an existing "

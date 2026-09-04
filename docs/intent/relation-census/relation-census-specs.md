@@ -71,6 +71,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-034**: When the CLI launcher is handed an argument whose nesting exceeds the tool's declared ceiling, clj-surgeon shall refuse it UNREAD as `:argument-nesting-too-deep`, measuring the depth by scanning delimiters rather than by reading, and shall publish that refusal through the launcher's one bounded exit; and when any `Throwable` whatsoever reaches the launcher's outermost handler — an `Error` included, which `catch Exception` never sees — clj-surgeon shall publish a typed, bounded refusal naming what failed rather than a stack trace, so that no caller-controlled argument can produce an exit the declared enumeration cannot drive.
 
+- [x] **MCP-OP-CENSUS-035**: When a census request names a `:dir` that resolves to something that is not a directory — a regular file, a device, a socket — clj-surgeon shall refuse it `:invalid-workspace-root` at BOTH entrances before any source is scanned, and shall never publish a completeness-shaped receipt (`no-fold-arms-found` with a scanned count) about a path that was never a tree; the check is on the RESOLVED path rather than on the caller's string, because the resolved path is what every later fence measures against.
+
 ## Published surfaces
 
 - [x] **MCP-OP-CENSUS-026**: When clj-surgeon publishes its tool catalog in prose, that prose shall state five tools, shall name `relation_census` in the README, in CLAUDE.md, and in the clj-surgeon skill reference and its mirror, shall state that the census locates review work rather than proving idempotency, and shall state that the census is the one tool that enumerates the workspace tree; the tool's own description shall state the same.
