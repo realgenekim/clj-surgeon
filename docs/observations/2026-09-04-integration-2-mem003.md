@@ -676,3 +676,175 @@ No Surgeon MCP server was started.
   `rename-ns-plan-full-match` and `workspace-sources-read-all`, named as known
   at `2556a38` and untouched here.
 - Ten TREND lines, reported and never gated, unchanged.
+
+---
+
+# Round 4 — the trunk merge, and §1 closed at rung 5
+
+Appended 2026-09-04 06:38 UTC by forge@anvil. Round-three review:
+`docs/observations/mem003-second-landing-round3-review-opus.md` — **NO-GO** on
+one blocking finding plus a trunk conflict. Three of the four round-two
+findings it re-checked were confirmed closed; §1 was not.
+
+## The trunk merge (ordered first, and not mechanical)
+
+`git fetch origin MCP/main` → **e96a7a54** (past the `cf8aebd0` the reviewer
+saw, and past the admit gate's `9b7220c3`).
+`git merge --no-ff origin/MCP/main` → merge commit **154787c0**.
+
+**One conflict, one hunk**, in `mcp_change_buffer/run-process!`, exactly where
+the review predicted: the trunk added a `visible-byte-limit` 4-arity
+(MCP-OP-ADMIT-122, the analyzer's read ceiling) on the same line this branch
+converted from `System/nanoTime` to `measured/start`. Resolved so BOTH hold —
+the 3-arity delegates, the 4-arity opens the measured clock:
+
+```clojure
+  ([project-root command timeout-ms]
+   (run-process! project-root command timeout-ms
+                 exact-verification-visible-bytes))
+  ([project-root command timeout-ms visible-byte-limit]
+   (let [started (measured/start)]
+```
+
+**The branch's own new ratchet went red on trunk code it had never seen**, as
+the review said it would:
+
+```
+raw clock reads with no allow-list entry:
+  (["src/clj_surgeon/mcp_admit_tool.clj" "default-test-runner"])
+Ran 9 tests containing 21 assertions. 2 failures, 0 errors.
+```
+
+That read is published as `:report_started_at` — a RECEIPT field, so it is
+ROUTED, never allow-listed. `measured/wall-clock-ms` is new: the receipt
+counterpart of `raw-ms`, returning a tagged reading, so a stamp saying WHEN
+something happened rides the partition exactly like a duration and earns no
+allow-list entry. Witness after: 9 tests, 21 assertions, 0 failures.
+
+Two more integrations the conflict did not show, found by running gates rather
+than by reading the diff:
+
+- `mcp_admit_tool/summary` read `(:elapsed_ms result)` and threw
+  `:invalid-mcp-elapsed-time` on every admit call once the finalizer moved the
+  clock under `:measured`. Now `mcp-operation/elapsed-ms`.
+- `admit-output-schema` declared a top-level `elapsed_ms` and no `measured`
+  block, so the sixth tool failed this branch's own schema witness.
+
+**The admit gate's own witness, before and after.** `clj-surgeon.admit-patch-test`
+alone: trunk at `e96a7a54` `{:test 114, :pass 2122, :fail 0, :error 0}`;
+this branch's tip `{:test 114, :pass 2122, :fail 0, :error 0}`. Same tests,
+same assertions, same verdict.
+
+## §1 (BLOCKING) — the reading is an opaque type
+
+Round three's claim was *"an undeclared measured field cannot be CONSTRUCTED
+from a sanctioned clock read."* It was false, and the review reproduced it by
+two routes, each three tokens, each needing no raw read, no `value` call and no
+allow-list entry. Both reproduce at **154787c0**:
+
+| plant | at 154787c0 |
+|---|---|
+| §1a `(:clj-surgeon.measured/reading (measured/elapsed-ms started))` | `{:undeclared-field 1.788624, :hashed-field 1.788624, :unpartitioned []}`; 9 tests / 21 assertions / **0 failures** |
+| §1b `[clj-surgeon.measured :as measured :refer [raw-nanos]]` | `{:scan-of-planted-file {}}`; public `{:ok false, :verification_wall_ms 0.003615, :measured {:elapsed_ms 1.0}}`, hashed carries it; 9 / 21 / **0 failures** |
+
+The diagnosis both share: **a keyword lookup is not a laundering verb anybody
+has to name, and a name the scanner does not know is a hole in every scanner at
+once.** While the reading was a map and the alias witness matched only
+`:as`, "one door" was prose.
+
+**The repair is rung 5 — the bad state is unrepresentable, not detected.**
+`Reading` and `Tick` are `deftype`s with a PRIVATE `^:unsynchronized-mutable`
+field and ONE protocol method: no `ILookup`, no map interface, no `seq`, no
+`deref`, no public field. `(:foo r)` and `(get r k)` are nil, `(count r)`
+throws, `measured/value` is the only expression that yields the number.
+`print-method` is deterministic and withholds the number — the default
+`deftype` printer writes an identity hash, which would make any parity subject
+that ever saw a reading irreproducible for a reason having nothing to do with
+the clock. And because the NAME is every scan's only handle, the require is now
+the rule: `src/` and `dev/experiments/` may name the namespace only as
+`[clj-surgeon.measured :as measured]`; `:refer`, `:use`, another alias and any
+fully-qualified call are each a typed offence.
+
+Both plants, replanted on the fixed tree:
+
+| plant | on the fix |
+|---|---|
+| §1a | `{:undeclared-field nil, :field-is-a-number false, :hashed-field nil, :unpartitioned []}` — the field never becomes a number; the source scan ALSO goes red, `:fully-qualified` ×2 |
+| §1b | `clj-surgeon.measured named other than \`[clj-surgeon.measured :as measured]\`: [["src/clj_surgeon/planted_refer.clj" 3 :refer "[clj-surgeon.measured :as measured :refer [raw-nanos]]))"]]` |
+
+**§1d — the `:control` allow-list is no longer prose.** Its 33 entries assert
+in a `:why` string that the value is never published, and the test read only
+the `:channel` keyword. A `:why` cannot be made true by a test. What can is
+the property those strings are really claiming, so the boundary is witnessed
+directly: a reading published through the real finalizer in six placements a
+control site could contrive must be RELOCATED or refused TYPED — never a bare
+number in the hash subject, never a raw JVM exception. Two of the six were the
+review's §5b findings and are fixed here: a reading used as a map KEY (the walk
+looked only at values) and a reading inside a string-keyed SORTED map (the
+`:measured` block's `assoc` threw `ClassCastException` from `compareTo`).
+
+**Two defects the opaque type surfaced, both round-3's.** `recovery/recover!`
+wrote tagged readings into a `:measured` block that is pprint'd to disk and
+read back with `clojure.edn`; the round trip only parsed because the tag
+happened to be a map. And the pre-publication BYTE ESTIMATES measured the raw
+domain map — `mcp-result-byte-count` and `mcp-write-refusal/json-bytes` now
+measure the PARTITIONED candidate, which fixes the review's §4 17-byte
+undercount at its cause; the two ratified lanes that sized their 128-byte
+reserve on the old wire are amended to match.
+
+RED at **154787c0** with the new witnesses in place: `Ran 22 tests containing
+66 assertions. 18 failures, 0 errors.` GREEN at **37a1cf9c**: 22 / 66 / 0.
+
+## Non-blocking items from the review, closed
+
+| item | what changed |
+|---|---|
+| §2 hardening gap | `CallToolResult` CONSTRUCTION is scanned and allowed in exactly one form, with a plant proving the scan goes red. Construction, not `.structuredContent` — that setter is also how a CLIENT reads a response |
+| §3 residual (a) | `dev/experiments/` is a scanned root. It named FOUR raw clock sites, not the one the review found; three capture servers now publish through `mcp-operation/invoke!`, the formatter canary takes the measured clock plus one allow-listed launder, and its `:server-elapsed-ms` reads the partition instead of a key that was always nil |
+| §5b map KEY / sorted map | typed `:unpartitioned-measured-field`, never a raw number and never a `ClassCastException` |
+| §4 two intent lanes | write-refusal-completeness (the 128-byte reserve) and MCP-OP-PREP-REQ-001 amended to the measured partition; the code's estimate now has that shape too |
+| §6 MEM-021 | `:host` is a FIELD of `timing-sample/detail` — the map anyone quotes — and `best` no longer coerces with `long` (49.9 was asserted as 49 against a `< 50` bound) |
+
+## Gates at the round-4 tip
+
+| gate | result |
+|---|---|
+| `~/bin/suite-run bb test/run_all.clj` | `Ran 892 tests containing 7078 assertions. 0 failures, 0 errors.` exit 0 |
+| `~/bin/suite-run clojure -M:clj-surgeon/mcp-test` | `Ran 716 tests containing 8496 assertions. 0 failures, 0 errors.` exit 0 |
+| `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` exit 0 |
+| intent audit (`audit-current-repository`) | `ok=true specs=354 violations=0` |
+| `make txn-kernel-warning-check` | `kernel warning check: 2 namespace(s), 0 warning(s)` exit 0 |
+| `make memory-battery-self-test` | `Ran 32 tests containing 171 assertions. 0 failures, 0 errors.` |
+| `make memory-red PARSER_RED_EXPECT=green` | `memory-red: 6/6 assertions held (expect=green)` — `{:best-scan-ms 13, :host {:cores 16, :load "10.13 9.61 8.88 …"}, :scan-ms [13 13 16], :wall-ms [117 115 112]}` |
+| `make memory-red-kernel` | `Ran 4 tests containing 25 assertions. 0 failures, 0 errors.`; FLATNESS 600 `heap-used-peak-mb 254.24` at `-Xmx256m` |
+| `clj-surgeon.admit-patch-test` alone | `{:test 114, :pass 2122, :fail 0, :error 0}` — equal to the trunk baseline |
+| `make admit-analyzer-memory-self-test` | `3/3 arms passed at -Xmx512m` |
+| `make memory-battery` (ONCE, flock, fresh `MEMBAT_ROOT=/home/forge/tmp/membat-mem003r4`) | **FAIL (INCOMPLETE) exit 1** — `reference-mismatch-count=0`; the two pre-existing `held-scales-with-n`; four UNMEASURED |
+
+Battery reference and battery ran under ONE `flock /home/forge/tmp/suite.lock`,
+once, no retry, `MEMBAT_ALLOW_ANY_ROOT` never set. The two failures are the ones
+named pre-existing at `2556a38` and unchanged in kind:
+
+```
+FAIL held-scales-with-n {:op :rename-ns-plan-full-match,  :observed 10.0, :limit 3.0, :small-n-observed 1.0}
+FAIL held-scales-with-n {:op :workspace-sources-read-all, :observed 41.0, :limit 6.5, :small-n-observed 4.5}
+```
+
+reference `.../receipts/20260904T062733.325751443Z-reference.edn`;
+battery `.../receipts/20260904T063417.556410101Z-battery.edn`.
+Its attestation names `head-sha 154787c0` — the run measured the working tree
+that became `37a1cf9c`, and the commit was taken after the run with no edit in
+between. No Surgeon MCP server was started; no server was started at all.
+
+## What is NOT closed
+
+- The four `UNMEASURED reserved-peak-over-budget` lines and the two
+  `held-scales-with-n` FAILs — MEM-001's lane, unchanged, as in round 3.
+- **Review §3 residual (b), the file-fatal benchmark refusal.**
+  `bench/event_timing.clj`'s `fail!` throws, so one legacy event aborts a whole
+  `summarize` and a mixed corpus yields nothing. The review's own preference — a
+  typed PER-ITEM refusal that still summarizes the rest — is right and is not in
+  this round's order. Left open deliberately, not overlooked.
+- Review §5b's reading-in-METADATA case: it survives on the hashed value's
+  metadata and is inert on the wire (`pr-str` and JSON both drop meta). Named,
+  not fixed.
