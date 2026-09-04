@@ -1125,15 +1125,20 @@
   (vec
     (for [namespace-name (sort (reachable-entrance-namespaces))
           :let [path (namespace-source-path namespace-name)
-                lines (str/split-lines (slurp path))]
+                text (slurp path)
+                lines (vec (str/split-lines text))]
+          ;; only a namespace whose OWN `refusal` takes the kind as its first
+          ;; argument can spell a kind at the call site at all; where the kind
+          ;; is a literal inside the constructor the `:error_type "…"` scan
+          ;; already has it
+          :when (re-find #"\(defn-?\s+refusal\s*\n?\s*\[\s*(error-type|kind)\b"
+                         text)
           [index line] (map-indexed vector lines)
           :when (and (re-find #"\(refusal\s" line)
                      (not (re-find #"\(refusal\s+:[a-z]" line))
                      (not (re-find #"defn-?\s+refusal" line)))
           :when (not (some #(str/includes? % "forwarded-refusal-kind")
-                           (subvec (vec lines)
-                                   (max 0 (- index 12))
-                                   (inc index))))]
+                           (subvec lines (max 0 (- index 12)) (inc index))))]
       (str path ":" (inc index)))))
 
 ;; @spec MCP-OP-ALIAS-059
@@ -1172,24 +1177,17 @@
   `:compact-relation-path-conflict` on compact-relations — belong to verbs
   `handle-alias-migration` never reaches."
   []
-  (let [verb-text (str (slurp "src/clj_surgeon/alias_migration.clj")
-                       (slurp "src/clj_surgeon/mcp_alias_migration.clj"))
+  (let [verb-text (reachable-entrance-source-text)
         router-text (slurp "src/clj_surgeon/mcp_tool.clj")
         entrance-text (str (slurp "src/clj_surgeon/mcp_workspace.clj")
-                           (slurp "src/clj_surgeon/mcp_server.clj"))
-        operation-text (slurp "src/clj_surgeon/mcp_operation.clj")
-        kernel-text (str (slurp "src/clj_surgeon/intent_transaction.clj")
-                         (slurp "src/clj_surgeon/file_ops.clj"))]
+                           (slurp "src/clj_surgeon/mcp_server.clj"))]
     (into (sorted-set "invalid-mcp-request" "server-not-initialized")
           cat
           [(map second (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]"
                                (str verb-text router-text)))
            (map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" verb-text))
            (map second (re-seq #":error-type :([a-z][a-z0-9-]*)" verb-text))
-           (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))
-           (map second (re-seq #":error-type :([a-z][a-z0-9-]*)"
-                               operation-text))
-           (map second (re-seq #":error-type :([a-z-]+)" kernel-text))])))
+           (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))])))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- assert-refusal-text!
@@ -1304,14 +1302,12 @@
   is a call form, and `mcp_operation.clj` mints its two kinds as map values
   under `:error-type` and holds no other keyword in that position."
   []
-  (let [verb-text (str (slurp "src/clj_surgeon/mcp_alias_migration.clj")
-                       (slurp "src/clj_surgeon/alias_migration.clj"))
-        operation-text (slurp "src/clj_surgeon/mcp_operation.clj")]
+  (let [verb-text (reachable-entrance-source-text)]
     (into (sorted-set)
           cat
           [(map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" verb-text))
            (map second (re-seq #":error-type :([a-z][a-z0-9-]*)"
-                               operation-text))])))
+                               verb-text))])))
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-refusal-enumeration-contains-every-kind-the-entrance-constructs

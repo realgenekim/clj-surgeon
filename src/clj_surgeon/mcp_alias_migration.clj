@@ -2090,6 +2090,13 @@
                            (:source_unchanged commit)
 
                            :else (not (:committed commit)))]
+    ;; @spec MCP-OP-ALIAS-059
+    ;; forwarded-refusal-kind: the kernel's own error-type travels VERBATIM
+    ;; rather than being renamed to a constant, so every kind the transaction
+    ;; kernel can mint is a kind this verb's text block must render. It is the
+    ;; one site in the entrance's reachable set where the kind is not a
+    ;; literal, and it invents nothing: the kinds it forwards are minted, and
+    ;; scanned, in the kernel's own sources.
     (refusal (or (some-> (or (:error-type commit) (:error_type commit)) name)
                  "alias-migration-transaction-refused")
              (or (:error commit) "The alias migration transaction refused")
