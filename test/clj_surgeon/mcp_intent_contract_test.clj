@@ -206,6 +206,7 @@
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
    "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
    "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
+   "docs/intent/test-isolation/test-isolation-specs.md"
    "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
    "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"])
 
@@ -229,7 +230,8 @@
    "docs/intent/read-path-memory/read-path-memory-specs.md"
    "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
    "docs/intent/relation-census/relation-census-specs.md"
-   "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"])
+   "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
+   "docs/intent/test-isolation/test-isolation-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"

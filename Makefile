@@ -1019,7 +1019,7 @@ N ?= 4
 
 suite-concurrency-battery:
 	@# @spec TEST-ISO-009
-	@N=$(N) sh test/suite_concurrency_battery.sh
+	@N=$(N) bash test/suite_concurrency_battery.sh
 
 # ============================================================
 # MEM-005 parser-admission red witness (heavy; NOT in make test)

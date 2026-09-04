@@ -236,3 +236,56 @@
     (is (= 11 (count (lm/namespaces-for :battery))))
     (is (= 51 (count lm/manifest))
         "round one's 49 measured namespaces plus the two round-two witnesses")))
+
+;; ---------------------------------------------------------------------------
+;; The intent audit for this family.
+;;
+;; A MARKER AUDIT IS NOT A RATCHET. This checks that every `@spec TEST-ISO-*`
+;; marker in the tree is a registered requirement and that every registered
+;; requirement marked implemented is claimed by at least one marker. That
+;; catches an id invented in a comment and a requirement whose implementation
+;; quietly vanished; it CANNOT catch a marker over code that does not do what
+;; the requirement says. The behavioural witnesses above and in
+;; `clj-surgeon.fast-lane-isolation-test` are the proof; this is the index.
+;; ---------------------------------------------------------------------------
+
+(def ^:private specs-doc "docs/intent/test-isolation/test-isolation-specs.md")
+
+(defn- spec-ids-in-tree
+  []
+  (->> (concat (test-source-files)
+               (filter #(.isFile ^java.io.File %) (file-seq (io/file "dev")))
+               [(io/file "Makefile")])
+       (filter #(.isFile ^java.io.File %))
+       (mapcat (fn [f] (re-seq #"TEST-ISO-[A-Z0-9\-]+" (slurp f))))
+       set))
+
+(defn- registered-ids
+  []
+  (let [text (slurp (io/file specs-doc))]
+    {:all (set (re-seq #"TEST-ISO-[A-Z0-9\-]+" text))
+     :implemented (set (map second
+                            (re-seq #"- \[x\] \*\*(TEST-ISO-[A-Z0-9\-]+)\*\*" text)))}))
+
+;; @spec TEST-ISO-001
+(deftest every-test-iso-marker-in-the-tree-is-a-registered-requirement
+  (let [{:keys [all]} (registered-ids)
+        unregistered (sort (remove all (spec-ids-in-tree)))]
+    (is (empty? unregistered)
+        (str "@spec marker(s) naming no requirement in " specs-doc ": "
+             (str/join ", " unregistered)))))
+
+;; @spec TEST-ISO-001
+(deftest every-implemented-requirement-is-claimed-by-a-marker
+  (let [{:keys [implemented]} (registered-ids)
+        in-tree (spec-ids-in-tree)
+        ;; The composite ids (001a, 001b) are witnessed by deftests named in
+        ;; the specs document rather than by their own source marker; the
+        ;; audit checks their PARENT is claimed.
+        expected (remove #{"TEST-ISO-001a" "TEST-ISO-001b"} implemented)
+        unclaimed (sort (remove in-tree expected))]
+    (is (seq implemented) "the specs document must parse")
+    (is (empty? unclaimed)
+        (str "requirement(s) marked implemented that no @spec marker claims -- "
+             "an implementation that vanished leaves the document lying: "
+             (str/join ", " unclaimed)))))
