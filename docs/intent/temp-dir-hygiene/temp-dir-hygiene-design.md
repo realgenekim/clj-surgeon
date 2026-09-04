@@ -1,7 +1,7 @@
 ---
 parent: high-level-design
 prefix: MCP-OP-TMPHYG
-status: "implemented 2026-09-04; inb-9483a4"
+status: "implemented 2026-09-04; round two after independent review; inb-9483a4"
 ---
 
 # Test-Runner Temp-Directory Hygiene
@@ -92,22 +92,72 @@ name, unconditionally, with no allowlist and no per-test opt-out.
 
 ## Falsifier table
 
+Every witness below is EXECUTED behaviour. Round one's witnesses were a unit
+test of the tmpfs predicate plus "every green suite run is the accepted-path
+proof" — the accepted path is not the requirement, and no test anywhere drove
+a runner to exit 97. The subprocess witnesses live in
+`test/tmp_leak_ratchet_test.sh` (`make tmp-leak-ratchet-self-test`, inside
+`mcp-test`), which drives `clj-surgeon.tmp-leak-probe` — a minimal real test
+entry point — in child processes, because `secure-tmpdir!` re-execs its own
+suite and calls `System/exit`.
+
 | Intent | Falsifier — what would prove the promise broken | Required result | Witness |
 |---|---|---|---|
-| MCP-OP-TMPHYG-001 | Either runner (`bb test/run_all.clj`, `clojure -M:clj-surgeon/mcp-test`) completes a test run while `java.io.tmpdir`'s resolved base is tmpfs-backed. | The runner refuses before running any test (exit 97, named message); nothing is created under the tmpfs base. | `tmpfs-predicate-tells-ram-from-disk` (`clj_surgeon/tmp_leak_support_test.clj`); functionally, every green `~/bin/suite-run` invocation on this seat's `/var/tmp/forge` (ext4) IS the accepted-path proof. |
-| MCP-OP-TMPHYG-002 | A test under either runner's namespace list creates a file or directory under `java.io.tmpdir` and the suite still exits 0. | The suite's exit code is non-zero, and *err* names the leaked entries (up to 5, with a count), whenever anything survives inside that run's isolated root after the suite finishes. | `with-temp-dir-cleans-up-on-throw`, `with-temp-dir-cleans-up-on-success` (`clj_surgeon/tmp_leak_support_test.clj`); functionally, the RED counts measured while fixing this leaf (`bb test/run_all.clj`: 1 leaked entry; `clojure -M:clj-surgeon/mcp-test`: 66 leaked entries, dominated by `clj-surgeon-change-buffer-*`) each went to 0 once the leaking test namespaces were fixed. |
+| MCP-OP-TMPHYG-001 | Either original runner completes a run while its base is tmpfs-backed. | Refuse before running any test: exit 97, named message. | `tmp-leak-ratchet-self-test` 3a; `tmpfs-predicate-tells-ram-from-disk`. |
+| MCP-OP-TMPHYG-002 | A test creates a file or directory under java.io.tmpdir and the suite still exits 0. | Non-zero exit, *err* names the leaked entries with a count. | `tmp-leak-ratchet-self-test` 5b; `with-temp-dir-cleans-up-on-throw` / `-on-success`. |
+| MCP-OP-TMPHYG-003 | A runner runs when no mount source can determine the fstype, or when the base is `/tmp` / `/dev/shm` and `findmnt` is unavailable. | Exit 97 with a named message in BOTH cases; and the mounts-table fallback still answers when only `findmnt` is missing. | `tmp-leak-ratchet-self-test` 3a–3e (3b is the review's arm B; 3e proves the fallback is not dead code). |
+| MCP-OP-TMPHYG-004 | A process that inherited the sentinel treats the shared base as its private root, and the sweep delete-trees it. | Exit 97; every planted foreign entry survives; `sweep-root!` refuses any name that is not `clj-surgeon-suite-*`. | `tmp-leak-ratchet-self-test` 4a, 4b. |
+| MCP-OP-TMPHYG-005 | A subprocess of the run creates a temp dir outside the isolated root. | The subprocess's temp dir is inside the root, and is reported as a leak; the shared base is left empty. | `tmp-leak-ratchet-self-test` 5a–5c; `configure-environment-publishes-this-process-temp-directory`. |
+| MCP-OP-TMPHYG-006 | The re-exec'd child runs at a different heap ceiling than the parent, or without the parent's argv. | child `maxMemory` == parent `maxMemory`; child argv == parent argv, on both the JVM and bb lanes. | `tmp-leak-ratchet-self-test` 6a–6c; `test/mcp_heap_config_test.sh`'s execution assertion. |
+| MCP-OP-TMPHYG-007 | A SIGTERMed run leaves its isolated root behind; or the startup sweep deletes a live run's root or another tenant's entry. | Base empty after a SIGTERM; dead-pid stale root swept; live-pid root and foreign entries untouched. | `tmp-leak-ratchet-self-test` 7a, 7b. |
+| MCP-OP-TMPHYG-008 | An unwritable base produces a stack trace instead of a refusal. | Exit 97 with a `tmp-refused:` line and no clojure `Execution error` banner. | `tmp-leak-ratchet-self-test` 8. |
+| MCP-OP-TMPHYG-009 | Any of the five test entry points runs with a RAM-backed base. | All five exit 97 with a named message. | `tmp-leak-ratchet-self-test` 9 (drives all four `-m`-able runners; `run_all.clj` is covered by 3a's bb arm). |
+| MCP-OP-TMPHYG-010 | A Makefile recipe or a `test/*.sh` gate names a `/tmp/<path>` write target. | The scan finds none. | `tmp-leak-ratchet-self-test` 10. |
+
+## Measured facts added in round two
+
+1. **`slurp` is not the only thing that fails on procfs.** `slurp`,
+   `(.readAllBytes (io/input-stream "/proc/mounts"))` and
+   `(line-seq (io/reader "/proc/mounts"))` ALL throw
+   `java.io.IOException: Invalid argument`, on bb and on a real JVM, because
+   procfs reports `st_size = 0`. The review's suggested streaming-reader
+   repair does not work. `java.nio.file.Files/lines` reads all 41 lines on
+   both runtimes and is what `mounts-table-fstype` uses.
+2. **`java.lang.management.ManagementFactory` cannot be named in code bb
+   loads.** It is absent from bb's native image and sci rejects the symbol at
+   ANALYSIS time, before any `try`/`catch` could run — so
+   `parent-jvm-options` reads it through `Class/forName`.
+3. **An undeterminable fstype is a REAL state, not a theoretical one**
+   (it follows from 1), which is why `mount-fstype` is tri-state and
+   `:unknown` refuses.
+
+## One declared, deliberate exception
+
+`src/clj_surgeon/mcp_process.clj` `extract-packaged-wrapper!` creates its
+clj-kondo admission wrapper with `File/createTempFile` + `.deleteOnExit` and
+no `finally`. That is CORRECT there: the wrapper must outlive the call that
+extracted it. The consequence is declared rather than fixed — a long-running
+or `kill -9`'d MCP server leaves one `clj-kondo-admission-*.py` behind per
+start, now inside whatever `java.io.tmpdir` that server was launched with.
+Every other `createTemp*` site in `src/` deletes in a `finally`.
 
 ## Deliberately out of scope in this leaf
 
-- **Fixing every hard-coded `/tmp` string in `bench/*.sh`.** Those scripts are
+- **Fixing every hard-coded `/tmp` string in `bench/*.sh`.** (The Makefile
+  recipes that INVOKE those harnesses no longer hand them `/tmp` roots —
+  MCP-OP-TMPHYG-010 — but the scripts' own internal defaults are untouched.) Those scripts are
   not required by `test/run_all.clj` or `mcp_test_runner.clj` and are not
   covered by this leaf's gates; `test/relation_causal_cohort_runner_test.sh`
   and `test/performance_regression_sentinel_runner_test.sh` (genuinely under
   `test/`) were fixed to `"${TMPDIR:-/tmp}/..."` as part of this leaf, but the
   `bench/` harnesses were left as a named follow-up.
-- **`test/mcp_heap_config_test.sh`'s `MCP_STATE_DIR='/tmp/...'`** is a `make
-  -n` (dry-run) assertion against the printed Makefile recipe text — it never
-  launches a process or creates that directory, so it is not a leak.
+- ~~**`test/mcp_heap_config_test.sh`'s `MCP_STATE_DIR='/tmp/...'`** is a
+  `make -n` assertion, so it is not a leak.~~ CORRECTED in round two: true as
+  far as it goes, and beside the point. That gate reading only recipe TEXT is
+  exactly how the MCP suite came to run at the box default heap for a day
+  while the gate stayed green. It now derives the path from `TMPDIR`
+  (MCP-OP-TMPHYG-010) *and* asserts the heap ceiling by EXECUTION
+  (MCP-OP-TMPHYG-006).
 - **A process killed by `SIGKILL` or an OOM.** The shutdown hook that sweeps
   an isolated root only runs for terminations the JVM/Substrate VM gets to
   observe (a graceful `SIGTERM`, an ordinary `System/exit`); nothing can run
