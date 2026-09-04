@@ -973,6 +973,62 @@
             (str "the enumeration does not see the kernel's " kind))))))
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- refusal-constructor-kinds
+  "Kind literals the entrance's own refusal constructors name.
+
+  Scanned INDEPENDENTLY of `refusal-kinds-in-source`, over the same subject,
+  and written apart on purpose: the enumeration is the thing under test, so a
+  witness that asked the enumeration what the entrance holds would agree with
+  itself. When the round-11 enumeration was prefix-locked to
+  `alias-migration-`, `(refusal :unknown-verification-profile …)` — minted by
+  the verb's own namespace, on the verb's own execution path, through the
+  verb's own constructor — fell through both of its spellings.
+
+  Two shapes, neither of which can produce a false positive: `(refusal :kind`
+  is a call form, and `mcp_operation.clj` mints its two kinds as map values
+  under `:error-type` and holds no other keyword in that position."
+  []
+  (let [verb-text (str (slurp "src/clj_surgeon/mcp_alias_migration.clj")
+                       (slurp "src/clj_surgeon/alias_migration.clj"))
+        operation-text (slurp "src/clj_surgeon/mcp_operation.clj")]
+    (into (sorted-set)
+          cat
+          [(map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" verb-text))
+           (map second (re-seq #":error-type :([a-z][a-z0-9-]*)"
+                               operation-text))])))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-enumeration-contains-every-kind-the-entrance-constructs
+  ;; Round-11 re-review finding 3: the enumeration's alias-side regex was
+  ;; prefix-locked to `alias-migration-`, and its keyword-spelled regex was
+  ;; applied only to the two kernel files, so a kind minted by the verb's own
+  ;; namespace under any other prefix fell through both. `execute-migration!`
+  ;; refuses `:unknown-verification-profile` before any discovery, and the
+  ;; undo path mints the same kind; `mcp_operation/invoke!` — which
+  ;; `handle-alias-migration` calls directly — mints
+  ;; `:invalid-mcp-operation-result` and `:invalid-mcp-elapsed-time`. The
+  ;; live receipt renders correctly today only because `refusal-fact-line` is
+  ;; generic; the gate that exists to fail "on the day a kind is written"
+  ;; would not have noticed.
+  (let [constructed (refusal-constructor-kinds)
+        enumerated (refusal-kinds-in-source)
+        missing (vec (sort (clojure.set/difference constructed enumerated)))]
+    (is (empty? missing)
+        (str "refusal kinds the entrance constructs that the enumeration does "
+             "not carry: " (pr-str missing)))
+    (testing "the kinds round 11 could not see, named"
+      (doseq [kind ["unknown-verification-profile"
+                    "invalid-mcp-operation-result"
+                    "invalid-mcp-elapsed-time"]]
+        (is (contains? enumerated kind)
+            (str "the enumeration does not see " kind))))
+    (testing "the kinds round 11 could see are still seen"
+      (doseq [kind ["invalid-workspace-root" "mcp-adapter-failure"
+                    "invalid-mcp-request" "alias-migration-empty-scope"]]
+        (is (contains? enumerated kind)
+            (str "the enumeration lost " kind))))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest a-refusal-without-a-remedy-does-not-point-at-one
   ;; The rendered no-next_call line said "the remedy above names what only the
   ;; caller can decide" unconditionally — on a receipt carrying no `:remedy` it
