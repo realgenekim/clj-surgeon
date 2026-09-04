@@ -1290,10 +1290,58 @@
 
 ;; @spec MCP-OP-TIME-005
 ;; @spec MCP-OP-TIME-006
+(def ^:private round-ten-review-plants
+  "The round-ten review's plants: round eight's faces with ONE NEWLINE in them.
+
+  Round nine closed the parenthesised member, `..` and `memfn` for real — N1-N4
+  each take the gate from 176 assertions green to two failures at the
+  production receipt site, and I reproduced that closing. But both alternative
+  builders write `\\s+` between the receiver and the member, so the authors'
+  own stated intent is ARBITRARY WHITESPACE — and Clojure's whitespace includes
+  the NEWLINE. That tolerance was dead on the one axis where it mattered:
+  `sites` reduced over `str/split-lines`, so no string ever offered to either
+  pattern could contain a line break. Every face round nine added was defeated
+  by pressing Enter.
+
+  P9 is the one to read first. It is not even a parenthesised member: it is
+  `(. System nanoTime)`, the plainest raw-clock dot form there is, carried by
+  the pattern since round six. Wrapped, it published a raw sixteen-digit
+  `nanoTime` into an undeclared receipt field INSIDE the hashed parity subject
+  with the gate at its exact baseline of 29 tests and 176 assertions.
+
+  These are not exotic spellings a reviewer invented. A receipt line carrying a
+  real argument list is long, and a formatter wraps it — the round-nine faces
+  are the LONGEST spellings and therefore the MOST likely to be wrapped, so the
+  fix that closed round eight created the population most exposed to this hole.
+  This is what the code looks like after the editor is done with it.
+
+  The patterns are correct. It was their INPUT that was wrong."
+  [{:label "P7 — N3's parenthesised member on the escape hatch, wrapped"
+    :pattern :escape
+    :source "(. rr\n                            (_launder))"}
+   {:label "P8 — N1 wrapped: the dot special form's parenthesised member on a clock"
+    :pattern :clock
+    :source "(. System\n                            (nanoTime))"}
+   {:label "P9 — the PLAIN dot form `(. System nanoTime)`, carried since round six, wrapped"
+    :pattern :clock
+    :source "(. System\n                            nanoTime)"}
+   {:label "P10 — N2 wrapped: `..` on a clock"
+    :pattern :clock
+    :source "(.. System\n                            (nanoTime))"}
+   {:label "P11 — N4 wrapped: `memfn` on the escape hatch"
+    :pattern :escape
+    :source "((memfn\n                             _launder) rr)"}
+   {:label "P12 — N3 by `..` on the escape hatch, wrapped"
+    :pattern :escape
+    :source "(.. rr\n                            (_launder))"}])
+
+;; @spec MCP-OP-TIME-005
+;; @spec MCP-OP-TIME-006
 (deftest every-round-six-review-plant-is-seen-by-the-scan-that-owns-it
   (testing "a call that names its target as a string or a dot form is scanned"
     (doseq [{:keys [label pattern source]} (concat round-six-review-plants
-                                                   round-eight-review-plants)]
+                                                   round-eight-review-plants
+                                                   round-ten-review-plants)]
       (let [root (str (io/file (System/getProperty "java.io.tmpdir")
                                (str "measured-r6-plant-" (System/nanoTime))))
             victim (io/file root "clj_surgeon" "planted_r6.clj")]
@@ -1483,6 +1531,52 @@
                  offenders)
               (str "the require witness did not see a planted :refer: "
                    (pr-str offenders))))
+        (finally
+          (.delete victim)
+          (.delete (.getParentFile victim))
+          (.delete (io/file root)))))))
+
+;; @spec MCP-OP-TIME-005
+;; @spec MCP-OP-TIME-006
+(deftest the-require-witness-catches-a-refer-split-across-lines
+  (testing "round-ten review §1b: round three's :refer bypass, reopened by pressing Enter"
+    ;; `measured-naming-offence` is asked about a LINE, and a require split
+    ;; across three lines is an offence on none of them: the first names the
+    ;; namespace and carries no `:refer`, the second carries `:refer` and names
+    ;; no namespace, the third is the sanctioned tail. The bare `(raw-nanos)`
+    ;; the split require introduces is then invisible to every other scan in
+    ;; this file, all of which are written against the `measured/` prefix — so
+    ;; a bare `System/nanoTime` reaches an undeclared receipt field INSIDE the
+    ;; hashed parity subject through the SANCTIONED namespace, with the gate at
+    ;; its exact baseline. It is round three's §1b bypass verbatim, and it
+    ;; needs no interop spelling, no reflection and no `Reading` at all.
+    ;;
+    ;; The subject of a scan over Clojure must be the SOURCE. A line is not a
+    ;; form.
+    (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                             (str "measured-split-refer-plant-" (System/nanoTime))))
+          victim (io/file root "clj_surgeon" "planted_split_refer.clj")]
+      (.mkdirs (.getParentFile victim))
+      (spit victim
+            (str "(ns clj-surgeon.planted-split-refer\n"
+                 "  (:require\n"
+                 "   [clj-surgeon.measured\n"
+                 "    :refer [raw-nanos]\n"
+                 "    :as measured]))\n\n"
+                 "(defn publish-an-undeclared-clock-field\n"
+                 "  [started]\n"
+                 "  {:ok false\n"
+                 "   :verification_wall_ms (/ (double (- (raw-nanos) started))\n"
+                 "                            1000000.0)})\n"))
+      (try
+        (let [offenders (measured-naming-offenders root)]
+          (is (= ["src/clj_surgeon/planted_split_refer.clj"]
+                 (mapv first offenders))
+              (str "the require witness did not see a :refer split across "
+                   "lines: " (pr-str offenders)))
+          (is (= [:refer] (mapv #(nth % 2) offenders))
+              (str "a require split across lines is an offence on no line, so "
+                   "the split is the bypass: " (pr-str offenders))))
         (finally
           (.delete victim)
           (.delete (.getParentFile victim))
