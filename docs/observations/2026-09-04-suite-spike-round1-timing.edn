@@ -1,0 +1,500 @@
+{:generated-at "2026-09-04T17:48:27.709441165Z",
+ :tmp-root "/var/tmp/forge/clj-surgeon-suite-2859048-45167e39",
+ :total-wall-ms 716677,
+ :namespace-count 49,
+ :rows
+ [{:subprocesses
+   ("/usr/bin/python3.14 /home/forge/src/clj-surgeon-suite/resources/clj-kondo-admission.py --lock"
+    "/usr/lib/jvm/java-21-openjdk-amd64/bin/java"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post12065589407782017474/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post12153532962233415667/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post13157047098589423928/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post14862245532959750350/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post15634616033719691725/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post2792310268226704867/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post3222097785454330673/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post712460310078159249/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-post9352591735215145925/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre10910940810895090892/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre14029077719128378687/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre15225127746882723494/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre1917823155971609349/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre4675313933934544391/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre5829514527742145160/src/acid/fanout/ns_003.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre7763207587615003484/src/fx/ns_00.clj"
+    "/usr/local/bin/clj-kondo --lint /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-admit-pre8508399323757446327/src/acid/fanout/ns_003.clj"),
+   :tests 114,
+   :ns clj-surgeon.admit-patch-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 6477,
+   :error 0,
+   :pass 2122,
+   :assertions 2122}
+  {:subprocesses (),
+   :tests 3,
+   :ns clj-surgeon.census-pool-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 128,
+   :error 0,
+   :pass 8,
+   :assertions 8}
+  {:subprocesses
+   ("/usr/local/bin/bb -cp /home/forge/src/clj-surgeon-suite/src"),
+   :tests 7,
+   :ns clj-surgeon.core-discovery-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 3010,
+   :error 0,
+   :pass 35,
+   :assertions 35}
+  {:subprocesses
+   ("/usr/bin/python3.14 /home/forge/src/clj-surgeon-suite/resources/clj-kondo-admission.py --lock"),
+   :tests 126,
+   :ns clj-surgeon.mcp-alias-migration-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 59888,
+   :error 0,
+   :pass 3148,
+   :assertions 3148}
+  {:subprocesses
+   ("/usr/lib/jvm/java-21-openjdk-amd64/bin/java"
+    "/usr/local/bin/bb"
+    "/usr/local/bin/bb -cp /home/forge/src/clj-surgeon-suite/src"
+    "?"),
+   :tests 5,
+   :ns clj-surgeon.mcp-relation-census-launcher-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 63707,
+   :error 0,
+   :pass 186,
+   :assertions 186}
+  {:subprocesses
+   ("/usr/lib/jvm/java-21-openjdk-amd64/bin/java"
+    "/usr/local/bin/bb -cp /home/forge/src/clj-surgeon-suite/src"
+    "?"),
+   :tests 7,
+   :ns clj-surgeon.reader-eval-fence-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 464921,
+   :error 0,
+   :pass 74,
+   :assertions 74}
+  {:subprocesses (),
+   :tests 3,
+   :ns clj-surgeon.mcp-relation-census-round20-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 25,
+   :error 0,
+   :pass 21,
+   :assertions 21}
+  {:subprocesses (),
+   :tests 33,
+   :ns clj-surgeon.mcp-contract-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 35,
+   :error 0,
+   :pass 476,
+   :assertions 476}
+  {:subprocesses (),
+   :tests 17,
+   :ns clj-surgeon.mcp-create-files-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 55,
+   :error 0,
+   :pass 97,
+   :assertions 97}
+  {:subprocesses (),
+   :tests 7,
+   :ns clj-surgeon.mcp-extraction-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 36,
+   :error 0,
+   :pass 60,
+   :assertions 60}
+  {:subprocesses (),
+   :tests 10,
+   :ns clj-surgeon.mcp-extraction-plan-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 18,
+   :error 0,
+   :pass 47,
+   :assertions 47}
+  {:subprocesses (),
+   :tests 30,
+   :ns clj-surgeon.mcp-change-buffer-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 136,
+   :error 0,
+   :pass 248,
+   :assertions 248}
+  {:subprocesses
+   ("/usr/bin/dash -c sleep 0.2"
+    "/usr/bin/dash -c sleep 5 & wait"
+    "/usr/bin/python3.14 /home/forge/src/clj-surgeon-suite/resources/clj-kondo-admission.py --lock"
+    "/usr/lib/cargo/bin/coreutils/sleep 0.2"
+    "/usr/lib/cargo/bin/coreutils/sleep 5"),
+   :tests 7,
+   :ns clj-surgeon.mcp-cold-verify-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 591,
+   :error 0,
+   :pass 50,
+   :assertions 50}
+  {:subprocesses (),
+   :tests 3,
+   :ns clj-surgeon.mcp-compact-edit-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 4,
+   :error 0,
+   :pass 24,
+   :assertions 24}
+  {:subprocesses (),
+   :tests 2,
+   :ns clj-surgeon.mcp-compact-edit-fields-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 4,
+   :error 0,
+   :pass 442,
+   :assertions 442}
+  {:subprocesses (),
+   :tests 9,
+   :ns clj-surgeon.mcp-compact-location-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 103,
+   :error 0,
+   :pass 101,
+   :assertions 101}
+  {:subprocesses (),
+   :tests 16,
+   :ns clj-surgeon.mcp-combinable-transaction-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 22,
+   :error 0,
+   :pass 62,
+   :assertions 62}
+  {:subprocesses (),
+   :tests 8,
+   :ns clj-surgeon.mcp-compact-relations-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 6370,
+   :error 0,
+   :pass 473,
+   :assertions 473}
+  {:subprocesses (),
+   :tests 13,
+   :ns clj-surgeon.mcp-http-server-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 1279,
+   :error 0,
+   :pass 158,
+   :assertions 158}
+  {:subprocesses (),
+   :tests 4,
+   :ns clj-surgeon.mcp-hot-verify-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 10016,
+   :error 0,
+   :pass 19,
+   :assertions 19}
+  {:subprocesses (),
+   :tests 20,
+   :ns clj-surgeon.mcp-inspect-contract-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 128,
+   :error 0,
+   :pass 261,
+   :assertions 261}
+  {:subprocesses (),
+   :tests 34,
+   :ns clj-surgeon.mcp-inspect-tool-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 304,
+   :error 0,
+   :pass 242,
+   :assertions 242}
+  {:subprocesses (),
+   :tests 11,
+   :ns clj-surgeon.mcp-intent-contract-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 41,
+   :error 0,
+   :pass 23,
+   :assertions 23}
+  {:subprocesses (),
+   :tests 3,
+   :ns clj-surgeon.mcp-operation-async-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 2,
+   :error 0,
+   :pass 22,
+   :assertions 22}
+  {:subprocesses (),
+   :tests 1,
+   :ns clj-surgeon.mcp-operation-registry-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 866,
+   :error 0,
+   :pass 51,
+   :assertions 51}
+  {:subprocesses (),
+   :tests 4,
+   :ns clj-surgeon.mcp-operation-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 2,
+   :error 0,
+   :pass 28,
+   :assertions 28}
+  {:subprocesses (),
+   :tests 6,
+   :ns clj-surgeon.mcp-recovery-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 6,
+   :error 0,
+   :pass 21,
+   :assertions 21}
+  {:subprocesses
+   ("/usr/bin/strace -f -e"
+    "/usr/local/bin/bb -cp /home/forge/src/clj-surgeon-suite/src"
+    "?"),
+   :tests 82,
+   :ns clj-surgeon.mcp-relation-census-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 36210,
+   :error 0,
+   :pass 2533,
+   :assertions 2533}
+  {:subprocesses (),
+   :tests 1,
+   :ns clj-surgeon.mcp-paths-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 1,
+   :error 0,
+   :pass 10,
+   :assertions 10}
+  {:subprocesses
+   ("/usr/bin/python3.14 /home/forge/src/clj-surgeon-suite/resources/clj-kondo-admission.py --lock"
+    "/usr/bin/python3.14 /var/tmp/forge/clj-surgeon-suite-2859048-45167e39/clj-surgeon-kondo-shim-5234252754327964971/clj-kondo 0"
+    "/usr/lib/cargo/bin/coreutils/sleep"
+    "/usr/lib/cargo/bin/coreutils/sleep 0.08"
+    "/usr/lib/cargo/bin/coreutils/sleep 0.15"
+    "/usr/lib/cargo/bin/coreutils/sleep 0.25"
+    "/usr/lib/cargo/bin/coreutils/sleep 0.30"
+    "/usr/lib/cargo/bin/coreutils/sleep 1"
+    "/usr/lib/cargo/bin/coreutils/sleep 1.00"
+    "?"),
+   :tests 19,
+   :ns clj-surgeon.mcp-process-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 3591,
+   :error 0,
+   :pass 70,
+   :assertions 70}
+  {:subprocesses (),
+   :tests 13,
+   :ns clj-surgeon.mcp-prepared-request-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 38,
+   :error 0,
+   :pass 169,
+   :assertions 169}
+  {:subprocesses (),
+   :tests 19,
+   :ns clj-surgeon.mcp-prepared-confirmation-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 28,
+   :error 0,
+   :pass 92,
+   :assertions 92}
+  {:subprocesses
+   ("/usr/bin/bash /usr/local/bin/clojure -X:clj-surgeon/mcp"
+    "/usr/bin/bash /usr/local/bin/clojure -X:clj-surgeon/mcp-stdio"
+    "/usr/bin/git --git-dir /home/forge/.gitlibs/_repos/https/github.com/bhauman/clojure-mcp"
+    "/usr/lib/git-core/git remote-https origin"
+    "/usr/lib/git-core/git-remote-http origin https://github.com/bhauman/clojure-mcp.git"
+    "/usr/lib/jvm/java-21-openjdk-amd64/bin/java"
+    "/usr/lib/jvm/java-21-openjdk-amd64/bin/java -XX:-OmitStackTraceInFastThrow -classpath"
+    "?"),
+   :tests 3,
+   :ns clj-surgeon.mcp-prepared-wire-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 18571,
+   :error 0,
+   :pass 27,
+   :assertions 27}
+  {:subprocesses (),
+   :tests 8,
+   :ns clj-surgeon.mcp-program-tool-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 45,
+   :error 0,
+   :pass 54,
+   :assertions 54}
+  {:subprocesses (),
+   :tests 5,
+   :ns clj-surgeon.mcp-read-request-normalization-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 4,
+   :error 0,
+   :pass 42,
+   :assertions 42}
+  {:subprocesses (),
+   :tests 6,
+   :ns clj-surgeon.mcp-schema-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 11,
+   :error 0,
+   :pass 32,
+   :assertions 32}
+  {:subprocesses (),
+   :tests 6,
+   :ns clj-surgeon.mcp-telemetry-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 6,
+   :error 0,
+   :pass 24,
+   :assertions 24}
+  {:subprocesses ("?"),
+   :tests 48,
+   :ns clj-surgeon.mcp-tool-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 6025,
+   :error 0,
+   :pass 490,
+   :assertions 490}
+  {:subprocesses (),
+   :tests 5,
+   :ns clj-surgeon.mcp-workspace-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 5,
+   :error 0,
+   :pass 34,
+   :assertions 34}
+  {:subprocesses (),
+   :tests 6,
+   :ns clj-surgeon.mcp-write-refusal-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 24,
+   :error 0,
+   :pass 54,
+   :assertions 54}
+  {:subprocesses (),
+   :tests 6,
+   :ns clj-surgeon.mcp-server-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 12,
+   :error 0,
+   :pass 83,
+   :assertions 83}
+  {:subprocesses (),
+   :tests 5,
+   :ns clj-surgeon.mcp-semantic-client-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 2,
+   :error 0,
+   :pass 17,
+   :assertions 17}
+  {:subprocesses (),
+   :tests 5,
+   :ns clj-surgeon.outline-differential-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 5672,
+   :error 0,
+   :pass 17,
+   :assertions 17}
+  {:subprocesses (),
+   :tests 4,
+   :ns clj-surgeon.outline-memory-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 193,
+   :error 0,
+   :pass 8,
+   :assertions 8}
+  {:subprocesses (),
+   :tests 5,
+   :ns clj-surgeon.quoted-var-refs-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 15,
+   :error 0,
+   :pass 36,
+   :assertions 36}
+  {:subprocesses (),
+   :tests 4,
+   :ns clj-surgeon.repository-hygiene-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 50,
+   :error 0,
+   :pass 14,
+   :assertions 14}
+  {:subprocesses (),
+   :tests 15,
+   :ns clj-surgeon.scope-stream-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 452,
+   :error 0,
+   :pass 78,
+   :assertions 78}
+  {:subprocesses ("/usr/lib/jvm/java-21-openjdk-amd64/bin/java" "?"),
+   :tests 80,
+   :ns clj-surgeon.txn-journal-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 16965,
+   :error 0,
+   :pass 545,
+   :assertions 545}
+  {:subprocesses (),
+   :tests 17,
+   :ns clj-surgeon.workspace-onboarding-test,
+   :fail 0,
+   :tmp-created (),
+   :wall-ms 130,
+   :error 0,
+   :pass 95,
+   :assertions 95}]}

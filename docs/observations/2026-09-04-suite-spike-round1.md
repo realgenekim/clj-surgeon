@@ -31,20 +31,22 @@ Box context: start `load 5.18 6.59 7.40`, `pgrep -c java = 19`; end `load 5.21 7
 | 15 | `clj-surgeon.mcp-operation-registry-test` | 0.87 | 0.1% | 98.2% | 1 | 51 | 0 |
 
 The remaining 34 namespaces total **9.2 s** (1.3%). Full 49-row table:
-`docs/observations/2026-09-04-suite-spike-round1-timing.md`. Raw receipt (per-namespace
-counters, sampled child argv, per-namespace temp-root diff): the harness writes it as EDN;
-this run's copy is quoted in that file.
+`2026-09-04-suite-spike-round1-timing.md`. Raw receipt — per-namespace counters, the distinct
+child argv the sampler saw, and the per-namespace temp-root diff:
+`2026-09-04-suite-spike-round1-timing.edn`. The classification receipt is not committed (166 KB
+of pprint); regenerate it with `bb dev/experiments/suite_classify.clj`.
 
 **One line of learning:** the suite is not slow — **eleven namespaces that launch cold JVM/bb/CLI
 child processes are 674.0 s of the 716.7 s (94%)**, one of them (`reader-eval-fence-test`, ~20
 cold launcher drives) is 65% by itself, and the other **36 namespaces finish 865-test-worth of
 work in 20.9 s**; the parallelism gate is therefore not paid for by the tests as a body, it is
-paid for by a handful of subprocess batteries plus **one latent teardown race** that only shows
-up under contention.
+paid for by a handful of subprocess batteries plus **two load-fragile namespaces** that only fail
+under contention — a teardown race and a set of hardcoded millisecond deadlines.
 
-**One caveat:** the box was never quiet (load 5-15, 19-24 foreign JVMs). Every wall figure here
-is an upper bound with unknown variance, and the interference result below is *one* pair of
-concurrent runs, not a rate.
+**One caveat:** the box was never quiet (load 5-15, 19-24 foreign JVMs). Every wall figure here is
+an upper bound with unknown variance from *one* solo run, and the interference result is **two**
+concurrent pairs — enough to name a mechanism, not enough to be a rate. No four-wide run was done,
+and `~/.m2` / `~/.gitlibs` were warm throughout.
 
 ## What was measured, and how
 
@@ -122,12 +124,21 @@ Two real `git clone`s of `e8090624` under `/var/tmp/forge/suite-spike-fx`, the *
 | run | started | wall | result |
 |---|---|---|---|
 | solo (instrumented) | 17:36:27Z, load 5.18 | 12m 01s | 865 tests, 13 023 assertions, **0 failures** |
-| 2-way `cloneA` | 17:48:55Z, load 4.31 | 12m 44s | 865 tests, 13 009 assertions, **1 error + 1 temp leak, exit 2** |
-| 2-way `cloneB` | 17:48:55Z, load 4.31 | 12m 44s | 865 tests, 13 023 assertions, **0 failures** |
+| pair 1 `cloneA` | 17:48:55Z, load 4.31 | 12m 44s | 865 tests, 13 009 assertions, **1 error + 1 temp leak, exit 2** |
+| pair 1 `cloneB` | 17:48:55Z, load 4.31 | 12m 44s | 865 tests, 13 023 assertions, **0 failures** |
+| pair 2 `cloneC` | 18:04:43Z, load 7.91 | 12m 47s | 865 tests, 13 009 assertions, **2 failures + 1 error + 1 temp leak, exit 4** |
+| pair 2 `cloneD` | 18:04:43Z, load 7.91 | 12m 47s | 865 tests, 13 023 assertions, **0 failures** |
 
-Load reached **15.34** by the end of the pair.
+Load reached **15.34** by the end of pair 1 and **11.49** by the end of pair 2. **In both pairs
+exactly one member failed and the other was clean** — the signature of a scheduler race, not of a
+shared file or port, which would tend to break both.
 
-**The colliding pair is not two namespaces — it is one namespace against the box's CPU:**
+**Concurrency is nearly free in wall:** 2-wide costs **12m 44s / 12m 47s against a 12m 01s solo**
+— about 6% — because 94% of the wall is subprocesses blocked on their own JVM startup, not on
+this JVM's CPU. The lane cap is not buying throughput. It is hiding two flaky namespaces.
+
+**The colliding pairs are not namespace-against-namespace — they are two namespaces against the
+box's CPU:**
 
 - **`clj-surgeon.mcp-prepared-wire-test` /
   `prepared-confirm-preview-commit-and-replay-cross-the-real-http-wire`** —
@@ -144,6 +155,20 @@ Load reached **15.34** by the end of the pair.
   so the temp workspace `prepared-wire-http-12804229785494378652` survived, and the tmp-leak
   ratchet correctly failed the run a second time. **Exit 2 = one error plus one leak, from one
   race.** A cleanup sequenced after a call that can throw is not cleanup.
+  **Reproduced in both pairs**, on a different clone each time.
+- **`clj-surgeon.mcp-process-test`** — surfaced in pair 2 only, two failures:
+  - `direct-shell-shim-uses-the-same-host-admission` (`mcp_process_test.clj:275`) — a
+    `(wait-until 1000 ...)` for a lock file written by a shim whose real binary is `/bin/sleep`
+    and whose admission timeout is `CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS=100`. One second of wall is
+    not one second of scheduling at load 12.
+  - `admission-wait-and-analyzer-share-one-deadline` (`mcp_process_test.clj:369`) —
+    `(is (false? (:finished? result)))` for a `sleep 0.30` child bounded at `:timeout-ms 350`,
+    then `(is (< (:elapsed_ms result) 650.0))`. **A 50 ms margin between "must not finish yet" and
+    "must not take longer than" cannot survive contention**; under load the child either finishes
+    inside the 350 ms window or blows the 650 ms ceiling, and the test asserts against both edges.
+
+  This is a wall-clock-calibrated test, not a shared-resource test. It belongs in the battery lane
+  for the same reason the launcher drives do — it measures the machine.
 
 **Shared resources named, with their verdicts:**
 
@@ -154,13 +179,18 @@ Load reached **15.34** by the end of the pair.
 | `java.io.tmpdir` | isolated per run by `tmp-leak-support/secure-tmpdir!` | no |
 | `~/.m2`, `~/.gitlibs`, per-clone `.cpcache` | yes, via `clojure -X` + `git remote-https` in `mcp-prepared-wire-test` | not observed (both clones already warm) |
 | `/home/forge/tmp/membat`, `/home/forge/tmp/admit/parser-red`, `suite.lock` | no — battery targets only | n/a this round |
-| **CPU / scheduler latency** | yes | **yes — the only collision observed** |
+| **CPU / scheduler latency** | yes | **yes — the only collision observed, in both pairs** |
 
 **The four-way run was NOT performed.** The spec gates it on "if two were clean," and two were
-not. A second 2-way replication was run instead to turn one observation into a rate; its result
-is appended below. **Evidence strength: one solo run and two concurrent pairs. A single
-non-reproduction would not clear this defect** — the mechanism is visible in the source and does
-not need a rate to be believed.
+not. A second 2-way replication was run instead — on two *fresh* clones, so a residue from pair 1
+could not carry over — and it reproduced the wire defect and added the process-test pair.
+
+**Evidence strength: one solo run (clean) and two concurrent pairs, 2/2 with exactly one failing
+member.** That is four concurrent suite-runs' worth of evidence, not a rate with a confidence
+interval. It does not need one: both mechanisms are visible in the source and neither depends on
+a statistic to be believed. What the evidence does *not* cover is the four-wide case, cold caches
+(`~/.m2` and `~/.gitlibs` were warm in every run, so the wire test's `git remote-https` never
+raced), or a genuinely quiet box.
 
 ## Partition proposal
 
@@ -223,16 +253,28 @@ halves are required, and the second is the one that catches what the first canno
    port, a write outside the run root — and require the witness to fail by name for each. A
    presence audit that nobody has watched fail is an opinion.
 
-And the defect this round found should be closed in round two with its own witness, at the
-highest rung that fits: `stop-child!` must not let a teardown exception escape (the leak is
-downstream of it), and the test's `finally` must run every cleanup step independently of the
-previous one's success. The red witness is the observed one: **run it under contention** —
-the failure is a race, so an example test on a quiet box is not the reproduction.
+And the two defects this round found should be closed in round two, each with its own witness, at
+the highest rung that fits:
+
+- **`stop-child!` must not let a teardown exception escape** (the leak is downstream of it), and
+  the test's `finally` must run every cleanup step **independently of the previous one's
+  success**. The typed-refusal rung is available here: make the leak unrepresentable by having the
+  fixture own the temp workspace's deletion rather than the test body's `finally` tail.
+- **`mcp-process-test` must stop asserting on wall-clock margins it does not control.** A 50 ms
+  gap between "must not have finished" and "must be under 650 ms" is not a requirement, it is a
+  measurement of an idle box. Either assert on the *ordering* the deadline is meant to produce, or
+  move the numeric margin behind an explicit, documented ceiling the test can widen under load and
+  the ratchet can check.
+
+For both, **the red witness must be run under contention** — the failures are races, so an example
+test on a quiet box is not the reproduction. The cheapest honest form is the one this round used:
+two concurrent suites from two clones, and require the failure to appear.
 
 ## Receipts
 
 - Harness: `dev/experiments/suite_timing.clj`, `suite_classify.clj`, `suite_report.clj` (commit
   `34e0e82a`).
+- Raw timing EDN: `2026-09-04-suite-spike-round1-timing.edn` (this run, verbatim).
 - Fixtures: `/var/tmp/forge/suite-spike-fx` (four clones, all logs), removed at the end of the
   session; nothing under `/tmp`.
 - Commands: `TMPDIR=/var/tmp/forge clojure -Sdeps '{:aliases {:suite-timing {:main-opts ["-m"
