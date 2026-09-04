@@ -41,6 +41,21 @@ run_probe() {
   cat "$out_file"
 }
 
+# Like run_probe, but with extra flags for the probe's own JVM (used to hand
+# it a java.io.tmpdir it must not trust).
+# usage: run_probe_flags <label> <flags> [env assignments...]
+run_probe_flags() {
+  label=$1; flags=$2; shift 2
+  out_file="$FX/$label.out"
+  set +e
+  # shellcheck disable=SC2086
+  env "$@" java $flags -cp "$CP" clojure.main -m "$PROBE" >"$out_file" 2>&1
+  PROBE_EXIT=$?
+  set -e
+  echo "--- $label (exit=$PROBE_EXIT) ---"
+  cat "$out_file"
+}
+
 # A PATH shim whose `findmnt` always fails, reproducing the review's arm B:
 # the case where neither mount source can answer.
 mkdir -p "$FX/shim"
@@ -93,5 +108,32 @@ run_probe fallback-alive TMPDIR="$FX/realdisk" PATH="$FX/shim:$PATH"
 [ "$PROBE_EXIT" -eq 0 ] || fail "3e: the mounts-table fallback did not answer; exit $PROBE_EXIT"
 grep -q 'PROBE role=child' "$FX/fallback-alive.out" \
   || fail "3e: the child did not run under the mounts-table fallback"
+
+# ============================================================
+# MCP-OP-TMPHYG-004: the run root is proven private, and nothing else is swept
+# ============================================================
+
+# An inherited sentinel must never make a SHARED base look like this run's
+# private root -- report-and-sweep-leak! delete-trees the root it is given,
+# so on this multi-tenant box that is another seat's working set.
+DECOY="$FX/decoy-base"
+mkdir -p "$DECOY/other-seat-precious-fixture"
+echo hi >"$DECOY/other-seat-file.txt"
+
+run_probe_flags sentinel-decoy "-Djava.io.tmpdir=$DECOY" \
+  TMPDIR="$DECOY" CLJ_SURGEON_TMPDIR_REEXEC=1
+[ "$PROBE_EXIT" -eq 97 ] || fail "4a: an unowned sentinel must exit 97, got $PROBE_EXIT"
+[ -d "$DECOY/other-seat-precious-fixture" ] \
+  || fail "4a: another tenant's directory was DELETED by the sweep"
+[ -f "$DECOY/other-seat-file.txt" ] \
+  || fail "4a: another tenant's file was DELETED by the sweep"
+
+# A sentinel that names a DIFFERENT root than this process actually got is
+# equally untrustworthy.
+run_probe_flags sentinel-mismatch "-Djava.io.tmpdir=$DECOY" \
+  TMPDIR="$DECOY" CLJ_SURGEON_TMPDIR_REEXEC="$FX/some-other-root"
+[ "$PROBE_EXIT" -eq 97 ] || fail "4b: a mismatched sentinel must exit 97, got $PROBE_EXIT"
+[ -d "$DECOY/other-seat-precious-fixture" ] \
+  || fail "4b: another tenant's directory was DELETED by the sweep"
 
 echo "tmp-leak ratchet witness passed"
