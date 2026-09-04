@@ -804,6 +804,98 @@
                      (str "The receipt is already at the maximum limit; scan a "
                           "subdirectory or add a grep pattern.")))))))))
 
+;; @spec MCP-OP-STUDY-042
+(def ^:private max-owner-list-characters
+  "How much of an `available_owners` list the text prints before it says how
+  much it printed. The list is evidence, so it is bounded rather than dropped."
+  2048)
+
+;; @spec MCP-OP-STUDY-042
+(defn- owner-list-line
+  "The owners a refusal's receipt lists, printed where a text-only client
+  reads them.
+
+  Field evidence (O2 re-review, 2026-09-03): this line was nested inside a
+  `diagnostic?` guard that a study refusal never satisfies, while the sentence
+  explaining how to USE the list was guarded only by the list being non-empty.
+  A refusal therefore told a caller how to choose among owners it never
+  showed. The two are one decision and now share one condition."
+  [result]
+  (when-let [owners (seq (:available_owners result))]
+    (let [returned (or (:available_owners_returned result) (count owners))
+          total (or (:available_owner_count result) returned)
+          joined (str/join ", " owners)
+          shown (if (<= (count joined) max-owner-list-characters)
+                  joined
+                  (str (subs joined 0 max-owner-list-characters) " …"))]
+      (format "  available owners (%d/%d%s): %s"
+              returned total
+              (if (:available_owners_truncated result) "; truncated" "")
+              shown))))
+
+;; @spec MCP-OP-STUDY-042
+(def ^:private refusal-detail-keys
+  "The refusal fields whose VALUE a caller needs to correct the call.
+
+  Enumerated rather than inferred, and written down here the way
+  MCP-OP-STUDY-034 writes down the source-carrying keys: a NEW refusal field
+  that a caller must act on belongs in this set the day it is added, or a
+  text-only client is handed a category name and told to try again."
+  [:path :failed_stage :missing :unknown :supported :expected :actual
+   :expected_match_count :actual_match_count :maximum :minimum :scope
+   :required :limits :request_id :request_index :observed_at_least
+   :paths_unresolved])
+
+;; @spec MCP-OP-STUDY-042
+(defn- refusal-detail-lines
+  [result]
+  (into []
+        (keep (fn [key]
+                (when (contains? result key)
+                  (let [value (get result key)]
+                    (str "  " (name key) ": "
+                         (if (string? value)
+                           value
+                           (json/generate-string value)))))))
+        refusal-detail-keys))
+
+;; @spec MCP-OP-STUDY-042
+(defn refusal-text
+  "The complete text block for one refusal: the type, the CAUSE, the evidence
+  the receipt lists, the remedy, and the next action.
+
+  The `ls-tree` refusal branch already had this shape and the generic branch
+  did not, so seven of nine modes refused with an error type and an arrow. A
+  caller cannot act on a category name."
+  [result extra-lines]
+  (let [error-type (let [value (or (:error_type result) (:error-type result))]
+                     (when value
+                       (if (keyword? value) (name value) value)))
+        reason (let [value (:reason result)]
+                 (when value (if (keyword? value) (name value) value)))
+        labels (distinct (remove nil? [error-type reason]))]
+  (str/join
+    "\n"
+    (remove
+      nil?
+      (concat
+        [(format "inspect_clojure%s\n  refused · %s · %s"
+                 (if (:mode result) (str " · " (:mode result)) "")
+                 (if (seq labels)
+                   (str/join " · " labels)
+                   "unknown-error")
+                 (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+         (when (:error result) "")
+         (when (:error result) (str "  " (:error result)))]
+        (refusal-detail-lines result)
+        extra-lines
+        [(when (:remedy result) "")
+         (when (:remedy result) (str "→ " (:remedy result)))
+         (when (:next_call result)
+           (str "\n→ next call: " (:tool (:next_call result)) " "
+                (json/generate-string (:arguments (:next_call result)))))
+         (format "\n→ %s" (or (:next_action result) "correct_request"))])))))
+
 ;; @spec MCP-OP-STUDY-036
 (def ^:private ls-tree-continuation-argument-order
   "The order a continuation's arguments are spelled in the text block. A map's
@@ -903,12 +995,8 @@
   truncated receipt spells its continuation or its remedy in the text."
   [result]
   (if-not (:ok result)
-    (format (str "inspect_clojure · ls-tree\n"
-                 "  refused · %s · %s\n\n%s\n\n→ %s")
-            (:error_type result)
-            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-            (:error result)
-            (:next_action result))
+    ;; @spec MCP-OP-STUDY-042
+    (refusal-text (assoc result :mode "ls-tree") nil)
     (let [block (ls-tree-payload-block result)
           payload (:text block)]
       (str/join
@@ -1578,6 +1666,7 @@
 
 ;; @spec MCP-OP-READ-DIAG-002
 ;; @spec MCP-OP-PREP-REQ-005
+
 (defn inspect-summary
   "The exact `content[0].text` a client renders for one inspect_clojure result.
 
@@ -1592,69 +1681,60 @@
     (= "ls-tree" (:mode result))
     (ls-tree-summary result)
 
+    ;; @spec MCP-OP-STUDY-042
     (not (:ok result))
-    (let [reason (or (:reason result) (:error-type result)
-                     (:error_type result) "unknown-error")
-          failed-request (:failed_request result)
+    (let [failed-request (:failed_request result)
           failure (first (:failures result))
           selection-failure (first (:selection_failures result))
           hypothesis (first (:hypotheses selection-failure))
           candidate (or (:owner hypothesis) (first (:form_candidates result)))
           hypotheses-truncated (or (:hypotheses_truncated selection-failure)
                                    (:candidates_truncated result))
-          available-owners (:available_owners result)
-          available-returned (or (:available_owners_returned result)
-                                 (count available-owners))
           available-count (or (:available_owner_count result)
-                              available-returned)
+                              (count (:available_owners result)))
           continuation (:continuation result)
           completed-count (:completed_request_count continuation)
           pending-ids (:pending_request_ids continuation)
           failure-label (if (= "ambiguous-form" (:error_type failure))
                           "ambiguous form"
                           "missing form")
-          diagnostic? (and failed-request failure)]
-      (str
-        (format (str "inspect_clojure\n"
-                     "  refused · %s · %s\n")
-                (if (keyword? reason) (name reason) reason)
-                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
-        (when diagnostic?
-          (str
-            (format "  request %s · %s\n"
-                    (:id failed-request) (:file failed-request))
-            (when failure
-              (format "  %s %s\n" failure-label (:form failure)))
-            (when candidate
-              (format "  I think you may have meant %s? (hypothesis only)\n"
-                      candidate))
-            (when hypotheses-truncated
-              (format "  hypotheses truncated · showing %d of %d owners\n"
-                      (:hypotheses_returned selection-failure)
-                      available-count))
-            (when (seq available-owners)
-              (format "  available owners (%d/%d%s): %s\n"
-                      available-returned
-                      available-count
-                      (if (:available_owners_truncated result)
-                        "; truncated"
-                        "")
-                      (str/join ", " available-owners)))))
-        (str (when (seq available-owners)
-               (str "\n  All listed owners are real snapshot evidence; "
-                    "ranking is non-authoritative. Semantic selection "
-                    "among them is allowed; the exact retry verifies "
-                    "the selection.\n"))
-             (when continuation
-               (format (str "  preserved %d completed request%s from the frozen snapshot\n"
-                            "  retry only %s; do not reread before the guarded retry\n")
-                       completed-count
-                       (if (= 1 completed-count) "" "s")
-                       (str/join ", " pending-ids)))
-             (cond
-               continuation "\n→ copy continuation.retry_template.arguments, fill only its null selector holes, and submit it"
-               diagnostic? "\n→ choose one exact owner and retry"
-               :else (format "\n→ %s" (or (:next_action result) "correct_request"))))))
+          diagnostic? (and failed-request failure)
+          owners (owner-list-line result)]
+      (refusal-text
+        result
+        [(when diagnostic? "")
+         (when diagnostic?
+           (format "  request %s · %s"
+                   (:id failed-request) (:file failed-request)))
+         (when (and diagnostic? failure)
+           (format "  %s %s" failure-label (:form failure)))
+         (when (and diagnostic? candidate)
+           (format "  I think you may have meant %s? (hypothesis only)"
+                   candidate))
+         (when (and diagnostic? hypotheses-truncated)
+           (format "  hypotheses truncated · showing %d of %d owners"
+                   (:hypotheses_returned selection-failure)
+                   available-count))
+         (when (and owners (not diagnostic?)) "")
+         owners
+         ;; The sentence and the list share one condition: a sentence about a
+         ;; list that was not printed is worse than silence.
+         (when owners
+           (str "\n  All listed owners are real snapshot evidence; "
+                "ranking is non-authoritative. Semantic selection "
+                "among them is allowed; the exact retry verifies "
+                "the selection."))
+         (when continuation
+           (format (str "\n  preserved %d completed request%s from the frozen snapshot\n"
+                        "  retry only %s; do not reread before the guarded retry")
+                   completed-count
+                   (if (= 1 completed-count) "" "s")
+                   (str/join ", " pending-ids)))
+         (cond
+           continuation
+           (str "\n→ copy continuation.retry_template.arguments, fill only "
+                "its null selector holes, and submit it")
+           diagnostic? "\n→ choose one exact owner and retry")]))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
