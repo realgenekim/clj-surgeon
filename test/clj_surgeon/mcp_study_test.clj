@@ -5125,3 +5125,190 @@
       (is (empty? (inspect/uncarried-leaves (str "structural\n" section) result))
           (str "declared 0 dropped over an audited miss; section "
                (pr-str section))))))
+
+;; ============================================================
+;; O2 ROUND 12 — a receipt key that collides on the WIRE
+;; (Sol O2 round-11 review, 2026-09-04, §2)
+;; ============================================================
+;; Round eleven NAMED a residual instead of closing it: `:a` and `"a"`, and
+;; `nil` and `""`, were said to spell one pointer deliberately, "because
+;; `structuredContent` publishes them as the same JSON object key." That is
+;; true and it is not a waiver. When BOTH keys occur in ONE map the receipt
+;; publishes a JSON object with DUPLICATE MEMBER NAMES — `{"a":1,"a":2}` —
+;; which ordinary decoders collapse to one member, so the structured face
+;; itself is lossy; and `leaf-label` hands both leaves one pointer, so with
+;; the duplicates separated in receipt order the renderer prints the first,
+;; declares the second dropped, and `uncarried-leaves` finds the second
+;; carried by the first's identical line. Measured by the reviewer: declared
+;; and audited disagree at allowances 102 and 100 on the abstract pair, and an
+;; ORDINARY fitted 32,684-byte public result declares four dropped against an
+;; audit of three.
+;;
+;; The pointer collision is only half the class. `0` and `"0"` spell DISTINCT
+;; pointers (`[0]` and `0`, round nine) and still publish as one JSON member
+;; `"0"`; `:a-b` and `:a_b` are made to collide by this namespace's own
+;; `json-key` normalization. The invariant is stated about the WIRE, so all
+;; three are one event.
+
+(def ^:private collision-twin
+  "the-same-distinctive-value-rendered-twice")
+
+(defn- collision-receipt
+  "A finalized ordinary receipt holding BOTH members of one colliding key
+   pair, separated in receipt order by two distinctive middles — the
+   reviewer's shape."
+  [key-a key-b]
+  (clocked
+    (apply array-map
+           (concat [:ok true :operation "inspect_clojure" :mode "outline"
+                    :request_count 1 :file_count 0
+                    :source_character_count 0 :read_complete true]
+                   [key-a collision-twin
+                    "middle0" (apply str (repeat 80 \m))
+                    "middle1" (apply str (repeat 80 \n))
+                    key-b collision-twin]))))
+
+(defn- boundary-report
+  "One receipt through the PUBLIC BOUNDARY — `enforce-result-budget`, the one
+   function every published inspect_clojure result passes through — at an
+   imposed evidence allowance, and what the published pair says about itself."
+  [raw limit]
+  (let [candidate (cond-> raw limit (assoc :text_evidence_limit limit))
+        published (clocked (inspect-tool/enforce-result-budget candidate candidate))
+        text (inspect-tool/inspect-summary published)
+        [_ shown total] (re-find #"receipt facts · (\d+) of (\d+) rendered" text)]
+    {:error-type (:error_type published)
+     :bytes (inspect-tool/mcp-result-byte-count text published)
+     :limit (:text_evidence_limit published)
+     :omitted (:text_omitted published)
+     :declared (if total
+                 (- (Long/parseLong total) (Long/parseLong shown))
+                 0)
+     :audited (count (inspect/uncarried-leaves text published))
+     :text text}))
+
+(def ^:private colliding-key-pairs
+  "Every way two distinct receipt keys can publish as ONE JSON object member.
+
+   `[:a \"a\"]` and `[nil \"\"]` are the reviewer's pair and the residual
+   round eleven declared safe. `[0 \"0\"]` is the same wire collision with
+   DISTINCT pointers, so it proves the invariant is about the wire rather than
+   about `leaf-label`. `[:a-b :a_b]` is a collision this namespace MAKES:
+   `json-key` replaces `-` with `_`, so two keys a caller could tell apart
+   become one member name on the way out."
+  [[:a "a"] [nil ""] [0 "0"] [:a-b :a_b]])
+
+;; @spec MCP-OP-STUDY-054
+(deftest a-receipt-whose-keys-collide-on-the-wire-is-refused-at-the-boundary
+  (doseq [[key-a key-b] colliding-key-pairs]
+    (testing (str "the pair " (pr-str key-a) " / " (pr-str key-b))
+      (let [raw (collision-receipt key-a key-b)]
+        (testing "the reviewer's allowances"
+          (doseq [limit [102 100]]
+            (let [r (boundary-report raw limit)]
+              (is (= "receipt-key-collision" (:error-type r))
+                  (format (str "allowance %d published a %d-byte pair over a "
+                               "receipt whose keys %s and %s publish as one "
+                               "JSON member; error_type %s; text %s")
+                          limit (:bytes r) (pr-str key-a) (pr-str key-b)
+                          (pr-str (:error-type r)) (pr-str (:text r))))
+              (is (= (:declared r) (:audited r))
+                  (format (str "allowance %d: declared %d dropped against %d "
+                               "audited; text %s")
+                          limit (:declared r) (:audited r) (pr-str (:text r)))))))
+        (testing "and across the whole allowance band"
+          (doseq [limit (range 60 320 4)]
+            (let [r (boundary-report raw limit)]
+              (is (= (:declared r) (:audited r))
+                  (format "allowance %d: declared %d against audited %d; text %s"
+                          limit (:declared r) (:audited r) (pr-str (:text r)))))))
+        (testing "and the refusal names both keys and the path"
+          (let [r (boundary-report raw 102)]
+            (is (str/includes? (:text r) (pr-str key-a))
+                (format "the refusal text does not name %s: %s"
+                        (pr-str key-a) (pr-str (:text r))))
+            (is (str/includes? (:text r) (pr-str key-b))
+                (format "the refusal text does not name %s: %s"
+                        (pr-str key-b) (pr-str (:text r))))))))))
+
+;; @spec MCP-OP-STUDY-054
+;; The reviewer's ORDINARY public rung: not an attack allowance, a deterministic
+;; 32,684-byte fitted result inside the 32,768-byte budget that declared four
+;; dropped against an audit of three. Swept rather than pinned, because which
+;; padding lands on the one-twin allowance moves whenever the declaration
+;; changes size.
+(deftest an-ordinary-fitted-public-result-cannot-collide-with-its-own-audit
+  (let [build (fn [padding]
+                (clocked
+                  {:ok true :operation "inspect_clojure" :mode "outline"
+                   :request_count 1 :file_count 0 :source_character_count 0
+                   :read_complete true
+                   :a collision-twin
+                   "a" collision-twin
+                   :pad (apply str (repeat padding \p))}))]
+    (doseq [padding (range 31695 31840 5)]
+      (testing (str "padding " padding)
+        (let [r (boundary-report (build padding) nil)]
+          (is (= "receipt-key-collision" (:error-type r))
+              (format (str "padding %d published a %d-byte pair at evidence "
+                           "allowance %s over a receipt whose `:a` and `\"a\"` "
+                           "publish as one JSON member; error_type %s")
+                      padding (:bytes r) (pr-str (:limit r))
+                      (pr-str (:error-type r))))
+          (is (= (:declared r) (:audited r))
+              (format (str "padding %d: a %d-byte public result at evidence "
+                           "allowance %s declared %d dropped against %d "
+                           "audited; text %s")
+                      padding (:bytes r) (pr-str (:limit r))
+                      (:declared r) (:audited r) (pr-str (:text r)))))))
+    (testing "the reviewer's exact operating point — 32,684 bytes"
+      (let [r (boundary-report (build 31751) nil)]
+        (is (= "receipt-key-collision" (:error-type r))
+            (format "a %d-byte fitted pair published; error_type %s; text %s"
+                    (:bytes r) (pr-str (:error-type r)) (pr-str (:text r))))
+        (is (= (:declared r) (:audited r))
+            (format "declared %d against audited %d; text %s"
+                    (:declared r) (:audited r) (pr-str (:text r))))))))
+
+;; @spec MCP-OP-STUDY-054
+;; A GENERATED family over an alphabet of key SHAPES rather than of segment
+;; characters: round eleven's generated family could only see the delimiters it
+;; was given, and the colliding pairs are made of key TYPES.
+(deftest a-generated-family-of-key-pairs-refuses-exactly-the-colliding-ones
+  (let [alphabet [:a "a" :a-b :a_b "a_b" nil "" 0 "0" 1 "1"
+                  :ns/x "ns/x" true "true"]
+        member (fn [k]
+                 ;; A hand-written statement of the wire member name, so the
+                 ;; witness does not inherit the production predicate it
+                 ;; exists to test.
+                 (cond
+                   (keyword? k) (subs (str k) 1)
+                   (string? k) k
+                   (nil? k) ""
+                   :else (str k)))
+        ;; The production normalization a caller cannot see: `-` becomes `_`
+        ;; inside a keyword on the way to the wire.
+        wire (fn [k] (if (keyword? k) (str/replace (member k) "-" "_") (member k)))
+        pairs (for [[i a] (map-indexed vector alphabet)
+                    [j b] (map-indexed vector alphabet)
+                    :when (< i j)]
+                [a b])]
+    (is (= 105 (count pairs)) "PRECONDITION: the family is the whole triangle")
+    (doseq [[key-a key-b] pairs]
+      (testing (str (pr-str key-a) " / " (pr-str key-b))
+        (let [collides? (= (wire key-a) (wire key-b))
+              r (boundary-report (collision-receipt key-a key-b) 102)]
+          (if collides?
+            (is (= "receipt-key-collision" (:error-type r))
+                (format (str "%s and %s both publish as the JSON member %s and "
+                             "the boundary published anyway; error_type %s")
+                        (pr-str key-a) (pr-str key-b) (pr-str (wire key-a))
+                        (pr-str (:error-type r))))
+            (is (not= "receipt-key-collision" (:error-type r))
+                (format "%s and %s publish as %s and %s and were refused"
+                        (pr-str key-a) (pr-str key-b)
+                        (pr-str (wire key-a)) (pr-str (wire key-b)))))
+          (is (= (:declared r) (:audited r))
+              (format "%s / %s: declared %d against audited %d; text %s"
+                      (pr-str key-a) (pr-str key-b)
+                      (:declared r) (:audited r) (pr-str (:text r)))))))))
