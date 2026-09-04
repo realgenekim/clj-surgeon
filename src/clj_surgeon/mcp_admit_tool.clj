@@ -1992,6 +1992,25 @@
        (<= (summary-characters candidate)
            write-refusal/public-byte-budget)))
 
+;; @spec MCP-OP-ADMIT-143
+(defn- binding-face
+  "Which of a receipt's two faces was over the one budget.
+
+  `structured`, `text` or `both`. A reader who sees `payload_omitted` asks
+  exactly one question -- how much am I not being shown -- and the byte
+  figure beside it answers a different one when the text face is what forced
+  the trim."
+  [receipt]
+  (let [json-over? (> (write-refusal/json-bytes receipt)
+                      write-refusal/public-byte-budget)
+        text-over? (> (summary-characters receipt)
+                      write-refusal/public-byte-budget)]
+    (cond
+      (and json-over? text-over?) "both"
+      text-over? "text"
+      json-over? "structured"
+      :else "neither")))
+
 ;; @spec MCP-OP-ADMIT-135
 ;; @spec MCP-OP-ADMIT-139
 (defn- oversize-next-call-refusal
@@ -2279,16 +2298,23 @@
   reset the cumulative omission record; a second budget would be a second
   budget."
   [receipt]
-  (let [bounded (-> receipt
-                    checked-refusal-kind!
-                    ;; @spec MCP-OP-ADMIT-140
-                    bound-identity-values
-                    (write-refusal/bound-public-refusal pr-str)
-                    ;; @spec MCP-OP-ADMIT-136
-                    (write-refusal/bound-public-payload
-                      trimmable-receipt-keys public-faces-fit?)
-                    ;; @spec MCP-OP-ADMIT-139
-                    reduce-receipt-to-budget)]
+  (let [checked (bound-identity-values (checked-refusal-kind! receipt))
+        pre-payload (write-refusal/bound-public-refusal checked pr-str)
+        ;; @spec MCP-OP-ADMIT-136
+        trimmed (write-refusal/bound-public-payload
+                  pre-payload trimmable-receipt-keys public-faces-fit?)
+        ;; @spec MCP-OP-ADMIT-143
+        ;; `payload_omitted_bytes` counts JSON, while the loop's exit test is
+        ;; `public-faces-fit?` -- which for this gate can be the TEXT face. A
+        ;; payload trimmed because its text face did not fit reported a byte
+        ;; figure that was never the binding constraint, so the record names
+        ;; which face forced it.
+        faced (if (:payload_truncated trimmed)
+                (assoc trimmed :payload_binding_face
+                       (binding-face pre-payload))
+                trimmed)
+        ;; @spec MCP-OP-ADMIT-139
+        bounded (reduce-receipt-to-budget faced)]
     ;; @spec MCP-OP-ADMIT-139
     ;; The oversize decision is taken AFTER reduction, on the receipt that
     ;; would actually be published: if something STILL will not fit once every
