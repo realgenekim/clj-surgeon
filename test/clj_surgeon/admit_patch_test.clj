@@ -6477,6 +6477,62 @@
               (pr-str (receipt-self-description-holds? receipt))))
         (finally (delete-tree! root))))))
 
+
+;; @spec MCP-OP-ADMIT-146
+(deftest every-catch-arm-at-the-handler-publishes-through-the-bound
+  ;; Round six's finding 3. `handle-admit-clojure-patch` wraps its two catch
+  ;; arms in `checked-refusal-kind!` alone -- neither passes through
+  ;; `bound-receipt` -- and both take the throwable's message verbatim. A
+  ;; 60,000-character message published 60,617 bytes of structuredContent and
+  ;; 60,159 characters of text, 27,977 past the budget, with
+  ;; `receipt_over_budget` and `receipt_identity_bounded` both absent: round
+  ;; five's blocking shape on the one arm round six did not touch.
+  ;;
+  ;; THE HONEST CAVEAT, recorded because a universal claim resting on an
+  ;; undemonstrated path is still a hole: the round-six reviewer drove four
+  ;; caller candidates at this arm -- a 400,000-paren nested patch, a
+  ;; 60,000-character create-file basename, a 60,000-character line inside a
+  ;; hunk, and a `workspace_root` naming a regular file -- and every one
+  ;; produced a typed, bounded refusal instead. No caller input is known to
+  ;; reach it with a large message. This witness therefore INJECTS the
+  ;; throwable at the verification seam. The seam is a fixture; the bound it
+  ;; proves is not.
+  (let [budget write-refusal/public-byte-budget
+        bulk (apply str (repeat 60000 "t"))
+        root (temp-dir)
+        arms {"an Error at the seam (the Throwable arm)"
+              (fn [_ _] (throw (Error. bulk)))
+              "an Exception at the seam"
+              (fn [_ _] (throw (RuntimeException. bulk)))}]
+    (try
+      (write-sources! root base-sources)
+      (doseq [[label thrower] arms]
+        (testing label
+          (let [{:keys [result text]}
+                (published-at-handler-edge
+                  root {"patch" clean-multi-file-patch "verify" "focused"}
+                  {:admit-lint-runner thrower})
+                bytes (write-refusal/json-bytes result)
+                chars (count (str text))]
+            (is (false? (:ok result))
+                (str label " did not refuse: " (pr-str (:ok result))))
+            (is (contains? admit/admit-refusal-kinds (:error-type result))
+                (str label " published an unenumerated kind: "
+                     (pr-str (:error-type result))))
+            (is (<= bytes budget)
+                (str label " published " bytes " bytes, past the " budget
+                     "-byte number the gate calls a budget"))
+            (is (<= chars budget)
+                (str label " published a " chars "-character text face, past "
+                     budget))
+            (is (not-any? #(and (string? %) (>= (count %) 60000))
+                          (vals result))
+                (str label " echoed the throwable message VERBATIM"))
+            (is (true? (receipt-self-description-holds? result))
+                (str label ": "
+                     (pr-str (receipt-self-description-holds? result)))))))
+      (finally (delete-tree! root)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Round six: every field a caller can influence, driven with bulk
 ;; ---------------------------------------------------------------------------
