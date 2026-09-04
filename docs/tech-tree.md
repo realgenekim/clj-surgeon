@@ -22,6 +22,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | refusals name their own field (`missing-fields` shape, `invalid-require-policy` values, `_` wildcard note) | BUILT | MCP | friction ledger items 3, 4, 6; inb-3cb0f4 |
 | workspace-wide inspect (ls-tree through MCP) | OPEN | MCP | inb-f403aa |
 | inspect that returns the next write's literals (the dossier) | OPEN | MCP | fleet round 6, Plan 3 (mission-design) |
+| `relation_census`: classify every collection write in a `defmethod fold-event` arm as door/set/guarded/raw/unknown | BUILT | MCP + CLI | `docs/intent/relation-census/`; real-bytes fixture reproduces the false positive a structural matcher shipped |
 
 ### Writes
 | node | status | lives in | receipt |
@@ -107,6 +108,8 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | 2026-09-02 | cohort R: prohibition beats explanation; forbid -88% unmandated sub-commands, J inert; ritual is cheap per return (-3.8 returns) | big-aha log cohort R |
 | 2026-09-02 | E1: gate arm 2.2x native; 69% refusals from grammar mismatch; three red teams missed it because they fed unified diffs; the free-choice arm would have found it in one run | big-aha log E1 |
 | 2026-09-02 | gate round one: confinement/atomicity/TOCTOU solid; hazard detector evadable via declare, reader conditionals, do, metadata; verification_complete minted on process exit; quadratic identity; fixes in round two | big-aha log, gate round one |
+| 2026-09-02 | relation_census: a structural match on the write alone calls 4 of the fixture's 7 sites `:raw`, the first of them the real `task.chase-recorded` write whose `not-any?` guard sits three lines above it; guard-dominance classification returns 1 `:raw`, and the real curtaincall-cfp-lens folds (117 arms, 11 sites) census to 0 `:raw`, 9 `:door`, 1 `:set`, 1 `:unknown` | this branch's fails-first receipt |
+| 2026-09-02 | claypoole `upmap` plan phase on 48 arm-files (432 arms, 336 sites), 4 cores at load 3.2: pool 1 median 319 ms, pool 2 242 ms, pool 4 197 ms, pool 8 198 ms; receipt byte-identical across pool sizes. One file: no measurable win, as expected | this branch's bench |
 
 ## Live experiment backlog (prediction and cost on every item)
 

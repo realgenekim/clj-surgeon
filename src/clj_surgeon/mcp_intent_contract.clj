@@ -160,6 +160,10 @@
   "Audit the repository's MCP operation intent leaves and all executable witnesses."
   ([] (audit-current-repository "."))
   ([root]
+   ;; Trunk's derived scan REPLACES this branch's hand-kept vector, and it
+   ;; subsumes it: `spec-doc-paths` discovers every
+   ;; `docs/intent/<leaf>/<name>-specs.md`, so the census specs this branch
+   ;; added to the list are found by the scan rather than listed.
    (let [spec-files (map #(io/file root %) (spec-doc-paths root))]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))

@@ -30,10 +30,19 @@
    :error message
    :source_unchanged true
    :next_action "pass_an_existing_absolute_workspace_root"
+   ;; @spec MCP-OP-CENSUS-018
+   ;; The remedy names the FIELD, not the value. The caller's own text is
+   ;; already published twice as a discriminating fact — `workspace_root` and
+   ;; `workspace_root_given` — and both are declared root-carrying fields; a
+   ;; third copy interpolated into PROSE is the one place the rule forbids,
+   ;; because prose is where a fact about the box gets read as a fact about
+   ;; the request. The remedy loses nothing: the value it would have quoted is
+   ;; in the receipt beside it.
    :remedy (str "Resend with workspace_root set to an absolute path naming a "
-                "directory that already exists; " (pr-str value)
-                " is not one. No next_call is composed because only the caller "
-                "knows which workspace it meant.")})
+                "directory that already exists; the value this receipt "
+                "publishes as workspace_root_given is not one. No next_call "
+                "is composed because only the caller knows which workspace "
+                "it meant.")})
 
 (defn canonical-root
   "Return one existing canonical absolute directory, or a stable refusal."

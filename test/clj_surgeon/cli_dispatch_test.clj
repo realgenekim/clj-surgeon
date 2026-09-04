@@ -12,6 +12,7 @@
   (:require
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clj-surgeon.relation-census :as relation-census]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -321,3 +322,209 @@
                (str/index-of moved "(defn run-kondo")))
         (is (str/blank? err)))
       (finally (.delete tmp)))))
+
+;; ============================================================
+;; :relation-census — the CLI entrance takes the same bounds as the tool
+;; ============================================================
+
+(def ^:private census-fixture-dir
+  (str (.getAbsolutePath (io/file "test-fixtures/relation-census"))))
+
+;; @spec MCP-OP-CENSUS-019
+(deftest cli-relation-census-parses-threads-and-validates-doors
+  (testing "the registry's own example dispatches: :threads 8"
+    (let [{:keys [exit out err]} (run-cli ":op" "relation-census"
+                                          ":dir" census-fixture-dir
+                                          ":threads" "8")
+          result (edn/read-string out)]
+      (is (zero? exit) (str "stderr: " err))
+      (is (true? (:ok result)))
+      (is (pos? (get-in result [:counts :raw])))
+      (is (not (str/includes? (str out err) "ClassCastException"))
+          "the documented :threads example still throws")))
+
+  (testing ":threads 0 and :threads 4096 refuse typed on the CLI too"
+    (doseq [bad ["0" "4096" "many"]]
+      (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                        ":dir" census-fixture-dir
+                                        ":threads" bad)
+            result (edn/read-string out)]
+        (is (pos? exit) (str ":threads " bad " was accepted"))
+        (is (= :invalid-pool-size (:error-type result))))))
+
+  (testing ":doors conj refuses instead of making every conj a door"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "conj")
+          result (edn/read-string out)]
+      (is (pos? exit))
+      (is (= :unknown-door-symbol (:error-type result)))
+      (is (str/includes? (:error result) "shadows a collection write head"))))
+
+  (testing "a good door list still censuses"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "conj-once,upsert-by")
+          result (edn/read-string out)]
+      (is (zero? exit))
+      (is (true? (:ok result))))))
+
+;; @spec MCP-OP-CENSUS-021
+(deftest cli-relation-census-reports-the-pool-that-ran
+  (testing "under babashka there is no claypoole, so the receipt says so"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":threads" "8")
+          result (edn/read-string out)]
+      (is (zero? exit))
+      (is (= 1 (:pool-size result))
+          "the CLI echoed a pool size it never used")
+      (is (= 8 (:pool-size-requested result))
+          "the request the census could not honour is named")))
+
+  (testing "no :threads means no pool and no request to report"
+    (let [{:keys [out]} (run-cli ":op" "relation-census"
+                                 ":dir" census-fixture-dir)
+          result (edn/read-string out)]
+      (is (= 1 (:pool-size result)))
+      (is (nil? (:pool-size-requested result))))))
+
+;; @spec MCP-OP-CENSUS-025
+(deftest cli-relation-census-names-the-calls-it-cannot-see-through
+  (let [dir (java.io.File. (System/getProperty "java.io.tmpdir")
+                           (str "clj-surgeon-census-cli-" (System/nanoTime)))
+        folds (io/file dir "src/app/folds.clj")]
+    (try
+      (.mkdirs (.getParentFile folds))
+      (spit folds (str "(ns app.folds)\n"
+                       "(defn- record-event [state x]\n"
+                       "  (update state :xs conj x))\n"
+                       "(defmethod fold-event \"e\" [state event]\n"
+                       "  (record-event state (:x event)))\n"))
+      (let [{:keys [exit out]} (run-cli ":op" "relation-census" ":dir" (.getPath dir))
+            result (edn/read-string out)]
+        (is (zero? exit))
+        (is (= 0 (get-in result [:counts :raw])))
+        (is (= 1 (get-in result [:unrecognised-calls :count])))
+        (is (= ["record-event"]
+               (mapv :call (get-in result [:unrecognised-calls :examples]))))
+        (is (str/includes? (:next-action result) "record-event"))
+        (is (not (contains? result :unrecognised))
+            "the raw per-call vector must not leak into the CLI receipt"))
+      (finally
+        (doseq [f (reverse (file-seq dir))] (.delete f))))))
+
+(def ^:private census-arm-source
+  "(defmethod fold-event \"e\" [state event]\n  (update state :xs conj (:x event)))\n")
+
+(def ^:private census-filler-source
+  "(ns app.filler)\n(def x 1)\n")
+
+(defn- census-temp-dir
+  []
+  (io/file (System/getProperty "java.io.tmpdir")
+           (str "clj-surgeon-census-cli-" (System/nanoTime))))
+
+(defn- delete-census-tree!
+  [dir]
+  (doseq [f (reverse (file-seq dir))] (.delete f)))
+
+(defn- build-census-tree!
+  "A workspace holding exactly `n` candidate Clojure sources, one with arms."
+  [dir n]
+  (let [arm (io/file dir "src/app/folds.clj")]
+    (.mkdirs (.getParentFile arm))
+    (spit arm census-arm-source)
+    (doseq [d (range (inc (quot (dec n) 100)))]
+      (.mkdirs (io/file dir (format "src/filler/d%02d" d))))
+    (doseq [i (range (dec n))]
+      (spit (io/file dir (format "src/filler/d%02d/f%04d.clj" (quot i 100) i))
+            census-filler-source))))
+
+;; @spec MCP-OP-CENSUS-027
+(deftest cli-relation-census-refuses-at-the-scanned-file-ceiling
+  (let [dir (census-temp-dir)]
+    (try
+      (build-census-tree! dir relation-census/max-scanned-files)
+      (testing "exactly the ceiling is censused and completion is claimed"
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (zero? exit) (str "the CLI refused AT the ceiling: " (:error result)))
+          (is (true? (:ok result)))
+          (is (true? (:read-complete result)))
+          (is (= 1 (:files result)))
+          ;; @spec MCP-OP-CENSUS-032
+          (is (= relation-census/max-scanned-files (:files-scanned result))
+              "the CLI cannot substantiate the scan it just claimed")))
+
+      (testing "one candidate past the ceiling refuses typed before any read"
+        (spit (io/file dir "src/filler/one_too_many.clj") census-filler-source)
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (pos? exit)
+              "the CLI published a truncated tree as a complete census")
+          (is (= :too-many-candidate-files (:error-type result)))
+          (is (= 0 (:files-read result)))
+          (is (= relation-census/max-scanned-files (:maximum result)))
+          (is (= relation-census/max-scanned-files (:fits result)))
+          (is (= (inc relation-census/max-scanned-files) (:observed result)))
+          (is (true? (:observed-at-least result)))
+          (is (nil? (:counts result)))
+          (is (str/includes? (str (:next-command result)) "relation-census"))))
+      (finally (delete-census-tree! dir)))))
+
+;; @spec MCP-OP-CENSUS-028
+(deftest cli-relation-census-names-the-source-it-was-too-large-to-read
+  (let [dir (census-temp-dir)
+        padded (fn [bytes]
+                 (str census-arm-source
+                      (apply str (repeat (- bytes (count census-arm-source) 1) \;))
+                      "\n"))]
+    (try
+      (.mkdirs (io/file dir "src/app"))
+      (spit (io/file dir "src/app/folds.clj") census-arm-source)
+      (spit (io/file dir "src/app/at_cap.clj")
+            (padded relation-census/max-source-bytes))
+      (testing "a source of exactly max-source-bytes is read and censused"
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (zero? exit) (str "refused: " (:error result)))
+          (is (true? (:read-complete result)))
+          (is (= 2 (:files result)))))
+
+      (testing "one byte over the cap is named and completion is withheld"
+        (spit (io/file dir "src/app/over_cap.clj")
+              (padded (inc relation-census/max-source-bytes)))
+        (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                          ":dir" (.getPath dir))
+              result (edn/read-string out)]
+          (is (zero? exit) (str "refused: " (:error result)))
+          (is (false? (:read-complete result))
+              "the CLI dropped a source and still claimed completion")
+          (is (= 1 (get-in result [:oversized-skipped :count])))
+          (is (= ["src/app/over_cap.clj"]
+                 (get-in result [:oversized-skipped :files])))
+          (is (= 2 (:files result)))))
+      (finally (delete-census-tree! dir)))))
+
+;; @spec MCP-OP-CENSUS-024
+(deftest cli-relation-census-confirms-doors-against-every-scanned-file
+  (testing "a door defined in a scanned file that defines no arms is accepted"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "record-window")
+          result (edn/read-string out)]
+      (is (zero? exit) (str "refused: " (:error result)))
+      (is (true? (:ok result)))))
+
+  (testing "a door defined nowhere is refused, which the CLI never checked"
+    (let [{:keys [exit out]} (run-cli ":op" "relation-census"
+                                      ":dir" census-fixture-dir
+                                      ":doors" "nowhere-door")
+          result (edn/read-string out)]
+      (is (pos? exit))
+      (is (= :unknown-door-symbol (:error-type result)))
+      (is (= "nowhere-door" (:door result))))))

@@ -47,13 +47,31 @@
 (def ^:private canonical-skill-path
   (fs/path project-root "skills" "clj-surgeon" "SKILL.md"))
 
-(def ^:private source-commit
+(defn- head-commit
+  "The repository's HEAD, read HERE and now.
+
+   Opus's round-seventeen item 6. This used to be a `def`, evaluated at
+   NAMESPACE LOAD, and the sub-`make` this file drives reads `git rev-parse
+   HEAD` again when the test BODY runs. Two independent reads of one mutable
+   ambient value at two different times: any commit landing between them fails
+   the stamp assertion with a mismatch that has nothing to do with the change
+   under test — and a TDD red/green loop commits between suite runs by
+   construction, which is how a builder gets a false RED from a gate they did
+   not touch.
+
+   A function, so that no caller can accidentally share one reading, and so
+   that the test can OWN the value instead: read it once, pass it DOWN to the
+   sub-make as `SOURCE_COMMIT`, and build the expected stamp from the same
+   value. Then there is one reading, and the assertion is about the installer
+   rather than about the clock."
+  []
   (let [{:keys [exit out]}
         @(proc/process ["git" "rev-parse" "HEAD"]
                        {:dir project-root :out :string :err :string})]
     (if (zero? exit) (str/trim out) "unknown")))
 
-(def ^:private stable-copy-stamp
+(defn- stable-copy-stamp-for
+  [source-commit]
   (str "\nStable copy installed from commit " source-commit ".\n"
        "When working inside the clj-surgeon repository, the working-tree skill.md\n"
        "supersedes this copy.\n"))
@@ -288,13 +306,20 @@
         install-root (fs/path tmp-dir "packages")
         control-plane-root (fs/path install-root "control-plane-root")
         codex-skill (fs/path codex-home "skills" "clj-surgeon")
-        claude-skill (fs/path claude-home "skills" "clj-surgeon")]
+        claude-skill (fs/path claude-home "skills" "clj-surgeon")
+        ;; Read ONCE, here, and passed DOWN to every sub-make below, so the
+        ;; stamp assertion compares the installer's output against the value
+        ;; this test chose rather than against a second reading of a value
+        ;; that can change while the test runs.
+        head (head-commit)
+        stable-copy-stamp (stable-copy-stamp-for head)]
     (try
       (let [{:keys [exit out err]}
             (run-make "--silent" "install"
                       (str "CLI_DEST=" cli-path)
                       (str "CODEX_HOME=" codex-home)
                       (str "CLAUDE_HOME=" claude-home)
+                      (str "SOURCE_COMMIT=" head)
                       (str "INSTALL_ROOT=" install-root))]
         (testing "the aggregate target succeeds and installs all entrances"
           (is (zero? exit) (str out err))
@@ -307,6 +332,7 @@
                           (str "CLI_DEST=" cli-path)
                           (str "CODEX_HOME=" codex-home)
                           (str "CLAUDE_HOME=" claude-home)
+                          (str "SOURCE_COMMIT=" head)
                           (str "INSTALL_ROOT=" install-root))]
             (is (zero? exit) (str out err))
             (is (fs/executable? cli-path))
@@ -492,5 +518,51 @@
             (is (str/starts-with? (str (fs/real-path codex-skill))
                                   (str (fs/real-path install-root))))
             (is (= (fs/real-path codex-skill) (fs/real-path claude-skill))))))
+      (finally
+        (delete-temp-tree tmp-dir)))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest the-install-stamp-is-the-commit-the-test-passed-down
+  "Opus's round-seventeen item 6, as a falsifier rather than a mechanism read.
+
+   The defect was that the expected stamp and the installed stamp came from TWO
+   independent readings of `git rev-parse HEAD`, taken at different times. It is
+   invisible while the two readings agree, which is every run in which nobody
+   commits — so the witness drives a commit value the ambient reading can never
+   equal, and asserts the installer stamped THAT.
+
+   RED before the fix: the expected stamp was built at namespace load from real
+   HEAD, so it could not match a synthetic commit however the install was
+   driven."
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj-surgeon-install-stamp-"})
+        cli-path (fs/path tmp-dir "bin" "clj-surgeon")
+        codex-home (fs/path tmp-dir "codex")
+        claude-home (fs/path tmp-dir "claude")
+        install-root (fs/path tmp-dir "packages")
+        codex-skill (fs/path codex-home "skills" "clj-surgeon")
+        chosen "0123456789abcdef0123456789abcdef01234567"]
+    (try
+      (let [{:keys [exit out err]}
+            (run-make "--silent" "install"
+                      (str "CLI_DEST=" cli-path)
+                      (str "CODEX_HOME=" codex-home)
+                      (str "CLAUDE_HOME=" claude-home)
+                      (str "SOURCE_COMMIT=" chosen)
+                      (str "INSTALL_ROOT=" install-root))]
+        (is (zero? exit) (str out err))
+        (testing "the installed SKILL.md carries the commit the TEST chose"
+          (is (= (str (slurp-path canonical-skill-path)
+                      (stable-copy-stamp-for chosen))
+                 (slurp-path (fs/path codex-skill "SKILL.md")))))
+        (testing "and so does the receipt the installer wrote"
+          (let [receipt (slurp-path
+                          (fs/path (fs/real-path codex-skill)
+                                   "install-receipt.edn"))]
+            (is (str/includes? receipt chosen)
+                (str "the receipt names a different commit: " receipt))))
+        (testing "the ambient reading is NOT what the assertion compares"
+          ;; The falsifier's own falsifier: if this ever equals HEAD, the drive
+          ;; above proves nothing and the witness says so instead of passing.
+          (is (not= chosen (head-commit)))))
       (finally
         (delete-temp-tree tmp-dir)))))
