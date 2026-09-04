@@ -1124,3 +1124,7 @@ Yes: every round amends EARS text + falsifier rows under stable ids; registry 25
 ## 02:28Z — E-NSWEEP CLOSED (doc 40dbfe6 on MCP/main): N* = 23; square 2 restricted to N ≤ 21
 
 Twelve more native arms, 0 stream edits (34/34 native write arms across five cohorts). The boundary the ceiling test could only bound is now located: the caller mostly stops hand-typing by N = 30 and entirely by 55; E-CEILING80's N ≲ 40 was too generous by ~2×. Report and brainfleet §34 carry the restricted sentence. What remains open on square 2 is the write-path flank (E-HARNESS-2 scoring). Apparatus ratchets named: fence digests exclude .git and hash evidence content; a fast gate receipt is re-executed and diffed, not trusted or distrusted.
+
+## 02:33Z — admit-gate fix review: Sol's filter REFUSED (fourth refusal tonight, this time on a brief with no chmod/symlink fixtures — it tripped on the gate's own source) → Opus fallback with the identical brief; E-HARNESS-2 chain done, runner nudged to score
+
+Sol refusal count tonight: MEM-003 r3 (earlier), fold-diff r9, census r16, census r17, admit-gate — every review that touches confinement, permissions, or a verifier. Gene's rule (Sol first) stands; the fallback is named each time. The pattern itself is worth a line for the mayor: Sol cannot review the security-boundary lanes at all, so those lanes are Opus-reviewed by necessity, not preference.
