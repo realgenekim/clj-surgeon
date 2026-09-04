@@ -5966,6 +5966,40 @@
 (defrecord RendererCompatRecord [a b])
 
 ;; @spec MCP-OP-ALIAS-059
+;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-fact-line-spends-one-print-budget-for-the-whole-receipt
+  ;; Round-sixteen review, recorded as a composition FACT rather than a
+  ;; finding: the wall-clock budget is per `bounded-pr-str` CALL and not per
+  ;; leaf, so a map of a hundred looping values costs one budget — but
+  ;; `refusal-fact-line` calls it once per fact under a sixteen-fact bound, and
+  ;; a refusal carrying sixteen unrenderable values cost a measured 32,008 ms.
+  ;; It is bounded, and it is not reachable from caller data: every entrance
+  ;; normalises its params through a JSON round trip that can carry only
+  ;; scalars and collections, never a JVM object with a hostile `toString`.
+  ;;
+  ;; Fixed anyway, because the fix is a DEADLINE shared across the fact line
+  ;; rather than a budget per fact — the receipt is the unit a caller waits on,
+  ;; and sixteen budgets is a bound nobody would choose on purpose.
+  (let [;; interruptible, so the sixteen abandoned daemon threads cost the rest
+        ;; of the suite nothing: a lazy sequence that sleeps rather than spins
+        unrenderable (fn [] (lazy-seq (do (Thread/sleep Long/MAX_VALUE) nil)))
+        result (into {:ok false
+                      :operation "alias_migration"
+                      :error_type "alias-migration-planted"
+                      :error "planted"}
+                     (for [index (range 16)]
+                       [(keyword (str "fact_" index)) (unrenderable)]))
+        started (System/nanoTime)
+        line (mcp-tool/refusal-fact-line result)
+        elapsed-ms (/ (- (System/nanoTime) started) 1e6)]
+    (is (some? line) "the planted refusal rendered no fact line at all")
+    (is (= 16 (count (re-seq #"#object\[" line)))
+        (str "every unrenderable fact should carry its own identity marker: "
+             line))
+    (is (< elapsed-ms 8000.0)
+        (str "refusal-fact-line spent one print budget PER FACT rather than "
+             "one for the receipt: " (long elapsed-ms) " ms for 16 facts"))))
+
 (deftest the-fact-renderer-keeps-every-rendering-callers-already-saw
   (let [ceiling mcp-tool/max-refusal-fact-characters]
     (testing "a record keeps its own tag rather than becoming a map"
