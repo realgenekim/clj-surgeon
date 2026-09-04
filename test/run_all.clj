@@ -1,5 +1,7 @@
 (ns run-all
   (:require
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
+   [clj-surgeon.tmp-leak-support-test]
    [clj-surgeon.agent-routing-test]
    [clj-surgeon.alias-migration-test]
    [clj-surgeon.analyze-test]
@@ -49,7 +51,16 @@
    [clj-surgeon.xray-test]
    [clojure.test :refer [run-tests]]))
 
-(let [r (run-tests 'clj-surgeon.forms-test
+;; RATCHET (2026-09-04, inb-9483a4): refuse to run at all on tmpfs, then
+;; isolate java.io.tmpdir into a private per-run root so any leaked fixture
+;; dir fails the run by name -- with no false positives from concurrent
+;; seats sharing /var/tmp/forge. See clj-surgeon.tmp-leak-support.
+(let [{:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script *file*})
+      _ (when refused (System/exit 97))
+      tmp-root root
+      tmp-before (tmp-leak/tmp-entries)
+      r (run-tests 'clj-surgeon.tmp-leak-support-test
+                   'clj-surgeon.forms-test
                    'clj-surgeon.alias-migration-test
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
@@ -95,5 +106,6 @@
                    'clj-surgeon.worktree-lifecycle-cli-test
                    'clj-surgeon.recovery-test
                    'clj-surgeon.cli-dispatch-test
-                   'clj-surgeon.core-discovery-test)]
-  (System/exit (+ (:fail r) (:error r))))
+                   'clj-surgeon.core-discovery-test)
+      leak-fail (tmp-leak/report-and-sweep-leak! tmp-root tmp-before)]
+  (System/exit (+ (:fail r) (:error r) leak-fail)))

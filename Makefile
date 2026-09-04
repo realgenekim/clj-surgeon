@@ -193,6 +193,8 @@ repository-hygiene-self-test:
 runtests: mcp-test
 
 mcp-test: mcp-operation-oracle
+	@# @spec MCP-OP-TMPHYG-001
+	@# @spec MCP-OP-TMPHYG-002
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
 	@$(MAKE) --no-print-directory repository-hygiene-self-test
 	@$(MAKE) --no-print-directory txn-kernel-warning-check
@@ -921,6 +923,8 @@ txn-kernel-warning-check:
 	clojure -M test/kernel_warning_check.clj
 
 test-fast:
+	@# @spec MCP-OP-TMPHYG-001
+	@# @spec MCP-OP-TMPHYG-002
 	bb test/run_all.clj
 
 # ============================================================
