@@ -715,46 +715,12 @@
         (is (str/includes?
               content (format "%.2f ms" elapsed)))))))
 
-(deftest callback-queries-a-cold-job-without-rereading-source
-  (let [project (temp-dir)
-        calls (atom [])]
-    (try
-      (cold-verify/clear-jobs!)
-      (inspect-tool/init! {:project-root (.getPath project)})
-      (let [launched (cold-verify/launch!
-                       (.getPath project) "full"
-                       {:command ["/bin/sh" "-c" "printf cold-ok"]
-                        :timeout-ms 1000})
-            job (:verification_job launched)]
-        (loop [attempt 0]
-          (when (and (not (:verification_complete
-                            (cold-verify/status (.getPath project) job)))
-                     (< attempt 100))
-            (Thread/sleep 10)
-            (recur (inc attempt))))
-        (inspect-tool/handle-inspect
-          nil
-          {"workspace_root" (.getPath project)
-           "verification_job" job
-           "view" "verification"}
-          (fn [content error? structured]
-            (swap! calls conj {:content content :error? error?
-                               :structured structured})))
-        (is (= false (:error? (first @calls))))
-        (is (str/starts-with? (first (:content (first @calls)))
-                              "inspect_clojure · cold verification\n"))
-        (is (number? (get-in @calls [0 :structured :elapsed_ms])))
-        (is (str/includes?
-              (first (:content (first @calls)))
-              (format "request %.2f ms"
-                      (get-in @calls [0 :structured :elapsed_ms]))))
-        (is (= :passed (get-in @calls [0 :structured :status])))
-        (is (true? (get-in @calls [0 :structured :verification_complete])))
-        (is (= 0 (get-in @calls [0 :structured :file_read_count] 0))))
-      (finally
-        (cold-verify/clear-jobs!)
-        (inspect-tool/init! nil)
-        (delete-tree! project)))))
+;; MOVED, round five: `callback-queries-a-cold-job-without-rereading-source`
+;; now lives in `clj-surgeon.mcp-inspect-cold-job-test` (:battery). It drove
+;; /bin/sh through the production cold-verify helper from inside a namespace
+;; declared `:fast`, whose lane rule reads "No child process" -- the
+;; round-three landing review's finding 6. The behaviour is unchanged and
+;; still runs; the LANE now matches what it does.
 
 (deftest handler-namespace-reload-preserves-the-live-runtime
   (let [project (temp-dir)

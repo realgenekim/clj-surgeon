@@ -140,11 +140,12 @@
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
 
-   ;; ---- :battery (11) ----
+   ;; ---- :battery (12) ----
    'clj-surgeon.admit-patch-test                        :battery
    'clj-surgeon.core-discovery-test                     :battery
    'clj-surgeon.mcp-alias-migration-test                :battery
    'clj-surgeon.mcp-cold-verify-test                    :battery
+   'clj-surgeon.mcp-inspect-cold-job-test               :battery
    'clj-surgeon.mcp-prepared-wire-test                  :battery
    'clj-surgeon.mcp-process-test                        :battery
    'clj-surgeon.mcp-relation-census-launcher-test       :battery

@@ -379,13 +379,15 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 39 (count (lm/namespaces-for :fast))))
     (is (= 4 (count (lm/namespaces-for :integration))))
-    (is (= 11 (count (lm/namespaces-for :battery))))
-    (is (= 54 (count lm/manifest))
+    (is (= 12 (count (lm/namespaces-for :battery))))
+    (is (= 55 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
              "battery-ledger witness, plus round four's six runtime purity "
-             "witnesses in ns-isolation-test"))))
+             "witnesses in ns-isolation-test, plus round five's "
+             "mcp-inspect-cold-job-test -- the one inspect-tool test that "
+             "spawns a child, moved out of a :fast namespace into :battery"))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -402,11 +404,12 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.battery-ledger-test      12  ; TEST-ISO-009a/b's witness (round three)
-    clj-surgeon.fast-lane-isolation-test 3   ; TEST-ISO-006's witness (round two)
-    clj-surgeon.lane-manifest-test       18  ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins
-    clj-surgeon.mcp-formatter-test       3   ; the adopted orphan (round three)
-    clj-surgeon.ns-isolation-test        17}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four)
+  '{clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
+    clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
+    clj-surgeon.lane-manifest-test         23 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
+    clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
+    clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
+    clj-surgeon.ns-isolation-test          21}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -416,12 +419,19 @@
   ;; dropping, so two things are checked, and the second is the one that
   ;; actually holds the line:
   ;;
-  ;;   round one's 49 namespaces, today ........... 921 deftests  (>= 865: the
-  ;;                                                trunk ADDED tests to them;
-  ;;                                                it never removed any)
-  ;;   adopted since round one ..................... 53 deftests  (12 + 3 + 18 + 3 + 17)
+  ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
+  ;;   adopted since round one ..................... 64 deftests  (12+4+23+3+1+21)
   ;;                                                --------------
-  ;;   total declared by the manifest .............. 974 deftests
+  ;;   total declared by the manifest .............. 984 deftests
+  ;;
+  ;; ROUND FIVE MOVED ONE TEST OUT of a round-one namespace, which is why the
+  ;; first line went 921 -> 920, and it is worth saying plainly because it is
+  ;; the exact shape this pin exists to police. It was not deleted: the one
+  ;; inspect-tool test that drives /bin/sh through the production cold-verify
+  ;; helper moved into clj-surgeon.mcp-inspect-cold-job-test (:battery), and
+  ;; that namespace's line in `adopted-since-round-one` carries the +1. The
+  ;; equality below is what makes the distinction load-bearing: a MOVE keeps
+  ;; the total, a DELETION does not, and only one of them can pass here.
   ;;
   ;; A namespace leaving a lane fails `the-partition-drops-nothing-...` by
   ;; name; a namespace's tests being deleted fails the >= below; anything
@@ -446,9 +456,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 53 adopted) (str "adopted tests: " adopted)))
+      (is (= 64 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 974 total) (str "manifest declares " total " tests"))
+      (is (= 984 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
