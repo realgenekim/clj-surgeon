@@ -12,6 +12,7 @@
    [clj-surgeon.mcp-feature-thread :as ft]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.java.shell]
    [clojure.set :as set]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -81,6 +82,28 @@
   [structured id]
   (first (filter #(= id (:id %)) (:legs structured))))
 
+(defn- offset-after-newlines
+  "Character offset just past the `k`th newline of `text`, or its end."
+  [^String text k]
+  (if (zero? k)
+    0
+    (let [n (count text)]
+      (loop [i 0 seen 0]
+        (if (>= i n)
+          n
+          (let [seen' (if (= \newline (.charAt text i)) (inc seen) seen)]
+            (if (= seen' k) (inc i) (recur (inc i) seen'))))))))
+
+(defn- line-range-bytes
+  "The EXACT bytes `sed -n '<from>,<to>p' <file>` prints: the inclusive lines,
+  each with its LF, the last line's LF included iff the file has one there.
+  No split, no join -- those are the defect."
+  [file from to]
+  (let [text (slurp file)]
+    (subs text
+          (offset-after-newlines text (dec from))
+          (offset-after-newlines text to))))
+
 (defn files-named
   "Every repository file the receipt names, anywhere."
   [structured]
@@ -129,8 +152,13 @@
           (is (<= (:from l) (:to l)))
           (is (re-matches #"[0-9a-f]{64}" (:sha256 l)))
           (is (string? (:body l)) (str (:id l) " carries no body"))
-          (is (= (:sha256 l) (ft/sha256-hex (:body l)))
-              (str (:id l) " hash does not cover the body it shipped"))
+          ;; ROUND-EIGHT finding 5: the digest is over the RANGE the receipt
+          ;; names -- inclusive lines with their LFs -- not over the body
+          ;; string the text block carries without its trailing LF.
+          (is (= (:sha256 l)
+                 (ft/sha256-hex (line-range-bytes (io/file fixture-root (:file l))
+                                                  (:from l) (:to l))))
+              (str (:id l) " hash does not cover the range it named"))
           (is (string? (:anchor l)) (str (:id l) " carries no insertion anchor"))))
 
       (testing "the text block names each owner"
@@ -159,10 +187,17 @@
           "a lexed close is the claim; a window would have to say so"))
 
     (testing "the body is the exact bytes at that range in the fixture"
-      (let [lines (str/split (slurp (io/file fixture-root (:file js))) #"\n" -1)
-            slice (str/join "\n" (subvec (vec lines) (dec (:from js)) (:to js)))]
-        (is (= slice (:body js)))
-        (is (= (ft/sha256-hex slice) (:sha256 js)))))
+      ;; ROUND-EIGHT finding 5: this expectation used to be built with
+      ;; split/join, which silently drops the range's final LF -- the SAME
+      ;; error the implementation had, so the two agreed about a file neither
+      ;; had read. It now walks the raw text; see
+      ;; `a-range-digest-covers-the-exact-bytes-the-refetch-prints`.
+      (let [slice (line-range-bytes (io/file fixture-root (:file js))
+                                    (:from js) (:to js))]
+        (is (= (str/trimr slice) (str/trimr (:body js)))
+            "the body is the range's own lines")
+        (is (= (ft/sha256-hex slice) (:sha256 js))
+            "the digest must cover the bytes the refetch prints, LF included")))
 
     (testing "Clojure legs are PARSED, and say so"
       (is (= "form(parsed)" (:boundary handler)))
@@ -2833,4 +2868,81 @@
           (is (not error?) (str "a plain conventions file was refused: "
                                 (pr-str (:error structured))))
           (is (= "in-workspace" (:repo_label structured))))
+        (finally (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-EIGHT REVIEW, finding 5 (BLOCKING): every range digest excluded the
+;; range's final LF, and the witness at ASSERTION 2 built its "slice" with
+;; split/join -- which silently drops that byte -- so implementation and witness
+;; shared one error and agreed with each other about a file neither had read.
+;;
+;; So this witness never joins lines. `line-range-bytes` walks the raw file text
+;; counting newlines, and one case is cross-checked against `sed` itself.
+;; ---------------------------------------------------------------------------
+
+(deftest a-range-digest-covers-the-exact-bytes-the-refetch-prints
+  (testing "the named case: every located leg's sha256 is the file's line slice"
+    (let [r (thread! fixture-root {:budget_bytes 32768})
+          structured (:structured r)
+          located (located-legs structured)]
+      (is (<= 6 (count located)))
+      (doseq [l located]
+        (let [slice (line-range-bytes (io/file fixture-root (:file l))
+                                      (:from l) (:to l))]
+          (is (= (ft/sha256-hex slice) (:sha256 l))
+              (str "leg " (:id l) " " (:file l) ":L" (:from l) "-L" (:to l)
+                   " digests something other than the bytes its own refetch"
+                   " prints; slice ends "
+                   (pr-str (subs slice (max 0 (- (count slice) 12))))))))))
+
+  (testing "and `sed` itself agrees, for the leg the transcript read four times"
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 32768})
+          js (leg structured "js-function")
+          out (:out (clojure.java.shell/sh
+                      "sed" "-n" (str (:from js) "," (:to js) "p")
+                      (.getPath (io/file fixture-root (:file js)))))]
+      (is (= (ft/sha256-hex out) (:sha256 js))
+          "the published digest is not a digest of what sed prints")))
+
+  (testing "a range that ends at a last line with NO trailing LF"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-no-final-lf"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        ;; no trailing newline: the file ends at the closing paren
+        (write-file! root "src/own.clj"
+                     "(ns own)\n\n(defn tailFn [x]\n  (inc x))")
+        (let [{:keys [structured]}
+              (call! {:subject "tailFn"
+                      :config string-only-conventions
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (located-legs structured)]
+            (let [slice (line-range-bytes (io/file root (:file l))
+                                          (:from l) (:to l))]
+              (is (not (str/ends-with? slice "\n"))
+                  "this fixture must end without a trailing LF to be the case")
+              (is (= (ft/sha256-hex slice) (:sha256 l))
+                  (str "leg " (:id l) " L" (:from l) "-L" (:to l))))))
+        (finally (delete-tree! root)))))
+
+  (testing "a range that ends MID-file carries the final LF"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-mid-file"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/own.clj"
+                     "(ns own)\n\n(defn tailFn [x]\n  (inc x))\n\n(defn after [y] y)\n")
+        (let [{:keys [structured]}
+              (call! {:subject "tailFn"
+                      :config string-only-conventions
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (located-legs structured)]
+            (let [slice (line-range-bytes (io/file root (:file l))
+                                          (:from l) (:to l))]
+              (is (str/ends-with? slice "\n")
+                  "a mid-file range ends with the LF of its last line")
+              (is (= (ft/sha256-hex slice) (:sha256 l))
+                  (str "leg " (:id l) " L" (:from l) "-L" (:to l))))))
         (finally (delete-tree! root))))))
