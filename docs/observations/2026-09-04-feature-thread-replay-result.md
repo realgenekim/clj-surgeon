@@ -256,3 +256,11 @@ patch before it lands (E-ADMIT-SEED) — not wall.
 Standing sentence, amended: the receipt is the only measured wall win (1.45×, capped near 2×); the plate and the gate
 are both withdrawn as wall levers at n=1–2 on this harness; the gate's next round is its input contract and its refusal
 receipt, measured by the same pair.
+
+## G2 / GN2 pre-registration (written 21:08Z, before any result) — the admit gate with the round-sixteen contract (server from 2ac33278 on 8173)
+
+Arms: G2 = receipt + gate mandated (inline verify as argv arrays, apply_patch-format patch, propose then commit); GN2 = native + the same mandate.
+Same task, same clones (smw-base@2df99c98), same-hour control = NC (30 turns / 6.5 min).
+Pre-registration: G2 raw ≤ 12, wall ≤ 5 min, ≥ 1 MCP admit call, ≤ 1 refusal, 0 agent-run suite invocations; GN2 ≤ 18 raw and ≥ 1 MCP call (the mandate becomes a path).
+WITHDRAWAL: G2 raw > 18 or G2 wall > 6.5 min (native control) → the r16 contract did not make the gate a wall lever on this harness;
+the finding becomes the refusal texts and the next_call (naive-reader probe). Any refusal repeated twice for the same reason = a gate contract finding, reported verbatim.
