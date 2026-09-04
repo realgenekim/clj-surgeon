@@ -427,6 +427,99 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-058
+(defn- many-root-workspace!
+  "A tree of 118 Clojure sources under 9 top-level source roots.
+
+  `src` holds 100 of them, so a remedy that ranks its roots alphabetically and
+  keeps the first six drops the one root that holds five sixths of the tree."
+  []
+  (let [workspace (temp-dir)]
+    (doseq [index (range 100)]
+      (let [target (io/file workspace "src" "big"
+                            (format "ns_%03d.clj" index))]
+        (.mkdirs (.getParentFile target))
+        (spit target (format "(ns big.ns-%03d)\n" index))))
+    (doseq [[root n] [["r0" 3] ["r1" 3] ["r2" 2] ["r3" 2]
+                      ["r4" 2] ["r5" 2] ["r6" 2] ["r7" 2]]
+            index (range n)]
+      (let [target (io/file workspace root (format "n%d.clj" index))]
+        (.mkdirs (.getParentFile target))
+        (spit target (format "(ns %s.n%d)\n" root index))))
+    workspace))
+
+;; @spec MCP-OP-ALIAS-058
+(deftest the-derived-remedy-never-drops-a-source-root-in-silence
+  ;; Round-10 review: `max-suggested-scope-paths` took 6 entries from a SORTED
+  ;; SET, so truncation was alphabetical rather than by size. On a nine-root
+  ;; tree the remedy named r0..r5, dropped `src/**` — the root holding 100 of
+  ;; the 118 sources — and no field said a root had been dropped, while the
+  ;; prose still called the list "the source roots this tree actually holds".
+  ;; A remedy that silently selects a sixth of the tree is the same class of
+  ;; defect as the refusal it replaced.
+  (let [workspace (many-root-workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (let [result (alias-migration/execute!
+                     (config workspace receipt-dir)
+                     {:op "alias_migration"
+                      :workspace_root (.getPath workspace)
+                      :from {:lib fixture/from-lib :var fixture/from-var}
+                      :to {:lib fixture/to-lib :var fixture/to-var
+                           :alias_policy fixture/alias-policy}
+                      :scope {:paths ["zzz/**"]}
+                      :expect {:files 1}})]
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+            (pr-str result))
+        (is (= 118 (:source_files_under_root result))
+            "the walk did not see the whole tree")
+        (testing "the receipt states how many of the tree's roots it listed"
+          (is (= 9 (:source_roots result))
+              "the receipt does not say how many source roots the walk saw")
+          (is (= 6 (:roots_listed result))
+              "the receipt does not say how many of them the remedy lists")
+          (is (str/includes? (str (:remedy result)) "9")
+              "the remedy does not state the truncation")
+          (is (str/includes? (str (:remedy result)) "6")
+              "the remedy does not state how many roots it named"))
+        (testing "the biggest root is the one a bounded list keeps"
+          (is (contains? (set (:suggested_paths result)) "src/**")
+              "the remedy dropped the root holding 100 of the 118 sources"))
+        (testing "the next_call selects the same file set the walk saw"
+          (let [next-call (:next_call result)
+                replayed (alias-migration/execute!
+                           (config workspace receipt-dir)
+                           (json/parse-string (json/generate-string next-call)
+                                              true))]
+            (is (= "alias-migration-empty-scope" (:error_type replayed))
+                (pr-str replayed))
+            (is (= 118 (:scanned_files replayed))
+                "the remedy's next_call selects fewer files than the walk saw"))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-058
+(deftest a-tree-inside-the-root-bound-lists-every-root-it-has
+  ;; The other side of the bound: when the tree's roots fit, every one of them
+  ;; is named, nothing is appended, and the two counts agree.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (let [result (execute! workspace {:scope {:paths ["srk/**"]}
+                                        :expect {:files 12}})]
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result)))
+        (is (= (:source_roots result) (:roots_listed result))
+            "a tree inside the bound reported a truncation it did not make")
+        (is (= (count (:suggested_paths result)) (:roots_listed result))
+            "the listed count does not match the list")
+        (is (not (contains? (set (:suggested_paths result)) "**"))
+            "an untruncated remedy appended the completing pattern anyway"))
+      (finally
+        (delete-tree! workspace)))))
+
+
 ;; @spec MCP-OP-ALIAS-006
 (deftest the-domain-refusal-fires-only-when-the-scope-matched-files
   ;; The counterpart of ALIAS-058: three files matched, none of them requires
