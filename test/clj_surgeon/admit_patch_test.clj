@@ -5331,20 +5331,31 @@
       ;; and must not redden on a fresh clone for a reason unrelated to the
       ;; gate. A receipt that is PRESENT and contradicts the exemption is a
       ;; loud failure.
+      ;; @spec MCP-OP-ADMIT-147
+      ;; The precondition is an ASSERTION, not a println. Round six measured
+      ;; what stdout costs: `clj-surgeon.admit-patch-test` ran 4,141
+      ;; assertions on a clone with no battery receipt and 4,143 on a machine
+      ;; that had run the battery, so the exemption silently rested on the
+      ;; structural checks alone and the only notice was one line inside a
+      ;; suite that prints thousands. The assertion count is now the SAME in
+      ;; both states, and an absent receipt is a named, counted, visibly
+      ;; non-zero failure carrying the receipt path and the exact command
+      ;; that writes it.
       (let [receipt (io/file
-                      "target/admit-transaction-recovery-battery-receipt.edn")]
-        (if (.exists receipt)
-          (let [record (read-string (slurp receipt))]
-            (is (contains? (set (:kinds-published record)) kind)
-                (str "the battery ran and did NOT publish the kind its"
-                     " exemption claims: " kind " · receipt "
-                     (pr-str record)))
-            (is (= target (:target record))
-                "the receipt names the target that wrote it"))
-          (println (str "PRECONDITION · no battery receipt at "
-                        (.getPath receipt) " · run `" target
-                        "` to prove " kind " by execution rather than by"
-                        " the structural checks alone"))))
+                      "target/admit-transaction-recovery-battery-receipt.edn")
+            present? (.exists receipt)
+            record (when present? (read-string (slurp receipt)))]
+        (is present?
+            (str "PRECONDITION UNMET · no battery receipt at "
+                 (.getPath receipt) " · run `" target "` to prove " kind
+                 " by execution rather than by the structural checks alone"))
+        (is (and present?
+                 (contains? (set (:kinds-published record)) kind))
+            (str "the battery ran and did NOT publish the kind its"
+                 " exemption claims: " kind " · receipt "
+                 (pr-str record)))
+        (is (and present? (= target (:target record)))
+            "the receipt names the target that wrote it"))
       (is (str/includes? (slurp makefile) (str "\n" target-name ":"))
           (str "the Makefile has no such target: " target))
       (is (not (str/includes? (slurp makefile)
