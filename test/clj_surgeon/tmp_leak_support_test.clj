@@ -129,9 +129,12 @@
             mentions of /tmp are not matches; only a literal /tmp/<name> used
             as a path is, and `/home/x/tmp/y` is not one."
     (let [pattern #"(?:^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]"
-          files (cons (io/file "Makefile")
-                      (filter #(str/ends-with? (.getName ^java.io.File %) ".sh")
-                              (.listFiles (io/file "test"))))
+          shells (fn [dir] (filter #(str/ends-with? (.getName ^java.io.File %) ".sh")
+                                   (.listFiles (io/file dir))))
+          ;; `bench/*.sh` is IN SCOPE: `make test` runs four of those harnesses,
+          ;; so a hard-coded root in a bench self-test is a directory this
+          ;; repo's own test command creates in RAM.
+          files (concat [(io/file "Makefile")] (shells "test") (shells "bench"))
           offenders (for [^java.io.File f files
                           :when (.exists f)
                           [n line] (map-indexed (fn [i l] [(inc i) l])

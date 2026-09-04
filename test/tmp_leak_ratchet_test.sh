@@ -348,10 +348,17 @@ assert_runner_refuses clj-surgeon.mcp-test-runner
 # anywhere" cannot be witnessed by executing one path.
 # `${TMPDIR:-...}` forms and prose mentions of /tmp are not matches; only a
 # literal /tmp/<name> used as a path is.
-hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]' Makefile test/*.sh || true)
+#
+# `bench/*.sh` is IN SCOPE (round two): `make test` runs
+# `bench/retain_benchmark_result.sh`, `bench/run_clean_codex.sh`,
+# `bench/run_clean_claude.sh` and `bench/run_inspect_mcp_benchmark.sh`, so a
+# hard-coded root in a bench self-test is a directory this repo's own test
+# command creates in RAM. The design doc previously called `bench/*.sh` out of
+# scope on the grounds that no gate reached it; that sentence was wrong.
+hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]' Makefile test/*.sh bench/*.sh || true)
 if [ -n "$hardcoded" ]; then
   echo "$hardcoded" >&2
-  fail "10: hard-coded /tmp write targets remain in Makefile / test shell gates"
+  fail "10: hard-coded /tmp write targets remain in Makefile / test / bench shell gates"
 fi
 
 echo "tmp-leak ratchet witness passed"
