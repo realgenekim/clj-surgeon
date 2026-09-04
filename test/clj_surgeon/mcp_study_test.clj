@@ -11,6 +11,7 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -3453,6 +3454,154 @@
     (is (str/includes? text note)
         "a 10,000-character leaf under the budget travels whole")
     (is (empty? misses) (miss-report misses))))
+
+;; ============================================================
+;; O2 ROUND 4 — the fit measures the envelope the publisher PUBLISHES
+;; (Sol O2 round-3 review, section 5)
+;; ============================================================
+;; `fit-public-result` measured with `elapsed_ms` zeroed, because the clock had
+;; not stopped yet, and a 64-byte `publish-reserve` was held back to cover the
+;; difference. A constant chosen from one observation is not an invariant: the
+;; envelope's own clock contract accepts any finite non-negative double, and a
+;; `1.0E308`-scale elapsed renders 309 characters:
+;;
+;;   payload= 420 fit_measure= 32514 normal_published= 32531
+;;                huge_published= 32860 huge_bounded= false
+;;   payload= 460 fit_measure= 32677 normal_published= 32694
+;;                huge_published= 33023 huge_bounded= false
+;;
+;; The repair is not a bigger constant. The fit measures the FINAL result —
+;; the one the publisher publishes, whatever shape its envelope has — so
+;; nothing is added after the measurement and there is nothing to reserve.
+;; That is also what makes the MEM-003 landing safe: when `elapsed_ms` moves
+;; to `measured.elapsed_ms`, the fit measures the nested envelope because it
+;; measures whatever it is handed.
+
+(defn- scripted-clock
+  [values]
+  (let [state (atom values)]
+    (fn [] (let [value (first @state)] (swap! state rest) value))))
+
+(defn- callback-entrance
+  "One `handle-inspect` call whose domain result and request clock are both
+   scripted, so a witness can place any accepted clock value against a
+   near-boundary receipt."
+  [raw clock-values]
+  (let [answer (atom nil)
+        original mcp-operation/invoke!]
+    (with-redefs [inspect-tool/execute-inspect! (fn [_ _] raw)
+                  mcp-operation/invoke!
+                  (fn [opts]
+                    (original (assoc opts :clock-nanos
+                                     (scripted-clock clock-values))))]
+      (inspect-tool/handle-inspect
+        nil {"requests" [{"operation" "outline" "file" "src/x.clj"}]
+             "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (reset! answer {:text (first content)
+                          :error? error?
+                          :structured structured}))))
+    @answer))
+
+(defn- near-boundary-receipt
+  [payload]
+  (let [row-source (str "(defn row [] \"" (apply str (repeat payload "x")) "\")")]
+    {:ok true :operation "inspect_clojure"
+     :request_count 32 :file_count 32
+     :source_character_count (* 32 (count row-source))
+     :read_complete true :next_action "none"
+     :results
+     (mapv (fn [index]
+             {:id (str "r" index) :operation "forms"
+              :file (str "src/f" index ".clj")
+              :file_hash (apply str (repeat 64 "a"))
+              :form_count 1
+              :source_character_count (count row-source)
+              :forms [{:name (str "f" index) :line 1 :end_line 1
+                       :form_type "defn" :source row-source}]})
+           (range 32))}))
+
+;; @spec MCP-OP-STUDY-040
+(deftest the-published-pair-is-bounded-under-every-accepted-clock
+  (inspect-tool/init! {:project-root project-root})
+  (try
+    (doseq [payload [400 420 430 440 460]]
+      (testing (str "payload " payload)
+        (let [raw (near-boundary-receipt payload)
+              ordinary (callback-entrance raw [0 1000000])
+              ;; The largest interval the envelope's own clock contract
+              ;; accepts: `format-elapsed-ms` takes any finite non-negative
+              ;; number, and this one renders 309 characters.
+              maximal (callback-entrance raw [0 1.0E308])]
+          (is (<= (inspect-tool/mcp-result-byte-count
+                    (:text ordinary) (:structured ordinary))
+                  inspect-tool/max-public-result-bytes)
+              "an ordinary clock publishes inside the budget")
+          (is (<= (inspect-tool/mcp-result-byte-count
+                    (:text maximal) (:structured maximal))
+                  inspect-tool/max-public-result-bytes)
+              (str "a maximal clock publishes "
+                   (inspect-tool/mcp-result-byte-count
+                     (:text maximal) (:structured maximal))
+                   " bytes against a budget of "
+                   inspect-tool/max-public-result-bytes
+                   " — the reserve is a constant, not an invariant")))))
+    (finally (inspect-tool/init! nil))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest the-fit-target-is-the-budget-itself
+  ;; With the measurement made on the final envelope there is nothing to hold
+  ;; back, so the largest accepted rendering reaches the declared budget
+  ;; rather than stopping a constant short of it.
+  (let [exact (largest-unelided-cause)
+        published (assoc (inspect-tool/fit-public-result
+                           (assoc (synthetic-refusal (apply str (repeat exact "c")))
+                                  :elapsed_ms 1.0))
+                         :elapsed_ms 1.0)
+        bytes (inspect-tool/mcp-result-byte-count
+                (inspect-tool/inspect-summary published) published)]
+    (is (<= bytes inspect-tool/max-public-result-bytes))
+    (is (> bytes (- inspect-tool/max-public-result-bytes 8))
+        (str "the fit stops " (- inspect-tool/max-public-result-bytes bytes)
+             " bytes short of the budget it declares"))))
+
+(defn- nest-measured
+  "The MEM-003 wire shape: every clock-derived field moves under `measured`."
+  [result]
+  (let [clock-keys [:elapsed_ms :inspection_elapsed_ms :job_elapsed_ms :scan_ms]]
+    (assoc (apply dissoc result clock-keys)
+           :measured (select-keys result clock-keys))))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-RESULT-001
+(deftest invoke-publishes-exactly-what-the-fit-returned
+  ;; The reserve existed because the publisher changed the result AFTER the
+  ;; fit measured it. The invariant that replaces it: `invoke!` finalizes,
+  ;; hands the finalized result to the fit, and then only renders and
+  ;; serializes what the fit returned. Nothing is added afterwards, so there
+  ;; is nothing to reserve — and this holds whatever shape the envelope has,
+  ;; MEM-003's nested `measured` block included.
+  (let [summarized (atom ::none)
+        published (atom ::none)
+        serialized (atom ::none)]
+    (mcp-operation/invoke!
+      {:clock-nanos (scripted-clock [0 1000000])
+       :execute (constantly {:ok true :operation "probe"})
+       :fit (fn [result] (assoc (nest-measured result) :fitted true))
+       :summarize (fn [result] (reset! summarized result) "text")
+       :serialize (fn [result] (reset! serialized result) "{}")
+       :callback (fn [_content _error? structured]
+                   (reset! published structured))})
+    (is (= @summarized @published)
+        "the text and the receipt render one map")
+    (is (= @summarized @serialized)
+        "and the serialized body is that same map")
+    (is (true? (:fitted @published))
+        "the map the fit returned is the map that is published")
+    (is (= {:elapsed_ms 1.0} (:measured @published))
+        "with its envelope in whatever shape the fit left it")
+    (is (not (contains? @published :elapsed_ms))
+        "the publisher adds no field after the fit")))
 
 ;; ============================================================
 ;; O2 ROUND 4 — the refusal enumeration comes from the RUNTIME
