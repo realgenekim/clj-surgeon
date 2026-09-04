@@ -83,6 +83,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | staged diffs, ended-gate, completeness gate, per-slot names | WON | f7c4b22 and later |
 | acceptance as gate not score | WON (rule) | 3e26e1c |
 | Anvil "origin" is a stale bundle | OPEN | kc-ns5i |
+| tree-scale memory battery (`make memory-battery`, MCP-OP-MEM-011) | BUILT on bridge/memory-battery; RED on main | docs/observations/2026-09-03-memory-battery-baseline.md |
 
 ## Findings (append-only; newest last)
 

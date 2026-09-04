@@ -4,6 +4,7 @@
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-alias-migration :as alias-migration]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-combinable-transaction :as combinable]
@@ -724,6 +725,29 @@
                  :recovery rollback
                  :source-unchanged rolled-back?}))))))))
 
+;; @spec MCP-OP-ALIAS-027
+(defn resolve-verification-config
+  "Resolve a routed workspace's lazy profile accessors into concrete profiles.
+
+  A workspace context published by the HTTP server carries
+  :verification-profile-selection-fn / :verification-profiles-fn rather than
+  :verification-profiles, so every public entrance must resolve them or it
+  silently reads the SERVER's profiles instead of the requested workspace's.
+  One function, both callers, so the two cannot drift apart again."
+  [config]
+  (cond
+    (:verification-profile-selection-fn config)
+    (let [{:keys [profiles source]} ((:verification-profile-selection-fn config))]
+      (assoc config
+             :verification-profiles profiles
+             :verification-profile-source source))
+
+    (:verification-profiles-fn config)
+    (assoc config
+           :verification-profiles ((:verification-profiles-fn config)))
+
+    :else config))
+
 (defn- execute-request-in-context!
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params
@@ -738,20 +762,7 @@
              (not (contains? normalized-params :create_files))
              (some #(contains? normalized-params %)
                    [:edits :delete_owners :symbol_migration :require_change]))
-        config (cond
-                 (:verification-profile-selection-fn config)
-                 (let [{:keys [profiles source]}
-                       ((:verification-profile-selection-fn config))]
-                   (assoc config
-                          :verification-profiles profiles
-                          :verification-profile-source source))
-
-                 (:verification-profiles-fn config)
-                 (assoc config
-                        :verification-profiles
-                        ((:verification-profiles-fn config)))
-
-                 :else config)
+        config (resolve-verification-config config)
         config (cond
                  (:formatter-fn config)
                  (assoc config :formatter ((:formatter-fn config)))
@@ -1331,6 +1342,196 @@
    :structured? true
    :tool-fn #'handle-edit-clojure})
 
+;; @spec MCP-OP-ALIAS-059
+(def alias-migration-refusal-envelope-keys
+  "Receipt keys the refusal text renders structurally rather than as facts."
+  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
+    :write_authority :next_action :next_call :remedy :elapsed_ms
+    :workspace_root :expect_files_unchanged_reason :receipt_hash
+    :undo_receipt :details_path :details_retained :details_retention})
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-fact-characters
+  "Ceiling on ONE rendered discriminating fact.
+
+  The text block is constant-size or it is not a receipt, and the one thing in
+  a fact that grows without limit is a caller-supplied path."
+  160)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-facts
+  "How many discriminating facts one refusal text renders."
+  12)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-rendered-next-call-characters
+  "Ceiling on the next_call JSON one refusal text inlines.
+
+  Twice the planner's own 512-character next_call bound, so every call the verb
+  composes is inlined and only a pathological one is replaced by a POINTER that
+  names its length — never dropped in silence."
+  1024)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- renderable-fact?
+  [value]
+  (or (string? value) (number? value) (boolean? value)
+      (and (sequential? value) (every? #(or (string? %) (number? %)) value))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn refusal-fact-line
+  "The refusal's own discriminating fields, rendered for a text-reading client.
+
+  A refusal has two faces — `structuredContent` and `content[0].text` — and a
+  client that reads only the text must not be told less than one that reads the
+  structure. In the E3-P cohort (2026-09-03) the structured refusal carried
+  `found_files 0` and `scanned_files 0`, the two numbers that separate `your
+  glob matched nothing` from `nothing here requires that lib`; the text carried
+  neither, and the arm that read the text sent the same wrong scope twice.
+
+  Sorted by field name so the line is a function of the refusal and not of map
+  order, and bounded in both count and per-fact length."
+  [result]
+  (let [facts (->> result
+                   (remove (fn [[field _]]
+                             (contains? alias-migration-refusal-envelope-keys
+                                        field)))
+                   (filter (fn [[_ value]] (renderable-fact? value)))
+                   (sort-by key)
+                   (take max-refusal-facts)
+                   (map (fn [[field value]]
+                          (let [rendered (pr-str value)]
+                            (str (name field) "="
+                                 (if (> (count rendered)
+                                        max-refusal-fact-characters)
+                                   (str (subs rendered 0
+                                              max-refusal-fact-characters)
+                                        "…")
+                                   rendered))))))]
+    (when (seq facts)
+      (str "facts · " (str/join " · " facts)))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn rendered-next-call
+  "The next_call line: sendable JSON, a bounded pointer, or a stated absence.
+
+  A refusal that carries an executable remedy the caller never sees costs a
+  model return at random — whichever face of the receipt that caller happens to
+  read. An absent next_call is STATED rather than omitted, because a missing
+  line and an uncomputable remedy are indistinguishable in silence."
+  [result]
+  (if-let [call (:next_call result)]
+    (let [encoded (json/generate-string call)]
+      (if (<= (count encoded) max-rendered-next-call-characters)
+        (str "next_call · " encoded)
+        (str "next_call · " (count encoded)
+             " characters, in structuredContent.next_call — send it verbatim")))
+    (str "next_call · none — this refusal has no mechanically composable "
+         "correction; the remedy above names what only the caller can decide")))
+
+;; @spec MCP-OP-ALIAS-042
+(defn alias-migration-summary
+  "Render one compact visible summary whose length is constant in N.
+
+  The committed block is gated on the receipt's own `:committed`, so the visible
+  check marks and the structured receipt can never disagree."
+  [result]
+  (if (and (:ok result) (true? (:committed result)))
+    (format (str "alias_migration\n"
+                 "  %s files · %s sites · aliases %s · %s collisions resolved · %s\n\n"
+                 "\u2713 atomic commit complete\n"
+                 "\u2713 written bytes read back and verified\n"
+                 "\u2713 terminal evidence · per-file detail at %s (%s retention)")
+            (:files result) (:sites result)
+            (pr-str (:alias_histogram result))
+            (:collisions_resolved result)
+            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (:details_path result)
+            (or (:details_retention result) "best-effort"))
+    (str/join
+      "\n"
+      (remove
+        nil?
+        [(format (str "alias_migration\n"
+                      "  refused · %s · %s\n\n"
+                      "%s")
+                 (or (:error_type result) (:reason result) "unknown-error")
+                 (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+                 (if (or (:source_unchanged result) (:source-unchanged result))
+                   "\u2713 source unchanged"
+                   "\u26a0 source state requires structured receipt review"))
+         (str "\u2192 " (or (:error result)
+                            (:remedy result)
+                            "Correct the request and retry once."))
+         (refusal-fact-line result)
+         (when-let [remedy (:remedy result)]
+           (str "remedy · " remedy))
+         (rendered-next-call result)]))))
+
+(def alias-migration-tool-description
+  (str
+    "Migrate one Var to a new namespace and name across every namespace that "
+    "requires the old one, in a single call whose payload does not grow with "
+    "the number of affected files. Send from {lib, var}, to {lib, var, "
+    "alias_policy}, scope {paths}, and expect {files}. Surgeon discovers every "
+    "requiring namespace and every call site itself under every spelling that "
+    "file makes legal — each :as alias, the fully qualified name, and the bare "
+    "referred name — chooses each file's alias as the first alias_policy entry "
+    "bound to nothing in that file, rewrites the require and every site, and "
+    "commits one failure-atomic transaction. Locals of the same name, strings, "
+    "docstrings, comments, metadata, #_ discards, and every reader-conditional "
+    "branch other than the file's own platform branch stay byte-identical. "
+    "Never send a per-file, per-owner, or per-site table; Surgeon discovers "
+    "them. The receipt is one constant-size object: files, sites, the alias "
+    "histogram, collisions resolved, the kondo delta, the focused-test result, "
+    "and a details_path holding per-file detail, retained best-effort: read it "
+    "from the receipt rather than assume the path keeps. Its receipt is terminal "
+    "evidence of the rewrite; do not re-read the files it changed. A refusal is "
+    "fail-closed and carries an executable next_call: send that once."))
+
+;; @spec MCP-OP-ALIAS-001
+(defn handle-alias-migration
+  "Stable callback that plans, commits, and publishes one O(1) receipt."
+  [_exchange params callback]
+  (mcp-operation/invoke!
+    {:execute
+     (fn []
+       (let [normalized (json/parse-string (json/generate-string params) true)]
+         (if-not @runtime-config
+           {:ok false
+            :operation "alias_migration"
+            :error_type "server-not-initialized"
+            :error "alias_migration server is not initialized"
+            :source_unchanged true
+            :remedy "Restart the configured clj-surgeon MCP server."}
+           (let [workspace-router (or (:workspace-router @runtime-config)
+                                      (workspace/router @runtime-config))
+                 routed (workspace/resolve-request workspace-router normalized)]
+             (if-not (:ok routed)
+               (assoc routed :operation "alias_migration")
+               ;; the same receipt-directory derivation the direct dispatch
+               ;; uses: the routed project root names the workspace's own
+               ;; durable receipt directory
+               (let [routed-config (resolve-verification-config (:config routed))
+                     receipt-dir (str (or (:receipt-dir routed-config)
+                                          (default-receipt-dir
+                                            (:project-root routed-config))))]
+                 (assoc (alias-migration/execute!
+                          (assoc routed-config :receipt-dir receipt-dir)
+                          (:params routed))
+                        :workspace_root (:workspace-root routed))))))))
+     :summarize alias-migration-summary
+     :callback callback}))
+
+(def alias-migration-tool
+  {:id :alias-migration
+   :name "alias_migration"
+   :description alias-migration-tool-description
+   :schema mcp-schema/alias-migration-schema
+   :output-schema mcp-schema/alias-migration-output-schema
+   :structured? true
+   :tool-fn #'handle-alias-migration})
+
 (def clj-change-tool
   {:id :clj-change
    :name "apply_clojure_changes"
@@ -1347,7 +1548,8 @@
     :full [inspect-tool/inspect-tool
            clj-change-tool
            edit-clojure-tool
-           program-tool/transform-clojure-tool]
+           program-tool/transform-clojure-tool
+           alias-migration-tool]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

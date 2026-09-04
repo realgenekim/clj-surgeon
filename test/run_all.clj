@@ -1,6 +1,7 @@
 (ns run-all
   (:require
    [clj-surgeon.agent-routing-test]
+   [clj-surgeon.alias-migration-test]
    [clj-surgeon.analyze-test]
    [clj-surgeon.cli-dispatch-test]
    [clj-surgeon.cljc-existing-ops-test]
@@ -24,6 +25,7 @@
    [clj-surgeon.install-test]
    [clj-surgeon.intent-transaction-test]
    [clj-surgeon.lens-query-test]
+   [clj-surgeon.memory-battery-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
@@ -31,6 +33,7 @@
    [clj-surgeon.outermost-test]
    [clj-surgeon.outline-test]
    [clj-surgeon.owner-hypotheses-test]
+   [clj-surgeon.parser-admission-test]
    [clj-surgeon.partition-all-test]
    [clj-surgeon.platform-selector-test]
    [clj-surgeon.quoted-var-refs-test]
@@ -47,6 +50,7 @@
    [clojure.test :refer [run-tests]]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
+                   'clj-surgeon.alias-migration-test
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
                    'clj-surgeon.move-test
@@ -64,6 +68,7 @@
                    'clj-surgeon.structural-lens-test
                    'clj-surgeon.syntax-var-refs-test
                    'clj-surgeon.lens-query-test
+                   'clj-surgeon.memory-battery-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test
                    'clj-surgeon.cljc.require-ops-test
@@ -75,6 +80,7 @@
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
                    'clj-surgeon.owner-hypotheses-test
+                   'clj-surgeon.parser-admission-test
                    'clj-surgeon.partition-all-test
                    'clj-surgeon.platform-selector-test
                    'clj-surgeon.quoted-var-refs-test

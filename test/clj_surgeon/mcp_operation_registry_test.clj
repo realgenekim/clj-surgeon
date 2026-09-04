@@ -29,6 +29,11 @@
     'clj-surgeon.mcp-tool-test/editor-gesture-is-exact-guarded-and-undoable
     :typed-refusal
     'clj-surgeon.mcp-tool-test/refuses-before-write-and-publishes-no-receipt}
+   "alias_migration"
+   {:committed
+    'clj-surgeon.mcp-alias-migration-test/one-call-migrates-the-whole-fan-out-and-returns-one-constant-receipt
+    :typed-refusal
+    'clj-surgeon.mcp-alias-migration-test/expect-mismatch-refuses-closed-with-an-executable-next-call}
    "transform_clojure"
    {:preview
     'clj-surgeon.mcp-program-tool-test/previews-one-program-as-several-lossless-addressed-edits

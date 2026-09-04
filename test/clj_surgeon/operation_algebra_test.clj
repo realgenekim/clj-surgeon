@@ -44,11 +44,15 @@
          (map first)
          set)))
 
+(defn- top-level-form-index
+  [file]
+  (into {}
+        (map (juxt :name :source))
+        (outline/top-level-form-records file (slurp file))))
+
 (defn- top-level-form-source
   [file owner]
-  (or (some (fn [{:keys [name source]}]
-              (when (= owner name) source))
-            (outline/top-level-form-records file (slurp file)))
+  (or (get (top-level-form-index file) owner)
       (throw (ex-info "Architecture owner not found"
                       {:file file :owner owner}))))
 
@@ -60,29 +64,77 @@
         invoked-heads (->> (tree-seq coll? seq form)
                            (keep #(when (seq? %) (first %)))
                            (filter symbol?))
-        raw-effect-symbols #{'slurp 'spit 'Files/move
+        ;; @spec MCP-OP-ALIAS-056
+        ;; the receipt staging write moved from `spit` on a `createTempFile`
+        ;; name to an explicit CREATE_NEW open; the inventory has to KNOW that
+        ;; call, or this oracle goes blind to the one write it exists to bound
+        raw-effect-symbols #{'slurp 'spit 'Files/move 'Files/newOutputStream
                              'java.io.File/createTempFile 'System/exit}
         effect-head? #(re-find
-                        #"(?i)(^|/)(write|publish|stage|rollback|recover|format|verif|process|launch|mcp|json|exit|move|createTempFile|slurp|spit)(!|$|-)|\.delete"
+                        #"(?i)(^|/)(write|publish|stage|rollback|recover|format|verif|process|launch|mcp|json|exit|move|createTempFile|newOutputStream|slurp|spit)(!|$|-)|\.delete|\.write"
                         (str %))]
     (set (concat (filter #(str/ends-with? (str %) "!") all-symbols)
                  (filter raw-effect-symbols all-symbols)
                  (filter effect-head? invoked-heads)))))
 
+;; @spec MCP-OP-ALIAS-056
+(defn- callees-in-file
+  "Top-level forms of the same file this form invokes directly."
+  [index owner source]
+  (->> (read-string source)
+       (tree-seq coll? seq)
+       (keep #(when (seq? %) (first %)))
+       (filter symbol?)
+       (filter index)
+       (remove #{owner})
+       distinct))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- architecture-references-one-frame-deeper
+  "This form and the helpers it calls in this file, each with its OWN effects.
+
+  The inventory used to read ONE top-level form textually and follow no calls,
+  which left it blind exactly one frame down: a `spit` added to the private
+  `receipt-source` — a helper `stage-receipt!` calls on every receipt — ran on
+  every run and this oracle stayed green. A bounded write is not bounded by
+  reading only the form that names it. One frame is where the boundary is
+  drawn: it covers the helpers the bounded forms actually delegate to, and it
+  stops before the whole file collapses into one set, which would make the
+  oracle assert nothing. Effects reachable two frames down are still outside
+  it, and that is the stated limit rather than an oversight.
+
+  The result is a map from OWNER FORM to the effects that form itself names,
+  and never a union over the frame. Unioning is how the widening bought its
+  own blind spot: five raw write primitives entered `:commit-entry` at once, so
+  a NOVEL symbol went red anywhere in the closure while a REPEATED one was
+  invisible — `.write` added to `validate-complete-source!` was already in the
+  set, inherited from `stage-receipt!`, and the oracle stayed green. An effect
+  is attributed to the form that names it, so gaining one anywhere moves the
+  inventory."
+  [index owner]
+  (let [source (get index owner)]
+    (into {owner (architecture-references source)}
+          (map (fn [callee]
+                 [callee (architecture-references (get index callee))]))
+          (callees-in-file index owner source))))
+
+(def ^:private transaction-file "src/clj_surgeon/intent_transaction.clj")
+
 (defn- runtime-architecture-inventory
-  []
-  (let [file "src/clj_surgeon/intent_transaction.clj"
-        refs #(architecture-references
-                (top-level-form-source file %))]
+  ([] (runtime-architecture-inventory
+        (top-level-form-index transaction-file)))
+  ([index]
+  (let [refs #(architecture-references-one-frame-deeper index %)]
     {:preview (refs 'plan-change)
+     ;; the two adapters name the same helpers, and a helper's own effect set
+     ;; is a function of its source alone, so merging cannot lose an answer
      :commit-adapters
-     (into #{}
-           (mapcat refs ['execute-change! 'execute-mcp-change!]))
+     (reduce merge {} (map refs ['execute-change! 'execute-mcp-change!]))
      :commit-entry (refs 'execute-change-with-context!)
      :commit-runtime (refs 'commit-compiled!)
      :receipt-stage (refs 'stage-receipt!)
      :receipt-publish (refs 'publish-staged-receipt!)
-     :rollback (refs 'recovery-result)}))
+     :rollback (refs 'recovery-result)})))
 
 (deftest operation-algebra-architecture-is-transport-neutral-and-bounded
   ;; @spec OP-ALG-CATALOG-001, OP-ALG-COMPILE-001, OP-ALG-EFFECT-001,
@@ -149,49 +201,161 @@
                (:capabilities
                  (algebra/derive-capabilities catalog-entry commit-context))
                #{:formatter-launch :process-exit :verifier-launch})))
-      (is (= {:preview #{'refuse! 'validate-spec!}
-              :commit-adapters #{'execute-change!
-                                 'execute-change-with-context!
-                                 'execute-mcp-change!}
-              :commit-entry #{'.delete
-                              'assert-receipt-does-not-alias-source!
-                              'commit-compiled!
-                              'execute-change-with-context!
-                              'prepare-compiled!
-                              'publish-staged-receipt!
-                              'refuse!
-                              'slurp
-                              'stage-receipt!
-                              'validate-receipt!}
-              :commit-runtime #{'assert-file-hash!
-                                'commit-compiled!
-                                'execute-writes!
-                                ;; @spec MCP-OP-EDIT-031
-                                'execute-creations!
-                                'execute-deletions!
-                                'create-directory!
-                                'delete-file!
-                                'default-create-directory!
-                                'default-delete-file!
-                                'rollback-creations!
-                                'rollback-deletions!
-                                'recover-transaction!
-                                'refuse!
-                                'slurp
-                                ;; @spec MCP-OP-EDIT-035
-                                'create-source!
-                                'write-source!
-                                'file-ops/atomic-create!
-                                'file-ops/atomic-write!}
-              :receipt-stage #{'.delete
-                               'refuse!
-                               'slurp
-                               'spit
-                               'stage-receipt!
-                               'validate-receipt!
-                               'java.io.File/createTempFile}
-              :receipt-publish #{'publish-staged-receipt! 'Files/move}
-              :rollback #{'read-source! 'write-source!}}
+      ;; @spec MCP-OP-ALIAS-056
+      ;; The inventory reads each bounded form AND the same-file helpers it
+      ;; calls, one frame down. Reading only the named form left this oracle
+      ;; blind exactly where the write lives: a `spit` added to the private
+      ;; `receipt-source`, which `stage-receipt!` calls on every receipt, ran
+      ;; on every run and this test stayed green.
+      ;;
+      ;; Each entry is keyed by OWNER FORM and never unioned. The union was
+      ;; the widening's own blind spot: five raw write primitives entered
+      ;; `:commit-entry` at once, so a NOVEL symbol went red anywhere in the
+      ;; frame while a REPEATED one was invisible — a `.write` smuggled into
+      ;; `canonical-receipt-path` left the WHOLE inventory byte-identical,
+      ;; because `stage-receipt!` had already contributed that symbol. Every
+      ;; symbol below is a call the form BESIDE IT names, and the bounded
+      ;; entry can reach every form listed without another named form
+      ;; standing between. Two frames down is still outside this oracle, and
+      ;; that is the stated limit rather than an oversight.
+      (is (= '{:commit-adapters
+             {execute-change! #{execute-change! execute-change-with-context!},
+              execute-change-with-context!
+              #{.delete
+                assert-receipt-does-not-alias-source!
+                commit-compiled!
+                execute-change-with-context!
+                prepare-compiled!
+                publish-staged-receipt!
+                refuse!
+                slurp
+                stage-receipt!
+                validate-receipt!},
+              execute-mcp-change! #{execute-change-with-context! execute-mcp-change!}},
+             :commit-entry
+             {assert-receipt-does-not-alias-source!
+              #{assert-receipt-does-not-alias-source! refuse!},
+              build-receipt #{},
+              canonical-receipt-path #{refuse!},
+              commit-compiled!
+              #{assert-file-hash!
+                commit-compiled!
+                create-directory!
+                create-source!
+                default-create-directory!
+                default-delete-file!
+                delete-file!
+                execute-creations!
+                execute-deletions!
+                execute-writes!
+                recover-transaction!
+                refuse!
+                rollback-creations!
+                rollback-deletions!
+                slurp
+                write-source!
+                file-ops/atomic-create!
+                file-ops/atomic-write!},
+              compile-change-spec #{refuse! validate-spec!},
+              compile-inverse
+              #{invalid-receipt! refuse! validate-complete-source! validate-receipt!},
+              execute-change-with-context!
+              #{.delete
+                assert-receipt-does-not-alias-source!
+                commit-compiled!
+                execute-change-with-context!
+                prepare-compiled!
+                publish-staged-receipt!
+                refuse!
+                slurp
+                stage-receipt!
+                validate-receipt!},
+              ;; main's :expect-matched basis check; documented pure ("Performs
+              ;; no I/O"), so it names no architecture effect of its own.
+              matched-basis-evidence #{},
+              observe-change-result #{},
+              publish-staged-receipt! #{publish-staged-receipt! Files/move},
+              refuse! #{refuse!},
+              stage-receipt!
+              #{.delete
+                .write
+                refuse!
+                slurp
+                stage-receipt!
+                validate-receipt!
+                Files/newOutputStream},
+              validate-receipt! #{invalid-receipt! validate-receipt!}},
+             :commit-runtime
+             {assert-file-hash! #{assert-file-hash! read-source! refuse!},
+              changed-file-plans #{},
+              commit-compiled!
+              #{assert-file-hash!
+                commit-compiled!
+                create-directory!
+                create-source!
+                default-create-directory!
+                default-delete-file!
+                delete-file!
+                execute-creations!
+                execute-deletions!
+                execute-writes!
+                recover-transaction!
+                refuse!
+                rollback-creations!
+                rollback-deletions!
+                slurp
+                write-source!
+                file-ops/atomic-create!
+                file-ops/atomic-write!},
+              execute-creations!
+              #{assert-file-hash!
+                create-directory!
+                create-source!
+                execute-creations!
+                refuse!
+                swap!
+                file-ops/revalidate-create-target!},
+              execute-deletions!
+              #{assert-file-hash! delete-file! execute-deletions! refuse! swap!},
+              execute-writes! #{assert-file-hash! execute-writes! write-source!},
+              recover-transaction! #{recover-transaction! write-source!},
+              recovered? #{},
+              refuse! #{refuse!},
+              rollback-creations! #{delete-file! rollback-creations!},
+              rollback-deletions! #{rollback-deletions! write-source!},
+              verified-hashes #{assert-file-hash!}},
+             :preview
+             {canonicalize-spec #{},
+              plan-change #{refuse! validate-spec!},
+              public-plan #{},
+              read-sources #{refuse! slurp},
+              refuse! #{refuse!},
+              spec-files #{},
+              validate-spec!
+              #{refuse!
+                validate-aggregate-expectation!
+                validate-change-aggregate-expectation!
+                validate-changes!
+                validate-create-files!
+                validate-intent!
+                validate-spec!}},
+             :receipt-publish
+             {publish-staged-receipt! #{publish-staged-receipt! Files/move}},
+             :receipt-stage
+             {receipt-source #{},
+              refuse! #{refuse!},
+              stage-receipt!
+              #{.delete
+                .write
+                refuse!
+                slurp
+                stage-receipt!
+                validate-receipt!
+                Files/newOutputStream},
+              validate-receipt! #{invalid-receipt! validate-receipt!}},
+             :rollback
+             {read-source! #{read-source! refuse!},
+              recovery-result #{read-source! write-source!}}}
              (runtime-architecture-inventory))))))
 
 ;; @spec OP-ALG-CATALOG-001, OP-ALG-CONTEXT-001, OP-ALG-CONTEXT-002,
@@ -607,3 +771,85 @@
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))
+
+
+;; @spec MCP-OP-ALIAS-056
+;; @spec OP-ALG-EFFECT-003
+(defn- smuggle
+  "The same form index with one raw effect call added inside `owner`'s body."
+  [index owner injected]
+  (update index owner
+          (fn [source]
+            (let [head (first (filter #(str/starts-with? source %)
+                                      [(str "(defn- " owner)
+                                       (str "(defn " owner)]))
+                  smuggled (when head
+                             (str/replace-first source head
+                                                (str head " " injected)))]
+              (when (or (nil? smuggled) (= smuggled source))
+                (throw (ex-info "The smuggling injection did not apply"
+                                {:owner owner})))
+              smuggled))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- owner-effects
+  "The effect symbols ONE owner form names, or nil when the entry is a union."
+  [inventory entry owner]
+  (let [by-owner (get inventory entry)]
+    (when (map? by-owner) (get by-owner owner))))
+
+;; @spec MCP-OP-ALIAS-056
+(defn- entry-union
+  "Every effect symbol an entry reaches, however the entry is keyed."
+  [inventory entry]
+  (let [by-owner (get inventory entry)]
+    (if (map? by-owner) (into #{} cat (vals by-owner)) by-owner)))
+
+;; @spec MCP-OP-ALIAS-056
+;; @spec OP-ALG-EFFECT-003
+(deftest the-effect-inventory-attributes-each-effect-to-the-form-that-names-it
+  ;; One frame down closed round 7's escape and opened a quieter one. The
+  ;; widening put five raw write primitives into `:commit-entry` as a single
+  ;; UNION, so a NOVEL symbol like `spit` goes red anywhere in the closure
+  ;; while a REPEATED one is invisible. `canonical-receipt-path` is a
+  ;; one-frame helper of the bounded entry, it names no `.write` of its own,
+  ;; and it is not the root of any other inventory entry — so when it gains
+  ;; one the entry's union is byte-identical (`.write` is already there, from
+  ;; `stage-receipt!`) and the whole oracle stays green. The inventory is keyed
+  ;; by OWNER FORM so an effect is attributed to the form that names it.
+  ;;
+  ;; (`validate-complete-source!` is NOT the example the round-8 review named:
+  ;; it is a callee of `compile-inverse` and therefore TWO frames from the
+  ;; entry, outside the boundary this inventory states rather than masked by
+  ;; the union.)
+  (let [index (top-level-form-index transaction-file)
+        clean (runtime-architecture-inventory index)
+        ;; `.write` is already in the entry's union, from `stage-receipt!`
+        repeated (runtime-architecture-inventory
+                   (smuggle index 'canonical-receipt-path
+                            "(when nil (.write nil \"smuggled\"))"))
+        ;; round 7's own escape: a symbol the union does NOT carry
+        novel (runtime-architecture-inventory
+                (smuggle index 'receipt-source
+                         "(when nil (spit \"x\" \"smuggled\"))"))]
+    (testing "a repeated effect symbol is attributed to its own form"
+      (is (not= repeated clean)
+          (str "a raw write primitive added to a helper left the inventory "
+               "unchanged; the entry's symbols are unioned into one set"))
+      (is (contains? (set (owner-effects repeated :commit-entry
+                                         'canonical-receipt-path))
+                     '.write)
+          "the smuggled write is not attributed to the form that names it")
+      (is (not (contains? (set (owner-effects clean :commit-entry
+                                              'canonical-receipt-path))
+                          '.write))
+          "the unmodified helper already carries the symbol it was given"))
+    (testing "and round seven's novel symbol still moves it"
+      (is (not= novel clean))
+      (is (contains? (set (owner-effects novel :receipt-stage 'receipt-source))
+                     'spit)))
+    (testing "the union stays blind to the repeated one, which is the point"
+      (is (= (entry-union repeated :commit-entry)
+             (entry-union clean :commit-entry))
+          (str "the union over owners was expected to be identical — that is "
+               "why keying by owner is the ratchet")))))

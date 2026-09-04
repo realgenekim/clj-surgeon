@@ -170,6 +170,13 @@ dependency rule between adapters, compilers, and effects. Each operation moves
 into that algebra through a separately reversible vertical slice; existing
 routes remain authoritative until differential tests prove parity.
 
+A memory-boundedness leaf under `docs/intent/memory-boundedness/` owns the
+promise that a tree-scale operation's retained heap is sized by the work its
+receipt carries rather than by the repository it is pointed at. It owns the
+per-operation memory-and-work receipt block and the bounded-JVM measurement
+battery that gates it (`make memory-battery`, `docs/memory-battery.md`). Both
+requirements are active gaps: the battery is the instrument, not the fix.
+
 The compact exact editor treats `.edn` as lossless Clojure data, not as a
 namespace. An EDN edit must use root scope, may apply one exact replacement to
 an explicit file set, and compiles into the existing frozen multi-file

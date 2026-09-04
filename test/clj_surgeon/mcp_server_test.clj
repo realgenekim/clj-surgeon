@@ -29,7 +29,7 @@
 
 (deftest tool-profiles-preserve-full-default-and-isolate-the-editor
   (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-          "transform_clojure"]
+          "transform_clojure" "alias_migration"]
          (mapv :name (tool/tools-for-profile :full))))
   (is (= ["edit_clojure"]
          (mapv :name (tool/tools-for-profile :edit))))
@@ -38,11 +38,12 @@
                         (tool/tools-for-profile :unknown))))
 
 ;; @spec MCP-OP-SCHEMA-001
-(deftest exposes-exactly-four-typed-tools
+;; @spec MCP-OP-ALIAS-001
+(deftest exposes-exactly-five-typed-tools
   (let [tools (server/make-tools nil ".")]
-    (is (= 4 (count tools)))
+    (is (= 5 (count tools)))
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-            "transform_clojure"]
+            "transform_clojure" "alias_migration"]
            (mapv :name tools)))
     (doseq [{:keys [output-schema]} tools]
       (is (= {:type "number" :minimum 0}
