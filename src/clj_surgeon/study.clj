@@ -145,7 +145,12 @@
     (try
       (let [;; argv, never `sh -c`: a workspace-confined directory name must not
             ;; be able to reach a shell from the MCP read entrance.
-            prune-args (concat ["("]
+            ;; @spec MCP-OP-STUDY-014
+            ;; `-mindepth 1` for the same reason `walk-clj-files` carries it:
+            ;; the prune list must never eat the START POINT. A resolved scan
+            ;; root can be named `target`, and pruning it at depth 0 reports an
+            ;; ordinary workspace as empty.
+            prune-args (concat ["-mindepth" "1" "("]
                                (drop 1 (mapcat #(vector "-o" "-name" %) skip-dirs))
                                [")" "-prune" "-o"
                                 "(" "-name" "deps.edn"
@@ -253,7 +258,23 @@
       (let [;; -prune the cache/vendor directories exactly as find-build-files
             ;; does. Without it a scan walked every file under target/,
             ;; node_modules/, and .gitlibs/ and then filtered by name.
-            prune-args (concat ["("]
+            ;; @spec MCP-OP-STUDY-014
+            ;; `-mindepth 1`, so the prune list can never eat the START POINT.
+            ;; `skip-dirs` names `target`, `node_modules` and `.git` because a
+            ;; scan should not DESCEND into them; it does not mean a caller may
+            ;; not NAME one. Field evidence (the trunk's
+            ;; `the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root`,
+            ;; arriving with the round-twelve merge): the fixture's real tree is
+            ;; a directory literally named `target` behind a symlink named
+            ;; `link`, and `ls-tree` resolves its scan root before walking — so
+            ;; the start point became `…/target`, `find` pruned it at depth 0,
+            ;; and an entirely ordinary workspace reported `No Clojure files
+            ;; found`. Canonicalising a root can RENAME it into the skip list,
+            ;; which makes this a property of the resolved path rather than of
+            ;; anything the caller did. The start point is never a build file or
+            ;; a source file itself, so excluding depth 0 from the results costs
+            ;; nothing.
+            prune-args (concat ["-mindepth" "1" "("]
                                (drop 1 (mapcat #(vector "-o" "-name" %) skip-dirs))
                                [")" "-prune" "-o"
                                 "(" "-name" "*.clj"
@@ -298,6 +319,56 @@
          found)))))
 
 ;; @spec MCP-OP-STUDY-014
+(defn- lexical-root-of
+  "The scan root as the CALLER spelled it, absolutized and lexically
+   normalized but NOT link-resolved — the frame a `:paths` entry discovered
+   under a symlinked root must be measured in."
+  ^java.nio.file.Path [dir]
+  (try (.normalize (.toAbsolutePath ^java.nio.file.Path (fs/path (str dir))))
+       (catch Throwable _ nil)))
+
+(defn- within?
+  [^java.nio.file.Path candidate ^java.nio.file.Path base]
+  (boolean (and candidate base (.startsWith candidate base))))
+
+;; @spec MCP-OP-STUDY-014
+;; @spec MCP-OP-SHELL-ARGV-006
+(defn- confined-source-dir
+  "One declared source path, resolved under its project root and fenced — or
+   nil when it escapes.
+
+   TWO FRAMES OF REFERENCE, each compared like with like, and that is the whole
+   correctness argument. The scan root can be a SYMLINK: `find` is started with
+   `-H` so the link itself is descended, and the project roots discovery hands
+   back are therefore spelled UNDER THE LINK, while `root` here is the
+   link-RESOLVED canonical root. A single lexical `startsWith` against the
+   resolved root therefore measured `link/src` against `target/` and refused
+   every ordinary `{:paths [\"src\"]}` under a symlinked root — the whole scan
+   came back `No Clojure files found`, which is a completeness claim about a
+   tree that was never read. Field evidence: the trunk's
+   `the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root`, driven
+   at both real launchers, arrived with the round-twelve merge and went red
+   against this branch's fence.
+
+   So the LEXICAL half compares the normalised entry against the UNRESOLVED
+   scan root, and the LINK half re-resolves the entry and compares its real
+   path against the CANONICAL root. An entry is confined when either frame
+   places it inside, and when its real path — where it has one — is inside the
+   canonical root. `..` and an absolute entry fail both frames; a symlinked
+   `:paths` entry pointing out of the tree fails the second."
+  [^java.nio.file.Path root ^java.nio.file.Path lexical-root
+   ^java.nio.file.Path project-root src-path]
+  (try
+    (let [resolved (.normalize (.resolve project-root (str src-path)))
+          real (try (.toRealPath resolved
+                                 (make-array java.nio.file.LinkOption 0))
+                    (catch Throwable _ nil))]
+      (when (and (or (within? resolved root)
+                     (within? resolved lexical-root))
+                 (or (nil? real) (within? real root)))
+        resolved))
+    (catch Exception _ nil)))
+
 (defn- confined-source-dirs
   "Resolve a build file's declared source paths under its project root,
    keeping only those that stay inside the canonical scan root — and RECORDING
@@ -331,15 +402,15 @@
    `:paths` entry that is itself a symlink (`:paths-unresolved`), with its own
    `:reason`, rather than on a second one: two refusal channels for one
    question is how two channels come to disagree."
-  [refused! project-name root project-root src-paths]
+  [refused! project-name root lexical-root project-root src-paths]
   (keep (fn [src-path]
           (if-not (string? src-path)
             (do (swap! refused! conj {:path (pr-str src-path)
                                       :reason :not-a-string
                                       :project project-name})
                 nil)
-            (if-let [resolved (mcp-paths/normalized-path-within
-                                root project-root src-path)]
+            (if-let [resolved (confined-source-dir root lexical-root
+                                                   project-root src-path)]
               [(str src-path) resolved]
               (do (swap! refused! conj {:path (str src-path)
                                         :reason :outside-project-root
@@ -447,7 +518,7 @@
   "One thunk per project root, DEEPEST root first, so the most specific
    project owns its own files and an outer project that declares `:paths
    [\".\"]` takes only what is left."
-  [cache root by-root limit skipped!]
+  [cache root lexical-root by-root limit skipped!]
   (map (fn [[project-root files]]
          (fn []
            (let [build-file (first files)
@@ -460,7 +531,8 @@
                                        skipped! project-name
                                        (confined-source-dirs
                                          skipped! project-name
-                                         root root-path src-paths))))]
+                                         root lexical-root
+                                         root-path src-paths))))]
              {:name project-name
               :root (str root-path)
               :files (vec (apply concat walks))
@@ -480,6 +552,7 @@
    `root` is the canonical scan root: nothing outside it is discovered."
   [root dir cap]
   (let [dir (fs/path dir)
+        lexical-root (lexical-root-of dir)
         cache (atom {})
         skipped! (atom [])
         ;; One file past the cap is all any walk needs to produce: it is
@@ -500,7 +573,7 @@
         (if (seq by-root)
           (accumulate-projects cap
                                (build-project-candidates
-                                 cache root by-root limit skipped!)
+                                 cache root lexical-root by-root limit skipped!)
                                empty-accumulation)
         ;; No build files — fallback to recursive scan. The skip-directory
         ;; test goes INTO the walk, so it can never shrink a listing below the
@@ -1144,7 +1217,8 @@
                                            ;; who just planted the file.
                                            (confined-source-dirs
                                              skipped! project-name
-                                             root (fs/path project-root)
+                                             root (lexical-root-of dir)
+                                             (fs/path project-root)
                                              (extract-source-paths build-file)))))]
                            {:name project-name
                             :root project-root

@@ -1298,7 +1298,22 @@
       (not (:ok scan))
       ;; NOTE (inb-eca3b1): calling System/exit from inside a library operation
       ;; is owed a separate fix; the exit-1 contract is unchanged here.
+      ;; @spec MCP-OP-SHELL-ARGV-006
+      ;; The refusal NAMES what was fenced, and this branch is exactly where it
+      ;; matters: a build file whose only `:paths` entry escapes leaves no
+      ;; files, so the walk lands here and printed "No Clojure files found
+      ;; under <the directory you named>" — a completeness claim about a tree
+      ;; that was never read, with the fence itself invisible. Each entry is
+      ;; printed AS THE CALLER SPELLED IT and never as the tree it resolved to.
       (do (println (:error scan))
+          (when-let [unresolved (seq (:paths-unresolved scan))]
+            (println (format "── source_paths_unresolved: %d entr%s"
+                             (count unresolved)
+                             (if (= 1 (count unresolved)) "y" "ies")))
+            (doseq [{:keys [project path reason]} unresolved]
+              (println (format "   %s  %s  refused: %s"
+                               project path (name reason))))
+            (when-let [remedy (:remedy scan)] (println remedy)))
           (System/exit 1))
 
       :else

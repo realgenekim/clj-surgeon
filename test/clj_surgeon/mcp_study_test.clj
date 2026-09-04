@@ -1393,11 +1393,16 @@
 (deftest the-public-tool-catalog-did-not-grow
   ;; The claim is that the STUDY lane published no new tool — the study
   ;; operations reach callers through `inspect_clojure` and nothing else. The
-  ;; set is the merged trunk catalog: `admit_clojure_patch` and
-  ;; `alias_migration` are the trunk's tools, and asserting the whole catalog
-  ;; is what makes a new study tool fail here.
+  ;; set is the merged trunk catalog: `admit_clojure_patch`, `alias_migration`
+  ;; and — since the round-twelve merge of `origin/MCP/main` — `relation_census`
+  ;; are the TRUNK's tools, and asserting the whole catalog is what makes a new
+  ;; study tool fail here. The trunk growing its own catalog is a merge to
+  ;; ABSORB, deliberately and in one visible line; this lane growing it is the
+  ;; failure this witness exists for, and the two are told apart by which
+  ;; branch added the tool, not by the size of the set.
   (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
-           "transform_clojure" "admit_clojure_patch" "alias_migration"}
+           "transform_clojure" "admit_clojure_patch" "alias_migration"
+           "relation_census"}
          (set (map :name (mcp-tool/all-tools))))))
 
 ;; ============================================================
