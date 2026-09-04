@@ -6587,6 +6587,46 @@
             (pr-str (receipt-self-description-holds? result))))
       (finally (delete-tree! root)))))
 
+
+;; @spec MCP-OP-ADMIT-149
+(deftest the-error-type-exemption-holds-only-where-its-reason-holds
+  ;; Round six's advisory 10b. `bound-identity-values` exempts `:error-type`
+  ;; "because `checked-refusal-kind!` already bounds it to an enumerated
+  ;; keyword" -- but that guard fires only on `(not (true? (:ok …)))`. On a
+  ;; receipt whose `:ok` is true the exemption's own reason is false, and the
+  ;; value goes out unbounded: 60,751 bytes through `bound-receipt`.
+  ;;
+  ;; The gate does not construct an `:ok true` receipt carrying an
+  ;; `error-type`, so this is bound-by-construction rather than
+  ;; caller-reachable today. An exemption whose justification does not hold
+  ;; is still a bound that holds by accident.
+  (let [budget write-refusal/public-byte-budget
+        bulk (apply str (repeat 60000 "e"))
+        published (#'admit/bound-receipt
+                    {:ok true :operation :admit-patch-commit
+                     :mode "commit" :files []
+                     :error-type bulk})]
+    (is (<= (write-refusal/json-bytes published) budget)
+        (str "an :ok true receipt carrying error-type bulk published "
+             (write-refusal/json-bytes published) " bytes, past " budget))
+    (is (not-any? #(and (string? %) (>= (count %) 60000)) (vals published))
+        "and echoed the value verbatim")
+    (is (some #{"error-type"} (:receipt_identity_bounded published))
+        (str "a bounded value must be NAMED as bounded: "
+             (pr-str (:receipt_identity_bounded published))))
+    (is (true? (receipt-self-description-holds? published))
+        (pr-str (receipt-self-description-holds? published))))
+  (testing "and a refusal's enumerated kind is still passed through whole"
+    (let [published (#'admit/bound-receipt
+                      {:ok false :operation :admit-patch-refused
+                       :mode "preview" :error-type :invalid-patch
+                       :error "e"})]
+      (is (= :invalid-patch (:error-type published))
+          (str "the exemption's real case was broken: "
+               (pr-str (:error-type published))))
+      (is (nil? (:receipt_identity_bounded published))
+          "an enumerated keyword is never bounded, and never named as such"))))
+
 ;; ---------------------------------------------------------------------------
 ;; Round six: every field a caller can influence, driven with bulk
 ;; ---------------------------------------------------------------------------
