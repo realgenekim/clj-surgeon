@@ -1250,3 +1250,7 @@ Login shell: TMPDIR=/var/tmp/forge, JAVA_TOOL_OPTIONS set. Through suite-run: se
 ## 05:08Z — admit gate round 3 BUILT on the trunk (95e7aed9, bridge/admit-gate-r3); Sol review launched
 
 The RED found a 37th kind a manual pass had missed (`invalid-relative-source-path`) — the source-scan enumeration paying out again — and the review brief asks the reviewer to diff it against a RUNTIME-derived set, since a source scan is the night's known weak rung. Sol first (a rendering lane; no permission fixtures in the brief, said so explicitly), Opus on refusal.
+
+## 05:11Z — FAN scorer r4 review (Opus): GO-WITH-FIX — the base-sha fallback is the last PATH-resolved input; round 5 launched
+
+The reviewer's line to keep: the content-addressed inventory is sound and "the scorer never reads a blob", so the only remaining freedom is WHICH commit — and rescore-FAN.sh hands it one from an exit-ignored PATH  when base.sha is missing, with no 40-hex check, while fan_check.clj's own comment claims the caller always passes 40 hex. Also the retroactive question answered by computation: all nine E-AFFORD arms rescore byte-identically and every published base.sha is 40-hex, so no published verdict rests on the open route. The race test (4,000 files, a background deleter, 13 typed errors on the first attempt) is the strongest evidence of the night that the per-entry rule is enforced, not documented.
