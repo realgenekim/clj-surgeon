@@ -89,6 +89,12 @@ required), `[x]` implemented (implementation and test witnesses required),
   be honoured unchanged. A refusal that lives only in the Clojure layer does
   not protect a recipe that never reaches Clojure.
 
+- [x] **MCP-OP-TMPHYG-013**: `sweep-root!` shall report what it actually did:
+  `true` only when the root is gone after the attempt, `false` when the delete
+  failed (an undeletable root, a foreign owner) as well as when the name was
+  refused. A receipt that names a subject it did not act on is `:unverified`,
+  never success.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb

@@ -96,6 +96,28 @@
         (is (true? (tmp-leak/sweep-root! ours)))
         (is (not (.exists ours)))))))
 
+;; @spec MCP-OP-TMPHYG-013
+(deftest sweep-root-does-not-claim-a-delete-it-did-not-perform
+  (testing "a receipt must name a subject it actually acted on. sweep-root!
+            returned true for every own-named root, whether or not the tree
+            was still there afterwards -- a delete it did not perform read as
+            a delete it did. It now reports whether the root is GONE."
+    (tmp-leak/with-temp-dir [parent "tmp-leak-sweep-receipt-"]
+      (let [locked (io/file parent "locked")
+            root (io/file locked "clj-surgeon-suite-42-undeletable")]
+        (.mkdirs root)
+        (.setWritable locked false false)
+        (try
+          (is (.exists root) "precondition: the root is there before the sweep")
+          (is (false? (tmp-leak/sweep-root! root))
+              "an undeletable root must not be reported as swept")
+          (is (.exists root) "and it really is still there")
+          (finally (.setWritable locked true false))))
+      (let [ours (io/file parent "clj-surgeon-suite-42-deletable")]
+        (.mkdirs ours)
+        (is (true? (tmp-leak/sweep-root! ours)))
+        (is (not (.exists ours)))))))
+
 ;; @spec MCP-OP-TMPHYG-011
 (deftest a-seam-sourced-fstype-can-never-prove-real-disk
   (let [findmnt (ns-resolve 'clj-surgeon.tmp-leak-support 'findmnt-fstype)
