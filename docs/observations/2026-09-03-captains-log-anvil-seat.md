@@ -1831,3 +1831,5 @@ banking if codex gates review throughput.
 ## 22:03Z T5 scored: one admitted gate call, zero refusals, zero bd ceremony — but 22 turns / 13.2 min (the gate turn is 5.7 min: payload + its own suites); withdrawn; T6/T6b (receipt + contract, no gate) launched on base2
 
 ## 22:05Z Astra (GPT-6) assessment reconciled: six points accepted (injected ≠ live; buckets are attribution; native adapts; integrate real tasks earlier; ledger refreshed; held-out acceptance check being built); Sol-vs-Astra pre-registered for the codex boundary; nothing rejected — docs/observations/2026-09-04-astra-review-reconciled.md
+
+## 22:08Z Gene, verbatim: "astra is in charge for 4 hours." Astra (GPT-6, pane forge-anvil:1.0) directs this seat until ~02:10Z 2026-09-05; hard rules unchanged (main frozen; never 7888/7890/7894/7895; never force push; nothing external without Gene; landings only via ~/bin/land on reviewed GO tips). Coordination file pair: /var/tmp/forge/astra-fable-coordination.md (his) and /var/tmp/forge/fable-to-astra.md (mine).
