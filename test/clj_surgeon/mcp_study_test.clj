@@ -4822,3 +4822,61 @@
                               "expect" {"requests" 1 "files" 1}}))]
       (is (empty? (filter reserved (top-level-keys refusal)))
           "a refusal's top-level keys spell no declaration line either"))))
+
+;; @spec MCP-OP-STUDY-052
+;; Field evidence (Sol O2 round-7 review, 2026-09-04, section 2): `leaf-label`
+;; joined path segments with a bare `.`, so the top-level key `"a.b"` and the
+;; nested path `[:a :b]` both spelled `a.b`. `text-line-index` is a SET, so one
+;; rendered `a.b: <value>` line discharged BOTH leaves: 587 declaration/audit
+;; disagreements across the allowance band, the first 19 declared against 18
+;; audited. A pointer that cannot be decoded back to the path that made it is
+;; not an address.
+(deftest two-distinct-leaves-never-share-a-pointer
+  (testing "the reviewer's colliding pair"
+    (let [twin "the-same-distinctive-value-rendered-twice"
+          result {"a.b" twin :a {:b twin}}]
+      (is (= 2 (count (set (map (fn [[path _]] (inspect/leaf-label path))
+                                (inspect/receipt-leaf-pairs result)))))
+          (str "the dotted top-level key and the nested path spell one "
+               "pointer: "
+               (pr-str (mapv (fn [[path _]] (inspect/leaf-label path))
+                             (inspect/receipt-leaf-pairs result)))))
+      (doseq [budget (range 40 300 4)]
+        (testing (str "budget " budget)
+          (let [report (carriage-report result budget)]
+            (is (empty? (:orphans report))
+                (format (str "budget %d: %d leaves counted as rendered have "
+                             "no pointer line of their own — %s; section %s")
+                        budget (count (:orphans report))
+                        (pr-str (:orphans report))
+                        (pr-str (:section report))))
+            (is (= (:declared report) (:audited report))
+                (format "budget %d: declared %d against audited %d; section %s"
+                        budget (:declared report) (:audited report)
+                        (pr-str (:section report)))))))))
+  (testing "an index rendering is not a key spelling"
+    (let [twin "the-same-distinctive-value-rendered-twice"
+          result {"x[0]" twin :x [twin]}]
+      (is (= 2 (count (set (map (fn [[path _]] (inspect/leaf-label path))
+                                (inspect/receipt-leaf-pairs result)))))
+          "a key spelled `x[0]` collided with the first element of `x`")))
+  (testing "a generated family over every delimiter this syntax uses"
+    ;; Exhaustive rather than sampled, and deterministic: every path of length
+    ;; one, two and three over an alphabet built from the delimiters
+    ;; themselves. If the encoding is injective the label set is exactly as
+    ;; large as the path set.
+    (let [alphabet ["a" "a.b" "b" "." ".." "/" "~" "~0" "[" "]" "[0]" ":" "="
+                    "\\" "0" 0 1]
+          paths (concat (for [x alphabet] [x])
+                        (for [x alphabet y alphabet] [x y])
+                        (for [x alphabet y alphabet z alphabet] [x y z]))
+          labels (map inspect/leaf-label paths)
+          duplicates (->> (map vector paths labels)
+                          (group-by second)
+                          (filter (fn [[_ group]] (> (count group) 1)))
+                          (take 3))]
+      (is (= (count paths) (count (set labels)))
+          (str "distinct paths spelled one pointer — "
+               (pr-str (mapv (fn [[label group]]
+                               [label (mapv first group)])
+                             duplicates)))))))
