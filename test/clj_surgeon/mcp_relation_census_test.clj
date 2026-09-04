@@ -6659,3 +6659,89 @@
         (allow-traversal! (io/file parent "ws/src/app/locked"))
         (allow-reads! (io/file parent "ws/src/app/denied.clj"))
         (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Opus's round-seventeen items 4 and 5, one class with two doors: a refusal
+;; whose SUBJECT is the workspace root itself has no name for it, so one
+;; entrance prints the server's absolute path and both entrances print nothing
+;; at all.
+;;
+;; Item 4, `mcp_paths/unreadable-ancestor`: `(if (str/blank? shown) (.toString
+;; dir) shown)` — when the unreadable ancestor IS the root, `relativize` yields
+;; `""` and the fallback publishes the absolute path, from the namespace whose
+;; own docstring forbids exactly that.
+;;
+;; Item 5, `core.clj` and `mcp_relation_census.clj` alike: `census-discovery`
+;; records `rel-dir` for the failing directory, which for the root is `""`, and
+;; both entrances interpolate it into three sentences — "the directory  may not
+;; be read", "make  readable under …". A receipt that names no subject is the
+;; class House-rule 20 exists for, and the two entrances agreeing on nothing is
+;; not parity.
+;;
+;; One rule, one spelling, one place: `census/workspace-root-token`. The root is
+;; NAMED, never empty and never absolute, wherever a workspace-relative path
+;; would be blank.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-018
+(deftest a-refusal-whose-subject-is-the-root-names-the-root
+  (let [parent (temp-dir)
+        ws (io/file parent "ws")]
+    (try
+      (spit-file! (io/file ws "src/app/arm.clj") arm-source)
+      (let [named (.getCanonicalPath ws)]
+        (deny-traversal! ws)
+
+        (testing "item 4: the unreadable ancestor IS the root, at the resolver"
+          (let [refusal (mcp-paths/resolve-source-path
+                          (mcp-paths/real-root (.getParentFile ws))
+                          (str (.getName ws) "/src/app/arm.clj"))]
+            ;; Driven from the PARENT so the root is reachable and the
+            ;; unreadable directory is inside it; the tool drive below is the
+            ;; shape the reviewer measured.
+            (is (false? (:ok refusal))
+                (str "the resolver accepted a path under a chmod-000 "
+                     "directory: " (pr-str refusal)))))
+
+        (testing "item 4: the unreadable ancestor IS the root, at the tool"
+          (let [result (census-tool/execute-request!
+                         {:project-root named} {:files ["src/app/arm.clj"]})]
+            (is (false? (:ok result)))
+            (is (not (str/includes? (str (:error result)) named))
+                (str "the refusal published the server's absolute root: "
+                     (pr-str (:error result))))
+            (is (str/includes? (str (:error result))
+                               census/workspace-root-token)
+                (str "the refusal does not NAME the root it is about: "
+                     (pr-str (:error result))))))
+
+        (testing "item 5: a root the walk cannot enter names its subject"
+          (doseq [[entrance result directory error remedy]
+                  [(let [r (census-tool/execute-request!
+                             {:project-root named} {})]
+                     [:tool r (:directory r) (:error r) (:remedy r)])
+                   (let [r (refusal-or-throw
+                             #(core/run-relation-census {:dir named}))]
+                     [:cli r (:directory r) (:error r) (:remedy r)])]]
+            (is (false? (:ok result))
+                (str entrance " accepted a tree it could not enter: "
+                     (pr-str (:ok result))))
+            (is (not (str/blank? (str directory)))
+                (str entrance " published :directory " (pr-str directory)
+                     " — a receipt that names no subject"))
+            (is (= census/workspace-root-token directory)
+                (str entrance " published :directory " (pr-str directory)))
+            (is (not= (str directory) named)
+                (str entrance " published the server's absolute root as the "
+                     "directory: " (pr-str directory)))
+            (doseq [[field text] [[:error error] [:remedy remedy]]]
+              (is (str/includes? (str text) census/workspace-root-token)
+                  (str entrance " " field " does not name its subject: "
+                       (pr-str text)))
+              (is (not (re-find #"\s{2,}" (str text)))
+                  (str entrance " " field " interpolated an empty name: "
+                       (pr-str text)))))))
+      (finally
+        (allow-traversal! ws)
+        (delete-tree! parent)))))

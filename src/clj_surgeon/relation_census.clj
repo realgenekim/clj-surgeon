@@ -77,6 +77,41 @@
    that grows with the tree it is refusing is neither."
   512)
 
+;; @spec MCP-OP-CENSUS-018
+(def workspace-root-token
+  "The ONE name a refusal gives the workspace root itself.
+
+   Opus's round-seventeen items 4 and 5. Every path a census refusal publishes
+   is workspace-RELATIVE, and the relative form of the root is the empty
+   string — so the refusals whose SUBJECT is the root had no name for it. One
+   entrance filled the hole with the server's ABSOLUTE path, from the namespace
+   whose own docstring forbids that; both entrances filled it with NOTHING, and
+   published \"the directory  may not be read\" and \"make  readable under the
+   workspace root\". A receipt that names no subject is worse than a wrong one,
+   because there is nothing for the caller to check.
+
+   A token rather than a sentence, because it is interpolated into three
+   sentences at two entrances and read back by a witness at both: the caller
+   sees the same spelling wherever it appears, and it can never be mistaken for
+   a relative path, because no relative path begins with `<`."
+  "<workspace_root>")
+
+;; @spec MCP-OP-CENSUS-018
+(defn shown-directory
+  "The name a refusal publishes for a directory the WALK named.
+
+   Blank means the root — `census-discovery` records the walk-relative path and
+   the root's is the empty string — and the root gets its token. Everything
+   else is already workspace-relative and passes through untouched.
+
+   One function, called from both entrances, for the reason the shared cause
+   vocabulary exists: a rule that lives in one branch is a rule the other
+   branch breaks, and these two branches published the identical empty
+   sentences."
+  [rel-dir]
+  (let [shown (str rel-dir)]
+    (if (str/blank? shown) workspace-root-token shown)))
+
 (def discovery-fact-keys
   "The discovery facts, in the CLI's key style mapped to the tool's.
 
