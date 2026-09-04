@@ -1583,3 +1583,5 @@ The receipt now names its subject, its evidence and its verdict, and the witness
 arm list rather than trusting the failing party's count — round nine's hole (a red battery's receipt suppressing the skip)
 is a typed FAILED third state that exits nonzero. Round eleven attacks the equality (permutation, extra arm, key types, a
 stale older-shape receipt). Nine rounds in, this lane's every finding has been a verifier blind to its own subject.
+
+## 15:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1028: study-agent-usage] Terminated
