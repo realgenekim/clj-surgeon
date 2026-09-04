@@ -1,3 +1,18 @@
+## TEMP FILES GO TO /var/tmp — never /tmp (Gene, 2026-09-04)
+
+Gene, verbatim: *"You must use /var/tmp — tmp is tmpfs, which uses ram."* and *"Make it impossible to make this
+mistake again."* Anvil's `/tmp` is a 16 GiB RAM-backed tmpfs shared by every seat; it filled twice on
+2026-09-04 (bytes, then inodes from 82,000 leaked test-fixture dirs).
+
+- Every seat process runs with `TMPDIR=/var/tmp/<seat>` and `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/var/tmp/<seat>`
+  (set in the seat's shell profile; `~/bin/suite-run` and `~/bin/sol-yolo` source `~/bin/seat-tmp-guard.sh`,
+  which REFUSES to run when the temp dir is on tmpfs).
+- Agent briefs name fixtures under `/var/tmp/<seat>/<lane>-fx` and end with their removal. A brief that says
+  `/tmp/...` is wrong.
+- Tests create temp dirs only via `java.io.tmpdir` and delete them in a `finally`; the test runners fail on any
+  entry left behind and refuse to run on a tmpfs temp dir (branch `bridge/tmp-leak-ratchet`).
+- Heartbeats check `df -i /tmp` as well as bytes and count seat-owned entries there; a non-zero count is an alarm.
+
 ## MAIN IS FROZEN — nobody merges to main, the mayor included (Gene, 2026-09-04)
 
 Gene, verbatim: *"no one should be merging to main, even mayor. People are using public repo, and
