@@ -589,6 +589,36 @@
               (mapcat #(walk %1 (conj path %2) in-measured?)
                       (seq node) (range))
 
+              ;; A JAVA ARRAY. Round-six review §5: an `Object[]` is neither a
+              ;; `java.util.Map` nor a `java.util.Collection`, so the two
+              ;; clauses above walked past it and the diagnostic returned `[]`
+              ;; for a reading sitting inside one. The number did not reach the
+              ;; wire -- cheshire refuses a `Reading` -- but it failed as an
+              ;; encoder stack trace instead of as the typed
+              ;; `:unpartitioned-measured-field` refusal that names the PATH,
+              ;; and naming the path is the entire value of the diagnostic.
+              ;; `(seq node)` is the array's element sequence and does not
+              ;; rebuild it; like the two clauses above this DIAGNOSES, and the
+              ;; rewriting walkers still refuse rather than guess at a foreign
+              ;; container's identity.
+              (and (some? node) (.isArray (class node)))
+              (mapcat #(walk %1 (conj path %2) in-measured?)
+                      (seq node) (range))
+
+              ;; An ITERATOR is REFUSED OUTRIGHT, not walked. Round-six review
+              ;; §5 named it alongside the array and it is not the same case:
+              ;; an iterator cannot be inspected without CONSUMING it, so a
+              ;; walker that diagnosed one would hand the boundary a verdict
+              ;; about a value it had just destroyed, and whatever encoded the
+              ;; result afterwards would serialise an exhausted iterator. The
+              ;; honest answer is to report the path itself as unpartitioned and
+              ;; let the boundary raise its typed refusal -- an iterator has no
+              ;; business in a published MCP result under any circumstances, so
+              ;; refusing it costs nothing real and guessing would cost the
+              ;; value.
+              (instance? java.util.Iterator node)
+              [path]
+
               :else nil))]
     (walk x [] false)))
 
