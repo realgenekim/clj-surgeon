@@ -254,8 +254,18 @@
             spelling (concat
                        (if static?
                          [(str (.getSimpleName c) "/" nm)
-                          (str "(. " (.getSimpleName c) " " nm)]
+                          (str "(. " (.getSimpleName c) " " nm)
+                          ;; `..` expands to the dot special form with a
+                          ;; PARENTHESISED member, which is the grammar
+                          ;; round-eight review finding 1 found unmatched.
+                          (str "(.. " (.getSimpleName c) " " nm)]
                          [(str "." nm)])
+                       ;; `memfn` names the member as an ordinary source token
+                       ;; and expands to the parenthesised member form. It is
+                       ;; spelled for STATIC and INSTANCE names alike: `memfn`
+                       ;; itself appears nowhere in this repository, so the
+                       ;; alternative collides with nothing.
+                       [(str "(memfn " nm)]
                        ;; The STRING form only for a name that CARRIES A CLOCK
                        ;; MORPHEME. `nanoTime`, `currentTimeMillis` and `now`
                        ;; do; the bare factory names a static-returning-a-time
@@ -293,7 +303,20 @@
   immediately
   before the SIMPLE name and a qualified class carries a `.` there instead. The
   slash form already had that tolerance -- its docstring says so -- and the dot
-  form did not; the two now agree. A QUOTED STRING spelling is matched
+  form did not; the two now agree.
+
+  The member position admits a PARENTHESISED member as well as a bare one,
+  because Clojure's `.` special form has two legal member spellings --
+  `(. obj member)` and `(. obj (method args*))` -- and round-eight review
+  finding 1 planted `(. System (nanoTime))` at the receipt-building site with
+  the gate at its exact baseline of 27 tests and 156 assertions. The second
+  spelling is not exotic: it is the form on Clojure's own reference page for
+  `.`, and it is what `..` and `memfn` -- macros in `clojure.core` whose entire
+  job is to emit it -- expand to. `(.. recv (member))` and `(memfn member)`
+  are two further faces per derived name, for the same reason: a derivation
+  over names must also enumerate the GRAMMAR the names can appear in.
+
+  A QUOTED STRING spelling is matched
   literally, quotes included: it is a method or a class named the way a
   reflective call names one, which is to say never as a source token. A STATIC
   spelling is quoted literally, and it deliberately matches a fully-qualified
@@ -306,11 +329,18 @@
     (str/starts-with? expression ".")
     (str "\\" expression "\\b")
 
-    (str/starts-with? expression "(. ")
-    (let [[cls & members] (rest (str/split expression #"\s+"))]
-      (str "\\(\\.\\s+(?:[\\w.]*\\.)?"
+    (str/starts-with? expression "(memfn ")
+    (str "\\(memfn\\s+"
+         (java.util.regex.Pattern/quote (str/trim (subs expression 7)))
+         "\\b")
+
+    (or (str/starts-with? expression "(. ")
+        (str/starts-with? expression "(.. "))
+    (let [dots (if (str/starts-with? expression "(.. ") "\\.\\." "\\.")
+          [cls & members] (rest (str/split expression #"\s+"))]
+      (str "\\(" dots "\\s+(?:[\\w.]*\\.)?"
            (java.util.regex.Pattern/quote cls)
-           (apply str (map #(str "\\s+" (java.util.regex.Pattern/quote %)) members))
+           (apply str (map #(str "\\s+\\(?\\s*" (java.util.regex.Pattern/quote %)) members))
            "\\b"))
 
     (str/ends-with? expression ".")
@@ -367,6 +397,23 @@
    "\"currentTimeMillis\"" "the wall clock's method as a string"
    "\"java.lang.System\"" "the clock source class's FULLY-QUALIFIED NAME as a string: Class/forName cannot be reached without one"
    "(. java.lang.System nanoTime" "the dot special form with a fully-qualified class — the simple-name form matched and this one did not"
+   ;; Round-eight review finding 1. `(. System (nanoTime))` is four tokens, it
+   ;; is the spelling on Clojure's own reference page for the `.` special form,
+   ;; it needs no reflection and no Reading, and it published a raw sixteen-digit
+   ;; monotonic clock value into an undeclared receipt field inside the hashed
+   ;; parity subject with the round-eight gate green at 27 tests and 156
+   ;; assertions. `..` and `memfn` are the two `clojure.core` macros whose
+   ;; entire job is to emit that spelling.
+   "(.. System nanoTime" "the parenthesised-member grammar reached through `..`, whose expansion IS `(. System (nanoTime))`"
+   "(memfn nanoTime" "`memfn`, which names the member as an ordinary source token and expands to the same form"
+   ;; The three the floor witness named on its first run after the grammar
+   ;; widened: java.util.Calendar is the class babashka's GraalVM image
+   ;; underives (57 methods on the JVM, 6 here), so its `..` and `memfn` faces
+   ;; are exactly the new JVM-minus-babashka difference. Found by the ratchet,
+   ;; verbatim, not by hand.
+   "(.. Calendar getInstance" "the `..` face of the java.util.Calendar factory — babashka underives it, so the floor is what carries it"
+   "(memfn getInstance" "the `memfn` face of the same factory"
+   "(memfn getTimeInMillis" "the `memfn` face of Calendar's epoch accessor"
    "Date." "a CONSTRUCTOR reads the clock, and a constructor is not a method, so .getMethods cannot see one"})
 
 (def ^:private clock-pattern
@@ -515,6 +562,18 @@
    "(. _launder" "the DOT SPECIAL FORM of the munged interop route: `(. r _launder)` is `(._launder r)` with two characters moved"
    "(. -launder" "the dot special form of the unmunged spelling"
    "(. launderable" "the dot special form of the field access"
+   ;; Round-eight review finding 1: the dot special form has a SECOND member
+   ;; spelling, `(. obj (member args*))`, and `..` and `memfn` are the
+   ;; `clojure.core` macros that emit it. `(. rr (_launder))` and
+   ;; `((memfn _launder) rr)` each published a reading's number in an
+   ;; undeclared receipt field inside the hashed parity subject with the
+   ;; round-eight gate green at 27 tests and 156 assertions.
+   "(.. _launder" "the PARENTHESISED member spelling of the munged interop route, which `..` emits"
+   "(.. -launder" "the same through `..` on the unmunged spelling"
+   "(.. launderable" "the same through `..` on the field access"
+   "(memfn _launder" "`memfn` names the member as an ordinary source token and expands to the parenthesised member form"
+   "(memfn -launder" "`memfn` on the unmunged spelling"
+   "(memfn launderable" "`memfn` on the field name"
    ".-launderable" "the deftype's private field, which babashka's interop does not enforce"
    ".launderable" "the same field spelled as a method call"
    "launderable" "the same field named bare, as a reflective lookup spells it"})
@@ -655,7 +714,14 @@
                (mapcat (fn [f] [f (str ".-" f) (str "." f)])
                        (opaque-type-field-names))
                (map #(str "\"" % "\"") members)
-               (map #(str "(. " %) dot-members)))))))
+               (map #(str "(. " %) dot-members)
+               ;; The dot special form's PARENTHESISED member spelling, and the
+               ;; two `clojure.core` macros whose expansion IS that spelling.
+               ;; Round-eight review finding 1: `(. rr (_launder))` and
+               ;; `((memfn _launder) rr)` name the member as an ordinary source
+               ;; token and matched no alternative.
+               (map #(str "(.. " %) dot-members)
+               (map #(str "(memfn " %) members)))))))
 
 (def derived-escape-hatch-spellings
   "The derivation's output, held so a witness can assert what it produced."
@@ -677,16 +743,32 @@
   (`(. r _launder)`) or a single parenthesised one (`(. (class r) _launder)`).
   A receiver with NESTED parentheses is a declared residual, and a narrow one:
   such a receiver has to produce a reading, which under these roots means
-  naming `measured/...`, and that names a token this pattern already matches."
+  naming `measured/...`, and that names a token this pattern already matches.
+
+  The MEMBER position admits a parenthesis too. Clojure's `.` special form has
+  two legal member spellings and round-eight review finding 1 published a
+  reading's number through the second, `(. rr (_launder))`, with the gate at
+  its exact baseline. `(.. r (_launder))` and `((memfn _launder) r)` are the
+  same grammar reached through the two `clojure.core` macros that emit it, and
+  each is its own face here: the receiver-shaped `..` alternative and a
+  receiver-free `memfn` one, since `memfn` takes the member alone."
   [spelling]
   (cond
     (str/starts-with? spelling "\"")
     (java.util.regex.Pattern/quote spelling)
 
-    (str/starts-with? spelling "(. ")
-    (str "\\(\\.\\s+(?:\\([^()]*\\)|\\S+)\\s+"
-         (java.util.regex.Pattern/quote (str/trim (subs spelling 3)))
+    (str/starts-with? spelling "(memfn ")
+    (str "\\(memfn\\s+"
+         (java.util.regex.Pattern/quote (str/trim (subs spelling 7)))
          "\\b")
+
+    (or (str/starts-with? spelling "(. ")
+        (str/starts-with? spelling "(.. "))
+    (let [dots (if (str/starts-with? spelling "(.. ") "\\.\\." "\\.")
+          member (str/trim (subs spelling (if (= dots "\\.\\.") 4 3)))]
+      (str "\\(" dots "\\s+(?:\\([^()]*\\)|\\S+)\\s+\\(?\\s*"
+           (java.util.regex.Pattern/quote member)
+           "\\b"))
 
     :else
     (str (java.util.regex.Pattern/quote spelling) "(?![-\\w])")))
@@ -942,6 +1024,17 @@
   seam is a fix witnessed nowhere.)"
   [spelling]
   (cond
+    ;; `memfn` takes the member alone and is applied to the receiver, which is
+    ;; the shape the reviewer's N4 published through.
+    (str/starts-with? spelling "(memfn ")
+    (str "((memfn " (subs spelling 7) ") subject)")
+
+    ;; `..` and the PARENTHESISED member: reassembled with a receiver and with
+    ;; the member in the parens the macro emits, so the plant is the source
+    ;; production code would actually take rather than the encoding.
+    (str/starts-with? spelling "(.. ")
+    (str "(.. subject (" (subs spelling 4) "))")
+
     (str/starts-with? spelling "(. ")
     (str "(. subject " (subs spelling 3) ")")
 
@@ -1427,7 +1520,12 @@
           reflection-thin (set (when-not @jdk-reflection-is-complete?
                                  ["Calendar/getInstance" ".getTimeInMillis"
                                   "(. Calendar getInstance"
-                                  "\"getTimeInMillis\""]))
+                                  "\"getTimeInMillis\""
+                                  ;; The `..` and `memfn` faces of the same
+                                  ;; underivable class, round-eight finding 1.
+                                  "(.. Calendar getInstance"
+                                  "(memfn getInstance"
+                                  "(memfn getTimeInMillis"]))
           ;; A spelling the derivation CANNOT produce by construction, and must
           ;; not: the derivation emits the SIMPLE class name, and the
           ;; fully-qualified dot form is a property of the ALTERNATIVE -- the
