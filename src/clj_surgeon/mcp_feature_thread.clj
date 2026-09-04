@@ -63,11 +63,11 @@
   save. Round four raised it again, from 24576 to 28672, when `after_context`
   (MCP-OP-THREAD-036) put the four source lines each anchor points AT into the
   receipt: at 24576 the complete receipt measures 25298 bytes and every leg's
-  after-context was cut, which is again the call the verb exists to save. 11264
-  is a good explicit `budget_bytes` for a caller that wants only the ranges:
-  with every body, every peer body and every anchor context elided the fixture
-  receipt measures 10484 bytes of text, and the receipt REFUSES rather than
-  truncate below that."
+  after-context was cut, which is again the call the verb exists to save. A
+  caller who wants only the RANGES passes `ranges-only-floor-bytes` instead --
+  the measured smallest budget that still returns the named receipt with every
+  body, every peer body and every anchor context elided. Below that the receipt
+  REFUSES rather than truncate a body."
   28672)
 
 ;; @spec MCP-OP-THREAD-002
@@ -98,7 +98,7 @@
     file-resolved receipt was 11266. Two bytes of drift turned a documented
     floor into a typed refusal for the exact call the documentation named. The
     figure is measured here now so it cannot drift again silently."
-  11264)
+  11266)
 
 ;; @spec MCP-OP-THREAD-002
 (def hard-cap-bytes
@@ -2690,9 +2690,12 @@
        ;; @spec MCP-OP-THREAD-052
        ;; The digest's SUBJECT is the range this receipt already prints for
        ;; every leg, and `refetch` on the row spells the command that fetches
-       ;; it. The wording is NOT extended here: at the 11,264-byte floor the
-       ;; delivered text is 11,246 bytes, so eighteen bytes of prose is the
-       ;; difference between a receipt and a budget refusal.
+       ;; it. The wording is NOT extended here: this sentence is IN the
+       ;; ranges-only receipt, so every byte added to it raises
+       ;; `ranges-only-floor-bytes` -- which is measured, not asserted, by
+       ;; `the-documented-ranges-only-floor-admits-the-named-receipt`. The
+       ;; round-nine review found the old hand-typed "eighteen bytes of
+       ;; headroom" claim was two bytes short of a typed refusal.
        :assert (str "the per-leg sha256 is the human-checkable detail of what"
                     " this read-only verb read; it enforces nothing itself, so"
                     " do NOT re-read the ranges to check it. Pass the subset"

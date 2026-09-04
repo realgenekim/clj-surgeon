@@ -637,12 +637,14 @@
 ;; @spec MCP-OP-THREAD-011
 (deftest over-budget-elides-in-the-stated-order-and-names-every-cut
   (testing "a small budget elides bodies, cheapest evidence first"
-    ;; 11,264 is the documented ranges-only floor. It did not move when peer
-    ;; ROWS became permanent (MCP-OP-THREAD-047): the everything-elided receipt
-    ;; is 11,164 B.
-    (let [{:keys [structured text] :as r} (thread! fixture-root {:budget_bytes 11264})]
+    ;; `ft/ranges-only-floor-bytes` is the documented ranges-only floor: the
+    ;; MEASURED smallest budget that still returns the named receipt (see
+    ;; `the-documented-ranges-only-floor-admits-the-named-receipt`). These calls
+    ;; pass the conventions INLINE, so their receipt is 25 bytes narrower than
+    ;; the floor's file-resolved one and this budget has room to spare.
+    (let [{:keys [structured text] :as r} (thread! fixture-root {:budget_bytes ft/ranges-only-floor-bytes})]
       (is (true? (:ok structured)))
-      (is (<= (:text_bytes structured) 11264)
+      (is (<= (:text_bytes structured) ft/ranges-only-floor-bytes)
           "the receipt must actually fit the budget it was given")
       (is (seq (:elided structured)) "an elision must be recorded")
       (testing "every elision names its leg, its bytes, its range and how to refetch"
@@ -665,7 +667,7 @@
           (is (string? (:refetch l)))))))
 
   (testing "every body elided still names every cut"
-    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 11264})]
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes ft/ranges-only-floor-bytes})]
       (is (true? (:ok structured)))
       (is (every? #(nil? (:body %)) (:legs structured)))
       (is (every? #(nil? (:body %))
@@ -697,8 +699,8 @@
       (is (true? (get-in over [:structured :ok])))))
 
   (testing "and at the fleet's smaller soft budget"
-    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 11264})]
-      (is (<= (:text_bytes structured) 11264))
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes ft/ranges-only-floor-bytes})]
+      (is (<= (:text_bytes structured) ft/ranges-only-floor-bytes))
       (is (seq (:elided structured))))))
 
 ;; ---------------------------------------------------------------------------
@@ -1017,9 +1019,9 @@
           "the definition the seed names was cut before the sibling")))
 
   (testing "at the ranges-only floor every leg still names its range, its hash and its anchor"
-    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 11264})]
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes ft/ranges-only-floor-bytes})]
       (is (true? (:ok structured)))
-      (is (<= (:text_bytes structured) 11264))
+      (is (<= (:text_bytes structured) ft/ranges-only-floor-bytes))
       (doseq [l (:legs structured)
               :when (= "FOUND" (:status l))]
         (is (integer? (:from l)) (str (:id l)))
@@ -1183,7 +1185,7 @@
     (is (str/includes? text "next_call admit_clojure_patch"))
 
     (testing "and it is elided under budget pressure with a named refetch"
-      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 11264})]
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes ft/ranges-only-floor-bytes})]
         (is (nil? (:next_call structured)))
         (is (some #(= "next-call" (:leg %)) (:elided structured)))))))
 
@@ -1196,7 +1198,7 @@
   ;; fixpoint never settled. Once it was the clock; once it was the header's
   ;; own byte counts, at budget 12000 only.
   (testing "text_bytes is the size of the text block the caller receives"
-    (doseq [budget [nil 32768 20000 15000 13000 12000 11264]]
+    (doseq [budget [nil 32768 20000 15000 13000 12000 ft/ranges-only-floor-bytes]]
       (let [{:keys [text structured]}
             (thread! fixture-root (if budget {:budget_bytes budget} {}))]
         (is (= (:text_bytes structured) (ft/utf8-bytes text))
@@ -1608,7 +1610,7 @@
 
   (testing "no cut anywhere pairs a structured-cap reason with budget advice"
     (doseq [root [fixture-root after-root]
-            budget [32768 24576 20000 11264]]
+            budget [32768 24576 20000 ft/ranges-only-floor-bytes]]
       (let [{:keys [structured]}
             (call! {:subject "dequoteFormatSelection"
                     :also ["/api/transform/format" "mechanical-format"]
@@ -2075,7 +2077,7 @@
           (finally (delete-tree! scratch)))))
 
     (testing "and it is elided with the body under budget pressure"
-      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 11264})]
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes ft/ranges-only-floor-bytes})]
         (doseq [l (:legs structured)
                 :when (:elided_reason l)]
           (is (nil? (:after_context l))
