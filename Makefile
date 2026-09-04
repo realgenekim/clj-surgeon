@@ -40,7 +40,7 @@ MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
 # recipes hand the value straight to shell harnesses that never reach Clojure.
 # @spec MCP-OP-TMPHYG-010
 # @spec MCP-OP-TMPHYG-012
-SELF_TEST_TMP ?= $(if $(filter /tmp /dev/shm,$(TMPDIR)),/var/tmp,$(or $(TMPDIR),/var/tmp))
+SELF_TEST_TMP ?= $(if $(filter /tmp /tmp/% /dev/shm /dev/shm/%,$(TMPDIR)),/var/tmp,$(or $(TMPDIR),/var/tmp))
 MCP_DEV_PORT ?= 7889
 MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
 MCP_DEV_URL ?= http://127.0.0.1:$(MCP_DEV_PORT)/mcp
