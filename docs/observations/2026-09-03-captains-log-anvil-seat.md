@@ -1722,3 +1722,5 @@ anvil-seat-one-shots. A kill I did not need: I killed NC/NS on a false reading o
 ## 19:30Z Gene ratified investing in the suite/CI ("massively increase option value"); GitHub Action + receipt ledger added to spike round three. ls-tree: inside MCP on bridge/study-ops-mcp (r12 building), lands on its GO with STUDY-051 accepted.
 
 ## 19:35Z GitHub Actions for MCP/main: seat token has the workflow scope (no mayor request needed); Curtain Call basis fetched (build-and-deploy.yml: setup-java@v4, setup-clojure@12.5, cache@v4; no matrix — ours adds one); builder launched on bridge/gha based on bridge/suite-spike (fast+integration gate, battery MATRIX from the lane manifest, nightly, receipt job for ~/bin/land)
+
+## 19:36Z NC/NS scored: slim plate a MISS as a native-side lever (30/6.5 min vs 54/11.2 min; reads 7 vs 16 dominate); churn removed as designed; T5 is where the contract is measured
