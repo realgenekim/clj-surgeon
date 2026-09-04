@@ -737,6 +737,28 @@
           (recur mid hi)
           (recur lo (dec mid)))))))
 
+;; @spec MCP-OP-THREAD-052
+(defn line-range-slice
+  "The EXACT bytes at lines `from`..`to` of `source`: the inclusive lines, each
+  terminated by its LF, the last line's LF included iff the file has one there.
+
+  This is what `sed -n '<from>,<to>p' <file>` prints, and it is what the leg's
+  `sha256` must digest. Round-seven review, finding 5 (BLOCKING): the body was
+  built by joining lines with a newline -- which drops the range's FINAL LF --
+  and hashed, so all six published digests were digests of a byte string that
+  does not exist at the range the receipt names. The witness made the same
+  split/join and agreed, which is why nothing caught it: a verifier blind to its
+  own subject."
+  [^String source from to]
+  (let [offsets (line-start-offsets source)
+        n (count source)
+        line-count (count offsets)
+        from (max 1 (min from line-count))
+        to (max from (min to line-count))
+        start (nth offsets (dec from))
+        end (if (< to line-count) (nth offsets to) n)]
+    (subs source start end)))
+
 (defn narrow-to-member
   "The OUTERMOST bracketed form inside `form-source` whose line range contains
   `hit-line` (1-based, relative to the form) and spans at most `ceiling` lines.
@@ -1575,7 +1597,11 @@
          :boundary boundary
          :form_name form-name
          :comment_start comment-start
-         :sha256 (sha256-hex body)
+         ;; @spec MCP-OP-THREAD-052
+         ;; The digest covers the RANGE this row names -- the bytes its own
+         ;; `refetch` prints -- not the body string the text block carries
+         ;; without its trailing LF.
+         :sha256 (sha256-hex (line-range-slice source from to))
          :bytes (utf8-bytes body)
          :body body
          :refetch (refetch-command file from to)}
@@ -2552,6 +2578,12 @@
        ;; this verb is read-only, and the only pre-image binding in the trunk
        ;; is admit_clojure_patch's expect_pre_sha256 over WHOLE FILES. So the
        ;; line is advisory about itself and points at the call that IS a gate.
+       ;; @spec MCP-OP-THREAD-052
+       ;; The digest's SUBJECT is the range this receipt already prints for
+       ;; every leg, and `refetch` on the row spells the command that fetches
+       ;; it. The wording is NOT extended here: at the 11,264-byte floor the
+       ;; delivered text is 11,246 bytes, so eighteen bytes of prose is the
+       ;; difference between a receipt and a budget refusal.
        :assert (str "the per-leg sha256 is the human-checkable detail of what"
                     " this read-only verb read; it enforces nothing itself, so"
                     " do NOT re-read the ranges to check it. Pass the subset"

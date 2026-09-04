@@ -932,7 +932,9 @@
       (is (str/includes? (:boundary js) "brace-window(lexed,closed)"))
       (is (str/includes? (:boundary js) "test-call at L63")
           "the anchor must name the enclosing call, not the assertion line")
-      (is (= (:sha256 js) (ft/sha256-hex (:body js))))
+      (is (= (:sha256 js)
+             (ft/sha256-hex (line-range-bytes (io/file fixture-root (:file js))
+                                              (:from js) (:to js)))))
       (is (str/starts-with? (:body js) "test("))
       (is (str/includes? text "leg tests(js)")
           "a co-primary is rendered as a leg row, never as an also row"))
@@ -2880,6 +2882,7 @@
 ;; counting newlines, and one case is cross-checked against `sed` itself.
 ;; ---------------------------------------------------------------------------
 
+;; @spec MCP-OP-THREAD-052
 (deftest a-range-digest-covers-the-exact-bytes-the-refetch-prints
   (testing "the named case: every located leg's sha256 is the file's line slice"
     (let [r (thread! fixture-root {:budget_bytes 32768})

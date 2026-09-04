@@ -391,3 +391,13 @@ run as a test inside `make mcp-test`) enforces both halves.
   spelled, the resolved target and the resolved root, when the real location is
   not under the workspace root; nothing from that file shall reach the receipt.
 
+- [x] **MCP-OP-THREAD-052**: A range digest covers the bytes its own refetch
+  prints. When `feature_thread` publishes a `sha256` for a leg, a co-primary, an
+  `also` row, a peer or a sibling leg, that digest shall be taken over the exact
+  bytes at the range the row names — the inclusive lines `from`..`to`, each
+  terminated by its LF, the last line's LF included if and only if the file has
+  one there, which is what `sed -n '<from>,<to>p' <file>` prints — and never
+  over a line-joined reconstruction of that range, which silently drops the
+  final LF; every witness of this property shall compute its expectation from
+  the file's own bytes rather than by joining lines.
+
