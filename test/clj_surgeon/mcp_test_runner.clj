@@ -5,6 +5,7 @@
    [clj-surgeon.core-discovery-test]
    [clj-surgeon.mcp-alias-migration-test]
    [clj-surgeon.mcp-relation-census-launcher-test]
+   [clj-surgeon.reader-eval-fence-test]
    [clj-surgeon.mcp-relation-census-round20-test]
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
@@ -59,6 +60,7 @@
           'clj-surgeon.core-discovery-test
           'clj-surgeon.mcp-alias-migration-test
           'clj-surgeon.mcp-relation-census-launcher-test
+          'clj-surgeon.reader-eval-fence-test
           'clj-surgeon.mcp-relation-census-round20-test
           'clj-surgeon.mcp-contract-test
           'clj-surgeon.mcp-create-files-test

@@ -37,7 +37,6 @@
    [clj-surgeon.partition-all-test]
    [clj-surgeon.platform-selector-test]
    [clj-surgeon.quoted-var-refs-test]
-   [clj-surgeon.reader-eval-fence-test]
    [clj-surgeon.recovery-test]
    [clj-surgeon.relation-census-test]
    [clj-surgeon.rename-test]
@@ -95,7 +94,6 @@
                    'clj-surgeon.worktree-lifecycle-test
                    'clj-surgeon.worktree-lifecycle-io-test
                    'clj-surgeon.worktree-lifecycle-cli-test
-                   'clj-surgeon.reader-eval-fence-test
                    'clj-surgeon.recovery-test
                    'clj-surgeon.relation-census-test
                    'clj-surgeon.cli-dispatch-test

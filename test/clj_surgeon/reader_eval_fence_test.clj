@@ -32,6 +32,14 @@
    - `no-real-launcher-evaluates-a-build-file-it-discovers` drives the
      instance through BOTH real launchers and asserts the side effect never
      happened.
+   This namespace rides the `mcp-test` lane and NOT `test-fast`, for a
+   mechanical reason worth writing down: `test-fast` is `bb test/run_all.clj`,
+   so `(System/getProperty "java.class.path")` inside it is BABASHKA's
+   classpath and the `:jvm` launcher drive cannot be built from it. Registered
+   in `run_all` the JVM half of this witness fails for a reason that has
+   nothing to do with its subject, which is the worst kind of red. The census
+   launcher witnesses live in the same lane for the same reason.
+
    - `no-source-in-this-repository-calls-the-evaluating-reader` is the CLASS
      ratchet: it PARSES every source under `src/` and fails on any call to
      `clojure.core/read-string` or `clojure.core/load-string`, bare or
