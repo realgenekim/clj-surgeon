@@ -77,3 +77,13 @@ round three becomes the full family.
   green comes from a machine the seat does not control — the one receipt that cannot be written by the thing making the claim.
 - The battery receipt ledger + freshness tripwire in `land` (a stale nightly is a refusal, not a silence).
 - The six runtime witnesses (TEST-ISO-002…005, 007, 010) on the per-namespace snapshot fixture, RED-first against round two's green.
+
+## Round three additions from CI's first runs (20:25Z)
+- Fix in src: `mcp-change-buffer/expand-command` must honour `$PATH` (walks five hardcoded dirs, returns the bare name
+  otherwise; the seat passes only because clj-kondo sits in /usr/local/bin). Typed refusal when the executable is absent.
+- Suite lane: `mcp-relation-census-test` asserts `(= 8 (:pool_size parallel))` while the pool clamps to availableProcessors
+  — assert the CLAMP (min 8 cores), or declare the precondition; a 4-core runner is a legitimate box (TEST-ISO ambient class).
+- `make performance-regression-sentinel-test` recipe is broken before any test runs (inb-22e945) — fix or retire with a reason.
+- reader-eval-fence-test = 494 of CI's 521 s: split its ~20 launcher drives into matrix cells (parallelism inside one ns).
+- GENE/MAYOR DECISION: the nightly cron is dormant until MCP/main is the repo's DEFAULT branch (GitHub runs schedules only
+  from the default branch; main is frozen). Changing the default branch is an external repo setting — Gene's call.

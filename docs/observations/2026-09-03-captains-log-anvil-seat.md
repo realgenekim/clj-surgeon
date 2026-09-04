@@ -1770,3 +1770,10 @@ SMW has no verification profile onboarded; the gate cannot run a verify it has n
 tell it. My first write-up said the agent's test failed inside the gate — wrong, corrected in the replay doc in place
 with the correction dated. The product ask moved to first place: inline verify commands, or onboarding from the
 receipt's verify rows, in one call.
+
+## 20:25Z GitHub Actions shipped (bridge/gha 5ce8aaea): merge gate green in 205 s on runners; CI found three defects the seat could not
+
+The receipt nobody on Anvil wrote: 429/4323/0 on the merge gate, 840/6916/0 bb, battery 11-wide 10/11 with nothing
+skipped. The three CI-only findings are all the ambient-state class from 2026-09-03 (a resolver that only works where
+clj-kondo happens to live; a test asserting the box has eight cores; a broken make recipe nobody runs) — exactly what an
+independent machine is for. One escalation for Gene: the nightly is dormant until MCP/main is the default branch.
