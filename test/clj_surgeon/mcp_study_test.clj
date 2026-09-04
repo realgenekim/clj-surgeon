@@ -3843,10 +3843,22 @@
 ;; one exists (the search does not assume what it cannot prove).
 
 (def ^:private review-batch-files
-  "Two of this repository's own sources — the tool's advertised batching use,
-   and the exact call the round-four review published 151 characters for."
-  ["src/clj_surgeon/mcp_inspect_tool.clj"
-   "src/clj_surgeon/mcp_inspect.clj"])
+  "Two FROZEN copies of the sources the round-four review published 151
+   characters for — the tool's advertised batching use, at a pinned content.
+
+   @spec MCP-OP-STUDY-053 — the fixture is a COPY, not the live sources.
+   Field evidence (Sol O2 round-9 review, 2026-09-04, section 6): reading
+   `src/clj_surgeon/mcp_inspect.clj` and `src/clj_surgeon/mcp_inspect_tool.clj`
+   made this a SELF-REFERENTIAL cost witness — the receipt and the text share
+   one 32,768-byte budget, so every commit to either source moved the text
+   floor, and 465 of the 471 characters lost between round seven and round
+   eight were this branch's own ~90 added lines rather than anything the
+   witness was measuring. A byte-cost claim needs a fixture that does not
+   change when the code under measurement does. The copies are verbatim but
+   for their `ns` form, renamed so the repository holds no duplicate
+   namespace."
+  ["test-fixtures/study/cost-batch/cost_batch_inspect_tool.clj"
+   "test-fixtures/study/cost-batch/cost_batch_inspect.clj"])
 
 (defn- outline-batch
   "One `outline` batch over real repository sources, finalized."
@@ -3889,19 +3901,22 @@
         "the published pair is inside the declared budget")
     (testing "the text spends the room the receipt leaves it"
       ;; The FLOOR is a floor against the round-four notice rung — 151
-      ;; characters with 9,251 bytes unspent — and NOT a target. It is coupled
-      ;; to the size of this repository's OWN SOURCES, which the fixture names
-      ;; and which every commit to those two files moves: the receipt and the
-      ;; text share one 32,768-byte budget, so a longer `mcp_inspect.clj`
-      ;; leaves the text less room. Round seven measured 6,248 characters at 2
-      ;; bytes of headroom; this tip measures 5,777 at 29. MEASURED, by
-      ;; redefining both escape functions to `identity` on this exact batch:
-      ;; the MCP-OP-STUDY-052/053 escaping accounts for SIX of those
-      ;; characters (5,777 escaped against 5,771 unescaped) — the other 465
-      ;; are the ~90 lines this branch added to `mcp_inspect.clj` itself. The
-      ;; invariant that has teeth is the headroom bound below; the floor only
-      ;; has to be far enough above a notice.
-      (is (<= 5000 (count text))
+      ;; characters with 9,251 bytes unspent — and it now has TEETH, because
+      ;; the fixture is FROZEN: `review-batch-files` names two pinned copies
+      ;; under `test-fixtures/`, so nothing but the RENDERING can move this
+      ;; number. Rounds five through eight read this repository's own sources
+      ;; instead, and the floor had to be lowered twice (6,248 -> 5,777 -> a
+      ;; 5,000 floor) for a reason that was never the rendering: 465 of the
+      ;; 471 characters lost between round seven and round eight were the ~90
+      ;; lines this branch added to `mcp_inspect.clj`, sharing one
+      ;; 32,768-byte budget with the text (Sol O2 round-9 review, section 6).
+      ;; MEASURED on the frozen fixture at this tip: 5,549 characters of text
+      ;; at 19 bytes of headroom, of which the MCP-OP-STUDY-052/053 escaping
+      ;; accounts for EIGHT — 5,549 escaped against 5,541 with both escape
+      ;; functions redefined to `identity`. The floor is set 149 characters
+      ;; below the measurement, not at it, so a rendering change that costs a
+      ;; few bytes is not a failure and one that costs a rung is.
+      (is (<= 5400 (count text))
           (format (str "an ordinary two-file batch published %d characters of "
                        "text with %d bytes of the budget unspent")
                   (count text) headroom))
