@@ -191,6 +191,7 @@
   ["docs/intent/2026-08-29-ratification/measurement-evidence-specs.md"
    "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
    "docs/intent/alias-migration/alias-migration-specs.md"
+   "docs/intent/feature-thread/feature-thread-specs.md"
    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
    "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
    "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
@@ -229,6 +230,7 @@
    "docs/intent/read-path-memory/read-path-memory-specs.md"
    "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
    "docs/intent/relation-census/relation-census-specs.md"
+   "docs/intent/feature-thread/feature-thread-specs.md"
    "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly

@@ -1,0 +1,577 @@
+;; Linked Intent registry — append-only. Ids are FOREVER STABLE: never
+;; renumbered, never deleted, never repurposed. Retire or supersede instead.
+;;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    fail closed as incomparable/regressed rather than declaring browser newer."
+   "File versions use exact SHA equality and make no numeric ordering claim."]
+  :tests [:editor-recovery-refuses-legacy-revision-ordering
+          :editor-recovery-refuses-cross-epoch-ordering
+          :editor-recovery-compares-file-sha-exactly
+          :editor-recovery-compares-typed-book-lineage
+          :editor-journal-carries-typed-document-version
+          :editor-frame-carries-typed-document-version]
+  :rationale "2026-08-23 live diagnosis: the durable 87,896-character Book copy containing '# abc' was labelled OLD because a legacy browser record carried global rev 37 while the restarted server and new persisted Book counter both read 1. The two integers came from different epochs/domains and were never orderable."}
+
+ {:id :EDITOR-SNAP-011
+  :status :active
+  :ears "When the visible editor snapshot is unavailable, a compound editor command shall refuse with a visible notification and shall send nothing."
+  :misreadings
+  ["A null snapshot is an empty snapshot — it is not: {sync: null} makes the
+    server commit its OWN idea of the draft under a gesture the reader made
+    against something they could not see."
+   "The server will reject it anyway, so sending is harmless — /api/save with a
+    nil sync skips snapshot validation entirely and proceeds to persist current
+    state."
+   "Silence is acceptable when nothing was sent — a Save gesture that produces
+    no request and no message reads as a successful save to the reader."
+   "Returning early may skip endEditorCommand because no request was made — the
+    single-flight bit is taken by beginEditorCommand BEFORE the snapshot is
+    collected, so an early return without release wedges the editor."]
+  :boundaries
+  ["Editor pane present in the DOM but not displayed (offsetParent null) — the
+    ordinary production producer of a null snapshot."
+   "Editor pane absent entirely."
+   "Snapshot present and normal (the command must remain fully usable)."
+   "Save specifically: the header status was already set to 'Saving…' before the
+    refusal and must not be left claiming work is in progress."]
+  :tests [:editor-hidden-pane-has-no-snapshot
+          :editor-save-refuses-missing-snapshot
+          :editor-save-back-refuses-missing-snapshot
+          :editor-save-file-refuses-missing-snapshot
+          :editor-format-refuses-missing-snapshot
+          :editor-commands-still-send-with-a-snapshot]
+  :rationale "2026-08-21 probe finding 8: saveDraft, saveBackToBook and saveFileDocument all proceeded when collectDraftSync() returned null, posting {sync: null}; only formatDraft refused loudly. A Save pressed while the editor pane was hidden silently committed server state under the reader's gesture."}
+
+ {:id :EDITOR-JDEAD-009
+  :status :active
+  :ears "While the draft journal is dead, the editor shall remain read-only until a journal snapshot succeeds."
+  :misreadings
+  ["readOnly is a per-command decoration — it is also the JOURNAL's fail-closed
+    state, so a command that blindly restores `readOnly = false` in its finally
+    silently re-enables typing that can no longer be recovered after a crash."
+   "Restoring readOnly to false IS restoring what I saved — it is only correct
+    when the command actually observed false; the restore must read back the
+    value it overwrote, not a hardcoded default."
+   "A same-identity server edit is exempt because the server already committed
+    it — replaceEditorValueAsNativeUndo sets readOnly = false to run
+    execCommand, which unlatches the editor as a side effect of a write that is
+    itself unjournaled."
+   "The latch may be cleared once storage looks healthy again — the only
+    evidence that the journal works is a snapshot that actually SUCCEEDED."]
+  :boundaries
+  ["Journal dies BEFORE a command starts (the command's finally must not clear
+    the latch)."
+   "Journal dies DURING a command that saved readOnly = false."
+   "Healthy journal: the command must still hand back an editable editor."
+   "Journal recovers via a later successful snapshot (command assembly or an
+    authoritative-paint settle), not via typing — typing is impossible while the
+    editor is read-only."]
+  :tests [:editor-journal-death-latches-read-only
+          :editor-command-cleanup-never-unlatches
+          :editor-healthy-command-restores-editable
+          :editor-native-undo-refuses-dead-journal
+          :editor-successful-snapshot-clears-latch]
+  :rationale "2026-08-21 probe findings 5 and 6: the journal's onError set editor.readOnly = true, but formatDraft's finally set readOnly = false unconditionally and replaceEditorValueAsNativeUndo did the same, so the fail-closed state survived only until the next command."}
+
+ {:id :EDITOR-JDEAD-010
+  :status :active
+  :ears "When journal capture fails while assembling a compound editor command, the client shall refuse to send the command."
+  :misreadings
+  ["A body missing only its journal fields is still a valid command — it is an
+    UNFENCED write: the server's journal-receipt path treats absent metadata as
+    a legacy caller and attaches no durable receipt, so the command can never be
+    confirmed against the exact visible bytes."
+   "The same refusal belongs on the background sync lane — the advisory lane is
+    droppable and pre-dates the journal; converting it into a command is a
+    different and lossier change, and EDITOR-JDEAD-009 has already made the
+    editor read-only so nothing new can accumulate there."
+   "An absent journal is the same as a failed journal — strict mode must refuse
+    only a FAILED snapshot; a page where the journal was never installed still
+    has to be usable."
+   "Identity transitions (node open, tab/project switch through
+    collectEditorTransitionSync) can share the strict door — a null snapshot
+    there DOWNGRADES the frame fence from identity-change to an unfenced
+    accepted-operation, so that path deliberately keeps the legacy behavior."]
+  :boundaries
+  ["Journal installed, snapshot throws (strict → null)."
+   "Journal not installed at all (strict → body unchanged)."
+   "Journal healthy (strict → body carrying journal fields)."
+   "Background sync under the same failure (unchanged legacy behavior: body
+    without journal fields, still sent)."]
+  :tests [:editor-dead-journal-has-no-command-snapshot
+          :editor-command-refuses-unjournaled-snapshot
+          :editor-background-sync-keeps-legacy-behavior
+          :editor-uninstalled-journal-is-not-dead]
+  :rationale "2026-08-21 probe finding 6: augmentEditorSync caught a snapshot failure, notified, and then returned the body WITHOUT journal fields, so Save/Format shipped an unfenced write that could never be durably acknowledged for the exact visible bytes."}
+
+ {:id :EDITOR-CONF-003
+  :status :active
+  :ears "When a command response arrives with status 409, the client shall raise the conflict surface from that same response before or together with any message that references it."
+  :misreadings
+  ["A detached promise chain is close enough — postJSON's clone-and-parse ran
+    unawaited, so the command's toast (\"choose an action in the red banner\")
+    could paint before, or entirely without, the banner it names."
+   "Two independent parses of the same 409 are harmless — the second one sees
+    the conflict already displayed, the reducer answers 'unchanged', and the
+    command concludes nothing was shown. One parse per response, shared."
+   "Raising the banner is the command's job — it is the RESPONSE's job; the
+    same helper must serve the command lane and the background sync lane so
+    there is exactly one parser and one policy."
+   "Ordering only matters visually — the toast is the only thing that tells the
+    reader where to look, so a toast without its banner is a dead end."]
+  :boundaries
+  ["Response body that is not JSON at all."
+   "JSON body that is not a conflict envelope (no outcome/conflict-id)."
+   "The same 409 raised twice (postJSON's detached call and the command's
+    awaited call must agree on one outcome)."
+   "Save Back and Format, whose 409s take the same door as Save's."]
+  :tests [:editor-409-raises-banner-before-toast
+          :editor-409-parses-once-per-response
+          :editor-save-back-409-raises-conflict]
+  :rationale "2026-08-21 probe finding 4: the 409 → banner path was a detached response.clone().json() chain with .catch(() => {}), while saveDraft's 409 branch toasted a reference to a banner whose appearance was neither awaited nor guaranteed."}
+
+ {:id :EDITOR-CONF-004
+  :status :active
+  :ears "When a 409 conflict payload cannot produce a displayable conflict, the client shall show a loud failure notification stating that the save was refused."
+  :misreadings
+  ["A silent catch is acceptable because the save simply did not happen — the
+    reader keeps typing into text they believe is saved; a refusal nobody hears
+    is indistinguishable from data loss."
+   "A superseded conflict is an unusable payload — a 409 the reducer ignores as
+    belonging to an older generation, or one that repeats a conflict already on
+    screen, is correctly handled and must stay SILENT. Loud failure fires only
+    when no conflict surface results at all."
+   "The generic 'save did not confirm' message covers it — the reader must be
+    told the save was REFUSED and that their visible text is intact, not that
+    the outcome is unknown."]
+  :boundaries
+  ["Malformed / non-JSON 409 body."
+   "Well-formed body missing conflict-id."
+   "Older-generation conflict (reducer effect 'ignore') — silent."
+   "Repeat of the conflict already displayed (reducer effect 'unchanged') —
+    silent."]
+  :tests [:editor-unusable-409-fails-loudly
+          :editor-superseded-409-stays-silent]
+  :rationale "2026-08-21 probe finding 4: a 409 whose payload failed to parse hit .catch(() => {}) and vanished, leaving a toast pointing at a banner that never appeared — or, on Save Back, no signal at all."}
+
+ {:id :EDITOR-CONF-005
+  :status :active
+  :ears "When a Format response arrives with status 409, the client shall present it as a save conflict, not as a generic failure."
+  :misreadings
+  ["Any non-200 from Format means the transform failed — a 409 means the
+    OPPOSITE of a failed transform: the server refused because the visible
+    snapshot is stale, which is a resolvable conflict with preserved text."
+   "'Format was not committed; visible text remains intact' is honest enough —
+    it hides the fact that a resolution is available and that autosave is now
+    quarantined."
+   "Format needs its own conflict handling — it takes the same door as Save so
+    the three commands cannot drift apart."]
+  :boundaries
+  ["Format 409 with a displayable conflict payload."
+   "Format 409 whose payload is unusable (falls through to EDITOR-CONF-004)."
+   "Format non-200, non-409 (must stay the generic failure message)."]
+  :tests [:editor-format-409-is-a-conflict
+          :editor-format-non-409-stays-generic]
+  :rationale "2026-08-21 probe finding 10: formatDraft tested `response.status !== 200` and reported every refusal as a generic failure, so a Format-time conflict looked like a broken transform."}
+
+ {:id :EDITOR-DURA-007
+  :status :active
+  :ears "While the draft journal is installed, when a compound editor command response lacks the durable journal acknowledgement for the submitted snapshot, the client shall not report the command as saved."
+  :misreadings
+  ["The identity/revision headers prove durability — they prove the server
+    ACCEPTED a generation, not that these exact bytes were durably written; the
+    durable receipt (X-Editor-Durable + sequence/hash/token/document) is the
+    only evidence of the second claim."
+   "Gate on whether the journal record could be cleared — the local record moves
+    on whenever the reader keeps typing during the round trip, so clearing is
+    not evidence about the SUBMITTED bytes. Compare the receipt against the
+    journal fields the command actually sent."
+   "A command that was not confirmed saved may still clear the conflict banner —
+    un-saved implies un-resolved; durability is checked first, and only then may
+    resolvesConflict / the submitted snapshot be honored."
+   "Every command should be gated — a command that carried NO journal fields
+    gets no receipt by server design (legacy-legal), so gating it would fail
+    every green save. Save File is excluded outright: /api/file/save attaches no
+    receipt headers at all (EDITOR-DURA-008, deferred)."]
+  :boundaries
+  ["Journaled command + valid matching receipt (success stands)."
+   "Journaled command + no X-Editor-Durable header (report not saved)."
+   "Journaled command + receipt for a DIFFERENT sequence/hash/token."
+   "Un-journaled command + header ack only (legacy success preserved)."
+   "Save File (explicitly out of scope while DURA-008 is deferred)."]
+  :tests [:editor-journaled-save-requires-receipt
+          :editor-journaled-save-with-receipt-succeeds
+          :editor-unjournaled-save-keeps-legacy-success
+          :editor-unconfirmed-save-cannot-clear-conflict
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,90 @@
+{:paths ["src" "resources"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ :aliases
+ {:dev {:extra-paths ["dev"]
+        :extra-deps {nrepl/nrepl {:mvn/version "1.3.1"}}
+        :jvm-opts ["-Dguardrails.enabled=true"]}
+
+  :nrepl {:extra-paths ["test"]
+          :extra-deps {nrepl/nrepl {:mvn/version "1.3.1"}
+                       org.clojure/tools.namespace {:mvn/version "1.5.0"}}
+          :jvm-opts ["-Djdk.attach.allowAttachSelf" "-Dguardrails.enabled=true"]
+          :main-opts ["-m" "nrepl.cmdline"]}
+
+  ;; -Dwriter.test=1 turns the ROOT of state/*io-enabled* OFF — test JVMs can
+  ;; never write real drafts/ or projects/ (2026-07-10 book-workshop wipe).
+  :test {:extra-paths ["test"]
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         :jvm-opts ["-Dguardrails.enabled=true" "-Dwriter.test=1"]}
+
+  :run-tests {:extra-paths ["test"]
+              :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+              :main-opts ["-m" "kaocha.runner" "--fail-fast"]
+              :jvm-opts ["-Dguardrails.enabled=true" "-Dwriter.test=1"]}
+
+  :etl {:extra-deps {com.google.apis/google-api-services-sheets {:mvn/version "v4-rev20251110-2.0.0"}
+                     com.google.auth/google-auth-library-oauth2-http {:mvn/version "1.23.0"}}
+        :exec-fn writer.etl.journal/fetch-and-write!}
+
+  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.10.5" :git/sha "2a21b7a"}}
+          :ns-default build}
+
+  :jib-deploy {:deps {io.github.clojure/tools.build {:git/tag "v0.10.5" :git/sha "2a21b7a"}
+                      com.google.cloud.tools/jib-core {:mvn/version "0.25.0"}}
+               :ns-default jib}
+
+  :jib-deploy-full {:deps {io.github.clojure/tools.build {:git/tag "v0.10.5" :git/sha "2a21b7a"}
+                           com.google.cloud.tools/jib-core {:mvn/version "0.25.0"}}
+                    :ns-default jib-full}}}

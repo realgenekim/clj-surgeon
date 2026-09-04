@@ -128,7 +128,7 @@
     (is (str/includes? block "[mcp_servers.clj-surgeon]"))
     (is (str/includes? block "required = true"))
     (is (str/includes? block
-                       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"relation_census\", \"alias_migration\"]"))
+                       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"relation_census\", \"alias_migration\", \"feature_thread\"]"))
     (is (not (str/includes? block "[mcp_servers.cclsp]")))
     (is (not (str/includes? block "resolve_var_surface")))
     (is (not (str/includes? block "rename")))))

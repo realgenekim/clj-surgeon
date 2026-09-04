@@ -224,7 +224,7 @@
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
 
-(deftest http-protocol-exposes-five-tools-and-structured-read-evidence
+(deftest http-protocol-exposes-seven-tools-and-structured-read-evidence
   (let [project (temp-dir)
         source-file (io/file project "src/demo.clj")
         _created (.mkdirs (.getParentFile source-file))
@@ -272,7 +272,7 @@
                        [:result :capabilities :tools :listChanged])))
         (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
                 "transform_clojure" "relation_census"
-                "alias_migration" "admit_clojure_patch"]
+                "alias_migration" "admit_clojure_patch" "feature_thread"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
         (is (= false (get-in tools [0 :annotations :destructiveHint])))
@@ -364,7 +364,7 @@
                 :status :synchronized
                 :removed []
                 :upserted ["inspect_clojure" "temporary_probe"]
-                :tool-count 8
+                :tool-count 9
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -382,6 +382,7 @@
                  "relation_census"
                  "alias_migration"
                  "admit_clojure_patch"
+                 "feature_thread"
                  "temporary_probe"}
                (set (map :name added-tools))))
         (is (= "HOT_SCHEMA_DESCRIPTION"
@@ -390,7 +391,7 @@
                 :status :synchronized
                 :removed ["temporary_probe"]
                 :upserted ["inspect_clojure"]
-                :tool-count 7
+                :tool-count 8
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -403,7 +404,7 @@
                (:after-contract-hash restored)))
         (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
                  "transform_clojure" "relation_census"
-                 "alias_migration" "admit_clojure_patch"}
+                 "alias_migration" "admit_clojure_patch" "feature_thread"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
                (get-in restored-by-name ["inspect_clojure" :description]))))
