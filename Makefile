@@ -35,8 +35,12 @@ MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command 
 MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
 # Scratch root for self-tests that need a real directory. NEVER /tmp: it is a
 # RAM-backed tmpfs on this seat, and 82,210 leaked fixture directories took it
-# to 96% of its inodes (inb-9483a4). @spec MCP-OP-TMPHYG-010
-SELF_TEST_TMP ?= $(or $(TMPDIR),/var/tmp)
+# to 96% of its inodes (inb-9483a4). A RAM-backed TMPDIR is REDIRECTED here at
+# the Make layer, not merely refused later by the Clojure layer -- these
+# recipes hand the value straight to shell harnesses that never reach Clojure.
+# @spec MCP-OP-TMPHYG-010
+# @spec MCP-OP-TMPHYG-012
+SELF_TEST_TMP ?= $(if $(filter /tmp /dev/shm,$(TMPDIR)),/var/tmp,$(or $(TMPDIR),/var/tmp))
 MCP_DEV_PORT ?= 7889
 MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
 MCP_DEV_URL ?= http://127.0.0.1:$(MCP_DEV_PORT)/mcp
@@ -222,6 +226,7 @@ tmp-leak-ratchet-self-test:
 	@# @spec MCP-OP-TMPHYG-007
 	@# @spec MCP-OP-TMPHYG-008
 	@# @spec MCP-OP-TMPHYG-011
+	@# @spec MCP-OP-TMPHYG-012
 	@sh test/tmp_leak_ratchet_test.sh
 
 # @spec MCP-OP-ADMIT-130

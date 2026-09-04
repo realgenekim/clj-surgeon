@@ -112,8 +112,9 @@ suite and calls `System/exit`.
 | MCP-OP-TMPHYG-007 | A SIGTERMed run leaves its isolated root behind; or the startup sweep deletes a live run's root or another tenant's entry. | Base empty after a SIGTERM; dead-pid stale root swept; live-pid root and foreign entries untouched. | `tmp-leak-ratchet-self-test` 7a, 7b. |
 | MCP-OP-TMPHYG-008 | An unwritable base produces a stack trace instead of a refusal. | Exit 97 with a `tmp-refused:` line and no clojure `Execution error` banner. | `tmp-leak-ratchet-self-test` 8. |
 | MCP-OP-TMPHYG-009 | Any of the five test entry points runs with a RAM-backed base. | All five exit 97 with a named message. | `tmp-leak-ratchet-self-test` 9 (drives all four `-m`-able runners; `run_all.clj` is covered by 3a's bb arm). |
-| MCP-OP-TMPHYG-010 | A Makefile recipe or a `test/*.sh` gate names a `/tmp/<path>` write target. | The scan finds none. | `tmp-leak-ratchet-self-test` 10. |
+| MCP-OP-TMPHYG-010 | A Makefile recipe, a `test/*.sh` gate or a `bench/*.sh` harness names a `/tmp/<path>` write target, or a `TMPDIR` fallback that names `/tmp`. | The scan finds none; there is no exemption for the fallback shape. | `tmp-leak-ratchet-self-test` 10; `no-gate-names-a-hard-coded-ram-path`. |
 | MCP-OP-TMPHYG-011 | A caller supplies a forged `CLJ_SURGEON_MOUNTS_FILE` claiming disk while `findmnt` cannot answer, and the run PROCEEDS. | Exit 97, `UNDETERMINABLE`: a seam-sourced non-tmpfs answer is `:unknown`; a seam-sourced `tmpfs` answer still refuses. | `tmp-leak-ratchet-self-test` 3g, 3h; `a-seam-sourced-fstype-can-never-prove-real-disk`. |
+| MCP-OP-TMPHYG-012 | `SELF_TEST_TMP` resolves to a RAM path when `TMPDIR` is `/tmp` or `/dev/shm`. | Redirected to `/var/tmp`; `/var/tmp` when `TMPDIR` is unset; a real-disk `TMPDIR` honoured unchanged. | `tmp-leak-ratchet-self-test` 11 (executes make's own expansion via `--eval`, not a text read of the assignment). |
 
 ## Measured facts added in round two
 
