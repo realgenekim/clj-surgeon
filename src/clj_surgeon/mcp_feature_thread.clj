@@ -213,11 +213,11 @@
   are in the receipt, and eliding it costs a call to get back."
   [peer-bodies-requested?]
   (if peer-bodies-requested?
-    [:sibling :after-context :peers :governance-template :secondary-tests
-     :next-call :menu :route :tests-js :tests :implementation
+    [:sibling :after-context :peers :verify-detail :governance-template
+     :secondary-tests :next-call :menu :route :tests-js :tests :implementation
      :js-function :handler]
-    [:peers :sibling :after-context :governance-template :secondary-tests
-     :next-call :menu :route :tests-js :tests :implementation
+    [:peers :sibling :after-context :verify-detail :governance-template
+     :secondary-tests :next-call :menu :route :tests-js :tests :implementation
      :js-function :handler]))
 
 ;; ---------------------------------------------------------------------------
@@ -2070,6 +2070,150 @@
                                        "alias" file)]
     (vec (take max-verify-rows (or (seq by-file) (seq by-dir) (seq by-alias) [])))))
 
+;; ---------------------------------------------------------------------------
+;; Which command picks up a NEW test namespace
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-048
+(defn namespace-of-test-file
+  "The Clojure namespace a test file declares, by PATH, under a source root.
+
+  `test/writer/handlers/transform_apply_test.clj` under root `test` is
+  `writer.handlers.transform-apply-test`. A script test has no namespace and
+  this returns nil rather than inventing one."
+  [file roots]
+  (when (clojure-path? file)
+    (let [root (first (filter #(str/starts-with? file (str % "/")) roots))]
+      (when root
+        (-> (subs file (inc (count root)))
+            (str/replace #"\.clj[cs]?$" "")
+            (str/replace "_" "-")
+            (str/replace "/" "."))))))
+
+;; @spec MCP-OP-THREAD-048
+(defn kaocha-suites
+  "The suites declared in a `tests.edn`, as
+  `[{:id :test-paths :ns-patterns :line}]`.
+
+  The `#kaocha/v1` reader tag is read as DATA — this verb runs no test runner
+  and claims no Kaocha semantics beyond the two fields that decide whether a
+  namespace is picked up: where the suite looks, and which namespace names it
+  admits."
+  [source lines]
+  (let [parsed (try
+                 (edn/read-string {:readers {'kaocha/v1 identity}
+                                   :default (fn [_ v] v)}
+                                  source)
+                 (catch Exception _ nil))
+        line-of (fn [id]
+                  (first (keep-indexed
+                           (fn [i l]
+                             (when (re-find (re-pattern
+                                              (str ":id\\s+:" (name id) "\\b"))
+                                            l)
+                               (inc i)))
+                           lines)))]
+    (when (map? parsed)
+      (vec (for [t (:tests parsed) :when (map? t)]
+             {:id (:id t)
+              :test-paths (vec (:test-paths t))
+              :ns-patterns (vec (:ns-patterns t))
+              :line (line-of (:id t))})))))
+
+;; @spec MCP-OP-THREAD-048
+(defn- deps-alias-paths
+  "`{alias-keyword #{extra-path …}}` from a `deps.edn`."
+  [source]
+  (let [parsed (try (edn/read-string {:default (fn [_ v] v)} source)
+                    (catch Exception _ nil))]
+    (when (map? parsed)
+      (into {} (for [[k v] (:aliases parsed) :when (map? v)]
+                 [k (set (concat (:extra-paths v) (:paths v)))])))))
+
+(defn- command-aliases
+  "Every `:alias` named in a `clojure -M:a:b` invocation."
+  [command]
+  (->> (re-seq #"-[MXT]\S*" (or command ""))
+       (mapcat #(str/split % #":"))
+       (remove str/blank?)
+       (remove #(re-find #"^-" %))
+       (map keyword)
+       set))
+
+;; @spec MCP-OP-THREAD-048
+(defn runs-namespace-for
+  "Whether one verify row's command picks up `ns`, and the evidence for it.
+
+  Both T3 arms spent a read on this question and the receipt could not answer
+  it: which target/alias actually RUNS the namespace the new test file will
+  declare. On social-media-writer the answer is neither obvious nor benign —
+  `make test-unit` runs the kaocha `unit` suite, whose `:ns-patterns` is an
+  explicit ALLOWLIST, so a brand-new namespace is silently not run by it.
+
+  Returns nil when the repository declares no runner configuration this verb
+  can read; it never guesses."
+  [{:keys [suites alias-paths tests-edn-present?]} command ns file]
+  (when ns
+    (let [tokens (set (re-seq #"[A-Za-z][A-Za-z0-9_-]*" (or command "")))
+          named (filter #(contains? tokens (name (:id %))) suites)
+          selected (if (and (seq suites) (empty? named)) suites named)
+          matches? (fn [suite]
+                     (and (some #(str/starts-with? file (str % "/"))
+                                (:test-paths suite))
+                          (or (empty? (:ns-patterns suite))
+                              (some #(re-find (re-pattern %) ns)
+                                    (:ns-patterns suite)))))
+          hit (first (filter matches? selected))
+          alias-hit (first (filter (fn [[a paths]]
+                                     (and (contains? (command-aliases command) a)
+                                          (some #(str/starts-with? file
+                                                                   (str % "/"))
+                                                paths)))
+                                   alias-paths))]
+      (cond
+        (and tests-edn-present? (seq selected) hit)
+        {:namespace ns
+         :picks_up true
+         :suite (name (:id hit))
+         :from (str "tests.edn" (when (:line hit) (str ":L" (:line hit))))
+         :why (if (empty? (:ns-patterns hit))
+                (str "the `" (name (:id hit)) "` suite takes every namespace under "
+                     (str/join ", " (:test-paths hit)))
+                (str "the `" (name (:id hit))
+                     "` suite's ns-patterns match this namespace"))}
+
+        (and tests-edn-present? (seq selected))
+        {:namespace ns
+         :picks_up false
+         :suites_tried (vec (sort (map (comp name :id) selected)))
+         :from "tests.edn"
+         :why (str "every suite this command selects declares an ns-patterns"
+                   " ALLOWLIST that does not name " ns
+                   " — a new namespace is not run by it until the pattern"
+                   " admits it")}
+
+        alias-hit
+        {:namespace ns
+         :picks_up true
+         :from "deps.edn"
+         :why (str "the " (key alias-hit) " alias puts this file's directory on"
+                   " the test classpath and the command names no suite")}
+
+        :else
+        (when (or tests-edn-present? (seq alias-paths))
+          {:namespace ns
+           :picks_up false
+           :from (if tests-edn-present? "tests.edn" "deps.edn")
+           :why "no suite or alias this command names reaches this file"})))))
+
+(defn- runner-config
+  [cache]
+  (let [t (read-source cache "tests.edn")
+        d (read-source cache "deps.edn")]
+    {:tests-edn-present? (boolean (:ok t))
+     :suites (when (:ok t) (kaocha-suites (:source t) (:lines t)))
+     :alias-paths (when (:ok d) (deps-alias-paths (:source d)))}))
+
 ;; @spec MCP-OP-THREAD-019
 (defn verify-row
   "`:verify` for every tests primary in the thread, and the reason when there is
@@ -2086,7 +2230,16 @@
                                              (map :file (:co_primaries l)))))
                        distinct
                        vec)
-            rows (vec (mapcat #(verify-rows-for targets %) files))]
+            runner (runner-config cache)
+            test-roots (distinct (concat (mapcat :test-paths (:suites runner))
+                                         ["test"]))
+            ;; @spec MCP-OP-THREAD-048
+            rows (vec (for [row (mapcat #(verify-rows-for targets %) files)
+                            :let [nsname (namespace-of-test-file (:for row)
+                                                                 test-roots)
+                                  runs (runs-namespace-for runner (:command row)
+                                                           nsname (:for row))]]
+                        (cond-> row runs (assoc :runs_namespace runs))))]
         (if (seq rows)
           {:verify rows}
           {:verify []
@@ -2286,15 +2439,25 @@
                                (when (seq m) [(keyword (:id l)) m])))
                            located))]
     (when (seq digests)
-      {:tool "admit_clojure_patch"
+      ;; @spec MCP-OP-THREAD-049
+      ;; ONE clock reading, spelled in both the leaf and the sentence: two
+      ;; calls to `Instant/now` would put two different instants in the same
+      ;; receipt, and the text-superset check would append the leaf as
+      ;; `structured-only` because the sentence did not carry it.
+      (let [clock (str (java.time.Instant/now))]
+       {:tool "admit_clojure_patch"
        :expect_pre_sha256 digests
        :by_leg by-leg
-       :note (str "whole-file digests, the subject admit_clojure_patch binds;"
+       :computed_at clock
+       :note (str "these whole-file digests were computed at " clock
+                  "; admit_clojure_patch re-checks them at write time — do NOT"
+                  " re-hash. "
+                  "whole-file digests, the subject admit_clojure_patch binds;"
                   " the per-leg sha256 above is over the line range only."
                   " Pass the subset your patch touches -- admit_clojure_patch"
                   " requires expect_pre_sha256 to name EXACTLY the files the"
                   " patch touches, so select from by_leg rather than sending"
-                  " this whole map")})))
+                  " this whole map")}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Assembling one thread
@@ -2910,7 +3073,20 @@
                               (map #(str (:target %) " (Makefile:" (:line %) ")"
                                          " for=" (:for %)
                                          " evidence=" (:evidence %)
-                                         "  " (:command %))
+                                         "  " (:command %)
+                                         ;; @spec MCP-OP-THREAD-048
+                                         (when-let [r (:runs_namespace %)]
+                                           (str "\n    runs_namespace "
+                                                (:namespace r)
+                                                " picks_up=" (:picks_up r)
+                                                (when (:suite r)
+                                                  (str " suite=" (:suite r)))
+                                                (when (:suites_tried r)
+                                                  (str " suites_tried="
+                                                       (str/join ","
+                                                                 (:suites_tried r))))
+                                                " from=" (:from r)
+                                                " — " (:why r))))
                                    (:verify rules))))
                (str "\n  verify none · " (:verify_reason rules)))
              "\nassert " (:assert rules)
@@ -3128,6 +3304,28 @@
                       :bytes 0
                       :reason (str (elision-reason binder) "; " cut
                                    " co-menu-item peer bodies dropped")
+                      :from 0 :to 0 :sha256 "n/a"
+                      :refetch (elision-remedy binder)}))
+         true]))
+
+    ;; @spec MCP-OP-THREAD-048
+    ;; The `runs_namespace` explanation is prose ABOUT a command the row still
+    ;; names; the command and its Makefile line survive, so what is lost is the
+    ;; sentence, not the answer's address. One ledger row, not one per target.
+    :verify-detail
+    (let [rows (get-in result [:rules :verify])
+          cut (count (filter :runs_namespace rows))]
+      (if (zero? cut)
+        [result false]
+        [(-> result
+             (assoc-in [:rules :verify]
+                       (mapv #(dissoc % :runs_namespace) rows))
+             (update :elided conj
+                     {:leg "verify-detail"
+                      :bytes 0
+                      :reason (str (elision-reason binder) "; the"
+                                   " runs_namespace explanation of " cut
+                                   " verify rows dropped")
                       :from 0 :to 0 :sha256 "n/a"
                       :refetch (elision-remedy binder)}))
          true]))

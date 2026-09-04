@@ -1,0 +1,30 @@
+#kaocha/v1
+ {:tests
+  [{:id :fast
+    :test-paths ["test"]
+    :source-paths ["src"]
+    :skip-meta [:unit :component :integration :fault]}
+   {:id :unit
+    :test-paths ["test"]
+    :source-paths ["src"]
+    :ns-patterns ["^writer\\.(book-tx|codec|distillery-bucket|editor-conflict|keymap|persist-plan|prompt|smw-write|transform)-test$"]
+    :skip-meta [:component :integration]
+    :focus-meta [:unit]}
+   {:id :component
+    :test-paths ["test"]
+    :source-paths ["src"]
+    :ns-patterns ["^writer\\.(book-dispatch|book-recovery|book-upsert|dispatch|keydown|persist|routes|telemetry|write-boundary)-test$"]
+    :focus-meta [:component]}
+   {:id :integration
+    :test-paths ["test"]
+    :source-paths ["src"]
+    :ns-patterns ["^writer\\.(ack-race|routes-keymap|schedule|storage)-test$"]
+    :focus-meta [:integration]}
+   {:id :fault
+    :test-paths ["test"]
+    :source-paths ["src"]
+    :ns-patterns ["^writer\\.tx-fault-test$"]
+    :focus-meta [:fault]}]
+  :plugins [:kaocha.plugin/profiling]
+  :kaocha.plugin.profiling/count 10
+  :fail-fast? true}

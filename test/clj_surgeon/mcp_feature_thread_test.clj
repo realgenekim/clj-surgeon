@@ -602,9 +602,12 @@
 ;; @spec MCP-OP-THREAD-011
 (deftest over-budget-elides-in-the-stated-order-and-names-every-cut
   (testing "a small budget elides bodies, cheapest evidence first"
-    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 11000})]
+    ;; 11,264 is the documented ranges-only floor. It did not move when peer
+    ;; ROWS became permanent (MCP-OP-THREAD-047): the everything-elided receipt
+    ;; is 11,164 B.
+    (let [{:keys [structured text] :as r} (thread! fixture-root {:budget_bytes 11264})]
       (is (true? (:ok structured)))
-      (is (<= (:text_bytes structured) 11000)
+      (is (<= (:text_bytes structured) 11264)
           "the receipt must actually fit the budget it was given")
       (is (seq (:elided structured)) "an elision must be recorded")
       (testing "every elision names its leg, its bytes, its range and how to refetch"
@@ -617,7 +620,7 @@
       (testing "the handler body is the LAST thing cut"
         (let [cut (set (map :leg (:elided structured)))]
           (when (not (contains? cut "handler"))
-            (is (string? (:body (leg structured "handler")))
+            (is (string? (:body (leg (full r) "handler")))
                 "the handler kept its body while cheaper bodies were cut"))))
       (testing "an elided leg still carries its range and its hash"
         (doseq [l (:legs structured)
@@ -632,9 +635,9 @@
       (is (every? #(nil? (:body %)) (:legs structured)))
       (is (every? #(nil? (:body %))
                   (mapcat :co_primaries (:legs structured))))
-      (is (= #{"sibling" "peers" "after-context" "governance-template"
-               "next-call" "menu-caller" "route" "tests(js)"
-               "tests" "implementation" "js-function" "handler"}
+      (is (= #{"sibling" "peers" "after-context" "verify-detail"
+               "governance-template" "next-call" "menu-caller" "route"
+               "tests(js)" "tests" "implementation" "js-function" "handler"}
              (set (map :leg (:elided structured))))
           "every step of the stated order is recorded when every body is cut")
       ;; @spec MCP-OP-THREAD-039
@@ -946,12 +949,12 @@
                "; the whole point of raising it was that it must not"))))
 
   (testing "the stated order elides context first and the edit sites last"
-    (is (= [:peers :sibling :after-context :governance-template
+    (is (= [:peers :sibling :after-context :verify-detail :governance-template
             :secondary-tests :next-call :menu
             :route :tests-js :tests :implementation :js-function :handler]
            (ft/elision-order-for false))
         "opportunistic peer bodies are the FIRST thing cut")
-    (is (= [:sibling :after-context :peers :governance-template
+    (is (= [:sibling :after-context :peers :verify-detail :governance-template
             :secondary-tests :next-call :menu
             :route :tests-js :tests :implementation :js-function :handler]
            (ft/elision-order-for true))
@@ -2187,6 +2190,88 @@
             "a cut peer must keep its range, its hash and its refetch")
         (is (:body (leg (full r) "menu-caller"))
             "the menu leg's OWN body is not cut by the peers step")))))
+
+;; @spec MCP-OP-THREAD-049
+(deftest the-next-call-block-says-when-the-digests-were-taken
+  (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 32768})
+        n (:next_call structured)]
+    (testing "the whole-file digests carry the clock they were computed at"
+      (is (string? (:computed_at n)))
+      (is (re-matches #"\d{4}-\d{2}-\d{2}T[0-9:.]+Z" (:computed_at n))
+          (str "computed_at is not an instant: " (pr-str (:computed_at n)))))
+
+    (testing "and the note says the gate re-checks them, so the caller does not"
+      (is (str/includes? (:note n)
+                         (str "these whole-file digests were computed at "
+                              (:computed_at n))))
+      (is (str/includes? (:note n) "re-checks them at write time"))
+      (is (str/includes? (:note n) "do NOT re-hash")))
+
+    (testing "the text face carries the same sentence and the same instant"
+      (is (str/includes? text (:computed_at n)))
+      (is (str/includes? text "do NOT re-hash")))
+
+    (testing "the instant is ONE reading, not two"
+      (is (= 1 (count (set (re-seq #"\d{4}-\d{2}-\d{2}T[0-9:.]+Z"
+                                   (:note n)))))
+          "the note quotes an instant the leaf does not carry"))))
+
+;; @spec MCP-OP-THREAD-048
+(deftest a-verify-row-says-which-command-picks-up-the-new-test-namespace
+  (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 32768})
+        rows (get-in structured [:rules :verify])
+        by-target (into {} (map (juxt :target identity) rows))]
+    (testing "the Clojure rows name the namespace the new test file declares"
+      (doseq [[target row] by-target
+              :when (str/ends-with? (str (:for row)) ".clj")]
+        (is (= "writer.handlers.transform-apply-test"
+               (get-in row [:runs_namespace :namespace]))
+            (str target " does not name the namespace"))))
+
+    (testing "a suite whose ns-patterns is an ALLOWLIST does not pick it up"
+      (let [r (get-in by-target ["runtests-unit" :runs_namespace])]
+        (is (false? (:picks_up r))
+            (str "make runtests-unit runs the kaocha `unit` suite, whose"
+                 " ns-patterns names nine namespaces and not this one: "
+                 (pr-str r)))
+        (is (= ["unit"] (:suites_tried r)))
+        (is (= "tests.edn" (:from r)))
+        (is (str/includes? (:why r) "ALLOWLIST"))))
+
+    (testing "and the target that DOES run it says which suite, and where from"
+      (let [r (get-in by-target ["runtests-once" :runs_namespace])]
+        (is (true? (:picks_up r)) (pr-str r))
+        (is (= "fast" (:suite r)))
+        (is (str/starts-with? (str (:from r)) "tests.edn:L"))))
+
+    (testing "a script test has no namespace and the row does not invent one"
+      (is (nil? (:runs_namespace (get by-target "test-js")))))
+
+    (testing "the text face carries the row too"
+      (is (str/includes? text "runs_namespace writer.handlers.transform-apply-test"))
+      (is (str/includes? text "picks_up=false")))))
+
+;; @spec MCP-OP-THREAD-048
+(deftest a-repository-with-no-runner-config-gets-no-runs-namespace-claim
+  (testing "the verb never guesses which command runs a namespace"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-norunner"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/views.clj" "(ns views)\n(def menu {:onclick \"go()\"})\n")
+        (write-file! root "src/routes.clj" "(ns routes)\n(def table [[\"/api/go\" {}]])\n")
+        (write-file! root "src/handlers.clj" "(ns handlers)\n(defn handle-go [r] r)\n")
+        (write-file! root "test/t.clj" "(ns t)\n(deftest x (post \"/api/go\"))\n")
+        (write-file! root "js/commands.js" "function go() { return 1; }\n")
+        (write-file! root "Makefile" "test:\n\tclojure -M:test\n")
+        (let [{:keys [structured]}
+              (call! {:subject "go" :also ["/api/go"]
+                      :config alias-conventions
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [row (get-in structured [:rules :verify])]
+            (is (nil? (:runs_namespace row))
+                (str "a claim with no configuration behind it: " (pr-str row)))))
+        (finally (delete-tree! root))))))
 
 ;; @spec MCP-OP-THREAD-047
 (deftest peers-ride-as-ranges-and-their-bodies-are-asked-for-or-opportunistic

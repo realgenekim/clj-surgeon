@@ -353,3 +353,23 @@ run as a test inside `make mcp-test`) enforces both halves.
   opportunistic and only after the sibling and the anchor context when the
   caller asked for them; `peer_bodies` shall be admitted as a boolean and
   refused by name otherwise.
+
+- [x] **MCP-OP-THREAD-048**: The verify row says which command picks up the NEW
+  test namespace. When `feature_thread` emits a `verify` row for a Clojure tests
+  file and the workspace declares a runner configuration it can read
+  (`tests.edn` suites, or `deps.edn` alias paths), the row shall carry
+  `runs_namespace` naming the namespace the file's path declares, whether that
+  command `picks_up` it, the suite or alias that decides, the file and line the
+  answer came from, and why — in particular it shall report `picks_up false`
+  when every suite the command selects declares an `ns-patterns` allowlist that
+  does not name the namespace. When the workspace declares no runner
+  configuration this verb can read, the row shall carry no `runs_namespace` at
+  all rather than a guess, and a script test — which has no namespace — shall
+  never be given one.
+
+- [x] **MCP-OP-THREAD-049**: The pre-image digests carry the clock they were
+  taken at. When `feature_thread` emits `next_call`, it shall carry
+  `computed_at` as one instant and its `note` shall spell that same instant in
+  the sentence "these whole-file digests were computed at <clock>;
+  admit_clojure_patch re-checks them at write time — do NOT re-hash", so a
+  caller never spends a batch re-hashing files the write gate re-checks anyway.
