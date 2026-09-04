@@ -1783,3 +1783,5 @@ independent machine is for. One escalation for Gene: the nightly is dormant unti
 ## 20:51Z feature_thread r11 merge round built (508f26f5; 988/17487/0 on the merged tree; catalog 8 tools); Sol r12 LANDING review launched — the last review, then freeze
 
 ## 21:02Z MEM-003 r9 built (a9963bd3): composition green — the census read elapsed at top level after the partition moved it; the eight fence failures were this branch's own streaming encoders; Opus r10 landing review launched
+
+## 21:08Z admit gate r16 built (2ac33278: inline verify in an overlay, harness-native patches with derived binding, failing output, propose mode); Sol r17 review + arms G2/GN2 on 8173 launched
