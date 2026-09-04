@@ -381,3 +381,13 @@ run as a test inside `make mcp-test`) enforces both halves.
   give it no insertion anchor, UNLESS the match spells a call (`subject(`) or is
   a route literal beginning with `/`; a mention shall rank below every other
   occurrence of the same leg rather than be dropped.
+
+- [x] **MCP-OP-THREAD-051**: The conventions FILE is contained too. When
+  `feature_thread` resolves its convention set from
+  `.clj-surgeon/feature-thread.edn` under the workspace root, clj-surgeon shall
+  resolve that path's real location — following the file's own symlink and every
+  symlink in its parent chain — before reading it, and shall refuse with
+  `feature-thread-conventions-file-escapes-workspace`, naming the path as
+  spelled, the resolved target and the resolved root, when the real location is
+  not under the workspace root; nothing from that file shall reach the receipt.
+

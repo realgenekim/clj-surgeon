@@ -1002,6 +1002,51 @@
     {:ok true
      :conventions (assoc conventions :conventions_source source-label)})))
 
+;; @spec MCP-OP-THREAD-051
+(defn- real-path
+  "The path with every symlink resolved, or nil when it cannot be resolved."
+  [^java.io.File f]
+  (try
+    (str (.toRealPath (.toPath f) (into-array java.nio.file.LinkOption [])))
+    (catch java.io.IOException _ nil)
+    (catch SecurityException _ nil)))
+
+;; @spec MCP-OP-THREAD-051
+(defn conventions-escape-refusal
+  "A typed refusal when the conventions FILE resolves outside the workspace, or
+  nil when it is contained.
+
+  Round-seven review, finding 4 (BLOCKING): `load-conventions` tested `.isFile`
+  and then slurped. `.isFile` FOLLOWS symlinks, so a workspace-local
+  `.clj-surgeon/feature-thread.edn` pointing at `../../outside/conventions.edn`
+  was read and its `repo-label` -- an out-of-root canary -- was published as
+  `repo_label`. The bounded no-follow source walk cannot protect this: it runs
+  later, and this read is what tells it where to walk.
+
+  Both escapes resolve the same way, which is why ONE check covers them:
+  `toRealPath` resolves the file's own link AND every link in its parent
+  chain, so a symlinked `.clj-surgeon` DIRECTORY is caught by the same
+  comparison. The separator is part of the test -- without it a sibling
+  `<root>-evil` passes a bare prefix check (MCP-OP-THREAD-033)."
+  [root ^java.io.File f]
+  (let [real-root (or (real-path (io/file root)) (.getCanonicalPath (io/file root)))
+        real-file (real-path f)
+        prefix (str real-root java.io.File/separator)]
+    (when-not (and real-file (str/starts-with? real-file prefix))
+      {:ok false
+       :error_type "feature-thread-conventions-file-escapes-workspace"
+       :error (str "the convention set at " conventions-file
+                   " resolves outside the workspace root: "
+                   (or real-file "the real path could not be resolved")
+                   " is not under " real-root
+                   ". It was NOT read.")
+       :conventions_source conventions-file
+       :workspace_root real-root
+       :resolved_target real-file
+       :remedy (str "Replace the symlink at " conventions-file
+                    " with a real file inside the workspace, or pass the"
+                    " convention set inline as `config`.")})))
+
 ;; @spec MCP-OP-THREAD-003
 (defn load-conventions
   "Resolve the convention set: inline map, or `.clj-surgeon/feature-thread.edn`
@@ -1022,14 +1067,15 @@
          :remedy (str "Write " conventions-file
                       " declaring the five leg roles of this repository, or pass"
                       " them inline as config.")}
-        (try
-          (normalize-conventions (edn/read-string (slurp f)) conventions-file)
-          (catch Exception e
-            {:ok false
-             :error_type "feature-thread-conventions-invalid"
-             :error (str conventions-file " did not read as EDN: " (.getMessage e))
-             :conventions_source conventions-file
-             :remedy "Correct the EDN syntax."}))))))
+        (or (conventions-escape-refusal root f)
+            (try
+              (normalize-conventions (edn/read-string (slurp f)) conventions-file)
+              (catch Exception e
+                {:ok false
+                 :error_type "feature-thread-conventions-invalid"
+                 :error (str conventions-file " did not read as EDN: " (.getMessage e))
+                 :conventions_source conventions-file
+                 :remedy "Correct the EDN syntax."})))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Seeds and the per-kind searches

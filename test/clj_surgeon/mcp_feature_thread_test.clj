@@ -2763,6 +2763,7 @@
                   {:id "handler" :kind :handler :globs ["src/*.clj"]}
                   {:id "tests" :kind :test :globs ["src/*.clj"]}]}))
 
+;; @spec MCP-OP-THREAD-051
 (deftest the-conventions-file-may-not-be-a-symlink-out-of-the-workspace
   (testing "a symlinked conventions FILE is a typed refusal, never a read"
     (let [base (io/file (str (java.nio.file.Files/createTempDirectory
