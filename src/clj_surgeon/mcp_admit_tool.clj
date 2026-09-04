@@ -2140,7 +2140,17 @@
     ;; enumeration tripwire scans this file for a literal error-type key
     ;; followed by a keyword, and a set literal that happened to put one
     ;; after it would read as a refusal kind constructed here.
-    (let [exempt #{:ok :error :remedy :next_call :error-type}
+    ;; @spec MCP-OP-ADMIT-149
+    ;; The error-type exemption holds only where its own REASON holds.
+    ;; `checked-refusal-kind!` bounds the kind to an enumerated keyword, but
+    ;; it fires only on `(not (true? (:ok …)))`, so on an `:ok true` receipt
+    ;; the justification is false and the value went out unbounded: 60,443
+    ;; bytes through this function, echoed verbatim, nothing named as bounded.
+    ;; The gate does not build such a receipt today; a bound that holds by
+    ;; construction rather than by its own rule is one refactor from not
+    ;; holding.
+    (let [exempt (cond-> #{:ok :error :remedy :next_call}
+                   (not (true? (:ok receipt))) (conj :error-type))
           candidates (remove exempt receipt-identity-keys)]
       (reduce
         (fn [current key]
