@@ -22,7 +22,9 @@ allow-list entry.
 
 The repair is at the rung above name-scanning, in two halves.
 
-**Impossible from ordinary code.** `unwrap-readings` is private — reachable only
+**CORRECTED IN ROUND SIX (round-five review §8): this sentence was false.** `^:private` in Clojure is a RESOLUTION CONVENTION, not a boundary: `((ns-resolve 'clj-surgeon.measured 'unwrap-readings) x)` reached it, and `(._launder r)` reached the protocol method beneath it, both with every witness green. The honest statement is *inconvenient from ordinary code, and an offence when named* -- which is what round six made true, by deriving the escape-hatch pattern from the namespace's interns, the protocol's methods and the type's fields, and by making a quoted-symbol, string or keyword spelling of the namespace a `:reflective` offence. The original claim follows, uncorrected, as the record of what was believed.
+
+~~**Impossible from ordinary code.**~~ `unwrap-readings` is private — reachable only
 from `measured`, `attach` and `partition-measured`, the three verbs that BUILD
 or PARTITION a block. `field` is deleted; nothing needed a convenience verb for
 reaching into a published block. The three call sites this forced:
