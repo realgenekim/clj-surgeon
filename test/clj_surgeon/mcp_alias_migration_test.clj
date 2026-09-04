@@ -975,6 +975,47 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-051
+(deftest a-nul-byte-in-a-scope-path-is-a-typed-refusal
+  ;; Round-11 re-review finding 8: `scope-glob-patterns` skips the subtree
+  ;; derivation for an entry containing a NUL, and `getPathMatcher` accepts
+  ;; one, so the entry selected nothing and the caller was handed
+  ;; `scope-matches-nothing` — a refusal about the TREE — for a spelling cause
+  ;; they cannot see, a byte that prints as nothing at all.
+  ;;
+  ;;   === P3b: NUL entry through scan-scope ===
+  ;;   {:ok true, :files []}      ; entry "src/ x"
+  ;;   {:ok true, :files []}      ; entry " "
+  ;;
+  ;; No escape and no data loss, so this refuses closed either way; but the
+  ;; cause a caller cannot see is the one the refusal has to name.
+  (let [workspace (temp-dir)]
+    (try
+      (write-tree! workspace {"src/two.clj" "(ns two)\n"})
+      (doseq [[label entry index] [["inside a path" (str "src/" (char 0) "x") 4]
+                                   ["alone" (str (char 0)) 0]
+                                   ["trailing" (str "src" (char 0)) 3]]]
+        (testing label
+          (let [result (scope-matches-nothing-refusal
+                         workspace {:scope {:paths [entry]}})
+                cause (str (:cause result))]
+            (is (= "alias-migration-scope-path-refused" (:error_type result))
+                (str "a NUL byte was reported as a fact about the tree: "
+                     (pr-str (:error_type result))))
+            (is (str/includes? cause "NUL")
+                (str "the refusal does not name the byte: " (pr-str cause)))
+            (is (str/includes? cause "U+0000")
+                (str "the refusal does not name the byte's code point: "
+                     (pr-str cause)))
+            (is (str/includes? cause (str "index " index))
+                (str "the refusal does not say where the byte is: "
+                     (pr-str cause)))
+            (is (true? (:source_unchanged result)))
+            (is (nil? (:next_call result))
+                "a spelling only the caller knows was given a mechanical call"))))
+      (finally
+        (delete-tree! workspace)))))
+
 
 ;; @spec MCP-OP-ALIAS-006
 (deftest the-domain-refusal-fires-only-when-the-scope-matched-files
