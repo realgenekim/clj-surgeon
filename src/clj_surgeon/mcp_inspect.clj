@@ -493,10 +493,23 @@
       (catch clojure.lang.ExceptionInfo error
         (ex-data error)))))
 
+;; @spec MCP-OP-STUDY-051
 (defn- json-key
+  "One receipt key, normalized to the spelling `structuredContent` publishes.
+
+  The COMPLETE keyword, namespace included. `name` is not it: a receipt key
+  that holds a path — `file_hashes` is keyed by `src/demo.clj` — comes back
+  from a JSON round trip as the NAMESPACED keyword `:src/demo.clj`, and
+  `name` renames it to `demo.clj`. The renderer walks the map it holds and
+  the audit walks the map the client parsed, so that rename made the pointer
+  the audit computed name a different leaf than the pointer the text printed.
+  Field evidence (O2 round 7): the HTTP wire witness reported
+  `[:file_hashes :demo.clj]` uncarried against a text carrying
+  `file_hashes.src/demo.clj: a803…`, the moment carriage stopped accepting
+  the hash's characters wherever in the text they appeared."
   [key]
   (if (keyword? key)
-    (keyword (str/replace (name key) "-" "_"))
+    (keyword (str/replace (subs (str key) 1) "-" "_"))
     key))
 
 (defn json-data
@@ -561,6 +574,23 @@
      :else [[path value]])))
 
 ;; @spec MCP-OP-STUDY-044
+(defn- segment-spelling
+  "The COMPLETE spelling of one path segment.
+
+  @spec MCP-OP-STUDY-051 — `name` is not it. A receipt key that survives a
+  JSON round trip as a NAMESPACED keyword — `file_hashes` holds
+  `:src/demo.clj` once the wire receipt is read back — spells `demo.clj`
+  under `name`, so the pointer the audit computed named a different leaf than
+  the pointer the renderer printed (`file_hashes.src/demo.clj`). Field
+  evidence: the HTTP wire witness reported `[:file_hashes :demo.clj]`
+  uncarried against a text that rendered it, once carriage stopped accepting
+  the hash's characters wherever they appeared."
+  [segment]
+  (cond
+    (keyword? segment) (subs (str segment) 1)
+    (string? segment) segment
+    :else (str segment)))
+
 (defn leaf-label
   "`results[0].source_anchor.range.start.line` — the JSON pointer a caller
   reads the same fact back out of `structuredContent` with."
@@ -569,8 +599,8 @@
          (map-indexed (fn [index segment]
                         (cond
                           (integer? segment) (str "[" segment "]")
-                          (zero? index) (name segment)
-                          :else (str "." (name segment))))
+                          (zero? index) (segment-spelling segment)
+                          :else (str "." (segment-spelling segment))))
                       path)))
 
 ;; @spec MCP-OP-STUDY-044
@@ -649,7 +679,15 @@
   reader can attribute to the leaf.
 
   This SUBSUMES `value-less-leaf?`, which stays as the narrower statement of
-  why `null`, `{}`, `[]` and a blank string can never be carried by value."
+  why `null`, `{}`, `[]` and a blank string can never be carried by value.
+
+  @spec MCP-OP-STUDY-051 — since round seven this chooses the FORM a leaf's
+  own line takes (`pointer=spelling` rather than `pointer: value`) and no
+  longer decides CARRIAGE: no leaf is carried by anything but its own line,
+  so a distinctive spelling is no safer from coincidence than a short one.
+  The distinction is kept because the two forms read differently — `ok=true`
+  is a flag, `source: (def answer 42)` is a value — and because dropping it
+  would rewrite every published golden for no gain."
   [value]
   (or (value-less-leaf? value)
       (number? value)
@@ -658,30 +696,79 @@
 
 ;; @spec MCP-OP-STUDY-044
 (defn labelled-leaf
-  "`results[0].platforms=[]` — the ONE spelling that carries a value-less
-  leaf, and the exact string its witness looks for."
+  "`results[0].platforms=[]` — the collidable leaf's own spelling, unindented,
+  and the exact string its witness looks for."
   [path value]
   (str (leaf-label path) "=" (leaf-spelling value)))
 
 ;; @spec MCP-OP-STUDY-044
+(defn leaf-lines
+  "The WHOLE LINES a rendering emits for ONE receipt leaf, and the only
+  characters anywhere that carry it.
+
+  `  <pointer>: <spelling>` for a distinctive value, `  <pointer>=<spelling>`
+  for a collidable one, and for a multi-line spelling the pointer's own
+  indented block: a header line `  <pointer>:` and every non-blank line of the
+  value indented under it.
+
+  Every form begins with the leaf's JSON POINTER, and pointers are unique, so
+  no leaf's lines can be another leaf's."
+  [path value]
+  (let [rendered (leaf-spelling value)
+        label (leaf-label path)]
+    (if (str/includes? rendered "\n")
+      (into [(str "  " label ":")]
+            (comp (remove str/blank?) (map #(str "    " %)))
+            (str/split-lines rendered))
+      [(if (collidable-leaf? value)
+         (str "  " (labelled-leaf path value))
+         (str "  " label ": " rendered))])))
+
+;; @spec MCP-OP-STUDY-051
+(defn text-line-index
+  "The set of WHOLE LINES a text is made of — the index every carriage
+  question below is asked against.
+
+  Built once per audit rather than once per leaf: `uncarried-leaves` over a
+  10,000-leaf receipt would otherwise split the same text 10,000 times."
+  [text]
+  (set (str/split-lines (or text ""))))
+
+;; @spec MCP-OP-STUDY-051
+(defn leaf-carried?
+  "Does a text whose lines are `line-index` carry this leaf?
+
+  ONLY as the leaf's OWN lines. Not as a substring of a longer value's line,
+  not inside the block's own declaration, and not by any coincidence of
+  characters: a leaf is carried when the reader can point at a line that
+  spells this leaf's pointer AND this leaf's value, which is the only evidence
+  from which the fact can be read back or removed.
+
+  Field evidence (Sol O2 round-6 review, 2026-09-04, sections 2 and 3). The
+  substring rule this replaces resolved three coincidences wrongly, and two of
+  them made the DECLARATION disagree with the AUDIT of its own text: a leaf
+  whose distinctive value equalled its own pointer was declared dropped and
+  then found carried by the `dropped:` line that named it (a public `name`
+  rung declaring 23 omissions over 19 audited); a sixteen-character value
+  occurring only inside `decoy: XXabcdefghijklmnopYY` was counted rendered
+  with no line of its own; and one value spelled at two pointers counted as
+  two facts carried by one line, so neither copy could be removed
+  independently. A JSON pointer spells a leaf's ADDRESS; it is never a
+  rendering of its VALUE."
+  [line-index path value]
+  (every? line-index (leaf-lines path value)))
+
+;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-051
 (defn leaf-rendered?
   "Does `text` carry this receipt leaf VERBATIM?
 
   ONE predicate, used both by the renderer that guarantees the property and by
-  the witness that checks it, so the two can never drift apart. A multi-line
-  value is carried when every one of its non-blank lines is; a COLLIDABLE leaf
-  — value-less, numeric, boolean, or spelled in fewer than
-  `min-distinctive-spelling` characters — is carried only as
-  `pointer=spelling`, because a short spelling found in the text is not
-  evidence that the text carries THIS leaf."
+  the witness that checks it, so the two can never drift apart. The one-shot
+  spelling of `leaf-carried?`, for a caller holding a text rather than an
+  index."
   [text path value]
-  (if (collidable-leaf? value)
-    (str/includes? text (labelled-leaf path value))
-    (let [rendered (leaf-spelling value)]
-      (if (str/includes? rendered "\n")
-        (every? #(or (str/blank? %) (str/includes? text %))
-                (str/split-lines rendered))
-        (str/includes? text rendered)))))
+  (leaf-carried? (text-line-index text) path value))
 
 ;; @spec MCP-OP-STUDY-044
 (defn leaf-excluded?
@@ -701,11 +788,12 @@
   every `structuredContent` leaf value. A caller reading only the text has the
   whole receipt or knows exactly which part of it it does not have."
   [text result]
-  (into []
-        (remove (fn [[path value]]
-                  (or (leaf-excluded? path)
-                      (leaf-rendered? text path value))))
-        (receipt-leaf-pairs result)))
+  (let [line-index (text-line-index text)]
+    (into []
+          (remove (fn [[path value]]
+                    (or (leaf-excluded? path)
+                        (leaf-carried? line-index path value))))
+          (receipt-leaf-pairs result))))
 
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-047
@@ -729,9 +817,10 @@
   against, so a leaf could be deemed carried by a fact line the budget then
   dropped. On the branch's own primary fixture that made
   `results[1].outline.requires[0]` invisible to the entry list, hence to the
-  count AND to the `dropped:` pointers: 784 declared against 785 audited. A
-  duplicate spelling is still credited to the entry that renders it, but that
-  is decided in `fact-block`, where whether it renders is known.
+  count AND to the `dropped:` pointers: 784 declared against 785 audited. @spec
+  MCP-OP-STUDY-051 — a duplicate spelling is no longer credited to another
+  entry at all: two pointers holding one value are two facts, and each renders
+  its own line.
 
   Deciding against a FIXED text is also what makes the fit affordable: the
   accumulator rebuilt the whole text once per leaf, so one 10,000-leaf result
@@ -744,34 +833,13 @@
                     (or (leaf-excluded? path)
                         (leaf-rendered? structural-text path value))))
           (map (fn [[path value]]
-                 (let [rendered (leaf-spelling value)
-                       collidable (collidable-leaf? value)
-                       line (cond
-                              collidable
-                              (str "  " (labelled-leaf path value))
-
-                              (str/includes? rendered "\n")
-                              (str/join "\n"
-                                        (cons (str "  " (leaf-label path) ":")
-                                              (map #(str "    " %)
-                                                   (str/split-lines rendered))))
-
-                              :else
-                              (str "  " (leaf-label path) ": " rendered))]
-                   {:path path
-                    :label (leaf-label path)
-                    :line line
-                    ;; The characters ANOTHER entry's rendered line would
-                    ;; have to contain for this leaf to be carried without a
-                    ;; line of its own — the same needles `leaf-rendered?`
-                    ;; looks for. A collidable leaf is carried only as
-                    ;; `pointer=spelling`, and pointers are unique, so no
-                    ;; other entry can ever carry one.
-                    :needles (when-not collidable
-                               (if (str/includes? rendered "\n")
-                                 (into [] (remove str/blank?)
-                                       (str/split-lines rendered))
-                                 [rendered]))}))))
+                 ;; @spec MCP-OP-STUDY-051 — the entry renders EXACTLY the
+                 ;; lines `leaf-carried?` looks for, so "this entry printed"
+                 ;; and "the text carries this leaf" are one fact rather than
+                 ;; two computations that have to agree.
+                 {:path path
+                  :label (leaf-label path)
+                  :line (str/join "\n" (leaf-lines path value))})))
         (receipt-leaf-pairs result)))
 
 ;; @spec MCP-OP-STUDY-044
@@ -840,67 +908,31 @@
           (if dropped? " · the complete receipt is in structuredContent" "")))
 
 ;; @spec MCP-OP-STUDY-047
-(defn- carrier-indices
-  "For each entry, the index of the earliest rendering position at which some
-  OTHER rendered line already carries this leaf — or nil when only its own
-  line can.
-
-  A leaf is carried by a line whose characters contain its spelling, and a
-  line's characters include its POINTER as well as its value: on this
-  branch's own fixture `results[1].file` is carried by the line
-  `file_hashes.src/clj_surgeon/mcp_inspect.clj: <hash>`, whose label spells
-  the path. Searching the spelling against whole LINES is therefore the same
-  question `leaf-rendered?` asks of the whole text, asked one line at a time
-  — and asking it per line is what keeps it affordable: the scan stops at the
-  first hit, which is at worst the entry's own index.
-
-  A multi-line spelling is carried when every one of its non-blank lines is,
-  so its index is the LATEST of their first hits."
-  [entries]
-  (let [lines (mapv :line entries)
-        n (count lines)
-        first-hit (memoize
-                    (fn [needle]
-                      (loop [index 0]
-                        (cond
-                          (>= index n) nil
-                          (str/includes? (nth lines index) needle) index
-                          :else (recur (inc index))))))]
-    (mapv (fn [entry]
-            (when-let [needles (seq (:needles entry))]
-              (let [hits (map first-hit needles)]
-                (when (every? some? hits) (apply max hits)))))
-          entries)))
-
-;; @spec MCP-OP-STUDY-047
+;; @spec MCP-OP-STUDY-051
 (defn- dropped-indices
-  "The indices of the entries a rendering of `shown` lines does NOT carry.
+  "The indices of the entries a rendering of `shown` lines does NOT carry:
+  every entry past `shown`, and nothing else.
 
-  An entry past `shown` is dropped unless some line INSIDE `shown` already
-  carries it. Derived from the same carriage rule `uncarried-leaves` applies
-  to the published text, so the count the header declares and the count the
-  audit finds are two readings of one walk rather than two computations.
+  @spec MCP-OP-STUDY-051 — there is nothing to search. A leaf is carried by
+  its OWN lines and by no others, so a rendered line can never discharge
+  another entry, and `shown` is exactly the set of facts the section carries.
+  This replaces `carrier-indices`, which asked whether some earlier line's
+  characters CONTAINED this leaf's spelling: on the reviewer's plants that
+  credited `target = abcdefghijklmnop` to the line
+  `decoy: XXabcdefghijklmnopYY`, and one long value at two pointers to a
+  single line, publishing `2 of 2 rendered` over facts the text did not
+  contain.
 
-  @spec MCP-OP-STUDY-050 — walked over the TAIL only. This used to
-  `map-indexed` the whole carrier vector and then `drop shown`, so one
-  question about the tail cost a pass over every entry; the descent in
-  `fact-block` asks it once per step, which made the pair quadratic in the
-  fact count."
-  [carriers shown]
-  (let [total (count carriers)]
-    (loop [index shown acc (transient [])]
-      (if (>= index total)
-        (persistent! acc)
-        (let [carried-at (nth carriers index)]
-          (recur (inc index)
-                 (if (and carried-at (< carried-at shown))
-                   acc
-                   (conj! acc index))))))))
+  @spec MCP-OP-STUDY-050 — and it walks the TAIL alone, which is what the
+  descent in `fact-block` asks about."
+  [total shown]
+  (vec (range shown total)))
 
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
 ;; @spec MCP-OP-STUDY-047
 ;; @spec MCP-OP-STUDY-048
+;; @spec MCP-OP-STUDY-051
 (defn fact-block
   "The bounded receipt-fact section, whether any fact was dropped, and WHICH.
 
@@ -928,8 +960,13 @@
 
   @spec MCP-OP-STUDY-047 — the header's `X of N` is DERIVED from the same
   carriage walk `uncarried-leaves` applies to the published text: `N` is every
-  entry, and `N - X` is every entry no rendered line carries. A duplicate
-  spelling is credited to the entry that renders it, and only while it renders.
+  entry, and `N - X` is every entry whose own line this rendering does not
+  print. @spec MCP-OP-STUDY-051 — that is now an IDENTITY rather than an
+  agreement between two walks, because a leaf is carried by its own lines and
+  by nothing else: not by a longer value whose line contains its spelling, and
+  not by the `dropped:` line that names its pointer. The round-six rendering
+  declared 29 omissions on the `name` rung while an audit of the text it
+  published found 25.
 
   Field evidence (Opus O2 round-4 review, 2026-09-04, sections 2 and 3): round
   four charged the fact LINES and left the header and the `dropped:` line
@@ -940,7 +977,6 @@
   [structural-text result budget]
   (let [entries (vec (receipt-fact-entries structural-text result))
         total (count entries)
-        carriers (carrier-indices entries)
         ;; Prefix sums so the descent below costs one comparison per step: a
         ;; section rendered per candidate would be quadratic in the fact
         ;; count, and the fit evaluates dozens of candidates.
@@ -949,7 +985,7 @@
         (memoize
           (fn [shown]
             (mapv #(:label (nth entries %))
-                  (dropped-indices carriers shown))))
+                  (dropped-indices total shown))))
         section-at
         (fn [shown]
           (let [labels (dropped-labels-at shown)

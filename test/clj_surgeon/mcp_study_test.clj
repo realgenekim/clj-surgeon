@@ -1898,7 +1898,25 @@
         (is (true? (:read_complete at-default))
             "the raised default completes it in one call")
         (is (= 25 (:returned at-default)))
-        (is (<= (count (text-block at-default)) 8192))))))
+        ;; @spec MCP-OP-STUDY-051 — a PRODUCT CHANGE, stated rather than
+        ;; quietly relaxed. The 8 KB ceiling this line used to assert was a
+        ;; rendering CONSTANT, which MCP-OP-STUDY-044 already forbids as an
+        ;; allowance; and it was survivable in round six only because a
+        ;; distinctive value found ANYWHERE in the text counted as carriage,
+        ;; so every path, namespace, form name and hash in the structural
+        ;; rows discharged its own receipt leaf. Under MCP-OP-STUDY-051 a
+        ;; leaf is carried only by its own pointer line, so this text carries
+        ;; the rows AND the receipt: measured 4,334 -> 8,796 characters on a
+        ;; twenty-five file toy tree, and 11,546 here. The bound that is real
+        ;; is the PUBLIC OUTPUT BUDGET; the 12 KB ceiling below is a ratchet
+        ;; against further growth, not a contract.
+        (is (<= (count (text-block at-default)) 12288)
+            (format "text block was %d characters"
+                    (count (text-block at-default))))
+        (is (<= (inspect-tool/mcp-result-byte-count
+                  (text-block at-default) at-default)
+                inspect-tool/max-public-result-bytes)
+            "and the published pair is inside the public output budget")))))
 
 ;; @spec MCP-OP-STUDY-036
 ;; @spec MCP-OP-STUDY-038
@@ -4716,14 +4734,17 @@
           (is (= (:declared report) (:audited report))
               (format "budget %d: declared %d against audited %d"
                       budget (:declared report) (:audited report))))))
-    ;; And the value is DECOY-SUBSTITUTABLE at the failing rung: a different
-    ;; sixteen-character value renders the same bytes, which is the proof that
-    ;; the text never carried this leaf at all.
-    (let [budget 90
-          rendered (fn [r] (:section (carriage-report r budget)))]
-      (is (not= (rendered result)
-                (rendered (assoc result :target "ponmlkjihgfedcba")))
-          "replacing the target value left the rendering byte-identical"))))
+    ;; A leaf is either RENDERED — and then a different sixteen-character
+    ;; value must change the bytes — or DECLARED dropped. What it may never be
+    ;; is counted as rendered while the text shows the same bytes whatever it
+    ;; holds, which is what the decoy bought at budget 90.
+    (let [rendered (fn [budget r] (:section (carriage-report r budget)))]
+      (is (not= (rendered 120 result)
+                (rendered 120 (assoc result :target "ponmlkjihgfedcba")))
+          "at a budget that renders the target, replacing its value left the
+           rendering byte-identical")
+      (is (str/includes? (rendered 90 result) "dropped: ")
+          "and at a budget that cannot render it, the text says so"))))
 
 ;; @spec MCP-OP-STUDY-051
 ;; @spec MCP-OP-STUDY-047
@@ -4752,3 +4773,50 @@
            doing the work of two facts")
       (is (not= whole (rendered (dissoc result :alpha)))
           "removing `alpha` left the rendering byte-identical"))))
+
+;; @spec MCP-OP-STUDY-051
+(deftest no-published-top-level-key-can-spell-a-declaration-line
+  ;; The RESIDUAL, named in MCP-OP-STUDY-051 and ratcheted here rather than
+  ;; left to be rediscovered. A fact line is `  <pointer><sep><spelling>` and
+  ;; the declaration lines are `  receipt facts · …` and `  dropped: …`, so
+  ;; the one way a declaration could still be mistaken for a fact's own line
+  ;; is a TOP-LEVEL receipt key spelled `dropped` or `receipt facts` — nested
+  ;; pointers always carry a `.` or a `[`, so they cannot collide. Every
+  ;; top-level key is constructed inside `clj-surgeon.mcp-inspect`; this holds
+  ;; that true.
+  (let [reserved #{"dropped" "receipt facts"}
+        top-level-keys
+        (fn [result]
+          (into #{}
+                (comp (map (fn [[path _]] (inspect/leaf-label path)))
+                      (remove #(or (str/includes? % ".")
+                                   (str/includes? % "["))))
+                (inspect/receipt-leaf-pairs result)))]
+    (with-tmp-project
+      (fn [dir]
+        (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+        (fs/create-dirs (str dir "/src/fixture"))
+        (spit (str dir "/src/fixture/core.clj") class-ratchet-fixture))
+      (fn [config]
+        (doseq [[operation extra] (sort class-ratchet-requests)]
+          (testing operation
+            (let [published (clocked
+                              (inspect-tool/execute-inspect!
+                                config
+                                {"requests" [(merge {"id" "r1"
+                                                     "operation" operation
+                                                     "file" "src/fixture/core.clj"}
+                                                    extra)]
+                                 "expect" {"requests" 1 "files" 1}}))
+                  collisions (filter reserved (top-level-keys published))]
+              (is (empty? collisions)
+                  (str operation ": a top-level receipt key spells a "
+                       "declaration line — " (pr-str collisions))))))))
+    ;; And a refusal, whose top-level shape is built by a different function.
+    (let [refusal (clocked (inspect-tool/execute-inspect!
+                             {:project-root "/var/tmp/forge/o2r7-fx/nowhere"}
+                             {"requests" [{"id" "r1" "operation" "outline"
+                                           "file" "src/missing.clj"}]
+                              "expect" {"requests" 1 "files" 1}}))]
+      (is (empty? (filter reserved (top-level-keys refusal)))
+          "a refusal's top-level keys spell no declaration line either"))))
