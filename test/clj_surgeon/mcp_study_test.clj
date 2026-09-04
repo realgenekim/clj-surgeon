@@ -2998,6 +2998,137 @@
       "every excluded key names, at its definition, why it is excluded"))
 
 ;; ============================================================
+;; O2 ROUND 4 — a value-less leaf is carried by its LABEL or not at all
+;; (Sol O2 round-3 review, section 2)
+;; ============================================================
+;; Round three froze the exclusion set and then left TWO further exclusion
+;; mechanisms open, neither of them enumerated anywhere. `receipt-leaf-pairs`
+;; yielded no leaf at all for `{}` or `[]`, so those receipt facts were not
+;; excluded — they were invisible to the walker that defines the criterion;
+;; and `leaf-rendered?` returned true for `null` and for a blank string
+;; without either the value or its label appearing in the text. The product
+;; predicate reported zero misses only because the renderer and the witness
+;; shared both loopholes.
+;;
+;; The rule this witness fixes in place: there is exactly ONE exclusion
+;; mechanism, `text-excluded-leaf-keys`. EVERY other leaf appears in the text,
+;; and a leaf whose value is indistinguishable from absence — `null`, `{}`,
+;; `[]`, `""` — appears with its JSON pointer attached to it.
+
+(def ^:private value-less-leaf-probe
+  "Every leaf shape whose VALUE carries no characters a reader could find and
+   attribute to it. `\"\"` matches at every index of every text; `{}` matches
+   any object rendering; `null` and `[]` appear inside unrelated words and
+   lines. Only the LABEL can carry these."
+  {:empty_map {}
+   :empty_vector []
+   :nil_value nil
+   :blank ""
+   :blank_spaces "   "
+   :nested {:inner_empty [] :inner_nil nil}})
+
+(def ^:private value-less-spellings
+  "Each probe leaf's JSON pointer and the characters `structuredContent`
+   spells its value with — WRITTEN OUT BY HAND, so this witness does not
+   inherit the very walker and predicate it exists to test."
+  [["probe.empty_map" "{}"]
+   ["probe.empty_vector" "[]"]
+   ["probe.nil_value" "null"]
+   ["probe.blank" "\"\""]
+   ["probe.blank_spaces" "\"   \""]
+   ["probe.nested.inner_empty" "[]"]
+   ["probe.nested.inner_nil" "null"]])
+
+(defn- value-less-misses
+  "Every probe leaf the text does not carry as `pointer=spelling`."
+  [text]
+  (into [] (remove (fn [[label spelling]]
+                     (str/includes? text (str label "=" spelling)))
+                   value-less-spellings)))
+
+(defn- published-with-probe
+  "One published result carrying every value-less leaf shape, fitted and
+   summarized exactly as a client is handed it."
+  [raw]
+  (let [published (assoc (inspect-tool/fit-public-result
+                           (assoc raw :probe value-less-leaf-probe))
+                         :elapsed_ms 1.0)]
+    [published (inspect-tool/inspect-summary published)]))
+
+;; @spec MCP-OP-STUDY-044
+(deftest every-value-less-leaf-appears-in-the-text-with-its-label
+  (with-tmp-project
+    (fn [dir]
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (fs/create-dirs (str dir "/src/fixture"))
+      (spit (str dir "/src/fixture/core.clj") class-ratchet-fixture))
+    (fn [config]
+      (doseq [[operation extra] (sort class-ratchet-requests)]
+        (testing operation
+          (let [[published text]
+                (published-with-probe
+                  (inspect-tool/execute-inspect!
+                    config
+                    {"requests" [(merge {"id" "r1"
+                                         "operation" operation
+                                         "file" "src/fixture/core.clj"}
+                                        extra)]
+                     "expect" {"requests" 1 "files" 1}}))]
+            (is (true? (:ok published)) (pr-str (:error published)))
+            (is (empty? (value-less-misses text))
+                (str operation
+                     ": value-less leaves the text carries with neither a "
+                     "value nor a label — "
+                     (pr-str (value-less-misses text))))
+            (is (empty? (leaf-misses text published))
+                (str operation ": " (count (leaf-misses text published))
+                     " uncarried leaves — "
+                     (miss-report (leaf-misses text published)))))))
+      (testing "ls-tree"
+        (let [[published text]
+              (published-with-probe
+                (inspect-tool/execute-ls-tree
+                  config {:mode "ls-tree" :dir "." :format "text"}))]
+          (is (true? (:ok published)))
+          (is (empty? (value-less-misses text))
+              (str "ls-tree: " (pr-str (value-less-misses text))))
+          (is (empty? (leaf-misses text published))
+              (miss-report (leaf-misses text published)))))
+      (testing "a refusal"
+        (let [[published text]
+              (published-with-probe
+                (inspect-tool/execute-inspect!
+                  config
+                  {"requests" [{"id" "r1" "operation" "outline"
+                                "file" "src/no_such_file_xyz.clj"}]
+                   "expect" {"requests" 1 "files" 1}}))]
+          (is (false? (:ok published)) "the fixture must actually refuse")
+          (is (empty? (value-less-misses text))
+              (str "refusal: " (pr-str (value-less-misses text))))
+          (is (empty? (leaf-misses text published))
+              (miss-report (leaf-misses text published))))))))
+
+;; @spec MCP-OP-STUDY-044
+(deftest an-empty-collection-is-a-receipt-leaf-the-walker-yields
+  ;; The walker is the definition of "every structuredContent leaf". A shape
+  ;; it skips is excluded by a mechanism nobody enumerated. `[:results] []`
+  ;; is not hypothetical: `results=[]` is what a zero-result receipt carries.
+  (let [receipt {:ok true :operation "inspect_clojure"
+                 :request_count 0 :file_count 0 :source_character_count 0
+                 :results [] :read_complete true :next_action "none"}
+        pairs (inspect/receipt-leaf-pairs receipt)]
+    (is (contains? (set (map first pairs)) [:results])
+        (str "the receipt walker yields no leaf for an empty collection: "
+             (pr-str (mapv first pairs))))
+    (let [published (assoc (inspect-tool/fit-public-result receipt)
+                           :elapsed_ms 1.0)
+          text (inspect-tool/inspect-summary published)]
+      (is (str/includes? text "results=[]")
+          "a zero-result receipt says so in the text, with its label")
+      (is (empty? (leaf-misses text published))
+          (miss-report (leaf-misses text published))))))
+
+;; ============================================================
 ;; O2 ROUND 3 — a name in the structural-key set is not a free pass
 ;; (Sol O2 round-2 review, section 6)
 ;; ============================================================
