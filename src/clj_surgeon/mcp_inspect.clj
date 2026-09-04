@@ -64,8 +64,61 @@
   [m key]
   (or (contains? m key) (contains? m (keyword key))))
 
+;; @spec MCP-OP-STUDY-046
+(def refusal-reasons
+  "Every reason an `inspect_clojure` request refusal can carry.
+
+  ENUMERATED here and enforced where refusals are CONSTRUCTED: `refuse!`
+  will not build a refusal whose reason is absent from this set, so a new
+  reason is a deliberate edit here rather than a string a caller discovers in
+  the field. The witness drives one fixture per member through the public
+  entrance and asserts the set it OBSERVES equals this one — the runtime is
+  the enumeration, and a source scan may only complement it.
+
+  Field evidence (Sol O2 round-3 review, sections 3 and 9): the round-3
+  ratchet read the set out of the source with `(refuse! :([a-z0-9-]+)`, which
+  sees only a literal reason at a literal call site. `unique-strings!` takes
+  its reason as an ARGUMENT and the forms validator passes `:duplicate-form`,
+  so a reachable refusal was missing from the scanned 22 — and Sol's rung D
+  showed the same escape is one `(identity :reason)` away for any of the
+  others, with the whole suite green."
+  #{:aggregate-expectation-mismatch
+    :boolean
+    :duplicate-form
+    :duplicate-id
+    :empty-snapshot-guards
+    :expected-object
+    :invalid-relative-source-path
+    :invalid-snapshot-hash
+    :invalid-study-limit
+    :missing-fields
+    :missing-snapshot-guards
+    :mixed-request-ids
+    :non-blank-string
+    :non-empty-array
+    :non-negative-integer
+    :operation-required
+    :positive-integer
+    :request-expectation-mismatch
+    :too-many-files
+    :too-many-forms
+    :too-many-requests
+    :unknown-fields
+    :unknown-operation})
+
+;; @spec MCP-OP-STUDY-046
 (defn- refuse!
   [reason path message & [data]]
+  ;; A reason outside `refusal-reasons` is a defect in this namespace, not a
+  ;; bad request: it makes the enumeration false at the moment it is used.
+  ;; It is thrown as a plain exception rather than an `ex-info`, precisely so
+  ;; the evaluator's `catch clojure.lang.ExceptionInfo` cannot turn it into a
+  ;; refusal a caller would read as its own fault. Rung (e): the unenumerated
+  ;; reason is unrepresentable rather than merely detected.
+  (when-not (contains? refusal-reasons reason)
+    (throw (IllegalArgumentException.
+             (str "inspect_clojure refusal reason is not enumerated in "
+                  "clj-surgeon.mcp-inspect/refusal-reasons: " (pr-str reason)))))
   (throw
     (ex-info
       message

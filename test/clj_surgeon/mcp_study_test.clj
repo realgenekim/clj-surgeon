@@ -2644,7 +2644,17 @@
     {"requests" [{"operation" "outline" "file" real-file}]
      "expect" {"requests" 1 "files" 1}
      "snapshot_guards" {"src/clj_surgeon/outline.clj"
-                        (apply str (repeat 64 "a"))}}]])
+                        (apply str (repeat 64 "a"))}}]
+
+   ;; @spec MCP-OP-STUDY-046
+   ;; O2 round 4: the reason `unique-strings!` receives as an ARGUMENT. No
+   ;; literal `(refuse! :duplicate-form` exists anywhere in the source, which
+   ;; is exactly why the round-three literal scan could not see it.
+   [:duplicate-form
+    {"requests" [{"operation" "forms" "file" real-file
+                  "forms" ["reader-cond?" "reader-cond?"]
+                  "expect" {"forms" 2}}]
+     "expect" {"requests" 1 "files" 1}}]])
 
 ;; @spec MCP-OP-STUDY-042
 (deftest every-refusal-kind-renders-its-cause-and-carries-no-unrendered-fact
@@ -3261,10 +3271,19 @@
 ;; cause, so the refusal text was bounded by the caller's input rather than
 ;; by a constant.
 
+(defn- refusal-reason-of
+  "The reason one request actually refuses with, driven through the public
+   entrance and normalized to its name."
+  [params]
+  (when-let [reason (:reason (run params))]
+    (if (keyword? reason) (name reason) (str reason))))
+
 (defn- constructed-refusal-reasons
-  "Every refusal reason the inspect validator can construct, read out of the
-   SOURCE. A hand-written list of refusal kinds is a claim; this is a
-   measurement."
+  "Every LITERAL refusal reason in the source. Kept as a COMPLEMENT to the
+   runtime enumeration below — never as the ratchet. A scan of program text
+   can only see the shapes it was written to match, and Sol O2 round 3
+   sections 3 and 9 showed both halves of that: a reason passed to a helper is
+   invisible to it, and `(identity :expected-object)` hides a literal one."
   []
   (into (sorted-set)
         (map second)
@@ -3272,18 +3291,51 @@
                 (slurp (str project-root "/src/clj_surgeon/mcp_inspect.clj")))))
 
 ;; @spec MCP-OP-STUDY-046
-(deftest the-refusal-ratchet-drives-every-reason-the-source-constructs
-  (let [constructed (constructed-refusal-reasons)
-        exercised (into (sorted-set)
-                        (keep (fn [[_ params]] (:reason (run params)))
-                              refusal-ratchet-cases))
-        unreached (vec (remove exercised constructed))]
-    (is (<= 20 (count constructed))
-        "the scan must actually find the constructors")
-    (is (empty? unreached)
-        (str (count unreached)
-             " reasons the source constructs that no ratchet fixture reaches: "
-             (pr-str unreached)))))
+(deftest the-refusal-ratchet-drives-every-reason-the-runtime-can-construct
+  ;; The enumeration is `inspect/refusal-reasons`, and `refuse!` refuses to
+  ;; build a refusal outside it. The ratchet is the RUNTIME: one fixture per
+  ;; member, driven through the public entrance, and the set of reasons
+  ;; OBSERVED must equal the set enumerated. A new reason therefore cannot
+  ;; ship without both an edit to the set and a fixture that reaches it — in
+  ;; either order, whichever is missing is a failing test.
+  (let [enumerated (into (sorted-set) (map name) inspect/refusal-reasons)
+        driven (into (sorted-set)
+                     (keep (fn [[_ params]] (refusal-reason-of params))
+                           refusal-ratchet-cases))
+        scanned (constructed-refusal-reasons)]
+    (is (= enumerated driven)
+        (str "the reasons the runtime constructs and the reasons the ratchet "
+             "drives differ — enumerated but never driven: "
+             (pr-str (vec (remove driven enumerated)))
+             "; driven but not enumerated: "
+             (pr-str (vec (remove enumerated driven)))))
+    (is (<= 23 (count driven))
+        "the ratchet must actually drive the refusals")
+    (testing "the source scan complements the runtime; it never ratchets it"
+      (is (empty? (remove enumerated scanned))
+          (str "a literal reason the scan finds is not enumerated: "
+               (pr-str (vec (remove enumerated scanned)))))
+      (is (seq (remove scanned enumerated))
+          (str "at least one enumerated reason is built through a helper "
+               "rather than written literally — this is the gap the round-3 "
+               "scan could not see, and it must stay visible here")))))
+
+;; @spec MCP-OP-STUDY-046
+(deftest a-refusal-cannot-invent-a-reason-outside-the-enumeration
+  ;; Sabotage, as a test rather than as a hope. A refusal built through a
+  ;; HELPER is the case the literal scan missed; both routes are closed at the
+  ;; point of construction, so an unenumerated reason is unrepresentable.
+  (is (thrown-with-msg?
+        IllegalArgumentException #"not enumerated"
+        (#'inspect/refuse! :brand-new-reason ["requests" 0] "synthetic"))
+      "a direct refusal cannot invent a reason")
+  (is (thrown-with-msg?
+        IllegalArgumentException #"not enumerated"
+        (#'inspect/unique-strings! ["a" "a"] ["requests" 0 "forms"]
+                                   :brand-new-reason))
+      "and neither can a refusal built through a helper")
+  (is (contains? inspect/refusal-reasons :duplicate-form)
+      "the helper's own reason is enumerated"))
 
 ;; ============================================================
 ;; O2 ROUND 4 — the refusal enumeration comes from the RUNTIME
@@ -3300,13 +3352,6 @@
 ;; escape already present in ordinary source.
 ;;
 ;; A literal-shape scan is never the ratchet. The runtime is.
-
-(defn- refusal-reason-of
-  "The reason one request actually refuses with, driven through the public
-   entrance and normalized to its name."
-  [params]
-  (when-let [reason (:reason (run params))]
-    (if (keyword? reason) (name reason) (str reason))))
 
 (def ^:private helper-built-refusal
   "A duplicate form name. The forms validator hands `:duplicate-form` to
@@ -3326,9 +3371,17 @@
                            refusal-ratchet-cases))]
     (is (= "duplicate-form" reachable)
         "the public entrance reaches a refusal whose reason is an argument")
-    (is (contains? scanned reachable)
-        (str "the literal `(refuse! :reason` scan misses a reason passed to a "
-             "helper; it found " (count scanned) ": " (pr-str (vec scanned))))
+    ;; The RED form of this assertion asked the literal scan to FIND it. That
+    ;; was the wrong repair: the scan is correct about the source and wrong
+    ;; about the program. It still cannot see this reason, and that fact is
+    ;; pinned here so nobody re-promotes the scan to a ratchet.
+    (is (not (contains? scanned reachable))
+        (str "the literal `(refuse! :reason` scan cannot see a reason passed "
+             "to a helper; it found " (count scanned) ": "
+             (pr-str (vec scanned))))
+    (is (contains? (into (sorted-set) (map name) inspect/refusal-reasons)
+                   reachable)
+        "the runtime enumeration carries it")
     (is (contains? driven reachable)
         (str "no ratchet fixture drives it; the ratchet drives "
              (count driven) " reasons"))))
