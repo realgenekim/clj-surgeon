@@ -5802,6 +5802,99 @@
                 (str "the failure must land in the counted bucket, not"
                      " escape as an uncaught exception: " (pr-str record)))))))
 
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Round eleven (Opus, finding 3): the classifier has FIVE ways to exit
+    ;; that are none of its three states -- ABSENT, SATISFIED or FAILED.
+    ;; Round twelve wrapped `classify-battery-receipt*` in `(catch Throwable
+    ;; e ...)` and replaced both bare `sort` sites with `sort-by pr-str`.
+    ;; Re-verified here against the exact production function, case by case:
+    ;; the mixed-key sorts and a non-seqable `:arms` are already closed by
+    ;; that wrap; a malformed `:kinds-published` and a reader overflow are
+    ;; NOT, because both happen outside `classify-battery-receipt*` itself
+    ;; -- the first in `check-battery-precondition!`'s `:satisfied` branch,
+    ;; after the state has already been decided, and the second in the
+    ;; `read-string`/`slurp` step that builds `record` before classification
+    ;; is even called.
+    (testing "round eleven's five escape sites, re-verified at the round-twelve tip"
+      (testing "sites :106/:136 -- mixed-type arm keys -- CLOSED by sort-by pr-str"
+        (let [{:keys [state failures]}
+              (drive-precondition-state!
+               (assoc complete :arm-verdicts {"8" true 32 true 64 true}))]
+          (is (= :failed state)
+              "a mixed-type-key receipt must classify :failed, never throw")
+          (is (= 1 (count failures)))))
+
+      (testing "site :122 -- a keyword :arms is not seqable -- CLOSED by the outer catch Throwable"
+        (let [{:keys [state failures]}
+              (drive-precondition-state! (assoc complete :arms :bogus))]
+          (is (= :failed state)
+              "a non-seqable :arms must classify :failed, never throw")
+          (is (= 1 (count failures)))))
+
+      (testing "site :122 -- a string :arms is seqable but still a shrunken subject -- fails closed"
+        (let [{:keys [state failures]}
+              (drive-precondition-state! (assoc complete :arms "8-32-64"))]
+          (is (= :failed state))
+          (is (= 1 (count failures)))))
+
+      (testing "site :174 -- a number as :kinds-published must not classify :satisfied and then throw"
+        ;; Every OTHER field the record must carry to reach :satisfied is
+        ;; intact; only :kinds-published is malformed. Pre-fix, the
+        ;; classifier itself returns {:state :satisfied} (nothing here
+        ;; validates :kinds-published), and the throw happens one layer up
+        ;; when check-battery-precondition!'s :satisfied branch calls
+        ;; `(set (:kinds-published record))` -- outside every catch.
+        (let [{:keys [state failures]}
+              (drive-precondition-state! (assoc complete :kinds-published 7))]
+          (is (= :failed state)
+              "a receipt that cannot name the kinds it published must not satisfy the precondition")
+          (is (= 1 (count failures))
+              "the failure must land in the counted bucket, not escape as an uncaught exception")))
+
+      (testing "site :166 -- a deeply nested receipt overflows the reader -- must classify :failed, not crash the run"
+        (let [deep (str (apply str (repeat 60000 "[")) (apply str (repeat 60000 "]")))
+              {:keys [state failures]} (drive-precondition-state! deep)]
+          (is (= :failed state))
+          (is (= 1 (count failures))))))
+
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Round thirteen: the ABSENT test was BY VALUE (`(nil? record)`), not by
+    ;; EXISTENCE. A file that exists but reads as `nil` took the fresh-clone
+    ;; skip and printed "no battery receipt at ..." about a file that is
+    ;; right there on disk -- the only shape in round eleven's review that
+    ;; ended exit 0. Absent must mean the file does not exist; a present file
+    ;; that reads as nil falls through to the ordinary "not a map" FAILED
+    ;; reason, same as any other non-map content.
+    (testing "a receipt that EXISTS but reads as nil is FAILED, never the absent skip"
+      (let [{:keys [state failures skips]} (drive-precondition-state! "nil")]
+        (is (= :failed state)
+            "a present file reading as nil must not take the absent skip")
+        (is (empty? skips)
+            "a present file must never be counted in the skip bucket")
+        (is (= 1 (count failures)))
+        (is (str/includes? (str (first failures)) "not a map")
+            (str "the reason must say the receipt is not a map, not that it"
+                 " is absent: " (pr-str failures)))))
+
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Round thirteen (hardening): the receipt was read with
+    ;; `clojure.core/read-string`, which leaves `*read-eval*` ON -- a receipt
+    ;; beginning `#=(...)` is EVALUATED by the reader during classification,
+    ;; inside the gate. `clojure.edn/read-string` never evaluates; an
+    ;; unsupported dispatch macro is a parse failure, same shape as any other
+    ;; unreadable receipt.
+    (testing "a #= form in a receipt must not execute, and must classify :failed"
+      (let [{:keys [state failures]}
+            (drive-precondition-state! "#=(java.lang.System/exit 3)")]
+        ;; Reaching this assertion at all is part of the proof: if the form
+        ;; had been evaluated, System/exit would have ended the JVM and no
+        ;; assertion below it would ever run.
+        (is (= :failed state))
+        (is (= 1 (count failures)))
+        (is (str/includes? (str (first failures)) "could not be read")
+            (str "the reason must name the parse failure, not silently drop"
+                 " the form: " (pr-str failures)))))
+
     (testing "every state spends the same number of assertions"
       (let [counts (mapv (fn [content]
                            (let [{:keys [reports]} (drive-precondition-state! content)]
