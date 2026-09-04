@@ -187,13 +187,24 @@
             (is (not (str/includes? out "def token"))
                 (str "the " (name runtime) " launcher printed a def name from "
                      "outside the caller's tree — exit " exit))
-            ;; The refusal names the entry AS SPELLED, never the tree it
-            ;; targeted: the target is the fact about the box, the spelling is
-            ;; the fact about the request.
-            (is (not (str/includes? out (.getCanonicalPath outside)))
-                (str "the refusal named the TARGET tree absolutely rather than "
-                     "the entry the caller spelled — stdout "
-                     (pr-str (subs out 0 (min 400 (count out)))))))
+            ;; The refusal NAMES the entry as the caller spelled it: a
+            ;; counted skip the caller cannot map back to a line of their own
+            ;; build file is a number, not a refusal.
+            (is (str/includes? out spelled)
+                (str "the refusal did not name the entry the caller spelled ("
+                     (pr-str spelled) ") — stdout "
+                     (pr-str (subs out 0 (min 400 (count out))))))
+            ;; And it names ONLY that. Where the two differ — the relative
+            ;; spelling — the resolved TARGET must not appear: the target is a
+            ;; fact about the box, and a refusal that publishes it hands over
+            ;; the very path it just declined to read. Where the caller spelled
+            ;; the entry absolutely the two are the same string, and echoing
+            ;; the caller's own text back is the contract, not a leak.
+            (when (= label :relative)
+              (is (not (str/includes? out (.getCanonicalPath outside)))
+                  (str "the refusal named the resolved TARGET tree rather than "
+                       "the entry the caller spelled — stdout "
+                       (pr-str (subs out 0 (min 400 (count out))))))))
           (finally
             (fs/delete-tree root)
             (fs/delete-tree outside)))))))
