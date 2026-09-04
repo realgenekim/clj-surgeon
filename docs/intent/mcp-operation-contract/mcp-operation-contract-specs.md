@@ -9,6 +9,11 @@ This file is the stable intent registry for the MCP operation-contract leaf.
 IDs are never reused. The status marker records whether the current code and
 tests witness the requirement.
 
+The admission gate's own intents, `MCP-OP-ADMIT-nnn`, are registered in
+[admit-clojure-patch-specs.md](admit-clojure-patch-specs.md) beside the design
+that owns them. They are audited from that file by the same coherence gate, so
+they are not restated here; ids remain unique across the whole `MCP-OP` prefix.
+
 # #Finalized Results
 
 - [x] **MCP-OP-RESULT-001**: When a public MCP handler produces a successful domain result, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that result.
@@ -152,6 +157,30 @@ These requirements define the project-owned exact-verifier fusion contract.
 - [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
 - [x] **MCP-OP-READ-PARITY-001**: When the transport-neutral exact-form selector refuses a missing or ambiguous owner, the CLI and MCP projections shall expose the same complete bounded owner vocabulary and non-authoritative per-owner hypotheses without source bodies.
 
+# #Refusals That Name Their Own Field
+
+- [x] **MCP-OP-FIELD-001**: When an `inspect_clojure` request omits a required field, the `missing-fields` refusal shall name every missing field, the complete required field set at that path, and, where clj-surgeon can stand behind one, the minimal valid object at that path. The visible summary shall show the path, the missing names, and that minimal shape.
+- [x] **MCP-OP-FIELD-002**: When an extraction request supplies no `require_policy` or an unaccepted one, on the `inspect_clojure` planning surface and on the `apply_clojure_changes` write surface alike, the `invalid-require-policy` refusal shall name the field, list its accepted values, echo what it received, and state that the field is required and never defaulted. The visible summary shall show the field and its accepted values. clj-surgeon shall not substitute a default for a field its published schema declares required, and shall not refuse it through a generic refusal that cannot name those values.
+- [x] **MCP-OP-FIELD-003**: When a `match` request whose pattern uses `_` as a standalone wildcard returns zero matches, or fewer than its declared expectation, the result shall carry the note that each `_` matches exactly one subtree and that a longer form needs a longer pattern. A pattern without a standalone `_` shall carry no such note.
+- [x] **MCP-OP-FIELD-005**: clj-surgeon shall decide whether a `match` pattern uses a standalone `_` wildcard from the parsed pattern, not from its bytes. An `_` inside a string literal or inside one symbol shall not count as a wildcard, and a wildcard whose only neighbour is a comma shall.
+- [x] **MCP-OP-FIELD-006**: Every minimal request shape clj-surgeon publishes shall be one the live validators accept at that path. Where no registered example covers a path's complete required set, the refusal shall omit `minimal_request` rather than show a shape clj-surgeon cannot stand behind.
+
+# #Matched-But-Unaddressed Reporting
+
+- [x] **MCP-OP-MATCHED-001**: When an `apply_clojure_changes` request supplies the optional `expect_matched` basis and every guard passes, the receipt shall report the matched count, the addressed count, and the bounded list of matched sites the transaction did not address, each with its pre-image line and source hash. The evidence shall be derived from the transaction's own frozen pre-image; clj-surgeon shall retain no server-side session state between the prior `match` read and the transaction.
+- [x] **MCP-OP-MATCHED-002**: If the `expect_matched` basis names a file this transaction did not read, or its `file_hash` differs from that file's pre-image hash, or re-running its pattern on that pre-image yields a different match count, then clj-surgeon shall refuse `expect-matched-stale` before any write, naming which of those disagreed with the expected and actual values, and leaving every byte unchanged.
+- [x] **MCP-OP-MATCHED-003**: If the `expect_matched` pattern is not exactly one complete Clojure form, then clj-surgeon shall refuse `expect-matched-invalid-pattern` before any write. If the pattern is usable but cannot be evaluated against the named file, it shall refuse `expect-matched-unreadable-source` instead, so the refusal names the cause the caller can act on. `expect_matched` shall remain optional; omitting it shall not change any existing receipt field or refusal.
+- [x] **MCP-OP-MATCHED-004**: When clj-surgeon decides whether one matched site was addressed by the transaction, it shall compare that site's pre-image preorder address span with each compiled edit's pre-image preorder address span. Two matched sites that share one pre-image line shall be reported independently.
+- [x] **MCP-OP-MATCHED-005**: A public tool shall advertise exactly the fields its entrance accepts. The published `apply_clojure_changes` schema shall not advertise `expect_matched` on a branch that refuses it, and `edit_clojure` shall refuse before any effect every request field its published schema omits, naming those fields and the entrance that accepts them.
+
+# #Multimethod Owner Addressing
+
+- [x] **MCP-OP-DISPATCH-001**: When an outline record describes a `defmethod` top-level form, clj-surgeon shall publish that form's dispatch value as a `dispatch` field carrying its exact source spelling.
+- [x] **MCP-OP-DISPATCH-002**: When an exact-owner selector refusal names an owner whose leading name resolves to one or more `defmethod` owners in the frozen snapshot, clj-surgeon shall publish the exact `{kind, name, dispatch}` owner form to send, the entrance that accepts it, and a bounded deterministic dispatch vocabulary with returned, omitted, and truncated counts. The evidence shall carry `authority=false`.
+- [x] **MCP-OP-DISPATCH-003**: When clj-surgeon summarizes a selector refusal that carries multimethod owner evidence, the visible summary shall state that the owner is a multimethod, show the exact owner form to send with the entrance that accepts it, and list the bounded dispatch vocabulary instead of only the collapsed owner name.
+- [x] **MCP-OP-DISPATCH-004**: When clj-surgeon publishes a dispatch vocabulary, the returned entries shall fit a published character budget as well as the count bound, and shall report returned, omitted, and truncated counts against it. Each entry shall be exactly one physical line carrying no comment — including a dispatch spelling whose source is a multi-line string literal, whose embedded newline shall be reader-escaped rather than passed through — so a joined summary line cannot be commented out, broken, or split across lines.
+- [x] **MCP-OP-DISPATCH-005**: When a `defmethod` form's dispatch value is preceded by `#_` discards or wrapped in reader metadata, clj-surgeon shall publish and select on the value the reader sees, not the discard or the metadata wrapper. An arm whose dispatch value cannot be read shall not match any selector and shall not prevent the remaining arms in that file from being read or addressed.
+
 # #Positional Mutation Authority
 
 - [x] **MCP-OP-POS-AUTH-001**: When CLI `:edit` receives `:expect`, the compiled query shall start with exactly one caller-visible named top-level owner step `[:form NAME]` or `[:form NAME PLATFORM]` before source or plan I/O can occur.
@@ -244,6 +273,21 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-READ-DIAG-003` | A ranked list makes the complete owner vocabulary unnecessary, or returning source is required for useful evidence. | Small namespace ; semantic rename outside the top ten; repeated owner names; name-only vector over budget. |
 | `MCP-OP-READ-HYP-001` | The highest-ranked owner can be selected automatically because the list is deterministic. | One-character typo ; semantic paraphrase; one candidate; tied candidates; candidate input permutation. |
 | `MCP-OP-READ-HYP-002` | A top-ten presentation is the complete candidate universe, or a score gap proves intent. | Eleven or more owners ; intended owner at rank ten; intended owner outside the bound; one displayed candidate from many available owners. |
+| `MCP-OP-DISPATCH-001` | A collapsed owner name is enough to address one multimethod arm, or the dispatch value may be normalized away from its source spelling. | String, keyword, vector, and namespaced-keyword dispatch ; metadata before the name ; non-defmethod owners carry no field. |
+| `MCP-OP-DISPATCH-002` | The refusal's collapsed owner list already teaches the owner shape, or the whole dispatch vocabulary may be returned unbounded. | Bare multimethod name ; name plus an exact dispatch spelling ; name plus an unknown dispatch ; more arms than the vocabulary bound ; non-multimethod owner. |
+| `MCP-OP-DISPATCH-003` | Structured evidence is enough when the summary shows only the collapsed name. | Refusal summary for a 117-arm multimethod ; truncated vocabulary ; refusal without multimethod evidence. |
+| `MCP-OP-DISPATCH-004` | A count bound is a size bound, or a dispatch spelling is always a short single-line token. | Sixty long dispatch vectors ; a `;;` comment inside a dispatch value ; a dispatch spanning three source lines ; a dispatch that is a multi-line string literal with a raw embedded newline ; a vocabulary already inside both bounds. |
+| `MCP-OP-DISPATCH-005` | The dispatch value is always the third child of the form. | `#_discard` before the dispatch ; two discards ; `^:meta` before it ; nested `^{} ^:kw` metadata ; an ordinary arm in the same file as those ; a scan that must not throw. |
+| `MCP-OP-MATCHED-001` | The server may remember a prior match result, or the receipt may report sites from the post-image. | 19 matched and 16 addressed ; all addressed ; nothing addressed ; two files in one transaction ; more unaddressed sites than the presentation bound. |
+| `MCP-OP-MATCHED-002` | A stale basis can be recomputed automatically, or a count disagreement is a receipt note rather than a refusal. | File absent from the transaction ; changed file hash ; count too high ; count too low ; refusal leaves bytes unchanged. |
+| `MCP-OP-MATCHED-003` | An unparseable pattern is a stale basis, a file the pattern cannot be evaluated against is an unusable pattern, or `expect_matched` may become required once a caller has used it once. | Two forms in one pattern ; unbalanced pattern ; a usable pattern over a source that does not parse ; omitted `expect_matched` on an otherwise identical transaction. |
+| `MCP-OP-MATCHED-004` | A pre-image line number is a sufficient proxy for structural identity. | Two `(f _)` sites on one line, one edited ; a site nested inside an edited form ; an edit spanning several matched sites ; an edit with no resolved preorder address. |
+| `MCP-OP-MATCHED-005` | Merged branch properties are close enough when the validator refuses anyway, or one shared handler may accept a field neither entrance's schema declares. | `{edits, expect_matched}` ; `{extraction, expect_matched}` ; `{changes, expect, expect_matched}` ; `edit_clojure` sent `changes` ; `edit_clojure` sent `expect_matched` ; an ordinary declared editor gesture. |
+| `MCP-OP-FIELD-001` | A structured `missing` array is enough when the visible summary says only `correct_request`, or an example shape may be shown for a path clj-surgeon has no example for. | Omitted top-level `expect` ; omitted `expect.files` ; omitted request `operation` ; a path with no registered example. |
+| `MCP-OP-FIELD-002` | An omitted required field may be silently defaulted to `minimal` because that is the common case, or one surface's refusal is enough when the other route refuses first with a generic reason. | Omitted `require_policy` on the plan route ; an unaccepted value on the plan route ; omitted on the apply route ; unaccepted on the apply route ; the published schema still lists the field as required ; the apply refusal leaves every byte unchanged. |
+| `MCP-OP-FIELD-003` | Every miss deserves the wildcard note, or `_` inside a symbol counts as a wildcard. | Zero matches with a standalone `_` ; fewer than expected with `_` ; zero matches with no `_` ; a pattern containing `foo_bar` only. |
+| `MCP-OP-FIELD-005` | Whitespace around `_` in the pattern text is a reliable test. | `(f "a _ b")` ; `[a,_]` ; `foo_bar` ; `(f _)` ; a pattern that does not parse. |
+| `MCP-OP-FIELD-006` | A published example shape stays valid on its own, and every registered path's example covers that path's required set. | Each registered example embedded in a complete request ; a `forms` request omitting `forms` and `expect` ; a path the table does not register ; a new example added without a validator carrier. |
 
 # #Deferred Surface
 

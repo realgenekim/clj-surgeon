@@ -21,6 +21,7 @@
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -29,12 +30,34 @@
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
+(defn- named-plan-refusal
+  "Run `f`; turn a parser-admission refusal into a NAMED refusal the caller can
+   read, instead of a stack trace.
+
+   Gating `clj-surgeon.analyze` (MCP-OP-MEM-005) swaps an uncatchable
+   StackOverflowError for a typed ExceptionInfo. This is the minimal surface
+   that makes that typed refusal usable at the planning ops, the way
+   `safe-outline` does for the scan. Anything that is not an admission refusal
+   is re-thrown untouched."
+  ;; @spec MCP-OP-MEM-005
+  [f]
+  (try
+    (f)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy :file])
+                 :error (ex-message e))
+          (throw e))))))
+
 (defn run-outline [{:keys [file]}]
-  (let [result (outline/outline file)
-        ns-name (:ns result)
-        forward-refs (when ns-name
-                       (fwd/detect-forward-refs file ns-name))]
-    (assoc result :forward-refs (or forward-refs []))))
+  (named-plan-refusal
+    (fn []
+      (let [result (outline/outline file)
+            ns-name (:ns result)
+            forward-refs (when ns-name
+                           (fwd/detect-forward-refs file ns-name))]
+        (assoc result :forward-refs (or forward-refs []))))))
 
 (defn run-mv [{:as opts}]
   (move/move-form (cond-> opts (#{:mv-with-deps "mv-with-deps" ":mv-with-deps"} (:op opts)) (assoc :with-deps true))))
@@ -52,6 +75,8 @@
       (edit-dsl/evaluate-xray (slurp (:file prepared)) prepared))))
 
 (defn run-declares [{:keys [file]}]
+ (named-plan-refusal
+  (fn []
   (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
         ol (outline/outline file)
         declares (->> (:forms ol)
@@ -80,22 +105,26 @@
                                          declares))
                :needed (count (filter #(or (contains? truly-cyclic (str (:name %)))
                                            (contains? fwd (str (:name %))))
-                                      declares))}}))
+                                      declares))}}))))
 
 ;; The four file-scoped study ops are CLI entrances over one kernel; the MCP
 ;; read entrance calls the same clj-surgeon.study functions on the same bytes.
 
 (defn run-deps [{:keys [file form]}]
-  (study/deps (slurp file) {:form form}))
+  (named-plan-refusal
+    (fn [] (study/deps (slurp file) {:form form}))))
 
 (defn run-topo [{:keys [file]}]
-  (study/topo (slurp file)))
+  (named-plan-refusal
+    (fn [] (study/topo (slurp file)))))
 
 (defn run-closure [{:keys [file form]}]
-  (study/ls-extract (slurp file) {:form form}))
+  (named-plan-refusal
+    (fn [] (study/ls-extract (slurp file) {:form form}))))
 
 (defn run-ls-deps [{:keys [file form]}]
-  (study/ls-deps (slurp file) {:form form}))
+  (named-plan-refusal
+    (fn [] (study/ls-deps (slurp file) {:form form}))))
 
 ;; ============================================================
 ;; CLJC operations: merge, split, add-require
@@ -150,12 +179,30 @@
    `format` shadowed `clojure.core/format` for the whole body, which is how
    the refusal branch once threw a NullPointerException instead of printing
    its message. The shadow is harmless today only because nothing in the body
-   calls `format`; naming it away is what keeps it harmless."
+   calls `format`; naming it away is what keeps it harmless.
+
+   A root that is not an existing directory is returned as a TYPED refusal map
+   rather than printed-and-exited (MCP-OP-SHELL-ARGV-002, Andon pull
+   inb-d27b79): an in-process caller must be able to read
+   `:workspace-root-not-a-directory` back, and the CLI top level still turns a
+   result carrying `:error` into exit 1, so the shell contract is unchanged."
   [{output-format :format :as opts}]
   (let [scan (study/ls-tree opts)]
-    (if-not (:ok scan)
+    (cond
+      (= :dir-not-found (:error-type scan))
+      {:error (str ":ls-tree :dir must be an existing directory: "
+                   (pr-str (str (:dir opts))))
+       :error-type :workspace-root-not-a-directory
+       :dir (str (:dir opts))
+       :next-action "pass_an_existing_directory_path"}
+
+      (not (:ok scan))
+      ;; NOTE (inb-eca3b1): calling System/exit from inside a library operation
+      ;; is owed a separate fix; the exit-1 contract is unchanged here.
       (do (println (:error scan))
           (System/exit 1))
+
+      :else
       ;; The CLI has no byte budget, so it asks for the whole tree; the MCP
       ;; entrance grows the same `outline-take` only as far as its receipt fits.
       (let [projects (study/outline-all (:projects scan))]

@@ -45,6 +45,11 @@
    "edit_clojure"
    #{:committed :typed-refusal}
    "transform_clojure"
+   #{:preview :committed :typed-refusal}
+   ;; @spec MCP-OP-ALIAS-001
+   "alias_migration"
+   #{:committed :typed-refusal}
+   "admit_clojure_patch"
    #{:preview :committed :typed-refusal}})
 
 ;; @spec MCP-OP-COVERAGE-001

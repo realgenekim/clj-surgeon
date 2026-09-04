@@ -11,6 +11,7 @@
    in dependency analysis, topological sort, and extraction."
   (:require
    [clj-surgeon.forms :as forms]
+   [clj-surgeon.parse-admission :as admission]
    [clojure.set :as set]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
@@ -21,14 +22,24 @@
 ;; ============================================================
 
 (defn file->zloc
-  "Read a file into a rewrite-clj zipper. This is the ONLY I/O function."
+  "Read a file into a rewrite-clj zipper. This is the ONLY I/O function.
+
+   Parser admission (MCP-OP-MEM-005) sits here: this is the read path's THIRD
+   tree constructor, and it is not exempt because its callers plan rather than
+   outline. Ungated it did not complete on a deeply nested input — it threw
+   StackOverflowError, an Error no caller handles. A typed refusal is strictly
+   better for every caller, with or without a receipt to carry it."
+  ;; @spec MCP-OP-MEM-005
   [file]
-  (z/of-string (slurp file) {:track-position? true}))
+  (z/of-string (admission/admit! file (slurp file)) {:track-position? true}))
 
 (defn string->zloc
-  "Parse a string into a zipper. For testing — no I/O."
-  [s]
-  (z/of-string s {:track-position? true}))
+  "Parse a string into a zipper. No I/O — but the source still has a shape, so
+   the same ceiling applies (`extract` and `extract-header` read through here)."
+  ;; @spec MCP-OP-MEM-005
+  ([s] (string->zloc "<source>" s))
+  ([file s]
+   (z/of-string (admission/admit! file s) {:track-position? true})))
 
 ;; ============================================================
 ;; Walk: Collect all top-level forms from a zipper

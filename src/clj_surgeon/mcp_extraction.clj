@@ -102,10 +102,20 @@
              "extraction.public_forms must contain distinct form names"
              {})
 
+    ;; @spec MCP-OP-FIELD-002
     (not (#{:minimal :copy-all} require-policy))
     (refusal :invalid-require-policy
              "extraction.require_policy must be minimal or copy-all"
-             {:require-policy require-policy})
+             {:field "extraction.require_policy"
+              :path ["extraction" "require_policy"]
+              :accepted ["minimal" "copy-all"]
+              :actual (some-> require-policy name)
+              :require-policy require-policy
+              :remedy (str "extraction.require_policy is required and is never "
+                           "defaulted. Send \"minimal\" to copy only the requires "
+                           "the moved forms use, or \"copy-all\" to copy the "
+                           "source namespace's complete require list, then call "
+                           "apply_clojure_changes once.")})
 
     (and source-hash
          (or (not (string? source-hash))

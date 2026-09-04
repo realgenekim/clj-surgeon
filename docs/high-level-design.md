@@ -177,6 +177,13 @@ dependency rule between adapters, compilers, and effects. Each operation moves
 into that algebra through a separately reversible vertical slice; existing
 routes remain authoritative until differential tests prove parity.
 
+A memory-boundedness leaf under `docs/intent/memory-boundedness/` owns the
+promise that a tree-scale operation's retained heap is sized by the work its
+receipt carries rather than by the repository it is pointed at. It owns the
+per-operation memory-and-work receipt block and the bounded-JVM measurement
+battery that gates it (`make memory-battery`, `docs/memory-battery.md`). Both
+requirements are active gaps: the battery is the instrument, not the fix.
+
 The compact exact editor treats `.edn` as lossless Clojure data, not as a
 namespace. An EDN edit must use root scope, may apply one exact replacement to
 an explicit file set, and compiles into the existing frozen multi-file
@@ -844,6 +851,107 @@ Claude Code or Codex skills may later discover and invoke the repository
 command, but they do not reimplement its policy. This keeps the safety contract
 versioned with the repository whose worktrees it governs.
 
+### Admit a native patch through one form-identity gate
+
+The measured adoption failure is not that structural writing is worse. It is
+that an agent already holding a complete unified diff will not abandon its
+native `apply_patch` route to restate that diff as a structural program.
+Layering Surgeon in front of that route costs a second design pass and buys
+nothing the agent believes it needs. The one place a structural tool can help
+without asking for a route change is immediately *after* the native write,
+where the agent otherwise pays three separate returns: re-read the file, run
+`git diff`, and run a focused test command.
+
+`admit_clojure_patch` occupies exactly that position. It accepts the same
+unified diff the agent would hand to `apply_patch`, applies it to an in-memory
+snapshot of current bytes, and returns one receipt that replaces those three
+returns while proving properties a text patcher cannot express.
+
+```mermaid
+flowchart LR
+    A[Agent composes unified diff] --> G[admit_clojure_patch]
+    G --> S[In-memory snapshot of current bytes]
+    S --> P[Apply hunks; record hunk spans]
+    P --> T[Parse pre and post images with rewrite-clj]
+    T --> D[Form-identity delta by top-level owner]
+    T --> H[Typed hazards]
+    D --> R[One receipt]
+    H --> R
+    R -->|preview| N[next_call: commit or corrected preview]
+    R -->|commit, no refusal hazard| C[Atomic compare-and-swap write]
+    C --> V[Focused lint delta and focused tests]
+    V --> R
+```
+
+The gate boundary is narrow on purpose.
+
+- **The gate owns admission, not authorship.** It never composes, widens,
+  repairs, or reformats a patch. Its only outputs are an applied snapshot, a
+  structural report, and one atomic commit of bytes the caller already wrote.
+- **The gate is a patch reader, not a patch editor.** Hunk application is
+  strict: context and removal lines must match the current file exactly. A
+  patch that does not apply is a typed refusal, never a fuzzy or offset match.
+- **Preview never writes.** Preview is the default. A preview receipt and a
+  commit receipt describe the same computation; only `committed` and the
+  verification block differ.
+- **Refusal leaves bytes unchanged.** A refusal-class hazard in commit mode
+  writes nothing and returns the same receipt with `next_call` naming the
+  hazard and the preview call that reproduces it. A refusal payload is never
+  empty.
+- **Form identity is the unit of report.** The delta is keyed by top-level
+  defining-form owner, not by line, hunk, or byte offset. The classification of
+  what defines an owner is `forms/defining-form?`, the repository's single
+  source of truth, so the gate cannot drift from the rest of the kernel.
+
+Four invariants make the receipt worth trusting.
+
+1. **Byte drift outside the hunks must be zero.** The gate reconstructs the
+   post image from the pre image and the patch's own hunk ranges, then compares
+   every byte outside those ranges. A non-zero drift means the patch moved
+   source it did not declare. This is reported as a number, not a verdict.
+2. **Protected node classes are counted, not assumed.** Comments, metadata,
+   reader conditionals, and `#_` discards are counted per owner in both images.
+   A count that changes for an owner whose hunks do not cover the change is
+   protected drift, which is the machine-checkable form of the repository's
+   standing rule that unrelated comments, metadata, discards, and lint
+   directives remain protected unless a declared change owns them.
+3. **The post image must read.** An unbalanced or unreadable post image is a
+   refusal, and the refusal names the file and the reader failure. This is the
+   one hazard a purely textual patcher can never anticipate, because its
+   correctness criterion ends at line matching.
+4. **Verification is claimed only when it ran, and it runs before the write.**
+   Every requested check executes against the in-memory snapshot *before* any
+   file is replaced. A check that fails is a refusal that writes nothing; a
+   check that could not run does not block the commit but keeps
+   `verification_complete` false with a stated reason. Evidence is required,
+   not inferred: a process exiting zero proves that a process exited zero, so
+   a test run counts only when the runner attributes results to the namespaces
+   the gate asked about. An unavailable analyzer, an absent test namespace, or
+   a deferred job is reported as an unverified state, never as success.
+
+Hazards are typed and separated by consequence. Refusal-class hazards block a
+commit: an unreadable post image, a duplicate top-level definition of one
+symbol in one file, a redefinition of a `def` or `defn` symbol later in the
+same file, and a `(ns ...)` form that loses an existing require. Informational
+hazards do not block: notably `:opaque-string-edit`, a change inside a long
+code-shaped string literal whose opening delimiter is outside the hunk, which
+is the class of edit where a text patch is structurally blind but the change
+may still be exactly what the author intended.
+
+Verification reuses the kernel that already exists. The lint delta is the
+location-independent multiset comparison in `diagnostic-delta`, so an unrelated
+edit that merely moves a finding does not read as a regression. Focused tests
+are the test namespaces mapped from the touched source namespaces, run through
+the repository's configured hot or cold verification runner. The gate adds no
+second verifier and no second notion of passing.
+
+The gate does not become another editing language. It exposes no selectors, no
+owners, no counts, and no expectations. Its entire request is the payload the
+agent already produced, plus a mode and a verification level. That is the
+property that makes it adoptable, and it is also the property that bounds its
+ambition: the gate can make every native Clojure edit verified, but it cannot
+make a fan-out edit cheaper to author. Those remain separate design problems.
+
 ## Key Design Decisions
 
 ### Share the operation algebra, not the MCP facade
@@ -970,6 +1078,50 @@ not a gate.
 A Prolog shadow oracle is provisional. It is retained only if its independent
 relation across operation, outcome, and verification state reveals a
 counterexample that the native contract tests missed.
+
+### Verify the patch the agent wrote, not the patch we would have written
+
+The gate accepts a foreign unified diff rather than requiring the caller to
+restate the change as a structural program. This is a deliberate reversal of
+the usual direction of authority in this repository, and it needs its reason
+recorded.
+
+Requiring a structural restatement was rejected because it is exactly the cost
+that measurement says agents decline to pay: they read, they compose a diff,
+and they then have no remaining reason to describe the same change twice.
+Making the gate a preflight before the native write was rejected for the same
+reason with an added failure mode, because a preflight that the agent may skip
+gates nothing and a preflight it may not skip is a route change wearing a
+different name. Widening `transform_clojure` to accept a diff was rejected
+because that verb's contract is a capability-limited program with an exact
+cardinality guard, and a diff carries neither.
+
+The accepted position is that patch application is bookkeeping and patch
+authorship is judgment. The gate performs the mechanical half exactly: strict
+hunk matching, snapshot hashes, atomic compare-and-swap commit, and read-back.
+It reports the structural half as facts with owners and spans and lets the
+model decide, except for the closed refusal set where the post image cannot be
+correct or cannot be read.
+
+The cost of this position is that verification happens after authorship rather
+than before it, so a hazard is found at admission rather than prevented at
+composition. That is accepted because refused bytes are never written, and
+because the alternative buys prevention at the price of adoption.
+
+Authorship is the only thing the gate is late for. Verification is not: the
+analyzer delta and the focused tests run against the snapshot before any file
+is replaced, so a failing check is a refusal rather than a repair. A gate that
+wrote first and verified afterwards would be able to publish a receipt reading
+`ok: true, committed: true` beside a failing test, which reports the opposite
+of what happened and leaves the repair to a second act that may never come.
+
+One consequence is worth stating plainly, because it is the seam where a gate
+usually starts lying. A commit and the preview that recommended it are two
+requests against two snapshots, so the transaction's own compare-and-swap
+cannot bind them. A preview therefore hands back the pre-image digest of every
+file it inspected, a commit that carries those digests refuses if anything
+moved, and a commit that omits them says so on its receipt. The gate does not
+forbid a one-shot commit; it refuses to let one look like a verified one.
 
 ## Success Metrics
 

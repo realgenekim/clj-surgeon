@@ -432,6 +432,19 @@
                   base :ambiguous-form
                   (str "Selector matched " (count matches) " top-level forms")
                   details)))))
+        ;; @spec MCP-OP-MEM-005
+        ;; A parser-admission refusal reaches the caller TYPED. Flattening it to
+        ;; a message left :refusal/:reason/:limit/:observed nil, which is exactly
+        ;; the witness family the spec requires of EVERY refusal — and show_form
+        ;; is one of the entrances the coverage claim names.
+        (catch clojure.lang.ExceptionInfo e
+          (let [data (ex-data e)]
+            (if (= :parser_admission_refused (:refusal data))
+              (merge (error-result base :parser-admission-refused
+                                   (ex-message e) {})
+                     (select-keys data [:refusal :reason :limit :observed
+                                        :remedy :file]))
+              (error-result base :invalid-source (ex-message e) {}))))
         (catch Exception e
           (error-result base :invalid-source (.getMessage e) {}))))))
 

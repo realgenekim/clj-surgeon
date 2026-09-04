@@ -10,6 +10,65 @@ is cut.
 
 ### Fixed
 
+- Receipt and refusal wording no longer contradicts its own numbers: a
+  one-arm multimethod says "1 defmethod arm shares", a basis whose pattern
+  matched nothing says so instead of claiming "all 0 matched sites
+  addressed", and one matched site is singular. A prior-match failure caused
+  by an unreadable file is now labelled `expect-matched-unreadable-source`
+  rather than blamed on the caller's pattern, and the minimal-shape lookup
+  is computed once instead of twice.
+
+- The published minimal request shapes are now pinned to the live validators:
+  every registered example is embedded in a complete request and validated,
+  and adding an example without a validator carrier fails the suite. A
+  refusal at a path no example covers is witnessed to omit `minimal_request`
+  rather than show a shape clj-surgeon cannot stand behind. The
+  `expect_matched` count-too-low and unusable-pattern routes gained
+  end-to-end witnesses proving no byte and no receipt directory moves.
+
+- The `_` wildcard note is now decided from the parsed `match` pattern rather
+  than its bytes. An underscore inside a string literal produced a spurious
+  note, and a wildcard whose only neighbour was a comma (`[a,_]`) was
+  missed.
+
+- Public tool schemas now advertise exactly what their entrances accept. The
+  `apply_clojure_changes` schema advertised `expect_matched` on the edits,
+  extraction, and basis branches that refuse it, and `edit_clojure` — whose
+  schema declares neither `changes` nor `expect_matched` — accepted both,
+  because both entrances share one handler. The schema branches now exclude
+  the field, and `edit_clojure` refuses any undeclared field before any
+  effect, naming the fields and pointing at `apply_clojure_changes`.
+
+- `defmethod` dispatch values behind a `#_` discard or a `^meta` wrapper are
+  now read as the reader reads them. The outline used to emit `#_skipped`
+  and `^:meta :withmeta` as dispatch spellings, and the exact-owner selector
+  threw on both while scanning — so a single such arm made every other arm
+  in that file unaddressable. An arm whose dispatch still cannot be read now
+  matches no selector instead of failing the whole compile.
+
+- `invalid-require-policy` now reaches `apply_clojure_changes`. The refusal
+  that names the field, lists `minimal` and `copy-all`, echoes what it
+  received, and states the field is never defaulted used to be unreachable
+  from the write surface: the request contract refused `invalid-enum` or
+  `missing-fields` first, and neither named the accepted values. Both an
+  omitted and an unaccepted `require_policy` now produce the same named
+  refusal on both routes, and the visible summary shows the field and its
+  values.
+
+- A published dispatch vocabulary is now bounded by characters as well as by
+  arm count, and each entry is rendered as one comment-free line. Sixty long
+  dispatch spellings used to produce kilobytes of refusal evidence, and a
+  `;;` inside one commented out the rest of the joined summary line. The
+  selector compares parsed dispatch values, so the rendered spelling is still
+  one the selector accepts.
+
+- `expect_matched` now decides "addressed" from preorder address spans
+  rather than pre-image line numbers. Two matched sites on one line used to
+  report "all matched sites addressed" when only one of them was edited —
+  the wrong failure direction for a receipt whose job is naming what a
+  transaction skipped. Sites nested inside an edited form still count as
+  addressed.
+
 - Restored the SCI computed-program capability boundary after the no-default
   `case` compatibility change exposed constructor shorthand and dot interop.
   Executable constructor, method, field, and explicit-dot forms now refuse
@@ -18,6 +77,43 @@ is cut.
   exploit shapes and the pre-change causal control.
 
 ### Added
+
+- Read refusals now name their own field. `inspect_clojure`'s `missing-fields`
+  refusal reports the omitted names, the complete required set at that path, and
+  the minimal valid object there, and its visible summary shows all three plus
+  the next call. `invalid-require-policy` names the field, lists `minimal` and
+  `copy-all`, echoes what it received, and states that the field is required and
+  never defaulted — the published schema declares it required, so clj-surgeon
+  does not substitute a default. A `match` result whose pattern uses `_` as a
+  standalone wildcard and returns zero, or fewer than its declared expectation,
+  now carries the note that each `_` matches exactly one subtree and a longer
+  form needs a longer pattern; a pattern without a standalone `_` carries no
+  note.
+
+
+- `apply_clojure_changes` now reports matched-but-unaddressed sites. Copy the
+  `file`, `file_hash`, pattern, and `match_count` from a prior `inspect_clojure`
+  `match` receipt into the new optional `expect_matched` object and the
+  transaction receipt returns `matched_count`, `addressed_matches`, and
+  `unaddressed_matches` — every matched site the transaction did not touch,
+  with its pre-image line and source hash. The basis is stateless: the file hash
+  fences it against the transaction's own frozen pre-image, and a file, hash, or
+  count disagreement refuses `expect-matched-stale` before any write. Field
+  case: 19 guard sites matched, 16 addressed, and the exclusion rationale for
+  the other 3 lived only in the driver's head.
+
+
+- Multimethod owner addressing is now discoverable from reads. Every outline row
+  for a `defmethod` carries `dispatch`, the exact source spelling of that arm's
+  dispatch value, so a file whose owner vocabulary collapses many arms into one
+  name still shows how to address one of them. The exact-owner selector refusal
+  now recognizes a selector whose leading name owns `defmethod` arms and
+  publishes the exact `{kind, name, dispatch}` owner form to send, the entrance
+  that accepts it, and a bounded dispatch vocabulary (at most 40 values, with
+  returned/omitted/truncated counts). Field case: 117 arms collapsed to one
+  owner `fold-event`, and a cold agent paid a refusal to learn the shape from
+  another tool's schema.
+
 
 - Experimental `inspect_clojure` MCP read batches. One typed call can retrieve
   ordered named forms, a compact outline, exact structural matches, and

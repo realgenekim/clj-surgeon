@@ -29,13 +29,25 @@
     'clj-surgeon.mcp-tool-test/editor-gesture-is-exact-guarded-and-undoable
     :typed-refusal
     'clj-surgeon.mcp-tool-test/refuses-before-write-and-publishes-no-receipt}
+   "alias_migration"
+   {:committed
+    'clj-surgeon.mcp-alias-migration-test/one-call-migrates-the-whole-fan-out-and-returns-one-constant-receipt
+    :typed-refusal
+    'clj-surgeon.mcp-alias-migration-test/expect-mismatch-refuses-closed-with-an-executable-next-call}
    "transform_clojure"
    {:preview
     'clj-surgeon.mcp-program-tool-test/previews-one-program-as-several-lossless-addressed-edits
     :committed
     'clj-surgeon.mcp-program-tool-test/commits-the-compiled-addressed-edits-with-read-back-proof
     :typed-refusal
-    'clj-surgeon.mcp-program-tool-test/callback-reports-elapsed-time-on-success-and-refusal}})
+    'clj-surgeon.mcp-program-tool-test/callback-reports-elapsed-time-on-success-and-refusal}
+   "admit_clojure_patch"
+   {:preview
+    'clj-surgeon.admit-patch-test/preview-writes-nothing
+    :committed
+    'clj-surgeon.admit-patch-test/a-clean-commit-writes-atomically-and-proves-read-back
+    :typed-refusal
+    'clj-surgeon.admit-patch-test/a-refusal-class-hazard-blocks-the-commit-and-returns-a-full-receipt}})
 
 (defn- public-tool-registry
   []

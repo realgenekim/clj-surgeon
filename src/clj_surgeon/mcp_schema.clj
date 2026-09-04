@@ -197,6 +197,20 @@
       "edits" (assoc positive-integer-schema :description "Total exact replacements.")
       "files" (assoc positive-integer-schema :description "Total files that must change.")}
      :required ["changes" "edits" "files"]}
+    "expect_matched"
+    {:type "object"
+     :additionalProperties false
+     :description "Optional prior-match basis copied from one inspect_clojure match receipt on the same snapshot. When supplied, the receipt reports every matched site this transaction did not address. Stateless: the file hash fences it, and a file, hash, or count disagreement refuses before any write."
+     :properties
+     {"file" {:type "string" :minLength 1
+              :description "Project-relative source path, exactly the match receipt's file."}
+      "file_hash" {:type "string" :minLength 1
+                   :description "The match receipt's file_hash. This transaction's pre-image hash must equal it."}
+      "match" {:type "string" :minLength 1
+               :description "Exactly the structural pattern the match receipt echoed."}
+      "count" {:type "integer" :minimum 0
+               :description "The match receipt's match_count for that pattern and snapshot."}}
+     :required ["file" "file_hash" "match" "count"]}
     "verify" verification-schema}
    :required ["changes"]})
 
@@ -482,6 +496,9 @@
                       (:properties editor-hybrid-schema)
                       (:properties extraction-schema))
    :allOf (:allOf editor-hybrid-schema)
+   ;; @spec MCP-OP-MATCHED-005
+   ;; `expect_matched` belongs to the direct changes transaction only. Every
+   ;; other branch refuses it at validation, so no other branch advertises it.
    :oneOf
    [{:required ["basis" "decisions"]
      :not {:anyOf [{:required ["changes"]} {:required ["expect"]}
@@ -489,6 +506,7 @@
                    {:required ["delete_owners"]}
                    {:required ["symbol_migration"]}
                    {:required ["require_change"]}
+                   {:required ["expect_matched"]}
                    {:required ["extraction"]}]}}
     {:required ["changes" "expect"]
      :not {:anyOf [{:required ["basis"]}
@@ -507,6 +525,7 @@
                    {:required ["decisions"]}
                    {:required ["changes"]}
                    {:required ["expect"]}
+                   {:required ["expect_matched"]}
                    {:required ["extraction"]}]}}
     {:required ["extraction"]
      :not {:anyOf [{:required ["basis"]}
@@ -517,6 +536,7 @@
                    {:required ["delete_owners"]}
                    {:required ["symbol_migration"]}
                    {:required ["require_change"]}
+                   {:required ["expect_matched"]}
                    {:required ["expect"]}]}}]})
 
 (defn closed-object-shape
@@ -540,6 +560,8 @@
      :expect (closed-object-shape (get-in change [:properties "expect"]))
      :aggregate-expect
      (closed-object-shape (get-in schema [:properties "expect"]))
+     :expect-matched
+     (closed-object-shape (get-in schema [:properties "expect_matched"]))
      :rename-binding
      (closed-object-shape (get-in change [:properties "rename_binding"]))
      :assoc-entry
@@ -567,3 +589,60 @@
 
 (def editor-gesture-contract
   (editor-gesture-contract-shape editor-hybrid-schema))
+
+;; @spec MCP-OP-ALIAS-002
+;; @spec MCP-OP-ALIAS-003
+(def alias-migration-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"op" {:type "string" :const "alias_migration"}
+    "workspace_root" {:type "string" :minLength 1}
+    "from"
+    {:type "object"
+     :additionalProperties false
+     :properties {"lib" {:type "string" :minLength 1}
+                  "var" {:type ["string" "null"] :minLength 1}}
+     :required ["lib" "var"]}
+    "to"
+    {:type "object"
+     :additionalProperties false
+     :properties {"lib" {:type "string" :minLength 1}
+                  "var" {:type ["string" "null"] :minLength 1}
+                  "alias_policy" {:type "array"
+                                  :minItems 1
+                                  :items {:type "string" :minLength 1}}
+                  "refer_policy" {:type "string"
+                                  :enum ["preserve-refer" "alias-qualify"]}}
+     :required ["lib" "var" "alias_policy"]}
+    "scope"
+    {:type "object"
+     :additionalProperties false
+     :properties {"paths" {:type "array"
+                           :minItems 1
+                           :items {:type "string" :minLength 1}}
+                  "exclude" {:type "array"
+                             :items {:type "string" :minLength 1}}}
+     :required ["paths"]}
+    "expect"
+    {:type "object"
+     :additionalProperties false
+     :properties {"files" {:type "integer" :minimum 0}}
+     :required ["files"]}
+    "verify" {:type "string" :minLength 1}}
+   :required ["from" "to" "scope" "expect"]})
+
+(def alias-migration-output-schema
+  {:type "object"
+   :properties {"ok" {:type "boolean"}
+                "elapsed_ms" {:type "number" :minimum 0}
+                "files" {:type "integer" :minimum 0}
+                "sites" {:type "integer" :minimum 0}
+                "alias_histogram" {:type "object"}
+                "collisions_resolved" {:type "integer" :minimum 0}
+                "refer_sites" {:type "integer" :minimum 0}
+                "lib_renamed" {:type ["object" "null"]}
+                "details_path" {:type "string"}
+                "details_retention" {:type "string"}
+                "details_retained" {:type "integer" :minimum 0}}
+   :required ["ok" "elapsed_ms"]})

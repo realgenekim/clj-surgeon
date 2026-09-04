@@ -18,7 +18,9 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | `:ls-tree` workspace table of contents, grep-filterable | WON | CLI **and MCP** | big-aha log, winners table (df432c4); MCP `mode="ls-tree"` shipped, clj-surgeon-0me |
 | `:ls-deps` / `:deps` / `:topo` / `:ls-extract` | WON | CLI **and MCP** | same; MCP `requests` operations shipped, clj-surgeon-0me |
 | `inspect_clojure` outline / forms / owners / prepare-change | KEEP | MCP | l1 taxonomy: substituted reads only under the mandate (07:36Z receipt) |
-| workspace-wide inspect (ls-tree through MCP) | BUILT, adoption unmeasured | MCP | clj-surgeon-0me; `docs/intent/study-ops/`; one kernel proved by `study-ops-both-entrances-call-one-kernel`; E6 free-choice cohort still owed |
+| outline emits `defmethod` dispatch; owner refusal teaches the `{kind,name,dispatch}` form | BUILT | MCP + CLI | friction ledger item 1 (session-4 watch n=2); inb-11a6ae |
+| refusals name their own field (`missing-fields` shape, `invalid-require-policy` values, `_` wildcard note) | BUILT | MCP | friction ledger items 3, 4, 6; inb-3cb0f4 |
+| workspace-wide inspect (ls-tree through MCP) | BUILT, adoption unmeasured | MCP | clj-surgeon-0me; `docs/intent/study-ops/`; one kernel proved by `study-ops-both-entrances-call-one-kernel`; E6 free-choice cohort still owed; inb-f403aa |
 | inspect that returns the next write's literals (the dossier) | OPEN | MCP | fleet round 6, Plan 3 (mission-design) |
 
 ### Writes
@@ -27,6 +29,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | native `apply_patch` | FLOOR | agent | n1, l1: one patch cell for 21 owners |
 | `require_change` across N namespaces | WON | MCP | l1 Y-5, zero churn (churn attribution receipt) |
 | `within` + `from`/`to` surgical edit | WON | MCP | l1 A-0, A-4, Y-0, zero churn |
+| `expect_matched` basis → `unaddressed_matches` in the transaction receipt | BUILT | MCP | friction ledger item 2 (19 matched, 16 addressed); inb-a97614 |
 | `:extract!` to a new namespace | WON | CLI + MCP extraction verb | no native equivalent; safe-refactor skill |
 | `:mv` + `:fix-declares!`, `:rename-ns!` | WON | CLI | no native equivalent |
 | owner-kind-namespace insertion (whole-file churn) | LOST; mechanism corrected: Surgeon runs standard-clojure-style whole-file on changes/basis/extraction routes, never on edits | MCP | clj-surgeon-46o re-scoped to formatter scope; big-aha log |
@@ -80,6 +83,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | staged diffs, ended-gate, completeness gate, per-slot names | WON | f7c4b22 and later |
 | acceptance as gate not score | WON (rule) | 3e26e1c |
 | Anvil "origin" is a stale bundle | OPEN | kc-ns5i |
+| tree-scale memory battery (`make memory-battery`, MCP-OP-MEM-011) | BUILT on bridge/memory-battery; RED on main | docs/observations/2026-09-03-memory-battery-baseline.md |
 
 ## Findings (append-only; newest last)
 

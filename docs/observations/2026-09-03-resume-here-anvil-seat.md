@@ -252,3 +252,210 @@ Live builders: study round 4 (ReDoS step budget; ~/src/clj-surgeon-study), censu
 Rules in force: unit suites via ~/bin/suite-run (three lanes); battery/memory-red keep the exclusive suite.lock; sol-yolo disables repo-declared MCP servers (7888 incident 06:05Z, reported).
 Inbox: inb-1165ce (night orders, GO notes, incident), inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4 (rf2 fence follow-ups), inb-3a9818 (fold-diff HOLD until Sol GO).
 Next on wake: file newest verdicts; at ~08:30Z the Gene report (tables first) from the captain's log; refresh this note.
+
+## RESUME DELTA 2026-09-03T07:18Z — night orders, fourth refresh
+GO (seven): kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated on Gene); rf2 965d49e; read-path-memory 2aa648a (MEM-015); memory-battery 5534e94 (tooling; main RED under it by design). fold-diff 2b56a484: GO for the mayor's exact production read with Sol's conditions (inb-3a9818 HOLD lifted); round 4 building for residuals.
+Live reviews: Sol census round 4 (1e5eec7), Sol q5z round 6 (9d72bcf); Opus study round 4 (ec5a592).
+Live builders: B3 MEM-005 (~/src/clj-surgeon-admit, RED committed, GREEN in progress), arms apparatus round 3 (~/src/clj-surgeon-arms), B1 kernel round 2 (~/src/clj-surgeon-txn: recheck→rename race, membership digest, , identity pinning, pre-image lifetime, battery accountant), fold-diff round 4 (~/src/curtaincall-cfp-folddiff).
+Gene report DRAFT committed: docs/observations/2026-09-03-gene-report-night.md (refresh at the end; tables from the log).
+Rules in force unchanged (suite-run lanes; battery/memory-red exclusive; sol-yolo neutralises repo .codex/config.toml — two 7888 contacts reported on inb-1165ce).
+Next on wake: file newest verdicts; when lanes go quiet or at ~08:30Z, refresh the Gene report and this note.
+
+## RESUME DELTA (fifth refresh; see the commit time) — night orders, final third
+GO (seven) unchanged: kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated on Gene); rf2 965d49e; read-path-memory 2aa648a; memory-battery 5534e94 (tooling). fold-diff: production read GO PINNED at 2b56a484 (inb-3a9818, Sol's conditions); branch tip d5b9e132 needs round 5 (own-copy fallback) before it replaces the pin.
+Live: Sol q5z round 7 (f4d196b). Builders: study round 5 (length-scaled budget term; ~/src/clj-surgeon-study), census round 5 (refusal evidence, entry bound, exhaustion; ~/src/clj-surgeon-census), B1 kernel round 2 (~/src/clj-surgeon-txn), MEM-005 round 2 (prefix depth, Error catch, 4th constructor; ~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms; previous builder wedged, stopped 07:41Z), fold-diff round 5 (~/src/curtaincall-cfp-folddiff).
+Gene report DRAFT at docs/observations/2026-09-03-gene-report-night.md — refresh at ~08:30Z from the captain's log (every number verbatim with its entry time).
+Sol content filter refuses: rf2, study, MEM-005 branches → Opus fallback each time (recorded per lane). sol-yolo neutralises repo .codex/config.toml (two 7888 contacts reported on inb-1165ce at 06:05Z and 06:57Z).
+Inbox: inb-1165ce (night orders, seven GO notes, incidents), inb-3a9818 (fold-diff production read GO with conditions), inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07c5e7 (MEM-005 follow-ups).
+
+## RESUME DELTA (sixth refresh; commit time is the timestamp) — cadence corrected
+Gene's nine hours end ~13:35Z. Gene report DRAFT (docs/observations/2026-09-03-gene-report-night.md) refreshes at ~10:30Z and ~13:00Z, from the captain's log, numbers verbatim with entry times.
+Live Sol reviews: census round 5 (869bbce), kernel round 2 (7c9a9b1), fold-diff round 5 (347fe6d3, curtain-call). Opus: q5z round 7 (f4d196b). Builders: study round 5 (~/src/clj-surgeon-study), MEM-005 round 2 (~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms), B4 MEM-003 streaming ls-tree (~/src/clj-surgeon-stream, based on the MEM-005 tip 8a55dbc).
+fold-diff production read: pinned GO at 2b56a484 on inb-3a9818; 347fe6d3 replaces it only after Sol confirms.
+Everything else as in the fifth refresh.
+
+## RESUME DELTA (seventh refresh; commit time is the timestamp)
+GO (eight): kondo + routing-doc MERGED; receipt-ratchets c5ef7ca; template-upsert 25b98a83 (order-gated); rf2 965d49e; read-path-memory 2aa648a; memory-battery 5534e94 (tooling); study-ops 4480e3d. fold-diff: production read GO at the tip 347fe6d3 on inb-3a9818 (keep the whole receipt); round 6 building for the verdict caveat + scan robustness.
+Live reviews: Opus kernel round 2 (7c9a9b1). Builders: MEM-005 round 2 (~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms), B4 MEM-003 streaming ls-tree (~/src/clj-surgeon-stream), q5z round 8 (~/src/clj-surgeon-q5z: constant-true source_unchanged), fold-diff round 6 (~/src/curtaincall-cfp-folddiff), census round 6 (~/src/clj-surgeon-census: streaming listing, candidate-aware narrowing, placeholders + CENSUS-014).
+Opus-first branches (Sol's filter refuses): rf2, study, MEM-005, q5z, kernel. Two 7888 contacts + the 7890 self-test observation are on inb-1165ce.
+Gene report DRAFT refreshes ~10:30Z and ~13:00Z (nine hours end ~13:35Z).
+
+## RESUME DELTA (eighth refresh; commit time is the timestamp)
+GO (eight) unchanged; fold-diff production read at 347fe6d3 (inb-3a9818).
+Live reviews: Sol MEM-003 streaming ls-tree (8c1087f); Opus kernel round 2 (7c9a9b1); Opus MEM-005 round 2 (ad439f4). Builders: fold-diff round 6 (~/src/curtaincall-cfp-folddiff), census round 6 (~/src/clj-surgeon-census), q5z round 9 (~/src/clj-surgeon-q5z), arms apparatus round 4 (~/src/clj-surgeon-arms: whitelist Make grammar, child subreaper, schema v2).
+Memory program state: MEM-015 GO (2aa648a) · battery GO (5534e94) · MEM-005 round 2 under Opus (ad439f4) · MEM-003 under Sol (8c1087f: ls-tree held 94 → 9.5 MB at 10k) · kernel round 2 under Opus (7c9a9b1) · remaining battery RED rows: workspace-sources-read-all 41.1 MB (MEM-004 streaming fold/spill, unbuilt) and rename-ns-plan-full-match 10.0 MB (the ungated rename planner, inb-07c5e7).
+Follow-ups filed tonight: inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07c5e7, inb-ddb845 (7890 self-test), inb-fa5d68 (MCP ls-tree adoption of MEM-003).
+
+## RESUME DELTA (ninth refresh; commit time is the timestamp)
+GO (eight) unchanged; fold-diff production read at 347fe6d3.
+Live: Sol MEM-003 (8c1087f); Opus q5z round 9 (f51ceae — rule the builder's dispute first: :rolled-back true on an undo = migration still in place). Builders: fold-diff round 6 (~/src/curtaincall-cfp-folddiff), arms apparatus round 4 (~/src/clj-surgeon-arms), kernel round 3 (~/src/clj-surgeon-txn: stale LOCK, lease fail-closed, undo! under lock), MEM-005 round 3 (~/src/clj-surgeon-admit: unmatched-close clamp + malformed corpus, meta counting), census round 7 (~/src/clj-surgeon-census: two continuation gaps).
+Follow-ups filed since the eighth refresh: inb-9c5826 (timing/HEAD-stamp test fragility under parallel lanes).
+
+## RESUME DELTA (tenth refresh; commit time is the timestamp)
+GO (nine): + q5z-alias-migration f51ceae (Opus round 9 withdrew its own item after reproducing the builder's counter-proof). E3's prerequisite amended in the prestaged doc: q5z merged + alias_migration admits the rung's scope (not "battery green").
+Live: Sol apparatus round 4 (895eed0), Sol fold-diff round 5 (885f58b3). Builders: kernel round 3 (~/src/clj-surgeon-txn), MEM-005 round 3 (~/src/clj-surgeon-admit), census round 7 (~/src/clj-surgeon-census), MEM-003 round 2 (~/src/clj-surgeon-stream: pinned manifest + MAC cursor).
+Follow-ups since the ninth refresh: inb-c95f37 (alias_migration deletions count / retire-failed).
+
+## RESUME DELTA (eleventh refresh; commit time is the timestamp)
+GO (nine) unchanged. Live: Sol apparatus round 4 (895eed0), Sol fold-diff round 5 (885f58b3), Sol census round 7 (5eee690); Opus kernel round 3 (eb22036). Builders: MEM-005 round 3 (~/src/clj-surgeon-admit), MEM-003 round 2 (~/src/clj-surgeon-stream).
+Follow-ups since the tenth refresh: inb-2c5b2a (publish-lock retrofit obligation, ~15 writer sites).
+Gene report refresh: launch the refresh agent at ~10:20Z (tables from the captain's log, numbers verbatim with entry times), commit by ~10:35Z; final at ~13:00Z.
+
+## RESUME DELTA (twelfth refresh; commit time is the timestamp) — after the 429
+At ~09:55Z the seat's Claude session limit (429, "resets 10am (UTC)") killed four subagents; codex/Sol lanes unaffected. All relaunched at 10:04Z from committed state. Live: Opus MEM-005 round-3 re-check (52c5d85), Opus kernel round-3 re-check (eb22036), arms round 5 (~/src/clj-surgeon-arms at 895eed0), MEM-003 round 2 (~/src/clj-surgeon-stream from its RED 98775cb), census round 8 (~/src/clj-surgeon-census at 5eee690: doors items schema-validated), fold-diff round 7 (~/src/curtaincall-cfp-folddiff at 885f58b3: witness independence, required-var guard, DATA_DIR under Postgres). Gene report refreshed 10:06Z; re-format per skills/gene-report/SKILL.md (in THIS repo — not ~/opt/claude-skills) running; final refresh ~13:00Z with that skill.
+GO (nine) unchanged; fold-diff production read GO at 347fe6d3 stands; none of the nine has merged yet (origin/main checked 09:44Z).
+
+## RESUME DELTA (thirteenth refresh; commit time is the timestamp)
+Live reviews: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Opus MEM-005 round 3 (52c5d85), Opus kernel round 3 (eb22036). Builders: MEM-003 round 2 (~/src/clj-surgeon-stream), fold-diff round 7 (~/src/curtaincall-cfp-folddiff).
+Gene report: docs/observations/2026-09-03-gene-report-night.md is in the skills/gene-report format (09b5d54); final refresh ~13:00Z with that skill.
+GO (nine) unchanged; none merged yet by the mayor.
+
+## RESUME DELTA (fourteenth refresh; commit time is the timestamp)
+GO (ten): + parser-admission 52c5d85 (MEM-005; merge after read-path-memory b7ef23d + memory-battery 5534e94). Follow-ups: inb-114faa (estimator-blind tagged-literal / hat-meta towers; scan_ms sum + false zero).
+Live: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Opus kernel round 3 (eb22036); builders MEM-003 round 2 (~/src/clj-surgeon-stream), fold-diff round 7 (~/src/curtaincall-cfp-folddiff).
+Next memory leaf after MEM-003 lands: MEM-004 (workspace-sources read-all streaming fold/spill — the last battery RED row besides the ungated rename planner).
+
+## RESUME DELTA (fifteenth refresh; commit time is the timestamp)
+GO (ten) unchanged. Live: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Sol fold-diff round 6 at the tip (66325423; production GO stays at 347fe6d3); builders MEM-003 round 2 (~/src/clj-surgeon-stream), kernel round 4 (~/src/clj-surgeon-txn: in-JVM mutex before the file lock, per-thread re-entrancy, atomic stale-lock break, finish! on every exception path).
+Memory added: jvm-file-locks-are-per-process (bash flock does not block FileChannel.lock; second thread → OverlappingFileLockException).
+
+## RESUME DELTA (sixteenth refresh; commit time is the timestamp)
+GO (ten) unchanged. Live: Sol fold-diff round 6 at the tip (66325423); builders kernel round 4 (~/src/clj-surgeon-txn), apparatus round 6 (~/src/clj-surgeon-arms), census round 9 (~/src/clj-surgeon-census: validation before routing), MEM-003 round 3 (~/src/clj-surgeon-stream: content-addressed cursor id + snapshot reuse; then Sol reviews the cursor surface).
+Follow-ups since the fifteenth refresh: inb-276378 (MEM-003 cursor identity bead).
+Memory added: cursor-mac-needs-an-unpublished-secret.
+
+## RESUME DELTA (seventeenth refresh; commit time is the timestamp)
+GO (ten) unchanged; production fold-diff read GO at 347fe6d3 stands (tip 66325423 NO-GO on the required-var scan; round 8 building).
+No review in flight; five builders: kernel round 4 (~/src/clj-surgeon-txn), apparatus round 6 (~/src/clj-surgeon-arms), census round 9 (~/src/clj-surgeon-census), MEM-003 round 3 (~/src/clj-surgeon-stream), fold-diff round 8 (~/src/curtaincall-cfp-folddiff).
+Next on each report: push → Sol (census, apparatus, fold-diff, MEM-003 cursor surface) or Opus (kernel) → file → GO note or next round. Gene report final refresh ~13:00Z with skills/gene-report/SKILL.md.
+
+## RESUME DELTA (eighteenth refresh; commit time is the timestamp)
+Live: Sol apparatus round 6 cohort-readiness review (8017789). Builders: kernel round 4, census round 9, MEM-003 round 3, fold-diff round 8 (worktrees as before). GO (ten) unchanged; production fold-diff read GO at 347fe6d3.
+
+## RESUME DELTA 12:05Z (from eb56891)
+
+State of the lanes right now (all builders/reviewers are subagents of the Anvil seat session; if you are reading this after compaction, their results arrive as task notifications — do NOT relaunch a lane that is listed as running until you have checked its worktree HEAD against the sha here):
+
+| lane | branch | tip on origin | status | next |
+|---|---|---|---|---|
+| census | clj-surgeon bridge/census-verb | 48c64ac | HELD (Sol r10 NO-GO: CLI validator only `threads`; CLI continuation `:dir .` retargets) | Opus r11 builder in ~/src/clj-surgeon-census → push → Sol r11 re-check |
+| MEM-003 | clj-surgeon bridge/streaming-ls-tree | 281e13b | HELD (Opus r4 GO-WITH-FIX: two-open race 89/400 SERVED-WRONG; symlinked dir escapes lexical confinement) | Opus r5 builder in ~/src/clj-surgeon-stream → push → Opus r5 re-check (Sol filter refuses this lane) |
+| kernel | clj-surgeon bridge/txn-journal | ec93bd1 | HELD (Opus r4 GO-WITH-FIX: restore check-then-act 129/29,012 clobbered; finish-after-throw un-commits) | Opus r5 builder in ~/src/clj-surgeon-txn → push → Opus r5 re-check |
+| apparatus | clj-surgeon bridge/anvil-arms-apparatus | 54f3b50 (tip) / **23a7643 GO cohort-ready** | Sol r8 NO-GO on the tip's case-45 meta-ratchet (wrong-file operand false green) | Sonnet r9 builder in ~/src/clj-surgeon-arms → push → Sol r9 confirm |
+| fold-diff | curtaincall-cfp bridge/fold-diff-tool | 17fa3183 (tip) / **347fe6d3 production GO** | Sol r8 NO-GO at the tip (scan fails open via bindings; crash exit 1; precedence) | Opus r9 builder in ~/src/curtaincall-cfp-folddiff → push → Sol r9 re-check |
+
+Unchanged GOs for the mayor (see the merge-queue doc): receipt-ratchets c5ef7ca, rf2 965d49e, study 4480e3d, memory-battery 5534e94, read-path-memory b7ef23d, q5z f51ceae, parser-admission 52c5d85, template-upsert 25b98a83 (order-gated on Gene), apparatus 23a7643. No merges observed from the mayor as of this delta; consolidated order stands on inb-1165ce. E3/E6 prerequisite "apparatus GO" satisfied; still waiting on the q5z/read-path/parser-admission merges.
+
+Sol lanes: launched via ~/bin/sol-yolo with a background waiter loop per lane; verdicts land in /home/forge/tmp/sol/<lane>-sol-review.md, EXIT line in <lane>-sol.log. Usage watch unchanged all night (96/49/47). Heartbeat cron every 10 min, usage watch hourly at :23. Load ~4–6 on 16 cores, ~20 GB free.
+
+## RESUME DELTA 19:05Z — after the weekly-limit outage (13:03–19:03Z)
+
+The seat's Claude weekly limit (resets 19:00 UTC) killed three subagents and silenced the main loop for six hours; Sol kept working. Relaunched at 19:03Z from committed state. Gene's nine-hour night window (from ~04:00Z) is over; he has not written since. Lanes now:
+
+| lane | tip on origin | status | running now |
+|---|---|---|---|
+| census | 772b29f | HELD — Sol r11 NO-GO (post-scan `:dir .`; unescaped `:next-command` = injection syntax; oversized pool_size throws) | Opus r12 builder in ~/src/clj-surgeon-census |
+| MEM-003 | 0914a37 (origin) / 3cedd44 (local, r6 four items committed, gates NOT run) | Opus r5 GO-WITH-FIX; r6 = docs + assertion + 2 small fixes | Sonnet gates-only agent on 3cedd44 → push → Opus confirm → GO |
+| kernel | 9aa5baa | r6 pushed; Opus r6 re-check was killed after item 1 | fresh Opus r6 re-check in ~/tmp/sol/txn6-wt |
+| fold-diff | b223f64e (production pin 347fe6d3) | r9 pushed; Sol refused the brief; Opus review killed after attack (a) | fresh Opus r9 review in ~/tmp/sol/folddiff9-wt |
+| apparatus | **77e6237 GO cohort-ready** (Sol r10) | CLOSED | — |
+
+Ten GOs unmerged; no merges observed from the mayor all night. Gene report at 2f05a46 (13:00Z). Usage watch unchanged 96/49/47.
+
+## RESUME DELTA 21:35Z — evening state (after the andon)
+
+**ANDON inb-d27b79 (shell injection in `core/find-build-files` on main)** — pulled 20:26Z, acked by the mayor 20:35Z (/tmp/mayor-2035.txt): release-lane freeze GRANTED (no install/reload/merge touching find-build-files or callers until the fix merges with adversarial review); mayor owns the 7888 blast-radius question; bead clj-surgeon-0me gated. Fix branch **bridge/andon-find-build-files-argv 32c0c7f** (11 commits on 11413f2): Opus adversarial review GO-WITH-FIX at 811f4b0, both required items landed; seat probes clean at the tip; handed to the mayor 21:21Z (session msg e0895374 + inb-d27b79) for their independent probe + merge. **Waiting on the mayor.** Follow-up inb-75aaf7 (find expression-start tokens).
+
+| lane | tip on origin | status | running now |
+|---|---|---|---|
+| census | d338554 | r14 pushed; 13 executed rounds so far (last Sol NO-GO on U+FFFD+unknown-field continuation, MCP remedies, missing file — all addressed in r14) | Sol r14 re-check (~/tmp/sol/census15-*) |
+| MEM-003 | **95b0881 GO** (Opus r8 "merge 95b0881") | CLOSED — eleventh GO | — |
+| kernel | **5a2d254 = merge point** (Opus r8: replaces 11c7377) | r9 pre-adoption hardening building | Opus r9 builder in ~/src/clj-surgeon-txn |
+| fold-diff | 3d344432 (production pin 347fe6d3) | r11 pushed (self-owned log, receipt/exit binding, rebind, driver-aborted) | Opus r11 review in ~/tmp/sol/folddiff11-wt — asks whether the tip may replace the pin |
+| apparatus | **77e6237 GO** | CLOSED | — |
+
+GOs for the mayor now: the ten from the night + MEM-003 95b0881 + apparatus 77e6237 + kernel 5a2d254 (latent). No merges observed from the mayor yet. Weekly Claude limit resets 19:00Z (hit once today, 13:03–19:03Z outage). Usage watch unchanged 96/49/47. Follow-ups filed today: inb-ef6dd6 (MEM-005 absolute path in :error), inb-eca3b1 (System/exit in ls-tree op), inb-1f9a27, inb-00d296, inb-75aaf7.
+
+## RESUME DELTA 23:02Z — evening, after Gene's rulings
+
+Gene's rulings tonight (verbatim in the log): Gene reports = vs-native perf first, wins/losses, learnings, what's next, ALWAYS pasted to chat; "target 50% functional work (overall). But your call."; delegated approvals ("If you can approve responsibly, go for it!!!"); "Tell mayor to review CC merge with sol, and merge into main". ANDON inb-d27b79 CLOSED (merged a6df86ee, freeze lifted). Folder-trust dialog was the approval on Gene's phone → 112 dirs trusted, `~/bin/trust-dir` + `~/bin/worktree-add`.
+
+| lane | state | running now |
+|---|---|---|
+| integration branch bridge/integration-2026-09-03 | composing the GOs onto main (mayor's ask); registry ratchet first; merge points: kernel 2df05b3, study-ops NEWER tip when O2 lands, apparatus 89295d8 | Opus integrator in ~/src/clj-surgeon-integ |
+| E6-Lb | DONE: adoption 0/3 (0/13 program), no wall claim — docs/observations/2026-09-04-e6-lb-cohort.md | — |
+| E3-P | DONE: T 49.3 s vs N 137.0 s (0.36× direction, inside the 172 s floor), 3/3 both, pass line fails on refusals; RECORD CORRECTED (next_call existed in structuredContent) — docs/observations/2026-09-04-e3-p-cohort.md | — |
+| E6-Q (square 3 read-only, N/M/F) | running, port 7909 | Opus runner, /home/forge/tmp/arms/e6q |
+| E6-C (WHEN plate vs bare) | running, ports 7909/7910 | Opus runner, /home/forge/tmp/arms/e6c |
+| O2 ls-tree text rows + payload bound | building on bridge/study-ops-mcp | Opus, ~/src/clj-surgeon-study |
+| q5z fix (bare dir scope; text ⊇ structured for refusals; quoted symbols) | building on bridge/q5z-alias-migration | Opus, ~/src/clj-surgeon-q5z |
+| --k irregularity knob | building on bridge/fanout-fixtures-in-git | Sonnet, ~/src/clj-surgeon-fanout |
+| E-REG (k sweep) + E-SLOPE80 | QUEUED behind the q5z fix and the knob; brief in brainfleet §16 | — |
+| census | HELD e2d70d0; round 16 (one fence for every path) building | Opus, ~/src/clj-surgeon-census |
+| fold-diff (curtain-call) | GO 3d344432, pin may move; approved order to the mayor with Sol review | mayor |
+| kernel | GO 2df05b3 (merge point) | in the integration branch |
+
+Mayor: draining via the integration branch; owns curtain-call merges (Sol-reviewed per Gene). Weekly Claude limit resets 19:00Z. Usage watch 96/49/47 flat by construction (cohort servers log elsewhere).
+
+## RESUME DELTA 2026-09-04T01:41Z — MAIN IS FROZEN; this note now lives on bridge/anvil-seat-docs-2026-09-04
+
+- **Gene, verbatim (01:4xZ):** "no one should be merging to main, even mayor. People are using public repo, and I don't want to publish anything on main until we have clear and decisive winner that is tested and dogfooded for months." Nothing from this seat goes to origin/main — code OR docs. The ~/src/clj-surgeon checkout is on `bridge/anvil-seat-docs-2026-09-04`; all seat records commit and push THERE.
+- **Integration line:** `bridge/main-candidate-2026-09-04` @ 3411e3b = origin/main 56efeff + 2556a38 (code tree byte-identical to 2556a38; ten-gate seat pass applies). Next onto it, after their Sol verdicts: 0a38e3d (MEM-003 second landing), then the study-ops composition (bridge/integration-2026-09-03-studyops, building). The mayor fast-forwards NOTHING until Gene names a winner.
+- **Policy commit:** bridge/main-policy-2026-09-04 (CLAUDE.md first section + AGENTS.md + this pointer) — Gene decides whether it lands on main.
+- **Mayor:** OFFLINE since ~01:3xZ; told via inb-1165ce + queued session messages.
+- **Reviews running (Sol):** O2 r2 a0b0520, MEM-003 0a38e3d, census r17 fb7f3b1, q5z r12 61dd334 — verdicts at /home/forge/tmp/sol/{o2r2,mem003,census17,q5z12}-sol-review.md; file them on the seat branch.
+- **Cohorts:** E-HARNESS-2 (10 arms, both write-path flanks) on the lock; E-NSWEEP (12 native arms, N ∈ {30,40,55}) queued; E-GATE-R replay (0 arms) + chars/s vs load running. Standing: square 2 WIN bounded to N ≲ 40 (E-CEILING80: native writes a generator at N=80 and beats the tool on chars); squares single-edit/3/4 withdrawn; square 1 pending E-GATE-R.
+- **Single next action:** when a Sol verdict lands, file it on the seat branch, update the queue row, and if GO put the tip onto the candidate branch (merge --no-ff in ~/src/clj-surgeon-cand, push the branch).
+
+## RESUME DELTA 01:56Z — the working trunk is `MCP/main` (Gene); this note and all seat records live there
+
+- Gene, verbatim: "Get everything onto a branch called MCP/. Let's have that be our 'main' branch, if you know what I mean". `MCP/main` @ a93768f = candidate 3411e3b + seat records + policy. The ~/src/clj-surgeon checkout is ON `MCP/main`; commit and push seat records there. `main` stays frozen (public); nobody pushes it.
+- Landing rule on MCP/main: reviewed GO tips only, `merge --no-ff` from ~/src/clj-surgeon-cand (also on MCP/main) or this checkout; run mcp-test as the trailing check after each landing. bridge/anvil-seat-docs-2026-09-04 and bridge/main-candidate-2026-09-04 are retired (merged); do not push to them.
+- Pending landings: 0a38e3d after MEM-003 r2 GO; study-ops after O2 r3 GO; census after r17 GO; q5z after r12 GO; admit-gate after its fix round GO. Then restart the seat's MCP server (7906) on MCP/main and produce Gene's ls-tree-over-MCP receipt.
+
+## RESUME DELTA 05:04Z — temp files go to /var/tmp/forge, never /tmp (Gene)
+
+Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/seat-tmp-guard.sh refuses a tmpfs temp dir and is sourced by suite-run and sol-yolo. Every brief from here names /var/tmp/forge/<lane>-fx. Repo ratchet building on bridge/tmp-leak-ratchet (runners fail on leaked temp entries and refuse tmpfs). Heartbeats: df -i /tmp + count of forge-owned entries.
+
+## RESUME DELTA 2026-09-04T05:43Z — full state for a post-compaction seat (Gene asked for the prompt at ~06:00Z)
+
+**Rules in force (Gene, tonight, all verbatim in the captain's log):** origin/main FROZEN for everyone (public repo; nothing publishes until a months-dogfooded winner) — this seat pushed ~40 docs commits to main before 01:40Z, disclosed, not rewritten; `MCP/main` is the working trunk (seat checkout /home/forge/src/clj-surgeon is ON it; landings by `merge --no-ff` from the seat after an executed review); temp files to /var/tmp/forge never /tmp (profile + ~/bin/seat-tmp-guard.sh + Claude settings env; repo ratchet building on bridge/tmp-leak-ratchet); reviews Sol first, Opus on filter refusal (nine refusals tonight, all on permission/symlink/lock/trust-root lanes); the meter is TOOL CALLS; keep cclsp running — but this seat has none (inb-41c1cc: repo 404, launchd-only start; 7890 is the surgeon seat's, never touch); cohorts with a tool arm void arms that hit semantic-provider-unavailable.
+
+**Landed on MCP/main:** the six-lane integration (2556a38 via the candidate), the admit gate (9b7220c3, fresh-clone GO-WITH-FIX; trailing suite 711/8436/0). **Standing sentence (Gene report 04:55Z, 2026-09-04-gene-report-0455z.md):** square 2 fan-out wins 2–7× in emitted chars for two callers at N ≤ 21 on the apply_patch harness; bounded at N* = 23 (E-NSWEEP), by write path (E-HARNESS-2: Bash-only native 0.68×), survives a second caller (E-CALLER 2.2×/3.7×); squares 1 (detection, E-GATE-R), 3, 4 withdrawn; the feature-thread study measured (E-THREAD: native 5/5, 0 false-completes; the script halves calls on SMW) — verdict "not a verb" was then REFRAMED by Gene on tool calls: build `feature_thread` v2 (bodies + sha + anchor + sibling one-axis + rules; 10/16 KB) and measure tool calls to a correct Dequote/Format edit (study §12; the mayor's transcript analysis: six read rounds is the human baseline; Dequote/Format is a NAMED TEST CASE with five assertions + a second fixture at the moment it broke).
+
+**Lanes and where their state lives (agent IDs do not survive compaction; branches and verdict files do):**
+| lane | branch @ tip | state | next |
+|---|---|---|---|
+| MEM-003 second landing | bridge/integration-2026-09-03-mem003 @ 3692e9b (r4 building: trunk merged in, deftype reading, :refer forbidden) | r3 Opus NO-GO | on push: review (Sol then Opus), land |
+| O2 study-ops (MCP ls-tree) | bridge/study-ops-mcp @ 515e8109 (r5 building: budgeted dropped line, monotone fit, mid-band witness, with-envelope shape-agnostic) | r4 Opus NO-GO (regression) | on push: review; then recompose onto MEM-003 landing (template f835394) |
+| census | bridge/census-verb @ 563c300d | r19 Opus review running (/home/forge/tmp/sol/census19-opus-review.md) | file; r20 or land |
+| q5z alias_migration | bridge/q5z-alias-migration @ b6d1d17b | r15 Sol review running (q5z15-sol-review.md) | file; r16 or land |
+| admit gate r3/r4 | bridge/admit-gate-r3 @ 95e7aed9 (r4 building on current trunk) | r3 Sol NO-GO (4) | on push: review; land |
+| FAN scorer | bridge/fanout-fixtures-in-git @ f2fa8be9 | r5 Sol review running (fanout5-sol-review.md; Opus on refusal) | file; land (apparatus) |
+| tmp-leak ratchet | bridge/tmp-leak-ratchet (building) | — | review; land |
+| feature_thread verb | bridge/feature-thread-verb (building; three amendments: named test case, fleet refinements, §12 deltas) | — | review; then the 30-arm adoption cohort (N/F/M-range/M-body/K ×6) |
+| E-SCALE-WALL | pre-registered (2026-09-04-escalewall-preregistration.md) | waits for a QUIET box (load < 2 before each arm) | run alone, after the review lanes land |
+| curtaincall | bridge/cc-integration-2026-09-03 @ 37978a74 seat-gated green | with the mayor (offline since ~01:30Z) | mayor's Sol review + landing |
+
+**Verdict files:** /home/forge/tmp/sol/<lane><n>-sol-review.md or -opus-review.md; logs /home/forge/tmp/sol/<lane><n>.log, finished when the LAST line is `EXIT n`. Inbox ids: inb-1165ce (mayor landings), inb-3e298e (O2), inb-b873d0 (q5z), inb-cbca17 (admit refusal text), inb-9483a4 (/tmp inode leak), inb-62a674 (enumerating-witness rule), inb-41c1cc (cclsp), inb-2f150d/84f801/10f4cd (gate defects), inb-55e00e (study, closed).
+
+**Single next action:** heartbeat; file any finished verdict; relaunch the next round for any NO-GO; land any GO by merge --no-ff onto MCP/main from the seat checkout with the trailing suite; keep the mayor's queue current on inb-1165ce.
+
+## RESUME DELTA 05:48Z (post-compaction, first action done)
+- Compaction happened ~05:5xZ; Gene fed the resume prompt; note re-read. Memento pointer is LINE 1 of CLAUDE.md on MCP/main (7751e1f8).
+- **FAN scorer LANDED on MCP/main = 804febcb** (Sol r5 GO, merge --no-ff; a .PHONY union conflict in Makefile resolved by hand; trailing `make fanout-selftests` log at /home/forge/tmp/trunk-fanout-selftests.log). Row F closed; inb-9c18e2 completed.
+- Still in flight: MEM-003 r4, O2 r5, gate r4, tmp-leak ratchet, feature_thread verb (builders); census r19 (Opus), q5z r15 (Sol) reviews. Branch tips unchanged since 05:21Z.
+- Next action: file census19/q5z15 verdicts when their logs end in EXIT; land MEM-003 r4 → recompose study-ops; E-SCALE-WALL waits for load < 2.0.
+
+## RESUME DELTA 06:10Z
+- feature_thread verb BUILT @ 02e823e7 on bridge/feature-thread-verb; Sol r1 review running (ft1.log / ft1-sol-review.md; clone /home/forge/tmp/sol/ft1-wt; reviewer ports 8126–8128). Inbox inb-cc9a4a. Next after GO: land on MCP/main, then the adoption cohort on tool calls.
+- census r19 NO-GO filed; r20 builder merges the trunk in first (12-file conflict). q5z r15 GO-WITH-FIX filed; r16 building (ports 8123–8125).
+
+## RESUME DELTA 06:32Z — FOREGROUND PROGRAM (Gene): the 10x tweezer on feature_thread
+- Mission: prove tool-calls-to-a-green-edit 10x on the Dequote/Format replay; foreground tweezer, background orchestration. Baseline 17 calls to first patch (21 + patch to done). nREPL 43791 on ~/src/clj-surgeon-thread (bridge/feature-thread-verb @ ad49908c + round-two builder running on that worktree: implementation leg, governance anchors, co-primary tests, verify row, budget 24 KB + edit-aware elision). Receipt dump /var/tmp/forge/tweezer/r3-receipt.txt; watcher ~/bin/call-watcher. Next: naive-reader probe (Sol+Opus), then the measured replay: an agent given ONLY the receipt writes the patch; count calls with the watcher; then the cohort.
+
+## RESUME DELTA 07:17Z
+- Lanes: feature_thread r2 building (Opus, on ~/src/clj-surgeon-thread; r1 NO-GO folded in); q5z r17 building; tmp-leak r2 building; gate r5 building; MEM-003 r5 building; census r21 Sol review; O2 r5 Sol review. All reviews except O2/census are on Opus after Sol filter refusals (14 tonight). Trunk MCP/main last landing: the FAN scorer (804febcb). Foreground: the tweezer waits on feature_thread r2 for the measured replay (baseline 17 calls; target zero reads before the write).
+
+## RESUME DELTA 07:29Z
+- feature_thread r2 = 9139b2c5 (Sol r3 review running: ft3.log / ft3-sol-review.md). REPLAY in progress: clone /home/forge/tmp/replay/smw-base @ 2df99c98; arms N / T1 / T2 pre-registered in the log; receipt for the clone to be computed from the nREPL (port 43791, root = the clone); counts from the codex logs (exec_command + apply_patch), never from the driver.

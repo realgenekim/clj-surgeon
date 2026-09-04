@@ -95,25 +95,72 @@
               :when (source-file? file extensions)]
           [(.getPath file) (slurp file)])))
 
+(def excluded-spec-docs
+  "Repo-relative intent spec documents deliberately kept OUT of the repository
+   audit, each mapped to a one-line reason. This map is normally EMPTY: an entry
+   is an admission that a discovered leaf does not yet satisfy the contract, so
+   it must name a reason and must be removed once the leaf is repaired. An entry
+   naming a file that does not exist is an ORPHAN LISTING and fails loudly."
+  {"docs/intent/embedded-elaborator/embedded-elaborator-specs.md"
+   "frozen-red pre-product leaf (frozen-red-declaration.md, 2026-08-30): 19 MCP-OP-ELAB active-gap specs whose red namespace clj-surgeon.mcp-embedded-elaborator-test is not in this tree, so every one reports missing-test-witness; re-include when the elaborator red surface lands."
+
+   "docs/intent/substantiation-telemetry/substantiation-telemetry-specs.md"
+   "frozen-red pre-product leaf (substantiation-telemetry-frozen-red.md, 2026-08-30): 19 MCP-OP-SUBST specs marked [x] to record Gene's advance ratification, not shipped code, so every one reports missing implementation AND test witnesses; re-include when substantiation telemetry ships."})
+
+(defn- spec-doc-file?
+  [^java.io.File file]
+  (and (.isFile file)
+       (boolean (re-matches #".+-specs\.md" (.getName file)))))
+
+(defn spec-doc-paths
+  "Derive the audited intent spec documents by SCANNING docs/intent/<leaf>/<name>-specs.md.
+
+   Derived, never listed: a new lane adds a FILE and touches no shared vector, so
+   two lanes can never conflict on this registry. Returns repo-relative paths
+   sorted lexicographically, which makes the concatenated spec text deterministic.
+
+   `excluded` is a map of repo-relative path -> one-line reason and defaults to
+   `excluded-spec-docs`; it is an argument so a witness can drive the scan against
+   a fixture root without the repository's own exclusions following it there.
+
+   Fails loudly rather than silently shrinking: an `excluded` entry whose file is
+   absent under `root` is an ORPHAN LISTING, and an empty scan means the intent
+   tree moved."
+  ([] (spec-doc-paths "." excluded-spec-docs))
+  ([root] (spec-doc-paths root excluded-spec-docs))
+  ([root excluded]
+   (let [orphans (remove #(.isFile (io/file root %)) (sort (keys excluded)))]
+     (when (seq orphans)
+       (throw (ex-info (str "excluded-spec-docs names spec documents that do not exist: "
+                            (str/join ", " orphans))
+                       {:type :orphan-spec-doc-listing
+                        :paths (vec orphans)
+                        :root (str root)}))))
+   (let [intent-dir (io/file root "docs" "intent")
+         leaves (sort-by (fn [^java.io.File d] (.getName d))
+                         (filter (fn [^java.io.File d] (.isDirectory d))
+                                 (or (seq (.listFiles intent-dir)) [])))
+         found (->> leaves
+                    (mapcat (fn [^java.io.File leaf]
+                              (for [^java.io.File f (or (seq (.listFiles leaf)) [])
+                                    :when (spec-doc-file? f)]
+                                (str "docs/intent/" (.getName leaf) "/" (.getName f)))))
+                    (remove #(contains? excluded %))
+                    sort
+                    vec)]
+     (when (empty? found)
+       (throw (ex-info (str "no intent spec documents found under "
+                            (.getPath intent-dir))
+                       {:type :no-spec-docs-found
+                        :root (str root)
+                        :searched (.getPath intent-dir)})))
+     found)))
+
 (defn audit-current-repository
   "Audit the repository's MCP operation intent leaves and all executable witnesses."
   ([] (audit-current-repository "."))
   ([root]
-   (let [spec-files
-         [(io/file root
-                   "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")
-          (io/file root
-                   "docs/intent/read-request-normalization/read-request-normalization-specs.md")
-          (io/file root
-                   "docs/intent/prepared-request/prepared-request-specs.md")
-          (io/file root
-                   "docs/intent/prepared-request-actions/prepared-request-actions-specs.md")
-          (io/file root
-                   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")
-          (io/file root
-                   "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md")
-          (io/file root
-                   "docs/intent/study-ops/study-ops-specs.md")]]
+   (let [spec-files (map #(io/file root %) (spec-doc-paths root))]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources

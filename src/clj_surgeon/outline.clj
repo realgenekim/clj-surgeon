@@ -6,6 +6,7 @@
   (:require
    [clj-surgeon.cljc.walk :as cwalk]
    [clj-surgeon.forms :as forms]
+   [clj-surgeon.parse-admission :as admission]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
@@ -145,6 +146,35 @@
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 
+;; @spec MCP-OP-DISPATCH-001
+;; @spec MCP-OP-DISPATCH-005
+(defn defmethod-dispatch-location
+  "Zipper location of a `defmethod` form's dispatch value.
+
+   The dispatch value is not simply the third child: `#_` discards before it are
+   read and thrown away, and a `^meta` wrapper decorates the value rather than
+   being it. Both are traversed here so the location returned is the one the
+   reader — and therefore the exact-owner selector — actually sees."
+  [zloc]
+  (loop [location (some-> zloc z/down z/right z/right)
+         steps 0]
+    (cond
+      (or (nil? location) (< 64 steps)) nil
+      (= :uneval (z/tag location)) (recur (z/right location) (inc steps))
+      (= :meta (z/tag location)) (recur (some-> location z/down z/rightmost)
+                                        (inc steps))
+      :else location)))
+
+;; @spec MCP-OP-DISPATCH-001
+(defn- extract-dispatch
+  "Source spelling of a `defmethod` dispatch value.
+
+   The exact spelling of that value is returned, not a normalized one, so a
+   caller can copy it verbatim into an exact `{kind, name, dispatch}` owner
+   form. Discard and metadata wrappers are not part of the value."
+  [zloc]
+  (some-> (defmethod-dispatch-location zloc) z/string))
+
 (defn attached-comment-start
   "Look backwards from a form's start line to find attached comment lines.
    Comments must be contiguous (no blank lines between them and the form)."
@@ -222,76 +252,133 @@
                             (mapcat vectors-from-reader-cond))]
           (mapv z/string (concat direct rcond)))))))
 
+;; @spec MCP-OP-MEM-015
+(defn- form-records-from-walked
+  "Build outline records from an already-walked top-level form sequence.
+
+   `lines` is the source split into lines, used only to find attached
+   comments. When `include-source?` is false the exact `:source` string is not
+   built at all: a caller that discards the key must not pay to construct it."
+  [walked lines project-aliases include-source?]
+  (mapv (fn [{:keys [zloc platforms]}]
+          (let [node (z/node zloc)
+                m (meta node)
+                type-str (some-> zloc z/down z/string)
+                form-spec (forms/spec-with-project-aliases
+                            project-aliases type-str)
+                user-fields (:fields form-spec)
+                extracted (when user-fields
+                            (resolve-user-fields user-fields zloc
+                                                 type-str (:row m)))
+                ;; If user provided :fields, respect their spec; don't fall
+                ;; back to legacy extractors for fields they omitted.
+                name-val (cond
+                           user-fields (:name extracted)
+                           (some? form-spec) (extract-name zloc))
+                arglist (cond
+                          user-fields (:arglist extracted)
+                          name-val (extract-arglist zloc))
+                dispatch (when (and name-val
+                                    (= :defmethod (:kind form-spec)))
+                           (extract-dispatch zloc))
+                form-line (:row m)
+                comment-start (when form-line
+                                (attached-comment-start lines form-line))
+                extras (when extracted
+                         (dissoc extracted :name :arglist))]
+            (cond-> {:type (symbol (or type-str "?"))
+                     :platforms (vec (sort platforms))}
+              include-source? (assoc :source (z/string zloc))
+              form-line (assoc :line form-line)
+              (:end-row m) (assoc :end-line (:end-row m))
+              name-val (assoc :name (if (symbol? name-val)
+                                      name-val
+                                      (symbol (str name-val))))
+              arglist (assoc :args arglist)
+              dispatch (assoc :dispatch dispatch)
+              (seq extras) (merge extras)
+              (and form-line comment-start (< comment-start form-line))
+              (assoc :comment-start comment-start))))
+        walked))
+
+(defn- parse-and-build-records
+  "Parse `source` once and project every top-level form into a record.
+
+   Every `top-level-form-records` arity delegates here rather than to another
+   arity of itself: a caller that counts calls through the var must see one
+   call per outline, whichever arity it used.
+
+   This and `outline-source` are the outline path's two tree constructors, so
+   parser admission sits at both: every operation that reads structure through
+   them — outline, ls_tree, show_form, compact locations, the extract read path,
+   the change buffer's owner scan — inherits the ceiling without knowing it
+   exists.
+
+   Read that as a claim about THESE TWO ENTRANCES, not about the product.
+   MCP-OP-MEM-005 is also wired into `clj-surgeon.analyze`'s two constructors
+   and `clj-surgeon.structural-lens/find-subforms`; `rg z/of-string` finds many
+   more direct sites across the edit and transform surfaces, and this intent
+   does not reach them."
+  ;; @spec MCP-OP-MEM-005
+  [file source project-aliases include-source?]
+  (admission/admit! file source)
+  (let [defaults (cwalk/platforms-for-extension (file-extension file))
+        walked (cwalk/top-level-forms source defaults)]
+    (form-records-from-walked walked (str/split-lines source)
+                              project-aliases include-source?)))
+
 (defn top-level-form-records
   "Return every parsed top-level list form in source order.
 
    Pure: filename, source string, and an explicit project-alias map in;
    records out. The two-argument arity uses no project aliases. Records include
    exact `:source` for structural readers. Public outline output removes that
-   field to preserve the compact `:ls` contract."
-  ([file source]
-   (top-level-form-records file source {}))
-  ([file source project-aliases]
-   (let [lines (str/split-lines source)
-         defaults (cwalk/platforms-for-extension (file-extension file))
-         walked (cwalk/top-level-forms source defaults)]
-     (mapv (fn [{:keys [zloc platforms]}]
-             (let [node (z/node zloc)
-                   m (meta node)
-                   type-str (some-> zloc z/down z/string)
-                   form-spec (forms/spec-with-project-aliases
-                               project-aliases type-str)
-                   user-fields (:fields form-spec)
-                   extracted (when user-fields
-                               (resolve-user-fields user-fields zloc
-                                                    type-str (:row m)))
-                   ;; If user provided :fields, respect their spec; don't fall
-                   ;; back to legacy extractors for fields they omitted.
-                   name-val (cond
-                              user-fields (:name extracted)
-                              (some? form-spec) (extract-name zloc))
-                   arglist (cond
-                             user-fields (:arglist extracted)
-                             name-val (extract-arglist zloc))
-                   form-line (:row m)
-                   comment-start (when form-line
-                                   (attached-comment-start lines form-line))
-                   extras (when extracted
-                            (dissoc extracted :name :arglist))]
-               (cond-> {:type (symbol (or type-str "?"))
-                        :platforms (vec (sort platforms))
-                        :source (z/string zloc)}
-                 form-line (assoc :line form-line)
-                 (:end-row m) (assoc :end-line (:end-row m))
-                 name-val (assoc :name (if (symbol? name-val)
-                                         name-val
-                                         (symbol (str name-val))))
-                 arglist (assoc :args arglist)
-                 (seq extras) (merge extras)
-                 (and form-line comment-start (< comment-start form-line))
-                 (assoc :comment-start comment-start))))
-           walked))))
+   field to preserve the compact `:ls` contract.
 
+   The four-argument arity accepts `{:include-source? false}` for a caller that
+   discards `:source`; the record then omits the key rather than build a
+   per-form substring the caller throws away. Every other caller keeps the
+   default, and `:source` remains exact."
+  ([file source]
+   (parse-and-build-records file source {} true))
+  ([file source project-aliases]
+   (parse-and-build-records file source project-aliases true))
+  ([file source project-aliases {:keys [include-source?]
+                                 :or {include-source? true}}]
+   (parse-and-build-records file source project-aliases include-source?)))
+
+;; @spec MCP-OP-MEM-015
 (defn outline-source
   "Return the existing compact outline for a filename and source string.
 
    Pure counterpart to `outline`. Each public form includes platform data but
-   not the complete `:source` retained by `top-level-form-records`."
+   not the complete `:source` retained by `top-level-form-records`.
+
+   One `z/of-string` builds the only node tree this projection needs: the
+   top-level walk and the `ns` lookup share it, and per-form source text is
+   built only when `include-string-symbols` is set, because the symbol scan
+   reads it."
   ([file source]
    (outline-source file source {}))
   ([file source project-aliases]
    (outline-source file source project-aliases {}))
+  ;; @spec MCP-OP-MEM-005
   ([file source project-aliases {:keys [include-string-symbols]}]
-   (let [records (top-level-form-records file source project-aliases)
-         zloc (z/of-string source {:track-position? true})
-         ns-zloc (some-> zloc
+   (admission/admit! file source)
+   (let [root (z/of-string source {:track-position? true})
+         lines (str/split-lines source)
+         defaults (cwalk/platforms-for-extension (file-extension file))
+         walked (cwalk/top-level-forms-from-zloc root defaults)
+         records (form-records-from-walked walked lines project-aliases
+                                           (boolean include-string-symbols))
+         ns-zloc (some-> root
                          (z/find-value z/next 'ns)
                          z/up)
          ns-name (some-> ns-zloc z/down z/right z/string symbol)
          requires (extract-ns-requires ns-zloc)]
      {:ns ns-name
       :file file
-      :lines (count (str/split-lines source))
+      :lines (count lines)
       :form-count (count (filter :name records))
       :forms (->> records
                   (remove #(= 'ns (:type %)))

@@ -156,7 +156,12 @@
 (def ^:private forms-request-properties
   {"forms" {:type "array" :minItems 1 :maxItems inspect/max-forms
             :uniqueItems true
-            :items {:type "string" :minLength 1}}
+            :items {:type "string" :minLength 1}
+            :description (str "Exact unqualified top-level owner names. A multimethod "
+                              "collapses every arm to one name here; read its per-arm "
+                              "dispatch from an outline row's dispatch field, then address "
+                              "one arm with apply_clojure_changes changes[].forms "
+                              "{kind: \"defmethod\", name, dispatch}.")}
    "include_source" {:type "boolean" :default true
                      :description "Set false for metadata-only form reads; line ranges, source character counts, hashes, and source anchors remain, while exact source bodies are omitted. Omit for exact source."}
    "expect" {:type "object" :additionalProperties false
@@ -183,6 +188,9 @@
           :description (str "One exact top-level form name. Required for ls-deps "
                             "and ls-extract; optional for deps, where it narrows "
                             "the call graph to one owner.")}))
+
+;; Outline rows for defmethod owners always carry `dispatch`, the exact source
+;; spelling of that arm's dispatch value. @spec MCP-OP-DISPATCH-001
 
 (defn- operationless-forms-request
   []
@@ -1824,7 +1832,68 @@
               (:params routed))
             (:workspace-root routed)))))))
 
+;; @spec MCP-OP-FIELD-001
+(defn- missing-field-lines
+  "Name the omitted fields, their path, and the minimal valid object there."
+  [result]
+  (when (and (= "missing-fields" (some-> (:reason result) name))
+             (seq (:missing result)))
+    (let [path (:path result)]
+      (str
+        (format "  missing required field%s at %s: %s\n"
+                (if (= 1 (count (:missing result))) "" "s")
+                (if (seq path)
+                  (str/join "." (map str path))
+                  "the request root")
+                (str/join ", " (:missing result)))
+        (when (seq (:required result))
+          (format "  required there: %s\n"
+                  (str/join ", " (:required result))))
+        (when (:minimal_request result)
+          (format "  minimal valid shape: %s\n"
+                  (json/generate-string (:minimal_request result))))))))
+
+;; @spec MCP-OP-FIELD-002
+(defn- named-field-lines
+  "Name the refused field and the values it accepts."
+  [result]
+  (when (and (:field result) (seq (:accepted result)))
+    (format "  field %s accepts: %s%s\n"
+            (:field result)
+            (str/join ", " (:accepted result))
+            (if (contains? result :actual)
+              (str " · received " (pr-str (:actual result)))
+              ""))))
+
+;; @spec MCP-OP-DISPATCH-003
+(defn- defmethod-owner-lines
+  "Render the exact multimethod owner form and its bounded dispatch vocabulary."
+  [owner]
+  (when owner
+    (let [{:keys [kind name dispatch]} (:owner_form owner)
+          vocabulary (:dispatch_vocabulary owner)]
+      (str
+        (format "  owner is a multimethod · %s the name %s\n"
+                (if (= 1 (:arm_count owner))
+                  "1 defmethod arm shares"
+                  (str (:arm_count owner) " defmethod arms share"))
+                (:name owner))
+        (format "  send this exact owner form to %s: {kind: %s, name: %s%s}\n"
+                (:accepted_by owner)
+                (pr-str kind)
+                (pr-str name)
+                (if dispatch
+                  (str ", dispatch: " (pr-str dispatch))
+                  ""))
+        (when (seq vocabulary)
+          (format "  dispatch values (%d/%d%s): %s\n"
+                  (:dispatch_vocabulary_returned owner)
+                  (:dispatch_count owner)
+                  (if (:dispatch_vocabulary_truncated owner) "; truncated" "")
+                  (str/join ", " vocabulary)))))))
+
 ;; @spec MCP-OP-READ-DIAG-002
+;; @spec MCP-OP-DISPATCH-003
 ;; @spec MCP-OP-PREP-REQ-005
 
 (defn inspect-summary
@@ -1857,6 +1926,7 @@
           candidate (or (:owner hypothesis) (first (:form_candidates result)))
           hypotheses-truncated (or (:hypotheses_truncated selection-failure)
                                    (:candidates_truncated result))
+          defmethod-owner (:defmethod_owner selection-failure)
           available-count (or (:available_owner_count result)
                               (count (:available_owners result)))
           continuation (:continuation result)
@@ -1884,6 +1954,17 @@
                    available-count))
          (when (and owners (not diagnostic?)) "")
          owners
+         ;; @spec MCP-OP-DISPATCH-003
+         (when-let [lines (defmethod-owner-lines defmethod-owner)]
+           (str/trimr lines))
+         ;; @spec MCP-OP-FIELD-001
+         (when-let [lines (missing-field-lines result)]
+           (str/trimr lines))
+         ;; @spec MCP-OP-FIELD-002
+         (when-let [lines (named-field-lines result)]
+           (str/trimr lines))
+         ;; @spec MCP-OP-FIELD-003
+         (when (:note result) (format "  note: %s" (:note result)))
          ;; The sentence and the list share one condition: a sentence about a
          ;; list that was not printed is worse than silence.
          (when owners
@@ -1901,7 +1982,12 @@
            continuation
            (str "\n→ copy continuation.retry_template.arguments, fill only "
                 "its null selector holes, and submit it")
-           diagnostic? "\n→ choose one exact owner and retry")]))
+           (and diagnostic? defmethod-owner)
+           "\n→ send the exact defmethod owner form above, or choose one exact owner and retry"
+           diagnostic? "\n→ choose one exact owner and retry"
+           ;; @spec MCP-OP-FIELD-001
+           (= "missing-fields" (some-> (:reason result) name))
+           "\n→ add the named field(s) in the minimal valid shape above and call inspect_clojure once")]))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
