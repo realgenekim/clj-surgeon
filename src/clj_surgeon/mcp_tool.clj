@@ -1278,14 +1278,21 @@
   neither, and the arm that read the text sent the same wrong scope twice.
 
   Sorted by field name so the line is a function of the refusal and not of map
-  order, and bounded in both count and per-fact length."
+  order, and bounded in both count and per-fact length — and the COUNT bound
+  says when it fired. No alias_migration refusal carries twelve discriminating
+  facts today, so this bound has never dropped one; a bound that truncates in
+  silence breaks the text ⊇ structured contract on the day it first fires, and
+  a reader of the text has no way to know it did."
   [result]
-  (let [facts (->> result
-                   (remove (fn [[field _]]
-                             (contains? alias-migration-refusal-envelope-keys
-                                        field)))
-                   (filter (fn [[_ value]] (renderable-fact? value)))
-                   (sort-by key)
+  (let [renderable (->> result
+                        (remove (fn [[field _]]
+                                  (contains?
+                                    alias-migration-refusal-envelope-keys
+                                    field)))
+                        (filter (fn [[_ value]] (renderable-fact? value)))
+                        (sort-by key))
+        dropped (max 0 (- (count renderable) max-refusal-facts))
+        facts (->> renderable
                    (take max-refusal-facts)
                    (map (fn [[field value]]
                           (let [rendered (pr-str value)]
@@ -1297,7 +1304,9 @@
                                         "…")
                                    rendered))))))]
     (when (seq facts)
-      (str "facts · " (str/join " · " facts)))))
+      (str "facts · " (str/join " · " facts)
+           (when (pos? dropped)
+             (str " · +" dropped " more in structuredContent"))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn rendered-next-call
