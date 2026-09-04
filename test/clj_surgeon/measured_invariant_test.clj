@@ -218,7 +218,14 @@
     `.getMethods` can never see -- `(java.util.Date.)` -- and is spelled
     `SimpleName.`;
   - every static spelling is ALSO emitted as the dot special form,
-    `(. Class method`, whose text contains no `Class/method` at all."
+    `(. Class method`, whose text contains no `Class/method` at all;
+  - every method name is ALSO emitted as a QUOTED STRING, and every source
+    class as its FULLY-QUALIFIED NAME in quotes, because a reflective read
+    spells neither as a source token: round-six review findings 2 and 3 showed
+    `(.getMethod (Class/forName \"java.lang.System\") \"nanoTime\" ...)` publishing
+    a sixteen-digit monotonic clock value in a receipt field inside the hashed
+    parity subject with the 159-spelling derivation green, and `Class/forName`
+    cannot be reached without the qualified name as a string."
   []
   (vec
    (sort
@@ -233,11 +240,28 @@
             :when (or (and static? (time-type? rt))
                       (and (contains? clock-numeric-return-types rt) morpheme?)
                       (and (time-type? rt) morpheme?))
-            spelling (if static?
-                       [(str (.getSimpleName c) "/" nm)
-                        (str "(. " (.getSimpleName c) " " nm)]
-                       [(str "." nm)])]
+            spelling (concat
+                       (if static?
+                         [(str (.getSimpleName c) "/" nm)
+                          (str "(. " (.getSimpleName c) " " nm)]
+                         [(str "." nm)])
+                       ;; The STRING form only for a name that CARRIES A CLOCK
+                       ;; MORPHEME. `nanoTime`, `currentTimeMillis` and `now`
+                       ;; do; the bare factory names a static-returning-a-time
+                       ;; also produces do not, and `Instant/from` as the four
+                       ;; characters `"from"` is a JSON schema key in
+                       ;; `mcp_schema.clj` and five `dev/experiments` files, not
+                       ;; a clock read. A morpheme-free name is still closed on
+                       ;; the reflective route, and closed at the tighter end of
+                       ;; it: `Class/forName` cannot reach `Calendar/getInstance`
+                       ;; without the string `"java.util.Calendar"`, which the
+                       ;; class alternative below carries and which collides with
+                       ;; nothing.
+                       (when morpheme? [(str "\"" nm "\"")]))]
         spelling)
+      ;; The class, named the only way `Class/forName` accepts it.
+      (for [^Class c clock-source-classes]
+        (str "\"" (.getName c) "\""))
       (for [^Class c clock-source-classes
             :when (time-type? c)
             ^java.lang.reflect.Constructor k (.getConstructors c)
@@ -252,19 +276,31 @@
   scan should say which one it found. A CONSTRUCTOR spelling gets a LEADING
   word boundary, so `Date.` does not match inside `LocalDate.`. A DOT SPECIAL
   FORM is matched with flexible whitespace, because `(.  System  nanoTime)` is
-  the same read. A STATIC spelling is quoted literally, and it deliberately
-  matches a fully-qualified call too (`java.time.Instant/now` contains
-  `Instant/now`)."
+  the same read, and with an OPTIONAL FULLY-QUALIFIED PREFIX on the class:
+  round-six review finding 3 planted `(. java.lang.System nanoTime)` and the
+  scan did not see it, because the alternative anchored a whitespace class
+  immediately
+  before the SIMPLE name and a qualified class carries a `.` there instead. The
+  slash form already had that tolerance -- its docstring says so -- and the dot
+  form did not; the two now agree. A QUOTED STRING spelling is matched
+  literally, quotes included: it is a method or a class named the way a
+  reflective call names one, which is to say never as a source token. A STATIC
+  spelling is quoted literally, and it deliberately matches a fully-qualified
+  call too (`java.time.Instant/now` contains `Instant/now`)."
   [expression]
   (cond
+    (str/starts-with? expression "\"")
+    (java.util.regex.Pattern/quote expression)
+
     (str/starts-with? expression ".")
     (str "\\" expression "\\b")
 
     (str/starts-with? expression "(. ")
-    (str "\\(\\.\\s+"
-         (str/join "\\s+" (map #(java.util.regex.Pattern/quote %)
-                               (rest (str/split expression #"\s+"))))
-         "\\b")
+    (let [[cls & members] (rest (str/split expression #"\s+"))]
+      (str "\\(\\.\\s+(?:[\\w.]*\\.)?"
+           (java.util.regex.Pattern/quote cls)
+           (apply str (map #(str "\\s+" (java.util.regex.Pattern/quote %)) members))
+           "\\b"))
 
     (str/ends-with? expression ".")
     (str "\\b" (java.util.regex.Pattern/quote (subs expression 0 (dec (count expression)))) "\\.")
@@ -542,6 +578,22 @@
        sort
        vec))
 
+(defn- reflective-member-names
+  "Every name of the measured namespace's own JAVA surface that a STRING can
+  name: each protocol method as written AND as the JVM munges it, and each
+  declared field of the opaque types.
+
+  This is the exact set `.getMethod`, `.getDeclaredField` and
+  `clojure.lang.Reflector/invokeInstanceMethod` accept as a string argument, and
+  it is derived from the same two sources the token spellings are derived from,
+  so a method or field added later grows all three forms together."
+  []
+  (vec
+   (sort
+    (distinct
+     (concat (mapcat (fn [m] [m (munge m)]) (protocol-method-names))
+             (opaque-type-field-names))))))
+
 (defn- escape-hatch-spellings
   "Every SPELLING that reaches an untagged number out of the measured
   namespace, derived from three sources and never typed out:
@@ -552,16 +604,46 @@
     interface method, so `(._launder r)` is the sanctioned door with no
     namespace token in it at all (round-five review finding 1);
   - each declared field of the opaque types, bare and as `.-<name>`, because
-    babashka's interop does not enforce a deftype field's privacy."
+    babashka's interop does not enforce a deftype field's privacy;
+  - each of those JAVA MEMBER names ALSO as a QUOTED STRING and ALSO as the DOT
+    SPECIAL FORM, which is round-six review findings 1a/1b/1c: every
+    alternative above is a source TOKEN, and `(.getMethod (class r)
+    \"_launder\" ...)`, `(clojure.lang.Reflector/invokeInstanceMethod r
+    \"_launder\" ...)` and `(. r _launder)` each reached the protocol method
+    while spelling no token at all, publishing a clock-derived number in an
+    undeclared receipt field inside the hashed parity subject with the
+    round-six gate green.
+
+  The `measured/<var>` spellings deliberately get NO string form, and that
+  exclusion is EVIDENCED rather than assumed. A string cannot name a Clojure
+  var by itself; it needs `resolve`, `ns-resolve`, `find-var`,
+  `requiring-resolve` or `intern`, and every one of those is already an offence
+  under the naming rule's `:reflective` clause -- which
+  `the-require-witness-catches-a-planted-reflective-resolution` proves by
+  planting one. Giving `\"value\"` an alternative would instead cost the two JSON
+  schema keys literally named `value` in `mcp_schema.clj` and `mcp_contract.clj`
+  an allow-list entry apiece, and an allow-list padded with entries that are not
+  clock routes is an allow-list nobody reads carefully. A JAVA member name is a
+  different case and gets the string form: `.getMethod`, `.getDeclaredField` and
+  `Reflector/invokeInstanceMethod` take one directly, with no measured token
+  anywhere in the call."
   []
-  (vec
-   (sort
-    (distinct
-     (concat (map #(str "measured/" %) (laundering-interns))
-             (mapcat (fn [m] [(str "." m) (str "." (munge m))])
-                     (protocol-method-names))
-             (mapcat (fn [f] [f (str ".-" f) (str "." f)])
-                     (opaque-type-field-names)))))))
+  (let [members (reflective-member-names)
+        ;; The dot form's member position also accepts the FIELD-ACCESS
+        ;; spelling, `(. r -launderable)`, which is not a reflective name.
+        dot-members (distinct
+                      (concat members
+                              (map #(str "-" %) (opaque-type-field-names))))]
+    (vec
+     (sort
+      (distinct
+       (concat (map #(str "measured/" %) (laundering-interns))
+               (mapcat (fn [m] [(str "." m) (str "." (munge m))])
+                       (protocol-method-names))
+               (mapcat (fn [f] [f (str ".-" f) (str "." f)])
+                       (opaque-type-field-names))
+               (map #(str "\"" % "\"") members)
+               (map #(str "(. " %) dot-members)))))))
 
 (def derived-escape-hatch-spellings
   "The derivation's output, held so a witness can assert what it produced."
@@ -570,11 +652,32 @@
 (defn- escape-hatch-alternative
   "One spelling as a regex alternative.
 
-  Quoted literally, with a lookahead that refuses a longer identifier, so
-  `measured/value` does not swallow a hypothetical `measured/value-of` and each
-  alternative names exactly the door it found."
+  A TOKEN spelling is quoted literally, with a lookahead that refuses a longer
+  identifier, so `measured/value` does not swallow a hypothetical
+  `measured/value-of` and each alternative names exactly the door it found.
+
+  A QUOTED STRING spelling is matched literally WITH its quotes -- the whole
+  point is that the text is `\"_launder\"` and not `._launder`, so a lookahead
+  for a longer identifier would be meaningless.
+
+  A DOT SPECIAL FORM spelling carries the member only, because the receiver is
+  whatever the caller had in hand: the alternative admits a bare receiver
+  (`(. r _launder)`) or a single parenthesised one (`(. (class r) _launder)`).
+  A receiver with NESTED parentheses is a declared residual, and a narrow one:
+  such a receiver has to produce a reading, which under these roots means
+  naming `measured/...`, and that names a token this pattern already matches."
   [spelling]
-  (str (java.util.regex.Pattern/quote spelling) "(?![-\\w])"))
+  (cond
+    (str/starts-with? spelling "\"")
+    (java.util.regex.Pattern/quote spelling)
+
+    (str/starts-with? spelling "(. ")
+    (str "\\(\\.\\s+(?:\\([^()]*\\)|\\S+)\\s+"
+         (java.util.regex.Pattern/quote (str/trim (subs spelling 3)))
+         "\\b")
+
+    :else
+    (str (java.util.regex.Pattern/quote spelling) "(?![-\\w])")))
 
 (def ^:private escape-hatch-pattern
   "Every expression that hands back an UNTAGGED number from the measured
@@ -768,9 +871,35 @@
           "a form's untagged-clock call count changed; re-read it and re-justify"))))
 
 ;; @spec MCP-OP-TIME-006
+(defn- escape-route-call
+  "A spelling written as the SOURCE that actually reaches the number.
+
+  A plant is evidence only if it is the shape production code would take, so a
+  STRING spelling is planted inside the reflective call that gives a string its
+  power — `.getMethod` plus `.invoke` — rather than as a bare literal in call
+  position, and a DOT SPECIAL FORM spelling is reassembled with a receiver.
+  (`witness through the production path`: a fix witnessed only through a tamper
+  seam is a fix witnessed nowhere.)"
+  [spelling]
+  (cond
+    (str/starts-with? spelling "(. ")
+    (str "(. subject " (subs spelling 3) ")")
+
+    (str/starts-with? spelling "\"")
+    (str "(.invoke (.getMethod (class subject) " spelling
+         " (into-array Class [])) subject (into-array Object []))")
+
+    :else
+    (str "(" spelling " subject)")))
+
 (deftest the-escape-hatch-pattern-carries-every-route-to-a-readings-number
   (testing "the pattern is derived from the namespace, not typed out"
-    (let [missing (vec (sort (remove #(re-find escape-hatch-pattern %)
+    ;; Checked in the CALL SHAPE, not on the raw spelling. A token spelling is
+    ;; its own source text, but `(. _launder` is an ENCODING of the dot special
+    ;; form whose receiver belongs to the caller -- matching the encoding
+    ;; against the pattern would be asserting the alternative against itself.
+    (let [missing (vec (sort (remove #(re-find escape-hatch-pattern
+                                               (escape-route-call %))
                                      (keys escape-hatch-spellings-the-ratchet-must-carry))))]
       (is (= [] missing)
           (str "spellings that reach a reading's number and no alternative of "
@@ -876,27 +1005,6 @@
             (.delete victim)
             (.delete (.getParentFile victim))
             (.delete (io/file root))))))))
-
-(defn- escape-route-call
-  "A spelling written as the SOURCE that actually reaches the number.
-
-  A plant is evidence only if it is the shape production code would take, so a
-  STRING spelling is planted inside the reflective call that gives a string its
-  power — `.getMethod` plus `.invoke` — rather than as a bare literal in call
-  position, and a DOT SPECIAL FORM spelling is reassembled with a receiver.
-  (`witness through the production path`: a fix witnessed only through a tamper
-  seam is a fix witnessed nowhere.)"
-  [spelling]
-  (cond
-    (str/starts-with? spelling "(. ")
-    (str "(. subject " (subs spelling 3) ")")
-
-    (str/starts-with? spelling "\"")
-    (str "(.invoke (.getMethod (class subject) " spelling
-         " (into-array Class [])) subject (into-array Object []))")
-
-    :else
-    (str "(" spelling " subject)")))
 
 ;; @spec MCP-OP-TIME-006
 (deftest the-escape-hatch-scanner-catches-every-route-planted-in-a-receipt
@@ -1160,7 +1268,17 @@
           reflection-thin (set (when-not @jdk-reflection-is-complete?
                                  ["Calendar/getInstance" ".getTimeInMillis"
                                   "(. Calendar getInstance"]))
-          missing (vec (sort (remove (some-fn derived reflection-thin)
+          ;; A spelling the derivation CANNOT produce by construction, and must
+          ;; not: the derivation emits the SIMPLE class name, and the
+          ;; fully-qualified dot form is a property of the ALTERNATIVE -- the
+          ;; optional `(?:[\w.]*\.)?` prefix round-six review finding 3 forced
+          ;; onto it. It is carried in the floor anyway so the plant witness
+          ;; below drives the exact source the reviewer published a raw
+          ;; nanoTime through; asserting it were derived would assert the
+          ;; alternative against itself.
+          alternative-shape #{"(. java.lang.System nanoTime"}
+          missing (vec (sort (remove (some-fn derived reflection-thin
+                                              alternative-shape)
                                      (keys clock-expressions-the-ratchet-must-carry))))]
       (is (= [] missing)
           (str "the JDK derivation no longer produces these clock spellings, so "
