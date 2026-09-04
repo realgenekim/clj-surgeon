@@ -108,14 +108,14 @@ assert_declared_orders() {
 
 run_zero_model_tests() {
   assert_declared_orders
-  screen_prompt > "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
+  screen_prompt > "${TMPDIR:-/var/tmp}/owner-aware-call-screen-prompt.$$"
   if rg -q 'symbol_migration|target_alias|preserve-name' \
-    "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"; then
+    "${TMPDIR:-/var/tmp}/owner-aware-call-screen-prompt.$$"; then
     echo "Prompt leaked the candidate request language" >&2
     return 1
   fi
-  rm -f "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
-  local refusal_file="${TMPDIR:-/tmp}/owner-aware-call-screen-refusal.$$"
+  rm -f "${TMPDIR:-/var/tmp}/owner-aware-call-screen-prompt.$$"
+  local refusal_file="${TMPDIR:-/var/tmp}/owner-aware-call-screen-refusal.$$"
   set +e
   "${BASH_SOURCE[0]}" > "$refusal_file" 2>&1
   local refusal_status=$?

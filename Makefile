@@ -760,7 +760,7 @@ benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh
 
 benchmark-inspect-mcp-self-test:
-	BENCH_RESULT_DIR="$$(mktemp -d "$${TMPDIR:-/tmp}/clj-surgeon-inspect-self-test.XXXXXX")" \
+	BENCH_RESULT_DIR="$$(mktemp -d "$${TMPDIR:-/var/tmp}/clj-surgeon-inspect-self-test.XXXXXX")" \
 	bash bench/run_inspect_mcp_benchmark.sh --self-test
 
 anvil-arms-self-test:

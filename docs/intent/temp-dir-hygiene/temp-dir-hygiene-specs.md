@@ -68,9 +68,12 @@ required), `[x]` implemented (implementation and test witnesses required),
   `src/clj_surgeon/memory_battery_runner.clj` — shall enforce this leaf's
   refusal and isolation before running anything.
 
-- [x] **MCP-OP-TMPHYG-010**: No Makefile recipe and no `test/*.sh` gate shall
-  name a hard-coded `/tmp/<path>` write target; scratch roots derive from
-  `TMPDIR` with a real-disk default.
+- [x] **MCP-OP-TMPHYG-010**: No Makefile recipe, no `test/*.sh` gate and no
+  `bench/*.sh` harness shall name a RAM write target — neither a hard-coded
+  `/tmp/<path>` nor a `TMPDIR` fallback that names `/tmp`. Scratch roots derive
+  from `TMPDIR` with a **real-disk** default (`/var/tmp`). `bench/*.sh` is in
+  scope because `make test` runs four of those harnesses; the fallback shape is
+  in scope because it takes `/tmp` in every shell that has not set `TMPDIR`.
 
 - [x] **MCP-OP-TMPHYG-011**: When the mounts-table witness seam
   (`CLJ_SURGEON_MOUNTS_FILE`) supplies the filesystem type, clj-surgeon shall
@@ -78,6 +81,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   `tmpfs` answer refuses as normal, and any other seam-sourced answer is
   `:unknown` — also a refusal. The seam exists only so a gate can execute the
   "no mount source can answer" branch; it can never turn a refusal into a run.
+
+- [x] **MCP-OP-TMPHYG-012**: The Make layer shall not propagate a RAM-backed
+  `TMPDIR` into the scratch root it hands to self-test recipes: with `TMPDIR`
+  set to `/tmp` or `/dev/shm`, `SELF_TEST_TMP` shall resolve to a real-disk
+  path; with `TMPDIR` unset it shall be `/var/tmp`; a real-disk `TMPDIR` shall
+  be honoured unchanged. A refusal that lives only in the Clojure layer does
+  not protect a recipe that never reaches Clojure.
 
 ## Misreadings these requirements exist to forbid
 

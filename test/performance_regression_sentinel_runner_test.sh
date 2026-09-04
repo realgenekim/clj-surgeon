@@ -3,7 +3,7 @@ set -euo pipefail
 
 source_repo=$(cd "$(dirname "$0")/.." && pwd -P)
 source_runner="$source_repo/bench/run_performance_regression_sentinel.sh"
-test_root=$(mktemp -d "${TMPDIR:-/tmp}/clj-surgeon-performance-sentinel-runner-test.XXXXXX")
+test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-performance-sentinel-runner-test.XXXXXX")
 trap '[ "${KEEP_PERF_SENTINEL_TEST_TMP:-false}" = true ] || rm -rf "$test_root"' EXIT
 
 fail() {
