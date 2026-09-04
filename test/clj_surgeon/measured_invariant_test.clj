@@ -1053,9 +1053,74 @@
 
 ;; @spec MCP-OP-TIME-005
 ;; @spec MCP-OP-TIME-006
+(def ^:private round-eight-review-plants
+  "The round-eight review's plants, verbatim, planted at the same
+  `src/clj_surgeon/mcp_hot_verify.clj:114` receipt-building site and each green
+  at the gate's baseline of 27 tests and 156 assertions, 0 failures.
+
+  Round six's lesson was *a derivation over names cannot see a call that names
+  nothing*. Round seven fixed that and inherited the sibling the reviewer
+  states as the sentence this round should keep: **a derivation over names must
+  also enumerate the GRAMMAR the names can appear in.** Clojure's `.` special
+  form has TWO member spellings —
+
+      (. instance-expr member-symbol)
+      (. instance-expr (method-symbol args*))
+
+  — and both `..` and `memfn`, macros in `clojure.core` whose entire job is to
+  emit the second, produce only the parenthesised one. The three-form rule
+  (call / quoted string / dot special form) was right in shape and one
+  production short.
+
+  N1 is the one to read first: four tokens, the spelling on Clojure's own
+  reference page for the `.` special form, no reflection and no `Reading`
+  anywhere, publishing a raw sixteen-digit `nanoTime` into an undeclared
+  receipt field INSIDE the hashed parity subject with the gate green.
+
+  N7 is finding 2: the morpheme narrowing's argument was that `Class/forName`
+  is the only route to a class, so a clock class needed no spelling but the
+  quoted one. On the JVM a class is an ordinary source symbol, so
+  `(.getMethod java.util.Calendar \"getInstance\" ...)` reaches the factory with
+  neither `java.util.Calendar` (bare) nor `\"getInstance\"` (morpheme-free) a
+  clock alternative.
+
+  Two of the reviewer's seven are NOT here and their absence is the record:
+
+  - **N5** `(let [c System] (. c nanoTime))` does not compile. `System`
+    evaluates to a `java.lang.Class` object and `(. c nanoTime)` is then an
+    INSTANCE member access on it — `IllegalArgumentException: No matching field
+    found: nanoTime for class java.lang.Class`. Reaching a static through a
+    class held in a local must go back through `.getMethod` with a method-name
+    STRING, which the derivation has carried since round seven. The route does
+    not exist; it is outside the route set, not inside it and unwatched.
+    (Asserted by `the-round-eight-N5-route-does-not-compile` below.)
+  - **N6** `(.getDeclaredMethod (class rr) (str \"_lau\" \"nder\") ...)` spells
+    the member name nowhere: it exists only at runtime. No source-text scan can
+    see it and this branch does not claim to. It is a declared residual, and
+    finding 3 widens that declaration from FIELDS to any member reached by a
+    computed name."
+  [{:label "N1 — the dot special form's PARENTHESISED member, the spelling in Clojure's own reference for `.`"
+    :pattern :clock
+    :source "(. System (nanoTime))"}
+   {:label "N2 — `..`, whose expansion IS the parenthesised member form"
+    :pattern :clock
+    :source "(.. System (nanoTime))"}
+   {:label "N3 — the parenthesised member on the escape hatch: round-six plant H with two characters added"
+    :pattern :escape
+    :source "(. rr (_launder))"}
+   {:label "N4 — `memfn`, which expands to N3 and names the member as an ordinary source token"
+    :pattern :escape
+    :source "((memfn _launder) rr)"}
+   {:label "N7 — a clock source class as a BARE SOURCE SYMBOL, which no alternative spelled at all"
+    :pattern :clock
+    :source "(.getMethod java.util.Calendar \"getInstance\" (into-array Class []))"}])
+
+;; @spec MCP-OP-TIME-005
+;; @spec MCP-OP-TIME-006
 (deftest every-round-six-review-plant-is-seen-by-the-scan-that-owns-it
   (testing "a call that names its target as a string or a dot form is scanned"
-    (doseq [{:keys [label pattern source]} round-six-review-plants]
+    (doseq [{:keys [label pattern source]} (concat round-six-review-plants
+                                                   round-eight-review-plants)]
       (let [root (str (io/file (System/getProperty "java.io.tmpdir")
                                (str "measured-r6-plant-" (System/nanoTime))))
             victim (io/file root "clj_surgeon" "planted_r6.clj")]
@@ -1080,6 +1145,25 @@
             (.delete victim)
             (.delete (.getParentFile victim))
             (.delete (io/file root))))))))
+
+;; @spec MCP-OP-TIME-005
+(deftest the-round-eight-N5-route-does-not-compile
+  (testing "a static reached through a class held in a local is not a route at all"
+    ;; The round-eight review's N5, recorded as OUTSIDE the route set rather
+    ;; than inside it and unwatched. `System` evaluates to a `java.lang.Class`
+    ;; OBJECT, so `(. c nanoTime)` is an instance member access on that object
+    ;; and there is no such member. To read a static through a class held in a
+    ;; local you must go back through `.getMethod` with a method-name STRING,
+    ;; which the derivation has carried since round seven.
+    ;;
+    ;; This is a witness and not a comment because the claim is about the
+    ;; RUNTIME, and a runtime that started accepting the form would reopen the
+    ;; route silently. If this test ever fails, the escape is real and the
+    ;; alternative set is short again.
+    (is (thrown? Throwable (eval '(let [c System] (. c nanoTime))))
+        (str "(let [c System] (. c nanoTime)) evaluated instead of throwing, so "
+             "a clock static IS reachable through a class bound to a local and "
+             "no alternative spells that route"))))
 
 ;; @spec MCP-OP-TIME-006
 (deftest the-escape-hatch-scanner-catches-every-route-planted-in-a-receipt
