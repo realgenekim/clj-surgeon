@@ -3716,3 +3716,152 @@
             (is (str/includes? text detector))
             (is (str/includes? text (name reason))))))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; A detector is silent when it produced no reading, not when its process
+;; failed to exit
+;; ---------------------------------------------------------------------------
+
+(defn- focused-runner
+  "One focused-test profile command built from a shell body.
+
+  `$0` is the runner's own name, `$1` the snapshot root, `$2` the report path
+  and `$3...` the namespaces -- the argv the gate expands. These fixtures go
+  through the real runner rather than stubbing it out, because the defect
+  being pinned lives in what the gate concludes from a runner that exited."
+  [body]
+  ["sh" "-c" body "runner" "{snapshot}" "{report}" "{namespaces}"])
+
+(defn- report-writing-runner
+  "A runner that writes one report row per requested namespace, then exits."
+  [tests failures trailer]
+  (focused-runner
+    (str "report=\"$2\"; shift 2; { printf '{'; "
+         "for ns in \"$@\"; do printf '\"%s\" {:tests " tests
+         " :failures " failures " :errors 0} ' \"$ns\"; done; "
+         "printf '}'; } > \"$report\"" trailer)))
+
+(def ^:private silent-focused-runner-shapes
+  "The four runner shapes the round-one adversarial review reproduced.
+
+  Every one of them exits, so `:ran` is true on all four; not one of them
+  leaves the gate holding a usable reading of the suite."
+  [{:label "R1 the report names namespaces nobody asked for"
+    :command (focused-runner
+               (str "printf '{\"other.ns-test\" {:tests 3 :failures 0"
+                    " :errors 0}}' > \"$2\""))
+    :reason :report-namespaces-do-not-match
+    :status :partial}
+   {:label "R2 the report says zero tests"
+    :command (report-writing-runner 0 0 "")
+    :reason :no-test-evidence
+    :status :partial}
+   {:label "R3 a clean report from a runner that exited three"
+    :command (report-writing-runner 3 0 "; exit 3")
+    :reason :runner-exit-nonzero
+    :status :partial}
+   {:label "R4 the runner exited three and wrote nothing"
+    :command (focused-runner "exit 3")
+    :reason :verification-runner-failed
+    :status :unverified}])
+
+;; @spec MCP-OP-ADMIT-125
+(deftest a-runner-that-exited-without-a-reading-is-a-silent-detector
+  (doseq [{:keys [label command reason status]} silent-focused-runner-shapes]
+    (testing label
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root core-test-sources)
+          (write-focused-profile! root {:command command :timeout-ms 60000})
+          (let [result (admit/execute-request!
+                         {:project-root (.getPath root)
+                          :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                         {:patch clean-multi-file-patch :verify "focused"})
+                text (#'admit/summary (assoc result :elapsed_ms 1.0))]
+            (is (true? (:ran (:tests result)))
+                (str "the runner's process exited, which is the whole reason "
+                     ":ran cannot answer this question"))
+            (is (= status (:verification_status result)))
+            (is (= [{:detector "focused-tests" :reason reason}]
+                   (:detectors_not_run result))
+                (str "the focused half produced no reading and the receipt "
+                     "published " (pr-str (:detectors_not_run result))))
+            (testing "and the text block carries what structure names"
+              (is (str/includes? text "did not run"))
+              (doseq [{:keys [detector reason]} (:detectors_not_run result)]
+                (is (str/includes? text detector))
+                (is (str/includes? text (name reason))))
+              (is (str/includes? text "not a clean bill of health")
+                  (str "hazards " (count (:hazards result))
+                       " beside a silent detector is the shape a reader "
+                       "scores as a pass"))))
+          (finally (delete-tree! root)))))))
+
+;; @spec MCP-OP-ADMIT-125
+(deftest a-check-that-ran-and-failed-is-a-reading-not-a-silent-detector
+  (testing "a suite that ran and failed"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root core-test-sources)
+        (write-focused-profile! root {:command (report-writing-runner 3 1 "")
+                                      :timeout-ms 60000})
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch clean-multi-file-patch :verify "focused"})
+              text (#'admit/summary (assoc result :elapsed_ms 1.0))]
+          (is (= :tests-failed (get-in result [:tests :reason])))
+          (is (= [] (:detectors_not_run result))
+              (str "a suite that ran and failed produced exactly the reading "
+                   "this gate asked for, and is already blocking"))
+          (is (not (str/includes? text "did not run"))))
+        (finally (delete-tree! root)))))
+  (testing "an analyzer that ran and introduced a blocking finding"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root core-test-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root
+                                    {:admit-lint-runner
+                                     (fn [_ _] {:ran true :ok false
+                                                :introduced-count 1
+                                                :blocking-introduced-count 1})})
+                       {:patch clean-multi-file-patch :verify "focused"})
+              text (#'admit/summary (assoc result :elapsed_ms 1.0))]
+          (is (= [] (:detectors_not_run result))
+              "the analyzer answered; what it answered was bad news")
+          (is (not (str/includes? text "did not run"))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-125
+(deftest a-refusal-that-consulted-no-detector-never-publishes-an-empty-list
+  (let [root (temp-dir)
+        source "(ns app.a)\n\n(defn f [] 1)\n"
+        no-op-patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                         "@@ -3,1 +3,1 @@\n (defn f [] 1)\n")]
+    (try
+      (write-sources! root {"src/app/a.clj" source})
+      (testing "a no-op patch is refused before any detector is consulted"
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch no-op-patch :verify "focused"})
+              text (#'admit/summary (assoc result :elapsed_ms 1.0))]
+          (is (= :no-op-patch (:error-type result)))
+          (is (= [{:detector "clj-kondo" :reason :verification-not-attempted}
+                  {:detector "focused-tests"
+                   :reason :verification-not-attempted}]
+                 (:detectors_not_run result))
+              (str "[] here is the affirmative claim that every requested "
+                   "detector answered, on a receipt where none was asked"))
+          (doseq [{:keys [detector reason]} (:detectors_not_run result)]
+            (is (str/includes? text detector))
+            (is (str/includes? text (name reason))))))
+      (testing "a refusal that never reached verification says nothing at all"
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch "this is not a unified diff" :verify "focused"})]
+          (is (false? (:ok result)))
+          (is (nil? (:detectors_not_run result))
+              (str "never asked and everything answered are different facts "
+                   "and must not share a value"))))
+      (finally (delete-tree! root)))))
