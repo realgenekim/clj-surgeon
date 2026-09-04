@@ -373,3 +373,11 @@ run as a test inside `make mcp-test`) enforces both halves.
   the sentence "these whole-file digests were computed at <clock>;
   admit_clojure_patch re-checks them at write time — do NOT re-hash", so a
   caller never spends a batch re-hashing files the write gate re-checks anyway.
+
+- [x] **MCP-OP-THREAD-050**: A string that only MENTIONS the subject is a lead.
+  When `feature_thread` resolves a leg and the hit's match sits inside a string
+  literal — or, in a script, inside a template or regex literal — clj-surgeon
+  shall report that leg CANDIDATE with the string named as the reason and shall
+  give it no insertion anchor, UNLESS the match spells a call (`subject(`) or is
+  a route literal beginning with `/`; a mention shall rank below every other
+  occurrence of the same leg rather than be dropped.

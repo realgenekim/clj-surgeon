@@ -1140,6 +1140,116 @@
           :else (recur (inc i) false))))))
 
 
+;; @spec MCP-OP-THREAD-050
+(defn literal-mask
+  "One boolean per character of `text`, true where that character sits INSIDE a
+  literal the language does not read as code: a Clojure string, or -- for a
+  script -- a string, a template literal or a regex literal.
+
+  `commented-line-set` answers the same question for comments and is LINE
+  granular, because a comment runs to end of line. A string does not:
+  `(def note \"stringOnly appears only in this string\")` carries code and prose
+  on ONE line, so the answer has to be per CHARACTER. Round-seven review,
+  finding 3 (BLOCKING): the Clojure path never asked, so a subject present only
+  inside a string literal was promoted to FOUND, was given an insertion anchor,
+  and made a five-leg convention read `COMPLETE (5 of 5)`.
+
+  Template interpolation is deliberately NOT masked: `${foo}` is code."
+  ^booleans [^String text clojure?]
+  (let [n (count text)
+        ^booleans m (boolean-array n false)
+        mark! (fn [i] (when (< i n) (aset m i true)))]
+    (if clojure?
+      (loop [i 0 mode :code]
+        (if (>= i n)
+          m
+          (let [c (.charAt text i)]
+            (case mode
+              :string (cond
+                        (= c \\) (do (mark! i) (mark! (inc i)) (recur (+ i 2) :string))
+                        (= c \") (recur (inc i) :code)
+                        :else (do (mark! i) (recur (inc i) :string)))
+              :comment (if (= c \newline)
+                         (recur (inc i) :code)
+                         (recur (inc i) :comment))
+              :code (cond
+                      (= c \") (recur (inc i) :string)
+                      (= c \;) (recur (inc i) :comment)
+                      ;; a character literal: `\"` opens nothing
+                      (= c \\) (recur (+ i 2) :code)
+                      :else (recur (inc i) :code))))))
+      (loop [i 0 mode :code stack [] prev nil]
+        (if (>= i n)
+          m
+          (let [c (.charAt text i)
+                next-c (when (< (inc i) n) (.charAt text (inc i)))]
+            (case mode
+              :line-comment (if (= c \newline)
+                              (recur (inc i) :code stack prev)
+                              (recur (inc i) :line-comment stack prev))
+              :block-comment (if (and (= c \*) (= next-c \/))
+                               (recur (+ i 2) :code stack prev)
+                               (recur (inc i) :block-comment stack prev))
+              :single (cond
+                        (= c \\) (do (mark! i) (mark! (inc i)) (recur (+ i 2) :single stack prev))
+                        (= c \') (recur (inc i) :code stack \')
+                        :else (do (mark! i) (recur (inc i) :single stack prev)))
+              :double (cond
+                        (= c \\) (do (mark! i) (mark! (inc i)) (recur (+ i 2) :double stack prev))
+                        (= c \") (recur (inc i) :code stack \")
+                        :else (do (mark! i) (recur (inc i) :double stack prev)))
+              :template (cond
+                          (= c \\) (do (mark! i) (mark! (inc i)) (recur (+ i 2) :template stack prev))
+                          (= c \`) (recur (inc i) :code stack \`)
+                          (and (= c \$) (= next-c \{))
+                          (recur (+ i 2) :code (conj stack :tpl) prev)
+                          :else (do (mark! i) (recur (inc i) :template stack prev)))
+              :regex (cond
+                       (= c \\) (do (mark! i) (mark! (inc i)) (recur (+ i 2) :regex stack prev))
+                       (= c \newline) (recur (inc i) :code stack prev)
+                       (= c \[) (do (mark! i) (recur (inc i) :regex-class stack prev))
+                       (= c \/) (recur (inc i) :code stack \/)
+                       :else (do (mark! i) (recur (inc i) :regex stack prev)))
+              :regex-class (cond
+                             (= c \\) (do (mark! i) (mark! (inc i)) (recur (+ i 2) :regex-class stack prev))
+                             (= c \newline) (recur (inc i) :code stack prev)
+                             (= c \]) (do (mark! i) (recur (inc i) :regex stack prev))
+                             :else (do (mark! i) (recur (inc i) :regex-class stack prev)))
+              :code (cond
+                      (and (= c \/) (= next-c \/)) (recur (+ i 2) :line-comment stack prev)
+                      (and (= c \/) (= next-c \*)) (recur (+ i 2) :block-comment stack prev)
+                      (= c \') (recur (inc i) :single stack prev)
+                      (= c \") (recur (inc i) :double stack prev)
+                      (= c \`) (recur (inc i) :template stack prev)
+                      (and (= c \}) (seq stack)) (recur (inc i) :template (pop stack) c)
+                      (and (= c \/)
+                           (or (nil? prev)
+                               (contains? regex-preceding-chars prev)
+                               (contains? regex-context-keywords (word-before text i))))
+                      (recur (inc i) :regex stack prev)
+                      (Character/isWhitespace c) (recur (inc i) :code stack prev)
+                      :else (recur (inc i) :code stack c)))))))))
+
+;; @spec MCP-OP-THREAD-050
+(defn string-shape
+  "How a match that sits inside a string LITERAL spells the subject.
+
+  `\"call\"` -- the match is immediately followed by `(`: the shape of
+  `{:onclick \"formatDraft()\"}`, which is the NAMED case's own menu leg.
+  `\"route\"` -- the match begins with `/`, a route literal, a string by
+  construction and governed by MCP-OP-THREAD-044 instead.
+  `\"mention\"` -- everything else: prose that names the subject and nothing
+  more. Only `\"mention\"` is weak.
+
+  Facts here, verdict in `leg-strength`: this function never decides a leg."
+  [^String line start end]
+  (let [matched (subs line start (min end (count line)))]
+    (cond
+      (str/starts-with? matched "/") "route"
+      (= \( (get line end)) "call"
+      :else "mention")))
+
+
 ;; @spec MCP-OP-THREAD-032
 (defn- clj-token-at
   "The token beginning at or after `i` in `text`, or nil. Used for exactly one
@@ -1340,10 +1450,10 @@
   [^String text line clojure?]
   (contains? (commented-line-set text clojure?) line))
 
-(defn- match-start
+(defn- match-span
   [pattern ^String line]
   (let [m (re-matcher pattern line)]
-    (when (.find m) (.start m))))
+    (when (.find m) [(.start m) (.end m)])))
 
 (defn scan
   "Hits for one regex over the leg's candidate files.
@@ -1364,17 +1474,30 @@
             ;; the file actually has a hit: `(comment ...)`, `#_` and `/* ... */`
             ;; are not decidable from the hit line alone.
             (let [clojure? (clojure-path? relative)
-                  commented (delay (commented-line-set source clojure?))]
+                  commented (delay (commented-line-set source clojure?))
+                  ;; @spec MCP-OP-THREAD-050
+                  ;; Per CHARACTER, computed once per file and only when the
+                  ;; file has a hit: a string literal does not run to end of
+                  ;; line the way a comment does.
+                  literal (delay {:mask (literal-mask source clojure?)
+                                  :offsets (line-start-offsets source)})]
               (update acc :hits into
                       (keep-indexed
                         (fn [idx line]
-                          (when-let [start (match-start pattern line)]
-                            {:file relative
-                             :line (inc idx)
-                             :col start
-                             :text (str/trim line)
-                             :in_comment (or (comment-mention? line start clojure?)
-                                             (contains? @commented (inc idx)))}))
+                          (when-let [[start end] (match-span pattern line)]
+                            (let [{:keys [^booleans mask offsets]} @literal
+                                  off (+ (nth offsets idx 0) start)
+                                  in-string? (and (< off (alength mask))
+                                                  (aget mask off))]
+                              {:file relative
+                               :line (inc idx)
+                               :col start
+                               :text (str/trim line)
+                               :in_comment (or (comment-mention? line start clojure?)
+                                               (contains? @commented (inc idx)))
+                               :in_string in-string?
+                               :string_shape (when in-string?
+                                               (string-shape line start end))})))
                         lines))))))
       {:hits [] :unreadable []}
       candidates)))
@@ -1390,12 +1513,14 @@
   (str "nl -ba " file " | sed -n '" from "," to "p'"))
 
 (defn- hit->member
-  [cache {:keys [file line col in_comment]} evidence & [opts]]
+  [cache {:keys [file line col in_comment in_string string_shape]} evidence & [opts]]
   (let [{:keys [ok source lines]} (read-source cache file)]
     (when ok
       (let [{:keys [from to body boundary form-name comment-start]}
             (body-at file source lines line opts)]
         (cond-> {:in-comment? (boolean in_comment)
+         ;; @spec MCP-OP-THREAD-050
+         :in-string-mention? (boolean (and in_string (= "mention" string_shape)))
          :file file
          :from from
          :to to
@@ -1613,6 +1738,13 @@
     {:status "CANDIDATE"
      :weak_reason "the hit is a comment mention, not code"}
 
+    ;; @spec MCP-OP-THREAD-050
+    (:in-string-mention? member)
+    {:status "CANDIDATE"
+     :weak_reason (str "the hit is inside a string literal that only MENTIONS"
+                       " the subject -- not a call spelling and not a route"
+                       " literal")}
+
     ;; @spec MCP-OP-THREAD-044
     (false? (:route-entry? member))
     {:status "CANDIDATE"
@@ -1651,7 +1783,7 @@
          co (mapv (fn [m] (let [strength (leg-strength m)]
                             (cond-> (-> m
                                         (merge strength)
-                                        (dissoc :rank :in-comment? :route-entry? :enclosing-form-name))
+                                        (dissoc :rank :in-comment? :in-string-mention? :route-entry? :enclosing-form-name))
                               (= "FOUND" (:status strength))
                               (-> (assoc :anchor (anchor-for cache m))
                                   (merge (after-context-for cache m))))))
@@ -1659,7 +1791,7 @@
          co-keys (set (map (juxt :file :from :to) co))
          strength (leg-strength primary)]
      (merge (dissoc base :globs)
-            (dissoc primary :rank :in-comment? :route-entry? :enclosing-form-name)
+            (dissoc primary :rank :in-comment? :in-string-mention? :route-entry? :enclosing-form-name)
             strength
             (cond-> {:searches [(last searches)]
                      :unreadable unreadable
@@ -1787,6 +1919,12 @@
                              (vec (sort-by #(if (:route-entry? %) 0 1) members))
 
                              :else (vec members))
+                    ;; @spec MCP-OP-THREAD-050
+                    ;; A prose mention inside a string sinks BELOW every real
+                    ;; occurrence. `sort-by` is stable, so the kind's own order
+                    ;; survives inside each class and the mention is still
+                    ;; carried as a lead rather than dropped.
+                    ranked (vec (sort-by #(if (:in-string-mention? %) 1 0) ranked))
                     ranked (keep-new ranked)]
                 (if (empty? ranked)
                   (recur more ran' unreadable')
@@ -2634,7 +2772,7 @@
                                  ;; enclosing form name and the comment offset
                                  ;; are all recoverable from the range itself,
                                  ;; and together they were two thirds of the row.
-                                 (dissoc m :in-comment? :rank :route-entry?
+                                 (dissoc m :in-comment? :in-string-mention? :rank :route-entry?
                                          :enclosing-form-name :hit_line
                                          :comment_start :form_name)
                                  strength)

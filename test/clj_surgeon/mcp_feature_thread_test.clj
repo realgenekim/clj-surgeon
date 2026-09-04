@@ -2679,6 +2679,7 @@
                       "    (log/info {:msg \"nested stringOnly mention\"})))\n"))
     root))
 
+;; @spec MCP-OP-THREAD-050
 (deftest a-subject-only-inside-a-clojure-string-is-never-found
   (testing "the reviewer's fixture: five use legs, one string, no completion"
     (let [root (string-only-fixture!)]
