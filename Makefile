@@ -1009,6 +1009,19 @@ test-bb:
 	bb test/run_all.clj
 
 # ============================================================
+# TEST-ISO-009 -- the concurrency battery (the spike's merge gate)
+# ============================================================
+# N real `git clone`s of the tip, all running `make mcp-test` at once. Passes
+# only if ALL N are 0 failures and 0 errors. One clean copy beside one failing
+# copy is a FAILURE, never a 50% pass -- round one saw exactly that twice, and
+# a gate that averaged them would have called a scheduler race healthy.
+N ?= 4
+
+suite-concurrency-battery:
+	@# @spec TEST-ISO-009
+	@N=$(N) sh test/suite_concurrency_battery.sh
+
+# ============================================================
 # MEM-005 parser-admission red witness (heavy; NOT in make test)
 # ============================================================
 # Isolates the memory battery's two adversarial SHAPE findings to one
