@@ -1841,3 +1841,13 @@ banking if codex gates review throughput.
 ## 22:30Z Held-out SMW acceptance check landed: 25 arms ACCEPT 4/4, G2 REJECT (the feature-absent arm, caught), three unchanged trees REJECT (negative controls). Every wall in the replay doc now has an independent ACCEPT beside it. Oracle shared with Astra.
 
 ## 22:33Z feature_thread r12 landing review (Sol): GO — landing 508f26f5 via ~/bin/land (twelve rounds; the lane freezes after)
+
+## 22:38Z suite spike r3 built (105f4b6f): all gates green on a fresh clone, N=4 battery PASS x2, battery ledger + freshness tripwire (which caught its own false-alarm bug before landing); landing review awaits Astra's slot
+
+## 22:39Z MEM-003 r10 fix built (d0e82620; seven split plants caught; hit counts unchanged); gates + landing review await Astra's slot
+
+## 22:40Z study-ops r13 landing review (Sol) cut off by the filter after finding one blocker (wire member identified before UTF-8 serialization); Opus completion + fix await a capacity slot
+
+## 22:41Z suite spike r3 LANDING review launched (Sol, 105f4b6f) under Astra's ruling: read-only until 23:20Z, focused probes only in the 23:20–23:30 shared window, coverage comparison behind 717→150 s required
+
+## 22:51Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 154  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:48Z load 6.32 ; === rc 0 end 22:51Z)
