@@ -277,9 +277,11 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
-- When only names, ranges, counts, hashes, or source anchors are needed, set
-  `include_source=false`. Omit it when source is needed for judgment or an edit;
-  a metadata-only read must not cause a second call for source.
+- For `forms` requests that need only names, ranges, counts, hashes, or source
+  anchors, set `include_source=false` on that request. Omit it when source is
+  needed for judgment or an edit; a metadata-only read must not cause a second
+  call for source. `outline` already omits form bodies: do not add
+  `include_source` to an outline request or to the top-level call.
 - **Latency discipline during this editor study:** an `inspect_clojure` result's
   compact human summary can omit requested source even though the same call's
   `structuredContent.results` already contains it. Preserve and consume that
