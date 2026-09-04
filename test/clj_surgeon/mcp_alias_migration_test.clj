@@ -877,6 +877,68 @@
         (finally
           (delete-tree! workspace))))))
 
+;; @spec MCP-OP-ALIAS-059
+(deftest a-caller-sized-scope-entry-cannot-grow-the-refusal-text
+  ;; Round-11 re-review finding 5: `max-refusal-fact-characters` bounds the
+  ;; rendered `facts ·` line, but `:error` and `:remedy` are ENVELOPE keys and
+  ;; are rendered whole, and both embed `:path`, `:pattern` and `:cause`
+  ;; verbatim. The glob parser echoes the pattern twice, so a 10,001-character
+  ;; entry becomes a 20,031-character cause before the two sentences quote it
+  ;; again:
+  ;;
+  ;;   error_type   => "alias-migration-scope-path-refused"
+  ;;   path length  = 10001  pattern length = 10001  cause length = 20031
+  ;;   error length = 30141  remedy length = 20298
+  ;;   TEXT BLOCK LENGTH = 51191
+  ;;
+  ;; ALIAS-059 asks for a text "bounded in count and in per-field length"; the
+  ;; bound read on the size of the TREE and not on the size of the CALLER'S
+  ;; OWN INPUT, which is the one thing in a refusal that no ceiling upstream
+  ;; of it constrains.
+  (let [workspace (temp-dir)]
+    (try
+      (write-tree! workspace {"src/two.clj" "(ns two)\n"})
+      (testing "a 10,001-character malformed entry"
+        (let [entry (str (apply str (repeat 10000 "a")) "{")
+              result (scope-matches-nothing-refusal
+                       workspace {:scope {:paths [entry]}})
+              text (mcp-tool/alias-migration-summary
+                     (assoc result :elapsed_ms 1.0))]
+          (is (= "alias-migration-scope-path-refused" (:error_type result))
+              (pr-str (:error_type result)))
+          (doseq [field [:path :pattern :cause]]
+            (is (<= (count (str (get result field))) 256)
+                (str "the refusal field " field " is "
+                     (count (str (get result field)))
+                     " characters of caller input"))
+            (is (str/includes? (str (get result field)) "10001")
+                (str "the elided field " field
+                     " does not name the length it replaced")))
+          (is (<= (count (str (:error result))) 1024)
+              (str "the error sentence is " (count (str (:error result)))
+                   " characters"))
+          (is (<= (count (str (:remedy result))) 1024)
+              (str "the remedy is " (count (str (:remedy result)))
+                   " characters"))
+          (is (<= (count text) 4096)
+              (str "the refusal text block is " (count text)
+                   " characters, past the stated 4096-character ceiling"))))
+      (testing "a 10,001-character entry that parses and matches nothing"
+        (let [entry (apply str (repeat 10001 "a"))
+              result (scope-matches-nothing-refusal
+                       workspace {:scope {:paths [entry]}})
+              text (mcp-tool/alias-migration-summary
+                     (assoc result :elapsed_ms 1.0))]
+          (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+              (pr-str (:error_type result)))
+          (is (every? #(<= (count %) 256) (:paths result))
+              "the caller's own paths ride the refusal at full length")
+          (is (<= (count text) 4096)
+              (str "the refusal text block is " (count text)
+                   " characters, past the stated 4096-character ceiling"))))
+      (finally
+        (delete-tree! workspace)))))
+
 
 ;; @spec MCP-OP-ALIAS-006
 (deftest the-domain-refusal-fires-only-when-the-scope-matched-files
