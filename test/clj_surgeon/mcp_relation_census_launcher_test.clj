@@ -20,6 +20,8 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [babashka.process :as proc]
+   [rewrite-clj.parser :as rw-p]
+   [rewrite-clj.node :as rw-n]
    [clj-surgeon.core :as core]
    [clj-surgeon.relation-census :as census])
   (:import
@@ -107,7 +109,19 @@
       :args [":op" big]}
      {:label :unknown-operation-under-help
       :error-type :unknown-operation
-      :args [":op" big ":help" "true"]}]))
+      :args [":op" big ":help" "true"]}
+     ;; Round twenty-two, item 4. A 10,001-deep nested EDN argument reached
+     ;; `edn/read-string` and came back as an untyped `StackOverflowError` at
+     ;; both real launchers. The depth is measured by SCANNING DELIMITERS, so
+     ;; the refusal is decided without the reader and without the stack; the
+     ;; name is declared here beside the other three so the enumeration
+     ;; witness drives it.
+     {:label :argument-nesting-too-deep
+      :error-type :argument-nesting-too-deep
+      :args [":op" ":relation-census" ":dir" "."
+             ":doors" (str (apply str (repeat 10001 "["))
+                           big
+                           (apply str (repeat 10001 "]")))]}]))
 
 (defn- printed-leaf-lengths
   "The RENDERED length of every leaf a parsed refusal carries.
@@ -379,3 +393,109 @@
               "escaping-source answered a containment question with no workspace")))
       (finally
         (doseq [f (reverse (file-seq parent))] (.delete ^java.io.File f))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND TWENTY-TWO, item 4 — Opus's round-twenty-one non-blocking finding.
+;;
+;; "Every refusal the launcher prints leaves through one bounded exit" was not
+;; true of an ERROR. `-main` caught `Exception`, and a `StackOverflowError` is
+;; an `Error`, so a 10,001-deep nested EDN argument — an ordinary caller value
+;; — escaped as an untyped stack trace at BOTH real launchers at 0a91e720:
+;;
+;;   $ java … :op :relation-census :dir $FX :doors "$(python3 -c "print('['*10001 + ']'*10001)")"
+;;   EXIT=1  BYTES=224
+;;   Execution error (StackOverflowError) at java.io.PushbackReader/read …
+;;   $ bb   … same argument
+;;   EXIT=1  BYTES=1402
+;;   Type:     java.lang.StackOverflowError
+;;
+;; Nothing was evaluated and no caller value was published unbounded, which is
+;; why the reviewer ruled it non-blocking — but a caller-controlled argument
+;; reaching an untyped stack trace is a refusal no enumeration can drive, and
+;; that is the round-nineteen argument about undeclared names, one class over.
+;;
+;; TWO repairs, because there are two defects and a single witness would hide
+;; one behind the other:
+;;
+;;   1. the READER is never handed a value deeper than it can read. `parse-val`
+;;      measures nesting depth by scanning delimiters — no reader, no stack —
+;;      and refuses `:argument-nesting-too-deep`, a DECLARED launcher name with
+;;      a drive of its own in `launcher-drives`.
+;;   2. the LAST-RESORT catch is over `Throwable`, so the exit stays bounded
+;;      for an `Error` the depth bound does not anticipate. Pinned by a unit
+;;      drive of the handler with a real `StackOverflowError` and by a
+;;      STRUCTURAL assertion that `-main`'s outermost catch names `Throwable` —
+;;      because once repair 1 lands, no argv can reach repair 2, and a bound
+;;      nothing can make red is not a ratchet.
+;; ---------------------------------------------------------------------------
+
+(def ^:private nesting-attack-depth
+  "The depth the reviewer drove."
+  10001)
+
+(defn- deeply-nested-argument
+  []
+  (str (apply str (repeat nesting-attack-depth "["))
+       (hostile-argument)
+       (apply str (repeat nesting-attack-depth "]"))))
+
+;; @spec MCP-OP-CENSUS-034
+(deftest a-deeply-nested-argument-never-reaches-the-reader
+  (testing "parse-val refuses on DEPTH, before the reader is called"
+    (let [thrown (try (core/parse-val (deeply-nested-argument))
+                      (catch clojure.lang.ExceptionInfo e e)
+                      (catch Throwable t t))]
+      (is (instance? clojure.lang.ExceptionInfo thrown)
+          (str "parse-val answered with " (pr-str (class thrown))
+               " — a StackOverflowError here is the defect itself"))
+      (is (= :argument-nesting-too-deep (:error-type (ex-data thrown)))
+          (str "refused as " (pr-str (:error-type (ex-data thrown)))))))
+
+  (testing "a nesting depth the tool accepts still reads"
+    (is (= [[[:a]]] (core/parse-val "[[[:a]]]")))))
+
+;; @spec MCP-OP-CENSUS-034
+(deftest the-launchers-last-resort-catch-is-over-throwable
+  (testing "the handler types an Error rather than letting it escape"
+    (let [handler (resolve 'clj-surgeon.core/launcher-throwable-refusal)]
+      (is (some? handler)
+          "core has no last-resort Throwable handler to route -main's catch to")
+      (when handler
+        (let [refusal (handler (StackOverflowError.))]
+          (is (map? refusal) "the handler returned no refusal map")
+          (is (keyword? (:error-type refusal))
+              (str "the handler published no type: " (pr-str refusal)))
+          (is (contains? census/launcher-refusal-types (:error-type refusal))
+              (str "the handler published " (pr-str (:error-type refusal))
+                   ", which is not a DECLARED launcher refusal name"))
+          (is (string? (:error refusal))
+              "the handler published no prose naming what failed")
+          (is (<= (count (pr-str refusal)) 4096)
+              "the handler's refusal is not bounded")))))
+
+  (testing "-main's outermost catch names Throwable"
+    ;; Structural, and deliberately so: once the depth bound lands, no argv
+    ;; can reach the last-resort catch, so the only thing left to assert is
+    ;; that the wiring is what the handler above was written for. A catch of
+    ;; `Exception` here is the defect verbatim.
+    (let [sexpr (fn [nd] (try (rw-n/sexpr nd) (catch Exception _ ::unreadable)))
+          head-tokens (fn [nd]
+                        (->> (rw-n/children nd)
+                             (filter #(= :token (rw-n/tag %)))
+                             (map sexpr)))
+          root (rw-p/parse-string-all (slurp "src/clj_surgeon/core.clj"))
+          main-node (->> (rw-n/children root)
+                         (filter #(= :list (rw-n/tag %)))
+                         (filter #(= ['defn '-main] (vec (take 2 (head-tokens %)))))
+                         first)
+          catches (when main-node
+                    (->> (tree-seq rw-n/inner? rw-n/children main-node)
+                         (filter #(= :list (rw-n/tag %)))
+                         (keep (fn [nd]
+                                 (let [ts (head-tokens nd)]
+                                   (when (= 'catch (first ts)) (second ts)))))
+                         set))]
+      (is (some? main-node) "core.clj defines no -main")
+      (is (contains? (or catches #{}) 'Throwable)
+          (str "-main catches only " (pr-str catches)
+               " — an Error escapes every one of them")))))
