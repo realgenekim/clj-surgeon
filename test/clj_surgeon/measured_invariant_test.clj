@@ -82,7 +82,17 @@
    that is re-blessed reflexively stops being a ratchet.
 
    `;;` comments are cut before matching: a comment EXPLAINING why a call was
-   removed must not read as the call."
+   removed must not read as the call.
+
+   The hit count is a count of CALLS, `(count (re-seq pattern code))`, not of
+   matching lines. Round-six review §6: this folded one hit per matching line,
+   so a line that already matched absorbed an unlimited number of further clock
+   reads or laundering calls without moving the declared number, and the
+   reviewer found the shape live in the tree at
+   `worktree_lifecycle/valid-future-expiry?` -- two `Instant/parse` reads on one
+   line, declared 1, green. `re-seq` also counts the SAME spelling twice, which
+   is the case the reviewer's own example is and which a `distinct` over
+   alternatives would still get wrong."
   ([^java.io.File file pattern] (sites file pattern "src"))
   ([^java.io.File file pattern root]
    (:hits
@@ -92,9 +102,9 @@
                             (second (str/split (str/trim line) #"[\s\[]+"))
                             form)]
                 {:form form'
-                 :hits (cond-> hits
-                         (re-find pattern code)
-                         (conj [(site-path file root) form']))}))
+                 :hits (into hits
+                             (repeat (count (re-seq pattern code))
+                                     [(site-path file root) form']))}))
             {:form nil :hits []}
             (str/split-lines (slurp file)))))) 
 
@@ -765,7 +775,7 @@
    ["src/clj_surgeon/txn_journal.clj" "begin!"]
    {:reads 1 :channel :control :why "transaction started-at stamp on disk"}
    ["src/clj_surgeon/txn_journal.clj" "evidence-stat"]
-   {:reads 2 :channel :control :why "the mtime/ctime pair that dates a tombstone's evidence on disk"}
+   {:reads 3 :channel :control :why "the mtime/ctime pair that dates a tombstone's evidence on disk, plus the java.nio ATTRIBUTE NAME `\"lastModifiedTime\"` the pair is read by — three spellings on two lines. Was declared 2 because the scan counted matching LINES (round-six review §6) and because the string spelling did not exist until this round; the value is a lock-age basis and reaches no receipt"}
    ["src/clj_surgeon/txn_journal.clj" "finish!"]
    {:reads 1 :channel :control :why "transaction finished-at stamp on disk"}
    ["src/clj_surgeon/txn_journal.clj" "legacy-lock-dead?"]
@@ -805,7 +815,7 @@
    ["src/clj_surgeon/worktree_lifecycle.clj" "instant-string?"]
    {:reads 1 :channel :control :why "parses a CALLER's timestamp string to decide whether it is one; the predicate returns a boolean and the parsed value is discarded"}
    ["src/clj_surgeon/worktree_lifecycle.clj" "valid-future-expiry?"]
-   {:reads 1 :channel :control :why "compares two CALLER-supplied timestamp strings; returns a boolean, publishes neither"}
+   {:reads 2 :channel :control :why "compares two CALLER-supplied timestamp strings; returns a boolean, publishes neither. TWO `Instant/parse` reads on ONE line — the reviewer's live proof that the count was a count of matching lines (round-six review §6), re-blessed here at the number the calls actually come to"}
    ["src/clj_surgeon/worktree_lifecycle_io.clj" "capture-inventory"]
    {:reads 1 :channel :control :why "inventory captured-at stamp"}
    ["src/clj_surgeon/worktree_lifecycle_io.clj" "issue-current?"]
