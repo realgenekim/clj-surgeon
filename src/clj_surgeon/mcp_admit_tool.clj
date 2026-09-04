@@ -267,6 +267,8 @@
     :patch-does-not-apply
     :patch-too-large
     :path-outside-project
+    ;; @spec MCP-OP-ADMIT-148
+    :request-decode-constraint-exceeded
     :require-removed
     :server-not-initialized
     :source-file-not-found
@@ -2444,13 +2446,41 @@
               {:ok true
                :params (json/parse-string (json/generate-string params) true)}
               (catch Exception error
-                {:ok false
-                 :error-type (if (str/includes? (.getName (class error))
-                                                "StreamConstraints")
-                               :patch-too-large
-                               :invalid-admit-request)
-                 :error (str "request could not be decoded: "
-                             (.getMessage error))}))]
+                ;; @spec MCP-OP-ADMIT-148
+                ;; A DECODER limit is not the patch being too large. The
+                ;; patch's own byte size was already checked above, so the
+                ;; only decoder constraint a patch's bytes can trip here is
+                ;; the string-value length; a name length, a nesting depth or
+                ;; a number length is a fact about the request's STRUCTURE.
+                ;; Round six measured a 230-byte patch published as
+                ;; `:patch-too-large` because a 60,000-character KEY NAME
+                ;; exceeded `StreamReadConstraints.getMaxNameLength()`, with
+                ;; `next_call.blocked_by` saying the same and no remedy at
+                ;; all -- so an agent that branches on the field splits a
+                ;; patch that was never too large, and splits again.
+                (let [message (str (.getMessage error))
+                      constraint? (str/includes? (.getName (class error))
+                                                 "StreamConstraints")
+                      patch-sized? (str/includes? message
+                                                  "getMaxStringLength")]
+                  (cond-> {:ok false
+                           :error-type (cond
+                                         (and constraint? patch-sized?)
+                                         :patch-too-large
+                                         constraint?
+                                         :request-decode-constraint-exceeded
+                                         :else :invalid-admit-request)
+                           :error (str "request could not be decoded: "
+                                       message)}
+                    (and constraint? (not patch-sized?))
+                    (assoc :remedy
+                           (str "this is a JSON decoder limit on the"
+                                " request's own structure, not the patch's"
+                                " size: the patch is " bytes " UTF-8 bytes,"
+                                " inside the " max-patch-bytes "-byte"
+                                " admission limit. Shorten the request field"
+                                " the decoder names above -- splitting the"
+                                " patch will not change this answer"))))))]
         (if-not (:ok normalized)
           (bound-receipt
             (merge (empty-receipt "preview")
@@ -2458,6 +2488,8 @@
                     :operation :admit-patch-refused
                     :error-type (:error-type normalized)
                     :error (:error normalized)
+                    ;; @spec MCP-OP-ADMIT-148
+                    :remedy (:remedy normalized)
                     :next_call {:tool "admit_clojure_patch"
                                 :patch_field "patch"
                                 :blocked_by (:error-type normalized)}}))
