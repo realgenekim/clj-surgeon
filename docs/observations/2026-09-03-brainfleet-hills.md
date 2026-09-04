@@ -1384,3 +1384,84 @@ that is the one experiment I would run before either of us quotes the number.
 | the sentence for Gene | the fan-out win is real and load-proof; the read side is not ours; the sed counterfactual must run before anyone quotes the number | pre-registered falsification was worth it (killed square 3 and the irregularity story, exposed a real emission win); no wall-speed, correctness, or beyond-this-caller claim | Both true; Opus's names the one experiment that can still take the headline away, so it goes first. |
 
 **Launched at 00:38Z:** E-AFFORD (Opus runner, 9 native arms on the E-REG fixtures, pre-registration before the first arm); the cross-attack (Opus attacks Sol's answer and drafts the merged E-PREWRITE pre-registration; Sol attacks Opus's answer); inbox item for the first-call schema+description branch. Functional share of launched work stays above 50%.
+
+## 24. Cross-attack — Sol on Opus, verbatim (00:44Z; recovered from the codex log: `codex exec -o` clobbered the file Sol wrote at the same path — sol-yolo fixed the same minute)
+
+# Cross-attack of Opus's E6-Q2 + E-REG poll
+
+## 1. F1 and E-HUNK
+
+**Strongest objection.** The claimed **27 +/- 5 characters per emitted line** is not a measurement. The receipt measures emitted characters and canonical churn, but not emitted patch-body lines. Opus manufactures the denominator: 168 canonical diff lines plus an assumed seven overhead lines per file gives `168 + 21*7 = 315`, and `8,550/315 = 27.1`. That cannot distinguish changed-line cost, hunk-context cost, path/header cost, or strategy choice. Its own prediction is internally inconsistent: with a *fixed per-file* seven-line overhead, H2 has `336 + 21*7 = 483` lines, so F1 predicts about **13,041 characters**, or **10,626-15,456** across its stated band—not 15,000-18,000. The higher prediction silently assumes a second hunk and therefore a second context allowance. E-HUNK never says whether the two sites coalesce into one hunk or are far enough apart to create two.
+
+**Does the objection survive the receipts? Yes.** E-REG holds canonical churn at **+84/-84 for every k**, yet individual native emissions range from **1,929 to 16,531 characters**. Its measured per-patch cell means are **5,262 / 8,550 / 8,190 / 8,951**, not a measured line-rate series. The 1,929-character arm is especially fatal to an unconditional line-count law: the cohort says that arm generated its patch programmatically. The same output diff therefore does not imply the same emitted representation.
+
+**Design change.** Replace E-HUNK with a small factorial and meter the actual request: one site/one hunk, two adjacent sites/one hunk, and two separated sites/two hunks. Record emitted patch lines, changed lines, context lines, headers, request characters, patch-call count, and the content-based strategy class. Pre-register the line-rate only within literal-patch arms and treat strategy switching as a separate outcome. With the observed 1,929-versus-8,594 split at k=1, `n=2` per cell cannot support a +/-20% refutation threshold; use at least six native arms per cell or present the result as a strategy-distribution probe, not a fitted law.
+
+## 2. The restated square-2 claim
+
+**Strongest objection.** A sceptic can dodge it because one of its supposedly receipt-bound clauses is false and another is overbroad. Opus says **8 of 8** native runs "hand-transcribed a full patch." E-REG explicitly says `ereg-k1-N-2` **"did not hand-type its patch"**; it emitted a compact JS table and generated the patch body. A sceptic can then correctly restate the result as a harness- and prompt-conditioned default-policy observation, not an inherent native limitation: one caller, generated fixtures, N=21, and a prompt in which `apply_patch` was salient while a stream rewrite was not. Likewise, "one request" is defensible only as *one committing request*: **6 of 8** tool arms first paid a refused request.
+
+**Does the objection survive the receipts? Yes.** The honest native range is **1,929-16,531 characters**, with literal patching in **7 of 8**, not hand transcription in 8 of 8. All **16 valid arms** were 6/6 and byte-identical, so the established advantage is emission under the observed policy, not correctness. The tool's **485-1,260** character range is real, but so are the **6/8** first-call refusals.
+
+**Design change.** The surviving claim should be: *For this caller, harness, N=21 alias-migration family, and default native prompt, 7/8 native arms emitted literal patches and one generated a compact patch; native write requests totaled 1,929-16,531 characters versus 485-1,260 for the tool, and every valid arm was byte-identical to canonical.* Then run the salience counterfactual before calling the behavior a product boundary.
+
+## 3. E-AFFORD and the meaning of “native”
+
+**Strongest objection.** Naming or licensing `sed` is an intervention, not contamination in the capability sense. The arm still uses no clj-surgeon and is therefore native, but it is no longer the autonomous native control measured by E-REG. It must be labelled **native-salient**, not silently pooled with N. The causal question is precisely whether prompt salience changes strategy, so the manipulation is legitimate only if permissions, task text, gate, and available tools are otherwise identical.
+
+Use this exact intervention line:
+
+> Clarification: as in every native arm, you may use any available native write path, including `apply_patch`, `sed`, `perl`, or a generated patch. Choose whichever method you judge fastest and safest; none is required or preferred. Do not use clj-surgeon.
+
+That wording names the alternatives without asserting that a regex is correct, supplying a command, or relaxing the acceptance gate.
+
+**Does the objection survive the receipts? Yes.** E-REG observed **zero `sed` or `perl` rewrites in 8 of 8 native arms**, but it also observed compact programmatic generation in **1 of 2 k=1 arms**. This is exactly why salience is a treatment variable. The existing cohort proves default behavior; it does not prove behavior after the intervention.
+
+**Design change.** Nine new native arms are valid for a same-wave comparison of default versus salient native behavior only if a fresh default cell is included and allocation is interleaved. They are **not** valid for Opus's predicted new T/N ratio: old T arms are historical context, not a contemporaneous comparator. Keep the nine-arm cost but run k=1 only: `N-default`, `N-salient`, and `T`, `n=3` each. Defer k=6. That directly tests both the prompt effect and whether the tool's emission advantage survives it.
+
+## 4. Schema-first versus the description-first canary
+
+**Strongest objection.** "The schema was present" does not establish that the caller read, understood, or could conveniently instantiate it. It establishes only availability. The same observation also cuts against Opus: a schema that was already in `tools/list` did not prevent repeated wrong envelopes. Accepting every guessed shape would mechanically suppress refusals, but it permanently widens the contract; silently treating an unknown `verification_profile` as the default is worse, because a typo can weaken requested verification while returning success.
+
+**Does the objection survive the receipts? Yes, but it narrows my position.** E6-Q2 recorded **12 `invalid-mcp-request` refusals among 42 inspect calls**, for missing `expect` or root-level `file`; the coordinator made the same first two mistakes. E-REG then recorded a first-call refusal in **6 of 8** tool arms, including **4** invented flat shapes and **2** unknown profiles. Those figures prove that the current advertised contract does not overcome the caller's prior. They do **not** distinguish a copyable-description fix from compatibility normalization, because neither intervention was randomized.
+
+**Design change.** Keep the description-first canary because it is reversible and discriminating: add one complete nested request plus the enumerated profile values, then pre-register first-call acceptance over eight fresh T arms. If at least 4/8 still refuse, add compatibility only for lossless, unambiguous syntactic sugar: flat alias fields may normalize when no nested request is present, and root-level `file` may hoist only when conflict-free. Continue to require `expect`; reject unknown verification profiles with the allowed values. Opus is right that compatibility is the deterministic fallback, but wrong to rank a safety-weakening default ahead of this canary.
+
+## 5. E-EXTRACT versus E-PREWRITE
+
+**Strongest objection.** E-EXTRACT does not, by itself, measure square 4. It measures a write-side semantic operation, fan-out, final correctness, and emission. Square 4 is **proof before write in the warm JVM**; E-PREWRITE measures the ordering and pristine-worktree guarantee directly. Calling extraction "the verbs with no native equivalent" does not turn final byte identity into evidence that proof preceded mutation.
+
+**Does the objection survive the receipts? Yes.** E6-Q2 closes square 3 after **54/54 total probes**, and merely names `:extract!` among the remaining open write-side verbs; it contains no extraction result. E-REG reports **all 16 valid arms 6/6 and byte-identical**, so it supplies no existing native correctness deficit either. Opus's predicted native `<=2/3` extraction correctness is therefore a hypothesis, not a continuation of a measured gap.
+
+**Design change: one pre-registration satisfying both.** Register one extraction cohort with two frozen sibling fixtures and `n=3` N/T pairs per fixture:
+
+- **Valid fixture:** perform the 250-line family extraction. Gate on load plus byte identity to a frozen canonical; measure emitted write characters. This is E-EXTRACT.
+- **Poisoned fixture:** the same extraction with one planted postcondition that must fail. The primary is an ordered witness that proof/refusal occurs before the first real-worktree mutation, plus an unchanged pre/post tree hash. This is E-PREWRITE and square 4.
+
+Keep the decisions independent and written before arm 1: withdraw the square-4 claim if T mutates before proof in any poisoned arm or N proves before mutation in at least 2/3; withdraw the extraction advantage if T is not 3/3 correct on the valid fixture, or if N is 3/3 correct and under 5,000 emitted characters in at least 2/3. No wall primary. One document, two sibling cells, no post-hoc relabelling.
+
+## 6. The sentence for Gene
+
+**Strongest objection.** The sentence compresses away exactly the caveats Gene needs. It assigns **54/54** to the plain agent, although native contributed **18/18** and 54/54 is the total over all nine arms. It gives native's range as 7,377-16,531, omitting the 1,929-character compact native arm, and calls the result load-proof while sliding from a load-immune character measurement toward the broader word "win." It also says the read side "is not ours" without the cohort's one-caller, supplied-symbol/line-number boundary.
+
+**Does the objection survive the receipts? Yes.** E6-Q2 says native was **6/6 in each of three runs, with three tool calls flat**; the whole cohort was 54/54. E-REG says **11 of 16 walls were void**, every arm was correct, and native emitted **1,929-16,531** characters. Those figures support an emission result and a scoped square-3 withdrawal, not a general speed or correctness win.
+
+**Replacement sentence.**
+
+> Tonight withdrew square 3 for this caller after native answered 18/18 supplied-symbol structural probes on two roughly 3,700-line files in three calls per run, and E-REG killed the irregularity story while showing a real default-policy emission gap—1,929-16,531 native write characters versus 485-1,260 for the verb, with every valid arm byte-correct—but it did not establish a wall, correctness, cross-caller, or sed-salient win.
+
+## What I now concede to Opus
+
+I concede that “a regex cannot close” must be retired; the defensible result is behavioral and prompt-conditioned.
+
+I concede that emitted request characters are the right load-immune primary meter for this loaded-box follow-up.
+
+I concede that E-AFFORD is the highest-value immediate falsifier of the current square-2 headline.
+
+I concede that unambiguous schema normalization is likely the right fallback if a description-only canary fails.
+
+I concede that E-EXTRACT is the strongest next write-side capability test, though it is not square 4 without an event-order witness.
+
+**Committed recommendation for the next 60 minutes of arm time:** run the nine-arm, same-wave k=1 E-AFFORD cohort now—three interleaved `N-default`, three `N-salient` using the exact line above, and three `T`—with emitted write characters and content-based strategy class primary, byte identity as the gate, and no wall claim.
+
+**Accepted into the running E-AFFORD before arm 1 (amendment 1):** Sol's fairness wording (names apply_patch as an equal option, "none is required or preferred"), the cell labelled N-salient and never pooled with N-default, cell C (k=6) dropped for a contemporaneous T k=1 ×3 cell so the ratio has a live comparator, cells interleaved. Also accepted: Opus's "8 of 8 hand-transcribed" is false (k1-N-2 generated its patch programmatically, 1,929 chars) — the report row already carries both k=1 figures; Sol's replacement sentence for Gene is the more exact one and goes in the next Gene report.
