@@ -2619,3 +2619,149 @@
       (is (str/includes? text (:error refusal)))
       (is (str/includes? text (:remedy refusal)))
       (is (str/includes? text "narrow_scope")))))
+
+;; ============================================================
+;; O2 ROUND 3 — the bound is a bound on the TEXT, and a refusal is the
+;; last resort (Sol O2 round-2 review, section 2)
+;; ============================================================
+;; Three separate ways the round-2 implementation broke its own stated
+;; contract, each reproduced from the review's own probe:
+;;
+;;   1. `fit-public-result` refuses after four unsuccessful halvings of the
+;;      text allowance. At one byte over the budget the receipt ALONE measured
+;;      32,558 bytes — 210 under the 32,768 budget — and the caller got a
+;;      typed refusal instead of the answer with a bounded text block.
+;;   2. A 32-result batch whose receipt measures 31,549 bytes is refused,
+;;      because `min-evidence-characters` holds a 512-character floor per
+;;      result that the budget is never allowed to lower.
+;;   3. `render-evidence` always renders the first row, counts it as shown,
+;;      and silently omits its body — so a 10,000-character form body vanished
+;;      from the text under `✓ terminal evidence · read_complete=true · next
+;;      action none`. And `ls-tree-summary` printed `! text abridged · 97 of
+;;      200 rows` and `✓ complete tree · read_complete=true` in one block.
+
+(defn- structured-bytes
+  "The public result measured with NO text block: the floor no rendering
+   choice can get under."
+  [result]
+  (inspect-tool/mcp-result-byte-count "" result))
+
+(def ^:private terminal-claim
+  "✓ terminal evidence · read_complete=true · next action none")
+
+;; @spec MCP-OP-STUDY-040
+(deftest a-receipt-whose-structured-content-fits-is-bounded-never-refused
+  (let [base {:ok true :operation "inspect_clojure"
+              :request_count 0 :file_count 0
+              :source_character_count 0 :results [] :padding ""}
+        pad (fn [n] (assoc base :padding (apply str (repeat n "x"))))
+        exact (pad (- inspect-tool/max-public-result-bytes (public-bytes base)))
+        over (update exact :padding str "x")]
+    (testing "at the bound the result passes through unchanged"
+      (is (= inspect-tool/max-public-result-bytes (public-bytes exact)))
+      (is (= exact (inspect-tool/fit-public-result exact))))
+    (testing "one byte over is a bounded TEXT, not a refusal"
+      (is (>= inspect-tool/max-public-result-bytes (structured-bytes over))
+          "the receipt alone fits, so nothing forces a refusal")
+      (let [fitted (inspect-tool/fit-public-result over)]
+        (is (true? (:ok fitted))
+            (str "refused with " (structured-bytes over)
+                 " bytes of receipt under a "
+                 inspect-tool/max-public-result-bytes " byte budget"))
+        (is (>= inspect-tool/max-public-result-bytes (public-bytes fitted)))))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest the-per-result-evidence-floor-never-forces-a-refusal
+  (with-tmp-project
+    (fn [dir]
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (fs/create-dirs (str dir "/src/fixture"))
+      (dotimes [i 32]
+        (spit (str dir "/src/fixture/f" i ".clj")
+              (format "(ns fixture.f%d)\n(defn f%d [] \"%s\")\n"
+                      i i (apply str (repeat 100 "x"))))))
+    (fn [config]
+      (let [raw (inspect-tool/execute-inspect!
+                  config
+                  {"requests" (mapv (fn [i]
+                                      {"id" (str "r" i) "operation" "forms"
+                                       "file" (str "src/fixture/f" i ".clj")
+                                       "forms" [(str "f" i)]
+                                       "expect" {"forms" 1}
+                                       "include_source" true})
+                                    (range 32))
+                   "expect" {"requests" 32 "files" 32}})
+            fitted (inspect-tool/fit-public-result raw)]
+        (is (true? (:ok raw)))
+        (is (>= inspect-tool/max-public-result-bytes (structured-bytes raw))
+            "the 32-result receipt fits with room to spare")
+        (is (true? (:ok fitted))
+            (str "refused a receipt of " (structured-bytes raw)
+                 " bytes because 32 results claim a 512-character floor each"))
+        (is (>= inspect-tool/max-public-result-bytes (public-bytes fitted)))))))
+
+;; @spec MCP-OP-STUDY-041
+(deftest a-row-whose-body-the-text-dropped-is-never-terminal-evidence
+  (let [huge (apply str (repeat 10000 "z"))
+        raw {:ok true :operation "inspect_clojure"
+             :request_count 1 :file_count 1
+             :source_character_count 10000
+             :read_complete true :next_action "none"
+             :results [{:id "one" :operation "forms" :file "src/huge.clj"
+                        :file_hash "deadbeef" :form_count 1
+                        :source_character_count 10000
+                        :forms [{:name "huge" :line 1 :end_line 1
+                                 :form_type "def" :source huge}]}]}
+        fitted (inspect-tool/fit-public-result raw)
+        text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))]
+    (is (true? (:ok fitted)))
+    (is (or (str/includes? text huge)
+            (str/includes? text "text abridged"))
+        "the body travels, or the text says it did not")
+    (is (not (str/includes? text terminal-claim))
+        "a text that dropped a row body never claims terminal evidence")))
+
+;; @spec MCP-OP-STUDY-040
+(deftest an-abridged-tree-never-also-claims-a-complete-tree
+  (let [tree (str/join "\n"
+                       (map #(format "src/f%03d.clj  %s"
+                                     % (apply str (repeat 90 "x")))
+                            (range 200)))
+        raw {:ok true :operation "inspect_clojure" :mode "ls-tree"
+             :dir "." :format "text" :project_count 1
+             :file_count 200 :returned 200 :omitted 0
+             :tree tree :truncated false :read_complete true
+             :next_action "none"}
+        fitted (inspect-tool/fit-public-result raw)
+        text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))]
+    (is (true? (:ok fitted)))
+    (is (not (and (str/includes? text "text abridged")
+                  (str/includes? text "complete tree · read_complete=true")))
+        "one block cannot say both that rows were dropped and that the tree is complete")
+    (is (>= inspect-tool/max-public-result-bytes (public-bytes fitted)))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest the-read-entrance-publishes-nothing-larger-than-the-budget
+  ;; The bound at the ENTRANCE a client actually calls, not at the pure
+  ;; function: `handle-inspect` is the callback both the stdio server and the
+  ;; HTTP server publish through.
+  (with-tmp-project
+    #(build-toy-project! % 78)
+    (fn [config]
+      (let [calls (atom [])]
+        (try
+          (inspect-tool/init! config)
+          (inspect-tool/handle-inspect
+            nil {"mode" "ls-tree" "dir" "." "format" "text" "limit" 16384}
+            (fn [content error? structured]
+              (swap! calls conj {:text (first content)
+                                 :error? error?
+                                 :structured structured})))
+          (let [{:keys [text error? structured]} (first @calls)]
+            (is (false? error?))
+            (is (>= inspect-tool/max-public-result-bytes
+                    (inspect-tool/mcp-result-byte-count text structured))
+                "the published pair is inside the declared budget")
+            (is (not (and (str/includes? text "text abridged")
+                          (str/includes? text "complete tree · read_complete=true")))))
+          (finally (inspect-tool/init! nil)))))))
