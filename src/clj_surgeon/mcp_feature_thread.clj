@@ -667,11 +667,11 @@
      :conventions_source source-label
      :remedy "Write a map with :legs, :repo-label and optional :sibling/:governance."}
 
-    (not (and (vector? (:legs conventions)) (= 5 (count (:legs conventions)))))
+    (not (and (vector? (:legs conventions)) (<= 5 (count (:legs conventions)))))
     {:ok false
      :error_type "feature-thread-conventions-invalid"
      :error (str "the convention set at " source-label
-                 " must declare exactly five leg roles under :legs; found "
+                 " must declare at least the five leg roles under :legs; found "
                  (if (coll? (:legs conventions)) (count (:legs conventions)) "none"))
      :conventions_source source-label
      :remedy "Declare the five roles this repository's features actually have."}
@@ -760,7 +760,8 @@
       :def (remove nil?
                    [(when idents
                       ["definition-shaped"
-                       (str "(?:async +)?function +(?:" idents ")\\b"
+                       (str "\\(defn?-? +(?:" idents ")\\b"
+                            "|(?:async +)?function +(?:" idents ")\\b"
                             "|(?:const|let|var) +(?:" idents ")\\s*="
                             "|(?:window|globalThis)\\.(?:" idents ")\\s*="
                             "|\\b(?:" idents ")\\s*[:=]\\s*(?:async\\s*)?(?:function|\\()")])
