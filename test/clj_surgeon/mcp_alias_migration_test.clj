@@ -5226,6 +5226,168 @@
                  (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
 
 ;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-kind-argument-is-located-by-reading-the-constructor
+  ;; Round-eighteen review findings 1 and 9. The `(refusal …)` scan was gated
+  ;; on a PER-FILE enable — `own-refusal-constructor-takes-kind?` — that asked
+  ;; whether the constructor's FIRST parameter reaches the `:error_type` value
+  ;; it publishes. A constructor shaped `[message error-type extra]` answers
+  ;; no, so every call site in that file was skipped wholesale; the reviewer
+  ;; drove `planted-runtime-kind` live through the entrance while the scan
+  ;; reported no dynamic site, no unscannable site, and a still-139-member
+  ;; enumeration. A guard whose subject is decided by the SHAPE of a helper is
+  ;; a guard an ordinary refactor turns off — `a-gate-a-caller-can-turn-off`,
+  ;; paid for a third time.
+  ;;
+  ;; The per-file enable is GONE. Every `(refusal …)` call in a reachable
+  ;; namespace is a site, and the constructor is read for one thing only:
+  ;; WHICH ARGUMENT carries the kind. The reader follows the parameter that
+  ;; flows into the published `:error-type`/`:error_type`/`:kind` value back to
+  ;; the position a caller fills — second, third, destructured out of a map,
+  ;; arriving through a `&` rest argument, or a different position per arity.
+  ;; A constructor whose body the reader cannot classify does not disable
+  ;; anything: every site in that file becomes a TYPED unscannable entry, named
+  ;; by the same scan, never silently exempt.
+  (let [planted-row (fn [text]
+                      (inc (count (take-while
+                                    #(not (re-find #"^\s+\(refusal\b" %))
+                                    (str/split-lines text)))))
+        two-arities (str "(defn refusal\n"
+                         "  ([error-type message]\n"
+                         "   {:ok false :error_type (name error-type) :error message})\n"
+                         "  ([message error-type extra]\n"
+                         "   (merge {:ok false :error_type (name error-type)\n"
+                         "           :error message}\n"
+                         "          extra)))\n")]
+    (testing "a dynamic kind is NAMED wherever the constructor takes it"
+      (doseq [[label text]
+              [["the SECOND parameter"
+                (str "(defn refusal\n"
+                     "  [message error-type extra]\n"
+                     "  {:ok false :error message :error_type (name error-type)})\n"
+                     "\n(defn- route-dynamic\n"
+                     "  [params]\n"
+                     "  (refusal \"planted dynamic kind\"\n"
+                     "           (keyword (:review_kind params))\n"
+                     "           {}))\n")]
+               ["the THIRD parameter"
+                (str "(defn refusal\n"
+                     "  [message extra error-type]\n"
+                     "  {:ok false :error message :error_type (name error-type)})\n"
+                     "\n(defn- route-dynamic\n"
+                     "  [params]\n"
+                     "  (refusal \"planted dynamic kind\"\n"
+                     "           {}\n"
+                     "           (keyword (:review_kind params))))\n")]
+               ["a `{:keys [kind]}` destructuring"
+                (str "(defn refusal\n"
+                     "  [{:keys [kind message]}]\n"
+                     "  {:ok false :error message :error_type (name kind)})\n"
+                     "\n(defn- route-dynamic\n"
+                     "  [params]\n"
+                     "  (refusal {:message \"planted dynamic kind\"\n"
+                     "            :kind (keyword (:review_kind params))}))\n")]
+               ["a `&` rest argument"
+                (str "(defn refusal\n"
+                     "  [message & [error-type extra]]\n"
+                     "  {:ok false :error message :error_type (name error-type)})\n"
+                     "\n(defn- route-dynamic\n"
+                     "  [params]\n"
+                     "  (refusal \"planted dynamic kind\"\n"
+                     "           (keyword (:review_kind params))\n"
+                     "           {}))\n")]
+               ["the three-argument arity of a two-arity constructor"
+                (str two-arities
+                     "\n(defn- route-dynamic\n"
+                     "  [params]\n"
+                     "  (refusal \"planted dynamic kind\"\n"
+                     "           (keyword (:review_kind params))\n"
+                     "           {}))\n")]]]
+        (testing label
+          (is (= [(str "plant:" (planted-row text))]
+                 (dynamic-refusal-kind-sites-in "plant" text))
+              (str "a kind spelled at runtime and passed as " label
+                   " was not named — the scan read the wrong argument or "
+                   "skipped the file: "
+                   (pr-str (dynamic-refusal-kind-sites-in "plant" text)))))))
+    (testing "the enumeration reads the kind ARGUMENT and not every argument"
+      (doseq [[label text expected]
+              [["the two-argument arity spells its kind first"
+                (str two-arities
+                     "\n(defn- route-literal\n"
+                     "  [_]\n"
+                     "  (refusal :two-arg-kind \"plain-message\"))\n")
+                #{"two-arg-kind"}]
+               ["the three-argument arity spells its kind second"
+                (str two-arities
+                     "\n(defn- route-literal\n"
+                     "  [_]\n"
+                     "  (refusal \"plain-message\" :second-kind {}))\n")
+                #{"second-kind"}]
+               ["a second-parameter constructor"
+                (str "(defn refusal\n"
+                     "  [message error-type extra]\n"
+                     "  {:ok false :error message :error_type (name error-type)})\n"
+                     "\n(defn- route-literal\n"
+                     "  [_]\n"
+                     "  (refusal \"plain-message\" :planted-kind {}))\n")
+                #{"planted-kind"}]]]
+        (testing label
+          (is (= expected (set (literal-refusal-kinds-in text)))
+              (str "the enumeration did not read exactly the kind argument for "
+                   label " — a message read as a kind is a phantom, a kind "
+                   "read as a message is a hole: "
+                   (pr-str (set (literal-refusal-kinds-in text)))))
+          (is (empty? (dynamic-refusal-kind-sites-in "plant" text))
+              (str "a site spelling a literal kind was named as dynamic for "
+                   label ": "
+                   (pr-str (dynamic-refusal-kind-sites-in "plant" text)))))))
+    (testing "a constructor the reader cannot classify makes every site unscannable"
+      (doseq [[label text]
+              [["a bare `& args` relayed through a `let`"
+                (str "(defn refusal\n"
+                     "  [& args]\n"
+                     "  (let [[message error-type] args]\n"
+                     "    {:ok false :error message :error_type (name error-type)}))\n"
+                     "\n(defn- route-plain\n"
+                     "  [_]\n"
+                     "  (refusal \"plain-message\" :ordinary-kind {}))\n")]
+               ["no constructor in the file at all"
+                (str "(defn- route-plain\n"
+                     "  [_]\n"
+                     "  (refusal :ordinary-kind \"plain-message\" {}))\n")]]]
+        (testing label
+          (is (= [(str "plant:" (planted-row text))]
+                 (dynamic-refusal-kind-sites-in "plant" text))
+              (str "a site whose kind argument the reader cannot locate — "
+                   label " — was silently exempt instead of reported "
+                   "unscannable: "
+                   (pr-str (dynamic-refusal-kind-sites-in "plant" text))))
+          (is (empty? (literal-refusal-kinds-in text))
+              (str "an unscannable site's arguments were enumerated as kinds "
+                   "for " label ": "
+                   (pr-str (literal-refusal-kinds-in text)))))))
+    (testing "a constructor whose kind is a CONSTANT still enables nothing"
+      ;; `mcp_workspace`'s and `extract_header`'s own shape: no parameter
+      ;; reaches the published `:error_type`, so the call sites carry no kind
+      ;; and the `:error_type "…"` scan inside the constructor already has it.
+      (let [text (str "(defn- refusal\n"
+                      "  \"One stable workspace-root refusal.\"\n"
+                      "  [message value]\n"
+                      "  {:ok false :error_type \"invalid-workspace-root\"\n"
+                      "   :error message :workspace_root value})\n"
+                      "\n(defn canonical-root\n"
+                      "  [value]\n"
+                      "  (refusal \"workspace_root must be absolute\" value))\n")]
+        (is (empty? (dynamic-refusal-kind-sites-in "plant" text))
+            (str "a constructor that takes no kind had its call sites read as "
+                 "dynamic kind sites: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))
+        (is (empty? (literal-refusal-kinds-in text))
+            (str "a constructor that takes no kind had its call arguments "
+                 "enumerated as kinds: "
+                 (pr-str (literal-refusal-kinds-in text))))))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest the-forwarded-kind-check-is-form-deep-and-not-merely-head-shaped
   ;; Round-sixteen review finding 1: the shape check collected the expression's
   ;; LISTS and tested only each list's FIRST child against the forwarding-head
