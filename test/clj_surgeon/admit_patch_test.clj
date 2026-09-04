@@ -3711,36 +3711,64 @@
         (io/copy file target)))
     (slurp (io/file field-diff-dir (str "egater-" shape ".diff")))))
 
+;; @spec MCP-OP-ADMIT-128
+(defn- analyzer-precondition
+  "The environment the vendored-fixture witnesses need, named, or nil.
+
+  These two drive the REAL analyzer over frozen field images, so they can go
+  red for two unrelated reasons: the fix regressed, or this box is not set
+  up. Failing loud is right in both cases -- a silent skip would let a
+  regression pass as an absent tool -- but the message has to say which, and
+  a bare `(:ran lint)` false cannot."
+  []
+  (let [gate (io/file (process/clj-kondo-admission-path))]
+    (cond
+      (not (and (.isFile gate) (.canExecute gate)))
+      (str "PRECONDITION UNMET, not a regression: the analyzer admission "
+           "wrapper is not an executable file at " (.getPath gate)
+           " -- run `make install-clj-kondo-admission`")
+
+      (not (process/resolve-executable "clj-kondo"))
+      (str "PRECONDITION UNMET, not a regression: clj-kondo is not "
+           "resolvable on this box's PATH")
+
+      :else nil)))
+
 ;; @spec MCP-OP-ADMIT-122
 (deftest a-real-fan-out-patch-gets-a-lint-delta-that-ran
-  (doseq [shape ["k1" "k6"]]
-    (testing (str "E-GATE-R shape " shape)
-      (let [root (temp-dir)]
-        (try
-          (let [patch (egater-fixture! root shape)
-                result (admit/execute-request!
-                         {:project-root (.getPath root)}
-                         {:patch patch :mode "preview" :verify "focused"})
-                lint (:lint_delta result)]
-            (is (:ok result) (str "the gate refused this: " (:error result)))
-            (is (= 21 (count (:files result))))
-            (is (true? (:ran lint))
-                (str "the analyzer half never ran in the field: "
-                     (pr-str (select-keys lint [:error-type :cap
-                                                :observed-bytes]))))
-            (is (true? (:ok lint)))
-            (is (pos? (long (:baseline-count lint))))
-            (is (= (:baseline-count lint) (:future-count lint)))
-            (is (zero? (long (:introduced-count lint)))
-                "the E-GATE-R finding: this caller introduced nothing")
-            (is (zero? (long (:blocking-introduced-count lint))))
-            (is (false? (:mutation_attempted result)))
-            (is (true? (:source-unchanged result))))
-          (finally (delete-tree! root)))))))
+  (let [unmet (analyzer-precondition)]
+    (is (nil? unmet) unmet)
+    (when-not unmet
+      (doseq [shape ["k1" "k6"]]
+        (testing (str "E-GATE-R shape " shape)
+          (let [root (temp-dir)]
+            (try
+              (let [patch (egater-fixture! root shape)
+                    result (admit/execute-request!
+                             {:project-root (.getPath root)}
+                             {:patch patch :mode "preview" :verify "focused"})
+                    lint (:lint_delta result)]
+                (is (:ok result) (str "the gate refused this: " (:error result)))
+                (is (= 21 (count (:files result))))
+                (is (true? (:ran lint))
+                    (str "the analyzer half never ran in the field: "
+                         (pr-str (select-keys lint [:error-type :cap
+                                                    :observed-bytes]))))
+                (is (true? (:ok lint)))
+                (is (pos? (long (:baseline-count lint))))
+                (is (= (:baseline-count lint) (:future-count lint)))
+                (is (zero? (long (:introduced-count lint)))
+                    "the E-GATE-R finding: this caller introduced nothing")
+                (is (zero? (long (:blocking-introduced-count lint))))
+                (is (false? (:mutation_attempted result)))
+                (is (true? (:source-unchanged result))))
+              (finally (delete-tree! root)))))))))
 
 ;; @spec MCP-OP-ADMIT-122
 (deftest a-denser-fan-out-image-yields-a-larger-baseline
-  (let [baselines
+  (let [unmet (analyzer-precondition)
+        _ (is (nil? unmet) unmet)
+        baselines
         (into {}
               (map (fn [shape]
                      (let [root (temp-dir)]
@@ -3754,7 +3782,7 @@
                                                         :baseline-count]))])
                          (finally (delete-tree! root))))))
               ["k1" "k6"])]
-    (is (> (get baselines "k6") (get baselines "k1"))
+    (is (or (some? unmet) (> (get baselines "k6") (get baselines "k1")))
         (str "k=6 requires more libraries per namespace than k=1, so it must "
              "produce more findings; equal counts would mean neither read was "
              "real: " (pr-str baselines)))))
@@ -4005,14 +4033,10 @@
          ["nor is a command that needs no admission"
           {:finished? true :exit 0 :admission {:status :not-required}}
           nil]]]
-    ;; Resolved rather than referred so the other witnesses in this rung
-    ;; still run while this one is red.
-    (let [admission-failure
-          (or (resolve 'clj-surgeon.mcp-admit-tool/analyzer-admission-failure)
-              (constantly nil))]
-      (doseq [[label raw expected] cases]
-        (testing label
-          (is (= expected (:error-type (admission-failure raw)))))))
+    (doseq [[label raw expected] cases]
+      (testing label
+        (is (= expected
+               (:error-type (admit/analyzer-admission-failure raw))))))
     (testing "every type this can publish reads as unverifiable"
       (doseq [[label _ expected] cases
               :when expected]

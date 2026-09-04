@@ -269,7 +269,51 @@
       (long declared)
       (long analyzer-findings-visible-bytes))))
 
+;; @spec MCP-OP-ADMIT-127
+(def analyzer-admission-remedies
+  "What would lift each analyzer admission failure, in the caller's terms."
+  {:clj-kondo-admission-unavailable
+   (str "this server cannot find its own analyzer admission wrapper; install"
+        " it (make install-clj-kondo-admission) or name it on"
+        " CLJ_SURGEON_CLJ_KONDO_ADMISSION")
+   :clj-kondo-executable-unavailable
+   (str "clj-kondo is not resolvable from this server's PATH; install it, or"
+        " name the analyzer on :admit-analyzer-command")
+   :clj-kondo-pressure-deferred
+   (str "the host was above the analyzer admission load ceiling and the run"
+        " was deferred rather than queued; retry when the box is quieter, or"
+        " raise CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD")
+   :clj-kondo-admission-timeout
+   (str "the analyzer waited for the machine-wide admission lock past this"
+        " call's deadline; retry, or raise the analyzer timeout")
+   :process-interrupted
+   "the analyzer run was interrupted before it answered; retry"})
+
+;; @spec MCP-OP-ADMIT-127
+(defn analyzer-admission-failure
+  "The typed admission failure a bounded analyzer run reported, or nil.
+
+  `run-process!` already preserves both halves of this fact -- the wrapper's
+  terminal evidence on `:admission` when the child exited, and the launch
+  exception's ex-data on `:admission-error` when it did not -- and
+  `kondo-findings` read neither, so a transient pressure deferral, an
+  admission timeout, a missing wrapper and a missing executable all published
+  the one type reserved for an analyzer that answered something unreadable.
+  A gate that reports a missing tool it is in fact holding cannot be acted
+  on: the four states have four different remedies."
+  [{:keys [admission admission-error]}]
+  (let [nested (:admission admission-error)
+        error-type (or (:error-type admission-error)
+                       (:error-type nested)
+                       (:error-type admission))]
+    (when error-type
+      {:error-type error-type
+       :status (or (:status nested) (:status admission))
+       :gate (or (:gate admission-error) (:gate nested) (:gate admission))
+       :remedy (get analyzer-admission-remedies error-type)})))
+
 ;; @spec MCP-OP-ADMIT-121
+;; @spec MCP-OP-ADMIT-127
 (defn- kondo-findings
   "Run clj-kondo over one materialized image set and return its findings.
 
@@ -288,8 +332,10 @@
                       (vec paths))
                     (into ["--cache" "false"
                            "--config" "{:output {:format :edn}}"]))
-        {:keys [finished? exit output output-bytes output-truncated]}
-        (change-buffer/run-process! project-root command 120000 ceiling)
+        raw (change-buffer/run-process! project-root command 120000 ceiling)
+        {:keys [finished? exit output output-bytes output-truncated]} raw
+        ;; @spec MCP-OP-ADMIT-127
+        admission (analyzer-admission-failure raw)
         parsed (when (and finished? (not output-truncated))
                  (try (edn/read-string output) (catch Exception _ nil)))]
     (cond
@@ -310,6 +356,21 @@
          :error (str "clj-kondo findings were cut at " ceiling " bytes of "
                      observed "; the analyzer ran and the gate could not read"
                      " its answer")})
+
+      ;; @spec MCP-OP-ADMIT-127
+      ;; Before the readability test, because an analyzer that was never
+      ;; admitted did not answer unreadably -- it did not answer.
+      admission
+      (cond-> {:ok false
+               :error-type (:error-type admission)
+               :detector "clj-kondo"
+               :admission_failure true
+               :error (str "the analyzer did not run: "
+                           (name (:error-type admission)))
+               :exit exit}
+        (:gate admission) (assoc :gate (:gate admission))
+        (:status admission) (assoc :admission_status (:status admission))
+        (:remedy admission) (assoc :remedy (:remedy admission)))
 
       (and (map? parsed) (vector? (:findings parsed)))
       {:ok true :findings (:findings parsed)}
@@ -355,6 +416,12 @@
                 (:cap failed) (assoc :cap (:cap failed))
                 (:observed-bytes failed)
                 (assoc :observed-bytes (:observed-bytes failed))
+                ;; @spec MCP-OP-ADMIT-127
+                (:gate failed) (assoc :gate (:gate failed))
+                (:admission_status failed)
+                (assoc :admission_status (:admission_status failed))
+                (:admission_failure failed)
+                (assoc :admission_failure true)
                 (:remedy failed) (assoc :remedy (:remedy failed))))
             (let [strip (fn [root findings]
                           (mapv #(update % :filename
@@ -842,9 +909,15 @@
           lint-ok (analyzer-clean-reading? lint)
           tests-ok (true? (:ok evidence))
           ;; @spec MCP-OP-ADMIT-124
+          ;; @spec MCP-OP-ADMIT-127
+          ;; The set names the types this gate knows. An admission failure is
+          ;; by construction a check that could not run, whatever the wrapper
+          ;; called it, so a type the set has not heard of still reads as
+          ;; unverified rather than falling through to partial.
           unverifiable (or (contains? unverifiable-test-reasons (:reason evidence))
                            (contains? unverifiable-lint-error-types
-                                      (:error-type lint)))
+                                      (:error-type lint))
+                           (true? (:admission_failure lint)))
           reasons (cond-> []
                     (not lint-ok) (conj (or (:error-type lint)
                                             (:reason lint)
