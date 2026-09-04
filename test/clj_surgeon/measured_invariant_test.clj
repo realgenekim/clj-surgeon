@@ -228,7 +228,14 @@
    "Files/getLastModifiedTime" "the static java.nio spelling"
    ".toMillis" "a FileTime converted to an epoch number"
    ".toEpochMilli" "an Instant converted to an epoch number"
-   "FileTime/fromMillis" "an epoch number turned back into a file time"})
+   "FileTime/fromMillis" "an epoch number turned back into a file time"
+   ;; The round-five review's finding 3: four ordinary spellings outside the
+   ;; 46 the hand-written CLASS list produced, planted together and all green.
+   "OffsetDateTime/now" "a java.time wall clock whose class was in clock-return-types but in no source list"
+   "Calendar/getInstance" "java.util.Calendar, which was in neither list"
+   ".getTimeInMillis" "Calendar's epoch accessor"
+   "(. System nanoTime" "the DOT SPECIAL FORM: the text is not `System/nanoTime` at all"
+   "Date." "a CONSTRUCTOR reads the clock, and a constructor is not a method, so .getMethods cannot see one"})
 
 (def ^:private laundering-sentinel
   "A number no clock produces and no fixture carries, so finding it outside a
@@ -951,9 +958,11 @@
       (let [root (str (io/file (System/getProperty "java.io.tmpdir")
                                (str "measured-clock-shape-" (System/nanoTime))))
             victim (io/file root "clj_surgeon" "planted_shape.clj")
-            call (if (str/starts-with? expression ".")
-                   (str "(" expression " subject)")
-                   (str "(" expression ")"))]
+            call (cond
+                   (str/starts-with? expression ".") (str "(" expression " subject)")
+                   ;; The dot special form is already an open paren.
+                   (str/starts-with? expression "(") (str expression ")")
+                   :else (str "(" expression ")"))]
         (.mkdirs (.getParentFile victim))
         (spit victim
               (str "(ns clj-surgeon.planted-shape)\n\n"
