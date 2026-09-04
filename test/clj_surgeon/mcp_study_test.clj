@@ -4880,3 +4880,84 @@
                (pr-str (mapv (fn [[label group]]
                                [label (mapv first group)])
                              duplicates)))))))
+
+;; @spec MCP-OP-STUDY-053
+;; Field evidence (Sol O2 round-7 review, 2026-09-04, section 3): a receipt
+;; whose only interesting key was spelled `bad\nkey` published a complete
+;; 761-byte public pair whose text claimed `receipt facts · 10 of 10
+;; rendered`, while an audit of that same text found one uncarried,
+;; UNDECLARED leaf. The rendering emitted `  bad` and `key: <value>` as two
+;; lines; `leaf-carried?` looked for the unsplit whole string, which no line
+;; of the text was. The same hole ran the other way through VALUES: a
+;; multi-line spelling was rendered as an indented block with its BLANK lines
+;; removed, so `"a\n\nb"` and `"a\nb"` rendered byte-identically at one
+;; pointer.
+(deftest a-rendered-line-is-a-single-line-by-construction
+  (let [control-chars #(or (str/includes? % "\n")
+                           (str/includes? % "\r")
+                           (str/includes? % "\t"))
+        cases {"a newline in a pointer" {"bad\nkey" "the-distinctive-pointer-value"}
+               "a carriage return in a pointer" {"bad\rkey" "the-distinctive-pointer-value"}
+               "a tab in a pointer" {"bad\tkey" "the-distinctive-pointer-value"}
+               "a newline in a value" {:key "the-distinctive-value\nsecond-line"}
+               "a carriage return in a value" {:key "the-distinctive-value\rsecond"}
+               "a tab in a value" {:key "the-distinctive-value\tcolumn"}
+               "a value that is only whitespace" {:key "   \n\t  "}
+               "every control character at once"
+               {"bad\nkey\ttoo" "the-distinctive-value\r\nwrapped"}}]
+    (doseq [[label result] (sort cases)]
+      (testing label
+        ;; 1. Every leaf renders EXACTLY ONE line, and that line holds no
+        ;;    character a text splitter would break it on.
+        (doseq [[path value] (inspect/receipt-leaf-pairs result)]
+          (let [lines (inspect/leaf-lines path value)]
+            (is (= 1 (count lines))
+                (str "leaf " (pr-str path) " rendered " (count lines)
+                     " lines: " (pr-str lines)))
+            (is (not (control-chars (first lines)))
+                (str "leaf " (pr-str path) " rendered a line carrying a raw "
+                     "control character: " (pr-str (first lines))))))
+        ;; 2. The complete rendering carries every leaf, and the audit of the
+        ;;    text it published agrees with what it declared.
+        (let [block (inspect/fact-block "" result inspect/unbounded-evidence)
+              text (str "structural\n" (inspect/fact-section block))]
+          (is (empty? (inspect/uncarried-leaves text result))
+              (str "the complete rendering left leaves uncarried: "
+                   (pr-str (inspect/uncarried-leaves text result))
+                   "; text " (pr-str text)))
+          (is (zero? (count (:dropped-labels block)))
+              "the complete rendering declared a drop it did not make"))
+        ;; 3. And declared equals audited across the allowance band, with no
+        ;;    leaf counted rendered that has no line of its own.
+        (doseq [budget (range 40 300 8)]
+          (testing (str "budget " budget)
+            (let [report (carriage-report result budget)]
+              (is (empty? (:orphans report))
+                  (format (str "budget %d: %d leaves counted as rendered "
+                               "have no pointer line of their own — %s; "
+                               "section %s")
+                          budget (count (:orphans report))
+                          (pr-str (:orphans report))
+                          (pr-str (:section report))))
+              (is (= (:declared report) (:audited report))
+                  (format (str "budget %d: declared %d against audited %d; "
+                               "section %s")
+                          budget (:declared report) (:audited report)
+                          (pr-str (:section report)))))))))
+    ;; 4. A blank line inside a value is part of the value. The indented-block
+    ;;    rendering dropped blank lines, so two distinct values spelled one
+    ;;    rendering at ONE pointer — the same-type substitution MCP-OP-STUDY-051
+    ;;    forbids.
+    (is (not= (inspect/leaf-lines [:key] "the-distinctive-value\n\ntail")
+              (inspect/leaf-lines [:key] "the-distinctive-value\ntail"))
+        "a blank line inside a value made no difference to its rendering")
+    ;; 5. The reviewer's exact public case: the text claimed to have rendered
+    ;;    everything while holding an uncarried, undeclared leaf.
+    (let [result {"bad\nkey" "the-distinctive-pointer-value"}
+          block (inspect/fact-block "" result inspect/unbounded-evidence)
+          section (inspect/fact-section block)]
+      (is (str/includes? section "1 of 1 rendered")
+          (str "section " (pr-str section)))
+      (is (empty? (inspect/uncarried-leaves (str "structural\n" section) result))
+          (str "declared 0 dropped over an audited miss; section "
+               (pr-str section))))))
