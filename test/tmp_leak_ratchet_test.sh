@@ -254,4 +254,18 @@ ls -A "$FX/stalebase" || true
 [ -d "$FX/stalebase/other-seat-precious-fixture" ] \
   || fail "7b: another tenant's entry was swept"
 
+# ============================================================
+# MCP-OP-TMPHYG-008: an unusable base is a typed refusal, not a stack trace
+# ============================================================
+
+mkdir -p "$FX/nowrite"
+chmod 500 "$FX/nowrite"
+run_probe unwritable TMPDIR="$FX/nowrite"
+chmod 700 "$FX/nowrite"
+[ "$PROBE_EXIT" -eq 97 ] \
+  || fail "8: an unwritable base must exit 97 like every other refusal, got $PROBE_EXIT"
+grep -q 'tmp-refused:' "$FX/unwritable.out" || fail "8: no tmp-refused: line"
+grep -q 'AccessDeniedException' "$FX/unwritable.out" \
+  && fail "8: the refusal is a raw stack trace, not a named message"
+
 echo "tmp-leak ratchet witness passed"
