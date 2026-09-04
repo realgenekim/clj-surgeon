@@ -601,21 +601,33 @@
   rather than a second, incompatible one — a caller who knows JSON Pointer
   decodes `~0` and `~1` unchanged.
 
-  @spec MCP-OP-STUDY-053 — and `\\n`, `\\r`, `\\t`, because a pointer that
-  SPLITS is not a pointer: the renderer emitted `  bad` and `key: <value>` as
-  two lines while the carriage predicate searched for the unsplit whole
-  string, and the text published `10 of 10 rendered` over a leaf it did not
-  carry.
+  @spec MCP-OP-STUDY-053 — and every character in the UNICODE LINE-BOUNDARY
+  CLASS, because a pointer that SPLITS is not a pointer: the renderer emitted
+  `  bad` and `key: <value>` as two lines while the carriage predicate
+  searched for the unsplit whole string, and the text published
+  `10 of 10 rendered` over a leaf it did not carry. The class is the one
+  `java.util.regex`'s `\\R` matches — `\\n`, `\\r`, the vertical tab, the form
+  feed, NEL (U+0085) and the Unicode LINE and PARAGRAPH separators (U+2028,
+  U+2029) — not the three characters that were named first: round nine found
+  U+2028 and U+2029 raw, so `clojure.string/split-lines` saw one line where a
+  caller's Unicode-aware splitter saw two. `\\t` is escaped with them because
+  it is a delimiter of this rendering, not because it splits.
 
   The map is applied in ONE pass by `clojure.string/escape`, so no escape can
   be re-escaped and the encoding is decodable: after `~` comes exactly one of
-  `0`-`7`, and after `\\` exactly one of `\\`, `n`, `r`, `t`. `~7` is spent
+  `0`-`7`, and after `\\` exactly one of `\\`, `n`, `r`, `t`, or `u` and four
+  hex digits. `~7` is spent
   on the EMPTY segment (see `empty-segment-pointer`) and is therefore not in
   this map: no character produces it, so no segment can spell it by accident."
   {\\ "\\\\"
    \newline "\\n"
    \return "\\r"
    \tab "\\t"
+   \u000B "\\u000B"
+   \formfeed "\\u000C"
+   \u0085 "\\u0085"
+   \u2028 "\\u2028"
+   \u2029 "\\u2029"
    \~ "~0"
    \/ "~1"
    \. "~2"
@@ -777,13 +789,27 @@
 (def ^:private line-break-escapes
   "The characters a rendered VALUE may not spell raw on its own line.
 
-  @spec MCP-OP-STUDY-053 — a line is a line. `\\` is escaped with them so the
-  encoding stays decodable, and nothing else is touched: a value's other
+  @spec MCP-OP-STUDY-053 — a line is a line, and a LINE is whatever a splitter
+  of the published text calls one: the whole class `java.util.regex`'s `\\R`
+  matches, which is `\\n` and `\\r` plus the vertical tab, the form feed, NEL
+  (U+0085) and the Unicode LINE and PARAGRAPH separators (U+2028, U+2029).
+  Field evidence (Sol O2 round-9 review, 2026-09-04, section 2): U+2028 and
+  U+2029 were left RAW — `value= \"a\u2028b\" rendered= \"  k=a\u2028b\"
+  clojure_split_lines= 1 unicode_R_lines= 2`.
+
+  `\\` is escaped with them so the encoding stays decodable — after it comes
+  `\\`, `n`, `r`, `t`, or `u` and four hex digits — and `\\t` because it is a
+  delimiter of this rendering. Nothing else is touched: a value's other
   characters are the answer the caller came for."
   {\\ "\\\\"
    \newline "\\n"
    \return "\\r"
-   \tab "\\t"})
+   \tab "\\t"
+   \u000B "\\u000B"
+   \formfeed "\\u000C"
+   \u0085 "\\u0085"
+   \u2028 "\\u2028"
+   \u2029 "\\u2029"})
 
 ;; @spec MCP-OP-STUDY-053
 (defn escape-line-breaks
