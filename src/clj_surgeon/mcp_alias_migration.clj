@@ -2492,10 +2492,24 @@
                    (change-buffer/capture-verification-baseline!
                      project-root profile verification-profiles files))]
     (if (and baseline (not (:ok baseline)))
+      ;; @spec MCP-OP-ALIAS-028
+      ;; the cause, and the one correction the caller can execute. A baseline
+      ;; that cannot read its analyzer's answer is not transient, so the
+      ;; generic "re-send the same request" remedy is exactly wrong here: the
+      ;; E-CALLER arm re-sent it, reproduced the refusal, and succeeded only
+      ;; when it dropped `verify` — which nothing in the receipt suggested.
       {:error "Verification baseline capture failed before the alias migration"
        :error-type (or (:error-type baseline) :verification-baseline-failed)
        :verification baseline
-       :source-unchanged true}
+       :verification_profile verify
+       :verification_command (some :command (remove :ok (:checks baseline)))
+       :source-unchanged true
+       :remedy (str "The migration itself is unaffected — nothing was written "
+                    "— and `verify` is opt-in. Send the next_call, which is "
+                    "this same request with the \"" verify "\" profile "
+                    "dropped, or configure a profile whose diagnostic command "
+                    "answers EDN this server can read. Re-sending this request "
+                    "unchanged reproduces this refusal.")}
       (let [;; @spec MCP-OP-ALIAS-047
             ;; the marker is set by the transaction's OWN write boundary, not
             ;; by this call site. Entering `execute-mcp-change!` is not a
@@ -2686,7 +2700,13 @@
               ;; @spec MCP-OP-ALIAS-056
               ;; the kernel's own write boundary, not a literal: the same
               ;; volatile ALIAS-047's heap guard reads
-              (commit-refusal plan commit @attempted)
+              (cond-> (commit-refusal plan commit @attempted)
+                ;; @spec MCP-OP-ALIAS-028
+                ;; a baseline failure has exactly one executable correction,
+                ;; and it is composed here because this is where the REQUEST
+                ;; is: the same call without the profile that could not be read
+                (and (:verification commit) verify)
+                (assoc :next_call (planner/unverified-call request)))
               (receipt plan
                        (-> commit
                            (assoc :undo_receipt (:receipt-file commit)

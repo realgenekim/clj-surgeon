@@ -27,6 +27,22 @@
 (def max-sites 24)
 (def max-visible-characters (* 32 1024))
 (def exact-verification-visible-bytes 12000)
+
+;; @spec MCP-OP-ALIAS-028
+(def diagnostic-capture-bytes
+  "How much of a DIAGNOSTIC answer the baseline reads.
+
+  `exact-verification-visible-bytes` bounds human-readable process evidence,
+  where a prefix is still evidence. A diagnostic answer is a DOCUMENT, and
+  half of one parses no better than none of it: the E-CALLER cohort's
+  `verify: \"fast\"` call scoped 100 sources, clj-kondo answered EDN far past
+  12,000 bytes, the runner cut it mid-map, and a correct analyzer answering a
+  correct document was typed `invalid-diagnostic-output` — deterministically,
+  on every retry, which is what the arm did before dropping `verify`.
+
+  Four megabytes is the same order as `max-snapshot-characters`, which is the
+  other place this verb holds a whole document in memory."
+  (* 4 1024 1024))
 (def max-snapshot-characters (* 4 1024 1024))
 (defonce basis-store (atom {}))
 
@@ -1261,6 +1277,9 @@
   ([project-root command]
    (run-process! project-root command 120000))
   ([project-root command timeout-ms]
+   (run-process! project-root command timeout-ms
+                 exact-verification-visible-bytes))
+  ([project-root command timeout-ms visible-byte-limit]
    (let [started (System/nanoTime)]
      (try
        (process-env/run-bounded!
@@ -1268,7 +1287,7 @@
           :cwd project-root
           :timeout-ms timeout-ms
           :merge-error? true
-          :visible-byte-limit exact-verification-visible-bytes})
+          :visible-byte-limit visible-byte-limit})
        (catch Exception error
          {:finished? false
           :launch-error true
@@ -1420,9 +1439,15 @@
 
 (defn- run-diagnostic-check!
   [project-root command files]
-  (let [{:keys [finished? exit elapsed_ms output] :as process}
-        (run-process! project-root (diagnostic-command command files))]
-    (if (admission-unverified? process)
+  ;; @spec MCP-OP-ALIAS-028
+  ;; read the answer WHOLE: a diagnostic answer is a document, and a document
+  ;; cut at the human-readable evidence budget cannot parse
+  (let [{:keys [finished? exit elapsed_ms output output-bytes output-truncated]
+         :as process}
+        (run-process! project-root (diagnostic-command command files)
+                      120000 diagnostic-capture-bytes)]
+    (cond
+      (admission-unverified? process)
       {:ok false
        :command (first command)
        :exit exit
@@ -1431,6 +1456,22 @@
        :output output
        :admission (:admission process)
        :admission-error (:admission-error process)}
+
+      ;; @spec MCP-OP-ALIAS-028
+      ;; an answer past even THIS budget is a truncation and is named as one.
+      ;; Reporting it as invalid output blames the analyzer for a bound this
+      ;; verb imposed, and leaves the caller nothing to change.
+      output-truncated
+      {:ok false
+       :command (first command)
+       :exit exit
+       :elapsed_ms elapsed_ms
+       :error-type :diagnostic-output-truncated
+       :output-bytes output-bytes
+       :diagnostic_byte_budget diagnostic-capture-bytes
+       :output output}
+
+      :else
       (let [parsed (when finished?
                      (try
                        (edn/read-string output)

@@ -665,6 +665,22 @@
   [call]
   (<= (count (json/generate-string call)) max-next-call-characters))
 
+;; @spec MCP-OP-ALIAS-028
+(defn unverified-call
+  "The same request with the verification profile dropped.
+
+  The one correction a caller whose baseline capture failed can execute: the
+  migration itself is unaffected — the tree was never touched — and `verify`
+  is opt-in. `base-call` already spells the request's closed field set without
+  it, so this is that set and nothing else.
+
+  Published because the E-CALLER arm was told to \"Re-send the same
+  alias_migration request\", did, reproduced the refusal, and found the one
+  change that worked by itself."
+  [request]
+  (let [call (base-call request)]
+    (when (within-next-call-bound? call) call)))
+
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-051
 (defn excluding-call
