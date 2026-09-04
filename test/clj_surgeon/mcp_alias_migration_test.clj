@@ -756,6 +756,64 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-051
+;; @spec MCP-OP-ALIAS-058
+(deftest the-derived-remedy-is-a-glob-the-parser-accepts-and-the-tree-matches
+  ;; Round-11 review finding 2: `suggested-scope-paths` built `<dirname>/**`
+  ;; from the RAW directory name, so a top-level directory whose name holds a
+  ;; glob metacharacter — legal on POSIX — made the published correction
+  ;; unexecutable. `a{b` produced `"a{b/**"`, which the same round's new
+  ;; ALIAS-051 parser gate then refused; `[x]`, `{a,b}` and `*` parsed and
+  ;; selected the WRONG set, which is worse, because nothing refuses it.
+  ;;
+  ;;   dir "a{b"    suggested=["a{b/**" "src/**"]
+  ;;      UNPARSEABLE "a{b/**" -> "Missing '} near index 5"
+  ;;      REPLAY error_type => "alias-migration-scope-path-refused"
+  ;;   dir "[x]"    suggested=["[x]/**" "src/**"]   REPLAY selects 0 of its own
+  ;;   dir "{a,b}"  suggested=["{a,b}/**" ...]      REPLAY selects 0 of its own
+  ;;   dir "*"      suggested=["*/**" "src/**"]     matches every depth-2 path
+  (doseq [dirname ["a{b" "[x]" "{a,b}" "*"]]
+    (let [workspace (temp-dir)
+          receipt-dir (io/file workspace "receipts")]
+      (try
+        (write-tree! workspace {(str dirname "/one.clj") "(ns one)\n"
+                                "src/two.clj" "(ns two)\n"})
+        (.mkdirs receipt-dir)
+        (let [result (scope-matches-nothing-refusal workspace)
+              root (mcp-paths/real-root (.getPath workspace))
+              suggested (:suggested_paths result)
+              derived (first (remove #{"src/**" "**"} suggested))]
+          (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+              (pr-str result))
+          (testing (str "every derived pattern parses · " (pr-str dirname))
+            (doseq [pattern suggested]
+              (is (nil? (#'alias-migration/glob-parse-error pattern))
+                  (str "the remedy published a pattern the verb's own parser "
+                       "gate refuses: " (pr-str pattern)))))
+          (testing (str "the derived pattern selects that directory · "
+                        (pr-str dirname))
+            (is (some? derived)
+                "the remedy did not derive a pattern for the metacharacter root")
+            (is (= [(str dirname "/one.clj")]
+                   (alias-migration/expand-scope root {:paths [derived]
+                                                       :exclude []}))
+                (str "the derived pattern " (pr-str derived)
+                     " does not select the directory it was derived from")))
+          (testing (str "the published call replays · " (pr-str dirname))
+            (let [replayed (alias-migration/execute!
+                             (config workspace receipt-dir)
+                             (json/parse-string
+                               (json/generate-string (:next_call result)) true))]
+              (is (not= "alias-migration-scope-path-refused"
+                        (:error_type replayed))
+                  (str "the published remedy earned a second refusal from the "
+                       "verb's own parser gate: " (pr-str replayed)))
+              (is (= 2 (:scanned_files replayed))
+                  (str "the published remedy selects fewer files than the walk "
+                       "saw: " (pr-str replayed))))))
+        (finally
+          (delete-tree! workspace))))))
+
 
 ;; @spec MCP-OP-ALIAS-006
 (deftest the-domain-refusal-fires-only-when-the-scope-matched-files
