@@ -1423,3 +1423,7 @@ feature_thread: round two closed every round-one finding and the reviewer found 
 ## 08:43Z — T2 (MCP-attached): 31 raw, 6 reads, 10 patches, first call feature_thread via MCP; T1C (ceremony-free receipt): 27 raw, 6 reads; NC running with ceremony=1. Round-four addendum sent: after_context per anchor (the tool arm re-read the lines after each anchor to write its patch).
 ## 08:43Z — T2 and T1C gates verified: === T2 test-js JS_EXIT=0 === T2 runtests-unit CLJ_EXIT=0 === T1C test-js JS_EXIT=0 === T1C runtests-unit CLJ_EXIT=0 
 ## 08:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, fourth consecutive, load 8.8); no figures — ledger inb-65c941. (Pushed to MCP/main: main is frozen.)
+
+## 08:52Z — tmp-leak r2 (Opus): GO-WITH-FIX — the first lane to close a whole review by execution, and the reviewer corrected its own round-one advice
+
+Every round-one closure was proven by running it, six sabotaged closures went red with named diagnostics, and the reviewer said in writing that its own suggested repair (line-seq over /proc/mounts) would have been dead code too. The one fix: a witness seam that can hand the gate a forged filesystem table and turn a refusal into a run — "a gate a caller can turn off", the seat's own scar. Round 3 is a fix round; the lane lands after it with the one-line .PHONY composition.
