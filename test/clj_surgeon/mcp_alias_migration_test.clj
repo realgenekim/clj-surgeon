@@ -641,6 +641,121 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-058
+(defn- long-root-workspace!
+  "A tree whose six top-level source roots have ordinary but long names.
+
+  Nothing here is hostile: six directories of fifty-two characters, one source
+  apiece. The rescoping call composed from them is 539 characters, past the
+  planner's 512-character `next_call` ceiling, so `rescoping-call` returns nil
+  and the refusal publishes no call at all."
+  []
+  (let [workspace (temp-dir)]
+    (doseq [index (range 6)]
+      (let [target (io/file
+                     workspace
+                     (str "a-very-long-but-entirely-ordinary-source-root-name-"
+                          index)
+                     "one.clj")]
+        (.mkdirs (.getParentFile target))
+        (spit target (format "(ns root%d.one)\n" index))))
+    workspace))
+
+;; @spec MCP-OP-ALIAS-058
+(defn- scope-matches-nothing-refusal
+  "One `scope-matches-nothing` refusal over `workspace`, with the receipt dir made."
+  ([workspace] (scope-matches-nothing-refusal workspace {}))
+  ([workspace overrides]
+   (let [receipt-dir (io/file workspace "receipts")]
+     (.mkdirs receipt-dir)
+     (alias-migration/execute!
+       (config workspace receipt-dir)
+       (merge {:op "alias_migration"
+               :workspace_root (.getPath workspace)
+               :from {:lib fixture/from-lib :var fixture/from-var}
+               :to {:lib fixture/to-lib :var fixture/to-var
+                    :alias_policy fixture/alias-policy}
+               :scope {:paths ["zzz/**"]}
+               :expect {:files 1}}
+              overrides)))))
+
+;; @spec MCP-OP-ALIAS-058
+(deftest the-remedy-never-tells-the-caller-to-resend-a-call-it-did-not-publish
+  ;; Round-11 review finding 1: on six top-level roots with ordinary long
+  ;; names the composed call is 539 characters, `rescoping-call` returns nil
+  ;; past its 512-character bound, and the receipt published `next_call nil`
+  ;; beside a remedy that opened "Resend the next_call:" — two adjacent lines
+  ;; of one text block telling the caller to resend a call and that no call
+  ;; exists. The listing is what a bound may shrink; the SELECTION is kept
+  ;; whole by the completing `**`, so a call that does not fit is a listing
+  ;; that has not been shrunk far enough — and where no listing fits at all,
+  ;; the receipt must say so, name the ceiling and the size, and hand the
+  ;; caller the roots to choose from.
+  (let [workspace (long-root-workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (try
+      (let [result (scope-matches-nothing-refusal workspace)]
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+            (pr-str result))
+        (is (= 6 (:source_files_under_root result)))
+        (is (some? (:next_call result))
+            "the remedy blew the next_call bound and published no call")
+        (testing "the published call is the one the remedy claims"
+          (let [replayed (alias-migration/execute!
+                           (config workspace receipt-dir)
+                           (json/parse-string
+                             (json/generate-string (:next_call result)) true))]
+            (is (= "alias-migration-empty-scope" (:error_type replayed))
+                (pr-str replayed))
+            (is (= 6 (:scanned_files replayed))
+                "the published next_call selects fewer files than the walk saw"))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-058
+(deftest a-remedy-with-no-composable-call-names-the-ceiling-and-the-roots
+  ;; The other side of finding 1: a request carrying enough exclusions that
+  ;; even the one-pattern call `["**"]` is past the ceiling. There is then no
+  ;; call to shrink to, and the receipt must NOT say "Resend the next_call".
+  ;; It must state that no call was composed, name the ceiling and the size
+  ;; that missed it, and give the caller the roots — with the number of
+  ;; sources each holds — to spell a scope from.
+  (let [workspace (long-root-workspace!)]
+    (try
+      (let [exclusions (mapv #(str "a-very-long-but-entirely-ordinary-source-"
+                                   "root-name-" % "/one.clj")
+                             (range 6))
+            result (scope-matches-nothing-refusal
+                     workspace
+                     {:scope {:paths ["zzz/**"] :exclude exclusions}})
+            remedy (str (:remedy result))]
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+            (pr-str result))
+        (is (nil? (:next_call result))
+            "this fixture no longer exercises the no-composable-call branch")
+        (is (not (str/includes? remedy "Resend the next_call"))
+            "the remedy told the caller to resend a call the receipt has not got")
+        (is (str/includes? remedy
+                           (str planner/max-next-call-characters))
+            "the remedy does not name the next_call ceiling it missed")
+        (is (number? (:next_call_characters result))
+            "the receipt does not say how long the call it could not publish is")
+        (is (> (long (or (:next_call_characters result) 0))
+               (long planner/max-next-call-characters))
+            "the reported size does not exceed the ceiling it is said to miss")
+        (is (str/includes? remedy
+                           (str (or (:next_call_characters result) "<absent>")))
+            "the remedy does not name the size that missed the ceiling")
+        (is (seq (:source_root_sizes result))
+            "the receipt hands the caller no roots to choose from")
+        (is (every? #(re-find #"\(\d+\)$" %) (:source_root_sizes result))
+            "the roots are listed without the number of sources each holds")
+        (is (<= (count (:source_root_sizes result))
+                alias-migration/max-suggested-scope-paths)
+            "the root listing is not bounded"))
+      (finally
+        (delete-tree! workspace)))))
+
 
 ;; @spec MCP-OP-ALIAS-006
 (deftest the-domain-refusal-fires-only-when-the-scope-matched-files
