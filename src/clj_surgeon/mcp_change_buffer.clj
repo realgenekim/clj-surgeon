@@ -1287,6 +1287,12 @@
    (run-process! project-root command timeout-ms
                  exact-verification-visible-bytes))
   ([project-root command timeout-ms visible-byte-limit]
+   (run-process! project-root command timeout-ms visible-byte-limit {}))
+  ;; @spec MCP-OP-ADMIT-160
+  ;; `opts` carries `:visible-anchor`, which decides WHICH END of a capture
+  ;; this JVM reads back. A caller that PARSES the output needs the head; a
+  ;; caller that PUBLISHES it for a human to act on needs the tail.
+  ([project-root command timeout-ms visible-byte-limit opts]
    (let [started (System/nanoTime)]
      (try
        (process-env/run-bounded!
@@ -1294,7 +1300,8 @@
           :cwd project-root
           :timeout-ms timeout-ms
           :merge-error? true
-          :visible-byte-limit visible-byte-limit})
+          :visible-byte-limit visible-byte-limit
+          :visible-anchor (get opts :visible-anchor :head)})
        (catch Exception error
          {:finished? false
           :launch-error true

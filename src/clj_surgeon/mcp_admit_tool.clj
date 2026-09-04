@@ -887,6 +887,17 @@
 
 (def ^:private inline-tail-chars 6000)
 
+;; @spec MCP-OP-ADMIT-160
+(def inline-visible-output-bytes
+  "How much of a command's captured output this JVM reads back, from its END.
+
+  The receipt publishes 40 lines of it, so this is not a receipt budget: it is
+  the window inside which the tail must be FOUND. It used to be the receipt's
+  own 12,000 bytes, read from the HEAD, so `output_tail` was the last 40 lines
+  of the first 12 KB -- which for any real test suite is 40 lines of noise and
+  no failing assertion."
+  262144)
+
 ;; @spec MCP-OP-ADMIT-153
 (def inline-default-timeout-ms 300000)
 
@@ -1263,10 +1274,14 @@
 
         :else
         (let [argv (nth argvs index)
-              {:keys [finished? exit output elapsed_ms launch-error]}
+              {:keys [finished? exit output elapsed_ms launch-error
+                      output-bytes]}
+              ;; @spec MCP-OP-ADMIT-160
               (change-buffer/run-process! (.getPath venue) argv
                                           (long (or timeout-ms
-                                                    inline-default-timeout-ms)))
+                                                    inline-default-timeout-ms))
+                                          inline-visible-output-bytes
+                                          {:visible-anchor :tail})
               launched? (not (true? launch-error))
               ok? (and launched? (boolean finished?) (zero? (long (or exit 0))))
               row {:command (nth commands index)
@@ -1283,12 +1298,25 @@
                                  (not launched?) "did-not-start"
                                  (not finished?) "did-not-finish"
                                  :else "failed")
-                   :elapsed_ms elapsed_ms
-                   :output_tail (inline-output-tail
-                                  output
-                                  (if ok?
-                                    inline-tail-lines
-                                    inline-failure-tail-lines))}]
+                   :elapsed_ms elapsed_ms}
+              tail (inline-output-tail output
+                                       (if ok?
+                                         inline-tail-lines
+                                         inline-failure-tail-lines))
+              ;; @spec MCP-OP-ADMIT-160
+              ;; The cut is stated in the same row as the text, in bytes,
+              ;; against the FULL capture. A caller handed the middle of an
+              ;; output with no flag has no way to know it is reading a
+              ;; fragment -- and the shape of a small, complete tail and a
+              ;; large, cut one were identical.
+              published (count (.getBytes (str tail) "UTF-8"))
+              total (long (or output-bytes published))
+              omitted (max 0 (- total published))
+              row (assoc row
+                         :output_tail tail
+                         :output_bytes total
+                         :output_omitted_bytes omitted
+                         :output_truncated (pos? omitted))]
           (recur (inc index) (conj rows row)
                  (when-not ok?
                    {:index index
@@ -1417,8 +1445,15 @@
                                       :else [item]))
                                   command))
             {:keys [finished? exit output]}
+            ;; @spec MCP-OP-ADMIT-156
+            ;; @spec MCP-OP-ADMIT-160
+            ;; The repository-declared runner publishes its output for a
+            ;; reader exactly as an inline command does, so it reads the same
+            ;; end of the capture.
             (change-buffer/run-process! (:project-root config) expanded
-                                        (or timeout-ms 300000))
+                                        (or timeout-ms 300000)
+                                        inline-visible-output-bytes
+                                        {:visible-anchor :tail})
             written? (.isFile report)
             failed? (or (not finished?) (not (zero? (long (or exit 0)))))
             rows (when written?

@@ -397,22 +397,30 @@
             (recur)))))
     (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest digest)))))
 
+;; @spec MCP-OP-ADMIT-160
 (defn- file-evidence
-  [file visible-byte-limit]
-  (let [byte-count (.length ^java.io.File file)
-        visible-count (min byte-count (long visible-byte-limit))
-        visible (byte-array (int visible-count))]
-    (with-open [input (io/input-stream file)]
-      (loop [offset 0]
-        (when (< offset visible-count)
-          (let [read-count (.read input visible offset
-                                  (- (int visible-count) offset))]
-            (when (pos? read-count)
-              (recur (+ offset read-count)))))))
-    {:text (String. visible java.nio.charset.StandardCharsets/UTF_8)
-     :bytes byte-count
-     :sha256 (sha256-file file)
-     :truncated (> byte-count visible-count)}))
+  "The bounded, readable part of one capture file, from one END of it.
+
+  `anchor` is `:head` (the default, and what a PARSER wants: EDN, JSON and a
+  report file all begin at byte zero) or `:tail` (what a READER wants: a test
+  suite's failing assertion is its last line, and the first 12,000 bytes of a
+  4,000-line run contain none of it). Round seventeen measured the cost of
+  having only the first: the receipt published the last 40 lines of the FIRST
+  12 KB, called them `output_tail`, and delivered no failing assertion for any
+  real suite."
+  ([file visible-byte-limit] (file-evidence file visible-byte-limit :head))
+  ([file visible-byte-limit anchor]
+   (let [byte-count (.length ^java.io.File file)
+         visible-count (min byte-count (long visible-byte-limit))
+         offset (if (= :tail anchor) (- byte-count visible-count) 0)
+         visible (byte-array (int visible-count))]
+     (with-open [reader (java.io.RandomAccessFile. ^java.io.File file "r")]
+       (.seek reader (long offset))
+       (.readFully reader visible))
+     {:text (String. visible java.nio.charset.StandardCharsets/UTF_8)
+      :bytes byte-count
+      :sha256 (sha256-file file)
+      :truncated (> byte-count visible-count)})))
 
 (defn run-bounded!
   "Run one command with a shared admission/execution deadline.
@@ -421,8 +429,8 @@
   to files so a verbose analyzer cannot deadlock on a full pipe. Timeout or
   interruption kills and confirms the complete child tree."
   [{:keys [command cwd timeout-ms stdin-text merge-error? visible-byte-limit
-           on-start]
-    :or {merge-error? false visible-byte-limit 65536}}]
+           visible-anchor on-start]
+    :or {merge-error? false visible-byte-limit 65536 visible-anchor :head}}]
   ;; @spec MCP-OP-ANALYZER-002
   (let [started (System/nanoTime)
         stdout-file (java.io.File/createTempFile "clj-surgeon-process-out-" ".log")
@@ -453,8 +461,10 @@
                     termination-confirmed? (or finished?
                                                (destroy-process-tree! process))
                     exit (when finished? (.exitValue process))
-                    stdout (file-evidence stdout-file visible-byte-limit)
-                    stderr (file-evidence stderr-file visible-byte-limit)
+                    stdout (file-evidence stdout-file visible-byte-limit
+                                          visible-anchor)
+                    stderr (file-evidence stderr-file visible-byte-limit
+                                          visible-anchor)
                     base {:finished? finished?
                           :exit exit
                           :termination-confirmed termination-confirmed?
