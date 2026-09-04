@@ -4443,3 +4443,70 @@
         (format "the name rung declared nothing over %d uncarried leaves: %s"
                 (count audited) (pr-str text)))
     (is (= (- (:total counts) (:shown counts)) (count audited)))))
+
+;; @spec MCP-OP-STUDY-049
+(defn- probe-domain-result
+  "A minimal ordinary `inspect_clojure` domain result, plus whatever the
+   caller wants to hang off it. Built by the DOMAIN, so anything it carries is
+   domain data no matter how it is spelled."
+  [extra]
+  (merge {:ok true
+          :operation "inspect_clojure"
+          :read_complete true
+          :next_action "none"
+          :source_character_count 0
+          :request_count 1
+          :file_count 1
+          :results []}
+         extra))
+
+(defn- published-through-invoke
+  "One domain result carried through the real finalizer and the real fit, and
+   handed back exactly as the publisher would publish it."
+  [domain]
+  (let [captured (atom nil)]
+    (mcp-operation/invoke!
+      {:execute (fn [] domain)
+       :fit (fn [result]
+              (let [fitted (inspect-tool/fit-public-result result)]
+                (reset! captured fitted)
+                fitted))
+       :summarize (fn [result] (inspect-tool/inspect-summary result))
+       :callback (fn [_ _ _] nil)})
+    @captured))
+
+;; @spec MCP-OP-STUDY-049
+(deftest a-domain-key-spelled-like-the-envelope-is-not-the-envelope
+  (testing "a domain `measured` map is published as domain data"
+    (let [value {:user_blob "a measurement the DOMAIN took"}
+          published (published-through-invoke
+                      (probe-domain-result {:measured value}))]
+      (is (= value (:measured published))
+          "the domain key must survive publication unchanged")
+      (is (not (contains? (mcp-operation/envelope published) :measured))
+          (str "the gate read a DOMAIN key as publisher metadata; the "
+               "envelope it would copy into a substitute is "
+               (pr-str (mcp-operation/envelope published))))))
+
+  (testing "a domain `measured` too large to publish is a refusal that FITS"
+    (let [published (published-through-invoke
+                      (probe-domain-result
+                        {:measured {:user_blob (apply str (repeat 40000 "x"))}}))
+          bytes (inspect-tool/mcp-result-byte-count
+                  (inspect-tool/inspect-summary published) published)]
+      (is (false? (:ok published))
+          "PRECONDITION: this fixture must reach the refusal rung")
+      (is (<= bytes inspect-tool/max-public-result-bytes)
+          (format (str "the fit RETURNED a candidate of %d bytes against the "
+                       "%d-byte budget it exists to enforce")
+                  bytes inspect-tool/max-public-result-bytes))))
+
+  (testing "a map that merely SPELLS the envelope was never finalized"
+    (let [impostor (probe-domain-result {:elapsed_ms 1.0 :measured {}})]
+      (is (not (mcp-operation/finalized? impostor))
+          (str "a domain result was accepted as finalized because it spells "
+               "the envelope's key names; the envelope is identified by "
+               "CONSTRUCTION, never by spelling"))
+      (is (thrown? IllegalArgumentException
+                   (inspect-tool/fit-public-result impostor))
+          "and the gate must refuse to measure it"))))
