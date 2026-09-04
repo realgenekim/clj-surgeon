@@ -1945,3 +1945,303 @@ Predictions 7 HIT / 5 MISS; the 25% tail (N 3/3) was the one that landed. §9 ve
 **What it means.** The verb's proof-before-write is real and architectural; it is not a differentiator against this caller, which reads first when the task tells it a blocker may exist. The anti-tautology clause (one rg + one sentence pre-registered as a live native route) is what makes this a behaviour finding. Caveat: PBW was satisfied through the "never mutated" disjunct in 6/6 — "neither writes", not "who proves first". Two defects found live, routed to q5z r12 (items 9a/9b): the refusal text drops mutation_attempted/write_authority; the refusal's next_call proposed store-2-2, outside the caller's four-entry policy (all three T arms declined it, obeying the task over the "send that" instruction). Apparatus catch: sol-yolo sets required=true only when the worktree carries a .codex/config.toml — validation 4 failed first, fixed before arm 1, pre-correction ledger preserved.
 
 **Standing after eight results.** Square 1 gate: unmeasured (O2 r2 / q5z r12 in flight). **Square 2 fan-out: the program's one win** (7.2×/5.7× cell means on emitted chars; worst pairing 1.9×; strategy bimodal; E-CEILING80 running for the boundary). Withdrawn for this caller: single edit at a known site, square 3 (E6-Q, E6-Q2), square 4 (E-PREWRITE). Fleet poll on the E-AFFORD + E-PREWRITE pair launched (Sol + Opus): with three squares withdrawn, what is square 1's experiment, is E-HARNESS (Bash-only native, no apply_patch) the next variable, and what does the program tell Gene now.
+
+## 29. Fleet poll on the E-AFFORD + E-PREWRITE pair — Opus, verbatim (01:27Z)
+
+# Opus — poll on the E-AFFORD + E-PREWRITE pair (three squares withdrawn; what is left, and square 1's experiment)
+
+*forge@anvil, 2026-09-04. Read-only: `2026-09-04-eafford-sed-counterfactual-cohort.md`,
+`2026-09-04-eprewrite-cohort.md`, `2026-09-03-brainfleet-hills.md` §19–§28, `docs/vision.md`
+(the four squares), `docs/tech-tree.md` (the gate's status line). No code run, nothing edited,
+no Surgeon MCP tool called.*
+
+**Standing disclosure.** E-AFFORD was my #1 and my F2, run to kill my own headline. It did not
+kill it, and it did not vindicate it either: **INCONCLUSIVE by its own pre-registered wording**,
+clause 1 missed by a single arm. Its real finding is that my experiment measured the noise
+floor — between-cell effect 1,473 chars against within-cell spreads of 8,221 and 7,268. I also
+own the §0 correction that reclassified it from counterfactual to salience gradient. Everything
+below is written with that in front of me.
+
+**One correction to the state-of-play paragraph, before anything else, because a sceptic will
+find it in ten seconds.** "Worst pairing 1.9×" is min-native ÷ **mean**-T (1,869 ÷ 966 = 1.93×).
+The worst **arm-to-arm** pairing on the receipts is 1,869 ÷ 1,214 = **1.54×**. Both numbers are
+in the E-AFFORD table; quote 1.54× as the floor, or a reviewer will compute it and ask why we
+didn't.
+
+---
+
+## 1. What clj-surgeon is for, in one receipted sentence
+
+> **clj-surgeon is for committing one intent across many owners in a single request: on a
+> 21-owner alias migration, under the same 6/6 gate and byte-identical `diff -r` against the
+> same frozen canonical, the verb committed in 549–1,214 emitted characters (mean 966) while
+> the unaided agent — with `sed` and `perl` named to it by the prompt — emitted 1,869–10,090
+> (cell means 6,979 and 5,505; ratios 7.22× and 5.70×, floor 1.54× arm-to-arm), flipping
+> between two disjoint hand-written strategies (4 literal patches, mean 9,438; 4 generated,
+> mean 2,556) and routing every write through `apply_patch` in 14 of 14 native write arms.**
+
+Clause-by-clause receipts, all from tonight:
+
+| clause | receipt |
+|---|---|
+| "one intent … single request" | E-AFFORD §7: every T arm, **exactly one committing `alias_migration` call**, zero native `apply_patch` fallback |
+| "same 6/6 gate, byte-identical" | E-AFFORD §7: 9/9 arms `rescore-FAN.sh 21` 6/6 **and** `diff -r` clean; 21 files, 0 extras, 106/106 protected regions, `FAN-TEST 147 assertions, 0 failures` |
+| "549–1,214, mean 966" | E-AFFORD table, T rows, contemporaneous with the native arms they are divided into |
+| "1,869–10,090; 6,979 and 5,505" | E-AFFORD cell means |
+| "7.22× / 5.70× / 1.54×" | E-AFFORD §2 ratios; the floor computed from the same table |
+| "`sed` and `perl` named to it" | The +249-byte diff `@@ -54,0 +55 @@`, sha `bdb56497…` vs `9ab5267a…` |
+| "two disjoint strategies, 9,438 / 2,556" | E-AFFORD §5 finding 2, pooled n=8 k=1 native arms; smallest literal (8,594) > largest generated (3,604) |
+| "14 of 14 native write arms" | E-REG 8 + E-AFFORD 6; **0 stream-edit**, classifier validated 8/8 on hand-driven `sed -i` / `perl -pi` / `awk -i` plus 3 negatives |
+
+### The sentence a sceptic uses against it
+
+> "Characters are not seconds, dollars, or defects. You voided 15 of your 25 walls and claim no
+> wall anywhere; the plain agent passed **every** correctness gate you ever ran it through —
+> 14/14 patches byte-identical, 54/54 structural probes, 3/3 planted blockers found before
+> writing a byte; three of your four squares withdrew against this same caller in one night;
+> and the survivor is one model, one patch format, one generated fixture, one operation."
+
+### Do the receipts answer it? **One clause of four. Say so in the report.**
+
+- **"Characters are not seconds" — ANSWERED, and this is the strongest unused asset on the
+  board.** Native chars/s stayed inside **137.4–151.8** and tool inside **165.2–181.1** across
+  loads **5.02 → 9.87** in the interleaved E-AFFORD run. Emission rate is approximately
+  load-invariant in the measured band, so the character gap converts: measured **emission gap
+  12.3–71.2 s native vs 3.3–7.0 s tool**. That is observed duration of the model's own output,
+  not box wall, and it survives the load rule that voided everything else. *Nobody has scored
+  chars/s against load as a pre-registered hypothesis. It is a free regression over 25 existing
+  arms and it upgrades every character claim to a time claim.*
+- **"No correctness advantage" — NOT ANSWERED and not answerable from these receipts.** Native
+  is 100% on every gate this program has ever run. This is the clause that will decide square 1
+  (§2).
+- **"Three squares withdrew" — answered in the sceptic's favour on breadth, in ours on
+  credibility.** Pre-registration is why the survivor is worth anything; it is also why we can
+  only claim one square.
+- **"One caller, one harness, one fixture, one operation" — NOT ANSWERED.** This is the entire
+  next wave (§5).
+
+---
+
+## 2. Square 1 (the gate) — the experiment, and my prediction that it withdraws too
+
+**Can square 1 be made to differ from square 4 for this caller? YES — the meters are genuinely
+different — but I predict it reaches the same verdict for a different reason, at 60%.**
+
+*Why they differ:* square 4's meter was an **ordering** property (proof precedes the first
+mutation). The verb satisfies it architecturally (`refusal` sets `mutation_attempted false`
+before `plan` can write), and native satisfied it by never writing — so the meter was true on
+both sides for reasons that had nothing to do with the product. Square 1's meter is a
+**detection** property on a patch that has *already landed and already looks green*. No
+architectural invariant supplies it; native cannot satisfy it by declining to write, because it
+has written. Different meter, live on both sides.
+
+*Why I still expect a null:* square 4 died because this caller **reads before writing**. Square 1
+will most likely die because this caller's patches are **correct** — 14/14 byte-identical to a
+frozen canonical, 54/54 probes, 3/3 blockers. **A differential detector needs a non-zero defect
+base rate, and the measured base rate on this program's task family is zero.** That is a
+structural problem no amount of arm time fixes.
+
+*And the E-PREWRITE lesson names the cheapest native route explicitly, which is the second
+problem:* the gate's substantive surface is, by the tech-tree's own status line, **"kondo delta +
+focused suite in one receipt (BUILDING, inside the gate)"**, and z7c's single substantive catch
+in six runs was literally typed `blocking-lint-findings`. **`clj-kondo` is installed on this box
+and shimmed by this project's own Makefile** (`install-clj-kondo-admission`, `~/bin/clj-kondo`).
+So the honest comparator for square 1 is not "native with nothing" — it is **native's own free
+verification stack: reload + focused test + `clj-kondo`**. If the gate's catch set is a subset of
+that, the differential is zero by construction and square 1 is a definition, not a finding — the
+exact tautology that nearly voided E-PREWRITE.
+
+So: **run the free half first, and let it decide whether the paid half runs at all.**
+
+### E-GATE-R — the replay half. **0 arm-runs.** Run this first.
+
+| | |
+|---|---|
+| **hypothesis** | `admit_clojure_patch` names ≥1 **substantive** hazard on a native patch that (a) the arm declared done, (b) the acceptance gate passed, and (c) `clj-kondo` **and** the focused suite do **not** name. |
+| **corpus** | Every frozen native final-state patch on record: **E-REG 8 + E-AFFORD 6 = 14**, all 6/6 and byte-identical. (E-PREWRITE's 3 native arms wrote nothing; E6-Q2's are read-only. Excluded, and the exclusion is pre-registered.) |
+| **load-immune meter** | Per patch, replayed over frozen bytes — deterministic, re-runnable, no arm time: `class ∈ {shape-refusal, substantive-catch, clean}`, plus the binary **`differential` = substantive-catch AND NOT named by `clj-kondo --lint` on the same tree AND NOT named by `bin/fan-test`**. Three predicates, disagreement reported typed. |
+| **n** | 14 patches × 3 predicates = 42 replays. |
+| **predicted numbers** | shape-refusal **0–1 of 14** (p=60% it is ≤1; the E1 grammar scar is the live risk — round five accepts both formats but has never been fed 14 real V4A bodies). Substantive catches on green patches **0 of 14** (p=70%). **`differential` = 0 of 14 (p=85%).** |
+| **cost** | **0 arm-runs.** ~1 agent-hour, 1 JVM, ~30 min wall. Cheapest item ever put on this board. |
+| **withdrawal condition, written before replay 1** | If `differential` = **0 of 14**, square 1's **detection** claim is withdrawn for this caller and task family, E-GATE-D does not run, and the gate is re-scoped in the same document to a **coverage/compliance** claim (Hill 4: 100% of `.clj` writes pass through it) — which is a **build result, not a vs-native square**. If additionally shape-refusals ≥ 2 of 14, the gate is **not merge-ready** and that is filed as a defect, not a result. |
+
+### E-GATE-D — the paid half. **3 arm-runs. Conditional on E-GATE-R showing a live base rate, or on the planted fixture below.**
+
+| | |
+|---|---|
+| **hypothesis** | On a task whose natural cheapest anchor produces a **false green**, native ships a patch that loads, passes the shipped suite, and passes `clj-kondo`, yet is semantically wrong — and the gate names it. |
+| **what is planted** | 21 owners, each with the required change belonging **inside the `:else` branch of a `cond`**. The shipped `bin/fan-test` exercises only the first branch (147 assertions, all green either way). The cheapest `apply_patch` literal-context anchor is the **top of the fn**, one form above the branch. A held-out oracle suite the arm never sees exercises the `:else` path. Kondo is clean on both spellings — a misplaced guard is not a lint finding. |
+| **load-immune meter** | Two binaries per arm, both replays over frozen bytes: **`FALSE_GREEN`** = (arm declared done) ∧ (shipped suite green) ∧ (kondo clean) ∧ (held-out oracle **red**); **`GATE_CATCH`** = `admit_clojure_patch`, fed that arm's exact frozen patch, returns a substantive refusal naming ≥1 wrong-anchor owner. Neither touches wall. |
+| **the cheapest native route, left open and pre-registered as a live win (the E-PREWRITE clause)** | One `rg` for the branch keyword plus one windowed `sed -n` per owner — **exactly the E6-Q2 behaviour that withdrew square 3** (three tool calls, ~300 of 7,516 lines, 54/54). If native reads the `cond` before anchoring, `FALSE_GREEN` = 0/3 and that is a **behaviour**, not a definition. Stated before arm 1 so a third null cannot be re-narrated as "the trap was too obvious." |
+| **n** | 3 native arms. (The gate replay on each is free; no tool arms — square 1's claim is about native's own route, so a T cell buys nothing.) |
+| **predicted numbers** | `FALSE_GREEN` **1 of 3 (40%)**; 0 of 3 (**45%**); ≥2 of 3 (15%). Conditional on a false green existing, **`GATE_CATCH` on it: 55%** — a wrong-anchor change is invisible to kondo and to the focused suite, so the catch rests entirely on the untouched-node/owner-delta proof, which **has no declared intent to compare against on a native patch**. Joint P(≥1 arm where native false-greens **and** the gate catches it) ≈ **0.40 × 0.55 = 22%**. |
+| **cost** | **3 arm-runs** + ~2 agent-hours to build the fixture and freeze the held-out oracle. |
+| **withdrawal condition, written before arm 1** | `FALSE_GREEN` = **0 of 3** → **square 1 is withdrawn** on exactly the terms squares 3 and 4 were: a gate that only fires on defects this caller does not produce is insurance with no measured premium. `FALSE_GREEN` ≥ 1 **but** `GATE_CATCH` = 0 on every false green → **square 1 is withdrawn harder**: the defect exists, is exactly the class `vision.md` names ("a guard placed at the cheap top anchor instead of inside the branch"), and the gate missed it. Either way, the gate remains a **build** worth shipping for coverage; it stops being a square. |
+
+**The uncomfortable thing I will say out loud so nobody sells it later:** 22% is the honest joint
+probability that square 1 produces a win. I am recommending it anyway (§5, rank 2) **because the
+free half costs zero arm-runs and settles the "is the gate just clj-kondo in a hat" question that
+will otherwise be the first thing a reviewer asks.**
+
+---
+
+## 3. E-HARNESS (Bash-only native, no `apply_patch`)
+
+### For
+
+1. **E-AFFORD's own caveat names it, and it is the one manipulation shown capable of moving the
+   mechanism.** 5 of 6 native arms invoked `sed`/`perl`/`awk` — every time as a *reader*; the one
+   arm that used perl for the edit **printed a patch and fed it to `apply_patch`**. The write path
+   is not a preference the prompt can move; it is a **route**. Removing the route is the only
+   untried lever.
+2. It is attack #3 on my own §21 list ("a second harness"), and a sceptic's first line is "your
+   win is against a harness quirk."
+3. Cheap: no new fixture, no new scorer, native arms only.
+
+### Against
+
+1. **It measures a harness nobody runs, and its result is unbankable.** Every real caller has
+   `apply_patch` or `Edit`. E-AFFORD's own restatement is the argument against it: the claim is
+   "weaker as a theorem and stronger as a product claim, since a product is sold against observed
+   behaviour." A Bash-only agent is not observed behaviour; it is a laboratory animal.
+2. **The direction is close to pre-computable, and it is the safe direction.** Strip `apply_patch`
+   and the agent writes whole files with `cat > f <<'EOF'` heredocs — **more** characters than
+   hunks, not fewer. Expected finding: native gets worse, the ratio goes **up**. A win we cannot
+   quote, in the flank that cannot hurt us.
+3. **It tests the wrong flank.** The harness that endangers 7.2× is not one with *no* write verb —
+   it is one with a **better** write verb: a minimal-context `old_string`/`new_string` edit, which
+   is what the second-largest coding harness in the world actually ships. Bash-only skips the
+   dangerous flank and runs at the safe one.
+4. Degenerate-arm risk: correctness collapses, arms fail the gate, and we score a null on a broken
+   harness — the same shape as E-AFFORD's noise floor, at real arm cost.
+
+### **COMMIT: DROP E-HARNESS as specified. RUN its dangerous twin, E-HARNESS-MIN.**
+
+Argument 3 is decisive: the point of a harness cohort is to find where the win *stops*, and
+Bash-only moves in the direction where it grows.
+
+### E-HARNESS-MIN — design
+
+| | |
+|---|---|
+| **hypothesis** | Native routes writes through `apply_patch` because **literal context is its correctness proof, not because it lacks alternatives.** Offer a write verb that supplies the *same* proof at a quarter of the characters — a literal single-occurrence replacement that **refuses on 0 or >1 matches** — and native's payload collapses toward the tool's. If it does **not**, the routing is habit and square 2 is safe against every harness, which is a stronger result than the ratio itself. |
+| **the intervention** | A ~20-line `bin/edit <file> <old> <new>` pre-installed in the fixture (literal, unique-or-refuse — Claude Code `Edit` semantics reachable through Bash, no harness surgery, no custom MCP tool). Named in §5 alongside `apply_patch` with **no preference**, per E-AFFORD Amendment 1's discipline; the diff against the E-AFFORD Ns prompt is one paragraph and its sha is frozen. |
+| **cells** | `N-min` (bin/edit available, k=1, n=3) and a **contemporaneous** `T` (n=2), interleaved. E-AFFORD's T is *not* the comparator — its own Amendment 1 proved a historical denominator overstated every ratio by 29%. |
+| **load-immune meter** | Emitted write-payload chars + the **same content-keyed strategy classifier**, extended with a fourth class **`minimal-edit`** (a `bin/edit` invocation with no literal patch body). The new branch is **hand-driven before arm 1 on three spellings plus three negatives**, per `hand-drive-every-mode-you-ship` — E-AFFORD's `stream-edit` branch was the one that had never fired and it is why that classifier was trusted. Gate: 6/6 + `diff -r` byte-identical. No wall claimed. |
+| **n** | 3 N-min + 2 T = **5 arm-runs**. |
+| **predicted numbers** | P(≥2 of 3 arms actually use `bin/edit` for the majority of write chars) = **40%** — E-AFFORD's whole lesson is that naming a path does not move this caller. Conditional on adoption: native mean **3,200 chars** (band 2,000–5,500, 65%), ratio falls **7.2× → 2.0–4.0× (60%)**, still ≥1.5× (80%). Conditional on non-adoption (60% of the mass): native mean **6,500 ± 3,500**, ratio holds **4–8×**, and `apply_patch` routing is proven harness-independent. **0 stream-edit again: 85%.** |
+| **withdrawal condition, before arm 1** | If ≥2 of 3 arms use `bin/edit` **and** the ratio falls **below 2.0×**, square 2's headline is restricted **in the same document** to *"harnesses whose write verb demands literal context"*, and the 7.2× is annotated in place with the minimal-edit number beside it. If ≥2 of 3 arms **decline** `bin/edit` and hand-type a patch anyway, **the harness flank is closed** — habit, not affordance, not capability — and no further write-path cohort runs. Both outcomes are decisions; that is the test that E-AFFORD failed. |
+
+---
+
+## 4. E-CEILING80 — predictions on record, before it lands
+
+*N=80, k=1, 3 N + 2 T. Derived from: per-owner literal rate ~450 chars (E-REG cell means ÷ 21);
+generated mode decomposed as ~1,950 fixed program + ~29/owner (from 2,556 at N=21); T flat across
+k in both cohorts.*
+
+| quantity | point prediction | band | p |
+|---|---|---|---|
+| **native, literal-patch arms** | **33,000 chars** | 26,000–42,000 | 65% |
+| **native, programmatic arms** | **4,300 chars** | 3,000–6,500 | 60% |
+| **strategy split (3 arms)** | **2 programmatic / 1 literal** | — | 40% modal (1P/2L 30%, 3P 20%, 0P 10%) |
+| **≥1 programmatic arm in 3** | yes | — | **90%** (scale pushes toward generation) |
+| **stream-edit arms** | **0 of 3** | — | 85% |
+| **native mean (3 arms)** | **14,000 chars** | 5,000–23,000 | 55% |
+| **native median (3 arms)** | **6,000 chars** | 4,000–33,000 (bimodal — the median is the honest statistic, the mean is not) | 50% |
+| **≥1 native arm ≥ 25,000 chars** | yes | — | **60%** |
+| **patch calls, literal arms** | **2–4** (mean 2.7) | — | 60% |
+| **patch calls, programmatic arms** | **1** | — | 75% |
+| **≥2 patch calls in ≥2 of 3 arms** | **no** | — | only **40%** — I am **lowering** my §21 figure of 60%, because bimodality was unknown then and the generated mode makes exactly one call |
+| **native re-emission / patch rejection** | ≥1 across 3 arms | — | 50% |
+| **T chars, mean of 2** | **1,050** | 600–1,800 | 75% |
+| **T chars if `expected_files` enumerates 80 paths** | **~3,200** | — | 25% (the branch that would halve the ratio) |
+| **T patch calls** | **1 committing call each** | — | 85% |
+| **T first-call refusal** | **≥1 of 2 arms** | — | 65% (6/8 in E-REG, 2/3 in E-AFFORD) |
+| **ratio on cell means** | **13×** | 5–30× | 60% |
+| **ratio on medians** | **5.7×** | — | the number I would actually quote |
+| **gate 5/5 green** | yes | — | 70% |
+| **≥1 native arm fails 6/6 or byte-identity at N=80** | — | — | **30%** (native is 30-for-30 on correctness, but 80 owners is a new scale and the first place transcription volume could truncate) |
+
+**The one number that matters:** if native's median lands near **4,300** rather than **33,000**,
+the emission law is bounded and square 2's claim shrinks to mid-size fan-out — that is the
+pre-registered withdrawal, and I expect it at roughly **45%**, which is much higher than the
+"< 6,000 chars in ≥2 of 3" clause implied when it was written at 50/50 strategy odds. **Say so
+now, before the table lands.**
+
+---
+
+## 5. The next three experiments, ranked
+
+*Floors respected: no wall primary anywhere; every meter below is a count or a binary, replayable
+over frozen bytes. **Total: 11 arm-runs.** All three are vs-native functional measurements —
+launch mix stays 100% functional. Square 1 is **included** (rank 2). E-HARNESS as specified is
+**excluded**; its redesign E-HARNESS-MIN is **included** (rank 3).*
+
+### #1 — E-CALLER-K1: a second caller, which is also a second harness, for the price of one
+
+| | |
+|---|---|
+| **hypothesis** | Every character in tonight's headline is `gpt-5.6-sol` at high reasoning effort writing `apply_patch`. A different caller arrives **with a different write verb** (minimal-context `Edit`/`MultiEdit` rather than literal-context hunks), so the two biggest holes in the claim — one caller, one harness — close in the same 6 arms. This is the only experiment on the board that can move the headline in the direction that costs us. |
+| **load-immune meter** | Emitted write-payload chars + the content-keyed strategy classifier (with the `minimal-edit` class from §3, hand-driven before arm 1) + the 6/6 + `diff -r` byte-identity gate. Same fixture (`fanout-k1`, read-only), same task text, same churn band. |
+| **n** | 3 native + 3 tool of the **second caller**, interleaved with each other; **no cross-caller ratio is quoted** — each caller is divided only by its own contemporaneous T. **6 arm-runs.** |
+| **predicted numbers** | Second-caller native mean **3,800 chars** (band 1,500–9,000, 60%); its contemporaneous T **1,100 ± 500** (70%); ratio **3.5×** (band 1.3–8×, 55%); **P(ratio < 2.0×) = 30%** — the single most dangerous number in the program. Strategy: ≥2 of 3 arms **minimal-edit rather than literal-patch (65%)**; stream-edit **0 of 3 (80%)**. Correctness 3/3 (70%). |
+| **cost** | **6 arm-runs**, no build beyond a driver swap and the classifier's fourth class; ~40 min. |
+| **withdrawal condition, before arm 1** | If the second caller's ratio is **< 2.0× in ≥2 of 3 pairings**, square 2's claim is restricted **in the same document that reports it** to *"callers whose write verb demands literal context"*, and the 7.2×/5.7× figures are annotated in place, never re-quoted bare. If the second caller's **correctness** falls below 2 of 3 while the tool holds 3 of 3, that is a **new square-1-adjacent finding** and is reported as such rather than folded into square 2. |
+
+### #2 — E-GATE-R, then conditionally E-GATE-D (square 1) — full design in §2
+
+Ranked second only because it costs **zero arm-runs** and therefore cannot contend with #1 for the
+box; in value-per-hour it is first. Summary line: **`differential` = 0 of 14 predicted at 85%**;
+0 arm-runs; withdrawal = square 1's detection claim withdrawn and the gate re-scoped to a
+coverage build. E-GATE-D (**3 arm-runs**, joint P(win) ≈ 22%) runs **only** if E-GATE-R shows a
+non-zero differential, or on the planted false-green fixture with its withdrawal clause frozen
+first.
+
+### #3 — E-HARNESS-MIN (the `bin/edit` write path) — full design in §3
+
+**5 arm-runs.** P(adoption) 40%; conditional ratio 2.0–4.0× at 60%; **both** outcomes are
+pre-registered decisions (restrict the headline, or close the harness flank permanently).
+
+### Explicitly excluded, and why
+
+- **E-HARNESS as specified (Bash-only, no `apply_patch`)** — tests the flank that cannot hurt us
+  and predicts native gets *worse*; unbankable because no shipped harness looks like that (§3).
+- **A true zero-licence rung** (no scripted-edit permission at all) — E-AFFORD's runner is right:
+  the licensed cells already decline, so the unlicensed one is arithmetic.
+- **N = 5** — dropped permanently at 00:57Z; the two strategies are indistinguishable at ~2,000
+  chars.
+- **Any further routing / free-choice-exposure cohort** — adoption 0/19 on record; route without
+  asking, or ride the gate.
+- **E-EXTRACT** — still the best *correctness*-at-risk candidate and the only place native's
+  accuracy has never been stressed, but it costs ~1.5 agent-hours of canonical freezing and
+  E-CALLER buys more per arm. **File it as #4**, not dropped.
+- **The first-call schema/description build** — a chore with a 4-arm acceptance witness after the
+  build. On the claimable meter it buys ~0. Never reported as a cohort win.
+- **One free non-cohort item worth an hour:** score **chars/s against load across all 25 existing
+  arms**. Zero arm-runs, zero JVMs, and it is what converts every character claim into a time
+  claim (§1). If chars/s proves load-sensitive, the conversion in §1 must be struck from the
+  report — which is exactly why it should be checked before anyone makes it.
+
+---
+
+## 6. One sentence for Gene
+
+Eight pre-registered cohorts tonight left **one** square standing and killed three: on the same
+21-file rename, the verb commits in **549–1,214 characters** where the plain agent types
+**1,869–10,090** — **7.2× and 5.7×** at the cell means, **1.5×** at the worst single pairing —
+both byte-identical against the same frozen canonical, both 6/6, and the plain agent never once
+let a stream editor touch a file in 14 write arms even when the prompt handed it `sed` and `perl`
+by name; **the read side, the proof-before-write side, and the single-edit side are all withdrawn
+because the plain agent did them as well or better** (54/54 structural probes in three calls, 3/3
+planted blockers found with one `rg` and one sentence, zero characters written). **The one thing
+that would change this sentence is a second caller** — every number in it is one model writing one
+patch format, and a caller whose write verb needs no literal context could take the 7.2× down to
+2×, which is why six of the next eleven arm-runs are pointed at exactly that.
+
+---
+
+*Written read-only; no code run, nothing edited, no Surgeon MCP tool called. Predictions above are
+on record before E-CEILING80's table lands.*
+
+**Coordinator note (01:27Z):** the floor correction is adopted — the worst arm-to-arm pairing is 1,869 ÷ 1,214 = **1.54×**, not 1.9× (which was min-native ÷ mean-T); every report from here quotes 1.54×. E-GATE-R (zero arm-runs: replay `admit_clojure_patch` over the 14 frozen native patches with the kondo and focused-suite predicates) launched immediately, together with the free chars/s-vs-load regression over the 25 existing arms. Sol's half pending before the ranking verdict.
