@@ -113,6 +113,33 @@
   [patch]
   (when (string? patch) (structural-lens/source-hash patch)))
 
+;; @spec MCP-OP-ADMIT-140
+(def ^:private caller-field-spelling-characters
+  "How much of a caller-supplied value a refusal may quote back.
+
+  Enough for the caller to recognise the value that was refused; never enough
+  for the value to be the reason the receipt does not fit."
+  120)
+
+;; @spec MCP-OP-ADMIT-140
+(defn- bounded-caller-spelling
+  "One caller-supplied value as a quoted, BOUNDED spelling with the cut stated.
+
+  A refusal that names the field a caller got wrong has to show enough of the
+  value to be recognisable. A refusal that echoes the value VERBATIM lets the
+  caller choose the size of clj-surgeon's receipt: a 60,000-character `mode`
+  published a 61,214-byte receipt whose own sentence called 32,640 the budget
+  (MCP-OP-ADMIT-140)."
+  [value]
+  (let [text (if (string? value) value (pr-str value))
+        n (count text)]
+    (if (<= n caller-field-spelling-characters)
+      (str "\"" text "\"")
+      (str "\"" (subs text 0 caller-field-spelling-characters)
+           "\" […" (- n caller-field-spelling-characters)
+           " more character(s), cut here so a caller's value cannot be the"
+           " size of this receipt]"))))
+
 ;; @spec MCP-OP-ADMIT-069
 (defn- next-call
   "One executable follow-up that never carries the patch back.
@@ -121,8 +148,19 @@
   input that caused it, and the caller already holds the text. The digest
   binds the follow-up to the same patch without restating it."
   [{:keys [workspace-root patch verify expect-pre]} mode blocked-by]
+  ;; @spec MCP-OP-ADMIT-140
+  ;; A follow-up call is a call the caller SHOULD send, so it never echoes a
+  ;; caller's out-of-enum `mode` or `verify` back: those two are the fields
+  ;; whose legal values this gate declares, and a next_call proposing the
+  ;; unusable value that just refused is neither sendable nor an affordance.
   (cond-> {:tool "admit_clojure_patch"
-           :arguments (cond-> {:mode mode :verify (or verify "focused")}
+           :arguments (cond-> {:mode (if (contains? #{"preview" "commit"} mode)
+                                       mode
+                                       "preview")
+                               :verify (if (contains? #{"focused" "none"}
+                                                      verify)
+                                         verify
+                                         "focused")}
                         workspace-root (assoc :workspace_root workspace-root)
                         (seq expect-pre) (assoc :expect_pre_sha256 expect-pre))
            :patch_field "patch"
@@ -180,6 +218,131 @@
    :verification_complete false
    :source-unchanged true
    :next_call nil})
+
+;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-138
+;; One member of this set -- `:transaction-recovery-required` -- is proved by
+;; `make admit-transaction-recovery-battery` rather than by the fast suite,
+;; because the only fixture that can produce it is a widened race and a timing
+;; bound is a battery target. The exemption is declared in
+;; `clj-surgeon.admit-patch-test/battery-only-refusal-kinds` with the target
+;; that proves it.
+(def admit-refusal-kinds
+  "THE enumeration of `:error-type` values the admit gate may publish.
+
+  Round three DERIVED this set by scanning five source files for literal
+  shapes. That derivation was already wrong -- it missed
+  `:workspace-lock-unavailable`, which the suite drives live -- and it was
+  wrong in a way no witness could see, because a kind built dynamically
+  (`(keyword (str ...))`, or forwarded out of another namespace's `ex-data`
+  at line 1901 below) has no literal to scan for. A reviewer planted exactly
+  such a kind and every enumeration witness stayed green.
+
+  So the enumeration is no longer derived from TEXT. It is declared here,
+  enforced by `checked-refusal-kind!` at the choke point every published
+  receipt passes through, and proved complete by EXECUTION: the suite records
+  every kind the entrance actually publishes and asserts set equality with
+  this def in both directions. A kind that reaches the surface without a
+  member here throws. A member here that nothing drives is a claim about the
+  gate that no fixture supports, and fails the same witness. The source scan
+  survives only as a complement, checking that no kind constructed in the
+  files the gate calls is missing from this set or from the justified
+  not-reachable list beside it."
+  #{:admit-tool-error
+    :admit-tool-failure
+    :analyzer-memory-exhausted
+    :binary-patch-unsupported
+    :duplicate-definition
+    :duplicate-patch-target
+    :hunk-truncated
+    :invalid-admit-request
+    :invalid-patch
+    :invalid-relative-source-path
+    ;; @spec MCP-OP-ADMIT-133
+    ;; `:invalid-source-path` was a member here until round fifteen's merge
+    ;; with the census landing. It is constructed at `mcp-paths` :283, in the
+    ;; `:else` arm of `resolve-source-path`'s catch -- "not the filesystem
+    ;; answering" -- and the one fixture that used to drive it, a source path
+    ;; under a REGULAR FILE, now publishes `:source-file-not-found`: the catch
+    ;; asks the whole `FileSystemException` hierarchy and ENOTDIR is a member
+    ;; of it. Every remaining shape that makes `.toRealPath` throw was driven
+    ;; (`no-filesystem-shape-reaches-invalid-source-path`) and each is claimed
+    ;; by a TYPED arm above the `:else`; the only class that could reach it,
+    ;; `InvalidPathException` for a NUL, is rejected lexically by
+    ;; `relative-source-path?` before any I/O. A member here that nothing
+    ;; drives is a claim about the gate no fixture supports -- this
+    ;; docstring's own rule -- so the kind moved to the justified
+    ;; not-reachable list in `clj-surgeon.admit-patch-test`, where the source
+    ;; scan still watches it.
+    :invalid-workspace-root
+    :namespace-form-removed
+    :next-call-exceeds-public-budget
+    :no-op-patch
+    :overlapping-hunks
+    :patch-does-not-apply
+    :patch-too-large
+    :path-outside-project
+    ;; @spec MCP-OP-ADMIT-148
+    :request-decode-constraint-exceeded
+    :require-removed
+    :server-not-initialized
+    :source-file-not-found
+    :source-hash-mismatch
+    ;; @spec MCP-OP-ADMIT-133
+    ;; Added by round fifteen's merge with the census landing, which
+    ;; introduced it at `mcp-paths` :220 (the file's own bits deny read) and
+    ;; :262 (a directory above it does). Enumerated because it is DRIVEN --
+    ;; `an-unreadable-source-refuses-as-source-not-readable` drives both
+    ;; sites through the real entrance with `chmod 000` -- and not merely
+    ;; because the trunk constructs it.
+    :source-not-readable
+    :source-not-regular-file
+    :target-already-exists
+    :target-parent-not-directory
+    :transaction-recovery-required
+    :transaction-write-failed
+    :unreadable-post-image
+    :unsupported-patch-target
+    :verification-failed
+    :verification-incomplete
+    :workspace-lock-unavailable})
+
+;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-137
+(defn checked-refusal-kind!
+  "Return `receipt` unchanged, or throw if it refuses under an unenumerated
+  kind.
+
+  A plain `IllegalArgumentException`, deliberately. An `ex-info` carrying an
+  `:error-type` is exactly the shape this namespace's own catch clauses know
+  how to turn back into a receipt, so the violation would launder itself into
+  the surface the guard exists to protect.
+
+  Called from `bound-receipt` and from the MCP handler's edge, and NOT from
+  the inner `refusal` helper. `refusal` runs inside the gate's own
+  `(catch Exception ...)`, which would swallow this throw and relabel it
+  `:admit-tool-failure` -- an enumerated kind. A guard whose violation is
+  caught and renamed to something legal is not a guard, so the enforcement
+  point is the one that sits outside every catch on the path.
+
+  The predicate is `(not (true? ...))` and not `(false? ...)` because the
+  RENDERER's predicate is truthiness: `summary` shows anything falsey as a
+  refusal. A guard testing `false?` therefore let `:ok nil` reach the caller
+  as a refusal under a kind nothing enumerated, and `refusal` merges its
+  caller's `data` map last, so that override is one keyword away
+  (MCP-OP-ADMIT-137). The two faces of a receipt must not disagree about
+  which one it is."
+  [receipt]
+  (when (and (map? receipt)
+             (not (true? (:ok receipt)))
+             (not (contains? admit-refusal-kinds (:error-type receipt))))
+    (throw (IllegalArgumentException.
+             (str "admit gate refusal kind is not enumerated: "
+                  (pr-str (:error-type receipt))
+                  " -- add it to clj-surgeon.mcp-admit-tool/admit-refusal-kinds"
+                  " with a fixture that drives it through the entrance, or"
+                  " stop constructing it"))))
+  receipt)
 
 ;; @spec MCP-OP-ADMIT-055
 (defn- refusal
@@ -1445,22 +1608,39 @@
 (defn- execute-in-context!
   [config {:keys [patch mode verify expect_pre_sha256 allow_partial]}
    workspace-root]
-  (let [mode (or mode "preview")
-        verify (or verify "focused")
+  (let [requested-mode (or mode "preview")
+        requested-verify (or verify "focused")
+        ;; @spec MCP-OP-ADMIT-140
+        ;; The caller's strings are NORMALISED before either can reach a
+        ;; receipt. `context` is what `refusal` merges into
+        ;; `(empty-receipt (:mode context))`, so an unvalidated mode here is
+        ;; a caller writing an identity key of every refusal below.
+        mode (if (contains? #{"preview" "commit"} requested-mode)
+               requested-mode
+               "preview")
+        verify (if (contains? #{"focused" "none"} requested-verify)
+                 requested-verify
+                 "focused")
         context {:mode mode :workspace-root workspace-root
                  :patch patch :verify verify}]
     (cond
+      ;; @spec MCP-OP-ADMIT-140
+      ;; FIRST, before the patch is even looked at: a mode outside the enum is
+      ;; a typed refusal naming the field, quoting the value cut to a bounded
+      ;; spelling, and carrying the DEFAULT mode in the receipt it publishes.
+      (not (contains? #{"preview" "commit"} requested-mode))
+      (refusal context :invalid-admit-request
+               (str "mode must be preview or commit; this call sent "
+                    (bounded-caller-spelling requested-mode)))
+
+      (not (contains? #{"focused" "none"} requested-verify))
+      (refusal context :invalid-admit-request
+               (str "verify must be focused or none; this call sent "
+                    (bounded-caller-spelling requested-verify)))
+
       (not (and (string? patch) (not (str/blank? patch))))
       (refusal context :invalid-patch
                "patch must be non-blank unified diff text")
-
-      (not (contains? #{"preview" "commit"} mode))
-      (refusal context :invalid-admit-request
-               "mode must be preview or commit")
-
-      (not (contains? #{"focused" "none"} verify))
-      (refusal context :invalid-admit-request
-               "verify must be focused or none")
 
       (not (or (nil? expect_pre_sha256) (map? expect_pre_sha256)))
       (refusal context :invalid-admit-request
@@ -1816,13 +1996,458 @@
         (telemetry/emit! state :tool.call event))))
   receipt)
 
-;; @spec MCP-OP-ADMIT-069
-(defn- bound-receipt
-  "Fit one public receipt inside the shared MCP payload budget."
+;; @spec MCP-OP-ADMIT-136
+;; `summary-characters` renders the text face; it lives with the renderer,
+;; below, and is declared here because the bound is applied at the one point
+;; every receipt passes.
+(declare summary-characters)
+
+;; @spec MCP-OP-ADMIT-136
+;; @spec MCP-OP-ADMIT-139
+(defn- public-faces-fit?
+  "Both faces of one candidate receipt inside the ONE budget.
+
+  The structured face is measured as the JSON the caller receives -- envelope
+  included, which is the 271 bytes round four charged to nobody -- and the
+  text face as the block that spells every one of its leaves. A candidate
+  fits only when both do."
+  [candidate]
+  (and (<= (write-refusal/json-bytes candidate)
+           write-refusal/public-byte-budget)
+       (<= (summary-characters candidate)
+           write-refusal/public-byte-budget)))
+
+;; @spec MCP-OP-ADMIT-143
+(defn- binding-face
+  "Which of a receipt's two faces was over the one budget.
+
+  `structured`, `text` or `both`. A reader who sees `payload_omitted` asks
+  exactly one question -- how much am I not being shown -- and the byte
+  figure beside it answers a different one when the text face is what forced
+  the trim."
   [receipt]
-  (-> receipt
-      (write-refusal/bound-public-refusal pr-str)
-      (write-refusal/bound-public-payload trimmable-receipt-keys)))
+  (let [json-over? (> (write-refusal/json-bytes receipt)
+                      write-refusal/public-byte-budget)
+        text-over? (> (summary-characters receipt)
+                      write-refusal/public-byte-budget)]
+    (cond
+      (and json-over? text-over?) "both"
+      text-over? "text"
+      json-over? "structured"
+      :else "neither")))
+
+;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-139
+(defn- oversize-next-call-refusal
+  "A next_call the public budget cannot carry is a typed refusal naming its
+  size -- never a pointer, and never a silently truncated call.
+
+  There is no honest degraded rendering of a next_call: it is the one field a
+  caller must be able to send back byte for byte, so a shortened one is not a
+  smaller version of the affordance, it is the absence of it wearing its name.
+  If it will not fit, the receipt says so, states the exact character count
+  and the budget it exceeded, and refuses -- so a caller knows the call
+  existed, knows why it cannot have it, and knows the number that would
+  change the answer.
+
+  Round three's answer, a pointer at structuredContent, is the same failure
+  one level down: the reader this text block exists for is the one who cannot
+  read structuredContent.
+
+  The decision is made on the RECEIPT that would carry the call, envelope
+  included, and after the payload has been trimmed -- not on the call's
+  characters alone. Round four compared the call's length to the budget, so a
+  next_call of exactly 32,640 characters was published inside a receipt of
+  32,911 bytes: 271 bytes of keys, quotes and braces charged to nobody, over
+  the very number the refusal text calls a budget (MCP-OP-ADMIT-139). And it
+  fires only when the next_call is the REASON the receipt cannot fit: a
+  receipt too large for other reasons states its elision and publishes, as it
+  always has."
+  [receipt]
+  (when-let [call (:next_call receipt)]
+    (let [characters (count (json/generate-string call))]
+      (when (not (public-faces-fit? receipt))
+        (let [receipt-bytes (write-refusal/json-bytes receipt)
+              sentence (str "this receipt's next_call is " characters
+                            " characters and the receipt that would carry it"
+                            " is " receipt-bytes " bytes; the public payload"
+                            " budget is " write-refusal/public-byte-budget
+                            " bytes, envelope included, so this call cannot be"
+                            " published verbatim, and a next_call a caller"
+                            " cannot send back byte for byte is not a"
+                            " next_call")
+              measurements {:next_call_characters characters
+                            :receipt_bytes receipt-bytes
+                            :public_byte_budget write-refusal/public-byte-budget
+                            :blocked_next_call_for (:error-type receipt)}]
+          (if (true? (:ok receipt))
+            ;; A receipt that was not otherwise a refusal BECOMES one, under
+            ;; the oversize kind, carrying its own safety claims forward.
+            (merge (empty-receipt (or (:mode receipt) "preview"))
+                   measurements
+                   {:ok false
+                    :operation :admit-patch-refused
+                    :error-type :next-call-exceeds-public-budget
+                    :error sentence
+                    :source-unchanged (:source-unchanged receipt)
+                    :mutation_attempted (:mutation_attempted receipt)
+                    :remedy (str "narrow the request so its follow-up call and"
+                                 " the receipt carrying it fit "
+                                 write-refusal/public-byte-budget
+                                 " bytes; fewer files in one patch is the"
+                                 " lever, because expect_pre_sha256 carries one"
+                                 " digest per file")})
+            ;; @spec MCP-OP-ADMIT-142
+            ;; A receipt that ALREADY refuses keeps its kind, its remedy and
+            ;; its safety claims; the next_call is the only thing that goes.
+            ;; Round five measured this arm turning a
+            ;; `transaction-recovery-required` refusal -- a third party changed
+            ;; the caller's files and the gate could not put them back -- into
+            ;; a size complaint whose `mutation_attempted` read `false` and
+            ;; whose remedy was `fewer files in one patch is the lever`. That
+            ;; is the exact swallowing MCP-OP-ADMIT-139's reduction arm was
+            ;; fixed for, one field over, on the arm that fires.
+            (merge receipt
+                   measurements
+                   {:next_call nil
+                    :next_call_omitted true
+                    :next_call_omission sentence})))))))
+
+;; @spec MCP-OP-ADMIT-139
+(def ^:private receipt-identity-keys
+  "The keys a receipt is not allowed to lose, whatever its size.
+
+  A receipt that will not fit is REDUCED, never replaced. The first draft of
+  this bound replaced an oversize receipt with a typed size complaint, and the
+  battery caught what that costs: a 64-file rolled-back transaction, whose
+  `transaction-recovery-required` means A THIRD PARTY CHANGED YOUR FILES AND
+  THE GATE COULD NOT PUT THEM BACK, came back to the caller as
+  `receipt-exceeds-public-budget` with a remedy of `use fewer files`. The most
+  safety-critical receipt this gate produces was swallowed by a size rule.
+  What may be dropped is bulk; what may never be dropped is the receipt's
+  answer to what happened, whether the workspace changed, and what to do."
+  [:ok :operation :mode :error-type :error :remedy :source-unchanged
+   :mutation_attempted :pre_image_binding :lock_scope :verification_complete
+   :verification_status :elapsed_ms :next_call])
+
+;; @spec MCP-OP-ADMIT-140
+(def ^:private identity-value-byte-bound
+  "The most JSON one receipt-identity value may spend.
+
+  Twelve bounded identity values cannot add to the public budget, which is
+  the property that makes `no identity key can be the reason a receipt is
+  oversize` true by construction rather than by inspection."
+  1024)
+
+;; @spec MCP-OP-ADMIT-140
+(defn- bound-identity-values
+  "Bound every identity value except the ones that have their own answer.
+
+  `reduce-receipt-to-budget` may never DROP an identity key and `cut`
+  shortens only the two sentences, so an identity value carrying bulk was
+  reachable by no arm of the bound at all: a caller's 60,000-character `mode`
+  published a 61,214-byte receipt, 28,574 over, with no annotation of any kind
+  and a 389-character `next_call` blamed for it.
+
+  `:error` and `:remedy` are exempt because `cut` is their answer and it
+  states its cut; `:next_call` is exempt because a shortened next_call is not
+  a smaller affordance but the absence of one wearing its name, and
+  `oversize-next-call-refusal` is its answer; `:error-type` is exempt because
+  `checked-refusal-kind!` already bounds it to an enumerated keyword. Every
+  value this DOES bound is named in `receipt_identity_bounded`, so a reader is
+  never told a value verbatim that was not."
+  [receipt]
+  (if-not (map? receipt)
+    receipt
+    ;; NOTE the order: the error-type keyword is written LAST because the
+    ;; enumeration tripwire scans this file for a literal error-type key
+    ;; followed by a keyword, and a set literal that happened to put one
+    ;; after it would read as a refusal kind constructed here.
+    ;; @spec MCP-OP-ADMIT-149
+    ;; The error-type exemption holds only where its own REASON holds.
+    ;; `checked-refusal-kind!` bounds the kind to an enumerated keyword, but
+    ;; it fires only on `(not (true? (:ok …)))`, so on an `:ok true` receipt
+    ;; the justification is false and the value went out unbounded: 60,443
+    ;; bytes through this function, echoed verbatim, nothing named as bounded.
+    ;; The gate does not build such a receipt today; a bound that holds by
+    ;; construction rather than by its own rule is one refactor from not
+    ;; holding.
+    (let [exempt (cond-> #{:ok :error :remedy :next_call}
+                   (not (true? (:ok receipt))) (conj :error-type))
+          candidates (remove exempt receipt-identity-keys)]
+      (reduce
+        (fn [current key]
+          (if-not (contains? current key)
+            current
+            (let [value (get current key)
+                  text (if (string? value) value (pr-str value))]
+              (if (<= (write-refusal/json-bytes {key value})
+                      identity-value-byte-bound)
+                current
+                (-> current
+                    (assoc key
+                           (str (subs text 0 (min (count text)
+                                                  caller-field-spelling-characters))
+                                "…[cut to " caller-field-spelling-characters
+                                " characters; this value was "
+                                (count text)
+                                " and an identity key may not be the size of"
+                                " a receipt]"))
+                    (update :receipt_identity_bounded
+                            (fnil conj []) (name key)))))))
+        receipt
+        candidates))))
+
+;; @spec MCP-OP-ADMIT-139
+(def ^:private receipt-reduction-keys
+  [:receipt_reduced :receipt_omitted_fields :receipt_bytes_before
+   :receipt_text_characters_before :public_byte_budget :error_truncated
+   ;; @spec MCP-OP-ADMIT-140
+   ;; a receipt that dropped the note saying a value was cut would be telling
+   ;; the reader a bounded value verbatim
+   :receipt_identity_bounded
+   ;; @spec MCP-OP-ADMIT-141
+   ;; and neither is the payload's own truncation notice bulk: reduction was
+   ;; measured dropping all four of these to make room, which is a receipt
+   ;; jettisoning the only annotation that makes its cut honest
+   :payload_truncated :payload_truncation :payload_omitted
+   :payload_omitted_bytes :payload_binding_face
+   ;; the terminal answer itself
+   :receipt_over_budget :receipt_residual_bytes
+   :receipt_residual_text_characters :receipt_unreducible_fields])
+
+;; @spec MCP-OP-ADMIT-139
+(defn- reduce-receipt-to-budget
+  "Shrink one receipt until BOTH its faces fit the one public budget, keeping
+  its identity and its safety claims.
+
+  Round four bounded only the trimmable VECTORS and only as JSON. A sixty-file
+  preview under 200-character directory names published a 125,104-byte receipt
+  with `:ok true` and a 185,060-character text -- four times the budget, with
+  no annotation at all -- because `hashes` is a MAP with one entry per path and
+  nothing shortened it.
+
+  Bulk fields go first, largest first, each one named in
+  `receipt_omitted_fields`; the identity keys stay. If even those will not fit,
+  the `error` and `remedy` sentences are cut with the cut stated rather than
+  the receipt being lost. What this function never does is change the receipt's
+  `error-type`: a caller must not learn that its patch was too wordy when what
+  actually happened is that its workspace needs manual recovery."
+  [receipt]
+  (if (public-faces-fit? receipt)
+    receipt
+    (let [bytes-before (write-refusal/json-bytes receipt)
+          characters-before (summary-characters receipt)
+          annotate (fn [candidate omitted]
+                     (cond-> (assoc candidate
+                                    :receipt_reduced true
+                                    :receipt_omitted_fields omitted
+                                    :receipt_bytes_before bytes-before
+                                    :receipt_text_characters_before
+                                    characters-before
+                                    :public_byte_budget
+                                    write-refusal/public-byte-budget)
+                       (:error_truncated candidate) identity))
+          cut (fn [candidate omitted]
+                ;; last resort: the sentences, with the cut stated
+                (let [shrink (fn [c k]
+                               (if-let [text (get c k)]
+                                 (assoc c k
+                                        (str (subs (str text) 0
+                                                   (min 200 (count (str text))))
+                                             "…[cut to fit the public payload"
+                                             " budget; full text in the"
+                                             " server log]"))
+                                 c))]
+                  (assoc (-> candidate (shrink :error) (shrink :remedy))
+                         :error_truncated true)))]
+      (loop [current (annotate receipt [])
+             omitted []]
+        (if (public-faces-fit? current)
+          current
+          (let [droppable (->> (apply dissoc current
+                                      (concat receipt-identity-keys
+                                              receipt-reduction-keys))
+                               (map (fn [[k v]]
+                                      [k (write-refusal/json-bytes {k v})]))
+                               (sort-by second >))]
+            (if-let [[key _] (first droppable)]
+              (let [omitted (conj omitted (name key))]
+                (recur (annotate (dissoc current key) omitted) omitted))
+              ;; nothing left but identity: cut the sentences once, then stop.
+              ;; If a next_call is what still will not fit, the oversize
+              ;; next_call refusal below is the honest answer.
+              ;; @spec MCP-OP-ADMIT-144
+              ;; -- and it is the answer BEFORE the cut, not after it. Round
+              ;; six cut both sentences here to make room for a next_call
+              ;; `oversize-next-call-refusal` was about to drop anyway, so a
+              ;; 52-character error sentence and a 49-character
+              ;; manual-recovery remedy reached the caller whole and labelled
+              ;; `error_truncated`, pointing an MCP client at a server log it
+              ;; cannot read. A sentence is cut only when cutting it is what
+              ;; the budget actually needs.
+              (if (and (:next_call current)
+                       (public-faces-fit? (dissoc current :next_call)))
+                current
+                (let [final (annotate (cut current omitted) omitted)]
+                  (if (public-faces-fit? final)
+                    final
+                    ;; @spec MCP-OP-ADMIT-141
+                    ;; Nothing droppable remains and the sentences are already
+                    ;; cut. Round five's tail here was `(if (or ...) final
+                    ;; final)` -- both arms identical, the predicate computed
+                    ;; and thrown away -- so a 60,563-byte receipt was published
+                    ;; carrying `receipt_reduced true`, which a reader can only
+                    ;; read as `the reduction succeeded`. A budget this receipt
+                    ;; could not be brought inside is a FACT about it, and it is
+                    ;; stated in a typed way on both faces rather than left
+                    ;; wearing the shape of success.
+                    (let [residual (write-refusal/json-bytes final)
+                          residual-text (summary-characters final)]
+                      (assoc final
+                             :receipt_over_budget true
+                             :receipt_residual_bytes residual
+                             :receipt_residual_text_characters residual-text
+                             :receipt_unreducible_fields
+                             (->> receipt-identity-keys
+                                  (filter #(contains? final %))
+                                  (map (fn [k]
+                                         [(name k)
+                                          (write-refusal/json-bytes
+                                            {k (get final k)})]))
+                                  (sort-by second >)
+                                  (mapv first))))))))))))))
+
+(def ^:private sentence-cut-marker
+  "The words `reduce-receipt-to-budget`'s `cut` appends to a sentence."
+  "[cut to fit the public payload")
+
+;; @spec MCP-OP-ADMIT-141
+;; @spec MCP-OP-ADMIT-144
+(defn- redescribe-published-receipt
+  "Re-derive one receipt's account of ITSELF from the bytes it will publish.
+
+  The terminal over-budget annotations and `error_truncated` are claims
+  about a candidate, and the candidate is not always what is published: when
+  a receipt is over budget because of its `next_call`, dropping the call is
+  what makes it fit, and every annotation reduction stamped on the way there
+  describes a receipt that no longer exists. Round six carried all of them
+  forward unexamined and published a 1,670-byte receipt claiming a 30,179-byte
+  residual, with `receipt_unreducible_fields` naming a `next_call` it had in
+  fact dropped, and a 49-character manual-recovery remedy -- the one
+  instruction a human needs after a failed rollback -- labelled as cut to fit
+  a budget it is 0.15% of.
+
+  A receipt that fits does not say it is over budget. A sentence that reaches
+  the caller whole is not labelled as truncated. Both are read off the
+  published value, not remembered."
+  [receipt]
+  (if-not (map? receipt)
+    receipt
+    (cond-> receipt
+      (public-faces-fit? receipt)
+      (dissoc :receipt_over_budget :receipt_residual_bytes
+              :receipt_residual_text_characters :receipt_unreducible_fields)
+
+      (not-any? #(str/includes? (str (get receipt %)) sentence-cut-marker)
+                [:error :remedy])
+      (dissoc :error_truncated))))
+
+;; @spec MCP-OP-ADMIT-069
+;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-136
+;; @spec MCP-OP-ADMIT-139
+(defn- bound-receipt
+  "Fit one public receipt inside the shared MCP payload budget, refusing
+  outright when its next_call alone cannot fit, and refusing to publish a
+  refusal whose kind is not enumerated.
+
+  This is the one place every receipt `execute-request!` returns passes
+  through, and it sits OUTSIDE every `catch` on that path -- so a kind built
+  dynamically, or forwarded out of another namespace's ex-data, cannot be
+  laundered into the public surface by the enumeration never having heard of
+  it.   The oversize check runs LAST, on the receipt that would actually be
+  published, so that the envelope and the trimming are both counted before it
+  decides (MCP-OP-ADMIT-139); the guard then runs over its refusal too.
+
+  The payload bound is ONE pass against ONE budget with TWO faces: a
+  candidate fits only when its JSON fits `public-byte-budget` AND the text
+  block that spells every one of its leaves fits the same number. When both
+  cannot fit, the STRUCTURE is what gives ground -- it is the face that can
+  say `payload_omitted` and be believed -- so the text stays a superset of
+  whatever survives (MCP-OP-ADMIT-136). Two passes with two predicates would
+  reset the cumulative omission record; a second budget would be a second
+  budget."
+  [receipt]
+  (let [checked (bound-identity-values (checked-refusal-kind! receipt))
+        pre-payload (write-refusal/bound-public-refusal checked pr-str)
+        ;; @spec MCP-OP-ADMIT-136
+        trimmed (write-refusal/bound-public-payload
+                  pre-payload trimmable-receipt-keys public-faces-fit?)
+        ;; @spec MCP-OP-ADMIT-143
+        ;; `payload_omitted_bytes` counts JSON, while the loop's exit test is
+        ;; `public-faces-fit?` -- which for this gate can be the TEXT face. A
+        ;; payload trimmed because its text face did not fit reported a byte
+        ;; figure that was never the binding constraint, so the record names
+        ;; which face forced it.
+        faced (if (:payload_truncated trimmed)
+                (assoc trimmed :payload_binding_face
+                       (binding-face pre-payload))
+                trimmed)
+        ;; @spec MCP-OP-ADMIT-139
+        ;; @spec MCP-OP-ADMIT-144
+        ;; @spec MCP-OP-ADMIT-151
+        ;; The CHEAP CORRECT MOVE FIRST. When the receipt is over budget only
+        ;; because of its `next_call`, reduction cannot reach the budget --
+        ;; `next_call` is an identity key, `bound-identity-values` exempts it,
+        ;; and `cut` shortens only the two sentences -- so the ladder walks
+        ;; all the way down, drops every droppable field, cuts both sentences
+        ;; and stamps the terminal over-budget annotations, to make room for a
+        ;; call that `oversize-next-call-refusal` is about to drop anyway.
+        ;; Round six published the result: a 1,670-byte receipt, 5% of the
+        ;; budget, saying `receipt_over_budget true` with a residual of 30,179
+        ;; bytes, its 52-character error sentence marked as cut. Testing the
+        ;; receipt WITHOUT its next_call first takes the move that actually
+        ;; fits, and costs the caller nothing else.
+        ;;
+        ;; @spec MCP-OP-ADMIT-151
+        ;; The ORDER is the behaviour, and it is observable in exactly one
+        ;; place: what else the receipt lost. Round seven's reviewer replaced
+        ;; this whole branch with `(reduce-receipt-to-budget faced)` and the
+        ;; focused suite stayed green at 164/4220/0 while the sabotaged
+        ;; receipt dropped `hashes` and the honest `payload_trim_unavailable`
+        ;; notice -- every assertion was about the published value's
+        ;; self-description, and a receipt that pays for a call it is about
+        ;; to drop describes itself perfectly honestly. The witness therefore
+        ;; asserts that every key other than the call survives VERBATIM.
+        bounded (if (and (:next_call faced)
+                         (not (public-faces-fit? faced))
+                         (public-faces-fit? (dissoc faced :next_call)))
+                  faced
+                  (reduce-receipt-to-budget faced))]
+    ;; @spec MCP-OP-ADMIT-139
+    ;; The oversize decision is taken AFTER reduction, on the receipt that
+    ;; would actually be published: if something STILL will not fit once every
+    ;; droppable field is gone, the next_call is what is left, and blaming it
+    ;; is then a fact rather than a guess. The guard runs last so the
+    ;; refusal's own kind is checked too.
+    ;; @spec MCP-OP-ADMIT-140
+    ;; The oversize refusal is bounded by the SAME pass as everything else.
+    ;; Round five published it around the bound: it was built by
+    ;; `(merge (empty-receipt (or (:mode receipt) "preview")) ...)`, which
+    ;; re-echoed the caller's 60,000-character mode into the receipt that is
+    ;; supposed to be the answer to `this did not fit`.
+    (checked-refusal-kind!
+      (if-let [replacement (oversize-next-call-refusal bounded)]
+        ;; @spec MCP-OP-ADMIT-144
+        ;; RE-DERIVE, never inherit. Dropping the next_call is what makes the
+        ;; receipt fit, and it fits with room to spare -- so every claim
+        ;; reduction made about a candidate that no longer exists has to be
+        ;; re-tested against the bytes actually published.
+        (redescribe-published-receipt
+          (reduce-receipt-to-budget (bound-identity-values replacement)))
+        bounded))))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry point
@@ -1866,13 +2491,41 @@
               {:ok true
                :params (json/parse-string (json/generate-string params) true)}
               (catch Exception error
-                {:ok false
-                 :error-type (if (str/includes? (.getName (class error))
-                                                "StreamConstraints")
-                               :patch-too-large
-                               :invalid-admit-request)
-                 :error (str "request could not be decoded: "
-                             (.getMessage error))}))]
+                ;; @spec MCP-OP-ADMIT-148
+                ;; A DECODER limit is not the patch being too large. The
+                ;; patch's own byte size was already checked above, so the
+                ;; only decoder constraint a patch's bytes can trip here is
+                ;; the string-value length; a name length, a nesting depth or
+                ;; a number length is a fact about the request's STRUCTURE.
+                ;; Round six measured a 230-byte patch published as
+                ;; `:patch-too-large` because a 60,000-character KEY NAME
+                ;; exceeded `StreamReadConstraints.getMaxNameLength()`, with
+                ;; `next_call.blocked_by` saying the same and no remedy at
+                ;; all -- so an agent that branches on the field splits a
+                ;; patch that was never too large, and splits again.
+                (let [message (str (.getMessage error))
+                      constraint? (str/includes? (.getName (class error))
+                                                 "StreamConstraints")
+                      patch-sized? (str/includes? message
+                                                  "getMaxStringLength")]
+                  (cond-> {:ok false
+                           :error-type (cond
+                                         (and constraint? patch-sized?)
+                                         :patch-too-large
+                                         constraint?
+                                         :request-decode-constraint-exceeded
+                                         :else :invalid-admit-request)
+                           :error (str "request could not be decoded: "
+                                       message)}
+                    (and constraint? (not patch-sized?))
+                    (assoc :remedy
+                           (str "this is a JSON decoder limit on the"
+                                " request's own structure, not the patch's"
+                                " size: the patch is " bytes " UTF-8 bytes,"
+                                " inside the " max-patch-bytes "-byte"
+                                " admission limit. Shorten the request field"
+                                " the decoder names above -- splitting the"
+                                " patch will not change this answer"))))))]
         (if-not (:ok normalized)
           (bound-receipt
             (merge (empty-receipt "preview")
@@ -1880,6 +2533,8 @@
                     :operation :admit-patch-refused
                     :error-type (:error-type normalized)
                     :error (:error normalized)
+                    ;; @spec MCP-OP-ADMIT-148
+                    :remedy (:remedy normalized)
                     :next_call {:tool "admit_clojure_patch"
                                 :patch_field "patch"
                                 :blocked_by (:error-type normalized)}}))
@@ -1941,7 +2596,255 @@
            " it is not a clean bill of health")
       "")))
 
-(defn- summary
+;; ---------------------------------------------------------------------------
+;; The text block is a superset of structuredContent -- on BOTH branches
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-134
+(def admit-receipt-fact-exclusions
+  "The receipt keys the fact walk below does NOT render. It is EMPTY, and
+  that is the point.
+
+  Round three excluded eleven keys and, separately, three SHAPES -- an empty
+  map, an empty vector, a `nil` -- and its witness re-declared the same
+  eleven keys on its own side before checking that they were absent. A test
+  that copies the policy it is auditing agrees with the implementation by
+  construction; the reviewer's word for it was `tautological`, and it was
+  right. Two of those eleven, `:files` and `:hashes`, were excluded on the
+  reasoning that they are `diff metadata the caller already sent` -- a
+  judgement about VALUE, not about whether the text is a superset, and the
+  caller who reads only the text is exactly the caller who cannot go look
+  them up.
+
+  So there is no exclusion list to get wrong. Every leaf of the receipt
+  renders in the fact walk, including the four the text also renders on
+  their own dedicated lines -- `:error-type` in the header, `:error`,
+  `:remedy`, and the verbatim `:next_call`. Those four are duplicated on
+  purpose: an exclusion set of size zero is a claim a witness can check with
+  no shared policy at all, and cheapness is not worth a hole. If a key ever
+  has to leave the walk, it is added here, with its reason, and the witness
+  fails until the EARS text names it too."
+  #{})
+
+;; @spec MCP-OP-ADMIT-134
+(def max-admit-receipt-fact-characters
+  "Ceiling on ONE rendered leaf's value. Past this the value is cut, never
+  the fact: the text still names the field, the first 200 characters, and
+  exactly how many characters it did not print."
+  200)
+
+;; @spec MCP-OP-ADMIT-136
+(def admit-receipt-fact-head
+  "The receipt keys whose leaves elision never reaches, in render order.
+
+  Round four sorted every fact by path and dropped from the tail, so the
+  four fields a caller most needs -- `source-unchanged`, `mutation_attempted`,
+  `pre_image_binding`, `lock_scope`: did you touch my files, did you try to
+  write, is this bound to the bytes I read, what did you lock -- were the
+  first to go, because their names sort late. A field's position in the
+  alphabet is not a statement about how much it matters.
+
+  So the walk renders these first and never elides them. `error`, `remedy`
+  and `next_call` are here for the same reason they have their own lines:
+  they are the receipt's answer to `what now`."
+  [:ok :operation :source-unchanged :mutation_attempted :pre_image_binding
+   :lock_scope :error :remedy :next_call
+   ;; @spec MCP-OP-ADMIT-141
+   ;; a receipt reduction could not bring inside the budget says so on the
+   ;; text face too, and elision is exactly what must not reach that
+   :receipt_over_budget :receipt_residual_bytes
+   ;; @spec MCP-OP-ADMIT-142
+   ;; and a receipt that had to drop its follow-up call says that where
+   ;; elision cannot reach either
+   :next_call_omitted :next_call_omission])
+
+;; @spec MCP-OP-ADMIT-136
+(defn- fact-root
+  "The receipt key one leaf path belongs to -- `files[3].path` -> `files`."
+  [path]
+  (let [n (count path)
+        dot (or (str/index-of path ".") n)
+        bracket (or (str/index-of path "[") n)]
+    (subs path 0 (min dot bracket))))
+
+;; @spec MCP-OP-ADMIT-134
+(defn admit-leaf-entries
+  "Every leaf reachable in `v`, as [dotted/bracketed-path display-string]
+  pairs, depth-first.
+
+  A leaf here is what a JSON reader sees as a leaf, which includes the
+  value-less shapes: `{}`, `[]`, `null` and `\"\"` each contribute one
+  entry carrying the characters JSON spells for them. Round three returned
+  nothing for an empty collection or a `nil`, on the reasoning that `an
+  absent field is not a fact` -- but structuredContent still shows the key,
+  so a text that omits it is a strict subset of the structure, which is the
+  defect."
+  [path v]
+  (cond
+    (and (map? v) (seq v))
+    (mapcat (fn [[k cv]]
+              (admit-leaf-entries (str path (when (seq path) ".") (name k)) cv))
+            (sort-by (comp str key) v))
+
+    (map? v)
+    [[path "{}"]]
+
+    (and (coll? v) (seq v))
+    (apply concat
+           (map-indexed
+             (fn [i cv] (admit-leaf-entries (str path "[" i "]") cv))
+             (if (set? v) (sort-by pr-str v) v)))
+
+    (coll? v)
+    [[path "[]"]]
+
+    (nil? v)
+    [[path "null"]]
+
+    (= v "")
+    [[path "\"\""]]
+
+    (keyword? v)
+    ;; the characters cheshire spells for it, namespace included -- `name`
+    ;; would drop the namespace and disagree with structuredContent
+    [[path (subs (str v) 1)]]
+
+    :else
+    [[path (str v)]]))
+
+;; @spec MCP-OP-ADMIT-134
+(defn- rendered-fact
+  "One `path=value` fact, its value cut at the per-leaf ceiling and the cut
+  stated in characters."
+  [[path text]]
+  (str path "="
+       (if (> (count text) max-admit-receipt-fact-characters)
+         (str (subs text 0 max-admit-receipt-fact-characters)
+              "…[+" (- (count text) max-admit-receipt-fact-characters)
+              " characters in structuredContent]")
+         text)))
+
+;; @spec MCP-OP-ADMIT-134
+;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-136
+(defn- admit-receipt-facts
+  "Every leaf of `result` a text-reading client would otherwise never see,
+  rendered inside `budget` characters -- what is actually LEFT of the one
+  public byte budget after the rest of this text block has been counted.
+
+  Round four charged this section a fixed half of `public-byte-budget`. That
+  was a second, invented budget -- the same defect round three blocked on for
+  `next_call`, one field over -- and it bit on an ordinary receipt: a
+  twenty-file preview whose structured face was 14,918 bytes, under half the
+  budget and untruncated, published a text missing 71 of its own leaves. The
+  headroom the half-budget reserved was never contested; the leaves were lost
+  anyway.
+
+  There is one budget and this section is charged the remainder of it, so a
+  receipt whose whole text fits publishes every leaf. When it does not fit,
+  the STRUCTURED face gives ground first -- `bound-receipt` trims the
+  receipt's own bounded collections until the text that spells it fits, so
+  supersetness is preserved by shrinking the structure rather than by
+  quietly shortening the text.
+
+  What is left after that cannot be dropped silently. The order is: (1) each
+  leaf's VALUE is cut at `max-admit-receipt-fact-characters`, naming the cut;
+  (2) `admit-receipt-fact-head` renders first and is never elided; (3) the
+  remaining leaves elide from the tail of the path-sorted order, and the text
+  NAMES the elided paths and states their exact count; (4) if the naming
+  itself will not fit, the names shrink and the count of unnamed paths is
+  stated -- the count is exact at every step; (5) the `next_call` is rendered
+  after this section, verbatim, and is never elided at any size
+  (MCP-OP-ADMIT-135)."
+  [result budget]
+  (let [entries (->> (apply dissoc result admit-receipt-fact-exclusions)
+                     (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
+                     (sort-by first)
+                     vec)
+        order (into {} (map-indexed (fn [i k] [(name k) i]))
+                    admit-receipt-fact-head)
+        head (->> entries
+                  (filter (fn [[path _]] (contains? order (fact-root path))))
+                  (sort-by (fn [[path _]] [(order (fact-root path)) path]))
+                  vec)
+        tail (filterv (fn [[path _]] (not (contains? order (fact-root path))))
+                      entries)
+        head-facts (mapv rendered-fact head)
+        tail-facts (mapv rendered-fact tail)
+        tail-paths (mapv first tail)
+        total (count tail-facts)
+        ;; Render the WHOLE section, elision note included, and measure that.
+        ;; Budgeting the join of the parts and then appending the marker is
+        ;; how a bound gets quietly exceeded by the thing that announces it.
+        line (fn [kept named]
+               (let [dropped (- total kept)]
+                 (str "facts · "
+                      (str/join " · " (into head-facts (subvec tail-facts 0 kept)))
+                      (when (pos? dropped)
+                        (str "\nfacts_elided · " dropped
+                             " leaf(s) are in structuredContent and not above: "
+                             (str/join " · " (subvec tail-paths kept
+                                                     (+ kept (min named dropped))))
+                             (when (< named dropped)
+                               (str " · [+" (- dropped named)
+                                    " path(s) not named here]")))))))]
+    (when (seq entries)
+      ;; keeping one more fact always costs more than naming it costs, so the
+      ;; rendered length rises with `kept` and a bisection is exact
+      (let [kept (loop [low 0 high total]
+                   (if (< low high)
+                     (let [mid (quot (+ low high 1) 2)]
+                       (if (<= (count (line mid (- total mid))) budget)
+                         (recur mid high)
+                         (recur low (dec mid))))
+                     low))]
+        (loop [named (- total kept)]
+          (let [rendered (line kept named)]
+            (cond
+              (<= (count rendered) budget) rendered
+              (pos? named) (recur (dec named))
+              ;; @spec MCP-OP-ADMIT-141
+              ;; Below roughly 191 characters of remainder the note that
+              ;; ANNOUNCES the elision is itself longer than the remainder,
+              ;; so the section exceeded the budget it was handed in order to
+              ;; say that it had to. A shorter note is tried, and if even
+              ;; that will not fit the section is absent rather than over --
+              ;; a bound announced by a thing not charged against it is the
+              ;; same defect this round's blocker was.
+              :else
+              (let [short-note (str "facts_elided · " total
+                                    " leaf(s) are in structuredContent"
+                                    " and not above")]
+                (when (<= (count short-note) budget) short-note)))))))))
+
+;; @spec MCP-OP-ADMIT-132
+;; @spec MCP-OP-ADMIT-135
+(defn- admit-rendered-next-call
+  "The next_call line: the JSON verbatim at any size, or a stated absence.
+
+  Round three replaced a next_call above 1,024 characters with a pointer at
+  structuredContent -- an invented second budget one thirtieth the size of
+  the real one, and the tool description tells callers to copy
+  `expect_pre_sha256` out of this very field. A routine 14-file preview
+  produced 1,550 characters here and 1,554 in the review, so the instructed
+  copy was already impossible for an ordinary change -- and impossible
+  precisely for the text-only caller this ratchet exists for, because a
+  pointer at structuredContent is no use to someone who cannot read
+  structuredContent. The next_call is the one thing in a receipt
+  a caller must be able to send back byte for byte; it is rendered last so
+  that everything else gives ground before it, and it never gives ground.
+  A next_call that alone cannot fit the public payload budget is a typed
+  refusal (`oversize-next-call-refusal`), never a pointer."
+  [result]
+  (if-let [call (:next_call result)]
+    (str "next_call · " (json/generate-string call))
+    (str "next_call · none — this receipt has no follow-up call")))
+
+;; @spec MCP-OP-ADMIT-134
+(defn- summary-head
+  "Everything the text block says above the fact section: the header line,
+  and on a refusal the error sentence, the source-unchanged claim, the
+  detector note and the remedy line."
   [result]
   (if (:ok result)
     (str "admit_clojure_patch\n  " (name (:operation result))
@@ -1964,7 +2867,55 @@
          (if (true? (:source-unchanged result))
            "\nsource unchanged"
            "\nwhether the workspace was changed is unverified")
-         (detector-note result))))
+         (detector-note result)
+         ;; @spec MCP-OP-ADMIT-131
+         (when-let [remedy (:remedy result)]
+           (str "\nremedy · " remedy)))))
+
+;; @spec MCP-OP-ADMIT-134
+;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-136
+(defn- summary
+  "One receipt's text face, inside the ONE public byte budget.
+
+  The header and the verbatim `next_call` are rendered first and measured;
+  the fact walk is then charged EXACTLY what is left, so a receipt whose
+  whole text fits publishes every leaf its structuredContent spells. Round
+  four gave the fact walk a fixed half of the budget instead and dropped 71
+  leaves from a twenty-file preview whose text was 18,761 characters -- less
+  than three fifths of the budget it was nowhere near."
+  ([result] (summary result write-refusal/public-byte-budget))
+  ([result budget]
+   (let [head (summary-head result)
+         ;; @spec MCP-OP-ADMIT-132
+         ;; @spec MCP-OP-ADMIT-135
+         next-call (admit-rendered-next-call result)
+         fixed (str head "\n" next-call)
+         ;; the newline that would join the fact section to the head
+         remaining (- budget (count fixed) 1)]
+     (if-let [facts (admit-receipt-facts result remaining)]
+       (str head "\n" facts "\n" next-call)
+       fixed))))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- summary-characters
+  "An upper bound on the length of the text face `receipt` will publish.
+
+  It is the length of the text that renders EVERY leaf, not the length of
+  the text that would be published: `summary` always fits its budget by
+  eliding, so asking it whether it fits would always be answered yes and
+  the structure would never give ground. The question this bound asks is
+  `would anything have to be elided`.
+
+  `:elapsed_ms` is stamped by `mcp-operation/finalize-result` AFTER the
+  receipt is bounded, so the widest rendering `format-elapsed-ms` can produce
+  stands in for it here. Over-reserving costs a few leaves of the structured
+  face; under-reserving would cost supersetness, and the two are not
+  symmetric. Any residual overshoot is caught exactly by `summary`, which
+  charges the fact walk the real remainder and names whatever it elides."
+  [receipt]
+  (count (summary (assoc receipt :elapsed_ms Double/MAX_VALUE)
+                  Long/MAX_VALUE)))
 
 ;; @spec MCP-OP-ADMIT-129
 (defn- edge-throwable-refusal
@@ -2010,7 +2961,9 @@
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(try
+    ;; @spec MCP-OP-ADMIT-133
+    {:execute #(checked-refusal-kind!
+                 (try
                  (if-let [config @runtime-config]
                    (execute-request! config params)
                    (merge (empty-receipt "preview")
@@ -2018,19 +2971,31 @@
                            :operation :admit-patch-refused
                            :error-type :server-not-initialized
                            :error "admit_clojure_patch server is not initialized"}))
+                 ;; @spec MCP-OP-ADMIT-146
+                 ;; Both catch arms publish THROUGH the bound. Round six
+                 ;; wrapped them in `checked-refusal-kind!` alone, so a
+                 ;; throwable message reached the caller verbatim: 60,617
+                 ;; bytes of structuredContent, 27,977 past the budget, with
+                 ;; no annotation of any kind. A receipt this handler can
+                 ;; publish and `bound-receipt` never sees is a hole in
+                 ;; MCP-OP-ADMIT-139's universal sentence, whether or not a
+                 ;; caller input is known that reaches it.
                  (catch Exception error
-                   (merge (empty-receipt "preview")
-                          {:ok false
-                           :operation :admit-patch-refused
-                           :error-type (if (str/includes? (.getName (class error))
-                                                          "StreamConstraints")
-                                         :patch-too-large
-                                         :admit-tool-failure)
-                           :error (or (.getMessage error)
-                                      (.getName (class error)))}))
+                   (bound-receipt
+                     (merge (empty-receipt "preview")
+                            {:ok false
+                             :operation :admit-patch-refused
+                             :error-type (if (str/includes?
+                                               (.getName (class error))
+                                               "StreamConstraints")
+                                           :patch-too-large
+                                           :admit-tool-failure)
+                             :error (or (.getMessage error)
+                                        (.getName (class error)))})))
                  ;; @spec MCP-OP-ADMIT-129
+                 ;; @spec MCP-OP-ADMIT-146
                  (catch Throwable error
-                   (edge-throwable-refusal error)))
+                   (bound-receipt (edge-throwable-refusal error)))))
      :summarize summary
      :callback callback}))
 
