@@ -109,9 +109,17 @@
         all [fixture second-fixture helpers]
         serial (run {:files all :pool_size 1})
         parallel (run {:files all :pool_size 8})
-        reversed (run {:files (vec (reverse all)) :pool_size 8})]
+        reversed (run {:files (vec (reverse all)) :pool_size 8})
+        ;; the box's own core count is the ambient precondition, never a typed
+        ;; literal: effective-pool-size clamps a requested pool_size to
+        ;; availableProcessors, so a runner with fewer than 8 cores is
+        ;; correctly handed fewer than 8 threads.
+        available (.availableProcessors (Runtime/getRuntime))
+        expected-parallel-pool-size (min 8 available)]
     (is (= 1 (:pool_size serial)))
-    (is (= 8 (:pool_size parallel)))
+    (is (= expected-parallel-pool-size (:pool_size parallel)))
+    (is (<= (:pool_size parallel) available)
+        "pool_size must never exceed the box's own availableProcessors")
     (is (= (json/generate-string (strip serial))
            (json/generate-string (strip parallel)))
         "parallelism changes elapsed time, never the answer")
