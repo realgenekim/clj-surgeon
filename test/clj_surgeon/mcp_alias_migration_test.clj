@@ -1626,6 +1626,12 @@
                 (router-entrance-slice)))))
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- literal-refusal-kinds-in
+  "Every kind spelled as a KEYWORD LITERAL at a `(refusal …)` call of `text`."
+  [text]
+  (map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" text)))
+
+;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
   "Every refusal kind the alias_migration ENTRANCE can emit, read from SOURCE.
 
@@ -1669,7 +1675,7 @@
           cat
           [(map second (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]"
                                (str verb-text router-text)))
-           (map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" verb-text))
+           (literal-refusal-kinds-in verb-text)
            (map second (re-seq #":error-type :([a-z][a-z0-9-]*)" verb-text))
            (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))
            ;; @spec MCP-OP-ALIAS-059
@@ -5050,6 +5056,166 @@
         (is (empty? (runtime-spelled-kind-sites label text))
             (str "a genuinely forwarded kind was named: "
                  (pr-str (runtime-spelled-kind-sites label text))))))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-call-site-scan-reads-forms-and-not-lines
+  ;; Round-sixteen review finding 2, proven both ways. `(refusal …)` sites were
+  ;; discovered by a per-LINE regex, so a call whose kind begins on the NEXT
+  ;; line was invisible to the guard, and the word `refusal` inside a STRING or
+  ;; a COMMENT was a false positive. The enumeration's own literal scan,
+  ;; `#"\(refusal :([a-z][a-z0-9-]*)"`, is anchored on a single space and has
+  ;; the same newline hole — so a literal kind written on the next line would
+  ;; be missed by the enumeration AND by the guard that exists to catch what
+  ;; the enumeration cannot see.
+  ;;
+  ;; Deciding a call site by TEXT in a file the namespace is already parsing is
+  ;; the defect class this requirement has now paid for twice. Both scans read
+  ;; FORMS: strings and comments cannot be call sites by construction, and a
+  ;; call is one form however many lines it occupies.
+  (let [constructor (str "(defn refusal\n"
+                         "  [error-type message]\n"
+                         "  {:ok false :error_type (name error-type)"
+                         " :error message})\n\n")]
+    (testing "a MINTING call whose kind begins on the next line is named"
+      (let [text (str constructor
+                      "(defn- route-next-line\n"
+                      "  [params]\n"
+                      "  (refusal\n"
+                      "    (keyword (:review_kind params))\n"
+                      "    \"routed refusal\"))\n")]
+        (is (= 1 (count (dynamic-refusal-kind-sites-in "plant" text)))
+            (str "a (refusal …) call whose kind starts on the NEXT line was "
+                 "invisible to a per-line scan: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))
+    (testing "a LITERAL kind on the next line still reaches the enumeration"
+      (let [text (str constructor
+                      "(defn- route-next-line-literal\n"
+                      "  [params]\n"
+                      "  (refusal\n"
+                      "    :planted-next-line-kind\n"
+                      "    \"routed refusal\"))\n")]
+        (is (contains? (set (literal-refusal-kinds-in text))
+                       "planted-next-line-kind")
+            (str "a literal kind written on the line below its (refusal was "
+                 "missed by the enumeration's own scan: "
+                 (pr-str (literal-refusal-kinds-in text))))))
+    (testing "the word `refusal` inside a STRING is not a call site"
+      (let [text (str constructor
+                      "(defn- describe\n"
+                      "  []\n"
+                      "  \"a (refusal x) call names its kind first\")\n")]
+        (is (empty? (dynamic-refusal-kind-sites-in "plant" text))
+            (str "the word `refusal` inside a string was reported as a "
+                 "dynamic call site: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))
+    (testing "the word `refusal` inside a COMMENT is not a call site"
+      (let [text (str constructor
+                      "(defn- describe\n"
+                      "  []\n"
+                      "  ;; (refusal x) is how the kind is spelled\n"
+                      "  nil)\n")]
+        (is (empty? (dynamic-refusal-kind-sites-in "plant" text))
+            (str "the word `refusal` inside a comment was reported as a "
+                 "dynamic call site: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
+
+;; @spec MCP-OP-ALIAS-059
+(def ^:private frozen-refusal-kinds
+  "The 139 kinds the entrance's enumeration held at 51da9446.
+
+  A PIN, not a source: `refusal-kinds-in-source` stays derived, and this set
+  exists so that a change to the derivation is LOUD. Round sixteen shipped a
+  spurious 140th kind, `ok`, read out of `(some :error-type (remove :ok
+  checks))` when a head allowlist mis-classified a forward; nothing asserted
+  the count or the set, so it changed in silence and was found by a reviewer
+  reading the enumeration by hand. A kind added here on purpose is one line of
+  diff with a reason; a kind that appears here by accident is a failing test."
+  #{
+    "alias-migration-alias-policy-exhausted"
+    "alias-migration-ambiguous-ownership"
+    "alias-migration-discovery-incomplete" "alias-migration-empty-scope"
+    "alias-migration-expect-mismatch" "alias-migration-indirect-reference"
+    "alias-migration-mixed-var-spec"
+    "alias-migration-receipt-detail-collision"
+    "alias-migration-receipt-dir-escapes"
+    "alias-migration-receipt-dir-in-control-directory"
+    "alias-migration-receipt-published-elsewhere"
+    "alias-migration-resource-exhausted" "alias-migration-retire-failed"
+    "alias-migration-retire-path-refused"
+    "alias-migration-retire-symlink-refused"
+    "alias-migration-scope-matches-nothing"
+    "alias-migration-scope-path-refused" "alias-migration-scope-too-deep"
+    "alias-migration-scope-too-large" "alias-migration-scope-too-large-bytes"
+    "alias-migration-scope-unreadable" "alias-migration-source-too-large"
+    "alias-migration-target-lib-exists" "alias-migration-transaction-refused"
+    "alias-migration-walk-too-large" "ambiguous-change-subject"
+    "ambiguous-form" "ambiguous-match" "analyzer-authority-unverified"
+    "analyzer-mission-budget-exhausted" "analyzer-mission-expired"
+    "apply-failed" "atomic-write-failed" "basis-coverage-mismatch"
+    "basis-edit-address-drift" "basis-edit-covers-owner"
+    "basis-workspace-mismatch" "change-buffer-budget-exceeded"
+    "clj-kondo-admission-unavailable" "clj-kondo-executable-unavailable"
+    "cold-verification-capacity-exceeded" "cold-verification-exception"
+    "diagnostic-output-truncated" "edit-requires-transform"
+    "effect-capability-denied" "empty-basis-change" "exact-owner-ambiguous"
+    "exact-owner-not-addressable" "exact-owner-not-found"
+    "exact-owner-scope-unsupported" "exact-profile-not-project-owned"
+    "expect-count-mismatch" "expect-mismatch"
+    "expect-requires-literal-replacement" "file-read-failed"
+    "future-source-transformation-failed" "hot-verification-connection-failed"
+    "hot-verification-failed" "hot-verification-path-escape"
+    "inside-not-found" "intent-compiler-failure"
+    "invalid-analyzer-mission-scope" "invalid-basis-decision"
+    "invalid-buffer-selection" "invalid-change-intent" "invalid-change-label"
+    "invalid-change-scope" "invalid-change-subject"
+    "invalid-compact-delete-result" "invalid-diagnostic-output"
+    "invalid-diagnostic-snapshot" "invalid-exact-owner" "invalid-exact-owners"
+    "invalid-exact-verification-profile" "invalid-expect"
+    "invalid-hot-verification-port" "invalid-hot-verification-profile"
+    "invalid-mcp-elapsed-time" "invalid-mcp-operation-result"
+    "invalid-mcp-request" "invalid-operation-context"
+    "invalid-operation-outcome" "invalid-plan" "invalid-plan-out"
+    "invalid-process-deadline" "invalid-query" "invalid-replacement"
+    "invalid-result-source" "invalid-source" "invalid-transaction-receipt"
+    "invalid-workspace-root" "line-not-in-form" "mcp-adapter-failure"
+    "missing-arguments" "missing-diagnostic-baseline" "missing-plan-out"
+    "no-match" "plan-artifact-changed" "plan-artifact-repair-failed"
+    "plan-overwrites-source" "plan-write-failed" "platform-context-required"
+    "positional-mutation-authority-refused" "process-interrupted"
+    "read-back-failed" "read-back-hash-mismatch" "read-back-invalid-source"
+    "receipt-write-failed" "result-hash-mismatch"
+    "semantic-evidence-incomplete" "semantic-owner-drift"
+    "semantic-owner-not-found" "semantic-path-outside-project"
+    "semantic-session-drift" "semantic-sites-not-addressable"
+    "semantic-source-drift" "server-not-initialized" "source-hash-mismatch"
+    "source-read-failed" "span-arity-mismatch" "stale-path" "stale-subform"
+    "target-ancestor-changed" "transaction-recovery-required"
+    "transaction-write-exception" "transaction-write-failed"
+    "unchanged-basis-decision" "unknown-buffer-site"
+    "unknown-or-expired-basis" "unknown-or-expired-verification-job"
+    "unknown-verification-profile" "unsupported-arguments"
+    "unsupported-buffer-context" "unsupported-plan-operation"
+    "unsupported-plan-version" "verification-baseline-failed"
+    "verification-failed" "verification-job-workspace-mismatch"
+    "verification-unverified"})
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
+  ;; The enumeration is DERIVED, and a derivation with no pin changes in
+  ;; silence: round sixteen's `ok` was a live, spurious kind that no witness
+  ;; could see. Both directions are asserted — a kind that appears and a kind
+  ;; that vanishes are each a change to what a text-reading client is promised.
+  (let [kinds (set (refusal-kinds-in-source))]
+    (is (= 139 (count kinds))
+        (str "the entrance's refusal enumeration changed size: "
+             (count kinds) " kinds"))
+    (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
+        (str "a kind appeared in the enumeration that is not in the frozen "
+             "set — a spurious kind, or a real one that needs pinning: "
+             (pr-str (sort (clojure.set/difference kinds frozen-refusal-kinds)))))
+    (is (empty? (clojure.set/difference frozen-refusal-kinds kinds))
+        (str "a pinned kind vanished from the enumeration: "
+             (pr-str (sort (clojure.set/difference frozen-refusal-kinds kinds)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; every invisible or malformed code point in a scope entry is typed
