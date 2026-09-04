@@ -56,6 +56,11 @@ required), `[x]` implemented (implementation and test witnesses required),
   base by runs whose owning process is dead and whose age exceeds the stale
   threshold, touching nothing whose name it did not itself create.
 
+- [x] **MCP-OP-TMPHYG-008**: When a test runner cannot create its isolated
+  root under the resolved base — an unwritable or otherwise unusable base —
+  clj-surgeon shall refuse with the same named, exit-97 message as every
+  other refusal, never a raw stack trace.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb

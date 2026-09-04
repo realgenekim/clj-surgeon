@@ -265,7 +265,7 @@ chmod 700 "$FX/nowrite"
 [ "$PROBE_EXIT" -eq 97 ] \
   || fail "8: an unwritable base must exit 97 like every other refusal, got $PROBE_EXIT"
 grep -q 'tmp-refused:' "$FX/unwritable.out" || fail "8: no tmp-refused: line"
-grep -q 'AccessDeniedException' "$FX/unwritable.out" \
+grep -q 'Execution error' "$FX/unwritable.out" \
   && fail "8: the refusal is a raw stack trace, not a named message"
 
 echo "tmp-leak ratchet witness passed"

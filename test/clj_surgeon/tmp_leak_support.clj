@@ -383,6 +383,7 @@
   ([target args]
   (let [base (env-or-current-tmpdir)]
     (try (fs/create-dirs base) (catch Throwable _ nil))
+    ;; @spec MCP-OP-TMPHYG-008
     (if-let [refusal (base-refusal base)]
       (refuse! refusal)
       (if-let [declared (System/getenv reexec-sentinel)]
@@ -405,7 +406,12 @@
         (let [root (io/file base (format "%s%d-%s" isolated-root-prefix (current-pid)
                                          (subs (str (random-uuid)) 0 8)))]
           (sweep-stale-roots! base)
-          (fs/create-dirs root)
+          (try
+            (fs/create-dirs root)
+            (catch Throwable t
+              (refuse! {:reason :unusable-base :base base
+                        :detail (str (.getSimpleName (class t)) ": " (.getMessage t))})
+              (System/exit 97)))
           (let [child (atom nil)
                 _ (register-root-sweep! root child)
                 cmd (reexec-child-command target root args)
