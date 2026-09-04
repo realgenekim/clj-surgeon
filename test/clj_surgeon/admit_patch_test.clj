@@ -5089,6 +5089,43 @@
                 "every pre-image digest the commit needs survived the render"))))
       (finally (delete-tree! root)))))
 
+;; @spec MCP-OP-ADMIT-139
+(deftest a-published-receipt-never-exceeds-the-number-it-calls-a-budget
+  ;; Round four's advisory 5d. At `next_call` = 32,640 characters -- exactly
+  ;; the number the refusal text calls "the public payload budget" -- the
+  ;; receipt the gate actually published was 32,911 bytes. The 271 bytes are
+  ;; the envelope: the keys, the quotes and the braces that carry the call.
+  ;; A budget a payload is allowed to exceed is not a budget, and this is the
+  ;; one field that never gives ground, so the envelope has to be counted at
+  ;; the point the refusal decides.
+  (let [budget write-refusal/public-byte-budget
+        skeleton (fn [pad] {:tool "admit_clojure_patch"
+                            :arguments {:mode "commit"
+                                        :expect_pre_sha256
+                                        {"src/app/core.clj" pad}}})
+        overhead (count (json/generate-string (skeleton "")))
+        call (fn [chars] (skeleton (apply str (repeat (- chars overhead) "a"))))
+        publish (fn [chars]
+                  (#'admit/bound-receipt
+                    {:ok true :operation :admit-patch-preview :mode "preview"
+                     :files [] :next_call (call chars)}))]
+    (is (= budget (count (json/generate-string (call budget))))
+        "the fixture builds a next_call of exactly the budget's length")
+    (testing "well under the budget, the call is published and the receipt fits"
+      (let [published (publish (- budget 2000))]
+        (is (true? (:ok published)) (str "refused: " (:error published)))
+        (is (<= (write-refusal/json-bytes published) budget))))
+    (testing "at and past the budget, nothing the gate publishes exceeds it"
+      (doseq [chars [budget (inc budget)]]
+        (let [published (publish chars)]
+          (is (<= (write-refusal/json-bytes published) budget)
+              (str "a receipt published for a " chars "-character next_call is "
+                   (write-refusal/json-bytes published) " bytes, past the "
+                   budget "-byte number the gate calls a budget"))
+          (is (false? (:ok published))
+              "a call that cannot be carried inside the budget must refuse")
+          (is (= :next-call-exceeds-public-budget (:error-type published))))))))
+
 ;; @spec MCP-OP-ADMIT-135
 (deftest a-next-call-that-alone-exceeds-the-public-budget-is-a-typed-refusal
   ;; The other end of the rule. If the call genuinely cannot be published,
