@@ -5498,6 +5498,77 @@
               (str "CLI " (pr-str (:cause cli)) " vs tool "
                    (pr-str (:cause tool)))))
 
+        (testing "a continuation is never truncated"
+          ;; The one EXEMPTION from the bound, proved rather than asserted. A
+          ;; continuation is an executable promise: a truncated path in an
+          ;; argument position does not fail, it names a DIFFERENT file, which
+          ;; MCP-OP-CENSUS-014 already forbids in the sentence about captions.
+          ;; It is safe to exempt precisely because it carries its OWN ceiling
+          ;; — `max-next-call-bytes`, a quarter of the field bound — so nothing
+          ;; a continuation holds can reach the length this bound acts on.
+          (doseq [[label params] [[:one-entry-missing
+                                   {:files [arm "src/app/missing.clj"]}]
+                                  [:one-entry-far-too-long
+                                   {:files [arm long-name]}]
+                                  [:an-unknown-door
+                                   {:files [arm] :doors ["nope"]}]]]
+            (let [result (census-tool/execute-request!
+                           {:project-root named} params)]
+              (doseq [text (all-strings (select-keys result [:next_call]))]
+                (is (not (str/includes? text "truncated"))
+                    (str label " published a TRUNCATED continuation, which "
+                         "names a different file rather than failing: "
+                         (pr-str (:next_call result))))
+                (is (<= (count text) max-field)
+                    (str label " carried a continuation field longer than the "
+                         "refusal bound, so the exemption is not safe: "
+                         (count text))))
+              (when-let [call (:next_call result)]
+                (is (<= (census/utf8-byte-count (json/generate-string call))
+                        census/max-next-call-bytes)
+                    (str label " published a continuation over its OWN "
+                         "ceiling: "
+                         (census/utf8-byte-count
+                           (json/generate-string call))))))))
+
+        (testing "the exemption itself, pinned where it can be falsified"
+          ;; The drives above prove the exemption is HARMLESS — no continuation
+          ;; production can build reaches the field bound, because its own
+          ;; ceiling is a quarter of it. They cannot prove the exemption is
+          ;; still THERE: deleting it would leave every one of them green.
+          ;; This asks `bound-refusal` its contract directly, with a
+          ;; continuation deliberately over the field bound, so that removing
+          ;; the exemption fails here instead of failing in the field, on the
+          ;; day something starts building longer calls.
+          (let [call {:tool "relation_census"
+                      :workspace_root (apply str (repeat 2000 \r))
+                      :files ["src/a.clj"]}
+                argv ["clj-surgeon" ":op" ":relation-census" ":dir"
+                      (apply str (repeat 2000 \r))]
+                bounded (census/bound-refusal
+                          {:ok false
+                           :error (apply str (repeat 2000 \e))
+                           :next_call call
+                           :next-command-argv argv})]
+            (is (= call (:next_call bounded))
+                "the bound truncated a continuation, which names a different file")
+            (is (= argv (:next-command-argv bounded))
+                "the bound truncated a CLI continuation's argv tokens")
+            (is (str/includes? (str (:error bounded)) "truncated")
+                (str "an ordinary field was NOT bounded, so this drive proves "
+                     "nothing about the exemption: "
+                     (count (str (:error bounded)))))))
+
+        (testing "the CLI's continuation is never truncated either"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census {:dir named :doors "nope"}))]
+            (doseq [text (all-strings (select-keys result [:next-command
+                                                           :next-command-argv]))]
+              (is (not (str/includes? text "truncated"))
+                  (str "the CLI published a TRUNCATED continuation: "
+                       (pr-str (select-keys result [:next-command
+                                                    :next-command-argv])))))))
+
         (testing "an ordinary refusal is not truncated at all"
           ;; The near-miss: a bound that fires on everything is not a bound,
           ;; it is a censor. Nothing about a normal-length refusal changes.
