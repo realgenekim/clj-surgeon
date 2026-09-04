@@ -86,11 +86,13 @@
    :receipt-dir (.getPath receipt-dir)})
 
 (defn- execute!
-  ([workspace] (execute! workspace {}))
-  ([workspace overrides]
+  ([workspace] (execute! workspace {} {}))
+  ([workspace overrides] (execute! workspace overrides {}))
+  ([workspace overrides config-overrides]
    (let [receipt-dir (io/file workspace "receipts")]
      (.mkdirs receipt-dir)
-     (alias-migration/execute! (config workspace receipt-dir)
+     (alias-migration/execute! (merge (config workspace receipt-dir)
+                                      config-overrides)
                                (request workspace overrides)))))
 
 (defn- owned-detail!
@@ -1046,6 +1048,93 @@
   #{:ok :operation :error_type :error :next_call :remedy :elapsed_ms
     :workspace_root :receipt_hash :undo_receipt :details_path
     :details_retained :details_retention})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- namespace-source-path
+  [namespace-name]
+  (str "src/"
+       (str/replace (str/replace (str namespace-name) "." "/") "-" "_")
+       ".clj"))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- required-clj-surgeon-namespaces
+  "The clj-surgeon namespaces one source `:require`s, read with the reader."
+  [namespace-name]
+  (let [path (namespace-source-path namespace-name)]
+    (when (.exists (io/file path))
+      (let [node (->> (n/children (parser/parse-string-all (slurp path)))
+                      (filter #(= :list (n/tag %)))
+                      first)
+            form (try (n/sexpr node) (catch Exception _ nil))]
+        (->> form
+             (filter seq?)
+             (filter #(= :require (first %)))
+             (mapcat rest)
+             (map #(if (sequential? %) (first %) %))
+             (filter symbol?)
+             (filter #(str/starts-with? (str %) "clj-surgeon.")))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- reachable-entrance-namespaces
+  "Every clj-surgeon namespace the alias_migration entrance can refuse THROUGH.
+
+  Closed under `:require` from the verb's own two namespaces and from
+  `mcp_operation`, which `handle-alias-migration` calls directly. Derived
+  rather than listed, because round twelve's enumeration derived its KINDS
+  from a hand-written list of six SOURCES and missed
+  `:invalid-diagnostic-output` — minted by `mcp_change_buffer`, which the verb
+  requires, and forwarded verbatim by the verb itself.
+
+  `mcp_tool` is the one namespace held out of the closure: it is the shared
+  router that hosts every verb, so closing over it would reach every verb in
+  the server. It keeps the prefix filter it has always had.
+
+  Over-approximation is the SAFE direction here. A kind in the set that the
+  entrance cannot actually reach costs one renderer assertion; a kind missing
+  from the set is the defect this witness exists to catch."
+  []
+  (loop [pending '[clj-surgeon.mcp-alias-migration
+                   clj-surgeon.alias-migration
+                   clj-surgeon.mcp-operation]
+         seen #{}]
+    (if-let [candidate (first pending)]
+      (if (or (contains? seen candidate)
+              (= 'clj-surgeon.mcp-tool candidate))
+        (recur (vec (rest pending)) seen)
+        (recur (into (vec (rest pending))
+                     (required-clj-surgeon-namespaces candidate))
+               (conj seen candidate)))
+      seen)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- reachable-entrance-source-text
+  []
+  (apply str (map (comp slurp namespace-source-path)
+                  (sort (reachable-entrance-namespaces)))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- dynamic-refusal-kind-sites
+  "Every `(refusal <non-literal>` site in the reachable set, unmarked.
+
+  A kind spelled at runtime cannot be scanned out of source, so an
+  enumeration derived from source is complete only while no reachable
+  namespace builds one. The single legitimate exception is FORWARDING a kind
+  another scanned source already minted, and such a site declares itself with
+  the marker `forwarded-refusal-kind` in the twelve lines above it."
+  []
+  (vec
+    (for [namespace-name (sort (reachable-entrance-namespaces))
+          :let [path (namespace-source-path namespace-name)
+                lines (str/split-lines (slurp path))]
+          [index line] (map-indexed vector lines)
+          :when (and (re-find #"\(refusal\s" line)
+                     (not (re-find #"\(refusal\s+:[a-z]" line))
+                     (not (re-find #"defn-?\s+refusal" line)))
+          :when (not (some #(str/includes? % "forwarded-refusal-kind")
+                           (subvec (vec lines)
+                                   (max 0 (- index 12))
+                                   (inc index))))]
+      (str path ":" (inc index)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
@@ -4118,3 +4207,86 @@
           "the refusal text was cut in silence")
       (is (str/includes? past "structuredContent")
           "the truncation marker does not say where the whole refusal is"))))
+
+;; ---------------------------------------------------------------------------
+;; the refusal enumeration derives its SOURCES, not just its kinds
+
+(defn- kondo-stub!
+  "An executable named `clj-kondo` that answers something that is not EDN."
+  [workspace]
+  (let [script (io/file workspace "bin" "clj-kondo")]
+    (.mkdirs (.getParentFile script))
+    (spit script "#!/bin/bash\necho not-edn\n")
+    (.setExecutable script true)
+    script))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-enumeration-sees-every-namespace-the-entrance-can-refuse-through
+  ;; Round-twelve review finding 3: `refusal-kinds-in-source` scanned SIX
+  ;; FIXED FILES and called the result "every refusal kind the entrance can
+  ;; emit". `mcp_change_buffer.clj:1445` mints `:invalid-diagnostic-output`,
+  ;; `mcp_alias_migration.clj:2236-2240` forwards it verbatim, and no scanned
+  ;; file contains it:
+  ;;
+  ;;   enumerated count => 36
+  ;;   enumerated contains invalid-diagnostic-output? => false
+  ;;   live error_type => "invalid-diagnostic-output"
+  ;;   live source_unchanged => true
+  ;;
+  ;; A fixed list of sources is a fixed list however the kinds inside it are
+  ;; derived. The subject is what the entrance can REACH, so the source set
+  ;; must be derived from the require graph and not enumerated by hand.
+  (let [kinds (refusal-kinds-in-source)]
+    (testing "a kind forwarded from a helper namespace is in the set"
+      (is (contains? kinds "invalid-diagnostic-output")
+          (str "the enumeration does not reach mcp_change_buffer.clj, which "
+               "the verb requires and whose refusals it forwards verbatim"))
+      (is (contains? kinds "verification-unverified")
+          "the enumeration does not see the helper's unverified refusal"))
+    (testing "the kinds the fixed list could already see are still seen"
+      (doseq [kind ["invalid-workspace-root" "mcp-adapter-failure"
+                    "invalid-mcp-request" "alias-migration-empty-scope"
+                    "unknown-verification-profile"
+                    "invalid-mcp-operation-result"]]
+        (is (contains? kinds kind)
+            (str "the enumeration lost " kind))))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest a-helper-refusal-driven-live-renders-every-key-it-carries
+  ;; The enumeration is derived from source; this drives the actual refusal
+  ;; the review found, through the entrance, and applies the text ⊇ structured
+  ;; contract to the receipt the verb really published — not to a synthetic
+  ;; one built from a kind name.
+  (let [workspace (workspace!)]
+    (try
+      (let [script (kondo-stub! workspace)
+            result (execute! workspace
+                             {:verify "focused"
+                              :scope {:paths ["src/**"]}
+                              :expect {:files 12}}
+                             {:verification-profiles
+                              {"focused" [(.getPath script)]}})]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "invalid-diagnostic-output" (:error_type result))
+            (pr-str result))
+        (is (true? (:source_unchanged result)) (pr-str result))
+        (is (contains? (refusal-kinds-in-source) (:error_type result))
+            (str "the enumeration does not carry the kind the entrance just "
+                 "published: " (:error_type result)))
+        (assert-refusal-text! (assoc result :elapsed_ms 1.0)
+                              "live invalid-diagnostic-output"))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest no-reachable-namespace-spells-a-refusal-kind-dynamically
+  ;; A kind built at runtime cannot be scanned out of source, so the only
+  ;; way an enumeration can be complete is if no reachable namespace builds
+  ;; one — except where the site is explicitly FORWARDING a kind another
+  ;; scanned source minted. Every such site carries the marker
+  ;; `forwarded-refusal-kind`; a new dynamic constructor anywhere reachable
+  ;; carries no marker and fails here.
+  (let [sites (dynamic-refusal-kind-sites)]
+    (is (empty? sites)
+        (str "refusal kinds spelled dynamically with no forwarding marker, "
+             "which no source scan can ever enumerate: " (pr-str sites)))))
