@@ -238,3 +238,12 @@ run as a test inside `make mcp-test`) enforces both halves.
   statement `none (classic script; functions are globals)` when the file has no
   module syntax at all, so a reader never searches for a registration site that
   does not exist.
+
+- [x] **MCP-OP-THREAD-036**: An anchor carries the lines it points at. When
+  `feature_thread` reports an insertion `anchor` for a FOUND leg or
+  co-primary, it shall also report `after_context`: the next
+  `after-context-lines` source lines after the leg's last line, VERBATIM, with
+  `after_context_from`/`after_context_to` naming the range, so the value equals
+  `sed -n '<to+1>,<to+N>p' <file>`. It is body-class detail: it is dropped when
+  the leg's body is elided, and it is the first thing cut after the sibling
+  when the receipt does not fit.

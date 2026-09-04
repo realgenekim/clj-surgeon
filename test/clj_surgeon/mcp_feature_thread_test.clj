@@ -594,9 +594,9 @@
       (is (every? #(nil? (:body %)) (:legs structured)))
       (is (every? #(nil? (:body %))
                   (mapcat :co_primaries (:legs structured))))
-      (is (= #{"sibling" "governance-template" "next-call" "menu-caller"
-               "route" "tests(js)" "tests" "implementation" "js-function"
-               "handler"}
+      (is (= #{"sibling" "after-context" "governance-template" "next-call"
+               "menu-caller" "route" "tests(js)" "tests" "implementation"
+               "js-function" "handler"}
              (set (map :leg (:elided structured))))
           "every step of the stated order is recorded when every body is cut")
       (is (str/includes? text "elided handler")))
@@ -895,14 +895,15 @@
 ;; @spec MCP-OP-THREAD-020
 (deftest the-budget-default-and-the-elision-order-are-edit-aware
   (testing "the default fits the six-leg receipt with every body"
-    (is (= 24576 ft/default-budget-bytes))
+    (is (= 28672 ft/default-budget-bytes))
     (let [{:keys [structured]} (thread! fixture-root)]
       (is (empty? (:elided structured))
           (str "the default budget elided " (pr-str (map :leg (:elided structured)))
                "; the whole point of raising it was that it must not"))))
 
   (testing "the stated order elides context first and the edit sites last"
-    (is (= [:sibling :governance-template :secondary-tests :next-call :menu
+    (is (= [:sibling :after-context :governance-template :secondary-tests
+            :next-call :menu
             :route :tests-js :tests :implementation :js-function :handler]
            ft/elision-order)))
 
@@ -1525,18 +1526,27 @@
 (deftest the-clock-cannot-swallow-a-structured-leaf
   (testing "a leaf whose digits appear inside elapsed_ms is still reported"
     (let [{:keys [structured]} (thread! fixture-root)
-          leaf (get-in structured [:sibling :legs 3 :bytes])]
-      (is (number? leaf) "the fixture's sibling carries a byte count leaf")
+          ;; Which leaves does the DESIGNED text omit? Ask the receipt itself
+          ;; with the clock unstamped, so the witness cannot go stale when the
+          ;; fixture's numbers move.
+          only (->> (str/split-lines (ft/render-receipt (assoc structured
+                                                               :elapsed_ms nil)))
+                    (filter #(str/includes? % "structured-only"))
+                    last)
+          [_ path digits] (re-find #"·\s([A-Za-z0-9_.]+)=(\d{3,})[\s·]" (str only " "))]
+      (is (some? digits)
+          (str "the witness needs a numeric structured-only leaf; line was "
+               (pr-str only)))
       (let [;; an operation clock whose DIGITS contain that leaf's value
             clocked (assoc structured
-                           :elapsed_ms (Double/parseDouble (str "229.543" leaf)))
+                           :elapsed_ms (Double/parseDouble (str "229.5" digits)))
             text (ft/render-receipt clocked)]
-        (is (str/includes? text (str "elapsed_ms=229.543" leaf))
+        (is (str/includes? text (str "elapsed_ms=229.5" digits))
             "the witness needs the clock it constructed")
-        (is (str/includes? text (str "sibling.legs.3.bytes=" leaf))
-            (str "the clock's digits made the structured leaf `sibling.legs.3"
-                 ".bytes=" leaf "` look present in the text, so the completion"
-                 " line dropped it")))))
+        (is (str/includes? text (str path "=" digits))
+            (str "the clock's digits made the structured leaf `" path "="
+                 digits "` look present in the text, so the completion line"
+                 " dropped it")))))
 
   (testing "twenty-five identical requests: text_bytes equals the delivered text"
     (let [deltas (vec (for [_ (range 25)]

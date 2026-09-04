@@ -60,9 +60,12 @@
   Round two raised it from 16384 after the Dequote/Format fixture measured SIX
   legs: at 16384 four bodies elided, including the JavaScript function the
   transcript re-read four times, which is exactly the call the verb exists to
-  save. 10240 is a good explicit `budget_bytes` for a caller that wants only
-  the ranges."
-  24576)
+  save. Round four raised it again, from 24576 to 28672, when `after_context`
+  (MCP-OP-THREAD-036) put the four source lines each anchor points AT into the
+  receipt: at 24576 the complete receipt measures 25298 bytes and every leg's
+  after-context was cut, which is again the call the verb exists to save. 10240
+  is a good explicit `budget_bytes` for a caller that wants only the ranges."
+  28672)
 
 ;; @spec MCP-OP-THREAD-002
 (def hard-cap-bytes
@@ -143,6 +146,17 @@
 ;; @spec MCP-OP-THREAD-019
 
 ;; @spec MCP-OP-THREAD-026
+(def after-context-lines
+  "Source lines quoted AFTER an insertion anchor.
+
+  An anchor says `after:L<n>` and stops. The MCP-attached replay arm re-read
+  exactly those next lines before it could write its patch -- the indentation,
+  the separator, whether the next entry is a `]` or another row -- which is a
+  call this verb exists to save. Four is the middle of the 3-6 band the
+  addendum asks for: enough to see the shape, small enough that six legs of it
+  cost under a kilobyte."
+  4)
+
 (def receipt-tail-bytes
   "Width, in ASCII bytes, of the operation-clock tail the receipt always ends
   with.
@@ -179,8 +193,8 @@
   definition the seed names. What goes first is context the caller can re-fetch
   without losing the edit basis. Fixed and stated so an elision is never a
   surprise."
-  [:sibling :governance-template :secondary-tests :next-call :menu :route
-   :tests-js :tests :implementation :js-function :handler])
+  [:sibling :after-context :governance-template :secondary-tests :next-call
+   :menu :route :tests-js :tests :implementation :js-function :handler])
 
 ;; ---------------------------------------------------------------------------
 ;; Small utilities
@@ -1373,6 +1387,25 @@
           (str "after:L" to " in-form:L" (:line enclosing) "-L" (:end-line enclosing))
           (str "after:L" to))))))
 
+;; @spec MCP-OP-THREAD-036
+(defn- after-context-for
+  "The `after-context-lines` source lines following the member's last line,
+  verbatim, with the range they came from.
+
+  Verbatim is the whole point: the caller writes an insertion here, so trailing
+  whitespace and indentation are the payload, not noise. Returns nil at end of
+  file rather than a padded lie."
+  [cache member]
+  (let [{:keys [ok lines]} (read-source cache (:file member))
+        from (inc (:to member))]
+    (when ok
+      (let [available (drop (dec from) lines)
+            taken (vec (take after-context-lines available))]
+        (when (seq taken)
+          {:after_context taken
+           :after_context_from from
+           :after_context_to (+ from (dec (count taken)))})))))
+
 (defn- secondary-row
   [member]
   (select-keys member [:file :from :to :evidence :bytes :refetch]))
@@ -1464,7 +1497,8 @@
                                         (merge strength)
                                         (dissoc :rank :in-comment?))
                               (= "FOUND" (:status strength))
-                              (assoc :anchor (anchor-for cache m)))))
+                              (-> (assoc :anchor (anchor-for cache m))
+                                  (merge (after-context-for cache m))))))
                   co-primaries)
          co-keys (set (map (juxt :file :from :to) co))
          strength (leg-strength primary)]
@@ -1479,7 +1513,11 @@
                                 (take 4)
                                 (mapv secondary-row))}
               (= "FOUND" (:status strength))
-              (assoc :anchor (anchor-if-found primary strength)))))))
+              (-> (assoc :anchor (anchor-if-found primary strength))
+                  ;; @spec MCP-OP-THREAD-036
+                  ;; The anchor's own lines ride WITH the anchor: an insertion
+                  ;; point with nothing after it makes the caller re-read.
+                  (merge (after-context-for cache primary))))))))
 
 ;; @spec MCP-OP-THREAD-004
 ;; @spec MCP-OP-THREAD-008
@@ -2249,6 +2287,10 @@
          (when (:form_name leg) (str " form=" (:form_name leg)))
          (when (:export leg) (str " export=" (:export leg)))
          "\n  found by: " (str/join "\n  found by: " (:searches leg))
+         (when (seq (:after_context leg))
+           (str "\n  AFTER<< L" (:after_context_from leg)
+                "-L" (:after_context_to leg) "\n"
+                (str/join "\n" (:after_context leg)) "\n  >>"))
          (if (:body leg)
            (str "\n  BODY<<\n" (:body leg) "\n  >>")
            (str "\n  BODY ELIDED reason=" (:elided_reason leg)
@@ -2432,7 +2474,10 @@
   [leg reason]
   (if (and (located? leg) (:body leg))
     [(-> leg
-         (dissoc :body)
+         ;; @spec MCP-OP-THREAD-036
+         ;; after_context is body-class detail and goes with the body: a leg
+         ;; whose body was cut for budget must not keep quoting source.
+         (dissoc :body :after_context :after_context_from :after_context_to)
          (assoc :elided_reason reason))
      {:leg (:id leg) :bytes (:bytes leg) :reason reason
       :from (:from leg) :to (:to leg) :sha256 (:sha256 leg)
@@ -2515,6 +2560,37 @@
                                      :refetch (:refetch m)})
                             cut)))
            true])))
+
+    ;; @spec MCP-OP-THREAD-036
+    ;; after_context is the FIRST thing cut after the sibling: it is the only
+    ;; part of the receipt whose re-fetch is a single exact `sed` the receipt
+    ;; itself prints, so losing it costs the caller one cheap call and losing
+    ;; `next_call` costs it the write gate.
+    :after-context
+    (let [carrying (fn [l] (or (seq (:after_context l))
+                               (some #(seq (:after_context %)) (:co_primaries l))))
+          strip (fn [m] (dissoc m :after_context :after_context_from
+                                :after_context_to))
+          cut (filter carrying (:legs result))]
+      (if (empty? cut)
+        [result false]
+        [(-> result
+             (update :legs
+                     #(mapv (fn [l] (-> (strip l)
+                                        (update :co_primaries
+                                                (fn [co] (mapv strip (or co []))))))
+                            %))
+             ;; ONE ledger row, not one per leg: a per-leg row costs ~120
+             ;; bytes each and this step exists to RECLAIM bytes. Every leg
+             ;; still names its own anchor and refetch.
+             (update :elided conj
+                     {:leg "after-context"
+                      :bytes 0
+                      :reason (str "public-budget; the anchor context of "
+                                   (count cut) " legs dropped")
+                      :from 0 :to 0 :sha256 "n/a"
+                      :refetch "re-run feature_thread with a larger budget_bytes"}))
+         true]))
 
     :sibling
     (if (seq (get-in result [:sibling :legs]))
@@ -2877,7 +2953,7 @@
                                 " workspace root.")}
     "budget_bytes" {:type "integer" :minimum 1 :maximum 32768
                     :description (str "Receipt budget in UTF-8 bytes of the"
-                                      " rendered TEXT; default 24576, hard cap"
+                                      " rendered TEXT; default 28672, hard cap"
                                       " 32768. Over budget, bodies are elided in"
                                       " a stated edit-aware order — context"
                                       " first, the forms you are about to edit"
