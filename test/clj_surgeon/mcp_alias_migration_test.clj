@@ -5268,6 +5268,87 @@
           (str "a bare symbol bound to a keyword LITERAL one line above was "
                "read as a forward: "
                (pr-str (runtime-spelled-kind-sites "plant" text))))))
+  ;; @spec MCP-OP-ALIAS-059
+  ;; Round-seventeen review finding 2: `mint-evidence` read KEYWORD literals
+  ;; and was blind to STRING literals, while every `refusal` constructor in
+  ;; the reachable set forwards its kind through `(name error-type)` — and
+  ;; `(name "brand-new-kind")` is `"brand-new-kind"`, so a string kind is a
+  ;; perfectly good kind. The blindness hid the hole in BOTH directions:
+  ;; `minted-kinds-in` already read strings, so at an `:error-type` value site
+  ;; the marked expression stayed exempt and the enumeration read nothing from
+  ;; it, while `runtime-spelled-kind-sites`' `(empty? (minted-kinds-in …))`
+  ;; test was false and did not name it either. The reviewer drove it end to
+  ;; end: a marked string-table `get` at `validate-request` emitted the live
+  ;; kind `brand-new-kind` with `dynamic-sites` empty and the enumeration at
+  ;; 139. Rows I and O of the reviewer's table, beside their keyword twins
+  ;; above.
+  (testing "a STRING literal is a kind source exactly as a keyword literal is"
+    (doseq [[label expression kind]
+            [["get against a literal STRING table"
+              "(get {\"a\" \"brand-new-kind\"} kind)" "brand-new-kind"]
+             ["get-in against a nested literal STRING table"
+              "(get-in {\"a\" {\"b\" \"table-minted\"}} [kind \"b\"])"
+              "table-minted"]]]
+      (testing label
+        (let [text (str "(defn- route-string-table-refusal\n"
+                        "  [kind]\n"
+                        "  {:ok false\n"
+                        "   ;; forwarded-refusal-kind: claims to forward, mints\n"
+                        "   :error_type " expression "\n"
+                        "   :error \"routed refusal\"})\n")]
+          (is (contains? (structural-error-type-kinds text) kind)
+              (str "a STRING kind minted inside a literal table under the "
+                   "marker never reached the enumeration: "
+                   (pr-str (structural-error-type-kinds text))))))))
+  (testing "a STRING literal bound above the site and relayed is a mint"
+    (let [text (str "(defn- route-let-bound-string\n"
+                    "  [params]\n"
+                    "  (let [planted \"planted-str-kind\"]\n"
+                    "    {:ok false\n"
+                    "     ;; forwarded-refusal-kind: claims to forward, mints\n"
+                    "     :error_type planted\n"
+                    "     :error \"routed refusal\"}))\n")]
+      (is (= 1 (count (runtime-spelled-kind-sites "plant" text)))
+          (str "a bare symbol bound to a STRING literal one line above was "
+               "read as a forward: "
+               (pr-str (runtime-spelled-kind-sites "plant" text))))))
+  (testing "a kind a marked (refusal …) site can spell reaches the enumeration"
+    ;; The reviewer's plantI at its own shape. At a `(refusal …)` call the
+    ;; `:error_type` scan is not the reader — `literal-refusal-kinds-in` is,
+    ;; and it read a keyword at the kind position and nothing else — so a
+    ;; marked expression that can hand back a LITERAL kind was enumerated
+    ;; nowhere and named nowhere. Every site is now one or the other: NAMED,
+    ;; because it spells its kind at runtime and no scan can read it, or
+    ;; ENUMERATED, because every literal it can hand back is in the set.
+    ;; Never neither, which is exactly what plantI was.
+    (let [text (str "(defn refusal\n"
+                    "  [error-type message]\n"
+                    "  {:ok false :error_type (name error-type) :error message})\n"
+                    "\n(defn- validate-request\n"
+                    "  [params]\n"
+                    "  ;; forwarded-refusal-kind: relays a kind another source minted\n"
+                    "  (refusal (get {\"planted-runtime-kind\" \"brand-new-kind\"}\n"
+                    "                (:review_kind params))\n"
+                    "           \"planted string-table kind\"\n"
+                    "           {}))\n")]
+      (is (contains? (set (literal-refusal-kinds-in text)) "brand-new-kind")
+          (str "a kind a marked (refusal …) site can hand back reached "
+               "neither the guard nor the enumeration: "
+               (pr-str (literal-refusal-kinds-in text))))))
+  (testing "a (refusal …) site that can spell NO readable kind is still named"
+    (let [text (str "(defn refusal\n"
+                    "  [error-type message]\n"
+                    "  {:ok false :error_type (name error-type) :error message})\n"
+                    "\n(defn- validate-request\n"
+                    "  [params]\n"
+                    "  ;; forwarded-refusal-kind: claims to forward, mints\n"
+                    "  (refusal (keyword (:review_kind params))\n"
+                    "           \"planted dynamic kind\"\n"
+                    "           {}))\n")]
+      (is (= 1 (count (dynamic-refusal-kind-sites-in "plant" text)))
+          (str "a (refusal …) call that spells its kind entirely at runtime "
+               "was not named: "
+               (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))
   (testing "the reachable set's real forwarding shapes stay exempt"
     (doseq [[label text]
             [["(some :error-type (remove :ok checks)) — the change buffer's own"
