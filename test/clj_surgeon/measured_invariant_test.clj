@@ -128,9 +128,107 @@
             (remove #(= measured-namespace-file (site-path % root))
                     (src-files root))))))
 
+(def ^:private clock-source-classes
+  "The JDK types a program reads a TIME from.
+
+  The METHOD names are never typed out. The round-four review's second blocking
+  finding (2026-09-04 §2) was a hand-written list of four spellings —
+  `System/nanoTime|System/currentTimeMillis|Instant/now|.getTime` — that did not
+  contain `.lastModified`, so `mcp_admit_tool.clj` published a file mtime into a
+  receipt field inside the parity hash TWO LINES ABOVE the read the same scan
+  had just caught and routed. A list of names is a list of the names somebody
+  thought of; the CLASS is what the ratchet is about, so the spellings below are
+  derived from these classes by reflection."
+  [java.lang.System
+   java.time.Instant
+   java.time.Clock
+   java.time.LocalDateTime
+   java.time.LocalDate
+   java.time.ZonedDateTime
+   java.util.Date
+   java.io.File
+   java.nio.file.Files
+   java.nio.file.attribute.FileTime
+   java.nio.file.attribute.BasicFileAttributes])
+
+(def ^:private clock-return-types
+  "A method is a clock read only if it HANDS BACK a time: an epoch or duration
+   number, or one of the JDK's time values. `File/length` and `Files/size` also
+   return `long` and are not clock reads, which is what the name fragments
+   below are for."
+  #{Long/TYPE Integer/TYPE
+    java.time.Instant java.time.LocalDate java.time.LocalDateTime
+    java.time.LocalTime java.time.ZonedDateTime java.time.OffsetDateTime
+    java.time.Clock java.util.Date java.nio.file.attribute.FileTime})
+
+(def ^:private clock-name-fragments
+  "The morphemes a JDK time accessor is spelled with. Case-carrying fragments
+   (`odified`, `poch`, `ano`, `illis`) match both `lastModified` and
+   `getLastModifiedTime` without a case-insensitive match that would drag in
+   every `now`-containing identifier in the tree."
+  ["time" "Time" "now" "Instant" "instant" "illis" "ano" "poch" "odified"
+   "Date" "Clock" "clock" "ystem"])
+
+(defn- derived-clock-expressions
+  "Every spelling of a clock read, derived from `clock-source-classes` by
+   reflection: `Class/method` for a static, `.method` for an instance method.
+
+  Sorted and distinct, so the pattern is deterministic and a diff of it is
+  readable."
+  []
+  (vec
+   (sort
+    (distinct
+     (for [^Class c clock-source-classes
+           ^java.lang.reflect.Method m (.getMethods c)
+           :let [nm (.getName m)]
+           :when (and (contains? clock-return-types (.getReturnType m))
+                      (some #(str/includes? nm %) clock-name-fragments))]
+       (if (java.lang.reflect.Modifier/isStatic (.getModifiers m))
+         (str (.getSimpleName c) "/" nm)
+         (str "." nm)))))))
+
+(defn- clock-expression-alternative
+  "One derived spelling as a regex alternative.
+
+  A static spelling is quoted literally, and it deliberately matches a
+  fully-qualified call too (`java.time.Instant/now` contains `Instant/now`). An
+  instance spelling gets a trailing word boundary so `.lastModified` does not
+  swallow `.lastModifiedTime` — both are separate alternatives and the scan
+  should say which one it found."
+  [expression]
+  (if (str/starts-with? expression ".")
+    (str "\\" expression "\\b")
+    (java.util.regex.Pattern/quote expression)))
+
 (def ^:private clock-pattern
-  "Every way a JVM program reads a clock."
-  #"System/nanoTime|System/currentTimeMillis|Instant/now|\.getTime")
+  "Every way a JVM program reads a clock, DERIVED from the JDK rather than
+   listed."
+  (re-pattern (str/join "|" (map clock-expression-alternative
+                                 (derived-clock-expressions)))))
+
+(def clock-expressions-the-ratchet-must-carry
+  "One representative spelling per JDK time shape, with the site that proved it
+  matters.
+
+  This is not the pattern — the pattern is derived. It is a fail-first witness
+  ON the derivation: each of these is planted in a receipt-publishing function
+  and the scan must name the form it sits in. A derivation that silently
+  stopped producing one of these would otherwise look exactly like a clean
+  tree."
+  {"System/nanoTime" "the monotonic clock behind every duration"
+   "System/currentTimeMillis" "the wall clock behind every epoch stamp"
+   "Instant/now" "the java.time wall clock"
+   "Instant/ofEpochMilli" "an epoch number turned back into a time value"
+   "LocalDateTime/now" "the local-time wall clock"
+   "Clock/systemUTC" "an injectable clock, still a clock"
+   ".getTime" "java.util.Date's epoch accessor"
+   ".lastModified" "the file mtime the round-four review found published at mcp_admit_tool.clj:737"
+   ".lastModifiedTime" "the java.nio spelling of the same read"
+   "Files/getLastModifiedTime" "the static java.nio spelling"
+   ".toMillis" "a FileTime converted to an epoch number"
+   ".toEpochMilli" "an Instant converted to an epoch number"
+   "FileTime/fromMillis" "an epoch number turned back into a file time"})
 
 (def ^:private escape-hatch-pattern
   "Every expression that hands back an UNTAGGED number from the measured
@@ -416,6 +514,47 @@
           (.delete (.getParentFile victim))
           (.delete (io/file root)))))))
 
+
+;; @spec MCP-OP-TIME-007
+(deftest the-derived-clock-pattern-carries-every-jdk-time-shape
+  (testing "the derivation, not a list, is what makes .lastModified visible"
+    (let [derived (set (derived-clock-expressions))
+          missing (vec (sort (remove derived
+                                     (keys clock-expressions-the-ratchet-must-carry))))]
+      (is (= [] missing)
+          (str "the JDK derivation no longer produces these clock spellings, so "
+               "a read written with one of them would be invisible to the scan: "
+               (pr-str missing)))
+      (is (< 20 (count derived))
+          (str "the derivation produced only " (count derived)
+               " spellings; reflection is not finding the JDK time methods")))))
+
+;; @spec MCP-OP-TIME-007
+(deftest the-clock-scanner-catches-every-jdk-time-shape-planted-in-a-receipt
+  (testing "each derived spelling, planted where a receipt is built"
+    (doseq [[expression why] (sort clock-expressions-the-ratchet-must-carry)]
+      (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                               (str "measured-clock-shape-" (System/nanoTime))))
+            victim (io/file root "clj_surgeon" "planted_shape.clj")
+            call (if (str/starts-with? expression ".")
+                   (str "(" expression " subject)")
+                   (str "(" expression ")"))]
+        (.mkdirs (.getParentFile victim))
+        (spit victim
+              (str "(ns clj-surgeon.planted-shape)\n\n"
+                   "(defn publish-a-receipt\n"
+                   "  [subject]\n"
+                   "  {:ok true :receipt {:written_at " call "}})\n"))
+        (try
+          (let [planted (scan clock-pattern root)]
+            (is (= {["src/clj_surgeon/planted_shape.clj" "publish-a-receipt"] 1}
+                   planted)
+                (str "the clock scan did not see a planted " expression
+                     " (" why "): " (pr-str planted))))
+          (finally
+            (.delete victim)
+            (.delete (.getParentFile victim))
+            (.delete (io/file root))))))))
 
 ;; ============================================================
 ;; 1b. The NAMESPACE's public surface, derived rather than enumerated

@@ -32,6 +32,7 @@ they are not restated here; ids remain unique across the whole `MCP-OP` prefix.
 - [x] **MCP-OP-SCHEMA-001**: For every tool in the canonical public MCP registry, clj-surgeon shall require a `measured` object carrying `elapsed_ms` as a non-negative number in that tool's output schema.
 - [x] **MCP-OP-TIME-005**: When clj-surgeon publishes any public MCP result, every field in that result whose value a clock produced shall appear only inside a `measured` block, at any depth, and never beside one.
 - [x] **MCP-OP-TIME-006**: When `clj-surgeon.measured` exposes a public var, that var shall not turn a tagged clock reading into a bare number outside a `measured` block, and shall not hand a number out of a published `measured` block, unless the witness names it in a sanctioned set with a reason; and every `measured/<verb>` reference under `src/` and `dev/experiments` shall name a var that is public in that namespace.
+- [x] **MCP-OP-TIME-007**: When clj-surgeon scans its sources for clock reads, the set of clock expressions it matches shall be DERIVED by reflection from the JDK time types rather than enumerated, and every matching read outside `clj-surgeon.measured` shall carry a `:control` allow-list entry stating why its value is never published.
 - [x] **MCP-OP-EXIT-001**: `System/exit` shall appear in `src/` only inside a `-main` entrypoint, so that no library call can terminate the process of a caller that is an MCP server, a test runner, or another tool's JVM.
 
 # #Asynchronous Verification
