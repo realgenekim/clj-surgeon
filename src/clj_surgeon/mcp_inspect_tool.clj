@@ -875,6 +875,21 @@
   10612` — so the refusal text was bounded by the caller's input."
   512)
 
+;; @spec MCP-OP-STUDY-046
+(defn- bounded-cause
+  "A refusal's cause, bounded, with a typed marker naming its true length.
+
+  Field evidence (Sol O2 round-2 review, section 5): a synthetic
+  10,000-character path was bounded at 512 characters in its detail line and
+  then repeated IN FULL as the cause — 10,612 characters of text — so the one
+  string a caller cannot control the size of was the one the text did not
+  bound."
+  [cause]
+  (if (<= (count cause) max-refusal-cause-characters)
+    cause
+    (str (subs cause 0 max-refusal-cause-characters)
+         " … (" (count cause) " characters)")))
+
 ;; @spec MCP-OP-STUDY-042
 (defn- refusal-detail-lines
   [result]
@@ -923,7 +938,12 @@
                    "unknown-error")
                  (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
          (when (:error result) "")
-         (when (:error result) (str "  " (:error result)))]
+         ;; @spec MCP-OP-STUDY-046
+         ;; The cause is bounded like every other refusal detail, with a
+         ;; marker naming its original length. The COMPLETE cause still
+         ;; travels, under the ordinary receipt-fact bound, so a refusal
+         ;; text is bounded by a constant rather than by the caller's input.
+         (when (:error result) (str "  " (bounded-cause (:error result))))]
         (refusal-detail-lines result)
         extra-lines
         [(when (:remedy result) "")

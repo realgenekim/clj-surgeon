@@ -2563,7 +2563,88 @@
            [:invalid-study-limit {"mode" "ls-tree" "dir" "." "limit" 99999}]
            [:invalid-format {"mode" "ls-tree" "dir" "." "format" "EDN"}]
            [:dir-not-found {"mode" "ls-tree" "dir" "no-such-dir-xyz"}]
-   [:unknown-parameter {"mode" "ls-tree" "dir" "." "depth" 2}]])
+   [:unknown-parameter {"mode" "ls-tree" "dir" "." "depth" 2}]
+
+   ;; @spec MCP-OP-STUDY-046
+   ;; O2 round 3: the eighteen reasons `src/clj_surgeon/mcp_inspect.clj`
+   ;; constructs that no round-two fixture reached. The set is derived from
+   ;; the constructors by `the-refusal-ratchet-drives-every-reason-the-source-
+   ;; constructs`, so a NEW `refuse!` reason lands here as a failing test.
+   [:expected-object {"requests" ["not-an-object"]
+                      "expect" {"requests" 1 "files" 1}}]
+   [:non-blank-string {"requests" [{"id" "" "operation" "outline"
+                                    "file" real-file}]
+                       "expect" {"requests" 1 "files" 1}}]
+   [:non-empty-array {"requests" [{"operation" "forms" "file" real-file
+                                   "forms" [] "expect" {"forms" 1}}]
+                      "expect" {"requests" 1 "files" 1}}]
+   [:positive-integer {"requests" [{"operation" "forms" "file" real-file
+                                    "forms" ["reader-cond?"]
+                                    "expect" {"forms" 0}}]
+                       "expect" {"requests" 1 "files" 1}}]
+   [:non-negative-integer {"requests" [{"operation" "match" "file" real-file
+                                        "match" "(defn- _ _ _)"
+                                        "expect" {"matches" -1}}]
+                           "expect" {"requests" 1 "files" 1}}]
+   [:boolean {"requests" [{"operation" "forms" "file" real-file
+                           "forms" ["reader-cond?"] "expect" {"forms" 1}
+                           "include_source" "yes"}]
+              "expect" {"requests" 1 "files" 1}}]
+   [:invalid-relative-source-path
+    {"requests" [{"operation" "outline" "file" "/etc/passwd"}]
+     "expect" {"requests" 1 "files" 1}}]
+   [:invalid-study-limit-request
+    {"requests" [{"operation" "deps" "file" real-file "limit" 99999}]
+     "expect" {"requests" 1 "files" 1}}]
+   [:request-expectation-mismatch
+    {"requests" [{"operation" "forms" "file" real-file
+                  "forms" ["reader-cond?" "splicing-rcond?"]
+                  "expect" {"forms" 1}}]
+     "expect" {"requests" 1 "files" 1}}]
+   [:too-many-forms
+    {"requests" [{"operation" "forms" "file" real-file
+                  "forms" (mapv #(str "form-" %) (range 129))
+                  "expect" {"forms" 129}}]
+     "expect" {"requests" 1 "files" 1}}]
+   [:mixed-request-ids
+    {"requests" [{"id" "a" "operation" "outline" "file" real-file}
+                 {"operation" "outline" "file" real-file}]
+     "expect" {"requests" 2 "files" 1}}]
+   [:duplicate-id
+    {"requests" [{"id" "same" "operation" "outline" "file" real-file}
+                 {"id" "same" "operation" "deps" "file" real-file
+                  "limit" 4096}]
+     "expect" {"requests" 2 "files" 1}}]
+   [:operation-required
+    {"requests" [{"file" real-file}]
+     "expect" {"requests" 1 "files" 1}}]
+   [:too-many-requests
+    {"requests" (mapv (fn [index]
+                        {"id" (str "r" index) "operation" "outline"
+                         "file" real-file})
+                      (range 65))
+     "expect" {"requests" 65 "files" 1}}]
+   [:too-many-files
+    {"requests" [{"operation" "outline" "file" real-file}]
+     "expect" {"requests" 1 "files" 1}
+     "snapshot_guards" (into {real-file (apply str (repeat 64 "a"))}
+                             (map (fn [index]
+                                    [(str "src/guard_" index ".clj")
+                                     (apply str (repeat 64 "b"))]))
+                             (range 32))}]
+   [:empty-snapshot-guards
+    {"requests" [{"operation" "outline" "file" real-file}]
+     "expect" {"requests" 1 "files" 1}
+     "snapshot_guards" {}}]
+   [:invalid-snapshot-hash
+    {"requests" [{"operation" "outline" "file" real-file}]
+     "expect" {"requests" 1 "files" 1}
+     "snapshot_guards" {real-file "not-a-sha256"}}]
+   [:missing-snapshot-guards
+    {"requests" [{"operation" "outline" "file" real-file}]
+     "expect" {"requests" 1 "files" 1}
+     "snapshot_guards" {"src/clj_surgeon/outline.clj"
+                        (apply str (repeat 64 "a"))}}]])
 
 ;; @spec MCP-OP-STUDY-042
 (deftest every-refusal-kind-renders-its-cause-and-carries-no-unrendered-fact
