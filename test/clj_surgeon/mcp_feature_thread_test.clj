@@ -2831,9 +2831,22 @@
               (str "got " (pr-str (:error_type structured))))
           (is (str/includes? (str (:error structured)) ".clj-surgeon/feature-thread.edn")
               "the refusal must name the path AS SPELLED")
-          (is (str/includes? (str (:resolved_target structured)) "outside/conventions.edn")
-              (str "the refusal must name the resolved target; got "
-                   (pr-str (:resolved_target structured))))
+          ;; @spec MCP-OP-THREAD-051
+          ;; ROUND-NINE REVIEW, finding 4 (BLOCKING): the refusal named the path
+          ;; as spelled AND published the RESOLVED target, which is by
+          ;; construction outside the workspace the caller scoped us to. A
+          ;; refusal may say a path escapes; it may not say where TO.
+          (let [target (.getCanonicalPath (io/file base "outside/conventions.edn"))
+                wire (str text " " (json/generate-string structured))]
+            (is (nil? (:resolved_target structured))
+                (str "the refusal published the resolved out-of-root target: "
+                     (pr-str (:resolved_target structured))))
+            (is (not (str/includes? wire target))
+                "the resolved out-of-root path reached the wire")
+            (is (not (str/includes? wire "outside"))
+                (str "a segment of the out-of-root target reached the wire:"
+                     " the refusal must name only the path AS SPELLED and the"
+                     " FACT that it resolves outside the root")))
           (is (not (str/includes? (str text) outside-conventions-canary))
               "the out-of-root canary reached the receipt")
           (is (not (str/includes? (json/generate-string structured)
@@ -2858,8 +2871,30 @@
                  (:error_type structured))
               (str "got " (pr-str (:error_type structured))))
           (is (not (str/includes? (str text) outside-conventions-canary))
-              "the out-of-root canary reached the receipt"))
+              "the out-of-root canary reached the receipt")
+          ;; @spec MCP-OP-THREAD-051
+          (let [target (.getCanonicalPath (io/file base "outside-conf/feature-thread.edn"))
+                wire (str text " " (json/generate-string structured))]
+            (is (nil? (:resolved_target structured))
+                (str "the symlinked-DIRECTORY refusal published the resolved"
+                     " out-of-root target: "
+                     (pr-str (:resolved_target structured))))
+            (is (not (str/includes? wire target))
+                "the resolved out-of-root path reached the wire")
+            (is (not (str/includes? wire "outside-conf"))
+                "a segment of the out-of-root target reached the wire")))
         (finally (delete-tree! base)))))
+
+  ;; @spec MCP-OP-THREAD-051
+  ;; The rule stated as a rule: NO refusal in this namespace publishes a
+  ;; resolved path. `real-path`/`getCanonicalPath` exist to DECIDE containment,
+  ;; and a decision is not a disclosure.
+  (testing "no refusal in the namespace carries a resolved out-of-root path"
+    (is (nil? (:resolved_target
+                (ft/conventions-escape-refusal
+                  "/nonexistent-root-ft10"
+                  (io/file "/nonexistent-root-ft10/.clj-surgeon/feature-thread.edn"))))
+        "the typed refusal still carries a resolved_target field"))
 
   (testing "an ordinary in-workspace conventions file still loads"
     (let [root (io/file (str (java.nio.file.Files/createTempDirectory
