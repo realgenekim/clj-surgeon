@@ -4759,7 +4759,138 @@
                      "that could not be read: " (pr-str (:next_call result))))
             (is (not (str/includes? (str (:remedy result)) "ran out"))
                 (str "the remedy invites a smaller retry against a read that "
-                     "failed: " (pr-str (:remedy result)))))))
+                     "failed: " (pr-str (:remedy result))))))
+
+        ;; -------------------------------------------------------------------
+        ;; Opus's round-sixteen NO-GO items 1 and 3, blocking. The round that
+        ;; closed this class closed it at ONE entrance. `collect-inputs` took
+        ;; the typed catch; `core/census-sources` kept its bare `(slurp p)`,
+        ;; and the identical storm through the CLI answered
+        ;;
+        ;;   {:file-not-readable 16523, :census-adapter-failure 1623, :OK 1854}
+        ;;
+        ;; — 1,623 in 20,000 carrying round fourteen's rejected receipt, and
+        ;; carrying it to a request that named ONE file with a remedy telling
+        ;; it to point `:dir` at a smaller directory. The witness above is
+        ;; green over all of it because it drives `execute-request!` only,
+        ;; which is the same blindness as the round-fourteen witness that drove
+        ;; only `:file`. A rule proved at one entrance while the EARS text
+        ;; states it for both is what authorises the next round to move on.
+        ;; -------------------------------------------------------------------
+        (testing "the CLI's read after the fence is not an adapter crash either"
+          (let [named-file (.getCanonicalPath racing)
+                stop (atom false)
+                flipper (doto (Thread.
+                                ^Runnable
+                                (fn []
+                                  (while (not @stop)
+                                    (.setReadable racing false false)
+                                    (.setReadable racing true true))))
+                          (.setDaemon true)
+                          (.start))
+                cli-answer (fn []
+                             (let [r (refusal-or-throw
+                                       #(core/run-relation-census
+                                          {:file named-file}))]
+                               (cond
+                                 (:threw r) (:threw r)
+                                 (:ok r) :ok
+                                 :else (:error-type r))))
+                counts (try (frequencies (repeatedly storm cli-answer))
+                            (finally (reset! stop true)
+                                     (.join flipper 5000)
+                                     (.setReadable racing true true)))]
+            (is (pos? (- storm (get counts :ok 0)))
+                (str "the flipper never won a race at the CLI, so this run "
+                     "proves nothing: " (pr-str counts)))
+            (is (zero? (get counts :census-adapter-failure 0))
+                (str "the CLI reported a permission bit as an adapter crash "
+                     (get counts :census-adapter-failure 0) " times in "
+                     storm ": " (pr-str counts)))
+            (is (zero? (get counts :census-resource-exhausted 0))
+                (str "the CLI reported a permission bit as a resource "
+                     "exhaustion: " (pr-str counts)))
+            (is (nil? (some #(when (string? %) %) (keys counts)))
+                (str "the CLI threw instead of refusing: " (pr-str counts)))))
+
+        (testing "the CLI names the actual cause, not a resource exhaustion"
+          ;; Deterministic, no race: the reader fails on the one file the
+          ;; request named. The refusal must answer as the fence answers a
+          ;; path it refuses — `:file-not-readable`, naming the source the
+          ;; caller named — and its remedy must be about a read that failed,
+          ;; never the walk's lost aggregates and never "point :dir at a
+          ;; directory you know is smaller" handed to a one-file request.
+          (let [named-file (.getCanonicalPath racing)
+                original slurp
+                result (refusal-or-throw
+                         #(with-redefs
+                            [slurp (fn [& args]
+                                     (if (str/includes? (str (first args))
+                                                        "race.clj")
+                                       (throw (java.io.FileNotFoundException.
+                                                "injected (Permission denied)"))
+                                       (apply original args)))]
+                            (core/run-relation-census {:file named-file})))]
+            (is (nil? (:threw result))
+                (str "the CLI threw instead of refusing: " (pr-str result)))
+            (is (= :file-not-readable (:error-type result))
+                (str "a read that failed after the CLI's fence answered "
+                     (pr-str (select-keys result [:error-type :error :exhausted
+                                                  :remedy]))))
+            (is (= :read-failed-after-fence (:cause result))
+                (str "the refusal does not say WHY the read failed: "
+                     (pr-str result)))
+            (is (= named-file (:file result))
+                (str "the refusal does not name the source the caller named: "
+                     (pr-str (:file result))))
+            (is (not (contains? result :exhausted))
+                (str "the refusal claims a resource-exhaustion fact about a "
+                     "read: " (pr-str (:exhausted result))))
+            (is (not (str/includes? (str (:remedy result))
+                                    "directory you know is smaller"))
+                (str "a one-file request is told to point :dir somewhere "
+                     "smaller: " (pr-str (:remedy result))))
+            (is (str/includes? (str (:remedy result)) named-file)
+                (str "the remedy does not name the source that could not be "
+                     "read: " (pr-str (:remedy result))))
+            (is (contains? (into census/cli-refusal-types
+                                 census/mcp-refusal-types)
+                           (:error-type result))
+                (str "the CLI refused " (pr-str (:error-type result))
+                     ", which no declared refusal set contains"))))
+
+        (testing "a walk member whose read fails answers with the walk's remedy"
+          ;; The same fact reached by the OTHER provenance: the path came from
+          ;; the `:dir` walk, so the remedy is the walk's — remove or repair it
+          ;; — and the file is named project-relative, exactly as a member the
+          ;; fence refuses is named.
+          (let [named (.getCanonicalPath root)
+                original slurp
+                result (refusal-or-throw
+                         #(with-redefs
+                            [slurp (fn [& args]
+                                     (if (str/includes? (str (first args))
+                                                        "race.clj")
+                                       (throw (java.io.FileNotFoundException.
+                                                "injected (Permission denied)"))
+                                       (apply original args)))]
+                            (core/run-relation-census {:dir named})))]
+            (is (nil? (:threw result))
+                (str "the walk threw instead of refusing: " (pr-str result)))
+            (is (= :file-not-readable (:error-type result))
+                (str "a walk member whose read failed answered "
+                     (pr-str (select-keys result [:error-type :error
+                                                  :remedy]))))
+            (is (= :read-failed-after-fence (:cause result))
+                (str "the refusal does not say WHY the read failed: "
+                     (pr-str result)))
+            (is (= race (:file result))
+                (str "the refusal does not name the member project-relative: "
+                     (pr-str (:file result))))
+            (is (str/includes? (str (:remedy result))
+                               "came from the workspace walk")
+                (str "the walk's refusal does not say where the path came "
+                     "from: " (pr-str (:remedy result)))))))
       (finally
         (delete-tree! root)))))
 
