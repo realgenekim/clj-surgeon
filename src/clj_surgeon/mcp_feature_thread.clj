@@ -1049,7 +1049,18 @@
   `toRealPath` resolves the file's own link AND every link in its parent
   chain, so a symlinked `.clj-surgeon` DIRECTORY is caught by the same
   comparison. The separator is part of the test -- without it a sibling
-  `<root>-evil` passes a bare prefix check (MCP-OP-THREAD-033)."
+  `<root>-evil` passes a bare prefix check (MCP-OP-THREAD-033).
+
+  Round-nine review, finding 4 (BLOCKING): the refusal ANSWERED with the
+  resolved target -- `resolved_target` and the error sentence both named the
+  out-of-workspace file the link points at. Refusing to READ a path and then
+  PUBLISHING it are the same disclosure by two routes, and the second one looks
+  like diligence. So the refusal names the path AS SPELLED, workspace-relative,
+  and the FACT that it resolves outside the root. It never names the resolved
+  path, and it never names the resolved ROOT either: a caller who symlinked
+  their own workspace root gets their own spelling back, not its real location.
+  The resolution still happens -- it is what DECIDES containment. A decision is
+  not a disclosure."
   [root ^java.io.File f]
   (let [real-root (or (real-path (io/file root)) (.getCanonicalPath (io/file root)))
         real-file (real-path f)
@@ -1058,13 +1069,14 @@
       {:ok false
        :error_type "feature-thread-conventions-file-escapes-workspace"
        :error (str "the convention set at " conventions-file
-                   " resolves outside the workspace root: "
-                   (or real-file "the real path could not be resolved")
-                   " is not under " real-root
-                   ". It was NOT read.")
+                   (if real-file
+                     " resolves outside the workspace root"
+                     " could not be resolved to a real path")
+                   ". It was NOT read. The resolved location is deliberately"
+                   " NOT named here: it is outside the workspace this call was"
+                   " scoped to.")
        :conventions_source conventions-file
-       :workspace_root real-root
-       :resolved_target real-file
+       :workspace_root (str root)
        :remedy (str "Replace the symlink at " conventions-file
                     " with a real file inside the workspace, or pass the"
                     " convention set inline as `config`.")})))

@@ -2818,10 +2818,10 @@
                               (into-array java.nio.file.attribute.FileAttribute []))))
           root (io/file base "repo")]
       (try
-        (write-file! base "outside/conventions.edn" (outside-conventions-edn))
+        (write-file! base "ft10-beyond/conventions.edn" (outside-conventions-edn))
         (write-file! root "src/own.clj" "(ns own)\n(defn formatDraft [x] x)\n")
         (symlink-path! (io/file root ".clj-surgeon/feature-thread.edn")
-                  "../../outside/conventions.edn")
+                  "../../ft10-beyond/conventions.edn")
         (let [{:keys [structured text error?]}
               (call! {:subject "formatDraft"
                       :scope {:workspace_root (.getPath root)}})]
@@ -2836,14 +2836,14 @@
           ;; as spelled AND published the RESOLVED target, which is by
           ;; construction outside the workspace the caller scoped us to. A
           ;; refusal may say a path escapes; it may not say where TO.
-          (let [target (.getCanonicalPath (io/file base "outside/conventions.edn"))
+          (let [target (.getCanonicalPath (io/file base "ft10-beyond/conventions.edn"))
                 wire (str text " " (json/generate-string structured))]
             (is (nil? (:resolved_target structured))
                 (str "the refusal published the resolved out-of-root target: "
                      (pr-str (:resolved_target structured))))
             (is (not (str/includes? wire target))
                 "the resolved out-of-root path reached the wire")
-            (is (not (str/includes? wire "outside"))
+            (is (not (str/includes? wire "ft10-beyond"))
                 (str "a segment of the out-of-root target reached the wire:"
                      " the refusal must name only the path AS SPELLED and the"
                      " FACT that it resolves outside the root")))
@@ -2860,9 +2860,9 @@
                               (into-array java.nio.file.attribute.FileAttribute []))))
           root (io/file base "repo")]
       (try
-        (write-file! base "outside-conf/feature-thread.edn" (outside-conventions-edn))
+        (write-file! base "ft10-beyond-conf/feature-thread.edn" (outside-conventions-edn))
         (write-file! root "src/own.clj" "(ns own)\n(defn formatDraft [x] x)\n")
-        (symlink-path! (io/file root ".clj-surgeon") "../outside-conf")
+        (symlink-path! (io/file root ".clj-surgeon") "../ft10-beyond-conf")
         (let [{:keys [structured text error?]}
               (call! {:subject "formatDraft"
                       :scope {:workspace_root (.getPath root)}})]
@@ -2873,7 +2873,7 @@
           (is (not (str/includes? (str text) outside-conventions-canary))
               "the out-of-root canary reached the receipt")
           ;; @spec MCP-OP-THREAD-051
-          (let [target (.getCanonicalPath (io/file base "outside-conf/feature-thread.edn"))
+          (let [target (.getCanonicalPath (io/file base "ft10-beyond-conf/feature-thread.edn"))
                 wire (str text " " (json/generate-string structured))]
             (is (nil? (:resolved_target structured))
                 (str "the symlinked-DIRECTORY refusal published the resolved"
@@ -2881,7 +2881,7 @@
                      (pr-str (:resolved_target structured))))
             (is (not (str/includes? wire target))
                 "the resolved out-of-root path reached the wire")
-            (is (not (str/includes? wire "outside-conf"))
+            (is (not (str/includes? wire "ft10-beyond-conf"))
                 "a segment of the out-of-root target reached the wire")))
         (finally (delete-tree! base)))))
 
