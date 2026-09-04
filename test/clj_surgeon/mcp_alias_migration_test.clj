@@ -1291,6 +1291,116 @@
           "the fact line does not count the facts it dropped"))))
 
 ;; @spec MCP-OP-ALIAS-059
+(def ^:private text-renders-by-value
+  "Refusal keys the text block renders as a VALUE rather than as a name.
+
+  `ok` is the word `refused`, `operation` is the header, `error_type` is the
+  cause after it, and `error` is the `→` sentence. Every OTHER key a refusal
+  carries must appear in the text under its own name, or a client reading the
+  text is told less than one reading the structure."
+  #{"ok" "operation" "error_type" "error"})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- refusal-receipt-keys-in-source
+  "Every key an alias_migration refusal carries by construction.
+
+  Read with the reader rather than grepped: the constructor's own base map
+  merged with every facts map handed to a `(refusal …)` call in the verb's two
+  namespaces. Keys are the EVEN meaningful children of each map literal, so a
+  keyword VALUE is never mistaken for a key."
+  []
+  (let [meaningful (fn [node]
+                     (remove #(contains? #{:whitespace :newline :comma :comment}
+                                         (n/tag %))
+                             (n/children node)))
+        map-keys (fn [node]
+                   (keep-indexed
+                     (fn [index child]
+                       (when (even? index)
+                         (let [value (try (n/sexpr child) (catch Exception _ nil))]
+                           (when (keyword? value) (name value)))))
+                     (meaningful node)))
+        forms (fn [path]
+                (tree-seq n/inner? n/children
+                          (parser/parse-string-all (slurp path))))
+        constructor-keys
+        (fn [path]
+          (->> (forms path)
+               (filter #(= :list (n/tag %)))
+               (filter (fn [node]
+                         (let [[head name-node] (meaningful node)]
+                           (and (contains? #{"defn" "defn-"}
+                                           (some-> head n/string))
+                                (= "refusal" (some-> name-node n/string))))))
+               (mapcat (fn [node]
+                         (->> (tree-seq n/inner? n/children node)
+                              (filter #(= :map (n/tag %)))
+                              (mapcat map-keys))))))
+        fact-keys
+        (fn [path]
+          (->> (forms path)
+               (filter #(= :list (n/tag %)))
+               (filter (fn [node]
+                         (= "refusal" (some-> (first (meaningful node))
+                                              n/string))))
+               (mapcat (fn [node]
+                         (->> (n/children node)
+                              (filter #(= :map (n/tag %)))
+                              (mapcat map-keys))))))
+        sources ["src/clj_surgeon/mcp_alias_migration.clj"
+                 "src/clj_surgeon/alias_migration.clj"]]
+    (into (sorted-set)
+          cat
+          [(mapcat constructor-keys sources)
+           (mapcat fact-keys sources)])))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest every-refusal-key-the-verb-constructs-appears-in-its-text-block
+  ;; E-PREWRITE cohort, 2026-09-04, live against alias_migration at 656a0a3c:
+  ;; the `alias-migration-alias-policy-exhausted` refusal carried
+  ;; `mutation_attempted false` and `write_authority false` in
+  ;; structuredContent, and its text block carried neither —
+  ;;
+  ;;   structured keys => [… :mutation_attempted … :write_authority]
+  ;;   text names mutation_attempted? => false
+  ;;   text names write_authority?    => false
+  ;;
+  ;; — because both are listed as ENVELOPE keys and nothing renders them.
+  ;; They are exactly the two fields that separate "refused before touching
+  ;; anything" from "tried and rolled back", so a client reading the text
+  ;; cannot tell those two states apart. `source_unchanged`,
+  ;; `next_action` and `expect_files_unchanged_reason` are suppressed the same
+  ;; way. This is derived from SOURCE, so a refusal key added later without a
+  ;; rendering fails the gate on the day it is written.
+  (let [keys-in-source (refusal-receipt-keys-in-source)]
+    (is (contains? keys-in-source "mutation_attempted")
+        "the scan does not see the constructor's own base map")
+    (is (contains? keys-in-source "collided_bindings")
+        "the scan does not see a facts map handed to the constructor")
+    (doseq [field (remove text-renders-by-value keys-in-source)]
+      (let [receipt {:ok false
+                     :operation "alias_migration"
+                     :error_type "alias-migration-empty-scope"
+                     :error "one sentence stating the cause"
+                     :elapsed_ms 1.25
+                     (keyword field) "probe-value"}
+            text (mcp-tool/alias-migration-summary receipt)]
+        (is (str/includes? text field)
+            (str "the text block drops the refusal key " field
+                 ", which structuredContent carries"))))
+    (testing "the four keys the text renders as values, not as names"
+      (let [text (mcp-tool/alias-migration-summary
+                   {:ok false
+                    :operation "alias_migration"
+                    :error_type "alias-migration-empty-scope"
+                    :error "one sentence stating the cause"
+                    :elapsed_ms 1.25})]
+        (is (str/includes? text "alias_migration") "operation")
+        (is (str/includes? text "refused") "ok")
+        (is (str/includes? text "alias-migration-empty-scope") "error_type")
+        (is (str/includes? text "one sentence stating the cause") "error")))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest a-refusal-without-a-remedy-does-not-point-at-one
   ;; The rendered no-next_call line said "the remedy above names what only the
   ;; caller can decide" unconditionally — on a receipt carrying no `:remedy` it
