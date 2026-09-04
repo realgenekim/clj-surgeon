@@ -4118,3 +4118,62 @@
                "on every workspace it routes"))
       (is (.canExecute (io/file (str path))))
       (finally (delete-tree! home)))))
+
+;; ---------------------------------------------------------------------------
+;; Nothing leaves the handler's edge without a receipt
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-129
+(deftest an-error-at-the-handlers-edge-becomes-a-typed-refusal
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        root (temp-dir)
+        drive (fn [thrown]
+                (let [captured (atom nil)]
+                  (reset! config-atom
+                          {:project-root (.getPath root)
+                           :admit-lint-runner (fn [_ _] (throw thrown))})
+                  (admit/handle-admit-clojure-patch
+                    nil
+                    {"patch" clean-multi-file-patch "verify" "focused"}
+                    (fn [content error? result]
+                      (reset! captured {:text (first content)
+                                        :error? error?
+                                        :result result})))
+                  @captured))]
+    (try
+      (write-sources! root base-sources)
+      (testing "an OutOfMemoryError below the read ceiling"
+        ;; Constructed, never provoked: exhausting the heap inside the suite
+        ;; would prove nothing this does not, and would take the suite with it.
+        (let [{:keys [text error? result]}
+              (drive (OutOfMemoryError. "Java heap space"))]
+          (is (some? result)
+              (str "an Error escaped the handler with no receipt at all, and "
+                   "a caller that receives nothing cannot tell a refusal "
+                   "from a write"))
+          (is (false? (:ok result)))
+          (is (true? error?))
+          (is (= :analyzer-memory-exhausted (:error-type result)))
+          (is (pos? (long (:max_heap_mib result)))
+              "the heap is the number that would lift this")
+          (is (str/includes? (str (:error result)) "MiB"))
+          (is (string? (:remedy result)))
+          (testing "and it does not claim a safety it cannot know"
+            (is (nil? (:source-unchanged result))
+                (str "the gate cannot know how far an escaped Error got, and "
+                     "a false 'source unchanged' terminates investigation"))
+            (is (not (str/includes? (str text) "source unchanged"))))))
+      (testing "any other Error is typed too, rather than escaping"
+        (let [{:keys [result]} (drive (StackOverflowError.))]
+          (is (some? result))
+          (is (false? (:ok result)))
+          (is (= :admit-tool-error (:error-type result)))))
+      (testing "an ordinary Exception keeps the type it always had"
+        (let [{:keys [result]} (drive (ex-info "boom" {}))]
+          (is (= :admit-tool-failure (:error-type result)))
+          (is (true? (:source-unchanged result))
+              "an Exception is caught below, where the gate does know")))
+      (finally
+        (reset! config-atom previous)
+        (delete-tree! root)))))
