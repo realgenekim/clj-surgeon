@@ -609,7 +609,9 @@
 
   The map is applied in ONE pass by `clojure.string/escape`, so no escape can
   be re-escaped and the encoding is decodable: after `~` comes exactly one of
-  `0`-`6`, and after `\\` exactly one of `\\`, `n`, `r`, `t`."
+  `0`-`7`, and after `\\` exactly one of `\\`, `n`, `r`, `t`. `~7` is spent
+  on the EMPTY segment (see `empty-segment-pointer`) and is therefore not in
+  this map: no character produces it, so no segment can spell it by accident."
   {\\ "\\\\"
    \newline "\\n"
    \return "\\r"
@@ -623,6 +625,18 @@
    \= "~6"})
 
 ;; @spec MCP-OP-STUDY-052
+(def ^:private empty-segment-pointer
+  "The spelling of the EMPTY path segment — the one segment an escape map
+  cannot reach.
+
+  `~7` and nothing shorter. A segment that renders as NO characters is not an
+  address: it erases the position it occupies, so `[\"\" 0]` and `[0]` — two
+  different JSON paths — spell one pointer. `~` is escaped to `~0` inside
+  every segment, so no non-empty segment can produce `~7`, and the encoding
+  stays injective and decodable in one direction each."
+  "~7")
+
+;; @spec MCP-OP-STUDY-052
 (defn escape-pointer-segment
   "One path segment, with every delimiter of this pointer syntax escaped.
 
@@ -632,9 +646,21 @@
   `a.b: <value>` line discharged both leaves and the block declared one
   dropped while an audit of its own text found two — 587 disagreements across
   the allowance band. A pointer that cannot be decoded back to the path that
-  made it is not an address."
+  made it is not an address.
+
+  @spec MCP-OP-STUDY-052 — an escape map cannot reach the EMPTY segment:
+  `str/escape` maps CHARACTERS, and the empty string has none, so the segment
+  escaped to zero characters and the position it names was ERASED. Field
+  evidence (Sol O2 round-9 review, 2026-09-04, section 1): the distinct JSON
+  paths `[\"\" 0]` — an array under the empty top-level key — and `[0]` — the
+  integer top-level key, published as the object key `\"0\"` — both spelled
+  `[0]`, and a FITTING 32,731-byte public result at evidence allowance 237
+  rendered one of them, named the other on its `dropped:` line, and declared
+  32 dropped where an audit of that same text found 31."
   [segment]
-  (str/escape segment pointer-segment-escapes))
+  (if (empty? segment)
+    empty-segment-pointer
+    (str/escape segment pointer-segment-escapes)))
 
 (defn leaf-label
   "`results[0].source_anchor.range.start.line` — the JSON pointer a caller
