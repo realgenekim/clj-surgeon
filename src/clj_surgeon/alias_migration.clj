@@ -980,15 +980,35 @@
           :else
           (let [{:keys [alias collided]} (choose-alias root direct policy)]
             (if (nil? alias)
+              ;; @spec MCP-OP-ALIAS-008
+              ;; NO next_call. The composition used to append
+              ;; `(str (last policy) "-2")`, so a four-entry policy was
+              ;; answered with `store-2-2` — a value the caller's own request
+              ;; forbids. A next_call is the caller's request with one field
+              ;; corrected, and a correction that violates a constraint the
+              ;; caller stated is not executable by the caller who stated it.
+              ;; Which alias to add is the one thing here only they know.
               {:refusal (refusal :alias-migration-alias-policy-exhausted
                                  (str "Every alias_policy entry is already bound in "
                                       file)
                                  {:file file
                                   :alias_policy policy
-                                  :collided_bindings collided}
-                                 (-> (base-call request)
-                                     (update-in ["to" "alias_policy"] conj
-                                                (str (last policy) "-2"))))}
+                                  :collided_bindings collided
+                                  :remedy
+                                  (str "to.alias_policy is exhausted for "
+                                       file ": every one of its "
+                                       (count policy) " entries — "
+                                       (pr-str (vec policy))
+                                       " — is already bound to another "
+                                       "namespace in that file's ns form. No "
+                                       "next_call is composed, because any "
+                                       "alias this verb could propose would "
+                                       "be outside the policy you sent and "
+                                       "your own request forbids it. Add an "
+                                       "alias that file does not bind to "
+                                       "to.alias_policy, or exclude " file
+                                       " through scope.exclude, and resend.")}
+                                 nil)}
               (let [referred (:referred target)
                     var-bare? (and (not lib-mode?)
                                    (or (contains? referred from-var)

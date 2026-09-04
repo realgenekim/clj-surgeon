@@ -1651,7 +1651,13 @@
         (is (false? (:ok result)))
         (is (= "alias-migration-alias-policy-exhausted" (:error_type result)))
         (is (= ["store2"] (:collided_bindings result)))
-        (is (= ["store2" "store2-2"] (get-in result [:next_call "to" "alias_policy"]))))
+        ;; @spec MCP-OP-ALIAS-008
+        ;; This assertion used to PIN the defect: it required the next_call to
+        ;; carry ["store2" "store2-2"], an alias_policy the caller never sent.
+        ;; An oracle that asserts the wrong invariant is a finding of its own,
+        ;; corrected in the same fix.
+        (is (nil? (:next_call result))
+            "an exhausted policy was answered with an alias outside it"))
       (finally
         (delete-tree! workspace)))))
 
