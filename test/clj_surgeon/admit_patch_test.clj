@@ -5726,6 +5726,47 @@
         (is (= :failed state))
         (is (= 1 (count failures)))))
 
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Sol, round eleven: a mixed-type arm-key attack fails closed but ESCAPES
+    ;; the promised bucket. `{"8" true, 32 true, 64 true}` differs from the
+    ;; script's declared `[8 32 64]`, so `classify-battery-receipt` correctly
+    ;; takes the "receipt cannot shrink its own subject" branch -- and that
+    ;; branch built its reason with `(sort (keys verdicts))`. Clojure's `sort`
+    ;; calls `compare` pairwise, and `compare` throws `ClassCastException` on
+    ;; a `String` against a `Long`, so the classifier itself threw BEFORE
+    ;; `fail-precondition!` ever ran: no entry in `precondition-failures`, no
+    ;; printed clearing command, and the exception propagates out of
+    ;; `check-battery-precondition!` as an ordinary test ERROR rather than the
+    ;; promised typed :failed state. The classifier must be TOTAL: every
+    ;; shape that reaches it, however malformed, is either :satisfied or
+    ;; :failed, and never throws.
+    (testing "mixed-type arm keys fail closed WITHOUT escaping the failed bucket"
+      (doseq [[label record]
+              [["the exact mixed-key attack: a string key beside long keys"
+                (assoc complete :arm-verdicts {"8" true 32 true 64 true})]
+               ["a nil key beside long keys"
+                (assoc complete :arm-verdicts {nil true 32 true 64 true})]
+               ["a keyword key beside long keys"
+                (assoc complete :arm-verdicts {:8 true 32 true 64 true})]
+               ["a string arm list instead of the declared longs"
+                (assoc complete
+                       :arms ["8" "32" "64"]
+                       :arm-verdicts {"8" true "32" true "64" true})]
+               ["arm-verdicts as a vector instead of a map"
+                (assoc complete :arm-verdicts [true true true])]
+               ["arms as a set instead of a vector"
+                (assoc complete
+                       :arms #{8 32 64 99}
+                       :arm-verdicts {8 true 32 true 64 true 99 true})]]]
+        (testing label
+          (let [{:keys [state failures]} (drive-precondition-state! record)]
+            (is (= :failed state)
+                (str "a receipt with " label " must classify as :failed,"
+                     " never throw: " (pr-str record)))
+            (is (= 1 (count failures))
+                (str "the failure must land in the counted bucket, not"
+                     " escape as an uncaught exception: " (pr-str record)))))))
+
     (testing "every state spends the same number of assertions"
       (let [counts (mapv (fn [content]
                            (let [{:keys [reports]} (drive-precondition-state! content)]
