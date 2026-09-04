@@ -6152,3 +6152,200 @@
       (finally
         (delete-tree! parent)
         (doseq [top [arms-top bare-top broken-top]] (delete-tree! top))))))
+
+;; ---------------------------------------------------------------------------
+;; Opus's round-seventeen NO-GO item 1, blocking. Round sixteen's item 7 landed
+;; the sentence "NO FIELD of any refusal either entrance emits shall be
+;; unbounded", and applied the bound at the tool's `refusal` CONSTRUCTOR —
+;; which is precisely the placement the same sentence forbids. Two refusals the
+;; MCP entrance emits are not built by that constructor, and the workspace
+;; router's is one of them: a 10,001-character `workspace_root` came back as a
+;; 10,540-byte refusal carrying a 10,007-character field and no truncation
+;; marker, hours after the rule shipped.
+;;
+;; Rounds fifteen and sixteen were "one entrance proved, both claimed". This is
+;; "one refusal SHAPE proved, every shape claimed": the round-sixteen witness
+;; drove exactly one MCP shape, `{:files [long-name]}`, which goes through the
+;; constructor, and never drove `workspace_root` at all.
+;;
+;; So the witness below is TOTAL by construction on two derived axes, and it is
+;; the derivation that makes it a ratchet rather than a longer list:
+;;
+;;   * every REQUEST FIELD either entrance declares — the MCP set read out of
+;;     `census-tool-schema`'s own `:properties`, the CLI set read out of the
+;;     shared `census/request-shape-rules` table — each driven with a
+;;     10,001-character value. A field added to the schema without a hostile
+;;     drive fails the equality assertion before it can ship unbounded.
+;;   * every REFUSAL SHAPE either entrance declares — the round-sixteen
+;;     enumerations `census/mcp-refusal-types` and `census/cli-refusal-types`,
+;;     driven through the machinery that already pins them TOTAL — each
+;;     asserted to carry no field over the ceiling.
+;; ---------------------------------------------------------------------------
+
+(def ^:private hostile-field-chars
+  "The reviewer's drive length: over the 1,024-character field bound by an
+   order of magnitude, so nothing here can be green by being short."
+  10001)
+
+(def ^:private hostile-string
+  (apply str (repeat hostile-field-chars \a)))
+
+(def ^:private refusal-field-ceiling
+  "The field bound plus the marker that says it fired. Owned by the witness
+   rather than read back from the code it checks."
+  (+ 1024 64))
+
+(defn- declared-mcp-request-fields
+  "Every request field the tool's OWN published schema declares, plus the
+   unknown-field row the schema expresses as `additionalProperties false`.
+
+   Derived, never listed: a property added to `census-tool-schema` appears
+   here on the next run and fails the drive-table equality below."
+  []
+  (conj (set (keys (:properties census-tool/census-tool-schema)))
+        ::unknown-field))
+
+(defn- declared-cli-request-fields
+  "Every request field the SHARED shape table names. Derived for the same
+   reason, out of the table both entrances already validate against."
+  []
+  (set (map :field census/request-shape-rules)))
+
+(defn- echoed-hostile-input?
+  "True when a refusal carried the caller's hostile input back out at all.
+
+   A refusal that never echoes the input cannot be asked for a truncation
+   marker; one that does must carry the marker, because a silently shortened
+   field leaves the caller comparing it against what they sent."
+  [strings]
+  (boolean (some #(str/includes? % (subs hostile-string 0 200)) strings)))
+
+(defn- assert-bounded!
+  [label result]
+  (let [strings (all-strings result)]
+    (is (false? (:ok result))
+        (str label " was accepted: " (pr-str (select-keys result [:ok]))))
+    (doseq [text strings]
+      (is (<= (count text) refusal-field-ceiling)
+          (str label " published a " (count text) "-character field under a "
+               refusal-field-ceiling "-character ceiling: "
+               (pr-str (str/join (take 80 text))))))
+    (is (< (count (json/generate-string result)) 8192)
+        (str label " renders " (count (json/generate-string result))
+             " bytes, against a 4096-byte receipt cap"))
+    (when (echoed-hostile-input? strings)
+      (is (some #(str/includes? % "truncated") strings)
+          (str label " echoed the caller's input back and shortened it "
+               "without saying so")))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest every-refusal-shape-either-entrance-emits-is-bounded-at-the-entrance
+  (let [parent (temp-dir)
+        ws (io/file parent "ws")]
+    (try
+      (spit-file! (io/file ws "src/a/one.clj") arm-source)
+      (let [named (.getCanonicalPath ws)
+            mcp-drives
+            ;; `workspace_root` is driven ABSOLUTE, so it reaches the
+            ;; workspace ROUTER rather than stopping at the shape pass: the
+            ;; router's refusal is the one the constructor-level bound never
+            ;; saw.
+            {"workspace_root" {:workspace_root (str "/nope/" hostile-string)}
+             "files" {:files [hostile-string]}
+             "doors" {:doors [hostile-string]}
+             ;; Not a string field, and driven anyway so the enumeration has
+             ;; no exceptions: a set with a carve-out is a set nobody can
+             ;; check.
+             "pool_size" {:files ["src/a/one.clj"] :pool_size 0}
+             ::unknown-field {(keyword hostile-string) 1}}
+            cli-drives
+            {:dir {:dir hostile-string}
+             :files {:file hostile-string}
+             :doors {:dir named :doors hostile-string}
+             :paths {:dir (str undecodable-probe-path hostile-string)}
+             :pool-size {:dir named :threads hostile-string}
+             :unknown-fields {:dir named (keyword hostile-string) 1}}]
+
+        (testing "the hostile drives cover every request field the tool declares"
+          (is (= (declared-mcp-request-fields) (set (keys mcp-drives)))
+              (str "declared: " (pr-str (declared-mcp-request-fields))
+                   "; driven: " (pr-str (set (keys mcp-drives))))))
+
+        (testing "the hostile drives cover every request field the CLI declares"
+          (is (= (declared-cli-request-fields) (set (keys cli-drives)))
+              (str "declared: " (pr-str (declared-cli-request-fields))
+                   "; driven: " (pr-str (set (keys cli-drives))))))
+
+        (doseq [[field params] (sort-by (comp str key) mcp-drives)]
+          (testing (str "the tool bounds a hostile " field)
+            (assert-bounded!
+              (str "tool/" field)
+              (refusal-or-throw
+                #(census-tool/execute-request! {:project-root named} params)))))
+
+        (doseq [[field opts] (sort-by (comp str key) cli-drives)]
+          (testing (str "the CLI bounds a hostile " field)
+            (assert-bounded!
+              (str "cli/" field)
+              (refusal-or-throw
+                #(binding [*out* (java.io.StringWriter.)]
+                   (core/run (assoc opts :op :relation-census)))))))
+
+        ;; The reviewer's exact receipt, pinned on its own so a regression
+        ;; names the shape rather than a field count.
+        (testing "the router's own refusal is bounded, which it was not"
+          (let [result (census-tool/execute-request!
+                         {:project-root named}
+                         {:workspace_root (str "/nope/" hostile-string)})]
+            (is (= "invalid-workspace-root" (:error_type result)))
+            (is (<= (count (json/generate-string result)) 8192)
+                (str "the router refusal renders "
+                     (count (json/generate-string result))
+                     " bytes; the reviewer measured 10540"))
+            (is (>= 1088 (reduce max 0 (map count (all-strings result))))
+                (str "the router refusal's longest field is "
+                     (reduce max 0 (map count (all-strings result)))
+                     " characters; the reviewer measured 10007")))))
+      (finally
+        (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest every-declared-refusal-shape-carries-no-field-over-the-ceiling
+  ;; The second axis: not the fields going IN but the shapes coming OUT. The
+  ;; two enumerations are the ones round sixteen built and pinned TOTAL; this
+  ;; asks each of them the length question the round-seventeen router refusal
+  ;; answered wrong.
+  (let [[arms-top arms] (deep-parent! long-root-chars)
+        [bare-top bare] (deep-parent! long-root-chars)
+        [broken-top broken] (deep-parent! long-root-chars)
+        parent (temp-dir)]
+    (try
+      (spit-file! (io/file arms "src/a/one.clj") arm-source)
+      (spit-file! (io/file arms "src/b/two.clj") arm-source)
+      (spit-file! (io/file arms "src/small.clj") "()")
+      (spit-file! (io/file bare "src/app/helpers.clj") "(ns app.helpers)")
+      (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
+
+      (let [results (for [{:keys [label drive]}
+                          (mcp-refusal-drives
+                            {:arms arms :bare bare :broken broken})]
+                      {:label label :result (refusal-or-throw drive)})]
+        (testing "the drives still cover every refusal the tool declares"
+          (is (= census/mcp-refusal-types
+                 (set (map (comp keyword :error_type :result) results)))))
+        (doseq [{:keys [label result]} results]
+          (testing (str label " carries no field over the ceiling")
+            (assert-bounded! (str "tool-shape/" label) result))))
+
+      (let [trees (cli-refusal-fixture! parent)
+            results (run-cli-drives (cli-refusal-drives trees))]
+        (testing "the drives still cover every refusal the CLI declares"
+          (is (= census/cli-refusal-types
+                 (set (map (comp :error-type :result) results)))))
+        (doseq [{:keys [label result]} results]
+          (testing (str label " carries no field over the ceiling")
+            (assert-bounded! (str "cli-shape/" label) result))))
+
+      (finally
+        (delete-tree! parent)
+        (doseq [top [arms-top bare-top broken-top]] (delete-tree! top))))))
