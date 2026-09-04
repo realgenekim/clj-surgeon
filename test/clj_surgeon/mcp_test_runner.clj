@@ -48,7 +48,7 @@
    [clojure.test :refer [run-tests]]))
 
 (defn -main
-  [& _]
+  [& args]
   ;; RATCHET (2026-09-04, inb-9483a4): same enforcement as test/run_all.clj
   ;; -- refuse on tmpfs, then isolate java.io.tmpdir into a private per-run
   ;; root (via a re-exec'd child with -Djava.io.tmpdir=<root> -- a runtime
@@ -56,7 +56,7 @@
   ;; see clj-surgeon.tmp-leak-support's docstring) so leaks fail the run by
   ;; name with no cross-seat false positives.
   (let [{:keys [refused root]}
-        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"})
+        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"} args)
         _ (when refused (System/exit 97))
         tmp-root root
         tmp-before (tmp-leak/tmp-entries)

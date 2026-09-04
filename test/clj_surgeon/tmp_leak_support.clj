@@ -216,18 +216,42 @@
   []
   (some? (System/getProperty "babashka.version")))
 
+;; @spec MCP-OP-TMPHYG-006
+(defn parent-jvm-options
+  "The JVM options THIS process was launched with, minus the ones the child
+   must be given fresh (`-Djava.io.tmpdir`, which is the whole point of the
+   re-exec) and minus a debugger transport, which cannot bind twice.
+
+   Read REFLECTIVELY on purpose: `java.lang.management.ManagementFactory`
+   does not exist in bb's native image, and sci rejects the symbol at
+   ANALYSIS time -- before any try/catch could run -- so a literal class
+   symbol here would break `bb test/run_all.clj` at load."
+  []
+  (try
+    (let [factory (Class/forName "java.lang.management.ManagementFactory")
+          bean (.invoke (.getMethod factory "getRuntimeMXBean" (into-array Class []))
+                        nil (into-array Object []))
+          method (.getMethod (Class/forName "java.lang.management.RuntimeMXBean")
+                             "getInputArguments" (into-array Class []))]
+      (->> (.invoke method bean (into-array Object []))
+           (remove #(str/starts-with? % "-Djava.io.tmpdir="))
+           (remove #(str/starts-with? % "-agentlib:jdwp"))
+           vec))
+    (catch Throwable _ [])))
+
 (defn- reexec-child-command
   "The command vector for the isolated child process: `bb -D... <script>`
    under bb, or a nested `java -D... -cp <this process's classpath>
    clojure.main -m <main-ns>` under a real JVM (avoids re-running the
    slower `clojure` CLI / deps resolution; the classpath this process
    already resolved is exactly the one the child needs)."
-  [{:keys [bb-script main-ns]} tmp-root]
-  (if (bb-runtime?)
-    ["bb" (str "-Djava.io.tmpdir=" tmp-root) bb-script]
-    ["java" "-cp" (System/getProperty "java.class.path")
-     (str "-Djava.io.tmpdir=" tmp-root)
-     "clojure.main" "-m" main-ns]))
+  [{:keys [bb-script main-ns]} tmp-root args]
+  (let [args (mapv str args)]
+    (if (bb-runtime?)
+      (into ["bb" (str "-Djava.io.tmpdir=" tmp-root) bb-script] args)
+      (into (into ["java" "-cp" (System/getProperty "java.class.path")]
+                  (conj (parent-jvm-options) (str "-Djava.io.tmpdir=" tmp-root)))
+            (into ["clojure.main" "-m" main-ns] args)))))
 
 ;; @spec MCP-OP-TMPHYG-004
 (defn own-isolated-root?
@@ -274,8 +298,10 @@
        honored -- see docstring fact 2).
 
    `target` is {:bb-script <path, for bb> :main-ns <ns, for clojure -M>} --
-   pass whichever the runtime needs; the other key is ignored."
-  [target]
+   pass whichever the runtime needs; the other key is ignored. `args` is the
+   runner's own argv, forwarded to the child."
+  ([target] (secure-tmpdir! target nil))
+  ([target args]
   (let [base (env-or-current-tmpdir)]
     (try (fs/create-dirs base) (catch Throwable _ nil))
     (if-let [refusal (base-refusal base)]
@@ -298,13 +324,13 @@
         (let [root (io/file base (format "%s%d-%s" isolated-root-prefix (current-pid)
                                          (subs (str (random-uuid)) 0 8)))]
           (fs/create-dirs root)
-          (let [cmd (reexec-child-command target root)
+          (let [cmd (reexec-child-command target root args)
                 {:keys [exit]} (apply proc/shell
                                        {:continue true
                                         :extra-env {reexec-sentinel (str root)}}
                                        cmd)]
             (sweep-root! root)
-            (System/exit exit)))))))
+            (System/exit exit))))))))
 
 (defn tmp-entries
   "Names of the top-level entries currently under java.io.tmpdir."

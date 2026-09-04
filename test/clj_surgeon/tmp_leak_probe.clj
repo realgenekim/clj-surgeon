@@ -17,7 +17,8 @@
    Never referenced by any runner's namespace list; `test/tmp_leak_ratchet_test.sh`
    is its only caller.
 
-   @spec MCP-OP-TMPHYG-003"
+   @spec MCP-OP-TMPHYG-003
+   @spec MCP-OP-TMPHYG-006"
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.shell :as shell]
@@ -38,7 +39,8 @@
   (report! (if (System/getenv "CLJ_SURGEON_TMPDIR_REEXEC") "child-pre" "parent") args)
   (let [{:keys [refused root]} (tmp-leak/secure-tmpdir!
                                  {:bb-script "test/tmp_leak_probe.clj"
-                                  :main-ns "clj-surgeon.tmp-leak-probe"})
+                                  :main-ns "clj-surgeon.tmp-leak-probe"}
+                                 args)
         _ (when refused (System/exit 97))
         before (tmp-leak/tmp-entries)
         argset (set args)]

@@ -55,7 +55,7 @@
 ;; isolate java.io.tmpdir into a private per-run root so any leaked fixture
 ;; dir fails the run by name -- with no false positives from concurrent
 ;; seats sharing /var/tmp/forge. See clj-surgeon.tmp-leak-support.
-(let [{:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script *file*})
+(let [{:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script *file*} *command-line-args*)
       _ (when refused (System/exit 97))
       tmp-root root
       tmp-before (tmp-leak/tmp-entries)

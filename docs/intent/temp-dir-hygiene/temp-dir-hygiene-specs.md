@@ -36,6 +36,12 @@ required), `[x]` implemented (implementation and test witnesses required),
   with a named message — to delete any directory that is not one of its own
   `clj-surgeon-suite-*` per-run roots.
 
+- [x] **MCP-OP-TMPHYG-006**: When a test runner re-executes itself to obtain
+  an isolated temp root, clj-surgeon shall launch the child with the JVM
+  options the parent itself was launched with — so a pinned heap ceiling is
+  the ceiling the tests actually run under — and shall forward the runner's
+  own command-line arguments to that child.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb

@@ -168,4 +168,15 @@ child_args=$(probe_field heap-args child args)
 [ "$child_args" = "$parent_args" ] \
   || fail "6b: the re-exec dropped the test-selection args: parent=$parent_args child=$child_args"
 
+# The bb lane re-execs by script path and appends args after the script.
+set +e
+env TMPDIR="$FX/realdisk" bb test/tmp_leak_probe.clj alpha beta >"$FX/bb-args.out" 2>&1
+BB_EXIT=$?
+set -e
+echo "--- bb-args (exit=$BB_EXIT) ---"
+cat "$FX/bb-args.out"
+[ "$BB_EXIT" -eq 0 ] || fail "6c: the bb lane exited $BB_EXIT"
+[ "$(probe_field bb-args child args)" = '["alpha" "beta"]' ] \
+  || fail "6c: the bb re-exec dropped its args"
+
 echo "tmp-leak ratchet witness passed"

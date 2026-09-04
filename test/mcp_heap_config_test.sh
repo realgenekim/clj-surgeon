@@ -58,4 +58,29 @@ if grep -Eq 'sdkman|[0-9]+\.[0-9]+\.[0-9]+-open' Makefile; then
   exit 1
 fi
 
+# EXECUTION, not printed recipe text. Every assertion above reads `make -n`
+# output; that is exactly how the suite came to run at the box default heap
+# (7.8 GB) for a whole day while this gate stayed green — the test runner
+# re-execs itself into a child JVM, and round one of the temp-dir hygiene
+# ratchet rebuilt that child without the parent's flags. Spawn the real
+# mechanism and read the child's actual Runtime/maxMemory.
+# @spec MCP-OP-TMPHYG-006
+heap_cp=$(clojure -Spath -A:clj-surgeon/mcp-test)
+heap_out=$(java -Xmx317m -cp "$heap_cp" clojure.main -m clj-surgeon.tmp-leak-probe 2>&1)
+heap_parent=$(printf '%s\n' "$heap_out" | sed -n 's/^PROBE role=parent max-mb=\([0-9]*\) .*$/\1/p' | head -1)
+heap_child=$(printf '%s\n' "$heap_out" | sed -n 's/^PROBE role=child max-mb=\([0-9]*\) .*$/\1/p' | head -1)
+if [ -z "$heap_parent" ] || [ -z "$heap_child" ]; then
+  printf '%s\n' "$heap_out" >&2
+  echo 'could not read the probe heap ceilings' >&2
+  exit 1
+fi
+if [ "$heap_parent" -ge 1000 ]; then
+  echo "the probe parent ignored -Xmx317m (max-mb=$heap_parent)" >&2
+  exit 1
+fi
+if [ "$heap_child" != "$heap_parent" ]; then
+  echo "the test-runner re-exec did not preserve the heap ceiling: parent=$heap_parent MB child=$heap_child MB" >&2
+  exit 1
+fi
+
 echo "MCP heap configuration regression passed"
