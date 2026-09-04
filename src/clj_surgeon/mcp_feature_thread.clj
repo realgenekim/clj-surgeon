@@ -71,6 +71,36 @@
   28672)
 
 ;; @spec MCP-OP-THREAD-002
+(def ranges-only-floor-bytes
+  "The smallest `budget_bytes` that still returns a COMPLETE receipt for the
+  NAMED case -- every body, every peer body and every anchor context elided,
+  ranges, hashes and anchors kept. Below it the verb REFUSES; it never
+  truncates a body.
+
+  A DERIVED constant, not a chosen one. Its derivation:
+  `the-documented-ranges-only-floor-admits-the-named-receipt` binary-searches
+  the smallest admitting budget for the fixture at
+  `test-fixtures/feature-thread/smw-dequote`, seeds `formatDraft` +
+  `/api/transform/format` + `mechanical-format`, with the convention set
+  RESOLVED FROM THE FIXTURE'S OWN `.clj-surgeon/feature-thread.edn` -- the way
+  a caller reads it -- and fails if this number is not exactly what it measured.
+
+  Two facts a caller has to be told, because both move this number:
+
+  * The receipt names its own inputs, so the receipt's SIZE depends on how they
+    are spelled. `conventions_source` is 25 bytes wider when the conventions
+    come from the file than when they are passed inline as `config`, and the
+    workspace ROOT is printed in the header, so a deeper root costs its extra
+    characters. This figure is the file-resolved spelling at a 40-character
+    root; an inline-config caller needs 25 fewer.
+  * Round-nine review, finding 5: the documented figure was 11264 with a
+    claimed eighteen bytes of headroom, and the true minimum for the
+    file-resolved receipt was 11266. Two bytes of drift turned a documented
+    floor into a typed refusal for the exact call the documentation named. The
+    figure is measured here now so it cannot drift again silently."
+  11264)
+
+;; @spec MCP-OP-THREAD-002
 (def hard-cap-bytes
   "Largest `budget_bytes` this verb accepts. A larger request is REFUSED with
   the cap named; it is never silently clamped."

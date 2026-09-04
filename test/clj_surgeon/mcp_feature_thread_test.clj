@@ -3234,3 +3234,70 @@
       (is (= "FOUND" (:status (leg structured "menu-caller"))))
       (is (= "FOUND" (:status (leg structured "route"))))
       (is (= 2148 (:from (leg structured "route")))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-NINE REVIEW, finding 5 (GO-WITH-FIX): the documented 11,264-byte
+;; ranges-only floor no longer admitted the receipt it names. Three warm calls
+;; at exactly 11,264 returned `feature-thread-budget-exceeded`; the true minimum
+;; was 11,266. The refusal was honest and bounded — but the documentation named
+;; a budget that refuses.
+;;
+;; So the floor stops being a number in a docstring and becomes a DERIVED
+;; constant: this witness measures it from the named fixture and fails when the
+;; constant is not exactly what it measured. It also pins the two boundaries a
+;; floor has to have — admission AT it, refusal ONE BYTE below.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-002
+;; @spec MCP-OP-THREAD-011
+(deftest the-documented-ranges-only-floor-admits-the-named-receipt
+  (let [;; NO :config. The convention set is resolved from the fixture's OWN
+        ;; `.clj-surgeon/feature-thread.edn`, the way a caller reads it — which
+        ;; is 25 bytes wider in the receipt than the inline `config` the other
+        ;; witnesses pass, because `conventions_source` names its source.
+        ranges-only (fn [budget]
+                      (call! {:subject (:subject dequote-seeds)
+                              :also (:also dequote-seeds)
+                              :scope {:workspace_root fixture-root}
+                              :budget_bytes budget}))
+        admits? (fn [b]
+                  (let [{:keys [error? structured]} (ranges-only b)]
+                    (and (not error?) (true? (:ok structured)))))
+        ;; invariant: `lo` refuses, `hi` admits
+        derived (loop [lo 1024 hi 32768]
+                  (if (>= (inc lo) hi)
+                    hi
+                    (let [mid (quot (+ lo hi) 2)]
+                      (if (admits? mid) (recur lo mid) (recur mid hi)))))]
+
+    (testing "the constant is what the named fixture actually measures"
+      (is (= derived ft/ranges-only-floor-bytes)
+          (str "the documented ranges-only floor is "
+               ft/ranges-only-floor-bytes " B; the named fixture's smallest"
+               " admitting budget is " derived " B. A documented floor that"
+               " refuses the receipt it names is worse than no floor.")))
+
+    (testing "admission AT the floor: a COMPLETE receipt with no bodies"
+      (let [{:keys [error? structured]} (ranges-only ft/ranges-only-floor-bytes)]
+        (is (not error?)
+            (str "the documented floor REFUSED: "
+                 (pr-str (:error_type structured))))
+        (is (true? (:ok structured)))
+        (is (= "COMPLETE (6 of 6)" (:status structured)))
+        (is (= ft/ranges-only-floor-bytes (:text_bytes structured))
+            "the floor is the receipt's exact size, so it is a floor")
+        (is (every? #(nil? (:body %)) (:legs structured))
+            "at the floor every body is elided — that is what makes it ranges-only")
+        (testing "and every leg still names its range, its hash and its anchor"
+          (doseq [l (:legs structured) :when (= "FOUND" (:status l))]
+            (is (integer? (:from l)))
+            (is (re-matches #"[0-9a-f]{64}" (str (:sha256 l))))
+            (is (string? (:refetch l)))))))
+
+    (testing "and refusal ONE BYTE below, which is what makes it the floor"
+      (let [{:keys [error? structured]}
+            (ranges-only (dec ft/ranges-only-floor-bytes))]
+        (is (true? error?))
+        (is (= "feature-thread-budget-exceeded" (:error_type structured)))
+        (is (= ft/ranges-only-floor-bytes (:would_be_text_bytes structured))
+            "the refusal quotes what the receipt would have measured")))))
