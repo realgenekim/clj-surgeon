@@ -4,6 +4,8 @@
 #   sabotage-FAN.sh <fixtures-dir> <N> [scratch-dir]
 #   sabotage-FAN.sh --selftest-k [N] [seed] [scratch-dir]
 #   sabotage-FAN.sh --selftest-backslash [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-listing-failure [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-whitespace-path [N] [seed] [scratch-dir]
 #
 # A scorer that has never gone red is a verdict label, not a meter (this program's
 # `verdict-label-was-a-noun` scar).  This harness builds the CORRECT tree (repo-N with
@@ -171,6 +173,197 @@ CLJEOF
     exit 0
   else
     echo "SELFTEST-BACKSLASH: FAIL -- CHECK 1 misreads the backslash-named directory (want missing=0 extras=0)"
+    exit 1
+  fi
+fi
+
+# --- self-test: a failing `git ls-files`/`git diff` must fail the gate closed, ---
+# never a silent false PASS (Sol round-1 review, finding 1, BLOCKER) --------------
+#   sabotage-FAN.sh --selftest-listing-failure [N] [seed] [scratch-dir]
+#
+# fan_check.clj:47-55 checked only `git diff`'s exit before consuming its output;
+# `git ls-files --others --exclude-standard` was parsed regardless of its own exit,
+# so a failing listing process read as an empty set of untracked files and an
+# untracked EXTRA file could disappear from CHECK 1 -- the gate could false-PASS.
+# This witness builds a tree that is genuinely 6/6-correct EXCEPT for one untracked
+# extra file the manifest does not own, then runs fan_check.clj three ways under a
+# PATH-shimmed `git` that exits 42 for one named subcommand only:
+#   - real git (control)   -> CHECK 1 must FAIL, extras=1 (the extra is really there)
+#   - `ls-files` shimmed   -> must NOT print CHECK 1 file-set: PASS; must exit
+#                             nonzero with an ERROR line naming the exit code
+#   - `diff` shimmed       -> same requirement (already fail-closed pre-fix; must
+#                             stay that way)
+# The `ls-files` case also runs the full six-check gate via rescore-FAN.sh, exactly
+# as the reviewer did, to prove the false PASS cannot propagate past CHECK 1.
+if [ "${1:-}" = "--selftest-listing-failure" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/tmp/fanout-r2-fx/selftest-listing-failure}
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  LPASS=0; LFAIL=0
+  ok()  { LPASS=$((LPASS+1)); echo "SELFTEST-LISTING-FAILURE $1: PASS $2"; }
+  bad() { LFAIL=$((LFAIL+1)); echo "SELFTEST-LISTING-FAILURE $1: FAIL $2"; }
+
+  REALGIT=$(command -v git)
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  rm -rf "$SCRATCH/repo"; mkdir -p "$SCRATCH/repo"
+  cp -r "$SCRATCH/gen/repo-$N/." "$SCRATCH/repo/"
+  ( cd "$SCRATCH/repo" && git init -q . \
+      && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" )
+  BASE=$(git -C "$SCRATCH/repo" rev-parse HEAD)
+
+  # simulate the CORRECT migration -- no server -- so the only defect present is
+  # the untracked extra file planted below (an ordinary migration would be 6/6).
+  cp -r "$SCRATCH/gen/canonical-$N/src/." "$SCRATCH/repo/src/"
+
+  # plant one untracked extra file the manifest does not own (exactly the
+  # reviewer's repro: src/acid/fanout/extra.clj, never `git add`ed).
+  printf '(ns acid.fanout.extra)\n;; an untracked file the manifest does not own\n' \
+    > "$SCRATCH/repo/src/acid/fanout/extra.clj"
+
+  # --- build the two PATH shims: exit 42 for exactly one subcommand, real git otherwise
+  mk_shim () {   # mk_shim <dir> <failing-subcommand>
+    local dir=$1 sub=$2
+    mkdir -p "$dir"
+    cat > "$dir/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = "$sub" ]; then echo "simulated-$sub-failure" >&2; exit 42; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+    chmod +x "$dir/git"
+  }
+  mk_shim "$SCRATCH/bin-ls-files" "ls-files"
+  mk_shim "$SCRATCH/bin-diff" "diff"
+
+  # --- control: real git must catch the extra -------------------------------------
+  OUT_REAL=$(bb "$HERE/fan_check.clj" "$SCRATCH/repo" "$SCRATCH/gen/manifest-$N.edn" \
+    "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  CHECK1_REAL=$(printf '%s\n' "$OUT_REAL" | grep '^CHECK 1 ' | head -1)
+  echo "SELFTEST-LISTING-FAILURE control: $CHECK1_REAL"
+  if printf '%s' "$CHECK1_REAL" | grep -q 'FAIL' && printf '%s' "$CHECK1_REAL" | grep -q 'extras=1'; then
+    ok "control real-git" "CHECK 1 correctly catches the untracked extra -- $CHECK1_REAL"
+  else
+    bad "control real-git" "expected CHECK 1 FAIL extras=1, got: $CHECK1_REAL"
+  fi
+
+  # --- ls-files shimmed: must not false-PASS ---------------------------------------
+  OUT_LS=$(PATH="$SCRATCH/bin-ls-files:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+    "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  RC_LS=$?
+  echo "SELFTEST-LISTING-FAILURE ls-files-shimmed: rc=$RC_LS"
+  printf '%s\n' "$OUT_LS" | sed 's/^/    /'
+  if [ $RC_LS -ne 0 ] \
+     && printf '%s' "$OUT_LS" | grep -Eq 'CHECK 1 file-set: (ERROR|FAIL).*ls-files.*exit=42' \
+     && ! printf '%s' "$OUT_LS" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "ls-files-shimmed fail-closed" "rc=$RC_LS, no false PASS, named the ls-files exit"
+  else
+    bad "ls-files-shimmed fail-closed" "rc=$RC_LS -- want nonzero rc, an ERROR/FAIL line naming ls-files exit=42, and no PASS line"
+  fi
+
+  # --- diff shimmed: must also fail closed (already correct pre-fix; must stay so)
+  OUT_DIFF=$(PATH="$SCRATCH/bin-diff:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+    "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  RC_DIFF=$?
+  echo "SELFTEST-LISTING-FAILURE diff-shimmed: rc=$RC_DIFF"
+  printf '%s\n' "$OUT_DIFF" | sed 's/^/    /'
+  if [ $RC_DIFF -ne 0 ] \
+     && printf '%s' "$OUT_DIFF" | grep -Eq 'CHECK 1 file-set: (ERROR|FAIL).*diff' \
+     && ! printf '%s' "$OUT_DIFF" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "diff-shimmed fail-closed" "rc=$RC_DIFF, no false PASS, named the git diff failure"
+  else
+    bad "diff-shimmed fail-closed" "rc=$RC_DIFF -- want nonzero rc, an ERROR/FAIL line naming the git diff failure, and no PASS line"
+  fi
+
+  # --- the same, through the full six-check gate, exactly as the reviewer did -----
+  RSOUT=$(PATH="$SCRATCH/bin-ls-files:$PATH" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+    bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1)
+  RSRC=$?
+  echo "SELFTEST-LISTING-FAILURE full-gate ls-files-shimmed: rc=$RSRC"
+  printf '%s\n' "$RSOUT" | sed 's/^/    /'
+  if [ $RSRC -ne 0 ] && ! printf '%s' "$RSOUT" | grep -q '6/6 checks passed'; then
+    ok "full-gate fail-closed" "rescore-FAN did not report 6/6 with a failing ls-files"
+  else
+    bad "full-gate fail-closed" "rescore-FAN reported 6/6 (or rc=0) with a failing ls-files -- false PASS reached the gate"
+  fi
+
+  echo "sabotage-FAN --selftest-listing-failure: $LPASS passed, $LFAIL failed"
+  [ $LFAIL -eq 0 ]
+  exit $?
+fi
+
+# --- self-test: CHECK 1 must not false-FAIL a legal path consisting solely -------
+# of whitespace (Sol round-1 review, finding 2) -----------------------------------
+#   sabotage-FAN.sh --selftest-whitespace-path [N] [seed] [scratch-dir]
+#
+# fan_check.clj's NUL-splitter used `str/blank?` to drop empty separators, but
+# `str/blank?` is also true for a legal path that is itself all whitespace (e.g. a
+# file literally named " ").  NUL framing (-z) never produces an empty-but-nonblank
+# separator, so the right predicate is `empty?`.  This witness plants one manifest
+# owner at the path " " (a single space, the exact byte from the reviewer's repro),
+# migrates it correctly, and asserts CHECK 1 reads it present (missing=0 extras=0)
+# rather than reporting it missing.
+if [ "${1:-}" = "--selftest-whitespace-path" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/tmp/fanout-r2-fx/selftest-whitespace-path}
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  T3="src/acid/fanout/ns_003.clj"
+  WS=" "   # a legal POSIX relative path consisting solely of one whitespace byte
+
+  rm -rf "$SCRATCH/repo"; mkdir -p "$SCRATCH/repo"
+  cp -r "$SCRATCH/gen/repo-$N/." "$SCRATCH/repo/"
+  ( cd "$SCRATCH/repo" && git init -q . \
+      && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" )
+  cp "$SCRATCH/repo/$T3" "$SCRATCH/repo/$WS"
+  ( cd "$SCRATCH/repo" && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q \
+           -m "fanout: plant one owner at a path consisting solely of whitespace (pre-migration)" )
+  BASE=$(git -C "$SCRATCH/repo" rev-parse HEAD)
+
+  rm -rf "$SCRATCH/canonical"; mkdir -p "$SCRATCH/canonical"
+  cp -r "$SCRATCH/gen/canonical-$N/." "$SCRATCH/canonical/"
+  cp "$SCRATCH/gen/canonical-$N/$T3" "$SCRATCH/canonical/$WS"
+
+  cat > "$SCRATCH/extend-manifest.clj" <<'CLJEOF'
+(require '[clojure.pprint :as pp])
+(let [[in out t3-path ws n2-str] *command-line-args*
+      n2 (Integer/parseInt n2-str)
+      m (read-string (slurp in))
+      t3 (first (filter #(= (:file %) t3-path) (:targets m)))
+      new-ws (assoc t3 :file ws :ns "acid.fanout.ownerws")
+      m2 (-> m (assoc :n n2) (update :targets #(vec (concat % [new-ws]))))]
+  (spit out (with-out-str (pp/pprint m2))))
+CLJEOF
+  N2=$((N + 1))
+  bb "$SCRATCH/extend-manifest.clj" "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/manifest-$N2.edn" \
+    "$T3" "$WS" "$N2"
+
+  # simulate the FULL migration -- no server -- so every one of the 22 targets
+  # (the 21 ordinary owners plus the whitespace-only path) is genuinely migrated;
+  # otherwise the 21 ordinary owners would show as unrelated missing=21 and mask
+  # the one assertion this witness is for.
+  cp -r "$SCRATCH/canonical/src/." "$SCRATCH/repo/src/"
+  cp "$SCRATCH/canonical/$WS" "$SCRATCH/repo/$WS"
+
+  OUT=$(bb "$HERE/fan_check.clj" "$SCRATCH/repo" "$SCRATCH/manifest-$N2.edn" "$SCRATCH/canonical" "$BASE" 2>&1)
+  CHECK1=$(printf '%s\n' "$OUT" | grep '^CHECK 1 ' | head -1)
+  echo "SELFTEST-WHITESPACE-PATH: $CHECK1"
+  if printf '%s' "$CHECK1" | grep -q 'PASS' \
+     && printf '%s' "$CHECK1" | grep -q 'missing=0' \
+     && printf '%s' "$CHECK1" | grep -q 'extras=0'; then
+    echo "SELFTEST-WHITESPACE-PATH: PASS -- CHECK 1 correctly reads a legal path consisting solely of whitespace (missing=0 extras=0)"
+    exit 0
+  else
+    echo "SELFTEST-WHITESPACE-PATH: FAIL -- CHECK 1 misreads the whitespace-only path (want missing=0 extras=0)"
     exit 1
   fi
 fi
