@@ -1,7 +1,8 @@
 # Astra fanout comparison — fresh wall-primary cohort
 
-Status: pre-registration draft pending final adapter hash and two model smokes;
-no measured migration arms have run. Pwd-only model smokes are excluded.
+Status: FROZEN before measured migration arms at 2026-09-04T22:26:34.515866+00:00. Both model
+smokes and nine adapter tests passed. Live alias migration and independent
+acceptance passed. Pwd-only model smokes and hand-drives are excluded.
 
 ## Hypothesis and task
 
@@ -89,3 +90,19 @@ Preserve prompt and binary hashes, requested/observed model, session-bound rollo
 watcher stream, stdout/stderr, server ready evidence, tool telemetry, external
 acceptance output, staged diff including new files, and terminal outcome. No agent
 self-count or summary is a counting/correctness authority.
+
+## Frozen input hashes
+
+```json
+{
+  "/var/tmp/forge/astra-program/prompts/fanout-common.txt": "440c64e95e9380cdc016f451ec9349c412005a0f9c2dedd9ff8abe561134ecbf",
+  "/var/tmp/forge/astra-program/prompts/fanout-native.txt": "47891a0fe5201d4c8b86a1eeee39892dc1bbd3a41ddb66124cc5461b0853ba70",
+  "/var/tmp/forge/astra-program/prompts/fanout-tool.txt": "8c6d8dc8cad3bf4d4dd49d9c63ff217e690f97f1b5b3a799436e715185dbf24c",
+  "/var/tmp/forge/astra-program/repo/bench/astra/adapter.py": "8f6c909ffe25836a3599a2eec45f5da5a35d3fdc94541356c4778b440372b449",
+  "/var/tmp/forge/astra-program/repo/bench/astra/test_adapter.py": "3e1a817aa08b149790179a32555886f9152ffcb7f6bd7f71032144d353ff8256",
+  "/var/tmp/forge/astra-program/repo/bench/anvil-arms/watch.py": "aebfffef7ee069814aa7e92436910bbd139e14eb11638e96be81603a04e4b7b4",
+  "/var/tmp/forge/astra-program/repo/bench/anvil-arms/score.py": "f0f198f44d1dbf9af37f14f1111435751c9d5e2d292cebe6d28bfa001f5a3f8e",
+  "/var/tmp/forge/astra-program/repo/bench/fanout/rescore-FAN.sh": "97486d75ff5f051b831c7997452d31ca15560fc85476ae1d57e12c69b9560eaa",
+  "/var/tmp/forge/astra-program/repo/bench/fanout/fan_check.clj": "003dcda183b89b44f7af3241f71e21e13b637ec64aec67cb6155bc3673b312ff"
+}
+```
