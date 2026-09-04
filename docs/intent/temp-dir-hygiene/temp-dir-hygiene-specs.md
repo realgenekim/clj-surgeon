@@ -42,6 +42,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   the ceiling the tests actually run under — and shall forward the runner's
   own command-line arguments to that child.
 
+- [x] **MCP-OP-TMPHYG-005**: When a test runner isolates a run, clj-surgeon
+  shall place every DESCENDANT PROCESS of that run inside the same isolated
+  root — via `TMPDIR`/`TMP`/`TEMP`, since `-Djava.io.tmpdir` is a
+  JVM-internal property no child process inherits — so a subprocess that
+  picks its own temp location cannot write outside the root the leak witness
+  watches.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb

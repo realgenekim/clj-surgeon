@@ -278,6 +278,21 @@
                            root isolated-root-prefix)))
         false)))
 
+;; @spec MCP-OP-TMPHYG-005
+(defn- child-environment
+  "The env the isolated child (and every descendant of it) is launched with.
+
+   `-Djava.io.tmpdir` is a JVM-internal property no child PROCESS inherits,
+   so a subprocess that picks its own temp location -- `mktemp -d`,
+   `tempfile.mkdtemp` -- would write to the SHARED base, outside the isolated
+   root and invisible to the leak witness. TMPDIR/TMP/TEMP put every
+   descendant inside the run's own root."
+  [root]
+  {reexec-sentinel (str root)
+   "TMPDIR" (str root)
+   "TMP" (str root)
+   "TEMP" (str root)})
+
 (defn secure-tmpdir!
   "Resolves the base temp directory (`env-or-current-tmpdir`). If it is
    tmpfs-backed, prints a named refusal to *err* and returns
@@ -327,7 +342,7 @@
           (let [cmd (reexec-child-command target root args)
                 {:keys [exit]} (apply proc/shell
                                        {:continue true
-                                        :extra-env {reexec-sentinel (str root)}}
+                                        :extra-env (child-environment root)}
                                        cmd)]
             (sweep-root! root)
             (System/exit exit))))))))
