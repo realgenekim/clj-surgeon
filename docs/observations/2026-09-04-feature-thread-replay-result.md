@@ -142,3 +142,41 @@ cannot remove ceremony; the admit gate (arm G) can collapse the 3 suite runs to 
 Standing sentence, amended: the round-six receipt holds the edit-basis line on one replicate and misses it by two reads on the
 other; the misses name a seventh leg (dispatch/fold) and a registry-tail sample. The count floor for this task on this harness
 is ~12 (7 feature + 5 ceremony); a receipt alone cannot go below it. 10x remains a harness claim (one admit-gate call).
+
+## Ethnography of the SMW change by turn species (Gene's question, 2026-09-04 16:1xZ) — and the bigger question
+
+Counted from the codex rollouts (native arms N/N2/N3; receipt arms T4/T4b), every function_call classified by what the
+turn was FOR:
+
+| species | native (mean of 3) | T4 / T4b | what the turns were |
+|---|---:|---:|---|
+| orient to the REPO's rules | ~6 | 4 / 2 | CLAUDE.md read in three slices (671 lines), tests.edn, the registry tail, bd protocol |
+| orient to the CODE (edit basis) | ~11 | 0 / 2 | menu, JS command, route, handler, tests; T4b also the state fold + authoritative frame path |
+| bd ceremony + beads churn | ~5 | 6 / 5 | bd create, claim, close; then reverting the .local_version file bd rewrote (2–3 calls per arm) |
+| write | ~6 | 4 / 4 | one patch per file, one per test |
+| verify and check | ~9 | 5 / 5 | unit + js suites after every patch, diff --check, status |
+| harness waits | 1 | 2 / 2 | |
+
+The receipt only ever attacked row two, and emptied it. The other ~18 turns are the repo asking "do you know how changes
+land here" and the harness asking "prove it again after each patch". Neither is a code question, so no edit-basis receipt
+can remove them.
+
+**The bigger question (one call): "What must be true for this change to be accepted in this repo, and what is the one
+command that proves each?"** — the LANDING CONTRACT. Mostly static per repo, so it belongs in the conventions file and rides
+on the same receipt:
+- the bd ceremony as the exact command chain the repo wants, with the warning that bd rewrites `.beads/.local_version` and
+  the change must not carry it (every arm paid 3–5 turns here);
+- the registry's id pattern and the next free id (T4b read the tail to learn it);
+- the minimal verify set that proves THIS change once (the verify rows already say which suite picks up a new ns);
+- a seventh leg, "dispatch": the fold/frame functions a handler's result travels through (T4b's only code reads);
+- the repo's binding rules distilled to the dozen lines that touch a change, so a 671-line CLAUDE.md is not sliced thrice.
+
+Then the admit gate collapses write + verify: all patches and the named verify in ONE call instead of 4 patches + 5 suite
+runs + 3 checks.
+
+**T5 pre-registration (runs when the gate lane lands):** arms = native N (same harness, gate offered) vs T5 = feature_thread
+with the landing contract + admit gate. Predicted floor for T5: catalog probe 1, feature_thread 1, bd chain 1–3, admit 1,
+wait 1 → **5–7 raw calls vs native ~38**; pre-write reads 0; suite runs 1. Withdrawal: if T5 raw > 12 on both replicates the
+landing contract did not remove the ceremony and the claim is restricted to "edit basis + gate". If native with the gate
+offered also drops below 12, the gate is the whole effect and the contract is withdrawn. The receipt alone tops out near 2×;
+the contract plus the gate is where 10× lives, if it lives.
