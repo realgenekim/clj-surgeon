@@ -410,3 +410,31 @@
           "an unknown lane must enforce NOTHING rather than everything")))
   (testing "every lane in the manifest's lane list has a declared reach"
     (is (= #{:fast :integration :battery} (set (keys iso/enforced-intents-by-lane))))))
+
+;; @spec TEST-ISO-007
+(deftest each-lane-has-its-own-default-budget-because-a-lane-is-a-cost-class
+  ;; ONE default across three lanes is either useless for the fast lane or a
+  ;; false alarm for the others. The first live run proved the second half:
+  ;; `mcp-hot-verify-test` was refused at 10 128 ms against the fast lane's
+  ;; 8 s ceiling, and it is `:integration` precisely because it drives an
+  ;; in-process server and waits on it. A ceiling that fires on a lane's
+  ;; definition is not a ratchet.
+  (testing "the fast lane keeps the tight default"
+    (is (= iso/default-namespace-budget-ms (get iso/lane-default-budget-ms :fast))))
+  (testing "each lane declares one, and they widen in cost order"
+    (is (= #{:fast :integration :battery} (set (keys iso/lane-default-budget-ms))))
+    (is (< (get iso/lane-default-budget-ms :fast)
+           (get iso/lane-default-budget-ms :integration)
+           (get iso/lane-default-budget-ms :battery))))
+  (testing "the integration ceiling leaves headroom over the measured worst case but is not unbounded"
+    (is (<= 15000 (get iso/lane-default-budget-ms :integration) 30000)))
+  (testing "the ceiling still bites at its own boundary, whichever lane's it is"
+    (let [ms->ns #(* % 1000000)
+          before (empty-snapshot)
+          budget (get iso/lane-default-budget-ms :integration)
+          at (assoc (empty-snapshot) :instant-ns (ms->ns budget))
+          past (assoc (empty-snapshot) :instant-ns (ms->ns (inc budget)))]
+      (is (empty? (of-intent (iso/violations subject before at {:default-budget-ms budget})
+                             "TEST-ISO-007")))
+      (is (= 1 (count (of-intent (iso/violations subject before past {:default-budget-ms budget})
+                                 "TEST-ISO-007")))))))

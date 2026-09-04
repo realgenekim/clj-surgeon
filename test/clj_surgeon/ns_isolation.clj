@@ -66,6 +66,23 @@
    :integration 240000
    :battery 1800000})
 
+(def lane-default-budget-ms
+  "@spec TEST-ISO-007 -- the per-namespace default, BY LANE. A lane is a cost
+   class, so one default across all three is either useless for the fast lane
+   or a false alarm for the others: the first live run refused
+   `mcp-hot-verify-test` at 10 128 ms against the fast lane's 8 s, and that
+   namespace is `:integration` precisely because it drives an in-process
+   server and waits on it.
+
+   Measured (2026-09-04, load 5.4): the whole fast lane is 34 s across 39
+   namespaces, and the slowest integration namespace is 10.1 s. The
+   integration ceiling is set at 20 s -- roughly 2x the measured worst case,
+   so contention on a shared box does not manufacture a refusal, while a
+   namespace that has genuinely doubled still says so."
+  {:fast 8000
+   :integration 20000
+   :battery 300000})
+
 (def namespace-budget-overrides
   "@spec TEST-ISO-007 -- namespaces whose ceiling is not the default, each with
    the reason. An override is a DECLARED cost, reviewable at the pin, never a

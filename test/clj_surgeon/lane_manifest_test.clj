@@ -319,7 +319,7 @@
     clj-surgeon.fast-lane-isolation-test 3   ; TEST-ISO-006's witness (round two)
     clj-surgeon.lane-manifest-test       18  ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins
     clj-surgeon.mcp-formatter-test       3   ; the adopted orphan (round three)
-    clj-surgeon.ns-isolation-test        16}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four)
+    clj-surgeon.ns-isolation-test        17}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four)
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -332,9 +332,9 @@
   ;;   round one's 49 namespaces, today ........... 921 deftests  (>= 865: the
   ;;                                                trunk ADDED tests to them;
   ;;                                                it never removed any)
-  ;;   adopted since round one ..................... 52 deftests  (12 + 3 + 18 + 3 + 16)
+  ;;   adopted since round one ..................... 53 deftests  (12 + 3 + 18 + 3 + 17)
   ;;                                                --------------
-  ;;   total declared by the manifest .............. 973 deftests
+  ;;   total declared by the manifest .............. 974 deftests
   ;;
   ;; A namespace leaving a lane fails `the-partition-drops-nothing-...` by
   ;; name; a namespace's tests being deleted fails the >= below; anything
@@ -359,9 +359,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 52 adopted) (str "adopted tests: " adopted)))
+      (is (= 53 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 973 total) (str "manifest declares " total " tests"))
+      (is (= 974 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

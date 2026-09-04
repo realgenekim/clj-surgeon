@@ -50,9 +50,13 @@
     {:namespace n
      :counters counters
      :elapsed-ms (quot (- (:instant-ns after) (:instant-ns before)) 1000000)
-     :violations (iso/enforced (lm/lane-of n)
-                               (iso/violations n before after
-                                               {:ledger @iso/allocated-ports}))}))
+     :violations (let [lane (lm/lane-of n)]
+                   (iso/enforced lane
+                                 (iso/violations n before after
+                                                 {:ledger @iso/allocated-ports
+                                                  :default-budget-ms
+                                                  (get iso/lane-default-budget-ms lane
+                                                       iso/default-namespace-budget-ms)})))}))
 
 (defn lane-budget-violations
   "@spec TEST-ISO-007 -- the per-LANE ceiling, over the namespaces that
