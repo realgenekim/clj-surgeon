@@ -476,3 +476,12 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## RESUME DELTA 11:30Z
 - tmp-leak ratchet LANDED: MCP/main = d0b4e1ca (merge --no-ff of 5a6e7c81; gate + bb green on the merged tree; trailing mcp-test log /var/tmp/forge/land-tmpleak-mcp-test.log). Landings tonight: integration, scorer, tmp-leak. Row TMP closed; inb-9483a4 completed.
+
+## RESUME DELTA 12:14Z
+- Landings tonight: integration, scorer, tmp-leak (d0b4e1ca), alias_migration/q5z (44e70af5 + re-pin merge-fix). Trunk MCP/main last landing 44e70af5.
+- Replay: T3 (round-four receipt) = 19 raw, ZERO reads before the write, verified green — the edit-basis line for T3 is MET; T3b replicate running (12:13Z). Peers are elided by the trunk's 32,640 structured cap (round-five item). Arm G waits on the admit gate landing.
+- Lanes: feature_thread r5 (Sol review of bb3b6360; ft1-wt clone); MEM-003 r6 (Sol review of 432268cf, trunk-merged); gate r6 (Opus review of ed20fa35); census r24 fix build (trunk merge + :paths fence); study-ops r7 build (one carriage predicate). nREPL on ~/src/clj-surgeon-thread port 45759.
+
+## RESUME DELTA 12:54Z
+- Lanes: feature_thread r6 building (Sol r5 NO-GO: escaping conventions globs; saveDraft route from a docstring; + the round-five spec); MEM-003 r6 Opus review (Sol refused; 432268cf); census r24 fix build (trunk merge + :paths fence; from r23 GO-WITH-FIX) → lands after; study-ops r7 build (r6 Sol NO-GO: one carriage predicate); gate r7 fix build (r6 Opus GO-WITH-FIX: stale over-budget annotations; empty trim annotated) → lands after; then arm G. T4 waits on ft r6.
+- Sol filter refusals: 24 tonight. Landings: 4 (integration, scorer, tmp-leak d0b4e1ca, q5z 44e70af5).

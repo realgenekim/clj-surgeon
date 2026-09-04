@@ -28,6 +28,22 @@
 (def max-sites 24)
 (def max-visible-characters (* 32 1024))
 (def exact-verification-visible-bytes 12000)
+
+;; @spec MCP-OP-ALIAS-028
+(def diagnostic-capture-bytes
+  "How much of a DIAGNOSTIC answer the baseline reads.
+
+  `exact-verification-visible-bytes` bounds human-readable process evidence,
+  where a prefix is still evidence. A diagnostic answer is a DOCUMENT, and
+  half of one parses no better than none of it: the E-CALLER cohort's
+  `verify: \"fast\"` call scoped 100 sources, clj-kondo answered EDN far past
+  12,000 bytes, the runner cut it mid-map, and a correct analyzer answering a
+  correct document was typed `invalid-diagnostic-output` — deterministically,
+  on every retry, which is what the arm did before dropping `verify`.
+
+  Four megabytes is the same order as `max-snapshot-characters`, which is the
+  other place this verb holds a whole document in memory."
+  (* 4 1024 1024))
 (def max-snapshot-characters (* 4 1024 1024))
 (defonce basis-store (atom {}))
 
@@ -1431,9 +1447,15 @@
 
 (defn- run-diagnostic-check!
   [project-root command files]
-  (let [{:keys [finished? exit elapsed_ms output] :as process}
-        (run-process! project-root (diagnostic-command command files))]
-    (if (admission-unverified? process)
+  ;; @spec MCP-OP-ALIAS-028
+  ;; read the answer WHOLE: a diagnostic answer is a document, and a document
+  ;; cut at the human-readable evidence budget cannot parse
+  (let [{:keys [finished? exit elapsed_ms output output-bytes output-truncated]
+         :as process}
+        (run-process! project-root (diagnostic-command command files)
+                      120000 diagnostic-capture-bytes)]
+    (cond
+      (admission-unverified? process)
       {:ok false
        :command (first command)
        :exit exit
@@ -1442,6 +1464,22 @@
        :output output
        :admission (:admission process)
        :admission-error (:admission-error process)}
+
+      ;; @spec MCP-OP-ALIAS-028
+      ;; an answer past even THIS budget is a truncation and is named as one.
+      ;; Reporting it as invalid output blames the analyzer for a bound this
+      ;; verb imposed, and leaves the caller nothing to change.
+      output-truncated
+      {:ok false
+       :command (first command)
+       :exit exit
+       :elapsed_ms elapsed_ms
+       :error-type :diagnostic-output-truncated
+       :output-bytes output-bytes
+       :diagnostic_byte_budget diagnostic-capture-bytes
+       :output output}
+
+      :else
       (let [parsed (when finished?
                      (try
                        (edn/read-string output)
@@ -1468,6 +1506,10 @@
       {:ok (every? :ok checks)
        :profile profile
        :checks checks
+       ;; @spec MCP-OP-ALIAS-059
+       ;; forwarded-refusal-kind: the failing check's OWN kind travels verbatim
+       ;; — :invalid-diagnostic-output and :verification-unverified, both minted
+       ;; and scanned in this file — rather than being renamed to a constant
        :error-type (some :error-type (remove :ok checks))
        ;; One derived reading, tagged: the per-check clocks are summed as
        ;; bare numbers and the sum re-enters the partition as clock-derived.
@@ -1546,6 +1588,9 @@
        {:ok (and command-ok? hot-ok? (or (nil? cold) (:ok cold)))
         :profile profile
         :checks checks
+        ;; @spec MCP-OP-ALIAS-059
+        ;; forwarded-refusal-kind: the failing check's own kind, minted and
+        ;; scanned in this file, travels verbatim
         :error-type (some :error-type (remove :ok checks))
         :hot-verification hot
         :cold-verification cold

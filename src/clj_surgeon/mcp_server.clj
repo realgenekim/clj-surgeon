@@ -116,9 +116,35 @@
       (.structuredContent json-mapper (json/generate-string structured))
       (.build)))
 
+(defn adapter-failure
+  "The receipt published when a tool throws OUTSIDE its own operation.
+
+  This is the SDK wrapper's last resort: the operation never returned, so
+  `mcp-operation/invoke!` never ran, no summary was rendered, and no domain
+  receipt exists. What it must NOT do is fill that hole with claims. It carries
+  no `source_unchanged` and no `mutation_attempted`, because a throw at an
+  unknown point knows neither, and the refusal renderer reads their absence as
+  \"source state requires structured receipt review\" — the honest answer. It
+  does carry a remedy, because a refusal that tells the caller nothing about
+  what to do next is the one shape every other refusal in this server is
+  forbidden."
+  [tool-name error]
+  {:ok false
+   :operation tool-name
+   :error_type "mcp-adapter-failure"
+   :error (or (.getMessage ^Throwable error) (.getName (class error)))
+   :cause (.getName (class error))
+   :next_call nil
+   :remedy (str "This failed before " tool-name
+                " published a receipt, so the operation's own answer — "
+                "including whether it wrote anything — does not exist. Inspect "
+                "the workspace before resending rather than assuming it is "
+                "untouched, and report the cause: a throw reaching this "
+                "boundary is a defect in the tool, not in the request.")})
+
 (defn create-structured-async-tool
   "Create one SDK-native tool with annotations and structuredContent support."
-  [{:keys [name description schema output-schema annotations tool-fn]}]
+  [{:keys [name description schema output-schema annotations tool-fn summarize]}]
   (let [json-mapper (McpJsonMapper/getDefault)
         annotation-record
         (McpSchema$ToolAnnotations.
@@ -145,14 +171,20 @@
                 (accept [_ sink]
                   ;; @spec MCP-OP-RESULT-002
                   ;; @spec MCP-OP-TIME-005
-                  ;; The adapter's own clock. The ordinary path is finalized by
-                  ;; the tool-fn's `mcp-operation/invoke!`; a throw from
-                  ;; execution, finalization, summary rendering or
-                  ;; serialization never reaches that finalizer, and before
-                  ;; this the catch built its own result with no `measured`
-                  ;; block at all — invalid against every canonical output
-                  ;; schema, which requires one (Sol review 2026-09-04 §2).
-                  ;; ONE boundary means one boundary.
+                  ;; @spec MCP-OP-ALIAS-059
+                  ;; The adapter's own clock, and the operation's own
+                  ;; summarizer. The ordinary path is finalized by the
+                  ;; tool-fn's `mcp-operation/invoke!`; a throw from execution,
+                  ;; finalization, summary rendering or serialization never
+                  ;; reaches that finalizer, and before this the catch built
+                  ;; its own result with no `measured` block at all — invalid
+                  ;; against every canonical output schema, which requires one
+                  ;; (Sol review 2026-09-04 §2). ONE boundary means one
+                  ;; boundary — and one FACE: this is the only refusal class
+                  ;; published from outside `mcp-operation/invoke!`, so it
+                  ;; renders through the operation's summarizer when the tool
+                  ;; names one, rather than showing raw JSON where every other
+                  ;; refusal shows rendered text.
                   (let [started (measured/start)]
                     (try
                       (tool-fn
@@ -163,16 +195,14 @@
                                       json-mapper content error? structured))))
                       (catch Exception error
                         (let [failure (mcp-operation/finalize-failure
-                                        {:ok false
-                                         :operation name
-                                         :error_type "mcp-adapter-failure"
-                                         :error (.getMessage error)}
-                                        started)]
+                                        (adapter-failure name error)
+                                        started)
+                              text (if summarize
+                                     (summarize failure)
+                                     (json/generate-string failure))]
                           (.success sink
                                     (structured-call-result
-                                      json-mapper
-                                      [(json/generate-string failure)]
-                                      true failure)))))))))))]
+                                      json-mapper [text] true failure)))))))))))]
     (McpServerFeatures$AsyncToolSpecification. mcp-tool handler)))
 
 (defn- create-async-tool
