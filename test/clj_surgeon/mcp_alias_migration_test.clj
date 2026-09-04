@@ -5003,6 +5003,99 @@
                  (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
 
 ;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-constructor-is-decided-by-the-reader-and-not-by-a-regex
+  ;; Round-seventeen review finding 1: whether the `(refusal …)` scan runs AT
+  ;; ALL for a source was decided by a TEXT regex over the constructor's
+  ;; argument NAME, `#"\(defn-?\s+refusal\s*\n?\s*\[\s*(error-type|kind)\b"`.
+  ;; `\s*\[` cannot cross a docstring, an attribute map, a multi-arity body or
+  ;; a `(def refusal (fn …))`, so five of the reviewer's six constructor
+  ;; shapes switched the guard off for EVERY site in the file, while
+  ;; `refusal-call-sites-in` found the planted site in all six — the form scan
+  ;; was right and the per-file enable threw its answer away.
+  ;;
+  ;; It is not hypothetical: `src/clj_surgeon/mcp_workspace.clj:8` carries a
+  ;; docstring today, so its four `(refusal …)` sites are skipped wholesale
+  ;; and the gate reaches the right answer for the wrong reason. Adding a
+  ;; docstring to that constructor is the single most house-style-encouraged
+  ;; edit anyone could make to `mcp_alias_migration.clj`, and it disabled the
+  ;; guard for all fifteen of its sites with no test going red anywhere —
+  ;; `a-gate-a-caller-can-turn-off`, reproduced end to end by the reviewer
+  ;; with a live kind the enumeration does not contain.
+  ;;
+  ;; The constructor is now decided with the READER, and the question asked of
+  ;; it is the one that matters: does its FIRST parameter reach the
+  ;; `:error_type`/`:error-type` value the constructor publishes? An argument
+  ;; name is a naming convention; a parameter that spells the kind is the
+  ;; thing itself.
+  (let [planted (str "\n(defn- route-dynamic\n"
+                     "  [params]\n"
+                     "  (refusal (keyword (:review_kind params))\n"
+                     "           \"planted dynamic kind\"\n"
+                     "           {}))\n")
+        planted-row (fn [text]
+                      (inc (count (take-while
+                                    #(not (str/includes? % "(refusal (keyword"))
+                                    (str/split-lines text)))))]
+    (testing "every constructor shape that takes the kind first enables the scan"
+      (doseq [[label constructor]
+              [["canonical"
+                (str "(defn refusal\n"
+                     "  [error-type message]\n"
+                     "  {:ok false :error_type (name error-type) :error message})\n")]
+               ["with a docstring"
+                (str "(defn refusal\n"
+                     "  \"One refusal, carrying its own cause and remedy.\"\n"
+                     "  [error-type message]\n"
+                     "  {:ok false :error_type (name error-type) :error message})\n")]
+               ["multi-arity"
+                (str "(defn refusal\n"
+                     "  ([error-type message]\n"
+                     "   {:ok false :error_type (name error-type) :error message})\n"
+                     "  ([error-type message extra]\n"
+                     "   (merge {:ok false :error_type (name error-type)\n"
+                     "           :error message}\n"
+                     "          extra)))\n")]
+               ["(def refusal (fn …))"
+                (str "(def refusal\n"
+                     "  (fn [error-type message]\n"
+                     "    {:ok false :error_type (name error-type)\n"
+                     "     :error message}))\n")]
+               ["with an attribute map"
+                (str "(defn refusal\n"
+                     "  {:added \"1.0\"}\n"
+                     "  [error-type message]\n"
+                     "  {:ok false :error_type (name error-type) :error message})\n")]
+               ["a first parameter named `k`"
+                (str "(defn refusal\n"
+                     "  [k message]\n"
+                     "  {:ok false :error_type (name k) :error message})\n")]]]
+        (testing label
+          (let [text (str constructor planted)]
+            (is (= [(str "plant:" (planted-row text))]
+                   (dynamic-refusal-kind-sites-in "plant" text))
+                (str "the planted dynamic site was not reported for a "
+                     "constructor shaped `" label "` — one ordinary edit to "
+                     "the constructor switched the whole file's scan off: "
+                     (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
+    (testing "a constructor whose kind is a CONSTANT enables nothing"
+      ;; `mcp_workspace`'s own shape: `[message value]`, spelling its one kind
+      ;; as a literal INSIDE the constructor, where the `:error_type "…"` scan
+      ;; already has it. Its call sites carry no kind at all, and naming them
+      ;; would be a false positive on every one.
+      (let [text (str "(defn- refusal\n"
+                      "  \"One stable workspace-root refusal.\"\n"
+                      "  [message value]\n"
+                      "  {:ok false :error_type \"invalid-workspace-root\"\n"
+                      "   :error message :workspace_root value})\n"
+                      "\n(defn canonical-root\n"
+                      "  [value]\n"
+                      "  (refusal \"workspace_root must be absolute\" value))\n")]
+        (is (empty? (dynamic-refusal-kind-sites-in "plant" text))
+            (str "a constructor that takes no kind had its call sites read as "
+                 "dynamic kind sites: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest the-forwarded-kind-check-is-form-deep-and-not-merely-head-shaped
   ;; Round-sixteen review finding 1: the shape check collected the expression's
   ;; LISTS and tested only each list's FIRST child against the forwarding-head
