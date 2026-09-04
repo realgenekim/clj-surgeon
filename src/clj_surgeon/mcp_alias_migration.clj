@@ -392,12 +392,26 @@
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-058
 (def max-suggested-scope-paths
-  "How many source roots one `scope-matches-nothing` remedy names.
+  "How many source roots one `scope-matches-nothing` remedy NAMES.
 
   The remedy is a next_call and a next_call is constant-size or it is not
-  publishable; a tree with many top-level source directories is narrowed to the
-  first few rather than allowed to grow the refusal."
+  publishable; a tree with many top-level source directories has only a sample
+  of them named. The sample is not the selection: when roots are dropped the
+  remedy also carries `**`, so the bound costs the caller detail in the listing
+  and never a file in the file set (`suggested-scope-paths`)."
   6)
+
+;; @spec MCP-OP-ALIAS-058
+(def completing-scope-path
+  "The pattern appended when the root listing is truncated.
+
+  It is the pattern the walk itself used, so a truncated remedy selects exactly
+  the file set the walk saw. A bounded LISTING is honest; a bounded SELECTION
+  presented as \"the source roots this tree actually holds\" is not — on a
+  nine-root tree the alphabetical first six selected 14 of 118 sources and
+  dropped `src/**`, the root holding a hundred namespaces, with no field saying
+  a root had been dropped."
+  "**")
 
 ;; @spec MCP-OP-ALIAS-058
 (defn suggested-scope-paths
@@ -412,19 +426,40 @@
   remedy that silently drops a file class is the defect this refusal exists to
   end.
 
-  Returns a sorted, bounded vector; empty when the tree holds no Clojure source
-  at all, which is itself the honest answer and is reported as such."
+  Roots are ranked by the number of sources they hold, ties broken
+  lexicographically, so the sample a bound keeps is the part of the tree the
+  caller most likely meant rather than the part whose name sorts first. When
+  the tree holds more roots than the bound names, `completing-scope-path` is
+  appended and `:roots` / `:roots-listed` differ: the caller is told the
+  listing is a sample, and the selection stays complete either way. The listed
+  roots keep their sorted order so the published call is a function of the tree
+  and not of the ranking's tie order.
+
+  Returns `{:source-files n :roots m :roots-listed k :truncated? bool :paths v}`;
+  `:paths` is empty when the tree holds no Clojure source at all, which is
+  itself the honest answer and is reported as such."
   [^Path root]
   (let [relatives (:files (scan-scope root {:paths ["**"] :exclude []}))
-        roots (reduce (fn [acc ^String relative]
-                        (let [cut (.indexOf relative "/")]
-                          (conj acc (if (neg? cut)
-                                      "*"
-                                      (str (subs relative 0 cut) "/**")))))
-                      (sorted-set)
-                      relatives)]
+        counts (reduce (fn [acc ^String relative]
+                         (let [cut (.indexOf relative "/")]
+                           (update acc
+                                   (if (neg? cut)
+                                     "*"
+                                     (str (subs relative 0 cut) "/**"))
+                                   (fnil inc 0))))
+                       {}
+                       relatives)
+        ranked (->> counts
+                    (sort-by (fn [[pattern n]] [(- n) pattern]))
+                    (map key))
+        listed (vec (sort (take max-suggested-scope-paths ranked)))
+        truncated? (> (count counts) (count listed))]
     {:source-files (count relatives)
-     :paths (vec (take max-suggested-scope-paths roots))}))
+     :roots (count counts)
+     :roots-listed (count listed)
+     :truncated? truncated?
+     :paths (cond-> listed
+              truncated? (conj completing-scope-path))}))
 
 (defn expand-scope
   "The sources one scope selects, when the bounded scan admits it.
@@ -601,7 +636,8 @@
       ;; Four of four E3-P tool arms were refused here and told the wrong cause.
       (zero? scanned)
       (let [given (vec (get-in request [:scope :paths]))
-            {:keys [source-files paths]} (suggested-scope-paths root)]
+            {:keys [source-files roots roots-listed truncated? paths]}
+            (suggested-scope-paths root)]
         (refusal :alias-migration-scope-matches-nothing
                  (str "scope.paths " (pr-str given) " matched 0 files. "
                       "scope.paths are globs: an entry selects a file only when "
@@ -614,17 +650,39 @@
                  {:paths given
                   :files_matched 0
                   :source_files_under_root source-files
+                  :source_roots roots
+                  :roots_listed roots-listed
                   :suggested_paths paths
                   :expected_files expected
                   :next_call (planner/rescoping-call request paths)
                   :expect_files_unchanged_reason
                   planner/expect-files-unchanged-reason
                   :remedy
-                  (if (seq paths)
+                  (cond
+                    ;; @spec MCP-OP-ALIAS-058
+                    ;; the listing is a bounded SAMPLE and the selection is
+                    ;; complete; both facts are stated, because a remedy that
+                    ;; names six of nine roots and calls them "the source roots
+                    ;; this tree actually holds" selected a sixth of the tree
+                    truncated?
                     (str "Resend the next_call: it replaces scope.paths with "
-                         (pr-str paths) ", the source roots this tree actually "
-                         "holds. expect.files declared " expected
+                         (pr-str paths) " — the " roots-listed " largest of "
+                         "this tree's " roots " top-level source roots, "
+                         "completed by " (pr-str completing-scope-path)
+                         " so it still selects every one of the " source-files
+                         " sources the walk saw. expect.files declared "
+                         expected
                          " and is left as declared, because no file was read.")
+
+                    (seq paths)
+                    (str "Resend the next_call: it replaces scope.paths with "
+                         (pr-str paths) ", every one of the " roots
+                         " source roots this tree holds, selecting all "
+                         source-files " of its sources. expect.files declared "
+                         expected
+                         " and is left as declared, because no file was read.")
+
+                    :else
                     (str "This project root holds no .clj, .cljs or .cljc file "
                          "at all, so no spelling of scope.paths can select one. "
                          "Check workspace_root before correcting scope.paths."))}))
