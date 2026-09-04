@@ -1476,3 +1476,40 @@
         (finally
           (.setReadable (io/file scratch "src/writer/handlers/transform.clj") true false)
           (delete-tree! scratch))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- an insertion anchor is a claim only a FOUND leg may make
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-034
+(deftest a-candidate-leg-carries-no-insertion-anchor
+  (testing "a lead names where to READ, never where to WRITE"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-candanchor")]
+      (try
+        (spit (io/file scratch "src/writer/handlers/transform.clj")
+              "\n\n(comment\n  (widgetize {:draft \"x\"}))\n"
+              :append true)
+        (let [{:keys [text structured]}
+              (call! {:subject "widgetize"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})
+              h (leg structured "handler")]
+          (is (= "CANDIDATE" (:status h)))
+          (is (nil? (:anchor h))
+              (str "a CANDIDATE leg offered an insertion anchor: "
+                   (pr-str (:anchor h))))
+          (is (not-any? #(and (str/starts-with? % "leg handler ")
+                              (str/includes? % "anchor="))
+                        (str/split-lines text))
+              (str "the receipt printed an insertion point for a leg it does"
+                   " not vouch for: "
+                   (pr-str (filter #(str/starts-with? % "leg handler ")
+                                   (str/split-lines text))))))
+        (finally (delete-tree! scratch)))))
+
+  (testing "a FOUND leg still carries one"
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (doseq [l (:legs structured)
+              :when (= "FOUND" (:status l))]
+        (is (string? (:anchor l))
+            (str "FOUND leg " (:id l) " lost its anchor"))))))
