@@ -3657,3 +3657,62 @@
         (str "k=6 requires more libraries per namespace than k=1, so it must "
              "produce more findings; equal counts would mean neither read was "
              "real: " (pr-str baselines)))))
+
+;; @spec MCP-OP-ADMIT-123
+;; @spec MCP-OP-ADMIT-124
+(deftest a-receipt-whose-detector-did-not-run-names-it-in-text-and-structure
+  (let [root (temp-dir)
+        text-of (fn [result] (#'admit/summary (assoc result :elapsed_ms 1.0)))]
+    (try
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj"
+                                  "(ns app.core-test)\n"))
+      (testing "the analyzer forced absent, through the production path"
+        (let [result (admit/execute-request!
+                       (-> (stub-config root)
+                           (dissoc :admit-lint-runner)
+                           (assoc :admit-analyzer-command
+                                  ["clj-kondo-absent-by-design"
+                                   "--lint" "{files}"]))
+                       {:patch clean-multi-file-patch :verify "focused"})
+              text (text-of result)]
+          (is (= :unverified (:verification_status result)))
+          (is (false? (:verification_complete result)))
+          (is (= [{:detector "clj-kondo" :reason :clj-kondo-unavailable}]
+                 (:detectors_not_run result))
+              "the analyzer is the one detector that produced no reading")
+          (is (str/includes? text "verification_status=unverified")
+              "the text block carries the word, not only the boolean")
+          (is (str/includes? text "did not run"))
+          (testing "the text block is a superset of the structured receipt"
+            (doseq [{:keys [detector reason]} (:detectors_not_run result)]
+              (is (str/includes? text detector)
+                  (str "the text block never names the detector " detector))
+              (is (str/includes? text (name reason))
+                  (str "the text block never names the reason " (name reason)))))
+          (testing "and no field in it reads as clean"
+            (is (empty? (:hazards result)))
+            (is (str/includes? text "not a clean bill of health")
+                (str "hazards 0 beside a silent detector is exactly the shape "
+                     "a reader scores as a pass")))))
+      (testing "both detectors live, and nothing is named"
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch clean-multi-file-patch :verify "focused"})
+              text (text-of result)]
+          (is (= :complete (:verification_status result)))
+          (is (empty? (:detectors_not_run result)))
+          (is (str/includes? text "verification_status=complete"))
+          (is (not (str/includes? text "did not run")))))
+      (testing "verify none names both detectors rather than passing over them"
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch clean-multi-file-patch :verify "none"})
+              text (text-of result)]
+          (is (= [{:detector "clj-kondo" :reason :verification-not-requested}
+                  {:detector "focused-tests" :reason :verification-not-requested}]
+                 (:detectors_not_run result)))
+          (doseq [{:keys [detector reason]} (:detectors_not_run result)]
+            (is (str/includes? text detector))
+            (is (str/includes? text (name reason))))))
+      (finally (delete-tree! root)))))
