@@ -110,3 +110,4 @@ Independent gate re-run for T3 (seat, 12:13Z): JS_EXIT=0 CLJ_EXIT=0
 |---|---|---|---|---|---|---|
 | T3b | 18 | 7 | 2 | 2 | 3 | 11 |
 T3 pair: 19, 18 raw (mean 18.5) vs the injected round-two receipt 24/22/22 (22.7) vs native 32/50/33 (38.3): **2.1× raw at n=2 for T3**, and the per-call listing below decides whether the write again came before any source read.
+T3b per-call: calls 1–2 tool-list probes, 3–4 CLAUDE.md/bd, **call 5 = ONE source read (editor-commands.js by nl|sed — the selection precedent, i.e. the PEERS the structured cap elided)**, call 6 a sha-check batch, first real patch at call 8, one later read (test classification). Independent gate re-run (seat, 12:23Z): JS_EXIT=0 CLJ_EXIT=0 . So T3 pair: reads before the write 0 and 1 — the single remaining pre-write read is the peers, which the receipt computed and could not carry. That is the whole of round five.
