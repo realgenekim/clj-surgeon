@@ -1346,3 +1346,4 @@ The Opus reader, given only the receipt, answered Gene's parenthetical from the 
 ## 06:51Z — usage watch: collector TIMED OUT again at 120 s (rc 124, child killed with -k, load 8.80); no figures — the collector needs its own lane (a JVM start under load 7+ exceeds the watch's budget); filed on inb-9483a4's neighbour below. (Pushed to MCP/main: main is frozen.)
 
 ## 06:51Z — study-ops O2 r5 built (972cf4c2); Sol r5 review launched. The composition question rides in the brief: does it still merge onto the MEM-003 landing at 694f538d.
+## 06:53Z — gate r4: Sol's filter refused (14th tonight); Opus fallback. Every review lane but O2 r5 is now on Opus — Sol's filter is tripping on the security-shaped material these lanes are made of (permissions, escapes, launders, enumerated refusals). Recorded as a class, not re-litigated per lane.
