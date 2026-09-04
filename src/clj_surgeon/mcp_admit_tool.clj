@@ -2242,34 +2242,81 @@
               ;; nothing left but identity: cut the sentences once, then stop.
               ;; If a next_call is what still will not fit, the oversize
               ;; next_call refusal below is the honest answer.
-              (let [final (annotate (cut current omitted) omitted)]
-                (if (public-faces-fit? final)
-                  final
-                  ;; @spec MCP-OP-ADMIT-141
-                  ;; Nothing droppable remains and the sentences are already
-                  ;; cut. Round five's tail here was `(if (or ...) final
-                  ;; final)` -- both arms identical, the predicate computed
-                  ;; and thrown away -- so a 60,563-byte receipt was published
-                  ;; carrying `receipt_reduced true`, which a reader can only
-                  ;; read as `the reduction succeeded`. A budget this receipt
-                  ;; could not be brought inside is a FACT about it, and it is
-                  ;; stated in a typed way on both faces rather than left
-                  ;; wearing the shape of success.
-                  (let [residual (write-refusal/json-bytes final)
-                        residual-text (summary-characters final)]
-                    (assoc final
-                           :receipt_over_budget true
-                           :receipt_residual_bytes residual
-                           :receipt_residual_text_characters residual-text
-                           :receipt_unreducible_fields
-                           (->> receipt-identity-keys
-                                (filter #(contains? final %))
-                                (map (fn [k]
-                                       [(name k)
-                                        (write-refusal/json-bytes
-                                          {k (get final k)})]))
-                                (sort-by second >)
-                                (mapv first)))))))))))))
+              ;; @spec MCP-OP-ADMIT-144
+              ;; -- and it is the answer BEFORE the cut, not after it. Round
+              ;; six cut both sentences here to make room for a next_call
+              ;; `oversize-next-call-refusal` was about to drop anyway, so a
+              ;; 52-character error sentence and a 49-character
+              ;; manual-recovery remedy reached the caller whole and labelled
+              ;; `error_truncated`, pointing an MCP client at a server log it
+              ;; cannot read. A sentence is cut only when cutting it is what
+              ;; the budget actually needs.
+              (if (and (:next_call current)
+                       (public-faces-fit? (dissoc current :next_call)))
+                current
+                (let [final (annotate (cut current omitted) omitted)]
+                  (if (public-faces-fit? final)
+                    final
+                    ;; @spec MCP-OP-ADMIT-141
+                    ;; Nothing droppable remains and the sentences are already
+                    ;; cut. Round five's tail here was `(if (or ...) final
+                    ;; final)` -- both arms identical, the predicate computed
+                    ;; and thrown away -- so a 60,563-byte receipt was published
+                    ;; carrying `receipt_reduced true`, which a reader can only
+                    ;; read as `the reduction succeeded`. A budget this receipt
+                    ;; could not be brought inside is a FACT about it, and it is
+                    ;; stated in a typed way on both faces rather than left
+                    ;; wearing the shape of success.
+                    (let [residual (write-refusal/json-bytes final)
+                          residual-text (summary-characters final)]
+                      (assoc final
+                             :receipt_over_budget true
+                             :receipt_residual_bytes residual
+                             :receipt_residual_text_characters residual-text
+                             :receipt_unreducible_fields
+                             (->> receipt-identity-keys
+                                  (filter #(contains? final %))
+                                  (map (fn [k]
+                                         [(name k)
+                                          (write-refusal/json-bytes
+                                            {k (get final k)})]))
+                                  (sort-by second >)
+                                  (mapv first))))))))))))))
+
+(def ^:private sentence-cut-marker
+  "The words `reduce-receipt-to-budget`'s `cut` appends to a sentence."
+  "[cut to fit the public payload")
+
+;; @spec MCP-OP-ADMIT-141
+;; @spec MCP-OP-ADMIT-144
+(defn- redescribe-published-receipt
+  "Re-derive one receipt's account of ITSELF from the bytes it will publish.
+
+  The terminal over-budget annotations and `error_truncated` are claims
+  about a candidate, and the candidate is not always what is published: when
+  a receipt is over budget because of its `next_call`, dropping the call is
+  what makes it fit, and every annotation reduction stamped on the way there
+  describes a receipt that no longer exists. Round six carried all of them
+  forward unexamined and published a 1,670-byte receipt claiming a 30,179-byte
+  residual, with `receipt_unreducible_fields` naming a `next_call` it had in
+  fact dropped, and a 49-character manual-recovery remedy -- the one
+  instruction a human needs after a failed rollback -- labelled as cut to fit
+  a budget it is 0.15% of.
+
+  A receipt that fits does not say it is over budget. A sentence that reaches
+  the caller whole is not labelled as truncated. Both are read off the
+  published value, not remembered."
+  [receipt]
+  (if-not (map? receipt)
+    receipt
+    (cond-> receipt
+      (public-faces-fit? receipt)
+      (dissoc :receipt_over_budget :receipt_residual_bytes
+              :receipt_residual_text_characters :receipt_unreducible_fields)
+
+      (not-any? #(str/includes? (str (get receipt %)) sentence-cut-marker)
+                [:error :remedy])
+      (dissoc :error_truncated))))
 
 ;; @spec MCP-OP-ADMIT-069
 ;; @spec MCP-OP-ADMIT-133
@@ -2314,7 +2361,24 @@
                        (binding-face pre-payload))
                 trimmed)
         ;; @spec MCP-OP-ADMIT-139
-        bounded (reduce-receipt-to-budget faced)]
+        ;; @spec MCP-OP-ADMIT-144
+        ;; The CHEAP CORRECT MOVE FIRST. When the receipt is over budget only
+        ;; because of its `next_call`, reduction cannot reach the budget --
+        ;; `next_call` is an identity key, `bound-identity-values` exempts it,
+        ;; and `cut` shortens only the two sentences -- so the ladder walks
+        ;; all the way down, drops every droppable field, cuts both sentences
+        ;; and stamps the terminal over-budget annotations, to make room for a
+        ;; call that `oversize-next-call-refusal` is about to drop anyway.
+        ;; Round six published the result: a 1,670-byte receipt, 5% of the
+        ;; budget, saying `receipt_over_budget true` with a residual of 30,179
+        ;; bytes, its 52-character error sentence marked as cut. Testing the
+        ;; receipt WITHOUT its next_call first takes the move that actually
+        ;; fits, and costs the caller nothing else.
+        bounded (if (and (:next_call faced)
+                         (not (public-faces-fit? faced))
+                         (public-faces-fit? (dissoc faced :next_call)))
+                  faced
+                  (reduce-receipt-to-budget faced))]
     ;; @spec MCP-OP-ADMIT-139
     ;; The oversize decision is taken AFTER reduction, on the receipt that
     ;; would actually be published: if something STILL will not fit once every
@@ -2329,7 +2393,13 @@
     ;; supposed to be the answer to `this did not fit`.
     (checked-refusal-kind!
       (if-let [replacement (oversize-next-call-refusal bounded)]
-        (reduce-receipt-to-budget (bound-identity-values replacement))
+        ;; @spec MCP-OP-ADMIT-144
+        ;; RE-DERIVE, never inherit. Dropping the next_call is what makes the
+        ;; receipt fit, and it fits with room to spare -- so every claim
+        ;; reduction made about a candidate that no longer exists has to be
+        ;; re-tested against the bytes actually published.
+        (redescribe-published-receipt
+          (reduce-receipt-to-budget (bound-identity-values replacement)))
         bounded))))
 
 ;; ---------------------------------------------------------------------------
