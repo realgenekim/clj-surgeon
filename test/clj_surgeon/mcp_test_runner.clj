@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-test-runner
   (:require
+   [clj-surgeon.admit-patch-test]
    [clj-surgeon.core-discovery-test]
    [clj-surgeon.mcp-alias-migration-test]
    [clj-surgeon.mcp-change-buffer-test]
@@ -49,6 +50,7 @@
   [& _]
   (let [result
         (run-tests
+          'clj-surgeon.admit-patch-test
           'clj-surgeon.core-discovery-test
           'clj-surgeon.mcp-alias-migration-test
           'clj-surgeon.mcp-contract-test

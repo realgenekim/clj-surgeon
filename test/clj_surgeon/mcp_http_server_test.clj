@@ -224,7 +224,7 @@
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
 
-(deftest http-protocol-exposes-four-tools-and-structured-read-evidence
+(deftest http-protocol-exposes-five-tools-and-structured-read-evidence
   (let [project (temp-dir)
         source-file (io/file project "src/demo.clj")
         _created (.mkdirs (.getParentFile source-file))
@@ -271,7 +271,8 @@
                (get-in (sse-json initialized)
                        [:result :capabilities :tools :listChanged])))
         (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                "transform_clojure" "alias_migration"]
+                "transform_clojure" "alias_migration"
+                "admit_clojure_patch"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
         (is (= false (get-in tools [0 :annotations :destructiveHint])))
@@ -379,6 +380,7 @@
                  "edit_clojure"
                  "transform_clojure"
                  "alias_migration"
+                 "admit_clojure_patch"
                  "temporary_probe"}
                (set (map :name added-tools))))
         (is (= "HOT_SCHEMA_DESCRIPTION"
@@ -399,7 +401,8 @@
         (is (= (:before-contract-hash added)
                (:after-contract-hash restored)))
         (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                 "transform_clojure" "alias_migration"}
+                 "transform_clojure" "alias_migration"
+                 "admit_clojure_patch"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
                (get-in restored-by-name ["inspect_clojure" :description]))))
