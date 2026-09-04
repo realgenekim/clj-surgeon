@@ -1,6 +1,7 @@
 (ns analyzer-contract-test-runner
   (:require
    [clj-surgeon.analyzer-contract-test]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.mcp-process :as process]
    [clojure.java.io :as io]
    [clojure.test :refer [run-tests]]))
@@ -24,8 +25,19 @@
                   (str path "\u0000" (slurp (io/file path)) "\u0000"))
                 mission-scope-files))))
 
-(let [result (process/call-with-analyzer-contract-mission
+;; RATCHET (2026-09-04, inb-9483a4): every test entry point refuses a
+;; RAM-backed temp base and isolates its run into a private root, so a leak
+;; fails the lane by name. `make test` runs this target between the two
+;; lanes that were guarded first. See clj-surgeon.tmp-leak-support.
+;; @spec MCP-OP-TMPHYG-009
+(let [{:keys [refused root]}
+      (tmp-leak/secure-tmpdir! {:main-ns "analyzer-contract-test-runner"}
+                               *command-line-args*)
+      _ (when refused (System/exit 97))
+      tmp-before (tmp-leak/tmp-entries)
+      result (process/call-with-analyzer-contract-mission
                (System/getProperty "user.dir")
                (mission-scope-sha256)
-               #(run-tests 'clj-surgeon.analyzer-contract-test))]
-  (System/exit (+ (:fail result) (:error result))))
+               #(run-tests 'clj-surgeon.analyzer-contract-test))
+      leak-fail (tmp-leak/report-and-sweep-leak! root tmp-before)]
+  (System/exit (+ (:fail result) (:error result) leak-fail)))

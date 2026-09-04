@@ -121,7 +121,7 @@ run_zero_model_tests() {
   [ "${run_ids[*]}" = '01-control 02-treatment 03-treatment 04-control' ]
 
   local output_probe empty_output nonempty_output regular_output symlink_output
-  output_probe=$(mktemp -d "${TMPDIR:-/tmp}/extraction-surface-output-root.XXXXXX")
+  output_probe=$(mktemp -d "${TMPDIR:-/var/tmp}/extraction-surface-output-root.XXXXXX")
   empty_output="$output_probe/empty"
   nonempty_output="$output_probe/nonempty"
   regular_output=$(mktemp "$output_probe/regular.XXXXXX")
@@ -140,7 +140,7 @@ run_zero_model_tests() {
   rmdir "$empty_output" "$nonempty_output" "$output_probe"
 
   local prompt
-  prompt=$(mktemp "${TMPDIR:-/tmp}/extraction-surface-prompt.XXXXXX")
+  prompt=$(mktemp "${TMPDIR:-/var/tmp}/extraction-surface-prompt.XXXXXX")
   screen_prompt > "$prompt"
   [ "$(wc -c < "$prompt" | tr -d ' ')" -eq "$expected_prompt_bytes" ]
   [ "$(shasum -a 256 "$prompt" | awk '{print $1}')" = "$expected_prompt_sha" ]

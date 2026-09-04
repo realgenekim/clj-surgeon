@@ -33,6 +33,14 @@ MCP_STOP_ATTEMPTS ?= 100
 MCP_JAVA_HOME ?= $(JAVA_HOME)
 MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command -v java 2>/dev/null))
 MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
+# Scratch root for self-tests that need a real directory. NEVER /tmp: it is a
+# RAM-backed tmpfs on this seat, and 82,210 leaked fixture directories took it
+# to 96% of its inodes (inb-9483a4). A RAM-backed TMPDIR is REDIRECTED here at
+# the Make layer, not merely refused later by the Clojure layer -- these
+# recipes hand the value straight to shell harnesses that never reach Clojure.
+# @spec MCP-OP-TMPHYG-010
+# @spec MCP-OP-TMPHYG-012
+SELF_TEST_TMP ?= $(if $(filter /tmp /tmp/% /dev/shm /dev/shm/%,$(TMPDIR)),/var/tmp,$(or $(TMPDIR),/var/tmp))
 MCP_DEV_PORT ?= 7889
 MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
 MCP_DEV_URL ?= http://127.0.0.1:$(MCP_DEV_PORT)/mcp
@@ -52,7 +60,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: repository-hygiene repository-hygiene-self-test test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests
+.PHONY: repository-hygiene repository-hygiene-self-test test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -194,10 +202,13 @@ repository-hygiene-self-test:
 runtests: mcp-test
 
 mcp-test: mcp-operation-oracle
+	@# @spec MCP-OP-TMPHYG-001
+	@# @spec MCP-OP-TMPHYG-002
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
 	@$(MAKE) --no-print-directory repository-hygiene-self-test
 	@$(MAKE) --no-print-directory txn-kernel-warning-check
 	@$(MAKE) --no-print-directory mcp-heap-config-self-test
+	@$(MAKE) --no-print-directory tmp-leak-ratchet-self-test
 	@$(MAKE) --no-print-directory clj-kondo-admission-path-self-test
 	@$(MAKE) --no-print-directory analyzer-contract-target-self-test
 	@$(MAKE) --no-print-directory cclsp-start-self-test
@@ -205,6 +216,20 @@ mcp-test: mcp-operation-oracle
 
 clj-kondo-admission-path-self-test:
 	@sh test/clj_kondo_admission_path_test.sh
+
+# The temp-dir hygiene ratchet's refusal branches, driven as real
+# subprocesses. `secure-tmpdir!` re-execs its own suite and exits, so these
+# cannot be witnessed from inside a clojure.test run.
+tmp-leak-ratchet-self-test:
+	@# @spec MCP-OP-TMPHYG-003
+	@# @spec MCP-OP-TMPHYG-004
+	@# @spec MCP-OP-TMPHYG-006
+	@# @spec MCP-OP-TMPHYG-007
+	@# @spec MCP-OP-TMPHYG-008
+	@# @spec MCP-OP-TMPHYG-011
+	@# @spec MCP-OP-TMPHYG-012
+	@# @spec MCP-OP-TMPHYG-013
+	@sh test/tmp_leak_ratchet_test.sh
 
 # @spec MCP-OP-ADMIT-130
 # The admit path's no-OOM proof, at an explicit -Xmx, with a numeric pass line
@@ -730,18 +755,19 @@ benchmark-anvil-portfolio-pair:
 	bash bench/run_anvil_portfolio_pair.sh "$(RESULT_DIR)" "$(TASK)" "$(ORDER)" "$(or $(REPLICATES),1)"
 
 benchmark-anvil-portfolio-pair-self-test:
+	@# @spec MCP-OP-TMPHYG-010
 	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_portfolio_pair.sh \
-		/tmp/clj-surgeon-anvil-pair-self-test decision-batch-edit compact-first 2
+		$(SELF_TEST_TMP)/clj-surgeon-anvil-pair-self-test decision-batch-edit compact-first 2
 	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_public_cfp_cleanup.sh \
-		/tmp/clj-surgeon-public-cfp-self-test native-first 1
+		$(SELF_TEST_TMP)/clj-surgeon-public-cfp-self-test native-first 1
 	ANVIL_FORMAT_CONFIG_SELF_TEST=true bash bench/run_anvil_format_extraction.sh \
-		/tmp/clj-surgeon-format-extraction-self-test mcp-first 1
+		$(SELF_TEST_TMP)/clj-surgeon-format-extraction-self-test mcp-first 1
 
 benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh
 
 benchmark-inspect-mcp-self-test:
-	BENCH_RESULT_DIR="$$(mktemp -d "$${TMPDIR:-/tmp}/clj-surgeon-inspect-self-test.XXXXXX")" \
+	BENCH_RESULT_DIR="$$(mktemp -d "$${TMPDIR:-/var/tmp}/clj-surgeon-inspect-self-test.XXXXXX")" \
 	bash bench/run_inspect_mcp_benchmark.sh --self-test
 
 anvil-arms-self-test:
@@ -945,6 +971,8 @@ txn-kernel-warning-check:
 	clojure -M test/kernel_warning_check.clj
 
 test-fast:
+	@# @spec MCP-OP-TMPHYG-001
+	@# @spec MCP-OP-TMPHYG-002
 	bb test/run_all.clj
 
 # ============================================================

@@ -20,7 +20,16 @@
   This is the lexical half of confinement and performs no filesystem I/O."
   [value]
   (when (string? value)
-    (let [portable (str/replace value "\\" "/")
+    (let [;; @spec MCP-OP-ALIAS-060
+          ;; the separator is the one THIS filesystem uses. On POSIX a
+          ;; backslash is an ordinary path character, so replacing it turned
+          ;; the legal name `c\\d.clj` into two segments and the legal
+          ;; top-level directory `\\` into a blank one — and the alias walk's
+          ;; owner under it vanished from `scope.paths [\"**\"]` without a word.
+          separator (java.io.File/separator)
+          portable (if (= "/" separator)
+                     value
+                     (str/replace value separator "/"))
           segments (str/split portable #"/" -1)
           extension (some-> portable (str/split #"\.") last)]
       (and (not (str/blank? portable))
@@ -68,6 +77,13 @@
     :unresolvable-source-path})
 
 (defn path-refusal
+  ;; @spec MCP-OP-ALIAS-059
+  ;; forwarded-refusal-kind: every caller spells its kind as a keyword
+  ;; literal at its own call site; this constructor only forwards that
+  ;; argument verbatim and mints nothing of its own. The optional `cause`
+  ;; is forwarded on the same terms — spelled by the caller, never minted
+  ;; here — so the receipt gains a discriminating field without this
+  ;; constructor gaining a vocabulary.
   ([error-type message path] (path-refusal error-type message path nil))
   ([error-type message path cause]
    (cond-> {:ok false

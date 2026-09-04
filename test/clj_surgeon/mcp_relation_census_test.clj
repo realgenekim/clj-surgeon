@@ -7144,8 +7144,13 @@
    workspace the caller named and are what a reader checks their request
    against; `workspace_root` is the tool's half of the same; every continuation
    is EXECUTABLE and a relative path in an argument position runs somewhere
-   else."
-  #{:anchor :dir :workspace_root :next-command :next-command-argv :next_call})
+   else. `workspace_root_given` arrived with the trunk's workspace-router
+   landing and is the same contract as `workspace_root` from the other side —
+   the caller's OWN text, `pr-str`d and published as the discriminating fact
+   the refusal is ABOUT — so it is exempt for the reason those are, and its
+   membership here is the deliberate edit this docstring asks for."
+  #{:anchor :dir :workspace_root :workspace_root_given
+    :next-command :next-command-argv :next_call})
 
 (defn- names-the-root-itself
   "Every prose string in `refusal` that names `root` AS ITSELF.

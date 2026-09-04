@@ -145,7 +145,7 @@ wait_for_model() {
 
 self_test_run() {
   local tmp
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/clj-surgeon-recognition-self-test.XXXXXX")
+  tmp=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-recognition-self-test.XXXXXX")
   self_test_tmp=$tmp
   trap 'rm -rf "${self_test_tmp:-}"' EXIT
 

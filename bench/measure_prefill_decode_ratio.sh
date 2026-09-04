@@ -72,7 +72,7 @@ command -v codex >/dev/null || { echo "codex not on PATH" >&2; exit 2; }
 command -v bb    >/dev/null || { echo "bb (babashka) not on PATH" >&2; exit 2; }
 
 mkdir -p "$out_dir/trials"
-work_dir=$(mktemp -d "${TMPDIR:-/tmp}/ratio-work.XXXXXX")
+work_dir=$(mktemp -d "${TMPDIR:-/var/tmp}/ratio-work.XXXXXX")
 trap 'rm -rf "$work_dir"' EXIT
 
 run_nonce=$(date +%s)-$$

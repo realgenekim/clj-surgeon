@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-process :as process-env]
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is]]))
 
 (defn- temp-dir
@@ -121,7 +122,13 @@
                    (:next_action result))))))
       (finally
         (cold-verify/clear-jobs!)
-        (delete-tree! root)))))
+        (delete-tree! root)
+        (try (io/delete-file lock-path true) (catch Throwable _ nil))
+        (try (io/delete-file priority-lock-path true) (catch Throwable _ nil))
+        ;; resources/clj-kondo-admission.py derives a sibling
+        ;; "<priority-lock-path>.waiters" file of its own (see its
+        ;; `priority_waiters_path`) -- clean that up too.
+        (try (io/delete-file (str priority-lock-path ".waiters") true) (catch Throwable _ nil))))))
 
 (deftest missing-cold-clj-kondo-admission-is-unverified
   ;; @spec MCP-OP-ANALYZER-004

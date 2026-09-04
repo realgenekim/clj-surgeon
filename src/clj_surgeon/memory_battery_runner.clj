@@ -25,7 +25,8 @@
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
    [clojure.string :as str]
-   [clj-surgeon.memory-battery :as battery])
+   [clj-surgeon.memory-battery :as battery]
+   [clj-surgeon.tmp-leak-support :as tmp-leak])
   (:import
    (java.io OutputStream)
    (java.lang.management ManagementFactory)
@@ -560,9 +561,18 @@
       (do (println "reference attested:" (pr-str (select-keys att battery/attested-fields)))
           (:pass battery/exit-codes)))))
 
+;; RATCHET (2026-09-04, inb-9483a4): refuse a RAM-backed temp base and
+;; isolate this run's temp creation. Deliberately WITHOUT
+;; report-and-sweep-leak!: this is minutes-scale measurement apparatus whose
+;; own trees live under MEMBAT_ROOT, and a leak verdict here would be a
+;; measurement result, not a test failure.
+;; @spec MCP-OP-TMPHYG-009
 (defn -main
   "Entry point for `make memory-battery`."
-  [& _args]
+  [& args]
+  (when (:refused (tmp-leak/secure-tmpdir!
+                    {:main-ns "clj-surgeon.memory-battery-runner"} args))
+    (System/exit 97))
   (let [root (env "MEMBAT_ROOT" "/home/forge/tmp/membat")
         mode (keyword (env "MEMBAT_MODE" "battery"))
         scales (mapv #(Long/parseLong (str/trim %))

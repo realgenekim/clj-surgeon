@@ -1431,6 +1431,12 @@
   (let [req (normalise-request :cli params)
         anchor (cli-anchor params)]
     (reduce
+      ;; @spec MCP-OP-ALIAS-059
+      ;; forwarded-refusal-kind: `cli` is destructured from one row of
+      ;; `request-shape-rules`, where every rule spells its kind as a keyword
+      ;; LITERAL (`:cli :dir-not-a-string`, …). This site forwards that
+      ;; literal verbatim and mints nothing of its own, so the entrance's
+      ;; source scan reads every kind this branch can publish from the table.
       (fn [_ {:keys [predicate cli cli-message cli-data cli-fix cli-remedy]
               :as _rule}]
         (if (or (not (keyword? cli)) (predicate req))

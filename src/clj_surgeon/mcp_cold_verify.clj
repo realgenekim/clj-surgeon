@@ -122,6 +122,9 @@
                               (:finished? process) :failed
                               (:termination-confirmed process) :timed-out
                               :else :termination-failed)
+                    ;; @spec MCP-OP-ALIAS-059
+                    ;; forwarded-refusal-kind: the kind analyzer-authority-
+                    ;; error-type mints in this file travels verbatim
                     :error-type authority-error
                     :exit (:exit process)
                     :termination_confirmed (:termination-confirmed process)

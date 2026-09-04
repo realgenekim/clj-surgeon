@@ -3,7 +3,7 @@ set -euo pipefail
 
 source_script=$(cd "$(dirname "$0")/.." && pwd -P)/bench/run_relation_causal_cohort.sh
 source_repo=$(cd "$(dirname "$source_script")/.." && pwd -P)
-test_root=$(mktemp -d /tmp/clj-surgeon-relation-coordinator-test.XXXXXX)
+test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-relation-coordinator-test.XXXXXX")
 trap '[ "${KEEP_RELATION_TEST_TMP:-false}" = true ] || rm -rf "$test_root"' EXIT
 mkdir -p "$test_root/codex-bin" "$test_root/codex-lib" "$test_root/node-bin"
 test_platform_os=$(uname -s)

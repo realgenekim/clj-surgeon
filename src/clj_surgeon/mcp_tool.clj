@@ -1348,11 +1348,21 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def alias-migration-refusal-envelope-keys
-  "Receipt keys the refusal text renders structurally rather than as facts."
-  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
-    :write_authority :next_action :next_call :remedy :elapsed_ms
-    :workspace_root :expect_files_unchanged_reason :receipt_hash
-    :undo_receipt :details_path :details_retained :details_retention})
+  "Receipt keys the refusal text renders structurally rather than as facts.
+
+  ONLY the keys this renderer actually renders. `mutation_attempted`,
+  `write_authority`, `source_unchanged`, `next_action` and
+  `expect_files_unchanged_reason` were listed here and rendered nowhere, so
+  they were removed from the fact line and then dropped from the text
+  altogether: the E-PREWRITE cohort read an `alias-policy-exhausted` refusal
+  whose structuredContent carried `mutation_attempted false` and
+  `write_authority false` — the two fields that separate \"refused before
+  touching anything\" from \"tried and rolled back\" — and whose text carried
+  neither. A key is envelope because the renderer HAS a place for it, never
+  because it looks structural."
+  #{:ok :operation :error_type :error :next_call :remedy :elapsed_ms
+    :workspace_root :receipt_hash :undo_receipt :details_path
+    :details_retained :details_retention})
 
 ;; @spec MCP-OP-ALIAS-059
 (def max-refusal-fact-characters
@@ -1364,8 +1374,14 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def max-refusal-facts
-  "How many discriminating facts one refusal text renders."
-  12)
+  "How many discriminating facts one refusal text renders.
+
+  Sixteen, not twelve: five keys that were listed as envelope and rendered
+  nowhere are facts now, and the widest live refusal —
+  `scope-matches-nothing` where no next_call can be composed — carries
+  fifteen. A bound that would drop one of them turns the fix for text ⊇
+  structured back into the defect it closed."
+  16)
 
 ;; @spec MCP-OP-ALIAS-059
 (def max-rendered-next-call-characters
@@ -1376,11 +1392,338 @@
   names its length — never dropped in silence."
   1024)
 
+
 ;; @spec MCP-OP-ALIAS-059
-(defn- renderable-fact?
+(defn- ceiling-writer
+  "A `Writer` that collects into `builder` and refuses past `ceiling`.
+
+  Every concrete `Writer.write` overload is intercepted rather than only the
+  abstract one, because `print-method` reaches the writer three different
+  ways: `append` on a char for an ordinary character, `write` on a String for
+  an escape sequence, and `write` on a char array for a copied region."
+  [^StringBuilder builder ceiling]
+  (let [refuse! (fn []
+                  (when (> (.length builder) ceiling)
+                    (throw (ex-info "print ceiling reached"
+                                    {::print-ceiling true}))))]
+    (proxy [java.io.Writer] []
+      (write
+        ([data]
+         (cond
+           (integer? data) (.append builder (char (int data)))
+           (string? data) (.append builder ^String data)
+           :else (.append builder (String. ^chars data)))
+         (refuse!))
+        ([data off len]
+         (if (string? data)
+           (.append builder ^String (subs ^String data off (+ (int off) (int len))))
+           (.append builder ^String (String. ^chars data (int off) (int len))))
+         (refuse!)))
+      (flush [])
+      (close []))))
+
+;; @spec MCP-OP-ALIAS-059
+(def ^:private print-safe-scalar-classes
+  "The EXACT classes `print-method` may be handed, enumerated by class.
+
+  Round-fifteen review finding 1: an allowlist BY TYPE admits every SUBTYPE.
+  The predicate this replaces admitted everything satisfying `number?` — that
+  is `(instance? java.lang.Number …)` — and `print-method`'s own `Number`
+  implementation is `print-simple`, which writes `(str o)`. `java.lang.Number`
+  is not final, so a `proxy` or an anonymous subclass carries an ARBITRARY
+  `toString` straight through the branch the renderer called safe: a throwing
+  one escaped `bounded-pr-str` and a looping one hung it — exactly the two
+  failures the round-fourteen fix closed for every other class.
+
+  Measured on this JVM (`Modifier/isFinal`): `String` and `Boolean` are final
+  and cannot be subclassed at all, so their `instance?` tests were already
+  exact. `clojure.lang.Keyword`, `clojure.lang.Symbol`, `java.math.BigInteger`,
+  `java.math.BigDecimal`, `clojure.lang.Ratio` and `java.lang.Number` are NOT
+  final, and `print-method` reaches `print-simple` — `(str o)` — for Keyword,
+  Symbol and Number alike. So membership is decided by `(class value)` and not
+  by `instance?`, uniformly, for every scalar: a subclass of any of them is
+  not this class and renders as an identity marker.
+
+  The set is the numeric representations Clojure and the JVM really produce
+  plus the four other scalars the renderer has always printed. `Character` is
+  deliberately absent: it was not admitted before this change either, and
+  admitting it now would alter a rendering."
+  #{java.lang.String
+    java.lang.Boolean
+    clojure.lang.Keyword
+    clojure.lang.Symbol
+    java.lang.Long
+    java.lang.Integer
+    java.lang.Short
+    java.lang.Byte
+    java.lang.Double
+    java.lang.Float
+    java.math.BigInteger
+    java.math.BigDecimal
+    clojure.lang.BigInt
+    clojure.lang.Ratio})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- print-safe-leaf?
+  "True when `value` is a scalar `print-method` can render without ever
+  reaching an arbitrary object's `toString`.
+
+  Decided on the value's EXACT class, never on `instance?`: see
+  `print-safe-scalar-classes`."
   [value]
-  (or (string? value) (number? value) (boolean? value)
-      (and (sequential? value) (every? #(or (string? %) (number? %)) value))))
+  (or (nil? value)
+      (contains? print-safe-scalar-classes (class value))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- opaque-object-marker
+  "Identity-only rendering for a value that is not Clojure data — the class's
+  simple name and identity hash, WITHOUT ever calling `.toString`.
+
+  `print-method`'s own default for an object it does not recognise calls
+  `.toString` before a single character reaches `ceiling-writer`, so a
+  `deftype` whose `toString` never returns hangs the renderer no matter how
+  tight the ceiling is, and one whose `toString` throws escapes the
+  ceiling's own catch entirely. A raw Java collection is exactly this shape
+  too: its own `toString` walks and stringifies every element, which is the
+  same unbounded work one level removed."
+  [value]
+  (str "#object[" (.getSimpleName (class value)) " "
+       (Integer/toHexString (System/identityHashCode value)) "]"))
+
+;; @spec MCP-OP-ALIAS-059
+(declare write-bounded)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-safe-leaf
+  "Prints one admitted scalar, with the CALL ITSELF guarded.
+
+  The allowlist decides which classes may reach `print-method`; this decides
+  what happens if one of them misbehaves anyway. Defence in depth, and cheap:
+  for every class in `print-safe-scalar-classes` the guard can never fire,
+  because none of them can be subclassed into hostility while remaining that
+  exact class. The ceiling's own refusal is re-thrown rather than swallowed —
+  it is the renderer stopping on purpose, not a leaf failing."
+  [^java.io.Writer writer value]
+  (try
+    (print-method value writer)
+    (catch clojure.lang.ExceptionInfo e
+      (if (::print-ceiling (ex-data e))
+        (throw e)
+        (.write writer (opaque-object-marker value))))
+    (catch Throwable _
+      (.write writer (opaque-object-marker value)))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded-elements
+  "Writes `coll`'s elements to `writer`, `sep`-separated, one at a time.
+
+  Walked with `seq`/`next` rather than `count`/`nth`, so an endless lazy
+  sequence is walked lazily — the ceiling writer's own refusal, thrown from
+  inside one of these `.write` calls, is what stops it, exactly as it always
+  stopped `print-method`'s recursion. A `(first coll)` truthiness check would
+  stop early on a real `nil` element, so emptiness is read from the seq
+  itself."
+  [^java.io.Writer writer coll level sep]
+  (loop [items (seq coll) first? true]
+    (when items
+      (when-not first? (.write writer ^String sep))
+      (write-bounded writer (first items) (dec level))
+      (recur (next items) false))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded-map-entries
+  [^java.io.Writer writer m level]
+  (loop [entries (seq m) first? true]
+    (when entries
+      (when-not first? (.write writer ", "))
+      (let [entry (first entries)]
+        (write-bounded writer (key entry) (dec level))
+        (.write writer " ")
+        (write-bounded writer (val entry) (dec level)))
+      (recur (next entries) false))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded-meta
+  "Writes `value`'s metadata, when the caller asked to see it.
+
+  Round-fifteen review finding 3: replacing `print-method`'s recursion
+  dropped two of its renderings — this one, and the record tag below. Core's
+  `print-meta` writes the map (or, for a lone `:tag`, the tag alone) under
+  exactly this condition, and the metadata itself recurses through the same
+  bounded writer as any other value, so nothing here is unbounded: a
+  poisonous object inside a metadata map renders as the same identity marker
+  it renders as anywhere else."
+  [^java.io.Writer writer value level]
+  (when (or *print-dup* (and *print-meta* *print-readably*))
+    (let [m (meta value)]
+      (when (and m (pos? (count m)))
+        (.write writer "^")
+        (if (and (= 1 (count m)) (:tag m))
+          (write-bounded writer (:tag m) level)
+          (write-bounded writer m level))
+        (.write writer " ")))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded
+  "Writes `value` to `writer`, recursing into Clojure data and refusing to
+  invoke `toString` on anything else.
+
+  The renderer prints only Clojure data — maps, vectors, sets, lists, seqs,
+  strings, numbers, keywords, symbols, booleans and nil — checked by type
+  BEFORE any printer is chosen; every other object, recursively inside
+  collections, renders as `opaque-object-marker` instead of being handed to
+  `print-method`'s object-toString fallback.
+
+  `level` mirrors the old `*print-level*` second floor: decremented on every
+  recursive descent, rendering `#` once it reaches zero. It is unreachable in
+  ordinary use for the same reason `*print-level*` was — `ceiling-writer`
+  throws on character count first, and every level of nesting costs at least
+  the two characters of its own delimiters."
+  [^java.io.Writer writer value level]
+  (cond
+    (print-safe-leaf? value)
+    (write-safe-leaf writer value)
+
+    (zero? level)
+    (.write writer "#")
+
+    ;; @spec MCP-OP-ALIAS-059
+    ;; a record is a map AND carries its own tag; `.getName` reads the class
+    ;; name without ever calling the value's `toString`, so the tag costs
+    ;; nothing the ceiling does not already bound
+    (record? value)
+    (do (write-bounded-meta writer value level)
+        (.write writer "#")
+        (.write writer (.getName (class value)))
+        (.write writer "{")
+        (write-bounded-map-entries writer value level)
+        (.write writer "}"))
+
+    (map? value)
+    (do (write-bounded-meta writer value level)
+        (.write writer "{")
+        (write-bounded-map-entries writer value level)
+        (.write writer "}"))
+
+    (set? value)
+    (do (write-bounded-meta writer value level)
+        (.write writer "#{")
+        (write-bounded-elements writer value level " ")
+        (.write writer "}"))
+
+    (vector? value)
+    (do (write-bounded-meta writer value level)
+        (.write writer "[")
+        (write-bounded-elements writer value level " ")
+        (.write writer "]"))
+
+    (or (list? value) (seq? value))
+    (do (write-bounded-meta writer value level)
+        (.write writer "(")
+        (write-bounded-elements writer value level " ")
+        (.write writer ")"))
+
+    :else
+    (.write writer (opaque-object-marker value))))
+
+;; @spec MCP-OP-ALIAS-059
+(def ^:private print-time-budget-ms
+  "The wall-clock floor under one bounded rendering.
+
+  Round-fifteen review finding 1: the ceiling bounds CHARACTERS, and work that
+  emits no character is unbounded by it — a `lazy-seq` whose body never
+  returns never yields its first element, so nothing is ever written and the
+  renderer waits forever. Two seconds is three orders of magnitude above the
+  slowest ordinary rendering measured here (a ten-megabyte string publishes
+  160 characters in a fraction of a millisecond) and far below any timeout a
+  caller waits on."
+  2000)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- bounded-text
+  [^StringBuilder builder ceiling]
+  (let [text (.toString builder)]
+    (if (> (count text) ceiling)
+      (str (subs text 0 ceiling) "…")
+      text)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn bounded-pr-str
+  "`pr-str` bounded in WORK as well as in output.
+
+  A ceiling applied to a finished string is a bound on the receipt and not on
+  the request. `pr-str` realises the complete value before anything measures
+  it, so an endless lazy sequence never reaches the gate, a value nested
+  twenty thousand deep takes the renderer down with a StackOverflowError, and
+  a ten-megabyte string is rendered whole in order to publish 160 characters
+  of it — 362 ms of work to produce a fact line nobody could tell apart from
+  the cheap one.
+
+  So printing STOPS at the ceiling instead: the writer refuses the moment the
+  buffer passes it. That alone is not enough — `print-method`'s own default
+  for an object it does not recognise calls that object's `toString` before a
+  single character reaches the writer, so a `deftype` whose `toString` never
+  returns hangs the renderer regardless of the ceiling. `write-bounded`
+  replaces `print-method`'s recursion for compound values with its own,
+  admitting only Clojure data before a value is ever printed and rendering
+  everything else as an identity marker — `level` standing in for the old
+  `*print-level*` second floor, since `*print-length*` is now redundant: the
+  writer's own character ceiling is what actually stops an endless or huge
+  value, exactly as before.
+
+  The three-argument arity takes the budget as a DEADLINE ALLOWANCE, so a
+  caller rendering several values into one receipt can spend one budget across
+  all of them rather than one each: `refusal-fact-line` renders up to sixteen
+  facts, and sixteen unrenderable values cost a measured 32,011 ms when each
+  gets its own two seconds. The receipt is the unit a caller waits on."
+  ([value ceiling] (bounded-pr-str value ceiling print-time-budget-ms))
+  ([value ceiling budget-ms]
+  (let [builder (StringBuilder.)
+        outcome-promise (promise)
+        ;; @spec MCP-OP-ALIAS-059
+        ;; a DAEMON thread and not `future`: the send-off pool's threads are
+        ;; not daemons, so one abandoned inside a `toString` that never
+        ;; returns keeps its JVM — an MCP server — from ever exiting. Measured
+        ;; on this branch: a probe that rendered a looping `Number` correctly
+        ;; then hung at JVM exit until it was killed. A rendering the budget
+        ;; abandons must cost a leaked thread and nothing else.
+        worker (doto (Thread.
+                       ^Runnable
+                       (bound-fn []
+                         (deliver outcome-promise
+                                  (try
+                                    (binding [*print-readably* true]
+                                      (write-bounded
+                                        (ceiling-writer builder ceiling)
+                                        value ceiling))
+                                    ::completed
+                                    (catch Throwable t t))))
+                       "clj-surgeon-bounded-print")
+                 (.setDaemon true)
+                 (.start))
+        outcome (deref outcome-promise (max 1 (long budget-ms)) ::timed-out)]
+    (cond
+      ;; @spec MCP-OP-ALIAS-059
+      ;; A character ceiling cannot stop work that produces no character. A
+      ;; `lazy-seq` whose body never returns yields no first element, so the
+      ;; ceiling writer is never called and the renderer waits forever; the
+      ;; same is true of any admitted leaf that could be made to loop. The
+      ;; TIME bound is the outer floor under both, and it returns the same
+      ;; identity marker every other unrenderable value gets. The builder is
+      ;; deliberately NOT read here: the abandoned thread may still be writing
+      ;; to it, and a partially-written buffer read across a race is worse
+      ;; than an honest marker.
+      (= ::timed-out outcome)
+      (do (.interrupt ^Thread worker)
+          (if (nil? value) "nil" (opaque-object-marker value)))
+
+      (instance? Throwable outcome)
+      (if (and (instance? clojure.lang.ExceptionInfo outcome)
+               (::print-ceiling (ex-data ^clojure.lang.ExceptionInfo outcome)))
+        (bounded-text builder ceiling)
+        (throw ^Throwable outcome))
+
+      :else (bounded-text builder ceiling)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn refusal-fact-line
@@ -1394,26 +1737,56 @@
   neither, and the arm that read the text sent the same wrong scope twice.
 
   Sorted by field name so the line is a function of the refusal and not of map
-  order, and bounded in both count and per-fact length."
+  order, and bounded in both count and per-fact length — and the COUNT bound
+  says when it fired. No alias_migration refusal carries twelve discriminating
+  facts today, so this bound has never dropped one; a bound that truncates in
+  silence breaks the text ⊇ structured contract on the day it first fires, and
+  a reader of the text has no way to know it did.
+
+  The print deadline is ONE budget for the whole line rather than one per fact,
+  which has a consequence worth stating: a fact late in a slow receipt gets
+  less of that budget, so an ordinary value can render as an identity marker
+  where on its own it would have rendered as itself. The degradation is typed
+  — a marker naming the value's class and identity hash — never wrong data and
+  never a hang, and it is the correct trade for a receipt bounded as the one
+  unit the caller actually waits on."
   [result]
-  (let [facts (->> result
-                   (remove (fn [[field _]]
-                             (contains? alias-migration-refusal-envelope-keys
-                                        field)))
-                   (filter (fn [[_ value]] (renderable-fact? value)))
-                   (sort-by key)
+  (let [;; @spec MCP-OP-ALIAS-059
+        ;; EVERY non-envelope key, whatever the shape of its value. The old
+        ;; predicate admitted strings, numbers, booleans and flat sequentials
+        ;; and dropped everything else IN SILENCE, so a nested map added to a
+        ;; live refusal was carried by structuredContent and absent from the
+        ;; text — and the source-derived key witness could not see it, because
+        ;; it probed every key with the string "probe-value". A value too
+        ;; large to render whole is ELIDED at the per-fact bound, which is the
+        ;; only honest way to bound a fact: named, cut, and pointed at the
+        ;; structure.
+        renderable (->> result
+                        (remove (fn [[field _]]
+                                  (contains?
+                                    alias-migration-refusal-envelope-keys
+                                    field)))
+                        (sort-by key))
+        dropped (max 0 (- (count renderable) max-refusal-facts))
+        ;; @spec MCP-OP-ALIAS-059
+        ;; ONE print budget for the whole receipt, not one per fact: a refusal
+        ;; carrying sixteen unrenderable values cost a measured 32,011 ms while
+        ;; each fact got its own. `mapv` and not `map`, because a deadline
+        ;; means nothing to a sequence nobody has realised yet.
+        deadline (+ (System/currentTimeMillis) print-time-budget-ms)
+        facts (->> renderable
                    (take max-refusal-facts)
-                   (map (fn [[field value]]
-                          (let [rendered (pr-str value)]
-                            (str (name field) "="
-                                 (if (> (count rendered)
-                                        max-refusal-fact-characters)
-                                   (str (subs rendered 0
-                                              max-refusal-fact-characters)
-                                        "…")
-                                   rendered))))))]
+                   (mapv (fn [[field value]]
+                           ;; bounded in WORK, not merely cut afterwards
+                           (str (name field) "="
+                                (bounded-pr-str
+                                  value max-refusal-fact-characters
+                                  (- deadline
+                                     (System/currentTimeMillis)))))))]
     (when (seq facts)
-      (str "facts · " (str/join " · " facts)))))
+      (str "facts · " (str/join " · " facts)
+           (when (pos? dropped)
+             (str " · +" dropped " more in structuredContent"))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn rendered-next-call
@@ -1422,7 +1795,14 @@
   A refusal that carries an executable remedy the caller never sees costs a
   model return at random — whichever face of the receipt that caller happens to
   read. An absent next_call is STATED rather than omitted, because a missing
-  line and an uncomputable remedy are indistinguishable in silence."
+  line and an uncomputable remedy are indistinguishable in silence.
+
+  The stated absence does not point at a remedy unless one is there. The live
+  `invalid-workspace-root` receipt carried no `:remedy` and this line still
+  said \"the remedy above names what only the caller can decide\", sending a
+  caller to a sentence that does not exist — a receipt that describes its own
+  contents wrongly is worse than one that is merely thin, because the caller
+  stops looking."
   [result]
   (if-let [call (:next_call result)]
     (let [encoded (json/generate-string call)]
@@ -1430,10 +1810,33 @@
         (str "next_call · " encoded)
         (str "next_call · " (count encoded)
              " characters, in structuredContent.next_call — send it verbatim")))
-    (str "next_call · none — this refusal has no mechanically composable "
-         "correction; the remedy above names what only the caller can decide")))
+    (if (:remedy result)
+      (str "next_call · none — this refusal has no mechanically composable "
+           "correction; the remedy above names what only the caller can decide")
+      (str "next_call · none — this refusal has no mechanically composable "
+           "correction and carries no remedy; the cause above is the whole of "
+           "what is known"))))
 
 ;; @spec MCP-OP-ALIAS-042
+;; @spec MCP-OP-ALIAS-059
+(defn- bounded-refusal-text
+  "One rendered refusal, held to the ceiling the verb publishes.
+
+  The last gate rather than the only one: every list this renderer embeds is
+  bounded in characters upstream, and this is what makes the whole a receipt
+  even when a field nobody bounded grows. It is a typed cut — the marker names
+  the length it replaced and where the whole refusal is — because a text block
+  silently shorter than the receipt it renders breaks the text ⊇ structured
+  contract with nothing in the text to show it."
+  [text]
+  (let [ceiling alias-migration/max-refusal-text-characters]
+    (if (<= (count text) ceiling)
+      text
+      (let [marker (str "\n… [refusal text truncated at " ceiling
+                        " characters; it rendered " (count text)
+                        " — every field is complete in structuredContent]")]
+        (str (subs text 0 (max 0 (- ceiling (count marker)))) marker)))))
+
 (defn alias-migration-summary
   "Render one compact visible summary whose length is constant in N.
 
@@ -1452,9 +1855,10 @@
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
             (:details_path result)
             (or (:details_retention result) "best-effort"))
-    (str/join
-      "\n"
-      (remove
+    (bounded-refusal-text
+      (str/join
+       "\n"
+       (remove
         nil?
         [(format (str "alias_migration\n"
                       "  refused · %s · %s\n\n"
@@ -1470,7 +1874,7 @@
          (refusal-fact-line result)
          (when-let [remedy (:remedy result)]
            (str "remedy · " remedy))
-         (rendered-next-call result)]))))
+         (rendered-next-call result)])))))
 
 (def alias-migration-tool-description
   (str
@@ -1534,6 +1938,12 @@
    :schema mcp-schema/alias-migration-schema
    :output-schema mcp-schema/alias-migration-output-schema
    :structured? true
+   ;; @spec MCP-OP-ALIAS-059
+   ;; the SDK wrapper publishes `mcp-adapter-failure` from outside
+   ;; `mcp-operation/invoke!`, so it never sees the summarizer the operation
+   ;; passes in; naming it on the tool is what lets that one refusal class
+   ;; render its two faces the same way every other one does
+   :summarize alias-migration-summary
    :tool-fn #'handle-alias-migration})
 
 (def clj-change-tool
