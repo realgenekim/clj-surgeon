@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -771,6 +772,42 @@
                   "must name the paved directories searched")
               (is (some #{(.getPath empty-path-dir)} (:searched-directories data))
                   "must name the PATH directories searched"))))))))
+
+(deftest the-resolver-refusal-is-translated-by-callers-that-own-a-typed-kind
+  ;; @spec MCP-OP-VERIFY-011
+  ;; The blast radius of the typed refusal, witnessed at the boundary rather
+  ;; than at the throw. `expand-command` now REFUSES where it used to hand
+  ;; back a bare name, and two callers return refusal MAPS as their whole
+  ;; contract. Letting the throw escape them replaced an enumerated kind with
+  ;; an unenumerated one: the full mcp-test suite went 4 failures / 2 errors,
+  ;; including MCP-OP-ADMIT-133's "the entrance published kinds the
+  ;; enumeration has never heard of: #{:executable-unresolved}".
+  ;;
+  ;; This assertion lives HERE, and not in `clj-surgeon.mcp-formatter-test`,
+  ;; because that namespace is an orphan: no runner and no Make target loads
+  ;; it, so a witness placed there would gate nothing. Reported, not fixed
+  ;; here -- the lane manifest is the right home for that repair.
+  (testing "the formatter translates it into its own formatter-failed kind"
+    (let [empty-path-dir (tmp-leak/track!
+                           temp-roots
+                           (.toFile (java.nio.file.Files/createTempDirectory
+                                      "clj-surgeon-formatter-empty-path-"
+                                      (make-array java.nio.file.attribute.FileAttribute 0))))]
+      (binding [process-env/*executable-path* (.getPath empty-path-dir)]
+        (let [result (formatter/format-candidates!
+                       (.getPath empty-path-dir)
+                       ["clj-surgeon-absent-formatter-9483a4" "{files}"]
+                       {"a.clj" "(ns a)"})]
+          (is (false? (:ok result))
+              "an unresolvable formatter is a refusal, never a thrown ex-info")
+          (is (= :formatter-failed (:error-type result))
+              "the kind stays the one this entry point already publishes")
+          (is (true? (:source-unchanged result)))
+          (is (str/includes? (str (:error result))
+                             "clj-surgeon-absent-formatter-9483a4")
+              "the refusal names the executable it could not resolve")
+          (is (str/includes? (str (:remedy result)) (.getPath empty-path-dir))
+              "and the remedy names the directories searched"))))))
 
 (deftest exact-process-evidence-is-complete-bounded-and-honest
   ;; @spec MCP-OP-VERIFY-003

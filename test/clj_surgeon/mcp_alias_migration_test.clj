@@ -5917,7 +5917,20 @@
     ;; (`:census-worker-failure` at the pool boundary, `:unparseable-file` at
     ;; the per-file read), so the derivation reads them; they are pinned here
     ;; on purpose, one line of diff with a reason.
-    "census-worker-failure" "unparseable-file"})
+    "census-worker-failure" "unparseable-file"
+    ;; re-pinned at the GHA round-one fix (2026-09-04, finding 1): 145 -> 146.
+    ;; `:executable-unresolved` is the typed refusal MCP-OP-VERIFY-011 requires
+    ;; of `mcp-change-buffer/expand-command` when a bare executable resolves in
+    ;; no paved directory and nowhere on `PATH` -- the kind that replaced
+    ;; silently returning the unresolved bare name to a caller that will exec
+    ;; it. It is a keyword literal in `mcp_change_buffer.clj`, so this
+    ;; source-reading derivation sees it. Note the two callers that own their
+    ;; own typed kind (`mcp-admit-tool/kondo-findings`,
+    ;; `mcp-formatter/format-candidates!`) TRANSLATE it, so it is minted in
+    ;; source without being published at the admit entrance -- which is why
+    ;; MCP-OP-ADMIT-133's entrance enumeration stays at 34 while this
+    ;; source-derived one moves to 146.
+    "executable-unresolved"})
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
@@ -5926,7 +5939,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 145 (count kinds))
+    (is (= 146 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

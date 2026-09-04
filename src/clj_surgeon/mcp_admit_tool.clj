@@ -487,64 +487,90 @@
   ran, the truth existed, and the ceiling cut it. Collapsing the second into
   the first is how a gate reports a missing tool it is in fact holding."
   [config paths]
-  (let [project-root (:project-root config)
-        ceiling (analyzer-read-ceiling config)
-        command (-> (change-buffer/expand-command
-                      (or (:admit-analyzer-command config)
-                          default-analyzer-command)
-                      (vec paths))
-                    (into ["--cache" "false"
-                           "--config" "{:output {:format :edn}}"]))
-        raw (change-buffer/run-process! project-root command 120000 ceiling)
-        {:keys [finished? exit output output-bytes output-truncated]} raw
+  ;; @spec MCP-OP-VERIFY-011
+  ;; `expand-command` refuses TYPED when the analyzer name resolves in no
+  ;; paved directory and nowhere on PATH. This gate already owns a kind for
+  ;; "the analyzer did not answer", and its entrance enumeration is pinned
+  ;; (MCP-OP-ADMIT-133), so the resolver refusal is TRANSLATED here into
+  ;; `clj-kondo-unavailable` -- carrying the directories it searched as the
+  ;; remedy -- instead of escaping the entrance as an unenumerated kind.
+  ;; Before the PATH fix this path arrived as a bare name that failed to
+  ;; launch and landed on the same kind; the receipt vocabulary is unchanged.
+  (try
+    (let [project-root (:project-root config)
+          ceiling (analyzer-read-ceiling config)
+          command (-> (change-buffer/expand-command
+                        (or (:admit-analyzer-command config)
+                            default-analyzer-command)
+                        (vec paths))
+                      (into ["--cache" "false"
+                             "--config" "{:output {:format :edn}}"]))
+          raw (change-buffer/run-process! project-root command 120000 ceiling)
+          {:keys [finished? exit output output-bytes output-truncated]} raw
+          ;; @spec MCP-OP-ADMIT-127
+          admission (analyzer-admission-failure raw)
+          parsed (when (and finished? (not output-truncated))
+                   (try (edn/read-string output) (catch Exception _ nil)))]
+      (cond
+        output-truncated
+        (let [observed (long (or output-bytes 0))]
+          {:ok false
+           :error-type :analyzer-output-truncated
+           :detector "clj-kondo"
+           :cap ceiling
+           :observed-bytes observed
+           :exit exit
+           :remedy (str "clj-kondo answered with " observed
+                        " bytes of findings and this gate reads at most "
+                        ceiling
+                        "; raise the analyzer read ceiling"
+                        " (:admit-analyzer-visible-bytes) or narrow the patch"
+                        " to fewer files")
+           :error (str "clj-kondo findings were cut at " ceiling " bytes of "
+                       observed "; the analyzer ran and the gate could not read"
+                       " its answer")})
+
         ;; @spec MCP-OP-ADMIT-127
-        admission (analyzer-admission-failure raw)
-        parsed (when (and finished? (not output-truncated))
-                 (try (edn/read-string output) (catch Exception _ nil)))]
-    (cond
-      output-truncated
-      (let [observed (long (or output-bytes 0))]
+        ;; Before the readability test, because an analyzer that was never
+        ;; admitted did not answer unreadably -- it did not answer.
+        admission
+        (cond-> {:ok false
+                 :error-type (:error-type admission)
+                 :detector "clj-kondo"
+                 :admission_failure true
+                 :error (str "the analyzer did not run: "
+                             (name (:error-type admission)))
+                 :exit exit}
+          (:gate admission) (assoc :gate (:gate admission))
+          (:status admission) (assoc :admission_status (:status admission))
+          (:remedy admission) (assoc :remedy (:remedy admission)))
+
+        (and (map? parsed) (vector? (:findings parsed)))
+        {:ok true :findings (:findings parsed)}
+
+        :else
         {:ok false
-         :error-type :analyzer-output-truncated
+         :error-type :clj-kondo-unavailable
          :detector "clj-kondo"
-         :cap ceiling
-         :observed-bytes observed
+         :error "clj-kondo did not produce readable findings"
          :exit exit
-         :remedy (str "clj-kondo answered with " observed
-                      " bytes of findings and this gate reads at most "
-                      ceiling
-                      "; raise the analyzer read ceiling"
-                      " (:admit-analyzer-visible-bytes) or narrow the patch"
-                      " to fewer files")
-         :error (str "clj-kondo findings were cut at " ceiling " bytes of "
-                     observed "; the analyzer ran and the gate could not read"
-                     " its answer")})
-
-      ;; @spec MCP-OP-ADMIT-127
-      ;; Before the readability test, because an analyzer that was never
-      ;; admitted did not answer unreadably -- it did not answer.
-      admission
-      (cond-> {:ok false
-               :error-type (:error-type admission)
-               :detector "clj-kondo"
-               :admission_failure true
-               :error (str "the analyzer did not run: "
-                           (name (:error-type admission)))
-               :exit exit}
-        (:gate admission) (assoc :gate (:gate admission))
-        (:status admission) (assoc :admission_status (:status admission))
-        (:remedy admission) (assoc :remedy (:remedy admission)))
-
-      (and (map? parsed) (vector? (:findings parsed)))
-      {:ok true :findings (:findings parsed)}
-
-      :else
-      {:ok false
-       :error-type :clj-kondo-unavailable
-       :detector "clj-kondo"
-       :error "clj-kondo did not produce readable findings"
-       :exit exit
-       :output (when output (subs output 0 (min 400 (count output))))})))
+         :output (when output (subs output 0 (min 400 (count output))))}))
+    (catch clojure.lang.ExceptionInfo error
+      (let [{:keys [error-type requested-executable searched-directories]}
+            (ex-data error)]
+        (if (not= :executable-unresolved error-type)
+          (throw error)
+          {:ok false
+           :error-type :clj-kondo-unavailable
+           :detector "clj-kondo"
+           :error (str "the analyzer did not run: \"" requested-executable
+                       "\" resolved in none of the "
+                       (count searched-directories)
+                       " directories searched")
+           :remedy (str "install " requested-executable
+                        " on this host, or name an absolute path in"
+                        " :admit-analyzer-command; searched: "
+                        (str/join " " searched-directories))})))))
 
 ;; @spec MCP-OP-ADMIT-040
 (defn default-lint-runner

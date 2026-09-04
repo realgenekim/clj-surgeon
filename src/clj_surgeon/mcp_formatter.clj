@@ -78,6 +78,33 @@
               :elapsed_ms (:elapsed_ms result)
               :output (:output result)
               :source-unchanged true}))
+         ;; @spec MCP-OP-VERIFY-011
+         ;; `expand-command` refuses TYPED when the formatter executable
+         ;; resolves in no paved directory and nowhere on PATH. This entry
+         ;; point already owns `formatter-failed` for "the formatter did not
+         ;; produce formatted files", and every caller reads that map; before
+         ;; the PATH fix an unresolvable name reached `run-process!` as a bare
+         ;; name and failed to launch into this same shape. Translate rather
+         ;; than let the resolver's throw escape a function whose whole
+         ;; contract is to return a refusal map.
+         (catch clojure.lang.ExceptionInfo error
+           (let [{:keys [error-type requested-executable searched-directories]}
+                 (ex-data error)]
+             (if (not= :executable-unresolved error-type)
+               (throw error)
+               {:ok false
+                :error-type :formatter-failed
+                :error (str "the formatter did not run: \""
+                            requested-executable
+                            "\" resolved in none of the "
+                            (count searched-directories)
+                            " directories searched")
+                :command (first command)
+                :remedy (str "install " requested-executable
+                             " on this host, or name an absolute path in the"
+                             " formatter command; searched: "
+                             (str/join " " searched-directories))
+                :source-unchanged true})))
          (finally
            (doseq [{:keys [temp]} staged]
              (io/delete-file temp true))))))))
