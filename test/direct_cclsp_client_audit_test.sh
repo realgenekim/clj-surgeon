@@ -2,7 +2,7 @@
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
-fixture=$(mktemp -d "${TMPDIR:-/tmp}/direct-cclsp-audit.XXXXXX")
+fixture=$(mktemp -d "${TMPDIR:-/var/tmp}/direct-cclsp-audit.XXXXXX")
 trap 'rm -rf "$fixture"' EXIT HUP INT TERM
 
 mkdir -p "$fixture/app/.codex" "$fixture/app/.claude" "$fixture/clj-surgeon-probe"

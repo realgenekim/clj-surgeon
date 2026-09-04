@@ -14,7 +14,7 @@ fail() {
   exit 1
 }
 
-tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/clj-surgeon-sentinel-intent.XXXXXX")
+tmp_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-sentinel-intent.XXXXXX")
 trap 'rm -rf "$tmp_root"' EXIT
 
 for test_file in "${test_files[@]}"; do

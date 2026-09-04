@@ -2,18 +2,40 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-process :as process]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is]])
+   [clojure.test :refer [deftest is use-fixtures]])
   (:import
    (java.lang ProcessHandle)
    (java.nio.file Files)))
 
+;; RATCHET (2026-09-04, inb-9483a4): this namespace's several temp-dir
+;; helpers (and a few inline deftest bodies) never deleted what they
+;; created -- 22 kondo-admission / 10 fake-kondo / ... of the historical
+;; leaked Anvil /tmp entries traced back here. Track every root created
+;; below and sweep them after each test.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
+;; test-events-path (below) is one shared file for the whole namespace, not
+;; per-test -- delete it once after every test in this ns has run.
+(use-fixtures :once (fn [f]
+                       (try (f)
+                            (finally
+                              (try (io/delete-file
+                                     (io/file (System/getProperty "java.io.tmpdir")
+                                              (str "clj-surgeon-kondo-test-events-"
+                                                   (.pid (ProcessHandle/current)) ".jsonl"))
+                                     true)
+                                   (catch Throwable _ nil))))))
+
 (defn- temporary-lock-path []
-  (str (.resolve (Files/createTempDirectory
-                   "clj-surgeon-kondo-admission-"
-                   (make-array java.nio.file.attribute.FileAttribute 0))
+  (str (.resolve (tmp-leak/track!
+                   temp-roots
+                   (Files/createTempDirectory
+                     "clj-surgeon-kondo-admission-"
+                     (make-array java.nio.file.attribute.FileAttribute 0)))
                  "clj-kondo.lock")))
 
 (def admission-script
@@ -22,13 +44,19 @@
 (def test-pressure-status "/definitely/missing/clj-surgeon-pressure-status.json")
 
 (def test-events-path
-  (str "/tmp/clj-surgeon-kondo-test-events-"
-       (.pid (ProcessHandle/current)) ".jsonl"))
+  ;; RATCHET (2026-09-04): was a hard-coded "/tmp/..." string; the seat
+  ;; points java.io.tmpdir at /var/tmp/forge (or the suite's isolated
+  ;; sub-root) and this must land there too, never at literal /tmp.
+  (str (io/file (System/getProperty "java.io.tmpdir")
+                (str "clj-surgeon-kondo-test-events-"
+                     (.pid (ProcessHandle/current)) ".jsonl"))))
 
 (defn- fake-clj-kondo []
-  (let [directory (Files/createTempDirectory
-                    "clj-surgeon-fake-kondo-"
-                    (make-array java.nio.file.attribute.FileAttribute 0))
+  (let [directory (tmp-leak/track!
+                     temp-roots
+                     (Files/createTempDirectory
+                       "clj-surgeon-fake-kondo-"
+                       (make-array java.nio.file.attribute.FileAttribute 0)))
         executable (.resolve directory "clj-kondo")]
     (Files/createSymbolicLink executable
                               (.toPath (io/file "/bin/sleep"))
@@ -36,9 +64,11 @@
     (str executable)))
 
 (defn- fake-successful-clj-kondo []
-  (let [directory (Files/createTempDirectory
-                    "clj-surgeon-fake-successful-kondo-"
-                    (make-array java.nio.file.attribute.FileAttribute 0))
+  (let [directory (tmp-leak/track!
+                     temp-roots
+                     (Files/createTempDirectory
+                       "clj-surgeon-fake-successful-kondo-"
+                       (make-array java.nio.file.attribute.FileAttribute 0)))
         executable (.resolve directory "clj-kondo")]
     (Files/createSymbolicLink executable
                               (.toPath (io/file "/usr/bin/true"))
@@ -46,9 +76,11 @@
     (str executable)))
 
 (defn- fake-script [body]
-  (let [directory (Files/createTempDirectory
-                    "clj-surgeon-fake-process-"
-                    (make-array java.nio.file.attribute.FileAttribute 0))
+  (let [directory (tmp-leak/track!
+                     temp-roots
+                     (Files/createTempDirectory
+                       "clj-surgeon-fake-process-"
+                       (make-array java.nio.file.attribute.FileAttribute 0)))
         executable (.toFile (.resolve directory "probe"))]
     (spit executable (str "#!/bin/sh\n" body "\n"))
     (.setExecutable executable true)
@@ -96,6 +128,17 @@
                        (str (System/getProperty "user.home") "/bin")))
     (is (str/ends-with? (.get environment "PATH") "/custom/bin"))))
 
+;; RATCHET (2026-09-04, inb-9483a4, round two): -Djava.io.tmpdir is a
+;; JVM-internal property no child PROCESS inherits, so every subprocess this
+;; server launches picked its own temp location from the ambient TMPDIR --
+;; outside any isolated root, and invisible to the leak witness.
+;; @spec MCP-OP-TMPHYG-005
+(deftest configure-environment-publishes-this-process-temp-directory
+  (let [environment (java.util.HashMap. {"PATH" "/custom/bin"})]
+    (process/configure-environment! environment)
+    (is (= (System/getProperty "java.io.tmpdir") (.get environment "TMPDIR"))
+        "a descendant that picks its own temp location stays where this JVM writes")))
+
 (deftest recognizes-only-clj-kondo-executables
   (is (process/clj-kondo-command? ["clj-kondo" "--lint" "src"]))
   (is (process/clj-kondo-command?
@@ -130,12 +173,16 @@
   ;; @spec MCP-OP-ANALYZER-003
   (let [lock-path (temporary-lock-path)
         analyzer (fake-clj-kondo)
-        owner-root (str (Files/createTempDirectory
-                          "owner-repository-"
-                          (make-array java.nio.file.attribute.FileAttribute 0)))
-        waiter-root (str (Files/createTempDirectory
-                           "waiter-repository-"
-                           (make-array java.nio.file.attribute.FileAttribute 0)))
+        owner-root (str (tmp-leak/track!
+                          temp-roots
+                          (Files/createTempDirectory
+                           "owner-repository-"
+                           (make-array java.nio.file.attribute.FileAttribute 0))))
+        waiter-root (str (tmp-leak/track!
+                           temp-roots
+                           (Files/createTempDirectory
+                            "waiter-repository-"
+                            (make-array java.nio.file.attribute.FileAttribute 0))))
         owner (future
                 (binding [process/*clj-kondo-lock-path* lock-path
                           process/*clj-kondo-admission-path* admission-script]
@@ -161,9 +208,11 @@
   ;; @spec MCP-OP-ANALYZER-003
   (let [lock-path (temporary-lock-path)
         analyzer (fake-clj-kondo)
-        current-root (str (Files/createTempDirectory
-                            "current-owner-"
-                            (make-array java.nio.file.attribute.FileAttribute 0)))]
+        current-root (str (tmp-leak/track!
+                            temp-roots
+                            (Files/createTempDirectory
+                             "current-owner-"
+                             (make-array java.nio.file.attribute.FileAttribute 0))))]
     (spit lock-path "{:pid 999999 :cwd \"/tmp/dead-owner\"}")
     (binding [process/*clj-kondo-lock-path* lock-path
               process/*clj-kondo-admission-path* admission-script]
@@ -206,9 +255,11 @@
   ;; @spec MCP-OP-ANALYZER-001
   ;; @spec MCP-OP-ANALYZER-005
   (let [lock-path (temporary-lock-path)
-        shim-directory (Files/createTempDirectory
-                         "clj-surgeon-kondo-shim-"
-                         (make-array java.nio.file.attribute.FileAttribute 0))
+        shim-directory (tmp-leak/track!
+                         temp-roots
+                         (Files/createTempDirectory
+                          "clj-surgeon-kondo-shim-"
+                          (make-array java.nio.file.attribute.FileAttribute 0)))
         shim (.resolve shim-directory "clj-kondo")
         _ (Files/copy (.toPath (io/file admission-script)) shim
                       (make-array java.nio.file.CopyOption 0))
@@ -233,12 +284,16 @@
   ;; @spec MCP-OP-ANALYZER-001
   ;; @spec MCP-OP-ANALYZER-005
   (let [lock-path (temporary-lock-path)
-        shim-directory (Files/createTempDirectory
-                         "clj-surgeon-shadowing-shim-"
-                         (make-array java.nio.file.attribute.FileAttribute 0))
-        analyzer-directory (Files/createTempDirectory
-                             "clj-surgeon-real-analyzer-"
-                             (make-array java.nio.file.attribute.FileAttribute 0))
+        shim-directory (tmp-leak/track!
+                         temp-roots
+                         (Files/createTempDirectory
+                          "clj-surgeon-shadowing-shim-"
+                          (make-array java.nio.file.attribute.FileAttribute 0)))
+        analyzer-directory (tmp-leak/track!
+                             temp-roots
+                             (Files/createTempDirectory
+                              "clj-surgeon-real-analyzer-"
+                              (make-array java.nio.file.attribute.FileAttribute 0)))
         shim (.resolve shim-directory "clj-kondo")
         analyzer (.resolve analyzer-directory "clj-kondo")]
     (Files/copy (.toPath (io/file admission-script)) shim
@@ -331,9 +386,11 @@
 
 (deftest admission-wrapper-records-exec-failure
   ;; @spec MCP-OP-ANALYZER-003
-  (let [directory (Files/createTempDirectory
-                    "clj-surgeon-exec-failure-"
-                    (make-array java.nio.file.attribute.FileAttribute 0))
+  (let [directory (tmp-leak/track!
+                    temp-roots
+                    (Files/createTempDirectory
+                     "clj-surgeon-exec-failure-"
+                     (make-array java.nio.file.attribute.FileAttribute 0)))
         lock-path (str (.resolve directory "lock"))
         evidence-path (str (.resolve directory "evidence.json"))
         missing (str (.resolve directory "missing-clj-kondo"))
@@ -351,9 +408,11 @@
 
 (deftest red-pressure-defers-without-launching-the-analyzer
   ;; @spec MCP-OP-ANALYZER-006
-  (let [directory (Files/createTempDirectory
-                    "clj-surgeon-pressure-defer-"
-                    (make-array java.nio.file.attribute.FileAttribute 0))
+  (let [directory (tmp-leak/track!
+                    temp-roots
+                    (Files/createTempDirectory
+                     "clj-surgeon-pressure-defer-"
+                     (make-array java.nio.file.attribute.FileAttribute 0)))
         lock-path (str (.resolve directory "lock"))
         evidence-path (str (.resolve directory "evidence.json"))
         marker-path (str (.resolve directory "must-not-exist"))

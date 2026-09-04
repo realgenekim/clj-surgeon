@@ -186,8 +186,12 @@ anchor's architecture tests assert things *about* the codebase —
 `#{"cfp-scheduler-killer.store" …}` — and other strings are data paths like
 `"data/store/events.jsonl"`. Rewriting them would silently edit test
 expectations; refusing for them would block a migration over something that is
-not a code reference. The receipt carries `string_mentions`, a count, so the
-bucket is visibly non-zero and an operator can go look.
+not a code reference. The receipt carries `string_mentions`, a count, and
+`string_mention_sites`, a bounded list of `file:line`, so the bucket is visibly
+non-zero and an operator can go straight to it rather than search for it. The
+needle follows what the migration retires — the lib in lib mode, the qualified
+`lib/var` in var mode, because a var migration leaves the lib and its other
+vars standing and a string naming the survivor is not stale work.
 
 **The `binding` case is the one that broke the real anchor.** An earlier draft
 classified `binding` with `let`, so `(binding [store/*clock* sim-birth] …)` at

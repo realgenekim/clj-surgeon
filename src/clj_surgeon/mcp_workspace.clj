@@ -6,6 +6,19 @@
    (java.security MessageDigest)))
 
 (defn- refusal
+  "One stable workspace-root refusal, carrying its own cause and remedy.
+
+  `workspace_root` is an ENVELOPE key on every receipt this server publishes —
+  the routed root, rendered structurally rather than as a discriminating fact —
+  so on the one refusal that is ABOUT that value it was suppressed, and the
+  receipt named no other fact that separated a blank root from a relative one.
+  `workspace_root_given` is the caller's own text, `pr-str`d so nil and \"\"
+  stay distinguishable, and it is not an envelope key.
+
+  The remedy is carried rather than implied: a refusal renderer that has none
+  to show still has to say what the caller does next, and the alternative it
+  had been reduced to was a text block pointing at a remedy that was not
+  there."
   [message value]
   {:ok false
    :operation "workspace-route"
@@ -13,9 +26,14 @@
    :reason "invalid-workspace-root"
    :path ["workspace_root"]
    :workspace_root value
+   :workspace_root_given (pr-str value)
    :error message
    :source_unchanged true
-   :next_action "pass_an_existing_absolute_workspace_root"})
+   :next_action "pass_an_existing_absolute_workspace_root"
+   :remedy (str "Resend with workspace_root set to an absolute path naming a "
+                "directory that already exists; " (pr-str value)
+                " is not one. No next_call is composed because only the caller "
+                "knows which workspace it meant.")})
 
 (defn canonical-root
   "Return one existing canonical absolute directory, or a stable refusal."
