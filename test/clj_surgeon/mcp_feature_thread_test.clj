@@ -1513,3 +1513,49 @@
               :when (= "FOUND" (:status l))]
         (is (string? (:anchor l))
             (str "FOUND leg " (:id l) " lost its anchor"))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- 3.1: the clock is not part of the superset haystack
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-026
+(deftest the-clock-cannot-swallow-a-structured-leaf
+  (testing "a leaf whose digits appear inside elapsed_ms is still reported"
+    (let [{:keys [structured]} (thread! fixture-root)
+          leaf (get-in structured [:sibling :legs 3 :bytes])]
+      (is (number? leaf) "the fixture's sibling carries a byte count leaf")
+      (let [;; an operation clock whose DIGITS contain that leaf's value
+            clocked (assoc structured
+                           :elapsed_ms (Double/parseDouble (str "229.543" leaf)))
+            text (ft/render-receipt clocked)]
+        (is (str/includes? text (str "elapsed_ms=229.543" leaf))
+            "the witness needs the clock it constructed")
+        (is (str/includes? text (str "sibling.legs.3.bytes=" leaf))
+            (str "the clock's digits made the structured leaf `sibling.legs.3"
+                 ".bytes=" leaf "` look present in the text, so the completion"
+                 " line dropped it")))))
+
+  (testing "twenty-five identical requests: text_bytes equals the delivered text"
+    (let [deltas (vec (for [_ (range 25)]
+                        (let [{:keys [text structured]} (thread! fixture-root)]
+                          (- (:text_bytes structured)
+                             (count (.getBytes ^String text "UTF-8"))))))]
+      (is (= #{0} (set deltas))
+          (str "text_bytes disagreed with the delivered text on "
+               (count (remove zero? deltas)) " of 25 runs; deltas seen: "
+               (pr-str (frequencies deltas)))))))
+
+;; @spec MCP-OP-THREAD-026
+(deftest a-budget-refusal-names-would-be-text-bytes
+  (testing "the count on a refusal describes the receipt that COULD NOT be sent"
+    (let [{:keys [error? structured text]} (thread! fixture-root {:budget_bytes 1})]
+      (is (true? error?))
+      (is (= "feature-thread-budget-exceeded" (:error_type structured)))
+      (is (nil? (:text_bytes structured))
+          (str "`text_bytes` on a refusal described a text nobody was"
+               " delivered: declared " (:text_bytes structured)
+               ", delivered " (count (.getBytes ^String text "UTF-8"))))
+      (is (number? (:would_be_text_bytes structured))
+          "the refusal must still say how big the receipt would have been")
+      (is (str/includes? text "would_be_text_bytes=")
+          "and the facts line must use the same name"))))
