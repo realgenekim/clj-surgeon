@@ -3780,3 +3780,208 @@
       (is (str/includes? specs "typed-mcp-inspect-entrance.md"))
       (is (str/includes? specs "high-level-design.md"))
       (is (str/includes? specs "README.md")))))
+
+;; ============================================================
+;; O2 ROUND 5 — the allowance bounds EVERY byte the rendering spends
+;; (Opus O2 round-4 review, sections 2 and 3)
+;; ============================================================
+;; Round four charged the fact LINES against the allowance and left the
+;; `dropped:` line outside it. That line names one label per dropped leaf, so
+;; it GROWS as the allowance shrinks: at allowance 0 it was 22,142 characters
+;; on a two-file `outline` batch over this repository's own sources. The
+;; rendering therefore got BIGGER as the budget got tighter, `fits?` stopped
+;; being monotone, and `fit-public-result`'s bisection walked into the half
+;; that can never fit and returned nil — so an ordinary two-file batch fell to
+;; the notice rung and published 151 characters of text with 9,251 bytes of
+;; the declared budget unspent, carrying none of its 1,137 receipt leaves.
+;;
+;; Two properties are witnessed here, because either one alone leaves the
+;; defect reachable: the rendering SHRINKS as the allowance shrinks (every
+;; rendered byte is charged), and the fit finds a fitting rendering whenever
+;; one exists (the search does not assume what it cannot prove).
+
+(def ^:private review-batch-files
+  "Two of this repository's own sources — the tool's advertised batching use,
+   and the exact call the round-four review published 151 characters for."
+  ["src/clj_surgeon/mcp_inspect_tool.clj"
+   "src/clj_surgeon/mcp_inspect.clj"])
+
+(defn- outline-batch
+  "One `outline` batch over real repository sources, finalized."
+  [files]
+  (clocked
+    (run {"requests" (vec (map-indexed
+                            (fn [index file]
+                              {"id" (str "r" index)
+                               "operation" "outline"
+                               "file" file})
+                            files))
+          "expect" {"requests" (count files) "files" (count files)}})))
+
+(defn- text-evidence-bytes
+  "The complete published pair at one imposed evidence allowance."
+  [raw limit]
+  (public-bytes (assoc raw :text_evidence_limit limit)))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-044
+(deftest an-ordinary-two-file-outline-batch-spends-the-budget-on-its-receipt
+  (let [raw (outline-batch review-batch-files)
+        complete (public-bytes raw)
+        structured (inspect-tool/mcp-result-byte-count "" raw)
+        published (clocked (inspect-tool/fit-public-result raw))
+        text (inspect-tool/inspect-summary published)
+        headroom (- inspect-tool/max-public-result-bytes (public-bytes published))]
+    (is (true? (:ok raw)) (pr-str (:error raw)))
+    (testing "PRECONDITION — this call must sit in the band the defect lives in"
+      (is (< inspect-tool/max-public-result-bytes complete)
+          (format (str "the complete rendering must overshoot the budget or "
+                       "this witness proves nothing; measured %d against %d. "
+                       "If these two sources shrank, name larger ones.")
+                  complete inspect-tool/max-public-result-bytes))
+      (is (< structured inspect-tool/max-public-result-bytes)
+          (format (str "and the receipt ALONE must fit, or no rendering "
+                       "choice could help; measured %d against %d")
+                  structured inspect-tool/max-public-result-bytes)))
+    (is (<= (public-bytes published) inspect-tool/max-public-result-bytes)
+        "the published pair is inside the declared budget")
+    (testing "the text spends the room the receipt leaves it"
+      (is (<= 6000 (count text))
+          (format (str "an ordinary two-file batch published %d characters of "
+                       "text with %d bytes of the budget unspent")
+                  (count text) headroom))
+      (is (<= headroom 2048)
+          (format "%d bytes of the public budget went unspent" headroom)))
+    (testing "and what it could not carry is declared by count and by pointer"
+      (is (nil? (:text_omitted published))
+          "the notice rung is for a receipt no rendering can accompany")
+      (is (re-find #"receipt facts · \d+ of \d+ rendered" text)
+          "the text says how many of how many facts it rendered")
+      (is (str/includes? text "dropped: ")
+          "and names dropped leaves by their JSON pointers")
+      (is (str/includes? text "structuredContent")
+          "and names where the complete receipt is")
+      (is (not (str/includes? text terminal-claim))
+          "and never reads as terminal over evidence it dropped"))))
+
+(defn- build-wide-namespace!
+  "One namespace of `n` ordinary three-line functions — the shape the review
+   swept at 140, 180 and 220 forms."
+  [dir n]
+  (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+  (fs/create-dirs (str dir "/src/wide"))
+  (spit (str dir "/src/wide/core.clj")
+        (str "(ns wide.core\n  (:require [clojure.string :as str]))\n\n"
+             (str/join
+               "\n\n"
+               (for [index (range n)]
+                 (format (str "(defn handler-%03d\n  \"Row %d of the wide "
+                              "namespace.\"\n  [request options]\n"
+                              "  (str/join \"-\" [request options %d]))")
+                         index index index))))))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-044
+(deftest the-form-count-sweep-never-abandons-a-rendering-that-fits
+  ;; The reviewer's 140/180/220 sweep. Every size that overshoots must still
+  ;; publish a rendering, because at every one of them the receipt alone fits
+  ;; with thousands of bytes to spare.
+  (let [banded
+        (into []
+              (keep
+                (fn [n]
+                  (with-tmp-project
+                    #(build-wide-namespace! % n)
+                    (fn [config]
+                      (let [raw (clocked
+                                  (inspect-tool/execute-inspect!
+                                    config
+                                    {"requests" [{"id" "r0"
+                                                  "operation" "outline"
+                                                  "file" "src/wide/core.clj"}]
+                                     "expect" {"requests" 1 "files" 1}}))
+                            complete (public-bytes raw)
+                            structured (inspect-tool/mcp-result-byte-count
+                                         "" raw)]
+                        (when (and (< inspect-tool/max-public-result-bytes
+                                      complete)
+                                   (< structured
+                                      inspect-tool/max-public-result-bytes))
+                          (let [published (clocked
+                                            (inspect-tool/fit-public-result
+                                              raw))
+                                text (inspect-tool/inspect-summary published)]
+                            {:n n
+                             :structured structured
+                             :published (public-bytes published)
+                             :text-chars (count text)
+                             :omitted (:text_omitted published)
+                             :headroom (- inspect-tool/max-public-result-bytes
+                                          (public-bytes published))}))))))
+                [140 180 220]))]
+    (is (seq banded)
+        "PRECONDITION: at least one sweep size must overshoot with a fitting receipt")
+    (doseq [row banded]
+      (testing (str (:n row) " forms")
+        (is (<= (:published row) inspect-tool/max-public-result-bytes))
+        (is (nil? (:omitted row))
+            (format (str "%d forms fell to the %s rung although the receipt "
+                         "alone measured %d bytes against a %d budget")
+                    (:n row) (pr-str (:omitted row)) (:structured row)
+                    inspect-tool/max-public-result-bytes))
+        (is (<= 2000 (:text-chars row))
+            (format "%d forms published %d characters of text with %d unspent"
+                    (:n row) (:text-chars row) (:headroom row)))))))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-044
+(deftest lowering-the-evidence-allowance-can-only-shrink-the-rendering
+  ;; Monotonicity BY CONSTRUCTION, which is what makes any search over the
+  ;; allowance sound. Round four's `dropped:` line was outside the allowance
+  ;; it described, so the rendering grew as the allowance fell.
+  (let [raw (outline-batch review-batch-files)
+        structured (inspect-tool/mcp-result-byte-count "" raw)
+        high (max 0 (- inspect-tool/max-public-result-bytes structured))
+        step (max 1 (quot high 40))
+        limits (vec (range 0 (inc high) step))
+        measured (mapv #(text-evidence-bytes raw %) limits)
+        breaks (into []
+                     (keep (fn [[[low-limit low-bytes] [high-limit high-bytes]]]
+                             (when (> low-bytes high-bytes)
+                               {:lower low-limit :lower-bytes low-bytes
+                                :higher high-limit :higher-bytes high-bytes})))
+                     (partition 2 1 (map vector limits measured)))]
+    (is (< 1 (count limits)) "PRECONDITION: the band must have room to sweep")
+    (is (empty? breaks)
+        (format (str "%d of %d adjacent allowances render MORE at the LOWER "
+                     "allowance — the rendering grows as the budget tightens: %s")
+                (count breaks) (dec (count limits))
+                (pr-str (take 3 breaks))))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest the-fit-finds-a-fitting-rendering-whenever-one-exists
+  ;; The search side of the same property, stated without assuming
+  ;; monotonicity: if ANY allowance in the band renders a fitting pair, the
+  ;; fit must publish a rendering rather than fall to the notice rung.
+  (let [raw (outline-batch review-batch-files)
+        structured (inspect-tool/mcp-result-byte-count "" raw)
+        high (max 0 (- inspect-tool/max-public-result-bytes structured))
+        step (max 1 (quot high 40))
+        fitting (into []
+                      (filter #(<= (text-evidence-bytes raw %)
+                                   inspect-tool/max-public-result-bytes))
+                      (range 0 (inc high) step))
+        best (last (sort-by #(text-evidence-bytes raw %) fitting))
+        published (clocked (inspect-tool/fit-public-result raw))]
+    (is (seq fitting)
+        (format (str "PRECONDITION: some allowance in [0, %d] must fit, or "
+                     "there is nothing for the search to find")
+                high))
+    (is (nil? (:text_omitted published))
+        (format (str "allowance %s renders %d bytes inside the %d-byte "
+                     "budget, and the fit published the %s rung instead")
+                (pr-str best) (text-evidence-bytes raw best)
+                inspect-tool/max-public-result-bytes
+                (pr-str (:text_omitted published))))
+    (is (>= (public-bytes published) (text-evidence-bytes raw best))
+        "the fit publishes at least as much as a brute-force sweep found")))
