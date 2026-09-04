@@ -1678,3 +1678,5 @@ Eight pre-existing conflicts with the census-merged trunk (the tool-count witnes
 merge round runs first and the landing review reviews the merged tip. Decision card to Gene (help-gene-decide, phone
 format): round two of the suite spike = (a) full TEST-ISO family, (b) mechanism first + battery, (c) witnesses first;
 recommended b, silence → b.
+
+## 18:10Z Gene ruled the suite-spike round two: "B. Go" — mechanism first (001, 006, 009 on the round-one partition); witnesses round three

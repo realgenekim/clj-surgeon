@@ -58,3 +58,10 @@ One fixture hosts 002/003/004/005/006/010 (a before/after snapshot per namespace
 001 + 007 make the lane manifest an intent registry: moving a ns needs a reason at the pin.
 
 Cherry-pick: ROUND TWO builds 001–007 and 009. FILED: 008 (runner must own ordering), 010, 011, 012 (only if it finds one).
+
+## Gene's ruling (18:10Z, verbatim: "B. Go") — round two = mechanism first
+Round two builds TEST-ISO-001 (lane declaration + registry audit), TEST-ISO-006 (fast-lane JVM started on a throwaway
+home and tmpdir), and TEST-ISO-009 (the concurrency battery: N clones of the fast lane at once, 0 failures, three times)
+on the partition round one proposes. The per-namespace witnesses (002–005, 007) are round three, each built RED-first
+against the round-two green with round one's collision list as the RED cases. Fallback if the battery fails at N=4:
+round three becomes the full family.
