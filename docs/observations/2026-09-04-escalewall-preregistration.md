@@ -280,3 +280,5 @@ compete for the box with anything else, and nothing else should be scheduled aga
 *Draft only. No arms have run. To be frozen (its own sha256, written with zero arm
 directories on disk, exactly as every prior cohort in this family did) immediately before
 arm 1, in the first confirmed-quiet window on the box.*
+
+## Amendment (before arm 1, coordinator, Gene's cclsp ruling): the seat's own cclsp provider must be LIVE before arm 1 (assert `make cclsp-status CCLSP_PORT=<seat port>` up, and that the cohort server is configured to use it); any tool arm whose receipt carries `semantic-provider-unavailable` is VOID and re-run, never scored. The provider on 7890 belongs to another seat and is never contacted.

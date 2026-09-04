@@ -575,3 +575,5 @@ than **1 call** over ranges alone.
 | withdrawal | < 1.5× calls → stop | median saving < 2 calls → stop | M-body − N < 3, or gate-green below N, or M-range − M-body < 1 → withdraw; F ≤ 1/6 → free choice closed for good | taken, Opus's wording |
 
 The apparatus ratchet that must ship with the cohort (Opus, from tonight's scar): the correctness oracle accepts EVERY valid implementation (suite + behavioural assertions), never one golden diff; a second seat tries to write a passing implementation the gate rejects, before arm 1. The mayor's transcript analysis sets the human baseline: six read rounds, the same JS file read at four guessed ranges.
+
+**Amendment to §12's adoption cohort (Gene's cclsp ruling):** the cohort server runs with this seat's own cclsp provider live (asserted before arm 1); a tool arm that hits `semantic-provider-unavailable` is VOID, not scored. `feature_thread` itself does not use the provider; the rule exists so refusals from an absent provider never pollute the tool cells again (E6-Q2 paid five).
