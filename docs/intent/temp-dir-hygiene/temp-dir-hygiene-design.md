@@ -115,6 +115,7 @@ suite and calls `System/exit`.
 | MCP-OP-TMPHYG-010 | A Makefile recipe, a `test/*.sh` gate or a `bench/*.sh` harness names a `/tmp/<path>` write target, or a `TMPDIR` fallback that names `/tmp`. | The scan finds none; there is no exemption for the fallback shape. | `tmp-leak-ratchet-self-test` 10; `no-gate-names-a-hard-coded-ram-path`. |
 | MCP-OP-TMPHYG-011 | A caller supplies a forged `CLJ_SURGEON_MOUNTS_FILE` claiming disk while `findmnt` cannot answer, and the run PROCEEDS. | Exit 97, `UNDETERMINABLE`: a seam-sourced non-tmpfs answer is `:unknown`; a seam-sourced `tmpfs` answer still refuses. | `tmp-leak-ratchet-self-test` 3g, 3h; `a-seam-sourced-fstype-can-never-prove-real-disk`. |
 | MCP-OP-TMPHYG-012 | `SELF_TEST_TMP` resolves to a RAM path when `TMPDIR` is `/tmp` or `/dev/shm`. | Redirected to `/var/tmp`; `/var/tmp` when `TMPDIR` is unset; a real-disk `TMPDIR` honoured unchanged. | `tmp-leak-ratchet-self-test` 11 (executes make's own expansion via `--eval`, not a text read of the assignment). |
+| MCP-OP-TMPHYG-013 | `sweep-root!` returns true for a root that is still on disk after the attempt. | false, and the root really is still there. | `sweep-root-does-not-claim-a-delete-it-did-not-perform` (an own-named root inside a chmod-500 parent). |
 
 ## Measured facts added in round two
 

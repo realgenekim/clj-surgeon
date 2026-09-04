@@ -283,12 +283,19 @@
                   (str/starts-with? (.getName f) isolated-root-prefix)))))
 
 ;; @spec MCP-OP-TMPHYG-004
+;; @spec MCP-OP-TMPHYG-013
 (defn sweep-root!
   "Deletes `root` -- but ONLY when it is one of this namespace's own private
-   per-run roots. Anything else is a typed, printed refusal returning false."
+   per-run roots. Anything else is a typed, printed refusal returning false.
+
+   The return value is a RECEIPT of what happened, not of what was attempted:
+   true only when the root is GONE afterwards. Round two returned true for
+   every own-named root, so a delete that failed (an unwritable parent, a
+   foreign owner) was counted as swept by `sweep-stale-roots!`."
   [root]
   (if (own-isolated-root? root)
-    (do (try (fs/delete-tree root) (catch Throwable _ nil)) true)
+    (do (try (fs/delete-tree root) (catch Throwable _ nil))
+        (not (.exists (io/file (str root)))))
     (do (binding [*out* *err*]
           (println (format (str "tmp-refused: refusing to delete %s -- it is not a private "
                                 "per-run root (its name must start with %s). Sweeping a shared "
