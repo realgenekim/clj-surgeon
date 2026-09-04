@@ -258,7 +258,22 @@
     :invalid-admit-request
     :invalid-patch
     :invalid-relative-source-path
-    :invalid-source-path
+    ;; @spec MCP-OP-ADMIT-133
+    ;; `:invalid-source-path` was a member here until round fifteen's merge
+    ;; with the census landing. It is constructed at `mcp-paths` :283, in the
+    ;; `:else` arm of `resolve-source-path`'s catch -- "not the filesystem
+    ;; answering" -- and the one fixture that used to drive it, a source path
+    ;; under a REGULAR FILE, now publishes `:source-file-not-found`: the catch
+    ;; asks the whole `FileSystemException` hierarchy and ENOTDIR is a member
+    ;; of it. Every remaining shape that makes `.toRealPath` throw was driven
+    ;; (`no-filesystem-shape-reaches-invalid-source-path`) and each is claimed
+    ;; by a TYPED arm above the `:else`; the only class that could reach it,
+    ;; `InvalidPathException` for a NUL, is rejected lexically by
+    ;; `relative-source-path?` before any I/O. A member here that nothing
+    ;; drives is a claim about the gate no fixture supports -- this
+    ;; docstring's own rule -- so the kind moved to the justified
+    ;; not-reachable list in `clj-surgeon.admit-patch-test`, where the source
+    ;; scan still watches it.
     :invalid-workspace-root
     :namespace-form-removed
     :next-call-exceeds-public-budget
@@ -273,6 +288,14 @@
     :server-not-initialized
     :source-file-not-found
     :source-hash-mismatch
+    ;; @spec MCP-OP-ADMIT-133
+    ;; Added by round fifteen's merge with the census landing, which
+    ;; introduced it at `mcp-paths` :220 (the file's own bits deny read) and
+    ;; :262 (a directory above it does). Enumerated because it is DRIVEN --
+    ;; `an-unreadable-source-refuses-as-source-not-readable` drives both
+    ;; sites through the real entrance with `chmod 000` -- and not merely
+    ;; because the trunk constructs it.
+    :source-not-readable
     :source-not-regular-file
     :target-already-exists
     :target-parent-not-directory

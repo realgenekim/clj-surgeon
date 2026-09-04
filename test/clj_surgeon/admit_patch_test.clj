@@ -9,6 +9,7 @@
    [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.mcp-admit-tool :as admit]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-process :as process]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
@@ -23,7 +24,7 @@
    [clojure.test :as t :refer [deftest is testing use-fixtures]])
   (:import
    (java.nio.file Files)
-   (java.nio.file.attribute FileAttribute)))
+   (java.nio.file.attribute FileAttribute PosixFilePermissions)))
 
 ;; ---------------------------------------------------------------------------
 ;; The precondition skip bucket
@@ -5851,6 +5852,33 @@
                      " escape as an uncaught exception: " (pr-str record)))))))
 
     ;; @spec MCP-OP-ADMIT-152
+    ;; Round thirteen (hardening): the receipt was read with
+    ;; `clojure.core/read-string`, which leaves `*read-eval*` ON -- a receipt
+    ;; beginning `#=(...)` is EVALUATED by the reader during classification,
+    ;; inside the gate. `clojure.edn/read-string` never evaluates; an
+    ;; unsupported dispatch macro is a parse failure, same shape as any other
+    ;; unreadable receipt.
+    ;; Round fourteen's finding 2, closed by ORDER. This case must run
+    ;; BEFORE the 60,000-deep nesting case below it: at the RED commit
+    ;; 98c2eb55 the nesting case throws a `StackOverflowError` past
+    ;; `(catch Exception e)`, which `clojure.test` records as one `:error`
+    ;; and which ABORTS the rest of the `deftest` -- so the read-eval case
+    ;; never executed there, and the RED commit exited 1 for two unrelated
+    ;; sites rather than 3 for this one. A witness that a later case can
+    ;; prevent from running is not a witness for the hazard it names.
+    (testing "a #= form in a receipt must not execute, and must classify :failed"
+      (let [{:keys [state failures]}
+            (drive-precondition-state! "#=(java.lang.System/exit 3)")]
+        ;; Reaching this assertion at all is part of the proof: if the form
+        ;; had been evaluated, System/exit would have ended the JVM and no
+        ;; assertion below it would ever run.
+        (is (= :failed state))
+        (is (= 1 (count failures)))
+        (is (str/includes? (str (first failures)) "could not be read")
+            (str "the reason must name the parse failure, not silently drop"
+                 " the form: " (pr-str failures)))))
+
+    ;; @spec MCP-OP-ADMIT-152
     ;; Round eleven (Opus, finding 3): the classifier has FIVE ways to exit
     ;; that are none of its three states -- ABSENT, SATISFIED or FAILED.
     ;; Round twelve wrapped `classify-battery-receipt*` in `(catch Throwable
@@ -5924,25 +5952,6 @@
             (str "the reason must say the receipt is not a map, not that it"
                  " is absent: " (pr-str failures)))))
 
-    ;; @spec MCP-OP-ADMIT-152
-    ;; Round thirteen (hardening): the receipt was read with
-    ;; `clojure.core/read-string`, which leaves `*read-eval*` ON -- a receipt
-    ;; beginning `#=(...)` is EVALUATED by the reader during classification,
-    ;; inside the gate. `clojure.edn/read-string` never evaluates; an
-    ;; unsupported dispatch macro is a parse failure, same shape as any other
-    ;; unreadable receipt.
-    (testing "a #= form in a receipt must not execute, and must classify :failed"
-      (let [{:keys [state failures]}
-            (drive-precondition-state! "#=(java.lang.System/exit 3)")]
-        ;; Reaching this assertion at all is part of the proof: if the form
-        ;; had been evaluated, System/exit would have ended the JVM and no
-        ;; assertion below it would ever run.
-        (is (= :failed state))
-        (is (= 1 (count failures)))
-        (is (str/includes? (str (first failures)) "could not be read")
-            (str "the reason must name the parse failure, not silently drop"
-                 " the form: " (pr-str failures)))))
-
     (testing "every state spends the same number of assertions"
       (let [counts (mapv (fn [content]
                            (let [{:keys [reports]} (drive-precondition-state! content)]
@@ -5951,6 +5960,59 @@
         (is (apply = counts)
             (str "the assertion count must not reveal which machine ran the"
                  " battery (MCP-OP-ADMIT-147): " (pr-str counts)))))))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- posix-permissions!
+  [^java.io.File file spec]
+  (Files/setPosixFilePermissions (.toPath file)
+                                 (PosixFilePermissions/fromString spec)))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private a-file-can-be-made-unreadable-here
+  "Whether THIS process can be denied read on a file it owns.
+
+  Round fifteen added `:source-not-readable` to the enumeration at the merge
+  with the census landing, and the enumeration's rule is that a member
+  nothing DRIVES is a claim no fixture supports. The driver is `chmod 000`,
+  and `chmod 000` does not deny ROOT: under uid 0 `Files/isReadable` stays
+  true and the entrance resolves the file normally, so the fixture would
+  quietly fail to provoke the kind and the completeness proof would redden
+  for a reason that has nothing to do with the gate.
+
+  So the capability is MEASURED, once, by doing the thing -- not inferred
+  from `user.name`, which a container can make say anything. When it does not
+  hold, the kind is excused exactly the way a battery-only kind is: named,
+  counted in the summary's skipped bucket, and subtracted from the set
+  equality rather than silently tolerated inside it."
+  (delay
+    (let [root (temp-dir)
+          probe (io/file root "probe.clj")]
+      (try
+        (spit probe "(ns probe)\n")
+        (posix-permissions! probe "---------")
+        (not (Files/isReadable (.toPath probe)))
+        (catch Throwable _ false)
+        (finally
+          (try (posix-permissions! probe "rw-------") (catch Throwable _ nil))
+          (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private permission-driven-refusal-kinds
+  "Kinds whose only driver is a denied read."
+  #{:source-not-readable})
+
+;; @spec MCP-OP-ADMIT-133
+(defn- kinds-excused-from-the-enumeration
+  "Battery-only kinds, plus any kind this machine cannot be denied."
+  []
+  (into (set (keys battery-only-refusal-kinds))
+        (when-not @a-file-can-be-made-unreadable-here
+          (skip-precondition!
+            (str "this process cannot be denied read on a file it owns"
+                 " (running as root?), so " (pr-str permission-driven-refusal-kinds)
+                 " has no driver here · re-run this suite as an unprivileged"
+                 " user to prove those kinds by execution"))
+          permission-driven-refusal-kinds)))
 
 ;; @spec MCP-OP-ADMIT-133
 (defn- record-and-check-refusal-kinds
@@ -5987,28 +6049,30 @@
       (run-tests!)))
   (testing "MCP-OP-ADMIT-133: the enumeration is the set the entrance produces"
     (let [observed @observed-refusal-kinds
-          enumerated admit/admit-refusal-kinds]
+          enumerated admit/admit-refusal-kinds
+          ;; @spec MCP-OP-ADMIT-138
+          ;; The battery-only excuses, plus a kind this machine is incapable
+          ;; of driving -- computed by execution, recorded in the skipped
+          ;; bucket, never assumed.
+          excused (kinds-excused-from-the-enumeration)]
       (is (seq observed) "the suite drove no refusal at all; the driver is broken")
       (is (empty? (set/difference observed enumerated))
           (str "the entrance published kinds the enumeration has never heard "
                "of: " (pr-str (set/difference observed enumerated))))
       ;; @spec MCP-OP-ADMIT-138
-      (is (empty? (set/difference enumerated observed
-                                  (set (keys battery-only-refusal-kinds))))
+      (is (empty? (set/difference enumerated observed excused))
           (str "the enumeration claims kinds no fixture drives and no battery "
                "target proves, so nothing shows they exist or that their text "
                "is a superset: "
-               (pr-str (set/difference enumerated observed
-                                       (set (keys battery-only-refusal-kinds))))))
-      (is (empty? (set/intersection
-                    observed (set (keys battery-only-refusal-kinds))))
-          (str "a kind this suite DOES drive is excused to a battery; delete "
-               "the excuse rather than carrying it: "
-               (pr-str (set/intersection
-                         observed (set (keys battery-only-refusal-kinds))))))
-      (is (= enumerated (into observed (keys battery-only-refusal-kinds)))
+               (pr-str (set/difference enumerated observed excused))))
+      (is (empty? (set/intersection observed excused))
+          (str "a kind this suite DOES drive is excused to a battery or to a "
+               "missing capability; delete the excuse rather than carrying "
+               "it: " (pr-str (set/intersection observed excused))))
+      (is (= enumerated (into observed excused))
           (str "enumerated " (count enumerated) ", observed " (count observed)
-               ", battery-only " (count battery-only-refusal-kinds))))))
+               ", battery-only " (count battery-only-refusal-kinds)
+               ", excused " (count excused))))))
 
 (use-fixtures :once record-and-check-refusal-kinds)
 
@@ -6105,21 +6169,148 @@
       (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-ADMIT-133
-(deftest a-source-path-under-a-regular-file-is-an-invalid-source-path
-  ;; ENOTDIR from .toRealPath, which is a FileSystemException and not the
-  ;; NoSuchFileException the source-file-not-found catch takes.
+(deftest a-source-path-under-a-regular-file-is-a-source-file-not-found
+  ;; Round fifteen, AT THE MERGE with the census landing. Until then this was
+  ;; `a-source-path-under-a-regular-file-is-an-invalid-source-path`, and it
+  ;; was the only fixture in the suite that drove `:invalid-source-path`:
+  ;; ENOTDIR from `.toRealPath` is a `FileSystemException` and not the
+  ;; `NoSuchFileException` the not-found catch used to take, so it fell
+  ;; through to the `:else` arm.
+  ;;
+  ;; The trunk's containment work asks the whole `FileSystemException`
+  ;; HIERARCHY now and publishes `:source-file-not-found` for every member of
+  ;; it -- "a path that does not resolve to a file" -- which is the same fact
+  ;; the CLI entrance already reported about this shape, and the point of the
+  ;; change was that the two entrances had disagreed. The witness follows the
+  ;; entrance rather than pinning the answer it used to give; what it still
+  ;; refuses to accept is an UNENUMERATED kind.
   (let [root (temp-dir)]
     (try
-      (is (= :invalid-source-path
-             (refusal-kind-of
-               root base-sources
-               {:patch (str "--- a/src/app/core.clj/child.clj\n"
-                            "+++ b/src/app/core.clj/child.clj\n"
-                            "@@ -1,1 +1,1 @@\n"
-                            "-(ns app.child)\n"
-                            "+(ns app.child2)\n")
-                :verify "none"})))
+      (let [kind (refusal-kind-of
+                   root base-sources
+                   {:patch (str "--- a/src/app/core.clj/child.clj\n"
+                                "+++ b/src/app/core.clj/child.clj\n"
+                                "@@ -1,1 +1,1 @@\n"
+                                "-(ns app.child)\n"
+                                "+(ns app.child2)\n")
+                    :verify "none"})]
+        (is (= :source-file-not-found kind))
+        (is (contains? admit/admit-refusal-kinds kind)))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest no-filesystem-shape-reaches-invalid-source-path
+  ;; The witness the excuse rests on. `:invalid-source-path` left the
+  ;; enumeration at round fifteen's merge because nothing drives it any
+  ;; more, and "nothing drives it" is a claim that has to be DRIVEN rather
+  ;; than argued: an excuse nobody tests is how a kind rots into the set in
+  ;; the first place.
+  ;;
+  ;; `resolve-source-path` reaches its `:else` arm only for a throw out of
+  ;; `.toRealPath` that is neither `NoSuchFileException`,
+  ;; `AccessDeniedException` nor any other `FileSystemException`. Every
+  ;; filesystem shape that can make that call throw is driven below, through
+  ;; the real entrance, and each is claimed by a typed arm ABOVE the
+  ;; `:else`. The one remaining class, `InvalidPathException` for a NUL, is
+  ;; refused lexically before any I/O.
+  (let [root (temp-dir)
+        edit (fn [relative]
+               (str "--- a/" relative "\n"
+                    "+++ b/" relative "\n"
+                    "@@ -1,1 +1,1 @@\n"
+                    "-(ns app.child)\n"
+                    "+(ns app.child2)\n"))
+        drive (fn [relative]
+                (refusal-kind-of root {} {:patch (edit relative)
+                                          :verify "none"}))]
+    (try
+      (write-sources! root base-sources)
+      ;; a symlink loop and a name past NAME_MAX: both are
+      ;; `FileSystemException`, neither is `NoSuchFileException`, and before
+      ;; the trunk's change both fell to the `:else` arm this test exists for
+      (let [a (io/file root "src/app/loopa.clj")
+            b (io/file root "src/app/loopb.clj")]
+        (Files/createSymbolicLink (.toPath a) (.toPath b)
+                                  (make-array FileAttribute 0))
+        (Files/createSymbolicLink (.toPath b) (.toPath a)
+                                  (make-array FileAttribute 0)))
+      (doseq [[label relative]
+              [["a source path under a regular file (ENOTDIR)"
+                "src/app/core.clj/child.clj"]
+               ["a symlink loop (ELOOP)" "src/app/loopa.clj"]
+               ["a name past NAME_MAX (ENAMETOOLONG)"
+                (str "src/app/" (apply str (repeat 300 "x")) ".clj")]
+               ["a source that is simply absent" "src/app/nope.clj"]]]
+        (let [kind (drive relative)]
+          (is (not= :invalid-source-path kind)
+              (str label " reached the :else arm: " (pr-str kind)))
+          (is (contains? admit/admit-refusal-kinds kind)
+              (str label " published an unenumerated kind: " (pr-str kind)))))
+      ;; the only class that could still reach the `:else` arm never gets
+      ;; near the filesystem: it is refused by the lexical half of
+      ;; confinement, which performs no I/O at all
+      (is (not (mcp-paths/relative-source-path?
+                 (str "src/app/co" (char 0) "re.clj")))
+          (str "a NUL path must be refused lexically, before .toRealPath"
+               " can throw InvalidPathException"))
+      (is (not (contains? admit/admit-refusal-kinds :invalid-source-path))
+          "the kind is excused as unreachable; it must not also be enumerated")
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-unreadable-source-refuses-as-source-not-readable
+  ;; Round fifteen, at the merge. The census landing added
+  ;; `:source-not-readable` at two sites of `resolve-source-path`: the file's
+  ;; own bits deny read (`Files/isReadable` false, asked after regularity so
+  ;; a directory is still reported as a directory), and a DIRECTORY above it
+  ;; denies read, which makes `.toRealPath` throw `AccessDeniedException` on
+  ;; the way through the parent.
+  ;;
+  ;; Both are driven here, through the real entrance, with `chmod 000` --
+  ;; enumerated because it is provoked, not because the trunk constructs it.
+  ;; A machine that cannot deny itself a read records a named precondition
+  ;; instead (see `a-file-can-be-made-unreadable-here`); it never passes
+  ;; quietly.
+  (if-not @a-file-can-be-made-unreadable-here
+    (is (seq @precondition-skips)
+        "an undrivable kind must be recorded in the skipped bucket")
+    (let [edit (fn [relative]
+                 (str "--- a/" relative "\n"
+                      "+++ b/" relative "\n"
+                      "@@ -1,1 +1,1 @@\n"
+                      "-(ns app.locked)\n"
+                      "+(ns app.locked2)\n"))]
+      (testing "the source file's own bits deny read"
+        (let [root (temp-dir)
+              locked (io/file root "src/app/locked.clj")]
+          (try
+            (write-sources! root (assoc base-sources
+                                        "src/app/locked.clj"
+                                        "(ns app.locked)\n"))
+            (posix-permissions! locked "---------")
+            (is (= :source-not-readable
+                   (refusal-kind-of root {} {:patch (edit "src/app/locked.clj")
+                                             :verify "none"})))
+            (finally
+              (try (posix-permissions! locked "rw-------")
+                   (catch Throwable _ nil))
+              (delete-tree! root)))))
+      (testing "a directory above the source denies read"
+        (let [root (temp-dir)
+              dir (io/file root "src/app/locked")]
+          (try
+            (write-sources! root (assoc base-sources
+                                        "src/app/locked/inner.clj"
+                                        "(ns app.locked)\n"))
+            (posix-permissions! dir "---------")
+            (is (= :source-not-readable
+                   (refusal-kind-of
+                     root {} {:patch (edit "src/app/locked/inner.clj")
+                              :verify "none"})))
+            (finally
+              (try (posix-permissions! dir "rwx------")
+                   (catch Throwable _ nil))
+              (delete-tree! root))))))))
 
 ;; @spec MCP-OP-ADMIT-133
 (deftest an-uninitialised-server-refuses-at-the-handlers-edge
@@ -6304,6 +6495,28 @@
   ExceptionInfo`, plus `*on-write-boundary*`, which this gate never binds.
   Each is reachable only by calling those functions directly.
 
+  `invalid-source-path` joined this list at round fifteen's merge with the
+  census landing, having been an ENUMERATED kind until then. It is the
+  `:else` arm of `resolve-source-path`'s catch -- \"not the filesystem
+  answering\" -- and its one driver, a source path under a REGULAR FILE, now
+  publishes `source-file-not-found`: the catch asks the whole
+  `FileSystemException` HIERARCHY, and ENOTDIR, ELOOP and ENAMETOOLONG are
+  all members of it. `no-filesystem-shape-reaches-invalid-source-path` drives
+  all four remaining shapes through the entrance and shows each is claimed by
+  a typed arm above the `:else`; the only class that could still reach it,
+  an `InvalidPathException` for a NUL, is refused by `relative-source-path?`
+  before any I/O, exactly as for `invalid-target-path` below. Moved rather
+  than kept because the enumeration's own rule is that a member nothing
+  drives is a claim no fixture supports.
+
+  Stated precisely, because the arm is NOT dead code: it fires for a throw
+  that is not the filesystem's, and `docs/observations/census-round18-rereview-sol.md`
+  records the CENSUS entrance publishing it for an injected
+  `IllegalStateException`. The claim here is narrower and is the only one
+  this suite may make -- no input the ADMIT entrance accepts reaches it --
+  and it is the claim `no-filesystem-shape-reaches-invalid-source-path`
+  drives.
+
   `invalid-target-path` has both branches dead on this platform: the `nil?
   parent` branch cannot fire because the lexical path is always root-anchored
   and absolute, and the catch-all needs an `InvalidPathException` for a
@@ -6322,6 +6535,7 @@
   #{"analyzer-output-truncated"
     "clj-kondo-unavailable"
     "invalid-compiled-transaction"
+    "invalid-source-path"
     "invalid-target-path"
     "patch-source-missing"
     "transaction-write-exception"})
