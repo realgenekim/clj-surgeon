@@ -111,3 +111,34 @@ Independent gate re-run for T3 (seat, 12:13Z): JS_EXIT=0 CLJ_EXIT=0
 | T3b | 18 | 7 | 2 | 2 | 3 | 11 |
 T3 pair: 19, 18 raw (mean 18.5) vs the injected round-two receipt 24/22/22 (22.7) vs native 32/50/33 (38.3): **2.1× raw at n=2 for T3**, and the per-call listing below decides whether the write again came before any source read.
 T3b per-call: calls 1–2 tool-list probes, 3–4 CLAUDE.md/bd, **call 5 = ONE source read (editor-commands.js by nl|sed — the selection precedent, i.e. the PEERS the structured cap elided)**, call 6 a sha-check batch, first real patch at call 8, one later read (test classification). Independent gate re-run (seat, 12:23Z): JS_EXIT=0 CLJ_EXIT=0 . So T3 pair: reads before the write 0 and 1 — the single remaining pre-write read is the peers, which the receipt computed and could not carry. That is the whole of round five.
+
+## T4 pair (round-six receipt, real repo, default budget) — 2026-09-04 14:20Z–14:4xZ
+
+Pre-registration: reads before the write = 0 on BOTH replicates; raw <= 18. Meter: ~/bin/rollout-calls on the codex rollout.
+
+| arm | raw | task-core | reads before first patch | patches | tests | gates |
+|---|---:|---:|---:|---:|---:|---|
+| T4 (smw-T4) | 19 (incl. 2 `wait`) | 7 | 0 (calls 2/4/5 were CLAUDE.md, not source) | 4 | 3 | test-js exit 0; runtests-unit 229/721/0; 8 files +311/-2 |
+| T4b (smw-T4b) | 18 (incl. 2 `wait`) | 10 | 2 | 4 | 5 | test-js exit 0; runtests-unit 229/722/0; 8 files +335/-2 |
+| T3 (round-four receipt, for comparison) | 19 / 18 | — | 0 / 1 | — | — | green |
+
+**Verdict: the line was MISSED.** T4 met the reads line (0) and missed raw by one (19 vs 18); T4b met raw (18) and paid two
+pre-write reads. Round six did not move the count versus T3 (19/18 -> 19/18). Both trees are gate-green on the seat's own runs.
+
+**What T4b read before writing, verbatim from the rollout (call 3 and 4):** `sed -n '1,125p' resources/public/js/editor-commands.js`,
+`sed -n '380,425p' src/writer/state.clj`, `sed -n '500,530p' src/writer/state.clj`, the heads of the two test files, `tail -80
+docs/intent/registry.edn`; then `rg` for `applyAuthoritativeEditorFrame` and `fold-editor-snapshot-and-tx` across the JS and
+`src/writer/editor_dispatch.clj`, plus two other JS test files (editor_durable_ack, editor_conflict_response). None of these is a
+leg the receipt carries: the caller wanted the STATE FOLD and the AUTHORITATIVE FRAME path (how an editor command's result reaches
+the buffer) and the registry's tail (the id pattern for a new intent). That is the residual: the receipt covers the six legs of the
+feature thread but not the dispatch/fold seam the feature plugs into, nor the registry convention. A seventh leg ("dispatch" —
+the fold/frame functions a handler's result travels through) and a registry-tail sample would have answered both without a read.
+
+**Where the raw count goes (T4):** 1 tool-catalog probe, 3 doc reads (CLAUDE.md in three slices — ceremony the repo demands),
+2 bd create/claim, 4 patches, 3 suite runs, 2 diff/status checks, 1 bd close, 2 `wait`, 1 .beads/.local_version revert. The
+feature itself is 4 patches + 3 suite runs = 7. Everything else is the repo's ceremony and the harness's `wait`. The receipt
+cannot remove ceremony; the admit gate (arm G) can collapse the 3 suite runs to 1 and the 2 diff checks to 0.
+
+Standing sentence, amended: the round-six receipt holds the edit-basis line on one replicate and misses it by two reads on the
+other; the misses name a seventh leg (dispatch/fold) and a registry-tail sample. The count floor for this task on this harness
+is ~12 (7 feature + 5 ceremony); a receipt alone cannot go below it. 10x remains a harness claim (one admit-gate call).

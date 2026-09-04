@@ -1513,3 +1513,11 @@ Correction of my own claim earlier tonight: "peers present at the default budget
 fixture; on the real repo the default budget elides the peer BODIES (rows stay). The receipt says so in its
 elided row with the remedy. The default is 28,672 for a reason (public budget); a caller who wants bodies
 asks for them.
+
+## 14:44Z T4 pair scored: line MISSED (T4 19 raw / 0 pre-write reads; T4b 18 / 2), both gate-green
+
+Round six did not move the count (T3 19/18 -> T4 19/18). T4b's two pre-write reads name what the receipt lacks: the
+dispatch/fold seam (state.clj L380-425, L500-530; applyAuthoritativeEditorFrame; fold-editor-snapshot-and-tx) and the
+registry tail. Filed as the round-seven product ask (a seventh leg, "dispatch", plus a registry-tail sample) in the replay
+result doc. The raw floor on this harness is ~12 (7 feature + 5 repo ceremony); the receipt cannot remove ceremony — arm G
+(the admit gate) is the next lever. Gates on both clones run by the seat: test-js exit 0, runtests-unit 229/721/0 and 229/722/0.
