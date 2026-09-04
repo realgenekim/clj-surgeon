@@ -128,6 +128,17 @@
                        (str (System/getProperty "user.home") "/bin")))
     (is (str/ends-with? (.get environment "PATH") "/custom/bin"))))
 
+;; RATCHET (2026-09-04, inb-9483a4, round two): -Djava.io.tmpdir is a
+;; JVM-internal property no child PROCESS inherits, so every subprocess this
+;; server launches picked its own temp location from the ambient TMPDIR --
+;; outside any isolated root, and invisible to the leak witness.
+;; @spec MCP-OP-TMPHYG-005
+(deftest configure-environment-publishes-this-process-temp-directory
+  (let [environment (java.util.HashMap. {"PATH" "/custom/bin"})]
+    (process/configure-environment! environment)
+    (is (= (System/getProperty "java.io.tmpdir") (.get environment "TMPDIR"))
+        "a descendant that picks its own temp location stays where this JVM writes")))
+
 (deftest recognizes-only-clj-kondo-executables
   (is (process/clj-kondo-command? ["clj-kondo" "--lint" "src"]))
   (is (process/clj-kondo-command?

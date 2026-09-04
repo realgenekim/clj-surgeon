@@ -179,4 +179,28 @@ cat "$FX/bb-args.out"
 [ "$(probe_field bb-args child args)" = '["alpha" "beta"]' ] \
   || fail "6c: the bb re-exec dropped its args"
 
+# ============================================================
+# MCP-OP-TMPHYG-005: descendant processes inherit the isolated root
+# ============================================================
+
+# -Djava.io.tmpdir is a JVM-internal property no child PROCESS inherits, so a
+# subprocess that picks its own temp location (mktemp -d, tempfile.mkdtemp)
+# wrote to the SHARED base — outside the isolated root, invisible to the leak
+# witness, and left behind on a multi-tenant box.
+mkdir -p "$FX/subbase"
+run_probe_flags subproc "" "--leak-subprocess" TMPDIR="$FX/subbase"
+sub_root=$(sed -n 's/^PROBE root=//p' "$FX/subproc.out" | head -1)
+sub_dir=$(sed -n 's/^PROBE subprocess-tmpdir=//p' "$FX/subproc.out" | head -1)
+[ -n "$sub_root" ] && [ -n "$sub_dir" ] || fail "5: could not read the probe root / subprocess dir"
+case "$sub_dir" in
+  "$sub_root"/*) : ;;
+  *) fail "5a: a subprocess temp dir ESCAPED the isolated root: $sub_dir (root $sub_root)" ;;
+esac
+[ "$PROBE_EXIT" -ne 0 ] \
+  || fail "5b: the escaped subprocess temp dir was not reported as a leak"
+grep -q 'temp-leak:' "$FX/subproc.out" || fail "5b: no temp-leak: line naming it"
+# and nothing survives in the shared base
+[ -z "$(ls -A "$FX/subbase")" ] \
+  || fail "5c: entries left in the shared base: $(ls -A "$FX/subbase")"
+
 echo "tmp-leak ratchet witness passed"
