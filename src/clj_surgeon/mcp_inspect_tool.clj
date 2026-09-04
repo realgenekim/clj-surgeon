@@ -1507,6 +1507,21 @@
         (:next_action result)
         "call next_call once after doing other useful work"))))
 
+;; @spec MCP-OP-STUDY-040
+(defn- with-envelope
+  "Every result the budget gate SUBSTITUTES carries the envelope of the result
+  it replaces.
+
+  The gate runs on the FINALIZED result, so a substitute it builds from
+  scratch would reach the publisher with no clock at all — and the publisher
+  adds nothing back, which is exactly the property that retired the 64-byte
+  publish reserve (Sol O2 round-3 review, section 5). Carrying the envelope
+  keeps the bytes measured and the bytes published the same bytes."
+  [substitute measured]
+  (cond-> substitute
+    (contains? measured :elapsed_ms)
+    (assoc :elapsed_ms (:elapsed_ms measured))))
+
 (defn enforce-public-result-budget
   "Refuse an oversized public result without returning partial source."
   [summary result]
@@ -1517,7 +1532,8 @@
       (do
         (when (and prepare? (:basis result))
           (change-buffer/discard-basis! (:basis result)))
-        {:ok false
+        (with-envelope
+          {:ok false
          :operation "inspect_clojure"
          :mode (:mode result)
          :error-type (if prepare?
@@ -1544,7 +1560,8 @@
          :remedies (if prepare?
                      [{:scope "definition"}
                       {:message "Narrow the subjects or add an exact structural focus."}]
-                     [{:message "Open fewer retained site IDs in one call."}])}))))
+                     [{:message "Open fewer retained site IDs in one call."}])}
+          result)))))
 
 (defn- inspect-refusal
   [result]
@@ -1888,22 +1905,26 @@
 ;; @spec MCP-OP-PREP-REQ-006
 
 ;; @spec MCP-OP-STUDY-040
-(def publish-reserve
-  "Bytes held back from the budget while FITTING, because the rendering
-  measured here is not byte-identical to the rendering published later.
-
-  `fit-public-result` measures with `elapsed_ms` zeroed — the clock has not
-  stopped yet — while `mcp-operation/invoke!` publishes the same result with
-  the real elapsed time in both the text block and `structuredContent`. A
-  candidate accepted at exactly the budget therefore ships over it. Measured
-  at the read entrance on a 78-file tree: 32,784 published bytes against a
-  32,768 byte budget, a 16-byte overshoot no pure-function witness could see."
-  64)
-
 (def max-fitted-result-bytes
-  "The budget a fitted result is measured against: the declared public budget
-  less the reserve the published rendering will spend."
-  (- max-public-result-bytes publish-reserve))
+  "The budget a fitted result is measured against: the declared public budget,
+  with NOTHING held back.
+
+  Round three held back a 64-byte `publish-reserve`, because
+  `fit-public-result` measured with `elapsed_ms` zeroed — the clock had not
+  stopped — while `mcp-operation/invoke!` published the same result with the
+  real elapsed time in the text block and in `structuredContent`. Field
+  evidence (Sol O2 round-3 review, section 5): the envelope's clock contract
+  accepts any finite non-negative number, a `1.0E308` elapsed renders 309
+  characters, and four near-boundary receipts published 32,860 / 32,841 /
+  32,912 / 32,996 bytes against the 32,768-byte budget. A reserve is a
+  constant taken from one observation; a bigger constant would only move the
+  escape.
+
+  The fit now runs on the FINALIZED result inside `mcp-operation/invoke!`, so
+  the bytes it measures are the bytes that are published — envelope, clock,
+  and whatever shape a later wire gives them. There is nothing left to
+  reserve."
+  max-public-result-bytes)
 
 ;; @spec MCP-OP-STUDY-040
 (defn- public-budget-refusal
@@ -1913,21 +1934,23 @@
   that point no rendering choice can help, and a caller that is handed the
   result anyway has been told a bound the tool does not keep."
   [result required-bytes]
-  (cond-> {:ok false
-           :operation "inspect_clojure"
-           :error_type "inspect-output-limit"
-           :scope "public_result"
-           :error (format (str "The complete inspect_clojure result is %d bytes; "
-                               "the public MCP output budget is %d")
-                          required-bytes max-public-result-bytes)
-           :required {:public_result_bytes required-bytes}
-           :limits {:public_result_bytes max-public-result-bytes}
-           :read_complete false
-           :source_unchanged true
-           :remedy (str "Lower limit, narrow dir/grep/ns_grep, or request "
-                        "fewer forms so the complete result fits the public "
-                        "output budget.")
-           :next_action "narrow_scope"}
+  (cond-> (with-envelope
+            {:ok false
+             :operation "inspect_clojure"
+             :error_type "inspect-output-limit"
+             :scope "public_result"
+             :error (format (str "The complete inspect_clojure result is %d bytes; "
+                                 "the public MCP output budget is %d")
+                            required-bytes max-public-result-bytes)
+             :required {:public_result_bytes required-bytes}
+             :limits {:public_result_bytes max-public-result-bytes}
+             :read_complete false
+             :source_unchanged true
+             :remedy (str "Lower limit, narrow dir/grep/ns_grep, or request "
+                          "fewer forms so the complete result fits the public "
+                          "output budget.")
+             :next_action "narrow_scope"}
+            result)
     (:mode result) (assoc :mode (:mode result))))
 
 ;; @spec MCP-OP-STUDY-040
@@ -1953,10 +1976,17 @@
   `min-evidence-characters` held a 512-character floor per result that the
   budget was never allowed to lower."
   [raw-result]
+  ;; @spec MCP-OP-STUDY-040
+  ;; The fit measures the FINAL envelope. A result with no clock is not one
+  ;; the publisher could publish, and measuring it would reintroduce exactly
+  ;; the gap the publish reserve used to paper over — so it is a typed
+  ;; refusal here rather than a silent 17-byte error later.
+  (when-not (contains? raw-result :elapsed_ms)
+    (throw (IllegalArgumentException.
+             (str "fit-public-result measures the published envelope and "
+                  "needs the finalized result: :elapsed_ms is absent"))))
   (let [measure (fn [result]
-                  (mcp-result-byte-count
-                    (inspect-summary (assoc result :elapsed_ms 0.0))
-                    result))
+                  (mcp-result-byte-count (inspect-summary result) result))
         required (measure raw-result)]
     (if (<= required max-fitted-result-bytes)
       raw-result
@@ -1990,36 +2020,33 @@
   [ordinary-result raw-result]
   (cond
     (:prepared_request raw-result)
-    (let [normalized (assoc raw-result :elapsed_ms 0.0)
-          required-bytes
-          (mcp-result-byte-count (inspect-summary normalized) normalized)]
+    (let [required-bytes
+          (mcp-result-byte-count (inspect-summary raw-result) raw-result)]
       (if (<= required-bytes max-public-result-bytes)
         raw-result
         ordinary-result))
 
     (and (:ok raw-result)
          (#{"prepare-change" "basis-view" "plan-extraction"} (:mode raw-result)))
-    (enforce-public-result-budget
-      (inspect-summary (assoc raw-result :elapsed_ms 0.0))
-      raw-result)
+    (enforce-public-result-budget (inspect-summary raw-result) raw-result)
 
     (:continuation raw-result)
     (let [required-bytes
-          (mcp-result-byte-count
-            (inspect-summary (assoc raw-result :elapsed_ms 0.0))
-            raw-result)]
+          (mcp-result-byte-count (inspect-summary raw-result) raw-result)]
       (if (<= required-bytes max-public-result-bytes)
         raw-result
-        {:ok false
-         :operation "inspect_clojure"
-         :error_type "inspect-output-limit"
-         :error "The complete selector refusal and continuation exceed the public MCP output budget"
-         :failed_stage "output-budget"
-         :required {:public-result-bytes required-bytes}
-         :limits {:public-result-bytes max-public-result-bytes}
-         :read_complete false
-         :source_unchanged true
-         :next_action "narrow_request"}))
+        (with-envelope
+          {:ok false
+           :operation "inspect_clojure"
+           :error_type "inspect-output-limit"
+           :error "The complete selector refusal and continuation exceed the public MCP output budget"
+           :failed_stage "output-budget"
+           :required {:public-result-bytes required-bytes}
+           :limits {:public-result-bytes max-public-result-bytes}
+           :read_complete false
+           :source_unchanged true
+           :next_action "narrow_request"}
+          raw-result)))
 
     ;; @spec MCP-OP-STUDY-040
     ;; Every other mode — `ls-tree` and every typed study read — used to fall
@@ -2043,8 +2070,7 @@
     (prepared-confirmation/attach-confirmation!
       prepared-confirmation/process-registry session-key prepared-result
       (fn [candidate]
-        (let [normalized (assoc candidate :elapsed_ms 0.0)]
-          (mcp-result-byte-count (inspect-summary normalized) normalized))))))
+        (mcp-result-byte-count (inspect-summary candidate) candidate)))))
 
 (defn handle-inspect
   "Structured clojure-mcp callback handler, retained as a Var for hot reload."
@@ -2070,9 +2096,16 @@
                :read_complete false
                :source_unchanged true
                :next_action "restart_server"})]
-        (attach-prepared-confirmation!
-          exchange ordinary-result
-          (prepared-request/project-result ordinary-result)))
+        ordinary-result)
+     ;; @spec MCP-OP-STUDY-040
+     ;; The budget gate runs on the FINALIZED result, after the clock has
+     ;; stopped, so the bytes it measures are the bytes this callback
+     ;; publishes. Nothing is added afterwards, which is what retired the
+     ;; 64-byte publish reserve (Sol O2 round-3 review, section 5).
+     :fit (fn [ordinary-result]
+            (attach-prepared-confirmation!
+              exchange ordinary-result
+              (prepared-request/project-result ordinary-result)))
      :summarize inspect-summary
      :callback callback}))
 

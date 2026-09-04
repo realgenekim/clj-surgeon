@@ -52,13 +52,23 @@
   The request clock surrounds domain execution only. Summary rendering and
   serialization both complete before callback publication, so failures cannot
   expose a partial public result."
-  [{:keys [clock-nanos execute summarize serialize callback]
+  [{:keys [clock-nanos execute fit summarize serialize callback]
     :or {clock-nanos #(System/nanoTime)
+         fit identity
          serialize json/generate-string}}]
   (let [started-ns (clock-nanos)
         domain-result (execute)
         finished-ns (clock-nanos)
-        result (finalize-result domain-result started-ns finished-ns)
+        ;; @spec MCP-OP-STUDY-040
+        ;; The FIT sees the FINALIZED result — the envelope included — and
+        ;; nothing is added to what it returns. A fit that runs inside
+        ;; `execute` measures a result the publisher has not finished
+        ;; building, and the difference has to be covered by a reserve; a
+        ;; reserve is a constant taken from one observation, and Sol's O2
+        ;; round-3 review section 5 escaped it with an accepted clock value.
+        ;; Placing the fit here removes the difference instead of estimating
+        ;; it, and it holds for whatever shape the envelope takes.
+        result (fit (finalize-result domain-result started-ns finished-ns))
         summary (summarize result)
         body (serialize result)]
     (callback [summary] (not (:ok result)) result)

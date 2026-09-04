@@ -2001,11 +2001,26 @@
 ;; below reproduces that overshoot inside the repository so the bound is
 ;; witnessed by CI rather than by one machine's scratch tree.
 
-(defn- public-bytes
+(defn- clocked
+  "One raw domain result with a clock on it.
+
+   O2 round 4 (§5): the fit measures the FINALIZED envelope — the bytes the
+   publisher publishes — so a result with no clock is not one it can measure.
+   `public-bytes` measures at the same clock, so a witness compares like with
+   like."
   [result]
-  (inspect-tool/mcp-result-byte-count
-    (inspect-tool/inspect-summary (assoc result :elapsed_ms 0.0))
-    result))
+  (assoc result :elapsed_ms 0.0))
+
+(defn- public-bytes
+  "The complete public pair as a client is handed it. Text AND receipt are
+   measured at the SAME clock — O2 round 4 (§5): measuring the text with a
+   clock and the receipt without one is an 18-byte disagreement, and it is
+   the same class of error the publish reserve existed to paper over."
+  [result]
+  (let [published (clocked result)]
+    (inspect-tool/mcp-result-byte-count
+      (inspect-tool/inspect-summary published)
+      published)))
 
 ;; @spec MCP-OP-STUDY-040
 (deftest ls-tree-public-result-is-bounded-by-the-declared-output-budget
@@ -2020,7 +2035,7 @@
             (format (str "the fixture must actually overshoot or the witness "
                          "proves nothing; measured %d bytes against %d")
                     over inspect-tool/max-public-result-bytes))
-        (let [fitted (inspect-tool/enforce-result-budget raw raw)
+        (let [fitted (inspect-tool/enforce-result-budget (clocked raw) (clocked raw))
               text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))]
           (is (<= (public-bytes fitted) inspect-tool/max-public-result-bytes)
               (format "the enforced result was %d bytes" (public-bytes fitted)))
@@ -2040,7 +2055,7 @@
       (let [raw (inspect-tool/execute-ls-tree
                   config {:mode "ls-tree" :dir "." :format "text"})]
         (is (>= inspect-tool/max-public-result-bytes (public-bytes raw)))
-        (is (= raw (inspect-tool/enforce-result-budget raw raw))
+        (is (= (clocked raw) (inspect-tool/enforce-result-budget (clocked raw) (clocked raw)))
             "a result inside the budget is never rewritten")))))
 
 ;; @spec MCP-OP-STUDY-040
@@ -2053,7 +2068,7 @@
       (let [raw (inspect-tool/execute-ls-tree
                   config {:mode "ls-tree" :dir "." :format "names"
                           :limit 16384})
-            fitted (inspect-tool/enforce-result-budget raw raw)
+            fitted (inspect-tool/enforce-result-budget (clocked raw) (clocked raw))
             text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))
             payload (first (filter #(str/starts-with? % "[")
                                    (str/split-lines text)))]
@@ -2704,7 +2719,7 @@
                    :source_character_count 0
                    :results []
                    :tree (apply str (repeat 40000 "x"))}
-        refusal (inspect-tool/fit-public-result oversized)
+        refusal (inspect-tool/fit-public-result (clocked oversized))
         text (inspect-tool/inspect-summary (assoc refusal :elapsed_ms 0.0))]
     (is (false? (:ok refusal)))
     (is (= "inspect-output-limit" (:error_type refusal)))
@@ -2777,11 +2792,11 @@
       (is (>= inspect-tool/max-fitted-result-bytes (public-bytes exact)))
       (is (< inspect-tool/max-fitted-result-bytes (public-bytes over))
           "and one character more is over it")
-      (is (= exact (inspect-tool/fit-public-result exact))))
+      (is (= (clocked exact) (inspect-tool/fit-public-result (clocked exact)))))
     (testing "one byte over is a bounded TEXT, not a refusal"
       (is (>= inspect-tool/max-public-result-bytes (structured-bytes over))
           "the receipt alone fits, so nothing forces a refusal")
-      (let [fitted (inspect-tool/fit-public-result over)]
+      (let [fitted (inspect-tool/fit-public-result (clocked over))]
         (is (true? (:ok fitted))
             (str "refused with " (structured-bytes over)
                  " bytes of receipt under a "
@@ -2809,7 +2824,7 @@
                                        "include_source" true})
                                     (range 32))
                    "expect" {"requests" 32 "files" 32}})
-            fitted (inspect-tool/fit-public-result raw)]
+            fitted (inspect-tool/fit-public-result (clocked raw))]
         (is (true? (:ok raw)))
         (is (>= inspect-tool/max-public-result-bytes (structured-bytes raw))
             "the 32-result receipt fits with room to spare")
@@ -2830,7 +2845,7 @@
                         :source_character_count 10000
                         :forms [{:name "huge" :line 1 :end_line 1
                                  :form_type "def" :source huge}]}]}
-        fitted (inspect-tool/fit-public-result raw)
+        fitted (inspect-tool/fit-public-result (clocked raw))
         text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))]
     (is (true? (:ok fitted)))
     (is (or (str/includes? text huge)
@@ -2850,7 +2865,7 @@
              :file_count 200 :returned 200 :omitted 0
              :tree tree :truncated false :read_complete true
              :next_action "none"}
-        fitted (inspect-tool/fit-public-result raw)
+        fitted (inspect-tool/fit-public-result (clocked raw))
         text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))]
     (is (true? (:ok fitted)))
     (is (not (and (str/includes? text "text abridged")
@@ -2929,13 +2944,14 @@
         (testing operation
           (let [published (assoc
                             (inspect-tool/fit-public-result
-                              (inspect-tool/execute-inspect!
-                                config
-                                {"requests" [(merge {"id" "r1"
-                                                     "operation" operation
-                                                     "file" "src/fixture/core.clj"}
-                                                    extra)]
-                                 "expect" {"requests" 1 "files" 1}}))
+                              (clocked
+                                (inspect-tool/execute-inspect!
+                                  config
+                                  {"requests" [(merge {"id" "r1"
+                                                       "operation" operation
+                                                       "file" "src/fixture/core.clj"}
+                                                      extra)]
+                                   "expect" {"requests" 1 "files" 1}})))
                             :elapsed_ms 1.0)
                 text (inspect-tool/inspect-summary published)
                 misses (leaf-misses text published)]
@@ -2947,9 +2963,10 @@
       (testing "ls-tree"
         (let [published (assoc
                           (inspect-tool/fit-public-result
-                            (inspect-tool/execute-ls-tree
-                              config {:mode "ls-tree" :dir "."
-                                      :format "text"}))
+                            (clocked
+                              (inspect-tool/execute-ls-tree
+                                config {:mode "ls-tree" :dir "."
+                                        :format "text"})))
                           :elapsed_ms 1.0)
               text (inspect-tool/inspect-summary published)
               misses (leaf-misses text published)]
@@ -2961,9 +2978,10 @@
       (testing "ls-tree format=names"
         (let [published (assoc
                           (inspect-tool/fit-public-result
-                            (inspect-tool/execute-ls-tree
-                              config {:mode "ls-tree" :dir "."
-                                      :format "names"}))
+                            (clocked
+                              (inspect-tool/execute-ls-tree
+                                config {:mode "ls-tree" :dir "."
+                                        :format "names"})))
                           :elapsed_ms 1.0)
               text (inspect-tool/inspect-summary published)
               misses (leaf-misses text published)]
@@ -2982,9 +3000,10 @@
     (fn [config]
       (let [published (assoc
                         (inspect-tool/fit-public-result
-                          (inspect-tool/execute-ls-tree
-                            config {:mode "ls-tree" :dir "." :format "text"
-                                    :limit 16384}))
+                          (clocked
+                            (inspect-tool/execute-ls-tree
+                              config {:mode "ls-tree" :dir "." :format "text"
+                                      :limit 16384})))
                         :elapsed_ms 1.0)
             text (inspect-tool/inspect-summary published)
             misses (leaf-misses text published)]
@@ -3062,7 +3081,7 @@
    summarized exactly as a client is handed it."
   [raw]
   (let [published (assoc (inspect-tool/fit-public-result
-                           (assoc raw :probe value-less-leaf-probe))
+                           (clocked (assoc raw :probe value-less-leaf-probe)))
                          :elapsed_ms 1.0)]
     [published (inspect-tool/inspect-summary published)]))
 
@@ -3131,7 +3150,7 @@
     (is (contains? (set (map first pairs)) [:results])
         (str "the receipt walker yields no leaf for an empty collection: "
              (pr-str (mapv first pairs))))
-    (let [published (assoc (inspect-tool/fit-public-result receipt)
+    (let [published (assoc (inspect-tool/fit-public-result (clocked receipt))
                            :elapsed_ms 1.0)
           text (inspect-tool/inspect-summary published)]
       (is (str/includes? text "results=[]")
@@ -3185,7 +3204,7 @@
 (deftest every-refusal-kind-text-carries-every-structured-content-leaf
   (doseq [[label params] refusal-ratchet-cases]
     (testing (name label)
-      (let [response (assoc (inspect-tool/fit-public-result (run params))
+      (let [response (assoc (inspect-tool/fit-public-result (clocked (run params)))
                             :elapsed_ms 1.0)
             text (inspect-tool/inspect-summary response)
             misses (leaf-misses text response)]

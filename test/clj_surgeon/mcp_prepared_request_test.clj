@@ -532,7 +532,12 @@
         (delete-tree! root)))))
 
 ;; @spec MCP-OP-PREP-REQ-001
-(deftest prefinalized-budget-uses-zero-elapsed
+(deftest the-budget-gate-measures-the-finalized-envelope
+  ;; O2 round 4 (Sol round-3 review, §5): this was
+  ;; `prefinalized-budget-uses-zero-elapsed`. The budget gate no longer runs
+  ;; before the clock stops — `mcp-operation/invoke!` hands it the FINALIZED
+  ;; result — so the candidates here carry a clock, and the bytes the gate
+  ;; measures are the bytes that are published.
   (let [project (public-var 'project-result)]
     (is (fn? project))
     (when (fn? project)
@@ -548,7 +553,8 @@
                                    'enforce-result-budget)
               summary (private-var 'clj-surgeon.mcp-inspect-tool
                                    'inspect-summary)
-              edge (result-at-prefinalized-bytes result 32768)
+              edge (assoc (result-at-prefinalized-bytes result 32768)
+                          :elapsed_ms 0.0)
               ;; One character past the largest candidate that fits: the
               ;; receipt grows by at least that byte, so this is over the
               ;; budget by construction rather than by arithmetic.
