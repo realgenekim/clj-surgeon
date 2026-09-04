@@ -1549,3 +1549,20 @@ floor does not. That is how round six's dot-form fix read green while untested (
 night's memory (scanner-brief-names-vs-spellings): the round-eight brief asks Sol to plant six forms that name nothing. Also
 recorded honestly by the builder: nine commits after a conflicted merge carry a red suite because `git commit` after
 `git add` commits the index, and two later fixes were never staged; first green commit ec143202.
+
+## 15:13Z three verdicts: feature_thread r7 NO-GO (4 blocking), admit gate r9 NO-GO (1 blocking), MEM-003 r8 Sol refused
+
+feature_thread r7 (Sol): the four blockers are all one family again — a control defined by a list. A parsed Clojure form
+is "unconditionally strong" so a subject inside a string is FOUND (the script path asks; the Clojure path does not); the
+conventions file is slurped by isFile without realpath containment while the source walk is no-follow; the range digest
+excludes the slice's final LF because the witness built its expected slice with split/join (the witness and the
+implementation shared the error, so the pair was green); the per-leg elide leaf has no text spelling. Each is a rung the
+reviewer climbed by executing the attack, not by reading. Round 8 building on ~/src/clj-surgeon-thread.
+
+admit gate r9 (Sol): the counted skip was ruled honest in principle, and then broken in one move — a battery that fails
+2/3 still writes its receipt, and the witness checks kinds/target/timestamp but never :arms-passed, so a RED battery
+produces a zero-skip green. A receipt must name the verdict it carries, not only the subject (house rule 20). Round 10
+building on ~/src/clj-surgeon-gate3.
+
+MEM-003 r8: Sol's content filter refused after the provenance item (the reflection/clock plants trip it, as in r4-r6);
+Opus fallback review launched with the same brief.
