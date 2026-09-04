@@ -66,3 +66,16 @@ T1b reproduces T1 within two calls (24 → 22; reads 2 → 2; first patch 7 → 
 **Paired table at n=3 per arm (raw / source reads before the first patch):** native 32, 50, 33 → mean 38.3, reads 10, 13, 12 (mean 11.7); receipt 24, 22, 22 → mean 22.7, reads 2, 2, 0 (mean 1.3). Intervals do NOT overlap (native 32–50 vs receipt 22–24) — Opus's R0 withdrawal line is not met; the raw claim stands at n=3: **1.7× raw, 8.8× discovery reads**. Task-core figures to be recomputed after hand classification of all six.
 
 Independent gate re-run for N3 and T1c (seat, 08:4xZ): === N3 test-js JS_EXIT=0 === N3 runtests-unit CLJ_EXIT=0 === T1c test-js JS_EXIT=0 === T1c runtests-unit CLJ_EXIT=0 
+
+## One rule, applied by code to all eight arms (`~/bin/rollout-taskcore`; a call is classified by WHAT IT READS, batched or not; ceremony = CLAUDE.md/AGENTS.md, bd/beads, git status/diff checks, tool-list probes, stdin waits, .beads patches)
+| arm | raw | task-core | reads (whole task) | patches | suite runs | ceremony |
+|---|---|---|---|---|---|---|
+| N | 32 | 23 | 12 | 3 | 8 | 9 |
+| N2 | 50 | 29 | 15 | 6 | 8 | 21 |
+| N3 | 33 | 19 | 12 | 3 | 4 | 14 |
+| T1 (+1 receipt) | 24 | 10 | 3 | 2 | 5 | 14 |
+| T1b (+1) | 22 | 8 | 3 | 3 | 2 | 14 |
+| T1c (+1) | 22 | 12 | 4 | 3 | 5 | 10 |
+| X stale | 25 | 14 | 5 | 2 | 7 | 11 |
+| P placebo | 31 | 19 | 12 | 2 | 5 | 12 |
+Means, n=3: native raw 38.3 / task-core 23.7 / reads 13.0; receipt raw 22.7 / task-core 10.0 (+1 receipt = 11.0) / reads 3.3. Ratios: **raw 1.7×, task-core 2.2×, reads 3.9×** (reads over the whole task; before-first-patch reads were 11.7 vs 1.3, 8.8×). Ceremony is ~35% of native raw and ~55% of receipt raw — the receipt arms' ceremony did not shrink, so the raw ratio is capped by it exactly as the Amdahl argument said.

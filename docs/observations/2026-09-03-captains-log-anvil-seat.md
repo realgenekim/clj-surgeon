@@ -1410,3 +1410,4 @@ Round 20 found read-string with reader-eval in parse-val and fixed parse-val; th
 ## 08:24Z — MEM-003 r5: Sol's filter refused (18th tonight; third consecutive on this lane); Opus fallback.
 ## 08:33Z — tmp-leak r2: Sol's filter refused (19th tonight); Opus fallback. Replicates N3 (33 raw) and T1c (22 raw) finished; gates re-running; T2 (MCP-attached) at 16 calls, still running.
 ## 08:34Z — N3 and T1c gates verified (=== N3 test-js JS_EXIT=0 === N3 runtests-unit CLJ_EXIT=0 === T1c test-js JS_EXIT=0 === T1c runtests-unit CLJ_EXIT=0 ): eight arms, all verified green. At n=3 per arm: native 32/50/33 vs receipt 24/22/22 raw; reads before the first patch 10/13/12 vs 2/2/0.
+## 08:34Z — one code rule over all eight rollouts: raw 1.7×, task-core 2.2×, reads 3.9× at n=3 (before-first-patch reads 8.8×); ceremony is 55% of the receipt arms' raw calls — the harness cap, measured.
