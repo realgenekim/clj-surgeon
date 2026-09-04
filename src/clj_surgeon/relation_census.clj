@@ -1176,14 +1176,50 @@
       (str (subs text 0 max-refusal-field-chars)
            "… [truncated: " (count text) " characters]"))))
 
+(defn bound-refusal-leaf
+  "One LEAF of a refusal, bounded by what it RENDERS as.
+
+   Opus's round-nineteen item 1, blocking. Round nineteen bounded strings —
+   `(if (string? %) (bound-refusal-text %) %)` — and `core/parse-val` mints a
+   KEYWORD out of any CLI value beginning with `:` and READS any value
+   beginning with `[` or `{`, so the caller controlled a leaf the bound never
+   looked at. Measured at both real launchers: 20,287 bytes with a
+   10,001-character run and no truncation marker, under a declared refusal
+   name, one colon of difference in the caller's argument.
+
+   The reviewer's ruling, and the rule this function now states: THE BOUND IS
+   OVER THE VALUE AS PRINTED, not over one type inside it. \"It is a keyword,
+   not a string\" is the same shape of exemption as \"it belongs to no op,\"
+   and the ruling on that one applies unchanged. What a caller reads is
+   `pr-str` output, not a Java type, so `pr-str` is what is measured; a leaf
+   that renders over the ceiling comes back as the bounded TEXT of its own
+   rendering, marker and all, because a keyword truncated into a keyword is a
+   different name rather than a shortened one."
+  [x]
+  (cond
+    (coll? x) x
+    (string? x) (bound-refusal-text x)
+    :else (let [printed (pr-str x)]
+            (if (<= (count printed) max-refusal-field-chars)
+              x
+              (bound-refusal-text printed)))))
+
 (defn bound-refusal
-  "Every string in a refusal, bounded, except the continuation it carries.
+  "Every value in a refusal, bounded AS PRINTED, except the continuation.
 
    Applied at each entrance's LAST step rather than at the sites that build
    the strings, for the reason MCP-OP-CENSUS-014 gives about the continuation
    constructor: a bound enforced at some of a namespace's construction sites is
    not a bound, it is those sites' habit, and the habit does not travel to the
-   site added next round."
+   site added next round.
+
+   TWO bounds, because a leaf bound alone is not a bound on the receipt: the
+   postwalk bounds every leaf by its rendering, and then the FIELD ITSELF is
+   measured as printed, because the NUMBER of leaves is caller-controlled too
+   — `:doors \"[:a :a :a …]\"` is a vector as long as the operator cares to
+   type, every element of it small. A field that renders over the ceiling is
+   replaced by the bounded text of its own rendering, so an unbounded printed
+   receipt is not representable rather than merely unlikely."
   [refusal]
   (if-not (map? refusal)
     refusal
@@ -1192,9 +1228,11 @@
         (assoc acc k
                (if (contains? refusal-continuation-keys k)
                  v
-                 (walk/postwalk
-                   #(if (string? %) (bound-refusal-text %) %)
-                   v))))
+                 (let [walked (walk/postwalk bound-refusal-leaf v)]
+                   (if (and (not (string? walked))
+                            (> (count (pr-str walked)) max-refusal-field-chars))
+                     (bound-refusal-text (pr-str walked))
+                     walked)))))
       (empty refusal)
       refusal)))
 

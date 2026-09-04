@@ -2209,14 +2209,38 @@
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.
-   Pure: string in, value out."
+   Pure: string in, value out.
+
+   `edn/read-string`, NOT `clojure.core/read-string`, and the difference is a
+   class rather than a nicety. `clojure.core/read-string` honours `*read-eval*`,
+   which defaults to true, so the reader EVALUATES `#=(…)` in caller text —
+   demonstrated at this branch's tip through the real JVM launcher:
+
+     $ clj-surgeon :op :relation-census :dir .
+         :doors '[#=(clojure.core/println \"PWNED-ARBITRARY-EVAL\")]'
+     PWNED-ARBITRARY-EVAL
+     {:ok false, :error-type :doors-not-a-string, …}
+
+   The evaluation happened while the op was REFUSING the argument, which is
+   the tell: the reader ran before any validation could. argv is usually the
+   operator's own shell, so the blast radius is small in the ordinary case —
+   but it is not always the operator's: a wrapper, a config-driven runner or
+   an agent composing argv from a request turns a value into code, and \"the
+   caller could have run it anyway\" is an argument about the ordinary case
+   made about the one that is not.
+
+   `edn/read-string` reads the data these two branches were written for —
+   vectors, maps, sets, keywords, symbols, strings and numbers — and refuses
+   `#=`, arbitrary tagged literals and every other reader escape. A value it
+   cannot read throws, and the launcher publishes the same bounded
+   `:invalid-arguments` it already publishes for a token that does not parse."
   [s]
   (cond
     (= s "true") true
     (= s "false") false
     (.startsWith s ":") (keyword (subs s 1))
-    (.startsWith s "[") (read-string s)  ;; parse EDN vectors after shell unquoting
-    (.startsWith s "{") (read-string s)  ;; parse EDN maps
+    (.startsWith s "[") (edn/read-string s)  ;; parse EDN vectors after shell unquoting
+    (.startsWith s "{") (edn/read-string s)  ;; parse EDN maps
     :else s))
 
 (defn parse-args
