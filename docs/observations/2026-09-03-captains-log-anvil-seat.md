@@ -1839,3 +1839,5 @@ banking if codex gates review throughput.
 ## 22:15Z MEM-003 r10 landing review (Opus): NO-GO on a one-line seam — line-at-a-time matching under whitespace-tolerant patterns; the sixth round in a row where the lesson is one rung down (a formatter wraps exactly the lines a scanner reads one at a time). Round 10 building; L cells running (live feature_thread on MVR ackReply/streamAction).
 
 ## 22:30Z Held-out SMW acceptance check landed: 25 arms ACCEPT 4/4, G2 REJECT (the feature-absent arm, caught), three unchanged trees REJECT (negative controls). Every wall in the replay doc now has an independent ACCEPT beside it. Oracle shared with Astra.
+
+## 22:33Z feature_thread r12 landing review (Sol): GO — landing 508f26f5 via ~/bin/land (twelve rounds; the lane freezes after)
