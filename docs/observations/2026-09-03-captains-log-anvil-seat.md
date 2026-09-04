@@ -1244,3 +1244,5 @@ Lane trajectory: r12 NO-GO (silent partial write) → r13 GO-WITH-FIX (3) → r1
 ## 05:06Z — temp-dir ratchet verified at three entrances; one hole found and closed
 
 Login shell: TMPDIR=/var/tmp/forge, JAVA_TOOL_OPTIONS set. Through suite-run: set (the guard). The harness's own Bash tool shell: UNSET — it is non-interactive and does not read ~/.bashrc, so a fixture created directly by a Bash call (or by an agent's Bash) would still default to /tmp. Closed by putting the four variables in ~/.claude/settings.json "env", which every tool shell and every subagent inherits; takes effect for new tool calls. The lesson generalises: a rule set in a shell profile is set for the shells that read the profile, and the harness's shell is not one of them — verify at each entrance, as the census rounds taught.
+
+## 05:07Z — O2 r4 review: Sol's filter refused (first refusal on the O2 lane — the round's probes include a Long/MAX_VALUE clock, a 10 MB string and endless sequences) → Opus fallback with the identical brief. Refusal tally: eight.
