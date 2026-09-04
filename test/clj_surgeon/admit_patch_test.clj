@@ -7947,7 +7947,10 @@
              ["inline verify is spelled as JSON" "\"commands\""]
              ["with a real example" "make test"]
              ["the venue is stated" "with your patch"]
-             ["a failing command blocks the write" "blocks the write"]]]
+             ["a failing command blocks the write" "blocks the write"]
+             ;; @spec MCP-OP-SHELL-ARGV-001
+             ["no shell is ever spawned for you" "NEVER handed to"]
+             ["and the escape hatch is named" "[\"sh\", \"-c\""]]]
       (testing what
         (is (str/includes? description fragment))))))
 
