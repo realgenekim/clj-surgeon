@@ -65,7 +65,9 @@ A repo-local script, `bin/feature-thread <identifier-or-route>`, in social-media
 Do not build the verb yet; the evidence from tonight says it would lose to this caller on one thread, exactly as square 3 did twice. Build the cheap thing first — the repo-local feature-thread script with named absent legs — and run E-THREAD in one evening, meter completeness and false-complete claims, not wall. The number that changes my mind is a native arm that reports four legs as the whole thread on a hidden-leg case while the relation names the fifth: two of six and the verb earns a design round, as a relation over cheap evidence with a completeness receipt, never a JavaScript parser.
 
 
-## PARKED (04:13Z) — mayor 2350Z: HOLD; Gene replied "no send to anvil!" and the mayor cannot tell which reading he means. No builders were spent (the study is prose + one $0 Sol poll). Kept as notes; nothing further until the mayor confirms. The mayor's bead is inb-cf3866; this seat's duplicate capture inb-55e00e points at it.
+## UNPARKED (04:15Z) — Gene, verbatim: "It was intended for you. Mayor messgage for you. Go go to. Tell mayor too". The hold below is superseded; the study proceeds (script + E-THREAD, no verb).
+
+## PARKED, superseded (04:13Z) — mayor 2350Z: HOLD; Gene replied "no send to anvil!" and the mayor cannot tell which reading he means. No builders were spent (the study is prose + one $0 Sol poll). Kept as notes; nothing further until the mayor confirms. The mayor's bead is inb-cf3866; this seat's duplicate capture inb-55e00e points at it.
 
 ## Appendix — Sol's independent position, verbatim (04:13Z)
 

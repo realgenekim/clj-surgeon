@@ -1192,3 +1192,7 @@ Verdict in one line: not a new square — square 3 plus a completeness receipt; 
 ## 04:13Z — mayor 2350Z: HOLD on the feature-thread study (Gene: "no send to anvil!", ambiguous). Parked; Sol's position appended to the doc as notes; no builders spent
 
 What existed at the hold: the study doc (prose, my position), Sol's independent position ($0), the inbox capture. Nothing else started, nothing to unwind. The mayor's durable capture is inb-cf3866; mine (inb-55e00e) is a duplicate that now points at his. Gene's own message to this seat ("Did you get latest from mayor on use case ls tree?") reads as wanting the seat to have it, but the mayor holds the relay and the seat honours the hold.
+
+## 04:15Z — Gene, verbatim: "It was intended for you. Mayor messgage for you. Go go to. Tell mayor too" — the feature-thread study is GO; mayor told (4e53ecaf); E-THREAD launching
+
+Scope of "go": the study and its experimental method (the repo-local feature-thread script as the S cell, the E-THREAD cohort on social-media-writer), not a Surgeon verb — the verb is earned only by the cohort's number. social-media-writer is Gene's repo: cloned read-only; the script lives under clj-surgeon bench/feature-thread and is parameterised by the repo's conventions; nothing is committed into SMW.
