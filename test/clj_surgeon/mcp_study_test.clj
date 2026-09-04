@@ -4878,8 +4878,15 @@
     ;; one, two and three over an alphabet built from the delimiters
     ;; themselves. If the encoding is injective the label set is exactly as
     ;; large as the path set.
+    ;; @spec MCP-OP-STUDY-052 — the alphabet is EXTENDED with the segments
+    ;; the round-nine review's public attack was built from and the committed
+    ;; family could not see: the EMPTY segment, an index spelling as a string
+    ;; (`"0"`, `"00"`, `"-1"`), whitespace-only segments, and the Unicode line
+    ;; and paragraph separators. A generated family can only witness the
+    ;; characters it is given.
     (let [alphabet ["a" "a.b" "b" "." ".." "/" "~" "~0" "[" "]" "[0]" ":" "="
-                    "\\" "0" 0 1]
+                    "\\" "0" "" "00" "-1" " " "  "
+                    "\u2028" "\u2029" "\u0085" 0 1]
           paths (concat (for [x alphabet] [x])
                         (for [x alphabet y alphabet] [x y])
                         (for [x alphabet y alphabet z alphabet] [x y z]))
@@ -4892,7 +4899,79 @@
           (str "distinct paths spelled one pointer — "
                (pr-str (mapv (fn [[label group]]
                                [label (mapv first group)])
-                             duplicates)))))))
+                             duplicates))))))
+  ;; @spec MCP-OP-STUDY-052
+  ;; Field evidence (Sol O2 round-9 review, 2026-09-04, section 1): the EMPTY
+  ;; segment rendered as ZERO characters, so the leading position simply
+  ;; vanished and the distinct JSON paths `["" 0]` — an array under the empty
+  ;; top-level key — and `[0]` — the integer top-level key, published as the
+  ;; object key `"0"` — both spelled `[0]`. Abstract collision is only half of
+  ;; it: `fit-public-result` returned a FITTING 32,731-byte ordinary result
+  ;; whose text rendered one `[0]` line, named the other `[0]` on its
+  ;; `dropped:` line, and thereby declared 32 dropped where an audit of that
+  ;; same text found 31 — the one rendered line discharged both leaves.
+  (testing "a segment that renders as nothing erases the position it names"
+    (let [twin "the-same-distinctive-value-rendered-twice"
+          ;; The reviewer's two paths, asked of the encoder directly.
+          labels (mapv inspect/leaf-label [["" 0] [0]])]
+      (is (apply distinct? labels)
+          (str "the empty top-level key and the integer top-level key spell "
+               "one pointer: " (pr-str labels))))
+    ;; And the public rung the reviewer actually published from. `padding` is
+    ;; the number of filler characters spread over the tail keys; the
+    ;; reviewer's operating point — a fitting 32,731-byte pair at evidence
+    ;; allowance 237, declaring 32 against 31 audited — reproduces at 31,640
+    ;; in this parameterisation. SWEPT rather than pinned, because which
+    ;; padding lands on the one-twin allowance moves whenever the declaration
+    ;; changes size.
+    (let [twin "the-same-distinctive-value-rendered-twice"
+          build (fn [padding]
+                  (merge {:ok true :operation "inspect_clojure" :mode "outline"
+                          :request_count 1 :file_count 0
+                          :source_character_count 0 :read_complete true
+                          "" [twin]
+                          0 twin}
+                         (into {}
+                               (for [i (range 22)]
+                                 [(keyword (str "tail" i))
+                                  (apply str
+                                         (repeat (quot padding 22)
+                                                 (char (+ 97 (mod i 26)))))]))))
+          ;; DECLARED is read out of the PUBLISHED text's own header, not
+          ;; re-derived from a `fact-block` this rung may never have built:
+          ;; MCP-OP-STUDY-047 states the guarantee about `X of N rendered` on
+          ;; the text the caller receives, and the `notice` rung has no
+          ;; allowance to rebuild a block from.
+          report (fn [padding]
+                   (let [fitted (inspect-tool/fit-public-result
+                                  (clocked (build padding)))
+                         text (inspect-tool/inspect-summary
+                                (assoc fitted :elapsed_ms 0.0))
+                         [_ shown total] (re-find
+                                           #"receipt facts · (\d+) of (\d+) rendered"
+                                           text)]
+                     {:padding padding
+                      :bytes (inspect-tool/mcp-result-byte-count text fitted)
+                      :limit (:text_evidence_limit fitted)
+                      :omitted (:text_omitted fitted)
+                      :declared (- (Long/parseLong total) (Long/parseLong shown))
+                      :audited (count (inspect/uncarried-leaves text fitted))
+                      :text text}))]
+      (doseq [padding (range 31600 31760 10)]
+        (testing (str "padding " padding)
+          (let [r (report padding)]
+            (is (= (:declared r) (:audited r))
+                (format (str "padding %d: a %d-byte public result at "
+                             "evidence allowance %s declared %d dropped "
+                             "against %d audited; text %s")
+                        padding (:bytes r) (pr-str (:limit r))
+                        (:declared r) (:audited r) (pr-str (:text r)))))))
+      (testing "the reviewer's exact operating point"
+        (let [r (report 31640)]
+          (is (nil? (:omitted r)) "the reviewer's rung is an ordinary result")
+          (is (= (:declared r) (:audited r))
+              (format "declared %d against audited %d; text %s"
+                      (:declared r) (:audited r) (pr-str (:text r)))))))))
 
 ;; @spec MCP-OP-STUDY-053
 ;; Field evidence (Sol O2 round-7 review, 2026-09-04, section 3): a receipt
