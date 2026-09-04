@@ -41,6 +41,35 @@ before the andon hardening — which is why the eight conflicts exist at all.
 figure below was measured at `1bb0c9d`; `fc2efb6` adds only this document. The tip was re-checked
 after pushing and corrected here rather than by amending a pushed commit.
 
+## The trunk moved again while this was composed — and it does not touch this branch
+
+Re-checked at 04:1xZ, after the push:
+
+```
+git rev-parse origin/MCP/main   -> 48fbd48ef7deabd116d9a511f6bc5705e7527111   (5 commits past a730a54)
+git merge-base --is-ancestor a730a54 origin/MCP/main   -> yes
+git diff --name-only a730a54 origin/MCP/main
+docs/observations/2026-09-03-captains-log-anvil-seat.md
+docs/observations/2026-09-03-merge-queue-for-mayor.md
+docs/observations/census-round18-rereview-sol.md
+docs/observations/fanout-scorer-round2-review-sol.md
+docs/observations/mem003-second-landing-round2-review-sol.md
+docs/observations/q5z-round13-rereview-sol.md
+docs/observations/study-ops-o2-round3-review-sol.md
+```
+
+All five are docs-only seat records; the intersection with the eight conflicted files (and with
+`mcp_intent_contract_test.clj`) is **empty**, and no `src/`, `test/` or `Makefile` byte moved. A
+dry-run merge onto the newer tip is clean:
+
+```
+git merge-tree --write-tree HEAD origin/MCP/main   -> 8ad3befa41bba250372a1c8d2c564cf131fac92a, exit 0, 0 CONFLICT lines
+```
+
+So every gate figure in this record still describes the tree that would land. If `MCP/main` moves
+again into `src/`, `test/` or the `Makefile` before the merge, re-run at least the mcp-test suite
+and the admit gate before landing.
+
 ## Merge table — every conflict and its resolution
 
 Not one conflict is a disagreement about behaviour. Every one is a **list both lanes appended
