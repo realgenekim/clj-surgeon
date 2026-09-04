@@ -516,7 +516,65 @@
 
         :else nil))))
 
+;; @spec MCP-OP-CENSUS-018
+(defn census-workspace
+  "The tree a CLI census is over, canonical, or nil when it does not resolve.
+
+   Sol's round-eighteen item 2, blocking. Every read this op performs is now
+   confined to this one answer, and the answer has to exist before the fence
+   can ask its containment question at all.
+
+   The workspace is the tree THE REQUEST NAMED:
+
+   - `:dir` when the request gives one — the same `census-root` the walk is
+     confined to, so a named `:file` and a walked member are measured against
+     one fence and cannot disagree;
+   - the `:file` ITSELF when the request names only a file, because a request
+     that names one source is a census over exactly that source. Its workspace
+     is the location the caller typed with every link ABOVE the final component
+     resolved: the parent chain is the box's business, the final component is
+     the request's. A link at that final component therefore leaves the
+     one-file workspace, and is refused — which is the honest answer, since
+     there is no tree in the request for the target to be inside of.
+
+   Returns a `java.nio.file.Path`, never a string, because containment is a
+   path-prefix question and `startsWith` on strings answers a different one
+   (`/a/bc` starts with `/a/b`)."
+  [dir file]
+  (try
+    (if (and (nil? dir) (string? file) (not (str/blank? file)))
+      (let [named (.toPath (java.io.File. (str (fs/absolutize file))))
+            parent (.getParent named)]
+        (when parent
+          (.resolve (.toRealPath parent (make-array java.nio.file.LinkOption 0))
+                    (.getFileName named))))
+      (.toRealPath (.toPath (java.io.File. (census-root dir)))
+                   (make-array java.nio.file.LinkOption 0)))
+    (catch Exception _ nil)))
+
+;; @spec MCP-OP-CENSUS-018
+(defn escaping-source
+  "The REAL path of `path`, when it resolves outside `workspace`; else nil.
+
+   `toRealPath` resolves EVERY link in the path, so a chain, an absolute
+   target and a link into a sibling workspace are one question with one answer
+   — a containment test that stops after one hop passes all three, which is
+   why the witness drives all three.
+
+   Returns the real path so the caller can decide what to say about it; what
+   the caller must NOT do is publish it. The target is a fact about the box,
+   the link is the fact about the request, and MCP-OP-CENSUS-014 has said since
+   round sixteen which of those a refusal may name."
+  [^java.nio.file.Path workspace path]
+  (when workspace
+    (try
+      (let [real (.toRealPath (.toPath (java.io.File. (str path)))
+                              (make-array java.nio.file.LinkOption 0))]
+        (when-not (.startsWith real workspace) real))
+      (catch Exception _ nil))))
+
 ;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-018
 ;; @spec MCP-OP-CENSUS-019
 (defn census-source-refusal
   "THE ONE FENCE every path this op reads passes through, before any open.
@@ -550,8 +608,18 @@
      on stdout and no diagnostic. Asked AFTER existence so a path that is not
      there is still reported as missing;
    - READABILITY last, so a directory is reported as a directory rather than as
-     a permission problem, and before anything opens it."
-  [path]
+     a permission problem, and before anything opens it.
+
+   Sol's round-eighteen item 2, blocking: CONTAINMENT, asked between existence
+   and regularity, exactly where `mcp-paths/resolve-source-path` asks it. This
+   fence had no containment question at all, so a `:file` naming a link under
+   the workspace published the bytes of the file it pointed at outside the
+   workspace — while the walk, one branch over, counted the identical link
+   `skipped-outside-root` and read nothing. After existence, because a link
+   that resolves to nothing is missing and not an escape; before regularity,
+   because what a path outside the workspace IS is not this census's business
+   to report."
+  [^java.nio.file.Path workspace path]
   (let [given (str path)
         absolute (str (fs/absolutize given))]
     (cond
@@ -572,6 +640,17 @@
         {:error-type :file-not-found
          :cause :not-found
          :error (str given " does not exist")})
+
+      ;; The link is named as the request spelled it; the TARGET is never
+      ;; named, here or in the remedy. MCP-OP-CENSUS-014: a refusal that
+      ;; publishes where a link points has told the caller a fact about the
+      ;; box in the course of refusing to tell them one.
+      (escaping-source workspace absolute)
+      {:error-type :file-outside-workspace
+       :cause :outside-project
+       :error (str given " resolves outside the workspace this census is "
+                   "over, so reading it would answer about a tree the "
+                   "request did not name")}
 
       (not (fs/regular-file? absolute))
       {:error-type :file-not-a-regular-file
@@ -641,6 +720,13 @@
   ([dir file {:keys [declared?]}]
    (let [discovered (when-not file (census-discovery/discover (census-root dir)))
          root (or (:root discovered) (census-root dir))
+         ;; The tree every read below is confined to. For a walk it is the
+         ;; canonical root the kernel already walked; for a `:file` request it
+         ;; is what the request named. ONE answer, computed once, handed to
+         ;; the fence on every member — a containment rule that lives in one
+         ;; branch is a rule the other branches break, which is precisely how
+         ;; the walk came to be confined and the `:file` branch not.
+         workspace (census-workspace dir file)
          relative #(str (fs/relativize root %))
          paths (if file
                  [(str (fs/absolutize file))]
@@ -698,7 +784,7 @@
              ;; first refusable path is what the MCP entrance's `collect-inputs`
              ;; does, for the same reason: nothing after it can be trusted
              ;; either, and the refusal names the one the walk tripped on.
-             (if-let [refused (census-source-refusal p)]
+             (if-let [refused (census-source-refusal workspace p)]
                (reduced (assoc acc :unreadable
                                (assoc refused
                                       :file (shown p)
@@ -863,7 +949,8 @@
         ;; the shape pass to touch nothing, and a `let` binding is forced
         ;; before the first `cond` branch is tested.
         named-refusal (delay (when (string? file)
-                               (census-source-refusal file)))
+                               (census-source-refusal
+                                 (census-workspace dir file) file)))
         scan (delay (census-sources dir file {:declared? want-declared?}))
         ;; ONE fact bundle, published by EVERY receipt shape below that got as
         ;; far as a scan — success, no-fold-arms-found and every refusal. The
@@ -939,6 +1026,20 @@
                         "a request and no narrower command can be computed: "
                         "name a source that exists with :file, or point :dir "
                         "at a directory to census its tree.")
+
+                   ;; Sol's round-eighteen item 2. The remedy names the LINK
+                   ;; and the two things the caller can do about it, and never
+                   ;; where the link points: a refusal that publishes the
+                   ;; target has told the caller a fact about the box in the
+                   ;; course of refusing to tell them one.
+                   :file-outside-workspace
+                   (str file " resolves outside the workspace this census is "
+                        "over, and a census is a completeness claim about a "
+                        "named tree, so reading it would answer about a tree "
+                        "the request did not name and no narrower command can "
+                        "be computed: name the tree that source really lives "
+                        "in with :dir, or name a source whose real path stays "
+                        "inside the tree you are censusing.")
 
                    :file-not-a-regular-file
                    (str file " is not a regular file — a directory, a named "

@@ -3182,7 +3182,13 @@
                ;; reached `slurp` and threw "(Is a directory)". The FIFO of the
                ;; same class is driven by its own witness, under a deadline: a
                ;; drive that blocks belongs nowhere near a shared fixture.
-               :dir-named-clj (io/file parent "dirfile/src/a/thing.clj")}]
+               :dir-named-clj (io/file parent "dirfile/src/a/thing.clj")
+               ;; Sol's round-eighteen item 2: a link UNDER a workspace whose
+               ;; real path leaves it. Its own tree for the same reason the
+               ;; denied source has one — inside `workspace` the walk would
+               ;; count it `skipped-outside-root` and every other drive's
+               ;; figures would change.
+               :escaping (io/file parent "escaping")}]
     (spit-file! (io/file (:workspace trees) "src/a/one.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/two.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/three.clj") arm-source)
@@ -3192,11 +3198,17 @@
     (spit-file! (:denied-file trees) arm-source)
     (deny-reads! (:denied-file trees))
     (.mkdirs ^java.io.File (:dir-named-clj trees))
+    (spit-file! (io/file (:escaping trees) "src/a/real.clj") arm-source)
+    (spit-file! (io/file parent "beyond/target.clj") arm-source)
+    (Files/createSymbolicLink
+      (.toPath (io/file (:escaping trees) "src/a/link.clj"))
+      (.toPath (io/file "../../../beyond/target.clj"))
+      (make-array FileAttribute 0))
     trees))
 
 (defn- cli-refusal-drives
   "One drive per refusal `census/cli-refusal-types` declares the op can emit."
-  [{:keys [workspace empty-ws broken denied-file dir-named-clj]}]
+  [{:keys [workspace empty-ws broken denied-file dir-named-clj escaping]}]
   (let [named #(.getCanonicalPath ^java.io.File %)]
     (concat
       ;; Every row of the shared table the CLI can express, driven
@@ -3264,6 +3276,16 @@
         :root workspace
         :expect-anchor (.getCanonicalPath ^java.io.File dir-named-clj)
         :opts {:file (.getCanonicalPath ^java.io.File dir-named-clj)}}
+       ;; Sol's round-eighteen item 2: a NAMED source whose real path leaves
+       ;; the workspace the request named, enumerated so it cannot ship
+       ;; unexercised. The anchor is the file the caller named, like every
+       ;; other `:file` row.
+       {:label :file-outside-workspace
+        :error-type :file-outside-workspace
+        :root escaping
+        :expect-anchor (str (named escaping) "/src/a/link.clj")
+        :opts {:dir (named escaping)
+               :file (str (named escaping) "/src/a/link.clj")}}
        {:label :no-fold-arms-found
         :error-type :no-fold-arms-found
         :root empty-ws
@@ -6917,10 +6939,22 @@
                     (str shape " " entrance ": offers no remedy"))))
 
             (testing (str shape ": the tool names the link relative to the workspace")
-              (is (= path (:path tool))
-                  (str shape ": the tool named " (pr-str (:path tool))))
-              (is (not (str/includes? (json/generate-string tool) named))
-                  (str shape ": the tool published its absolute root")))))
+              (is (= path (:file tool))
+                  (str shape ": the tool named " (pr-str (:file tool))))
+              (is (= [path] (:files_removed tool))
+                  (str shape ": the tool narrowed to "
+                       (pr-str (:files_removed tool))))
+              ;; `workspace_root` is the request's own IDENTIFYING target and
+              ;; carries the absolute root by contract — the same exception the
+              ;; CLI's `:anchor` and every continuation carry, and the reason
+              ;; the round-nineteen item-4 witness scopes its claim to PROSE.
+              ;; Every other field is checked here.
+              (is (not (str/includes?
+                         (json/generate-string (dissoc tool :workspace_root))
+                         named))
+                  (str shape ": the tool published its absolute root outside "
+                       "workspace_root: "
+                       (pr-str (dissoc tool :workspace_root)))))))
 
         (testing "a link that stays INSIDE is followed by the walk and by :file"
           (let [inside (str named "/src/app/inside.clj")
