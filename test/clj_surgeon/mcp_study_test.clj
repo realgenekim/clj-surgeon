@@ -4565,3 +4565,102 @@
         "the rendering still declares what it dropped")
     (is (= (- (:total counts) (:shown counts)) (count audited))
         "and the declared count is still the audited count")))
+
+;; ============================================================
+;; O2 ROUND 7 — a pointer spells the leaf's ADDRESS, never its VALUE
+;; (Sol O2 round-6 review, §2)
+;; ============================================================
+;; A public rung declared 23 omitted facts while its own product audit found
+;; 19. The mechanism is a coincidence the two sides of the guarantee resolve
+;; DIFFERENTLY: a leaf whose distinctive value equals its own JSON pointer is
+;; declared dropped by `fact-block`, and then the `dropped:` line that names
+;; it spells those same characters — so the substring carriage test finds the
+;; value in the published text and `uncarried-leaves` calls the leaf carried.
+;; The declaration and the audit disagree BY CONSTRUCTION, which is the one
+;; thing MCP-OP-STUDY-047 exists to forbid.
+;;
+;; The repair is a single carriage rule both sides read: a leaf is carried
+;; when the text contains the WHOLE LINE the renderer emits for THAT leaf —
+;; `  <pointer>: <value>` or `  <pointer>=<value>` — and by nothing else. A
+;; pointer occurring inside a declaration is an address, not a value.
+
+(defn- pointer-valued-receipt
+  "A finalized receipt whose leaves' distinctive values are their own JSON
+   pointers. Sixteen characters each: distinctive under
+   `min-distinctive-spelling`, and identical to the pointer the `dropped:`
+   line would name them by."
+  [n]
+  (clocked (merge {:ok true
+                   :operation "inspect_clojure"
+                   :read_complete true
+                   :next_action "none"
+                   :source_character_count 0
+                   :request_count 1
+                   :file_count 1
+                   :results []}
+                  (into {}
+                        (map (fn [i]
+                               (let [pointer (format "pointervalue%04d" i)]
+                                 [(keyword pointer) pointer])))
+                        (range n)))))
+
+;; @spec MCP-OP-STUDY-051
+(deftest a-dropped-pointer-is-not-carriage-of-the-value-it-names
+  ;; The mechanism in one leaf, with no budget arithmetic around it: a leaf
+  ;; whose value IS its pointer, dropped, and then named as dropped.
+  (let [spelling "abcdefghijklmnop"
+        result {(keyword spelling) spelling}
+        block (inspect/fact-block "structural" result 0)
+        section (inspect/fact-section block)
+        text (str "structural\n" section)
+        audited (inspect/uncarried-leaves text result)]
+    (is (= 1 (count (:dropped-labels block)))
+        "PRECONDITION: at allowance 0 the one leaf is dropped")
+    (is (str/includes? (or section "") (str "dropped: " spelling))
+        "PRECONDITION: and the declaration names it by that pointer")
+    (is (= (count (:dropped-labels block)) (count audited))
+        (format (str "the block declares %d dropped while the audit finds %d "
+                     "uncarried: the `dropped:` pointer satisfied the value's "
+                     "own carriage test; section %s")
+                (count (:dropped-labels block)) (count audited)
+                (pr-str section)))))
+
+;; @spec MCP-OP-STUDY-051
+;; @spec MCP-OP-STUDY-047
+(deftest the-name-rung-declares-exactly-what-its-own-audit-finds
+  ;; The reviewer's public reproduction, made deterministic: the `name` rung
+  ;; is the shortest text the tool publishes, it declares every leaf, and on
+  ;; a receipt of pointer-valued leaves its declaration and its audit must
+  ;; still be one number.
+  (let [result (pointer-valued-receipt 20)
+        text (inspect/minimum-text-block result)
+        counts (declared-fact-counts text)
+        audited (inspect/uncarried-leaves text result)
+        audited-labels (set (map (fn [[path _]] (inspect/leaf-label path))
+                                 audited))
+        declared (- (:total counts) (:shown counts))]
+    (is (some? counts) "PRECONDITION: the name rung declares its omissions")
+    (is (pos? declared) "PRECONDITION: and this receipt omits leaves")
+    (is (= declared (count audited))
+        (format (str "the name rung declares %d omitted facts while its own "
+                     "audit finds %d; the leaves it counts as carried are "
+                     "named by the `dropped:` line and rendered nowhere: %s")
+                declared (count audited)
+                (pr-str (sort (remove audited-labels
+                                      (map (fn [[path _]]
+                                             (inspect/leaf-label path))
+                                           (inspect/receipt-leaf-pairs result))))))))
+  ;; And on every rung of the same fixture, not only the one that fails today.
+  (doseq [n [1 2 5 20]]
+    (testing (str n " pointer-valued leaves")
+      (let [result (pointer-valued-receipt n)]
+        (doseq [allowance [0 1 64 256 4096]]
+          (testing (str "allowance " allowance)
+            (let [block (inspect/fact-block "" result allowance)
+                  text (or (inspect/fact-section block) "")]
+              (is (= (count (:dropped-labels block))
+                     (count (inspect/uncarried-leaves text result)))
+                  (format "declared %d against audited %d at allowance %d"
+                          (count (:dropped-labels block))
+                          (count (inspect/uncarried-leaves text result))
+                          allowance)))))))))
