@@ -819,10 +819,14 @@
            digest and every deterministic resource fact live. The measured
            scan cost beside them is expected to differ between two scans and
            is exactly what may not be compared.")
-      (is (not= a-edn b-edn)
-          "and the meter is NOT dark: the unprojected results DO differ, so
-           this witness is comparing a projection and not an equality that
-           holds for the trivial reason")
+      ;; Anti-vacuity, and DETERMINISTIC rather than temporal: the measured
+      ;; field is THERE unprojected and GONE projected. Asserting that two
+      ;; clocks disagreed would be a flake on a twelve-file fixture.
+      (is (some? (get-in (last a-edn) [:receipt :resources :measured :scan_ms]))
+          "the meter is dark: deleting scan_ms would satisfy every determinism
+           row on this branch and silently lose MCP-OP-MEM-005")
+      (is (nil? (get-in (last (hashed a-edn)) [:receipt :resources :measured]))
+          "the projection left the measured block inside the hashed channel")
       (is (= 1 (count (snapshot-ids dir)))
           "an unchanged tree pins ONE snapshot however often it is scanned;
            four identical scans used to leave four snapshots")

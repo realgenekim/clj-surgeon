@@ -15,6 +15,7 @@
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.core :as core]
+   [clj-surgeon.measured :as measured]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
@@ -179,8 +180,25 @@
             actual-edn (core/run-ls-tree {:dir dir :format :edn})]
         (is (= expected-text actual-text)
             (str dir ": streamed text differs from the batch text"))
-        (is (= expected-edn actual-edn)
+        ;; @spec MCP-OP-MEM-003
+        ;; On the HASHED CHANNEL. Both encoders publish the scan's own
+        ;; wall-clock cost (MCP-OP-MEM-005, unconditional), and two scans of
+        ;; one tree are expected to differ in it; the measured field is
+        ;; published beside the result and is never the subject of a parity
+        ;; claim. See `clj-surgeon.measured`.
+        (is (= (measured/hashed-channel expected-edn)
+               (measured/hashed-channel actual-edn))
             (str dir ": streamed EDN differs from the batch EDN"))
+        ;; Anti-vacuity, and DETERMINISTIC rather than temporal: assert the
+        ;; measured field is THERE unprojected and GONE projected, not that
+        ;; two clocks happened to disagree. A witness that depends on two
+        ;; scans taking different amounts of time is a flake.
+        (is (some? (get-in (last actual-edn)
+                           [:receipt :resources :measured :scan_ms]))
+            (str dir ": the meter is dark — nothing was published to project"))
+        (is (nil? (get-in (last (measured/hashed-channel actual-edn))
+                          [:receipt :resources :measured]))
+            (str dir ": the projection left the measured block in place"))
         (is (= (mapv :file expected-edn) (mapv :file actual-edn))
             (str dir ": record ORDER differs"))))))
 
