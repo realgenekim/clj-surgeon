@@ -7658,3 +7658,76 @@
         (is (some? (:payload_omitted_bytes receipt))
             "and still reports the JSON figure beside it"))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round sixteen: the input contract measured in the field
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-154
+(deftest a-workspace-with-no-verification-profile-is-admissible-in-one-call
+  (testing "the missing-profile refusal begins with the words and names the call"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "focused"})]
+          (is (false? (:ok result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (= :no-focused-test-profile (get-in result [:tests :reason])))
+          (is (str/starts-with? (str (:error result))
+                                "this workspace has no verification profile")
+              (str "the refusal's first words name the state, not an internal "
+                   "repair verb: " (pr-str (:error result))))
+          (is (str/includes? (str (:error result)) "\"commands\"")
+              "the refusal spells the one call that supplies the profile")
+          (is (map? (get-in result [:next_call :arguments :verify]))
+              "the follow-up proposes the inline shape, not the word that failed")
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root)))))
+  (testing "the caller's own commands run inside the snapshot and admit the patch"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [marker "GATE16-INLINE-MARKER"
+              result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands
+                                 [["sh" "-c"
+                                   (str "grep -q 'fnil inc 0' src/app/core.clj"
+                                        " && echo " marker)]
+                                  "true"]}})]
+          (is (:ok result) (pr-str (:error result)))
+          (is (true? (:committed result)))
+          (is (true? (:verification_complete result)))
+          (is (= "inline" (get-in result [:tests :verify_mode])))
+          (let [rows (get-in result [:tests :commands])]
+            (is (= 2 (count rows)) (pr-str rows))
+            (is (zero? (long (:exit (first rows)))))
+            (is (str/includes? (str (:output_tail (first rows))) marker)
+                "the receipt carries the command's own last lines verbatim")
+            (is (str/includes? (str (:command (first rows))) "fnil inc 0")
+                "the receipt names each command as the caller gave it"))
+          (is (str/includes? (slurp (io/file root "src/app/core.clj"))
+                             "(fnil inc 0)")))
+        (finally (delete-tree! root)))))
+  (testing "a command that verifies the WORKSPACE rather than the snapshot fails"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands
+                                 [["sh" "-c"
+                                   "grep -q ':ticks inc)' src/app/core.clj"]]}})]
+          (is (false? (:ok result))
+              "the pre-image text is gone from the snapshot the commands see")
+          (is (false? (:committed result)))
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root))))))
