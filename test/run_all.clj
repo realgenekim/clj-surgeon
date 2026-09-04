@@ -25,6 +25,7 @@
    [clj-surgeon.install-test]
    [clj-surgeon.intent-transaction-test]
    [clj-surgeon.lens-query-test]
+   [clj-surgeon.measured-channel-test]
    [clj-surgeon.memory-battery-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
@@ -68,6 +69,7 @@
                    'clj-surgeon.structural-lens-test
                    'clj-surgeon.syntax-var-refs-test
                    'clj-surgeon.lens-query-test
+                   'clj-surgeon.measured-channel-test
                    'clj-surgeon.memory-battery-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test
