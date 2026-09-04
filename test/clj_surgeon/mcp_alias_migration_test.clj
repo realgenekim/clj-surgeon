@@ -4599,3 +4599,80 @@
           "a wide fact was dropped rather than elided")
       (is (str/includes? text "…")
           "a wide fact was rendered whole past the per-fact bound"))))
+
+;; @spec MCP-OP-ALIAS-058
+;; @spec MCP-OP-ALIAS-059
+(defn- root-listing-suggestion
+  "A `root-sizes` input whose entries render at exactly the given lengths.
+
+  Synthetic rather than a tree, because the subject is the ARITHMETIC of the
+  listing budget and a tree can only approach its edges. Each entry is
+  `<pattern> (9)`, so a pattern of `length - 4` characters renders at `length`,
+  and no entry reaches `max-refusal-field-characters` and elides."
+  [lengths]
+  (let [patterns (vec (map-indexed
+                        (fn [index length]
+                          (str (char (+ (int \a) index))
+                               (apply str (repeat (- length 5) \x))))
+                        lengths))]
+    {:ranked patterns
+     :counts (into {} (map (fn [pattern] [pattern 9])) patterns)}))
+
+;; @spec MCP-OP-ALIAS-058
+;; @spec MCP-OP-ALIAS-059
+(deftest the-root-listing-charges-its-own-marker-against-its-own-ceiling
+  ;; Round-thirteen review finding 1: `root-sizes` budgets only the entries it
+  ;; RETAINS and then appends `… [+N more roots …]` for free, so the marker is
+  ;; a fifth item nobody charged and the advertised sub-bound is broken by the
+  ;; very thing that announces it.
+  ;;
+  ;;   root-list items/rendered/ceiling => 5 528 512
+  ;;   root-list marker? => true
+  ;;   root-list within ceiling? => false
+  ;;
+  ;; Six ordinary roots rendering 116 characters each retain four entries and
+  ;; render 528. A bound that stops counting one item before the end is not a
+  ;; bound; it is a bound plus whatever the last item costs.
+  (let [ceiling alias-migration/max-refusal-root-list-characters
+        rendered-of (fn [lengths]
+                      (alias-migration/root-sizes
+                        (root-listing-suggestion lengths)))
+        marker? (fn [listing]
+                  (boolean (some #(str/includes? % "more roots") listing)))]
+    (testing "the review's own six 116-character roots"
+      (let [listing (rendered-of (repeat 6 116))
+            rendered (pr-str listing)]
+        (is (marker? listing)
+            (str "six roots past the budget dropped entries in silence: "
+                 (pr-str listing)))
+        (is (<= (count rendered) ceiling)
+            (str "the root listing renders " (count rendered)
+                 " characters, past its ceiling of " ceiling
+                 " — the marker is appended after the budget rather than "
+                 "charged against it"))))
+    (testing "at exactly the ceiling the listing is published whole"
+      ;; four entries of 125, 125, 125 and 124 characters render, as a vector
+      ;; of strings, at exactly 512 with no marker: every root fits, so no
+      ;; root is dropped and the listing says nothing about dropping any.
+      (let [listing (rendered-of [125 125 125 124])
+            rendered (pr-str listing)]
+        (is (= 512 (count rendered))
+            (str "a listing that renders exactly the ceiling was cut to "
+                 (count rendered) " characters — the budget is short by the "
+                 "marker it never charged"))
+        (is (= 4 (count (filter #(str/ends-with? % " (9)") listing)))
+            (str "a listing that fits whole dropped roots: " (pr-str listing)))
+        (is (not (marker? listing))
+            (str "a listing that dropped nothing claimed it dropped roots: "
+                 (pr-str listing)))))
+    (testing "one character past the ceiling the listing is cut and says so"
+      (let [listing (rendered-of [125 125 125 125])
+            rendered (pr-str listing)]
+        (is (<= (count rendered) ceiling)
+            (str "the cut listing renders " (count rendered)
+                 " characters, past its ceiling of " ceiling))
+        (is (marker? listing)
+            (str "the listing dropped roots in silence: " (pr-str listing)))
+        (is (str/includes? (last listing) "+1 more roots")
+            (str "the marker names the wrong number of dropped roots: "
+                 (pr-str (last listing))))))))
