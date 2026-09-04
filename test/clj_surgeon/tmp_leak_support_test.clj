@@ -96,6 +96,26 @@
         (is (true? (tmp-leak/sweep-root! ours)))
         (is (not (.exists ours)))))))
 
+;; @spec MCP-OP-TMPHYG-010
+(deftest no-gate-names-a-hard-coded-ram-path
+  (testing "a refusal at the runner is worthless if the gates around it create
+            directories in RAM by name. `${TMPDIR:-...}` forms and prose
+            mentions of /tmp are not matches; only a literal /tmp/<name> used
+            as a path is, and `/home/x/tmp/y` is not one."
+    (let [pattern #"(?:^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]"
+          files (cons (io/file "Makefile")
+                      (filter #(str/ends-with? (.getName ^java.io.File %) ".sh")
+                              (.listFiles (io/file "test"))))
+          offenders (for [^java.io.File f files
+                          :when (.exists f)
+                          [n line] (map-indexed (fn [i l] [(inc i) l])
+                                                (str/split-lines (slurp f)))
+                          :when (and (re-find pattern line)
+                                     (not (str/includes? line "TMPDIR:-/tmp")))]
+                      (str (.getPath f) ":" n ": " (str/trim line)))]
+      (is (empty? offenders)
+          (str "hard-coded /tmp write targets: " (pr-str (vec offenders)))))))
+
 (deftest tmpfs-predicate-tells-ram-from-disk
   (testing "/dev/shm is tmpfs-backed -- this is what secure-tmpdir! refuses on"
     (is (true? (tmp-leak/tmpfs? "/dev/shm"))))

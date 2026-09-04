@@ -217,6 +217,10 @@ clj-kondo-admission-path-self-test:
 # cannot be witnessed from inside a clojure.test run.
 tmp-leak-ratchet-self-test:
 	@# @spec MCP-OP-TMPHYG-003
+	@# @spec MCP-OP-TMPHYG-004
+	@# @spec MCP-OP-TMPHYG-006
+	@# @spec MCP-OP-TMPHYG-007
+	@# @spec MCP-OP-TMPHYG-008
 	@sh test/tmp_leak_ratchet_test.sh
 
 # @spec MCP-OP-ADMIT-130
