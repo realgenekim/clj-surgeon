@@ -5831,7 +5831,7 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def ^:private frozen-refusal-kinds
-  "The 143 kinds the entrance's enumeration holds on the MCP/main landing (139 at 51da9446 + four trunk kinds).
+  "The 145 kinds the entrance's enumeration holds on the MEM-003 landing (139 at 51da9446 + four trunk kinds + two measured-partition kinds).
 
   A PIN, not a source: `refusal-kinds-in-source` stays derived, and this set
   exists so that a change to the derivation is LOUD. Round sixteen shipped a
@@ -5844,6 +5844,13 @@
     ;; re-pinned at the MCP/main landing (2026-09-04): four kinds the trunk publishes (the admit-gate
     ;; and parser-admission landings) that the branch never saw — 139 → 143
     "expect-matched-invalid-pattern" "expect-matched-stale" "expect-matched-unreadable-source" "parser-admission-refused"
+    ;; re-pinned again on the MEM-003 merge (2026-09-04): the enumeration is a property of the
+    ;; COMPOSITION, not of either side. Neither parent produced 145 — the trunk pinned 143 without
+    ;; the measured partition, and the branch pinned 143 without q5z's four. These two are the
+    ;; measured landing's own typed refusals, reachable from the entrance because every entrance now
+    ;; finalizes through `mcp-operation/finalize-result`: `invalid-measured-start` (measured.clj:259,
+    ;; a start that is not a reading) and `unpartitioned-measured-field` (mcp_operation.clj:60, a
+    ;; clock-derived value found outside the `measured` block at the publication boundary). 143 → 145.
     "alias-migration-alias-policy-exhausted"
     "alias-migration-ambiguous-ownership"
     "alias-migration-discovery-incomplete" "alias-migration-empty-scope"
@@ -5886,6 +5893,7 @@
     "invalid-exact-verification-profile" "invalid-expect"
     "invalid-hot-verification-port" "invalid-hot-verification-profile"
     "invalid-mcp-elapsed-time" "invalid-mcp-operation-result"
+    "invalid-measured-start"
     "invalid-mcp-request" "invalid-operation-context"
     "invalid-operation-outcome" "invalid-plan" "invalid-plan-out"
     "invalid-process-deadline" "invalid-query" "invalid-replacement"
@@ -5906,7 +5914,8 @@
     "transaction-write-exception" "transaction-write-failed"
     "unchanged-basis-decision" "unknown-buffer-site"
     "unknown-or-expired-basis" "unknown-or-expired-verification-job"
-    "unknown-verification-profile" "unsupported-arguments"
+    "unknown-verification-profile" "unpartitioned-measured-field"
+    "unsupported-arguments"
     "unsupported-buffer-context" "unsupported-plan-operation"
     "unsupported-plan-version" "verification-baseline-failed"
     "verification-failed" "verification-job-workspace-mismatch"
@@ -5919,7 +5928,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 143 (count kinds))
+    (is (= 145 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
