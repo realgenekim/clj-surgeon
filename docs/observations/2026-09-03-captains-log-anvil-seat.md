@@ -1540,3 +1540,12 @@ byte-identically. Round nine asks Sol for a ninth collision and for value-side i
 "unreproduced failures under load" disclosure (feature_thread r6: 3; study-ops r8: 6); both reviews re-run mcp-test twice on
 fresh clones. If both come back clean the shared cause is the box at load 11 with three seats, and the fix is scheduling,
 not code; if either reproduces, it is a defect and the lane holds.
+
+## 14:59Z MEM-003 round seven built (a2a15cc0); Sol round-eight review launched
+
+The round's own lesson, in the builder's words: a floor entry and a derived property can catch the same plant, and when
+they do the plant witnesses the floor, not the property — a plant meant to witness a derivation has to name something the
+floor does not. That is how round six's dot-form fix read green while untested (sabotage S2 stayed green). Same class as the
+night's memory (scanner-brief-names-vs-spellings): the round-eight brief asks Sol to plant six forms that name nothing. Also
+recorded honestly by the builder: nine commits after a conflicted merge carry a red suite because `git commit` after
+`git add` commits the index, and two later fixes were never staged; first green commit ec143202.
