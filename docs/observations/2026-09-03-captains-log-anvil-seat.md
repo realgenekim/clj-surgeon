@@ -1743,3 +1743,13 @@ through admit_clojure_patch as one call (patches + the named verify), receipt in
 same gate mandated and no receipt. Pre-registration: G raw ≤ 12, agent-run suite invocations 0 (the gate runs them), wall
 < 4 min; withdrawal if G raw > 18 or the gate refuses the agent's patch twice on the same reason (then the finding is the
 gate's contract, not the claim).
+
+## 20:11Z suite spike round two: the merge gate 717 s → 150 s (fast lane 30 s); four clones at once 12/12 green; Sol review launched
+
+Round two's own defects were all caught by gates, never by reading: the four-clone battery caught `isolate-home?` keyed on
+one spelling (fast alone isolated, the merge gate not, a witness asserting otherwise) — the same class as doctrine
+disagreeing with the installed prompt; the repo's existing tmp-leak ratchet caught the fix's refusal-ordering regression
+within the hour. Six race sites, not two; the last two inverted the lesson (a generous ceiling cannot fix "the other party
+had already left"). Nothing dropped: 885/13128 = 865/13023 + exactly the twenty new witnesses. Rename to know:
+make test-fast is now the JVM fast lane; the bb lane is make test-bb. Independent Sol review on the fresh clone
+suite-wt; on GO it lands and round three (GHA, ledger + tripwire, runtime witnesses) follows.
