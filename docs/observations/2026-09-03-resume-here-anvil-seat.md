@@ -416,3 +416,27 @@ Mayor: draining via the integration branch; owns curtain-call merges (Sol-review
 ## RESUME DELTA 05:04Z — temp files go to /var/tmp/forge, never /tmp (Gene)
 
 Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/seat-tmp-guard.sh refuses a tmpfs temp dir and is sourced by suite-run and sol-yolo. Every brief from here names /var/tmp/forge/<lane>-fx. Repo ratchet building on bridge/tmp-leak-ratchet (runners fail on leaked temp entries and refuse tmpfs). Heartbeats: df -i /tmp + count of forge-owned entries.
+
+## RESUME DELTA 2026-09-04T05:43Z — full state for a post-compaction seat (Gene asked for the prompt at ~06:00Z)
+
+**Rules in force (Gene, tonight, all verbatim in the captain's log):** origin/main FROZEN for everyone (public repo; nothing publishes until a months-dogfooded winner) — this seat pushed ~40 docs commits to main before 01:40Z, disclosed, not rewritten; `MCP/main` is the working trunk (seat checkout /home/forge/src/clj-surgeon is ON it; landings by `merge --no-ff` from the seat after an executed review); temp files to /var/tmp/forge never /tmp (profile + ~/bin/seat-tmp-guard.sh + Claude settings env; repo ratchet building on bridge/tmp-leak-ratchet); reviews Sol first, Opus on filter refusal (nine refusals tonight, all on permission/symlink/lock/trust-root lanes); the meter is TOOL CALLS; keep cclsp running — but this seat has none (inb-41c1cc: repo 404, launchd-only start; 7890 is the surgeon seat's, never touch); cohorts with a tool arm void arms that hit semantic-provider-unavailable.
+
+**Landed on MCP/main:** the six-lane integration (2556a38 via the candidate), the admit gate (9b7220c3, fresh-clone GO-WITH-FIX; trailing suite 711/8436/0). **Standing sentence (Gene report 04:55Z, 2026-09-04-gene-report-0455z.md):** square 2 fan-out wins 2–7× in emitted chars for two callers at N ≤ 21 on the apply_patch harness; bounded at N* = 23 (E-NSWEEP), by write path (E-HARNESS-2: Bash-only native 0.68×), survives a second caller (E-CALLER 2.2×/3.7×); squares 1 (detection, E-GATE-R), 3, 4 withdrawn; the feature-thread study measured (E-THREAD: native 5/5, 0 false-completes; the script halves calls on SMW) — verdict "not a verb" was then REFRAMED by Gene on tool calls: build `feature_thread` v2 (bodies + sha + anchor + sibling one-axis + rules; 10/16 KB) and measure tool calls to a correct Dequote/Format edit (study §12; the mayor's transcript analysis: six read rounds is the human baseline; Dequote/Format is a NAMED TEST CASE with five assertions + a second fixture at the moment it broke).
+
+**Lanes and where their state lives (agent IDs do not survive compaction; branches and verdict files do):**
+| lane | branch @ tip | state | next |
+|---|---|---|---|
+| MEM-003 second landing | bridge/integration-2026-09-03-mem003 @ 3692e9b (r4 building: trunk merged in, deftype reading, :refer forbidden) | r3 Opus NO-GO | on push: review (Sol then Opus), land |
+| O2 study-ops (MCP ls-tree) | bridge/study-ops-mcp @ 515e8109 (r5 building: budgeted dropped line, monotone fit, mid-band witness, with-envelope shape-agnostic) | r4 Opus NO-GO (regression) | on push: review; then recompose onto MEM-003 landing (template f835394) |
+| census | bridge/census-verb @ 563c300d | r19 Opus review running (/home/forge/tmp/sol/census19-opus-review.md) | file; r20 or land |
+| q5z alias_migration | bridge/q5z-alias-migration @ b6d1d17b | r15 Sol review running (q5z15-sol-review.md) | file; r16 or land |
+| admit gate r3/r4 | bridge/admit-gate-r3 @ 95e7aed9 (r4 building on current trunk) | r3 Sol NO-GO (4) | on push: review; land |
+| FAN scorer | bridge/fanout-fixtures-in-git @ f2fa8be9 | r5 Sol review running (fanout5-sol-review.md; Opus on refusal) | file; land (apparatus) |
+| tmp-leak ratchet | bridge/tmp-leak-ratchet (building) | — | review; land |
+| feature_thread verb | bridge/feature-thread-verb (building; three amendments: named test case, fleet refinements, §12 deltas) | — | review; then the 30-arm adoption cohort (N/F/M-range/M-body/K ×6) |
+| E-SCALE-WALL | pre-registered (2026-09-04-escalewall-preregistration.md) | waits for a QUIET box (load < 2 before each arm) | run alone, after the review lanes land |
+| curtaincall | bridge/cc-integration-2026-09-03 @ 37978a74 seat-gated green | with the mayor (offline since ~01:30Z) | mayor's Sol review + landing |
+
+**Verdict files:** /home/forge/tmp/sol/<lane><n>-sol-review.md or -opus-review.md; logs /home/forge/tmp/sol/<lane><n>.log, finished when the LAST line is `EXIT n`. Inbox ids: inb-1165ce (mayor landings), inb-3e298e (O2), inb-b873d0 (q5z), inb-cbca17 (admit refusal text), inb-9483a4 (/tmp inode leak), inb-62a674 (enumerating-witness rule), inb-41c1cc (cclsp), inb-2f150d/84f801/10f4cd (gate defects), inb-55e00e (study, closed).
+
+**Single next action:** heartbeat; file any finished verdict; relaunch the next round for any NO-GO; land any GO by merge --no-ff onto MCP/main from the seat checkout with the trailing suite; keep the mayor's queue current on inb-1165ce.
