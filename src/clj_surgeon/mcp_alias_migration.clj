@@ -843,23 +843,34 @@
   says how many, so a caller reading six of seven roots knows the seventh
   exists — silent truncation inside a remedy is the same defect as silent
   truncation inside a fact line, and worse, because the caller acts on a
-  remedy."
+  remedy.
+
+  That drop marker is PART OF THE LISTING and is charged against the same
+  ceiling: a budget that stopped one item short of the end retained four
+  ordinary 116-character roots and rendered 528 characters against a stated
+  512, the overflow carried by the very item announcing that the bound had
+  fired. So the bound is read on the RENDERED listing with the marker inside
+  it, and the listing shrinks until that measurement fits."
   [{:keys [ranked counts]}]
   (let [candidates (mapv (fn [pattern]
                            (elide (str pattern " (" (get counts pattern) ")")))
                          (take max-suggested-scope-paths ranked))
-        kept (first
-               (reduce (fn [[kept used] item]
-                         (let [next-used (+ used (count (pr-str item)) 1)]
-                           (if (> next-used max-refusal-root-list-characters)
-                             (reduced [kept used])
-                             [(conj kept item) next-used])))
-                       [[] 2]
-                       candidates))
-        dropped (- (count candidates) (count kept))]
-    (cond-> kept
-      (pos? dropped)
-      (conj (str "… [+" dropped " more roots, complete in structuredContent]")))))
+        total (count candidates)
+        listing (fn [kept-count]
+                  (let [dropped (- total kept-count)]
+                    (cond-> (subvec candidates 0 kept-count)
+                      (pos? dropped)
+                      (conj (str "… [+" dropped
+                                 " more roots, complete in structuredContent]")))))
+        ;; the ceiling is read on the listing this returns, marker INCLUDED,
+        ;; so the answer is measured rather than estimated: an incremental
+        ;; charge of `(count (pr-str item)) + 1` over a starting 2 is one
+        ;; character more than the vector renders, and cut a listing that
+        ;; rendered at exactly the ceiling
+        fitted (first (filter #(<= (count (pr-str (listing %)))
+                                   max-refusal-root-list-characters)
+                              (range total -1 -1)))]
+    (listing (or fitted 0))))
 
 (defn expand-scope
   "The sources one scope selects, when the bounded scan admits it.
