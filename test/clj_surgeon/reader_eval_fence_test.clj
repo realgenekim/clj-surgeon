@@ -34,7 +34,7 @@
      happened.
    This namespace rides the `mcp-test` lane and NOT `test-fast`, for a
    mechanical reason worth writing down: `test-fast` is `bb test/run_all.clj`,
-   so `(System/getProperty "java.class.path")` inside it is BABASHKA's
+   so `(System/getProperty \"java.class.path\")` inside it is BABASHKA's
    classpath and the `:jvm` launcher drive cannot be built from it. Registered
    in `run_all` the JVM half of this witness fails for a reason that has
    nothing to do with its subject, which is the worst kind of red. The census

@@ -282,6 +282,8 @@
                     (or (:source-paths m) ["src"]))
     ["src"]))
 
+;; @spec MCP-OP-SHELL-ARGV-005
+;; @spec MCP-OP-SHELL-ARGV-004
 (defn- extract-source-paths
   "I/O wrapper: read a build file AS DATA and return its source paths.
 
@@ -760,6 +762,7 @@
         :else nil))))
 
 ;; @spec MCP-OP-CENSUS-018
+;; @spec MCP-OP-CENSUS-035
 (defn census-workspace
   "The tree a CLI census is over, canonical, or the TYPED REFUSAL it earns.
 
@@ -2657,6 +2660,7 @@
 
             :else (recur (inc i) depth deepest false false)))))))
 
+;; @spec MCP-OP-CENSUS-034
 (defn- refuse-over-nested!
   "Throw the DECLARED launcher refusal when one argument nests past the
    ceiling. Named separately from `parse-val` so the two branches that read
@@ -2759,6 +2763,7 @@
       (cond-> (into {} pairs)
         has-help? (assoc :help true)))))
 
+;; @spec MCP-OP-CENSUS-034
 (defn launcher-throwable-refusal
   "The LAST-RESORT refusal for anything that reaches `-main`'s outermost catch.
 
