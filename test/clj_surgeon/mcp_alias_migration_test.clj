@@ -911,9 +911,16 @@
                 (str "the refusal field " field " is "
                      (count (str (get result field)))
                      " characters of caller input"))
+            (is (re-find #"\[elided, \d+ characters\]$"
+                         (str (get result field)))
+                (str "the field " field
+                     " is not elided with the length it replaced")))
+          (doseq [field [:path :pattern]]
             (is (str/includes? (str (get result field)) "10001")
                 (str "the elided field " field
-                     " does not name the length it replaced")))
+                     " does not name the caller's own 10,001 characters")))
+          (is (str/includes? (str (:cause result)) "20031")
+              "the elided cause does not name its own length")
           (is (<= (count (str (:error result))) 1024)
               (str "the error sentence is " (count (str (:error result)))
                    " characters"))
@@ -1738,7 +1745,14 @@
         (is (false? (:ok result)) (pr-str result))
         (is (= "alias-migration-scope-too-deep" (:error_type result))
             "a file past the depth bound was truncated out of scope instead")
-        (is (= deep (:path result)))
+        ;; @spec MCP-OP-ALIAS-059
+        ;; the refused path is 255 characters and every refusal field is now
+        ;; bounded at 200: it is named by its prefix, with the length it
+        ;; replaced, not by silent truncation
+        (is (str/starts-with? deep (subs (:path result) 0 200))
+            "the refusal does not name the path the walk refused")
+        (is (str/includes? (:path result) (str (count deep)))
+            "the elided path does not name the length it replaced")
         (is (= 65 (:depth result)))
         (is (= alias-migration/max-scope-depth (:max_depth result)))
         (is (true? (:source_unchanged result)))

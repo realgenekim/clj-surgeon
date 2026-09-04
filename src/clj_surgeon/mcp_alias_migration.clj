@@ -724,6 +724,58 @@
                    prefix]))
        first))
 
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-field-characters
+  "Ceiling on ONE caller-supplied string a refusal carries.
+
+  `max-refusal-fact-characters` bounds the rendered `facts ·` line, and only
+  that line: `:error` and `:remedy` are envelope keys, rendered whole, and
+  both quote the caller's own text. A 10,001-character `scope.paths` entry
+  produced a 20,031-character parser message — the parser echoes the pattern
+  twice — inside a 30,141-character error sentence and a 51,191-character text
+  block. Every other ceiling this verb carries reads on the size of the TREE;
+  this one reads on the size of the caller's own input, which is the one thing
+  in a refusal that nothing upstream of it constrains."
+  200)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-field-items
+  "How many caller-supplied entries one refusal field names."
+  8)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-text-characters
+  "The ceiling the whole rendered refusal text is held to.
+
+  Stated as a number the witness can assert the rendered block against: a
+  receipt is constant-size or it is not a receipt, and per-field bounds are
+  only a claim about the whole until the whole is measured."
+  4096)
+
+;; @spec MCP-OP-ALIAS-059
+(defn elide
+  "One caller-supplied string, bounded, naming the length it replaced.
+
+  Truncation with a typed marker rather than in silence: the caller sent the
+  bytes and is the only one who can recognise them from a prefix, and the
+  original length is what says the prefix is a prefix."
+  [value]
+  (let [text (str value)]
+    (if (<= (count text) max-refusal-field-characters)
+      text
+      (str (subs text 0 max-refusal-field-characters)
+           "… [elided, " (count text) " characters]"))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn elide-items
+  "One caller-supplied list, bounded in entry length AND in entry count."
+  [values]
+  (let [values (vec values)
+        bounded (mapv elide (take max-refusal-field-items values))]
+    (cond-> bounded
+      (> (count values) max-refusal-field-items)
+      (conj (str "… [elided, " (count values) " entries]")))))
+
 ;; @spec MCP-OP-ALIAS-006
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-038
@@ -756,20 +808,21 @@
       ;; no mechanical correction, only the one the caller meant.
       (= :alias-migration-scope-path-refused (:error-type scan))
       (refusal :alias-migration-scope-path-refused
-               (str "scope.paths entry " (pr-str (:path scan))
+               (str "scope.paths entry " (pr-str (elide (:path scan)))
                     " is not a parseable glob"
                     (when-not (= (:path scan) (:pattern scan))
                       (str " — it names a directory, and the subtree pattern "
-                           (pr-str (:pattern scan)) " derived from it"))
-                    ": " (:cause scan)
+                           (pr-str (elide (:pattern scan)))
+                           " derived from it"))
+                    ": " (elide (:cause scan))
                     ". No file was visited, so what the scope contains is not"
                     " known.")
-               {:path (:path scan)
-                :pattern (:pattern scan)
-                :cause (:cause scan)
+               {:path (elide (:path scan))
+                :pattern (elide (:pattern scan))
+                :cause (elide (:cause scan))
                 :next_call nil
                 :remedy (str "Correct the glob and resend. The parser reported "
-                             (pr-str (:cause scan))
+                             (pr-str (elide (:cause scan)))
                              "; an unclosed {group}, [class] or trailing \\ is "
                              "the usual cause — src/{clj,cljs}/** is one "
                              "keystroke from src/{**. No next_call is composed "
@@ -779,15 +832,16 @@
       ;; @spec MCP-OP-ALIAS-048
       (= :alias-migration-scope-too-deep (:error-type scan))
       (refusal :alias-migration-scope-too-deep
-               (str (:path scan) " is " (:depth scan)
+               (str (elide (:path scan)) " is " (:depth scan)
                     " path segments below the project root, past the "
                     max-scope-depth "-segment bound one alias_migration walks")
-               {:path (:path scan)
+               {:path (elide (:path scan))
                 :depth (:depth scan)
                 :max_depth (:max-depth scan)
                 :next_call nil
                 :remedy (str "Narrow scope.paths so the walk does not reach "
-                             (:path scan) ", or flatten that tree; the bound is "
+                             (elide (:path scan))
+                             ", or flatten that tree; the bound is "
                              "refused rather than truncated so no file can "
                              "silently leave the found count.")})
 
@@ -811,8 +865,8 @@
                (str (:unreadable-count scan)
                     " path(s) under scope.paths could not be read, so what the"
                     " scope contains is not knowable: "
-                    (str/join ", " (:unreadable-paths scan)))
-               {:unreadable_paths (:unreadable-paths scan)
+                    (str/join ", " (elide-items (:unreadable-paths scan))))
+               {:unreadable_paths (elide-items (:unreadable-paths scan))
                 :unreadable_count (:unreadable-count scan)
                 :next_call nil
                 :remedy (str "Make those paths readable, or exclude them "
@@ -826,7 +880,11 @@
       ;; scope requires from.lib" — is a claim discovery never got to make.
       ;; Four of four E3-P tool arms were refused here and told the wrong cause.
       (zero? scanned)
-      (let [given (vec (get-in request [:scope :paths]))
+      (let [;; @spec MCP-OP-ALIAS-059
+            ;; the caller's own paths ride the refusal bounded in entry length
+            ;; and in entry count: they are named AS GIVEN, and a name that
+            ;; does not fit is elided with the length it replaced
+            given (elide-items (get-in request [:scope :paths]))
             suggestion (suggested-scope-paths root)
             {:keys [source-files roots]} suggestion
             ;; @spec MCP-OP-ALIAS-058
