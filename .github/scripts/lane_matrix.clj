@@ -24,8 +24,13 @@
   {"clj-surgeon.mcp-relation-census-test" "strace"})
 
 (def kondo-for
-  "Namespaces that shell out to clj-kondo. admit-patch-test runs it 18 times."
-  #{"clj-surgeon.admit-patch-test"})
+  "Namespaces that shell out to clj-kondo. admit-patch-test runs it 18 times;
+   mcp-cold-verify-test asserts the ADMISSION TIMEOUT branch, which is only
+   reachable when a clj-kondo binary exists to be slow -- without one the
+   result is :clj-kondo-executable-unavailable and the test reads as a
+   product failure when it is an environment gap."
+  #{"clj-surgeon.admit-patch-test"
+    "clj-surgeon.mcp-cold-verify-test"})
 
 (defn cell
   [ns-sym]

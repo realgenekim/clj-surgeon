@@ -44,6 +44,31 @@ runs:
         key: cljdeps-${{ runner.os }}-${{ hashFiles('deps.edn') }}
         restore-keys: cljdeps-${{ runner.os }}-
 
+    # clj-surgeon's OWN executable resolver (mcp-change-buffer/expand-command)
+    # does NOT consult $PATH. It walks a hardcoded list -- /opt/homebrew/...,
+    # /usr/local/bin, /usr/bin, /bin -- and returns the BARE NAME when the
+    # binary is in none of them. setup-clojure puts clj-kondo in the runner's
+    # tool cache, which is on PATH and in none of those five directories, so
+    # `mcp-change-buffer-test` and `mcp-cold-verify-test` both failed with
+    # "resolved clj-kondo must be an absolute path, not a bare name" and
+    # :clj-kondo-executable-unavailable. The seat passes only because its
+    # clj-kondo happens to sit in /usr/local/bin.
+    #
+    # This link makes the runner satisfy that undeclared precondition. It is a
+    # WORKAROUND, not the fix: the resolver ignoring $PATH is a real portability
+    # defect, reported in docs/observations/2026-09-04-gha-round1.md.
+    - name: Put clj-kondo where clj-surgeon's resolver actually looks
+      if: inputs.clj-kondo == 'true'
+      shell: bash
+      run: |
+        real=$(command -v clj-kondo)
+        echo "clj-kondo on PATH: $real"
+        if [ "$real" != "/usr/local/bin/clj-kondo" ]; then
+          sudo ln -sf "$real" /usr/local/bin/clj-kondo
+          echo "linked -> /usr/local/bin/clj-kondo"
+        fi
+        /usr/local/bin/clj-kondo --version
+
     - name: Install apt packages
       if: inputs.apt != ''
       shell: bash
