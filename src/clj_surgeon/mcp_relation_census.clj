@@ -160,43 +160,87 @@
     result))
 
 ;; @spec MCP-OP-CENSUS-014
+(defn- candidate-field-weights
+  "Every field of a continuation candidate, with the UTF-8 bytes it costs on
+   the wire.
+
+   WALKED, never listed. `overflow-measurement` below is the reason: it used to
+   weigh a NAMED PAIR of the candidate's parts, and the candidate is not a
+   fixed pair — the `:refusal loaded` branch builds it out of the caller's own
+   request, so every option the caller sent rides through it and any option
+   added to the schema next round rides through it too. A named field list is
+   a list of the parts whoever wrote it happened to know about, and the caller
+   is the one who pays when the bulk is in the part it does not name.
+
+   `:tool` is excluded, and it is the only exclusion: it is STAMPED by the
+   constructor, it is 26 constant bytes, and a caller cannot shorten it, so
+   naming it as a cause could never be advice."
+  [candidate]
+  (into {}
+        (map (fn [[k v]]
+               [k (census/utf8-byte-count (json/generate-string {k v}))]))
+        (dissoc candidate :tool)))
+
+;; @spec MCP-OP-CENSUS-014
 (defn- overflow-measurement
   "WHICH part of an over-long continuation is the length that does not fit.
 
-   Opus's round-sixteen item 5. The remedy this feeds used to state one cause
-   unconditionally — \"the length of the workspace path in it is\" — and it
-   stated it about a 24-character root carrying 500 named sources, where the
-   workspace path was 24 of the 9,603 bytes measured. A caller who follows a
-   remedy like that shortens the one thing that is not the problem and receives
-   the identical refusal: the loop-with-a-receipt MCP-OP-CENSUS-014 forbids a
+   Opus's round-sixteen item 5 and round-seventeen item 2. The remedy this
+   feeds used to state one cause unconditionally — \"the length of the
+   workspace path in it is\" — about a 24-character root carrying 500 named
+   sources. Round sixteen MEASURED the cause and measured two parts of it;
+   round seventeen found the third, `doors`, and the same false sentence back:
+   \"workspace_root alone measures 19 of those bytes\" on a 723-byte
+   continuation, 2.6% named as the cause. A caller who follows a remedy like
+   that shortens the one thing that is not the problem and receives the
+   identical refusal: the loop-with-a-receipt MCP-OP-CENSUS-014 forbids a
    continuation, arriving in a remedy instead.
 
-   So the cause is MEASURED. The candidate's two variable parts are the
-   workspace path and the `files` list; whichever carries more bytes is what
-   the caller must change, and when it is the list, one very long entry and
-   five hundred short ones are different problems with different remedies.
+   So the cause is DERIVED. `candidate-field-weights` walks whatever fields the
+   candidate actually has, and the HEAVIEST of them is what the caller must
+   change. Ties break by field name so that two runs over one candidate name
+   the same field. When the heaviest is `files`, one very long entry and five
+   hundred short ones are still different problems with different remedies, and
+   that distinction survives.
 
-   Returns `{:bytes :cause :measured :entries}` where `:measured` is the byte
-   figure the named cause accounts for."
+   Returns `{:bytes :cause :measured :entries :field}` where `:field` is the
+   name walked out of the candidate and `:measured` is the byte figure the
+   named cause accounts for — for the two named causes, the figure round
+   sixteen's witnesses already assert, which is the raw length of the thing the
+   caller would shorten rather than its rendered pair."
   [candidate bytes]
-  (let [root-bytes (census/utf8-byte-count (str (:workspace_root candidate)))
+  (let [weights (candidate-field-weights candidate)
         entries (when (sequential? (:files candidate)) (vec (:files candidate)))
         entry-sizes (mapv #(census/utf8-byte-count (str %)) entries)
         entry-bytes (reduce + 0 entry-sizes)
-        longest (reduce max 0 entry-sizes)]
+        longest (reduce max 0 entry-sizes)
+        [heaviest heaviest-bytes]
+        (first (sort-by (juxt (comp - val) (comp str key)) weights))]
     (merge {:bytes bytes :entries (count entries)}
+           (when heaviest {:field (name heaviest)})
            (cond
-             (>= root-bytes entry-bytes)
-             {:cause :workspace-root-length :measured root-bytes}
+             ;; A candidate with no variable part at all. Unreachable through
+             ;; either entrance today, and it gets a cause-free sentence rather
+             ;; than a guess: naming nothing is honest, naming a minority is
+             ;; the defect this function exists to prevent.
+             (nil? heaviest)
+             {:cause :indeterminate :measured 0}
 
+             (= :workspace_root heaviest)
+             {:cause :workspace-root-length
+              :measured (census/utf8-byte-count
+                          (str (:workspace_root candidate)))}
+
+             (= :files heaviest)
              ;; One entry carrying more than half of what the list weighs is
              ;; the entry, not the count: telling that caller to name fewer
              ;; sources is the same unmeasured advice in a different sentence.
-             (> (* 2 longest) entry-bytes)
-             {:cause :entry-length :measured longest}
+             (if (> (* 2 longest) entry-bytes)
+               {:cause :entry-length :measured longest}
+               {:cause :entry-count :measured entry-bytes})
 
              :else
-             {:cause :entry-count :measured entry-bytes}))))
+             {:cause :field-length :measured heaviest-bytes})))) 
 
 ;; @spec MCP-OP-CENSUS-014
 (defn continuation
@@ -292,7 +336,7 @@
    identical refusal (Opus's round-sixteen item 5).
 
    Every sentence below is a figure `overflow-measurement` actually observed."
-  [{:keys [bytes cause measured entries]}]
+  [{:keys [bytes cause measured entries field]}]
   (str "The narrowest continuation this refusal can compute renders as "
        bytes " UTF-8 bytes, over the " census/max-next-call-bytes
        "-byte ceiling a continuation must fit, so none is offered. "
@@ -309,6 +353,17 @@
               " sources this call would name measures " measured
               " of those bytes — name shorter sources with files, and fix "
               "what this refusal named.")
+
+         :field-length
+         (str "The workspace path is not the problem, the length of the "
+              field " in it is: " field " alone measures " measured
+              " of those bytes — retry with a shorter " field ", and fix what "
+              "this refusal named.")
+
+         :indeterminate
+         (str "No one part of the call accounts for the length, so this "
+              "refusal names none: narrow the request itself and retry, and "
+              "fix what this refusal named.")
 
          (str "The workspace path is not the problem, the NUMBER of sources "
               "in it is: the " entries " sources this call would name measure "
