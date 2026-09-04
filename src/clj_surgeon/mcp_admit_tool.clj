@@ -2374,6 +2374,7 @@
                 trimmed)
         ;; @spec MCP-OP-ADMIT-139
         ;; @spec MCP-OP-ADMIT-144
+        ;; @spec MCP-OP-ADMIT-151
         ;; The CHEAP CORRECT MOVE FIRST. When the receipt is over budget only
         ;; because of its `next_call`, reduction cannot reach the budget --
         ;; `next_call` is an identity key, `bound-identity-values` exempts it,
@@ -2386,6 +2387,17 @@
         ;; bytes, its 52-character error sentence marked as cut. Testing the
         ;; receipt WITHOUT its next_call first takes the move that actually
         ;; fits, and costs the caller nothing else.
+        ;;
+        ;; @spec MCP-OP-ADMIT-151
+        ;; The ORDER is the behaviour, and it is observable in exactly one
+        ;; place: what else the receipt lost. Round seven's reviewer replaced
+        ;; this whole branch with `(reduce-receipt-to-budget faced)` and the
+        ;; focused suite stayed green at 164/4220/0 while the sabotaged
+        ;; receipt dropped `hashes` and the honest `payload_trim_unavailable`
+        ;; notice -- every assertion was about the published value's
+        ;; self-description, and a receipt that pays for a call it is about
+        ;; to drop describes itself perfectly honestly. The witness therefore
+        ;; asserts that every key other than the call survives VERBATIM.
         bounded (if (and (:next_call faced)
                          (not (public-faces-fit? faced))
                          (public-faces-fit? (dissoc faced :next_call)))

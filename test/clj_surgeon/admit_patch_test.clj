@@ -6712,6 +6712,119 @@
       (is (nil? (:receipt_identity_bounded published))
           "an enumerated keyword is never bounded, and never named as such"))))
 
+
+;; @spec MCP-OP-ADMIT-144
+;; @spec MCP-OP-ADMIT-151
+(deftest the-cheap-correct-move-is-taken-before-the-reduction-ladder
+  ;; Round seven's finding 3. MCP-OP-ADMIT-144 promises a `bound-receipt`
+  ;; that takes the CHEAP CORRECT MOVE FIRST: when a receipt is over budget
+  ;; only because of its `next_call`, dropping the call is what makes it fit,
+  ;; so the reduction ladder -- which cannot drop the call, because it is an
+  ;; identity key -- must not run at all. Every focused assertion the round
+  ;; shipped was about the PUBLISHED VALUE's self-description, and the
+  ;; reviewer's seventh negative control proved that blind: replacing the
+  ;; whole outer branch with `(reduce-receipt-to-budget faced)` dropped
+  ;; `hashes` and the honest `payload_trim_unavailable` notice on the way to
+  ;; making room for a call `oversize-next-call-refusal` was about to drop
+  ;; anyway, and the entire suite stayed green at 164/4220/0.
+  ;;
+  ;; So this witness observes the ORDER, which is visible in exactly one
+  ;; place: WHAT ELSE the receipt lost. The cheap move costs the caller
+  ;; nothing but the call; the ladder-first order bills the caller for the
+  ;; call's bytes in facts it could have kept.
+  (let [budget write-refusal/public-byte-budget
+        error-sentence (str "patch is in neither accepted grammar; its first"
+                            " line is \"(ns x)\"")
+        remedy-sentence (str "resend the patch with a `*** Begin Patch`"
+                             " header or a unified-diff `--- a/` header")
+        hashes (into {} (for [i (range 60)]
+                          [(str "src/app/" (apply str (repeat 100 "p"))
+                                i ".clj")
+                           (apply str (repeat 64 "a"))]))
+        call {:tool "admit_clojure_patch"
+              :arguments {:mode "preview" :verify "none"}
+              :note (apply str (repeat 24000 "n"))}
+        faced {:ok false :operation :admit-patch-refused :mode "preview"
+               :error-type :invalid-patch
+               :error error-sentence :remedy remedy-sentence
+               :source-unchanged true :mutation_attempted false
+               :hashes hashes
+               :next_call call}
+        kept (dissoc faced :next_call)]
+    ;; The fixture is only the fixture this witness is named for if the
+    ;; next_call is the SOLE reason it does not fit. Stated as assertions, so
+    ;; a future edit that makes the probe fit outright cannot make this test
+    ;; pass by ceasing to exercise anything.
+    (is (> (write-refusal/json-bytes faced) budget)
+        (str "the probe already fits, so nothing is being tested: "
+             (write-refusal/json-bytes faced)))
+    (is (<= (write-refusal/json-bytes kept) budget)
+        (str "the probe is over budget for MORE than its next_call: "
+             (write-refusal/json-bytes kept)))
+    (let [published (#'admit/bound-receipt faced)]
+      (is (nil? (:next_call published))
+          "the call is what gives ground")
+      (is (true? (:next_call_omitted published))
+          (str "and the receipt says so: " (pr-str published)))
+      ;; The order, observed. Every key the receipt carried other than the
+      ;; call survives VERBATIM: the ladder never ran, so nothing was spent
+      ;; making room for a call that was dropped one line later.
+      (is (= kept (select-keys published (keys kept)))
+          (str "the ladder ran before the cheap move and billed the caller"
+               " for the call's bytes in facts it could have kept \u00b7 lost: "
+               (pr-str (remove #(contains? published %) (keys kept)))
+               " \u00b7 changed: "
+               (pr-str (remove #(= (get faced %) (get published %))
+                               (keys kept)))))
+      (is (nil? (:receipt_omitted_fields published))
+          (str "a field other than the next_call was dropped: "
+               (pr-str (:receipt_omitted_fields published))))
+      (is (nil? (:receipt_reduced published))
+          "a receipt the cheap move fitted was not reduced")
+      ;; The two sentences reach the caller whole. A cut error sentence and a
+      ;; cut manual-recovery remedy, both pointing at a server log an MCP
+      ;; client cannot read, is round six's exact published defect.
+      (is (= error-sentence (:error published))
+          (str "the error sentence was cut: " (pr-str (:error published))))
+      (is (= remedy-sentence (:remedy published))
+          (str "the remedy sentence was cut: " (pr-str (:remedy published))))
+      (is (nil? (:error_truncated published))
+          "a sentence that reached the caller whole is not labelled truncated")
+      (is (some? (:payload_trim_unavailable published))
+          (str "the honest `this bound removed nothing` notice was dropped to"
+               " make room for a call that was dropped anyway: "
+               (pr-str published)))
+      (is (<= (write-refusal/json-bytes published) budget))
+      (is (true? (receipt-self-description-holds? published))
+          (pr-str (receipt-self-description-holds? published)))))
+  (testing "and the ladder still runs when the next_call is NOT the reason"
+    ;; The converse. A cheap move applied where it does not apply would
+    ;; publish an oversize receipt, so the skip is conditional on the
+    ;; condition, not on the presence of a next_call.
+    (let [budget write-refusal/public-byte-budget
+          hashes (into {} (for [i (range 400)]
+                            [(str "src/app/" (apply str (repeat 100 "q"))
+                                  i ".clj")
+                             (apply str (repeat 64 "b"))]))
+          faced {:ok false :operation :admit-patch-refused :mode "preview"
+                 :error-type :invalid-patch
+                 :error "e" :remedy "r"
+                 :source-unchanged true :mutation_attempted false
+                 :hashes hashes
+                 :next_call {:tool "admit_clojure_patch"
+                             :arguments {:mode "preview"}}}]
+      (is (> (write-refusal/json-bytes (dissoc faced :next_call)) budget)
+          "the converse fixture must NOT fit once its call is removed")
+      (let [published (#'admit/bound-receipt faced)]
+        (is (<= (write-refusal/json-bytes published) budget)
+            (str "an oversize receipt was published: "
+                 (write-refusal/json-bytes published)))
+        (is (some #{"hashes"} (:receipt_omitted_fields published))
+            (str "the ladder did not run where it is the only answer: "
+                 (pr-str (:receipt_omitted_fields published))))
+        (is (true? (receipt-self-description-holds? published))
+            (pr-str (receipt-self-description-holds? published)))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Round six: every field a caller can influence, driven with bulk
 ;; ---------------------------------------------------------------------------
