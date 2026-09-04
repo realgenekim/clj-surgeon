@@ -1266,3 +1266,5 @@ The pre-registration held even when the first grading said otherwise: eight "fal
 ## 05:15Z — census round 19 BUILT (563c300d, pushed); Sol review launched
 
 Nineteen rounds; the last three each closed the reviewer's items and found one more of the same class by ENUMERATING (r18: three unbounded CLI fields from the schema; r19: a third unbounded launcher refusal from the declared set, and a remedy that told the caller to make a directory readable under itself, shipped since r17). The witness that drives the launcher as a subprocess rather than a fn call is the right entrance discipline. The builder re-ran every gate under /var/tmp/forge after the TMPDIR rule landed mid-round, unprompted beyond the message — the ratchet propagated.
+
+## 05:23Z — census r19 review: Sol's filter refused (ninth refusal; census r18 had passed) → Opus fallback with the identical brief. gate r3 Sol review still running with one refusal inside its log.
