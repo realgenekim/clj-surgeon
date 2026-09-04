@@ -42,7 +42,12 @@
 (def js-test-owner "test/js/browser_runtime_classic_script_test.js")
 
 (defn call!
-  "One call through the MCP entrance. Returns `{:text :error? :structured}`."
+  "One call through the MCP entrance.
+
+  `:structured` is the face the client is actually HANDED — body-free since
+  MCP-OP-THREAD-046. `:full` is a delay over the same request's complete
+  result, the face the text block is rendered from, for the assertions that are
+  about a BODY rather than about the wire."
   [params]
   (let [captured (atom nil)]
     (ft/init! nil)
@@ -52,7 +57,16 @@
         (reset! captured {:text (first content)
                           :error? error?
                           :structured structured})))
-    @captured))
+    (assoc @captured :full (delay (ft/execute-request nil params)))))
+
+(defn full
+  "The complete result behind a `call!` — bodies included."
+  [r]
+  @(:full r))
+
+(defn located-legs
+  [structured]
+  (filter #(#{"FOUND" "CANDIDATE"} (:status %)) (:legs structured)))
 
 (defn thread!
   ([root] (thread! root {}))
@@ -88,7 +102,7 @@
 ;; @spec MCP-OP-THREAD-013
 (deftest t1-smw-thread-returns-six-legs-with-bodies
   (testing "Edit -> Dequote/Format: six owners, two languages, one call"
-    (let [{:keys [text error? structured]} (thread! fixture-root)]
+    (let [{:keys [text error? structured] :as r} (thread! fixture-root)]
       (is (false? error?))
       (is (true? (:ok structured)))
       (is (= "COMPLETE (6 of 6)" (:status structured)))
@@ -109,7 +123,7 @@
             "the node test witness is not named anywhere in the receipt"))
 
       (testing "every FOUND leg carries a body, a range and a hash of that body"
-        (doseq [l (:legs structured)]
+        (doseq [l (:legs (full r))]
           (is (integer? (:from l)))
           (is (integer? (:to l)))
           (is (<= (:from l) (:to l)))
@@ -131,7 +145,8 @@
 ;; @spec MCP-OP-THREAD-005
 ;; @spec MCP-OP-THREAD-006
 (deftest ranges-not-files-the-receipt-returns-the-exact-body
-  (let [{:keys [structured]} (thread! fixture-root)
+  (let [r (thread! fixture-root)
+        structured (full r)
         js (leg structured "js-function")
         handler (leg structured "handler")
         route (leg structured "route")]
@@ -262,11 +277,12 @@
 ;; @spec MCP-OP-THREAD-010
 (deftest dequote-format-thread-is-correct-on-the-broken-tree
   (testing "the transcript's own patch applied: the new command's thread"
-    (let [{:keys [structured text]}
+    (let [{:keys [text] :as r}
           (call! {:subject "dequoteFormatSelection"
                   :also ["/api/transform/format" "mechanical-format"]
                   :config smw-conventions
-                  :scope {:workspace_root after-root}})]
+                  :scope {:workspace_root after-root}})
+          structured (full r)]
       (is (= "COMPLETE (6 of 6)" (:status structured)))
       (is (= "resources/public/js/editor-commands.js"
              (:file (leg structured "js-function"))))
@@ -489,7 +505,7 @@
   (testing "the alias target is found: the receipt names the implementation"
     (let [root (alias-fixture! true)]
       (try
-        (let [{:keys [structured]}
+        (let [{:keys [structured] :as r}
               (call! {:subject "formatDraft" :also ["/api/x/format"]
                       :config alias-conventions
                       :scope {:workspace_root (.getPath root)}})
@@ -499,7 +515,8 @@
               "the alias line is not the implementation")
           (is (str/includes? (:evidence l) "one hop"))
           (is (str/includes? (:evidence l) "runDraftFormatter"))
-          (is (str/includes? (:body l) "async function runDraftFormatter")))
+          (is (str/includes? (:body (leg (full r) "js-function"))
+                             "async function runDraftFormatter")))
         (finally (delete-tree! root)))))
 
   (testing "the alias target is absent: alias-only, never a four-of-five as five"
@@ -616,10 +633,15 @@
       (is (every? #(nil? (:body %))
                   (mapcat :co_primaries (:legs structured))))
       (is (= #{"sibling" "peers" "after-context" "governance-template"
-               "peer-rows" "next-call" "menu-caller" "route" "tests(js)"
+               "next-call" "menu-caller" "route" "tests(js)"
                "tests" "implementation" "js-function" "handler"}
              (set (map :leg (:elided structured))))
           "every step of the stated order is recorded when every body is cut")
+      ;; @spec MCP-OP-THREAD-039
+      ;; A peer ROW is never elided: it is ~120 bytes and it is the whole
+      ;; reason peers exist in the receipt at all.
+      (is (= 3 (count (:peers (leg structured "menu-caller"))))
+          "peer rows survived the tightest budget that still returns")
       (is (str/includes? text "elided handler")))
 
   (testing "a budget nothing can fit REFUSES rather than truncating a body"
@@ -696,10 +718,10 @@
 
 (deftest warm-up-meter-rounds-to-a-complete-thread
   (testing "the human baseline in the transcript is SIX batched read rounds"
-    (let [{:keys [structured]} (thread! fixture-root)
-          bodies (+ (count (filter :body (:legs structured)))
+    (let [{:keys [structured] :as r} (thread! fixture-root)
+          bodies (+ (count (filter :body (:legs (full r))))
                     (count (filter :body
-                                   (mapcat :co_primaries (:legs structured)))))
+                                   (mapcat :co_primaries (:legs (full r))))))
           sites 7
           missing-after-receipt (- sites bodies)
           verb-rounds (+ 1 (if (pos? missing-after-receipt) 1 0))]
@@ -853,7 +875,8 @@
 
 ;; @spec MCP-OP-THREAD-018
 (deftest the-tests-leg-has-one-primary-per-language
-  (let [{:keys [structured text]} (thread! fixture-root)
+  (let [{:keys [text] :as r} (thread! fixture-root)
+        structured (full r)
         tests (leg structured "tests")
         co (:co_primaries tests)
         js (first (filter #(= js-test-owner (:file %)) co))]
@@ -923,19 +946,25 @@
                "; the whole point of raising it was that it must not"))))
 
   (testing "the stated order elides context first and the edit sites last"
-    (is (= [:sibling :peers :after-context :governance-template
-            :secondary-tests :peer-rows :next-call :menu
+    (is (= [:peers :sibling :after-context :governance-template
+            :secondary-tests :next-call :menu
             :route :tests-js :tests :implementation :js-function :handler]
-           ft/elision-order)))
+           (ft/elision-order-for false))
+        "opportunistic peer bodies are the FIRST thing cut")
+    (is (= [:sibling :after-context :peers :governance-template
+            :secondary-tests :next-call :menu
+            :route :tests-js :tests :implementation :js-function :handler]
+           (ft/elision-order-for true))
+        "peer bodies the caller ASKED for outlive the sibling"))
 
   (testing "under pressure the handler and the seeds' definitions keep their bodies"
-    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 21000})
+    (let [{:keys [structured] :as r} (thread! fixture-root {:budget_bytes 21000})
           cut (set (map :leg (:elided structured)))]
       (is (seq cut) "21000 bytes must force at least one cut")
       (is (contains? cut "sibling"))
-      (is (string? (:body (leg structured "handler")))
+      (is (string? (:body (leg (full r) "handler")))
           "the handler body was cut while cheaper context survived")
-      (is (string? (:body (leg structured "implementation")))
+      (is (string? (:body (leg (full r) "implementation")))
           "the definition the seed names was cut before the sibling")))
 
   (testing "at the ranges-only floor every leg still names its range, its hash and its anchor"
@@ -1336,7 +1365,7 @@
                           "  const re = /[/}]/;\n"
                           "  return re.test(s);\n"
                           "}\n"))
-        (let [{:keys [structured]}
+        (let [{:keys [structured] :as r}
               (call! {:subject "trapRegexCharClassSlash"
                       :config smw-conventions
                       :scope {:workspace_root (.getPath scratch)}})
@@ -1345,7 +1374,8 @@
           (is (= 4 (:to js))
               (str "the published body stops at L" (:to js)
                    " with boundary " (:boundary js)))
-          (is (str/includes? (str (:body js)) "return re.test(s);")
+          (is (str/includes? (str (:body (leg (full r) "js-function")))
+                             "return re.test(s);")
               "the receipt published a truncated function body"))
         (finally (delete-tree! scratch))))))
 
@@ -1599,16 +1629,17 @@
         (write-file! root "src/handlers.clj" "(ns handlers)\n(defn handle-go [r] r)\n")
         (write-file! root "test/t.clj" "(ns t)\n(deftest x (post \"/api/go\"))\n")
         (write-file! root "js/commands.js" "function go() { return 1; }\n")
-        (let [{:keys [structured]}
+        (let [{:keys [structured] :as r}
               (call! {:subject "go" :also ["/api/go"]
                       :config alias-conventions
                       :scope {:workspace_root (.getPath root)}})
-              l (leg structured "route")]
+              l (leg structured "route")
+              lb (leg (full r) "route")]
           (is (= "FOUND" (:status l)))
-          (is (str/includes? (:body l) ":path \"/api/go\"")
+          (is (str/includes? (:body lb) ":path \"/api/go\"")
               (str "the map entry is the route leg: "
                    (pr-str (select-keys l [:status :from :to :boundary]))))
-          (is (not (str/includes? (:body l) "decoy docstring"))
+          (is (not (str/includes? (:body lb) "decoy docstring"))
               "the docstring that merely MENTIONS the route is not the leg"))
         (finally (delete-tree! root))))))
 
@@ -1950,7 +1981,10 @@
 
 ;; @spec MCP-OP-THREAD-036
 (deftest an-anchor-carries-the-source-lines-it-points-at
-  (let [{:keys [text structured]} (thread! fixture-root)]
+  (let [{:keys [text]} (thread! fixture-root)
+        ;; after_context is body-class detail: it rides in the TEXT face, and
+        ;; the full result is where it is asserted (MCP-OP-THREAD-046).
+        structured (full (thread! fixture-root))]
     (testing "every FOUND leg with an anchor carries after_context"
       (doseq [l (:legs structured)
               :when (= "FOUND" (:status l))]
@@ -2094,10 +2128,12 @@
 
 ;; @spec MCP-OP-THREAD-039
 (deftest the-use-leg-names-its-co-menu-item-peers
-  (let [{:keys [text structured]} (thread! fixture-root {:budget_bytes 32768})
+  (let [{:keys [text structured] :as r0} (thread! fixture-root {:budget_bytes 32768})
         menu (leg structured "menu-caller")
         peers (:peers menu)
-        by-id (into {} (map (juxt :identifier identity) peers))]
+        by-id (into {} (map (juxt :identifier identity) peers))
+        by-id-full (into {} (map (juxt :identifier identity)
+                                 (:peers (leg (full r0) "menu-caller"))))]
     (testing "every other command bound in the same menu form is a peer"
       (is (= #{"openTransformFromSelection" "expound" "bulletize"}
              (set (map :identifier peers)))
@@ -2115,7 +2151,8 @@
         (is (string? (:sha256 p)))
         (is (string? (:anchor p)))
         (is (= "co-menu-item" (:evidence p)))
-        (is (str/includes? (str (:body p)) "function openTransformFromSelection"))
+        (is (str/includes? (str (:body (get by-id-full "openTransformFromSelection")))
+                           "function openTransformFromSelection"))
         (is (str/starts-with? (str (:boundary p)) "brace-window(lexed,closed"))))
 
     (testing "a peer with NO definition is named absent, with the search run"
@@ -2137,19 +2174,74 @@
                  (pr-str (map :leg (:elided structured)))))
         (is (= 3 (count (:peers (leg structured "menu-caller")))))))
 
-    (testing "and under pressure peer bodies go FIRST, after the sibling only"
-      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 24000})
+    (testing "and under pressure peer bodies go FIRST, before the sibling"
+      (let [{:keys [structured] :as r} (thread! fixture-root {:budget_bytes 24000})
             cut (map :leg (:elided structured))
             menu (leg structured "menu-caller")]
-        (is (= ["sibling" "peers"] (take 2 cut))
+        (is (= ["peers" "sibling"] (take 2 cut))
             (str "the stated order was not followed; elided was " (pr-str cut)))
         (is (every? #(nil? (:body %)) (:peers menu))
             "a peer body survived its own elision step")
         (is (every? #(and (:from %) (:sha256 %) (:refetch %))
                     (filter ft/located? (:peers menu)))
             "a cut peer must keep its range, its hash and its refetch")
-        (is (:body menu)
+        (is (:body (leg (full r) "menu-caller"))
             "the menu leg's OWN body is not cut by the peers step")))))
+
+;; @spec MCP-OP-THREAD-047
+(deftest peers-ride-as-ranges-and-their-bodies-are-asked-for-or-opportunistic
+  (testing "peer_bodies false: every peer is a RANGE row, and nothing more"
+    (let [r (thread! fixture-root {:peer_bodies false :budget_bytes 32768})
+          peers (:peers (leg (full r) "menu-caller"))
+          located (filter ft/located? peers)]
+      (is (= 3 (count peers)))
+      (is (= 1 (count located)))
+      (is (every? #(nil? (:body %)) peers)
+          "a peer body rode when the caller said not to")
+      (doseq [p located]
+        (is (string? (:file p)))
+        (is (integer? (:from p)))
+        (is (integer? (:to p)))
+        (is (string? (:sha256 p)))
+        (is (string? (:anchor p)))
+        (is (string? (:refetch p))))))
+
+  (testing "a peer row is small enough to ride at any budget"
+    (let [with-peers (thread! fixture-root {:peer_bodies false :budget_bytes 32768})
+          rows (:peers (leg (:structured with-peers) "menu-caller"))
+          located (first (filter ft/located? rows))]
+      ;; A LOCATED row is the locator and nothing else. An ABSENT row costs
+      ;; more because it carries the search that proves the absence, which is
+      ;; exactly what an absent peer is FOR.
+      (is (< (count (json/generate-string located)) 500)
+          (str "a located peer row costs "
+               (count (json/generate-string located)) " bytes"))
+      (is (< (count (json/generate-string rows)) 1200)
+          (str "three peer rows cost "
+               (count (json/generate-string rows)) " bytes"))))
+
+  (testing "peer_bodies true: the bodies the caller ASKED for outlive the sibling"
+    (let [r (thread! fixture-root {:peer_bodies true :budget_bytes 25000})
+          structured (:structured r)
+          cut (map :leg (:elided structured))]
+      (is (some #{"sibling"} cut)
+          (str "25000 bytes must cut the sibling; elided was " (pr-str cut)))
+      (is (not= "peers" (first cut))
+          (str "requested peer bodies were cut before the sibling: "
+               (pr-str cut)))))
+
+  (testing "by default the peers ride WITH their bodies when the budget has room"
+    (let [r (thread! fixture-root)
+          p (first (filter #(= "openTransformFromSelection" (:identifier %))
+                           (:peers (leg (full r) "menu-caller"))))]
+      (is (= "FOUND" (:status p)))
+      (is (str/includes? (str (:body p)) "function openTransformFromSelection")
+          "at the DEFAULT budget the peer body rides — the T3b read is gone")))
+
+  (testing "peer_bodies is admitted like any other field"
+    (let [{:keys [structured]} (thread! fixture-root {:peer_bodies "yes"})]
+      (is (false? (:ok structured)))
+      (is (= "feature-thread-invalid-peer-bodies" (:error_type structured))))))
 
 ;; ---------------------------------------------------------------------------
 ;; ROUND FOUR / round-three spec 5 -- the two defects the real-repo recall found
@@ -2258,22 +2350,94 @@
       (is (= "transform/handle-format" (:route_handler structured))))))
 
 ;; @spec MCP-OP-THREAD-012
-(deftest every-body-is-byte-for-byte-identical-in-both-faces
-  (testing "the text face never re-formats what the structured face carries"
-    (let [{:keys [text structured]} (thread! fixture-root {:budget_bytes 32768})
-          bodies (concat (keep :body (:legs structured))
-                         (mapcat #(keep :body (:co_primaries %)) (:legs structured))
-                         (mapcat #(keep :body (:peers %)) (:legs structured)))
-          ctx (mapcat :after_context (:legs structured))]
+(defn- deep-bodies
+  "Every `:body` string anywhere in a receipt face."
+  [node]
+  (cond
+    (map? node) (concat (when (string? (:body node)) [(:body node)])
+                        (mapcat deep-bodies (vals node)))
+    (sequential? node) (mapcat deep-bodies node)
+    :else []))
+
+(defn- deep-after-context
+  [node]
+  (cond
+    (map? node) (concat (when (sequential? (:after_context node))
+                          (:after_context node))
+                        (mapcat deep-after-context (vals node)))
+    (sequential? node) (mapcat deep-after-context node)
+    :else []))
+
+;; @spec MCP-OP-THREAD-012
+;; @spec MCP-OP-THREAD-046
+(deftest the-bodies-live-in-the-text-face-and-the-structured-face-says-so
+  (testing "the delivered structured face carries no body and no source context"
+    (let [{:keys [text structured]} (thread! fixture-root {:budget_bytes 32768})]
+      (is (empty? (deep-bodies structured))
+          (str "the structured face still duplicates "
+               (count (deep-bodies structured)) " bodies the text carries"))
+      (is (empty? (deep-after-context structured))
+          "the structured face still duplicates the anchor context")
+      (is (not (str/includes? (json/generate-string structured) "BODY<<"))
+          "no body escaped into the structured face by another name")))
+
+  (testing "every leg whose body is in the TEXT says so in the structured face"
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 32768})
+          located (filter #(#{"FOUND" "CANDIDATE"} (:status %)) (:legs structured))]
+      (is (<= 6 (count located)))
+      (doseq [l located]
+        (is (true? (:body_in_text l))
+            (str "leg " (:id l) " carries no body and does not say where it is: "
+                 (pr-str (select-keys l [:id :status :body_in_text])))))))
+
+  (testing "the structured face still carries every LOCATOR a client needs"
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 32768})]
+      (doseq [l (filter #(#{"FOUND" "CANDIDATE"} (:status %)) (:legs structured))]
+        (is (string? (:file l)) (str (:id l) " has no file"))
+        (is (integer? (:from l)) (str (:id l) " has no start line"))
+        (is (integer? (:to l)) (str (:id l) " has no end line"))
+        (is (string? (:sha256 l)) (str (:id l) " has no digest"))
+        (is (string? (:refetch l)) (str (:id l) " has no refetch command")))
+      (is (seq (get-in structured [:rules :verify])))
+      (is (seq (:next_call structured)))))
+
+  (testing "the text face carries every body, byte for byte"
+    (let [{:keys [text]} (thread! fixture-root {:budget_bytes 32768})
+          ;; the FULL result — what the text is rendered FROM — reached
+          ;; directly, so the delivered bodies can be compared verbatim.
+          full (ft/execute-request nil {:subject (:subject dequote-seeds)
+                                        :also (:also dequote-seeds)
+                                        :config smw-conventions
+                                        :budget_bytes 32768
+                                        :scope {:workspace_root fixture-root}})
+          bodies (deep-bodies full)
+          ctx (deep-after-context full)]
       (is (<= 6 (count bodies)) "the witness needs bodies to compare")
       (is (<= 12 (count ctx)) "and anchor context to compare")
       (doseq [b bodies]
         (is (str/includes? text b)
-            (str "a structured body is not VERBATIM in the text face; a caller"
-                 " reading the text and a caller reading the structure would"
-                 " write different patches. First 80 chars: "
+            (str "a body the receipt read is not VERBATIM in the text face."
+                 " First 80 chars: "
                  (pr-str (subs b 0 (min 80 (count b)))))))
       (doseq [l ctx]
         (is (str/includes? text l)
             (str "an after_context line is not verbatim in the text face: "
-                 (pr-str l)))))))
+                 (pr-str l))))))
+
+  (testing "text is still a superset of the DELIVERED structured face"
+    (let [{:keys [text structured]} (thread! fixture-root {:budget_bytes 32768})
+          leaves (ft/leaf-paths (dissoc structured :elapsed_ms) [])]
+      (is (< 100 (count leaves)))
+      (doseq [[path v] leaves]
+        (is (str/includes? text (str v))
+            (str "a structured leaf is not spelled in the text: "
+                 (str/join "." path) "=" (pr-str v))))))
+
+  (testing "the structured face fits well inside the trunk cap on the named case"
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (is (< (:structured_bytes structured) 16384)
+          (str "the structured face is " (:structured_bytes structured)
+               "B — the cap it was designed to stop hitting is "
+               ft/trunk-public-byte-budget "B"))
+      (is (< 20000 (:text_bytes structured))
+          "the text face still carries the edit basis"))))

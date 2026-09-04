@@ -330,3 +330,26 @@ run as a test inside `make mcp-test`) enforces both halves.
   ceiling is; and a `structured-cap` row shall never advise a larger
   `budget_bytes`, because no `budget_bytes` raises that ceiling — it shall name
   `mode=locations` and quote the ceiling instead.
+
+- [x] **MCP-OP-THREAD-046**: The structured face carries locators, not bodies.
+  When `feature_thread` publishes a receipt, the DELIVERED `structuredContent`
+  shall carry every file, range, `sha256`, boundary, evidence, anchor, refetch
+  command, rule and `next_call`, and shall carry NO body string and no
+  `after_context`; each map whose body the text block carries shall say
+  `body_in_text true`. `text ⊇ structured` continues to hold and is checked
+  against the delivered face plus the bodies, so a dropped body is still loud.
+  `structured_bytes` counts the delivered face. The contract was never
+  `structured ⊇ text`, and duplicating the bodies is what pinned the structured
+  face at 31,338 B against the trunk's 32,640 B ceiling on social-media-writer,
+  eliding `peers` and `sibling` at every budget including the hard cap.
+
+- [x] **MCP-OP-THREAD-047**: Peers ride as ranges; their bodies are asked for or
+  opportunistic. When `feature_thread` reports co-menu-item peers, every peer
+  shall carry its row — identifier, status, and for a located peer the file,
+  range, `sha256`, boundary, evidence, anchor and refetch — and that row shall
+  never be elided for budget. Peer BODIES shall ride when `peer_bodies` is true
+  or when the budget has room after the legs, shall never ride when
+  `peer_bodies` is false, and shall be elided FIRST of all when they were
+  opportunistic and only after the sibling and the anchor context when the
+  caller asked for them; `peer_bodies` shall be admitted as a boolean and
+  refused by name otherwise.

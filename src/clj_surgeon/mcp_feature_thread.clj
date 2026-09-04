@@ -196,17 +196,29 @@
 
 ;; @spec MCP-OP-THREAD-011
 ;; @spec MCP-OP-THREAD-020
-(def elision-order
+;; @spec MCP-OP-THREAD-047
+(defn elision-order-for
   "The order bodies are dropped when the receipt does not fit.
 
   EDIT-AWARE, not merely cheap-first: what goes LAST is what the caller is about
   to type into — the handler, the script function the seed names, and the
   definition the seed names. What goes first is context the caller can re-fetch
   without losing the edit basis. Fixed and stated so an elision is never a
-  surprise."
-  [:sibling :peers :after-context :governance-template :secondary-tests
-   :peer-rows :next-call :menu :route :tests-js :tests :implementation
-   :js-function :handler])
+  surprise.
+
+  Peer bodies move: unasked-for they are OPPORTUNISTIC and go first, ahead of
+  even the sibling; asked for with `peer_bodies true` they are part of what the
+  caller came for and outlive the sibling and the anchor context. A peer ROW is
+  not in this order at all — it is about 120 bytes, it is the whole reason peers
+  are in the receipt, and eliding it costs a call to get back."
+  [peer-bodies-requested?]
+  (if peer-bodies-requested?
+    [:sibling :after-context :peers :governance-template :secondary-tests
+     :next-call :menu :route :tests-js :tests :implementation
+     :js-function :handler]
+    [:peers :sibling :after-context :governance-template :secondary-tests
+     :next-call :menu :route :tests-js :tests :implementation
+     :js-function :handler]))
 
 ;; ---------------------------------------------------------------------------
 ;; Small utilities
@@ -2451,8 +2463,17 @@
               (if-not m
                 {:identifier id :status "ABSENT" :searched searched}
                 (let [strength (leg-strength m)]
-                  (cond-> (merge {:identifier id :searched searched}
-                                 (dissoc m :in-comment? :rank :route-entry? :enclosing-form-name)
+                  (cond-> (merge {:identifier id}
+                                 ;; @spec MCP-OP-THREAD-047
+                                 ;; A LOCATED peer is a range row, and a range
+                                 ;; row is only worth carrying if it is small:
+                                 ;; the search that succeeded, the hit line, the
+                                 ;; enclosing form name and the comment offset
+                                 ;; are all recoverable from the range itself,
+                                 ;; and together they were two thirds of the row.
+                                 (dissoc m :in-comment? :rank :route-entry?
+                                         :enclosing-form-name :hit_line
+                                         :comment_start :form_name)
                                  strength)
                     (= "FOUND" (:status strength))
                     (assoc :anchor (anchor-for cache m)))))))
@@ -2592,7 +2613,7 @@
 ;; Rendering: the text block, and the completion pass that makes it a superset
 ;; ---------------------------------------------------------------------------
 
-(defn- leaf-paths
+(defn leaf-paths
   "Every scalar leaf of a structured receipt as `[path value]`."
   [node path]
   (cond
@@ -2601,6 +2622,43 @@
                                (range) node)
     (or (string? node) (number? node) (boolean? node)) [[path node]]
     :else []))
+
+;; @spec MCP-OP-THREAD-046
+(defn- face-walk
+  [node strip?]
+  (cond
+    (map? node)
+    (let [m (reduce-kv (fn [acc k v] (assoc acc k (face-walk v strip?))) {} node)
+          m (cond-> m (some? (:body node)) (assoc :body_in_text true))]
+      (cond-> m strip? (dissoc :body :after_context)))
+
+    (sequential? node) (mapv #(face-walk % strip?) node)
+
+    :else node))
+
+;; @spec MCP-OP-THREAD-046
+(defn public-face
+  "The STRUCTURED face that is DELIVERED: every locator, no body.
+
+  `text ⊇ structured` is the contract; it never required
+  `structured ⊇ text`. The bodies and the anchor context are the receipt's
+  bulk, the text block carries them already, and duplicating them into the
+  structured face is what pinned that face against the trunk's fixed
+  32,640-byte ceiling — 31,338 B on social-media-writer in edit-basis, so
+  `peers` and `sibling` were elided at EVERY budget including the hard cap, and
+  the agent went and read the peers from source (round-four T3b). So each map
+  that carried a body now says `body_in_text true` and drops the bytes; a
+  client that reads only this face still gets every file, range, digest,
+  anchor, evidence, rule, refetch command and `next_call`."
+  [result]
+  (if (:ok result) (face-walk result true) result))
+
+;; @spec MCP-OP-THREAD-012
+(defn superset-subject
+  "The subject of the text ⊇ structured check: the delivered structured face
+  PLUS the bodies, so the check still proves every body reached the text."
+  [result]
+  (if (:ok result) (face-walk result false) result))
 
 ;; @spec MCP-OP-THREAD-012
 (defn ensure-superset
@@ -2890,8 +2948,9 @@
                       "\n" (receipt-tail (:elapsed_ms result)))
         without-clock (str/join "\n" (cons (header-for false) after-header))]
     (ensure-superset designed
-                     (dissoc result :receipt_bytes :text_bytes
-                             :structured_bytes)
+                     (superset-subject
+                       (dissoc result :receipt_bytes :text_bytes
+                               :structured_bytes))
                      without-clock
                      #{["elapsed_ms"]})))
 
@@ -2911,7 +2970,9 @@
                            :text_bytes tb :structured_bytes sb)
           text (render-receipt candidate)
           t (utf8-bytes text)
-          st (utf8-bytes (json/generate-string candidate))
+          ;; @spec MCP-OP-THREAD-046
+          ;; The number the trunk cap governs is the face that is DELIVERED.
+          st (utf8-bytes (json/generate-string (public-face candidate)))
           total (+ t st)]
       (if (or (and (= total n) (= t tb) (= st sb)) (>= rounds 6))
         [text (assoc result :receipt_bytes total
@@ -3071,27 +3132,6 @@
                       :refetch (elision-remedy binder)}))
          true]))
 
-    ;; @spec MCP-OP-THREAD-039
-    ;; When even the peer RANGES will not fit, the rows go rather than the
-    ;; receipt failing: a peer is the most re-derivable thing here (one
-    ;; `feature_thread` call per identifier), and the ledger names each one so
-    ;; the caller knows what it is asking for.
-    :peer-rows
-    (let [ids (mapcat #(map :identifier (:peers %)) (:legs result))]
-      (if (empty? ids)
-        [result false]
-        [(-> result
-             (update :legs #(mapv (fn [l] (dissoc l :peers)) %))
-             (update :elided conj
-                     {:leg "peer-rows"
-                      :bytes 0
-                      :reason (str (elision-reason binder) "; " (count ids)
-                                   " co-menu-item peer rows dropped entirely")
-                      :from 0 :to 0 :sha256 "n/a"
-                      :refetch (str "feature_thread subject="
-                                    (first ids))}))
-         true]))
-
     ;; @spec MCP-OP-THREAD-036
     ;; after_context is the FIRST thing cut after the sibling: it is the only
     ;; part of the receipt whose re-fetch is a single exact `sed` the receipt
@@ -3156,9 +3196,9 @@
 
   When every body has been elided and the receipt still does not fit, the verb
   REFUSES. It never truncates a body mid-form and never cuts in silence."
-  [result budget]
+  [result budget order]
   (loop [current (assoc result :elided [])
-         remaining elision-order]
+         remaining order]
     (let [[text measured total] (measure current)]
       (cond
         (and (<= total budget)
@@ -3208,7 +3248,7 @@
 
 (def allowed-fields
   #{:subject :also :scope :config :budget_bytes :include_bodies :mode :mirror
-    :axis :workspace_root :probe})
+    :axis :workspace_root :probe :peer_bodies})
 
 (defn- refuse
   [error-type message extra]
@@ -3225,7 +3265,8 @@
   "Validate the request before any file is read. Every refusal names the field."
   [params]
   (let [unknown (sort (map name (remove allowed-fields (keys params))))
-        {:keys [subject also scope budget_bytes include_bodies mode mirror]} params]
+        {:keys [subject also scope budget_bytes include_bodies mode mirror
+                peer_bodies]} params]
     (cond
       (seq unknown)
       (refuse "feature-thread-unknown-field"
@@ -3353,6 +3394,14 @@
               "include_bodies must be true or false"
               {:remedy "Omit include_bodies, or pass a boolean."})
 
+      ;; @spec MCP-OP-THREAD-047
+      (and (some? peer_bodies) (not (boolean? peer_bodies)))
+      (refuse "feature-thread-invalid-peer-bodies"
+              "peer_bodies must be true or false"
+              {:remedy (str "Omit peer_bodies for opportunistic peer bodies,"
+                            " pass true to ask for them, false for ranges"
+                            " only.")})
+
       (and (some? mode) (not (contains? #{"edit-basis" "locations"} mode)))
       (refuse "feature-thread-invalid-mode"
               "mode must be \"edit-basis\" (bodies) or \"locations\" (ranges only)"
@@ -3377,6 +3426,22 @@
   [config]
   (reset! runtime-config config))
 
+;; @spec MCP-OP-THREAD-047
+(defn- strip-peer-bodies
+  "Peer ROWS without peer BODIES: `{id, file, from, to, sha256, anchor,
+  refetch}`, about 120 bytes each. What the caller asked for when they passed
+  `peer_bodies false`, and what a peer is worth carrying at any budget."
+  [legs]
+  (mapv (fn [l]
+          (if (seq (:peers l))
+            (update l :peers
+                    #(mapv (fn [p] (cond-> (dissoc p :body)
+                                     (:body p) (assoc :body_omitted
+                                                      "peer_bodies=false")))
+                           %))
+            l))
+        legs))
+
 (defn- strip-bodies
   [legs]
   (mapv (fn [l]
@@ -3400,7 +3465,7 @@
     (if-not (:ok admission)
       admission
       (let [{:keys [subject also scope budget_bytes include_bodies mode mirror axis
-                    probe]}
+                    probe peer_bodies]}
             normalized
             root (or (:workspace_root scope)
                      (:workspace_root normalized)
@@ -3455,6 +3520,10 @@
                                              handler candidate-globs
                                              (:paths scope))
                         legs (if bodies? legs (strip-bodies legs))
+                        ;; @spec MCP-OP-THREAD-047
+                        legs (if (false? peer_bodies)
+                               (strip-peer-bodies legs)
+                               legs)
                         status (thread-status legs)
                         sibling (resolve-sibling cache paths conventions seeds
                                                  legs mirror candidate-globs
@@ -3487,7 +3556,9 @@
                                                   (or probe [])))
                                 :elided []}
                                status)
-                        [_ fitted] (fit-to-budget base budget)]
+                        [_ fitted] (fit-to-budget
+                                     base budget
+                                     (elision-order-for (true? peer_bodies)))]
                     fitted))))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -3558,6 +3629,14 @@
                                       " last — and every elision is named.")}
     "include_bodies" {:type "boolean"
                       :description "false returns ranges only (mode=locations)."}
+    "peer_bodies" {:type "boolean"
+                   :description (str "Co-menu-item peers always ride as ranges"
+                                     " (file, range, sha256, anchor, refetch)."
+                                     " Omit for their BODIES to ride whenever"
+                                     " the budget has room after the legs;"
+                                     " true to ask for them explicitly, so"
+                                     " they outlive the sibling; false for"
+                                     " ranges only.")}
     "mode" {:type "string" :enum ["edit-basis" "locations"]}
     "mirror" {:type "string" :minLength 1
               :description "Seed of the feature this one should mirror."}
@@ -3648,7 +3727,15 @@
                            (or (.getMessage error) (.getName (class error)))
                            {:remedy "Report this receipt; no source was read past the failure."})))
      :summarize summary
-     :callback callback}))
+     ;; @spec MCP-OP-THREAD-046
+     ;; The text is rendered from the FULL result, which is why `summarize`
+     ;; still sees the bodies; what is PUBLISHED as structuredContent — and
+     ;; what `structured_bytes` counted — is the body-free face. Both the
+     ;; serialized body and the callback get the same one, so the two cannot
+     ;; disagree.
+     :serialize #(json/generate-string (public-face %))
+     :callback (fn [content error? structured]
+                 (callback content error? (public-face structured)))}))
 
 ;; @spec MCP-OP-THREAD-001
 (def feature-thread-tool
