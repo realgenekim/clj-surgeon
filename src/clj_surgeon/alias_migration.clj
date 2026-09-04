@@ -1121,7 +1121,21 @@
   one."
   [needle source]
   (try
-    (->> (tree-seq n/inner? n/children (parser/parse-string-all source))
+    (->> (tree-seq (fn [node]
+                     ;; @spec MCP-OP-ALIAS-034
+                     ;; a reader DISCARD is not a string literal the reader
+                     ;; read: `#_ "lib/var"` is dropped before any value
+                     ;; exists. The migration walker already stops here
+                     ;; (`(= :uneval tag) (leaf node)`), and a count published
+                     ;; as EXACT cannot count what the reader never built.
+                     ;; `(comment …)` is NOT this case and is descended: it is
+                     ;; an ordinary macro whose body the reader reads, so its
+                     ;; string literal exists and names stale work an operator
+                     ;; must go and look at.
+                     (and (n/inner? node) (not= :uneval (n/tag node))))
+                   n/children
+                   (parser/parse-string-all source))
+         (remove #(= :uneval (n/tag %)))
          (filter #(contains? #{:token :multi-line} (n/tag %)))
          (keep (fn [node]
                  (let [value (try (n/sexpr node) (catch Exception _ nil))]
