@@ -3888,7 +3888,20 @@
     (is (<= (public-bytes published) inspect-tool/max-public-result-bytes)
         "the published pair is inside the declared budget")
     (testing "the text spends the room the receipt leaves it"
-      (is (<= 6000 (count text))
+      ;; The FLOOR is a floor against the round-four notice rung — 151
+      ;; characters with 9,251 bytes unspent — and NOT a target. It is coupled
+      ;; to the size of this repository's OWN SOURCES, which the fixture names
+      ;; and which every commit to those two files moves: the receipt and the
+      ;; text share one 32,768-byte budget, so a longer `mcp_inspect.clj`
+      ;; leaves the text less room. Round seven measured 6,248 characters at 2
+      ;; bytes of headroom; this tip measures 5,777 at 29. MEASURED, by
+      ;; redefining both escape functions to `identity` on this exact batch:
+      ;; the MCP-OP-STUDY-052/053 escaping accounts for SIX of those
+      ;; characters (5,777 escaped against 5,771 unescaped) — the other 465
+      ;; are the ~90 lines this branch added to `mcp_inspect.clj` itself. The
+      ;; invariant that has teeth is the headroom bound below; the floor only
+      ;; has to be far enough above a notice.
+      (is (<= 5000 (count text))
           (format (str "an ordinary two-file batch published %d characters of "
                        "text with %d bytes of the budget unspent")
                   (count text) headroom))

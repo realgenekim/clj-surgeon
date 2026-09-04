@@ -601,10 +601,19 @@
   rather than a second, incompatible one — a caller who knows JSON Pointer
   decodes `~0` and `~1` unchanged.
 
+  @spec MCP-OP-STUDY-053 — and `\\n`, `\\r`, `\\t`, because a pointer that
+  SPLITS is not a pointer: the renderer emitted `  bad` and `key: <value>` as
+  two lines while the carriage predicate searched for the unsplit whole
+  string, and the text published `10 of 10 rendered` over a leaf it did not
+  carry.
+
   The map is applied in ONE pass by `clojure.string/escape`, so no escape can
   be re-escaped and the encoding is decodable: after `~` comes exactly one of
-  `0`-`6`, and after `\\` exactly one `\\`."
+  `0`-`6`, and after `\\` exactly one of `\\`, `n`, `r`, `t`."
   {\\ "\\\\"
+   \newline "\\n"
+   \return "\\r"
+   \tab "\\t"
    \~ "~0"
    \/ "~1"
    \. "~2"
@@ -739,34 +748,65 @@
       (< (count (leaf-spelling value)) min-distinctive-spelling)))
 
 ;; @spec MCP-OP-STUDY-044
+(def ^:private line-break-escapes
+  "The characters a rendered VALUE may not spell raw on its own line.
+
+  @spec MCP-OP-STUDY-053 — a line is a line. `\\` is escaped with them so the
+  encoding stays decodable, and nothing else is touched: a value's other
+  characters are the answer the caller came for."
+  {\\ "\\\\"
+   \newline "\\n"
+   \return "\\r"
+   \tab "\\t"})
+
+;; @spec MCP-OP-STUDY-053
+(defn escape-line-breaks
+  "One rendered spelling, with every character that would split its line
+  escaped to its visible two-character form.
+
+  This is what makes `leaf-lines` return ONE line by construction, which is
+  what makes the renderer's declaration and an audit of its published text the
+  same question. Field evidence (Sol O2 round-7 review, 2026-09-04, section
+  3): the previous rendering split a multi-line spelling into an indented
+  BLOCK and dropped its blank lines, so `\"a\\n\\nb\"` and `\"a\\nb\"` rendered
+  byte-identically at one pointer — the same-type substitution
+  MCP-OP-STUDY-051 forbids, one level down."
+  [spelling]
+  (str/escape spelling line-break-escapes))
+
 (defn labelled-leaf
   "`results[0].platforms=[]` — the collidable leaf's own spelling, unindented,
   and the exact string its witness looks for."
   [path value]
-  (str (leaf-label path) "=" (leaf-spelling value)))
+  (str (leaf-label path) "=" (escape-line-breaks (leaf-spelling value))))
 
 ;; @spec MCP-OP-STUDY-044
 (defn leaf-lines
-  "The WHOLE LINES a rendering emits for ONE receipt leaf, and the only
-  characters anywhere that carry it.
+  "The WHOLE LINE a rendering emits for ONE receipt leaf, and the only
+  characters anywhere that carry it. Always exactly one.
 
-  `  <pointer>: <spelling>` for a distinctive value, `  <pointer>=<spelling>`
-  for a collidable one, and for a multi-line spelling the pointer's own
-  indented block: a header line `  <pointer>:` and every non-blank line of the
-  value indented under it.
+  `  <pointer>: <spelling>` for a distinctive value and `  <pointer>=<spelling>`
+  for a collidable one, with the pointer escaped by MCP-OP-STUDY-052 and the
+  spelling by MCP-OP-STUDY-053.
 
-  Every form begins with the leaf's JSON POINTER, and pointers are unique, so
-  no leaf's lines can be another leaf's."
+  Both forms begin with the leaf's JSON POINTER, and pointers are INJECTIVE,
+  so no leaf's line can be another leaf's. Both are SINGLE LINES BY
+  CONSTRUCTION, so the line this returns is the line a splitter of the
+  published text finds.
+
+  @spec MCP-OP-STUDY-053 — the indented-block rendering of a multi-line
+  spelling is withdrawn. It split one leaf across lines the carriage predicate
+  never looked for, and it removed the value's blank lines, so two distinct
+  values rendered identically at one pointer. A multi-line value now prints
+  its `\\n` visibly, on its own line, whole.
+
+  The vector is kept — one element — because it is the unit `leaf-carried?`
+  asks the line index about and the unit the entry list joins."
   [path value]
-  (let [rendered (leaf-spelling value)
-        label (leaf-label path)]
-    (if (str/includes? rendered "\n")
-      (into [(str "  " label ":")]
-            (comp (remove str/blank?) (map #(str "    " %)))
-            (str/split-lines rendered))
-      [(if (collidable-leaf? value)
-         (str "  " (labelled-leaf path value))
-         (str "  " label ": " rendered))])))
+  [(if (collidable-leaf? value)
+     (str "  " (labelled-leaf path value))
+     (str "  " (leaf-label path) ": "
+          (escape-line-breaks (leaf-spelling value))))])
 
 ;; @spec MCP-OP-STUDY-051
 (defn text-line-index
