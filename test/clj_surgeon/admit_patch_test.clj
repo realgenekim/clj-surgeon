@@ -3756,7 +3756,16 @@
                              {:patch patch :mode "preview" :verify "focused"})
                     lint (:lint_delta result)]
                 (is (:ok result) (str "the gate refused this: " (:error result)))
-                (is (= 21 (count (:files result))))
+                ;; @spec MCP-OP-ADMIT-136
+                ;; The receipt accounts for all 21 files, but it no longer
+                ;; necessarily CARRIES all 21: since the text block must name
+                ;; every leaf the structure spells, and both faces are charged
+                ;; the same one budget, the structure gives ground on a wide
+                ;; patch and says so. What must not change is the accounting.
+                (is (= 21 (+ (count (:files result))
+                             (get-in result [:payload_omitted :files] 0)))
+                    (str "files carried " (count (:files result))
+                         " omitted " (pr-str (:payload_omitted result))))
                 (is (true? (:ran lint))
                     (str "the analyzer half never ran in the field: "
                          (pr-str (select-keys lint [:error-type :cap
@@ -4867,12 +4876,16 @@
             "the text names the field, what it printed, and exactly what it cut")))))
 
 ;; @spec MCP-OP-ADMIT-134
-(deftest a-receipt-past-the-fact-section-budget-states-how-many-it-dropped
-  ;; The count elision, at the bound. A leaf is never dropped silently: the
-  ;; text states the exact number that live in structuredContent instead, and
-  ;; "exact" is checked against this witness's own independent leaf count.
-  (let [budget @#'admit/admit-fact-section-byte-budget
-        wide (into {} (for [i (range 4000)]
+;; @spec MCP-OP-ADMIT-136
+(deftest a-receipt-past-the-fact-section-budget-names-what-it-dropped
+  ;; The last-resort elision, at the bound -- and the bound is the ONE public
+  ;; budget minus the rest of the text, computed here from the published text
+  ;; itself rather than read from a constant in the implementation.
+  ;;
+  ;; Round four asserted this against `admit-fact-section-byte-budget`, half
+  ;; of the public budget and an invented second one. There is no such var to
+  ;; read now, which is the point.
+  (let [wide (into {} (for [i (range 4000)]
                         [(keyword (format "leaf%04d" i))
                          (apply str (repeat 40 "y"))]))
         result (merge {:ok false :operation :admit-patch-refused :mode "preview"
@@ -4880,24 +4893,63 @@
                        :source-unchanged true :next_call nil}
                       wide)
         text (#'admit/summary result)
-        fact-line (->> (str/split-lines text)
-                       (filter #(str/starts-with? % "facts · "))
-                       first)
-        marker (re-find #"\[\+(\d+) more facts in structuredContent\]" text)
+        lines (str/split-lines text)
+        fact-line (first (filter #(str/starts-with? % "facts · ") lines))
+        elided-line (first (filter #(str/starts-with? % "facts_elided · ") lines))
+        marker (re-find #"facts_elided · (\d+) leaf\(s\)" text)
         printed (->> (str/split (subs fact-line (count "facts · ")) #" · ")
-                     (remove #(str/starts-with? % "[+"))
                      count)
         total (count (structured-leaves result))]
     (is (some? fact-line))
-    (is (some? marker)
-        (str "a receipt whose leaves exceed the " budget
-             "-byte fact budget must say so, not stop"))
+    (is (some? elided-line)
+        (str "a receipt whose leaves cannot fit the remainder of the one "
+             "budget must say so, not stop"))
     (is (< printed total) "some leaves were in fact elided")
-    (is (<= (count fact-line) budget)
-        "the fact section stayed inside the budget it states")
+    (is (<= (count text) write-refusal/public-byte-budget)
+        (str "the WHOLE text block -- the elision note included -- stays "
+             "inside the one public budget: " (count text)))
     (is (= (- total printed) (Integer/parseInt (second marker)))
-        (str "the stated omitted count must equal this witness's own count of "
-             "leaves minus the facts actually printed: " total " - " printed))))
+        (str "the stated elided count must equal this witness's own count of "
+             "leaves minus the facts actually printed: " total " - " printed))
+    (testing "and the elided leaves are NAMED, not merely counted"
+      (let [named (-> elided-line
+                      (str/split #"not above: ")
+                      second
+                      (str/split #" · "))
+            named (remove #(str/starts-with? % "[+") named)]
+        (is (seq named) "the note names at least one elided path")
+        (doseq [path (take 5 named)]
+          (is (not (str/includes? fact-line (str path "=")))
+              (str "a path named as elided is in fact rendered: " path)))))
+    (testing "and the head fields elision never reaches are all present"
+      (doseq [key @#'admit/admit-receipt-fact-head
+              :let [leaf (str (name key) "=")]
+              :when (contains? result key)]
+        (is (str/includes? fact-line leaf)
+            (str "a head field was elided: " leaf))))))
+
+;; @spec MCP-OP-ADMIT-136
+(deftest the-fact-section-is-charged-the-remainder-of-the-one-budget
+  ;; The arithmetic, stated as a behaviour: the fact walk's budget is what is
+  ;; LEFT of the public budget after the head and the verbatim next_call, and
+  ;; nothing else. Measured off the published text, with no constant shared
+  ;; with the renderer.
+  (let [result {:ok false :operation :admit-patch-refused :mode "preview"
+                :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                :source-unchanged true
+                :leaf (apply str (repeat 40 "z"))
+                :next_call {:tool "admit_clojure_patch" :blocked_by "invalid-patch"}}
+        text (#'admit/summary result)
+        lines (str/split-lines text)
+        facts (count (first (filter #(str/starts-with? % "facts · ") lines)))
+        rest-of-text (- (count text) facts 1)]
+    (is (pos? facts))
+    (is (= (- write-refusal/public-byte-budget rest-of-text)
+           (- write-refusal/public-byte-budget (- (count text) facts 1)))
+        "arithmetic identity, stated so the next line reads as a claim")
+    (is (<= facts (- write-refusal/public-byte-budget rest-of-text))
+        (str "the fact section may spend only the remainder: " facts
+             " of " (- write-refusal/public-byte-budget rest-of-text)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Round four, blocker 3 (MCP-OP-ADMIT-134): the SUCCESS branch was never a
@@ -5076,8 +5128,8 @@
                                   [(keyword (format "leaf%04d" i))
                                    (apply str (repeat 40 "y"))])))
         text (#'admit/summary crowded)]
-    (is (str/includes? text "more facts in structuredContent]")
-        "the fixture must actually be over the fact budget")
+    (is (str/includes? text "facts_elided · ")
+        "the fixture must actually be over the fact section's remainder")
     (is (str/includes? text (str "next_call · " encoded))
         (str "the next_call is rendered last and never elided; everything "
              "else gives ground before it does"))))

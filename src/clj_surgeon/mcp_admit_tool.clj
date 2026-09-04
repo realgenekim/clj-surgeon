@@ -1941,9 +1941,16 @@
                              " lever, because expect_pre_sha256 carries one"
                              " digest per file")})))))
 
+;; @spec MCP-OP-ADMIT-136
+;; `summary-characters` renders the text face; it lives with the renderer,
+;; below, and is declared here because the bound is applied at the one point
+;; every receipt passes.
+(declare summary-characters)
+
 ;; @spec MCP-OP-ADMIT-069
 ;; @spec MCP-OP-ADMIT-133
 ;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-136
 (defn- bound-receipt
   "Fit one public receipt inside the shared MCP payload budget, refusing
   outright when its next_call alone cannot fit, and refusing to publish a
@@ -1953,12 +1960,28 @@
   through, and it sits OUTSIDE every `catch` on that path -- so a kind built
   dynamically, or forwarded out of another namespace's ex-data, cannot be
   laundered into the public surface by the enumeration never having heard of
-  it. The oversize check runs first so its own refusal is checked too."
+  it. The oversize check runs first so its own refusal is checked too.
+
+  The payload bound is ONE pass against ONE budget with TWO faces: a
+  candidate fits only when its JSON fits `public-byte-budget` AND the text
+  block that spells every one of its leaves fits the same number. When both
+  cannot fit, the STRUCTURE is what gives ground -- it is the face that can
+  say `payload_omitted` and be believed -- so the text stays a superset of
+  whatever survives (MCP-OP-ADMIT-136). Two passes with two predicates would
+  reset the cumulative omission record; a second budget would be a second
+  budget."
   [receipt]
   (-> (or (oversize-next-call-refusal receipt) receipt)
       checked-refusal-kind!
       (write-refusal/bound-public-refusal pr-str)
-      (write-refusal/bound-public-payload trimmable-receipt-keys)))
+      ;; @spec MCP-OP-ADMIT-136
+      (write-refusal/bound-public-payload
+        trimmable-receipt-keys
+        (fn [candidate]
+          (and (<= (write-refusal/json-bytes candidate)
+                   write-refusal/public-byte-budget)
+               (<= (summary-characters candidate)
+                   write-refusal/public-byte-budget))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry point
@@ -2114,16 +2137,31 @@
   exactly how many characters it did not print."
   200)
 
-;; @spec MCP-OP-ADMIT-134
-(def admit-fact-section-byte-budget
-  "The share of the ONE public payload budget the fact walk may spend.
+;; @spec MCP-OP-ADMIT-136
+(def admit-receipt-fact-head
+  "The receipt keys whose leaves elision never reaches, in render order.
 
-  Round three capped the walk at a flat 40 facts -- a second, invented
-  budget with no relation to the payload that actually has to fit. This is
-  half of `mcp-write-refusal/public-byte-budget`, the shared contract; the
-  other half is headroom for the header, error sentence, remedy, detector
-  note and the next_call, which is rendered last and never elided."
-  (quot write-refusal/public-byte-budget 2))
+  Round four sorted every fact by path and dropped from the tail, so the
+  four fields a caller most needs -- `source-unchanged`, `mutation_attempted`,
+  `pre_image_binding`, `lock_scope`: did you touch my files, did you try to
+  write, is this bound to the bytes I read, what did you lock -- were the
+  first to go, because their names sort late. A field's position in the
+  alphabet is not a statement about how much it matters.
+
+  So the walk renders these first and never elides them. `error`, `remedy`
+  and `next_call` are here for the same reason they have their own lines:
+  they are the receipt's answer to `what now`."
+  [:ok :operation :source-unchanged :mutation_attempted :pre_image_binding
+   :lock_scope :error :remedy :next_call])
+
+;; @spec MCP-OP-ADMIT-136
+(defn- fact-root
+  "The receipt key one leaf path belongs to -- `files[3].path` -> `files`."
+  [path]
+  (let [n (count path)
+        dot (or (str/index-of path ".") n)
+        bracket (or (str/index-of path "[") n)]
+    (subs path 0 (min dot bracket))))
 
 ;; @spec MCP-OP-ADMIT-134
 (defn admit-leaf-entries
@@ -2184,56 +2222,83 @@
 
 ;; @spec MCP-OP-ADMIT-134
 ;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-136
 (defn- admit-receipt-facts
   "Every leaf of `result` a text-reading client would otherwise never see,
-  on a refusal and on a success alike.
+  rendered inside `budget` characters -- what is actually LEFT of the one
+  public byte budget after the rest of this text block has been counted.
 
-  Round three ran this on the refusal branch only, so an `:ok true` receipt
-  published its file records, pre/post digests, focused test namespaces and
-  `detectors_not_run` to structuredContent and to nobody reading the text.
-  A receipt has two faces and one of them must not say less. It now runs on
-  both.
+  Round four charged this section a fixed half of `public-byte-budget`. That
+  was a second, invented budget -- the same defect round three blocked on for
+  `next_call`, one field over -- and it bit on an ordinary receipt: a
+  twenty-file preview whose structured face was 14,918 bytes, under half the
+  budget and untruncated, published a text missing 71 of its own leaves. The
+  headroom the half-budget reserved was never contested; the leaves were lost
+  anyway.
 
-  The stated elision order, when the whole text will not fit: (1) each
-  leaf's VALUE is cut at `max-admit-receipt-fact-characters`, naming the
-  cut; (2) then whole leaves are dropped from the TAIL of the path-sorted
-  order until the section fits `admit-fact-section-byte-budget`, and the
-  text states how many were dropped; (3) the `next_call` is never elided at
-  any size -- it is rendered after this section, verbatim, and if it alone
-  cannot fit the public budget the receipt becomes a typed refusal rather
-  than a pointer (MCP-OP-ADMIT-135)."
-  [result]
-  (let [facts (->> (apply dissoc result admit-receipt-fact-exclusions)
-                   (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
-                   (sort-by first)
-                   (map rendered-fact)
-                   vec)
-        line (fn [kept]
-               (let [omitted (- (count facts) (count kept))]
-                 (str "facts · " (str/join " · " kept)
-                      (when (pos? omitted)
-                        (str " · [+" omitted
-                             " more facts in structuredContent]")))))]
-    (when (seq facts)
-      ;; Shrink the WHOLE rendered line, marker included, until it fits.
-      ;; Budgeting the join of the parts and then appending the marker is how
-      ;; a bound gets quietly exceeded by the thing that announces it.
-      (loop [kept (let [budget admit-fact-section-byte-budget]
-                    ;; a cheap first cut, so the exact shrink below runs a
-                    ;; handful of times rather than once per dropped fact
-                    (subvec facts 0
-                            (min (count facts)
-                                 (max 0 (dec (count (take-while
-                                                      #(<= % budget)
-                                                      (reductions
-                                                        + (count "facts · ")
-                                                        (map #(+ 3 (count %))
-                                                             facts)))))))))]
-        (let [rendered (line kept)]
-          (if (or (empty? kept)
-                  (<= (count rendered) admit-fact-section-byte-budget))
-            rendered
-            (recur (subvec kept 0 (dec (count kept))))))))))
+  There is one budget and this section is charged the remainder of it, so a
+  receipt whose whole text fits publishes every leaf. When it does not fit,
+  the STRUCTURED face gives ground first -- `bound-receipt` trims the
+  receipt's own bounded collections until the text that spells it fits, so
+  supersetness is preserved by shrinking the structure rather than by
+  quietly shortening the text.
+
+  What is left after that cannot be dropped silently. The order is: (1) each
+  leaf's VALUE is cut at `max-admit-receipt-fact-characters`, naming the cut;
+  (2) `admit-receipt-fact-head` renders first and is never elided; (3) the
+  remaining leaves elide from the tail of the path-sorted order, and the text
+  NAMES the elided paths and states their exact count; (4) if the naming
+  itself will not fit, the names shrink and the count of unnamed paths is
+  stated -- the count is exact at every step; (5) the `next_call` is rendered
+  after this section, verbatim, and is never elided at any size
+  (MCP-OP-ADMIT-135)."
+  [result budget]
+  (let [entries (->> (apply dissoc result admit-receipt-fact-exclusions)
+                     (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
+                     (sort-by first)
+                     vec)
+        order (into {} (map-indexed (fn [i k] [(name k) i]))
+                    admit-receipt-fact-head)
+        head (->> entries
+                  (filter (fn [[path _]] (contains? order (fact-root path))))
+                  (sort-by (fn [[path _]] [(order (fact-root path)) path]))
+                  vec)
+        tail (filterv (fn [[path _]] (not (contains? order (fact-root path))))
+                      entries)
+        head-facts (mapv rendered-fact head)
+        tail-facts (mapv rendered-fact tail)
+        tail-paths (mapv first tail)
+        total (count tail-facts)
+        ;; Render the WHOLE section, elision note included, and measure that.
+        ;; Budgeting the join of the parts and then appending the marker is
+        ;; how a bound gets quietly exceeded by the thing that announces it.
+        line (fn [kept named]
+               (let [dropped (- total kept)]
+                 (str "facts · "
+                      (str/join " · " (into head-facts (subvec tail-facts 0 kept)))
+                      (when (pos? dropped)
+                        (str "\nfacts_elided · " dropped
+                             " leaf(s) are in structuredContent and not above: "
+                             (str/join " · " (subvec tail-paths kept
+                                                     (+ kept (min named dropped))))
+                             (when (< named dropped)
+                               (str " · [+" (- dropped named)
+                                    " path(s) not named here]")))))))]
+    (when (seq entries)
+      ;; keeping one more fact always costs more than naming it costs, so the
+      ;; rendered length rises with `kept` and a bisection is exact
+      (let [kept (loop [low 0 high total]
+                   (if (< low high)
+                     (let [mid (quot (+ low high 1) 2)]
+                       (if (<= (count (line mid (- total mid))) budget)
+                         (recur mid high)
+                         (recur low (dec mid))))
+                     low))]
+        (loop [named (- total kept)]
+          (let [rendered (line kept named)]
+            (if (or (zero? named) (<= (count rendered) budget))
+              rendered
+              (recur (dec named)))))))))
 
 ;; @spec MCP-OP-ADMIT-132
 ;; @spec MCP-OP-ADMIT-135
@@ -2259,7 +2324,10 @@
     (str "next_call · none — this receipt has no follow-up call")))
 
 ;; @spec MCP-OP-ADMIT-134
-(defn- summary
+(defn- summary-head
+  "Everything the text block says above the fact section: the header line,
+  and on a refusal the error sentence, the source-unchanged claim, the
+  detector note and the remedy line."
   [result]
   (if (:ok result)
     (str "admit_clojure_patch\n  " (name (:operation result))
@@ -2273,18 +2341,7 @@
          "\nverification_complete=" (:verification_complete result)
          " verification_status="
          (name (or (:verification_status result) :unverified))
-         (detector-note result)
-         ;; @spec MCP-OP-ADMIT-134
-         ;; The ok branch obeys the identical rule as the refusal branch.
-         ;; Round three ran the fact walk on refusals only, so a successful
-         ;; commit published its file records, digests and focused test
-         ;; namespaces to structuredContent and to nobody reading the text.
-         ;; A receipt has two faces and neither is allowed to say less.
-         (when-let [facts (admit-receipt-facts result)]
-           (str "\n" facts))
-         ;; @spec MCP-OP-ADMIT-132
-         ;; @spec MCP-OP-ADMIT-135
-         "\n" (admit-rendered-next-call result))
+         (detector-note result))
     (str "admit_clojure_patch refused · " (name (or (:error-type result)
                                                     :unknown))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
@@ -2296,13 +2353,52 @@
          (detector-note result)
          ;; @spec MCP-OP-ADMIT-131
          (when-let [remedy (:remedy result)]
-           (str "\nremedy · " remedy))
-         ;; @spec MCP-OP-ADMIT-134
-         (when-let [facts (admit-receipt-facts result)]
-           (str "\n" facts))
+           (str "\nremedy · " remedy)))))
+
+;; @spec MCP-OP-ADMIT-134
+;; @spec MCP-OP-ADMIT-135
+;; @spec MCP-OP-ADMIT-136
+(defn- summary
+  "One receipt's text face, inside the ONE public byte budget.
+
+  The header and the verbatim `next_call` are rendered first and measured;
+  the fact walk is then charged EXACTLY what is left, so a receipt whose
+  whole text fits publishes every leaf its structuredContent spells. Round
+  four gave the fact walk a fixed half of the budget instead and dropped 71
+  leaves from a twenty-file preview whose text was 18,761 characters -- less
+  than three fifths of the budget it was nowhere near."
+  ([result] (summary result write-refusal/public-byte-budget))
+  ([result budget]
+   (let [head (summary-head result)
          ;; @spec MCP-OP-ADMIT-132
          ;; @spec MCP-OP-ADMIT-135
-         "\n" (admit-rendered-next-call result))))
+         next-call (admit-rendered-next-call result)
+         fixed (str head "\n" next-call)
+         ;; the newline that would join the fact section to the head
+         remaining (- budget (count fixed) 1)]
+     (if-let [facts (admit-receipt-facts result remaining)]
+       (str head "\n" facts "\n" next-call)
+       fixed))))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- summary-characters
+  "An upper bound on the length of the text face `receipt` will publish.
+
+  It is the length of the text that renders EVERY leaf, not the length of
+  the text that would be published: `summary` always fits its budget by
+  eliding, so asking it whether it fits would always be answered yes and
+  the structure would never give ground. The question this bound asks is
+  `would anything have to be elided`.
+
+  `:elapsed_ms` is stamped by `mcp-operation/finalize-result` AFTER the
+  receipt is bounded, so the widest rendering `format-elapsed-ms` can produce
+  stands in for it here. Over-reserving costs a few leaves of the structured
+  face; under-reserving would cost supersetness, and the two are not
+  symmetric. Any residual overshoot is caught exactly by `summary`, which
+  charges the fact walk the real remainder and names whatever it elides."
+  [receipt]
+  (count (summary (assoc receipt :elapsed_ms Double/MAX_VALUE)
+                  Long/MAX_VALUE)))
 
 ;; @spec MCP-OP-ADMIT-129
 (defn- edge-throwable-refusal

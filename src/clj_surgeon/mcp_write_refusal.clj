@@ -245,13 +245,24 @@
   The omission record is cumulative. Reporting only the last step's loss would
   understate a payload trimmed several times over, and a reader who sees
   `payload_omitted` at all is asking exactly one question: how much am I not
-  being shown?"
-  [result trimmable]
+  being shown?
+
+  The three-argument arity takes the fit test itself, so a caller whose
+  published surface is wider than the JSON -- a receipt that must also render
+  every one of its leaves in a text block -- can shrink the STRUCTURE until
+  both of its faces fit the same one budget, in ONE pass, with one cumulative
+  omission record. Two passes with two predicates would reset that record and
+  understate the loss; a second budget would be a second budget."
+  ([result trimmable]
+   (bound-public-payload result trimmable
+                         (fn [candidate]
+                           (<= (json-bytes candidate) public-byte-budget))))
+  ([result trimmable fits?]
   (let [annotation-keys [:payload_truncated :payload_truncation
                          :payload_omitted :payload_omitted_bytes]
         content (fn [value] (json-bytes (apply dissoc value annotation-keys)))
         original-bytes (content result)]
-    (if (<= original-bytes public-byte-budget)
+    (if (fits? result)
       result
       (loop [current result
              omitted {}]
@@ -275,6 +286,6 @@
                                      :payload_omitted omitted
                                      :payload_omitted_bytes
                                      (- original-bytes (content trimmed)))]
-              (if (<= (json-bytes next-result) public-byte-budget)
+              (if (fits? next-result)
                 next-result
-                (recur trimmed omitted)))))))))
+                (recur trimmed omitted))))))))))
