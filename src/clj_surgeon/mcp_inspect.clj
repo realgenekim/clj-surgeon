@@ -591,16 +591,60 @@
     (string? segment) segment
     :else (str segment)))
 
+(def ^:private pointer-segment-escapes
+  "The characters a receipt path segment may not spell RAW inside a pointer.
+
+  @spec MCP-OP-STUDY-052 — every one of them is a character this syntax has
+  already spent: `.` joins segments, `[` and `]` wrap an index, `:` and `=`
+  separate a pointer from its spelling, and `~` and `\\` are the two escape
+  introducers themselves. `/` is escaped so the rule is RFC 6901's extended
+  rather than a second, incompatible one — a caller who knows JSON Pointer
+  decodes `~0` and `~1` unchanged.
+
+  The map is applied in ONE pass by `clojure.string/escape`, so no escape can
+  be re-escaped and the encoding is decodable: after `~` comes exactly one of
+  `0`-`6`, and after `\\` exactly one `\\`."
+  {\\ "\\\\"
+   \~ "~0"
+   \/ "~1"
+   \. "~2"
+   \[ "~3"
+   \] "~4"
+   \: "~5"
+   \= "~6"})
+
+;; @spec MCP-OP-STUDY-052
+(defn escape-pointer-segment
+  "One path segment, with every delimiter of this pointer syntax escaped.
+
+  Field evidence (Sol O2 round-7 review, 2026-09-04, section 2): the segments
+  were concatenated RAW, so the top-level key `\"a.b\"` and the nested path
+  `[:a :b]` both spelled `a.b`. `text-line-index` is a SET, so ONE rendered
+  `a.b: <value>` line discharged both leaves and the block declared one
+  dropped while an audit of its own text found two — 587 disagreements across
+  the allowance band. A pointer that cannot be decoded back to the path that
+  made it is not an address."
+  [segment]
+  (str/escape segment pointer-segment-escapes))
+
 (defn leaf-label
   "`results[0].source_anchor.range.start.line` — the JSON pointer a caller
-  reads the same fact back out of `structuredContent` with."
+  reads the same fact back out of `structuredContent` with.
+
+  @spec MCP-OP-STUDY-052 — INJECTIVE: distinct paths spell distinct pointers,
+  because every character this rendering spends as a delimiter is escaped
+  inside a segment. That is what makes a rendered line attributable to ONE
+  leaf, and it is the identity the declaration and the audit both rest on."
   [path]
   (apply str
          (map-indexed (fn [index segment]
                         (cond
                           (integer? segment) (str "[" segment "]")
-                          (zero? index) (segment-spelling segment)
-                          :else (str "." (segment-spelling segment))))
+                          (zero? index) (escape-pointer-segment
+                                          (segment-spelling segment))
+                          :else (str "."
+                                     (escape-pointer-segment
+                                       (segment-spelling segment)))))
                       path)))
 
 ;; @spec MCP-OP-STUDY-044
