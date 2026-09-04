@@ -900,6 +900,19 @@ detector had never run on a real input.
 - [x] **MCP-OP-ADMIT-129**: If a `Throwable` that is not an `Exception` reaches the admit handler's edge — an `OutOfMemoryError` raised below the analyzer read ceiling above all — then clj-surgeon shall publish a typed refusal naming the maximum heap and a remedy, rather than escaping the handler with no receipt at all; and because the gate cannot know how far such a failure got, that refusal shall not claim `source unchanged` in either the structured receipt or its text block.
 - [x] **MCP-OP-ADMIT-130**: The admit path's memory bound shall be a receipt, not an argument: a bounded self-test shall drive `default-lint-runner` over 100, 1,000 and 10,000-file synthetic analyzer answers with distinct findings, in a JVM with an explicit `-Xmx`, and emit a numeric PASS or FAIL line per arm naming the findings count, the analyzer bytes, the observed heap and the budget. It shall be reachable by a named Make target and shall never be wired into `test`, `test-fast` or `mcp-test`, so it cannot become a slow gate by accident.
 
+Landing review, round three (inb-cbca17). `admit_clojure_patch` is the
+catalog's only write tool, and its refusal text sat outside the trunk's
+text-is-a-superset-of-structuredContent ratchet the alias-migration verb
+already carries (MCP-OP-ALIAS-059): `remedy` and `next_call` were absent from
+every refused receipt's text, including the ceiling that names the number
+that would lift an `analyzer-memory-exhausted` refusal and the follow-up call
+`verification-incomplete` itself proposes; the tool description tells a
+caller to copy `expect_pre_sha256` from a preview's `next_call`, and the text
+never showed a `next_call` at all.
+
+- [x] **MCP-OP-ADMIT-131**: Every refusal kind clj-surgeon's admit gate constructs — enumerated from the source, not from a maintained list, so a kind added later without a text witness fails this gate the day it is written — shall render every leaf of its structured receipt in `content[0].text`, however deep, bounded per leaf and in total count rather than dropped: a leaf past the per-fact character ceiling is elided with a stated cut, and a refusal carrying more leaves than the text's fact budget states how many more live in structuredContent rather than silently stopping. `remedy`, when present, shall render as its own line.
+- [x] **MCP-OP-ADMIT-132**: Every receipt's `next_call` — refused or not — shall render in `content[0].text` as sendable JSON when it fits the text's own budget, as a bounded pointer naming its length in structuredContent when it does not, or as an explicit statement that no follow-up call exists; a preview's `next_call.arguments.expect_pre_sha256`, which the tool description tells a caller to copy for the commit that authorizes it, shall therefore be readable from the text alone.
+
 # #Witness Failure Baseline
 
 The witness tests in `test/clj_surgeon/admit_patch_test.clj` were written and

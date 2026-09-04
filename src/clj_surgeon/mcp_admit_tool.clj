@@ -1941,6 +1941,130 @@
            " it is not a clean bill of health")
       "")))
 
+;; ---------------------------------------------------------------------------
+;; The refusal text is a superset of structuredContent
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private admit-refusal-envelope-keys
+  "Receipt keys the text renders on their own dedicated line, so the generic
+  fact walk below does not duplicate them, or that the fact walk would
+  otherwise bury the diagnostic that matters under low-value structural
+  detail.
+
+  `:files` and `:hashes` are excluded for the second reason: a multi-file
+  patch's per-file hunk spans and pre/post digests are already the largest
+  branch of the receipt, and a refusal's job is to say why, not to re-dump
+  diff metadata the caller already sent -- the pre-image digests a caller
+  actually needs back (to bind a commit) are `next_call`'s own
+  `expect_pre_sha256`, rendered verbatim by `admit-rendered-next-call`."
+  #{:ok :operation :error-type :error :next_call :remedy :elapsed_ms
+    :workspace-root :detectors_not_run :source-unchanged :mode
+    :files :hashes})
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private max-admit-refusal-fact-characters
+  "Ceiling on one rendered leaf. A fact is elided past this length, never
+  dropped: the text still names the field and how much was cut."
+  200)
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private max-admit-refusal-facts
+  "How many leaves one refusal text renders before it states how many more
+  there were, rather than silently stopping."
+  40)
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private max-rendered-admit-next-call-characters
+  "Ceiling on the next_call JSON a receipt's text inlines verbatim.
+
+  Above this, the text names the field, its length, and where the caller can
+  read it in full (structuredContent.next_call) -- never silence."
+  1024)
+
+;; @spec MCP-OP-ADMIT-131
+(defn- admit-leaf-entries
+  "Every scalar leaf reachable in `v`, as [dotted/bracketed-path value]
+  pairs, depth-first.
+
+  An empty map or vector contributes no leaves -- an absent field is not a
+  fact -- and a `nil` leaf is likewise silent, because `nil` is the closed
+  receipt's own default for a field nothing populated."
+  [path v]
+  (cond
+    (map? v)
+    (mapcat (fn [[k cv]]
+              (admit-leaf-entries (str path (when (seq path) ".") (name k)) cv))
+            (sort-by (comp str key) v))
+
+    (sequential? v)
+    (apply concat
+           (map-indexed
+             (fn [i cv] (admit-leaf-entries (str path "[" i "]") cv))
+             v))
+
+    (nil? v)
+    []
+
+    :else
+    [[path v]]))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- admit-refusal-facts
+  "Every leaf of a refusal `result` a text-reading client would otherwise
+  never see.
+
+  A refusal has two faces -- structuredContent and content[0].text -- and a
+  client that reads only the text must not be told less than one that reads
+  the structure. A field renders only when it differs from the closed empty
+  receipt's own default for that key, so a refusal that never reached a
+  check does not bury its cause under a page of zeros and empty vectors --
+  and a field the gate actually populated, however deep, is never
+  suppressed by that filter."
+  [result]
+  (let [baseline (empty-receipt (or (:mode result) "preview"))
+        leaves (->> (apply dissoc result admit-refusal-envelope-keys)
+                    (remove (fn [[k v]] (= v (get baseline k))))
+                    (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
+                    (filter (fn [[_ v]]
+                              (or (string? v) (number? v) (boolean? v)
+                                  (keyword? v) (symbol? v))))
+                    (sort-by first))
+        rendered (take max-admit-refusal-facts leaves)
+        overflow (- (count leaves) (count rendered))]
+    (when (seq rendered)
+      (str "facts · "
+           (str/join
+             " · "
+             (map (fn [[path v]]
+                    (let [text (if (or (keyword? v) (symbol? v)) (name v) (str v))]
+                      (str path "="
+                           (if (> (count text) max-admit-refusal-fact-characters)
+                             (str (subs text 0 max-admit-refusal-fact-characters) "…")
+                             text))))
+                  rendered))
+           (when (pos? overflow)
+             (str " · [+" overflow " more facts in structuredContent]"))))))
+
+;; @spec MCP-OP-ADMIT-131
+;; @spec MCP-OP-ADMIT-132
+(defn- admit-rendered-next-call
+  "The next_call line: sendable JSON, a bounded pointer, or a stated absence.
+
+  A receipt whose next_call the caller never sees costs a return at random --
+  whichever face of the receipt that caller happens to read. This is the
+  affordance the tool description tells a caller to copy expect_pre_sha256
+  from, so it must be readable from the text alone. Mirrors
+  MCP-OP-ALIAS-059's `rendered-next-call`."
+  [result]
+  (if-let [call (:next_call result)]
+    (let [encoded (json/generate-string call)]
+      (if (<= (count encoded) max-rendered-admit-next-call-characters)
+        (str "next_call · " encoded)
+        (str "next_call · " (count encoded)
+             " characters, in structuredContent.next_call — send it verbatim")))
+    (str "next_call · none — this receipt has no follow-up call")))
+
 (defn- summary
   [result]
   (if (:ok result)
@@ -1955,7 +2079,9 @@
          "\nverification_complete=" (:verification_complete result)
          " verification_status="
          (name (or (:verification_status result) :unverified))
-         (detector-note result))
+         (detector-note result)
+         ;; @spec MCP-OP-ADMIT-132
+         "\n" (admit-rendered-next-call result))
     (str "admit_clojure_patch refused · " (name (or (:error-type result)
                                                     :unknown))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
@@ -1964,7 +2090,13 @@
          (if (true? (:source-unchanged result))
            "\nsource unchanged"
            "\nwhether the workspace was changed is unverified")
-         (detector-note result))))
+         (detector-note result)
+         ;; @spec MCP-OP-ADMIT-131
+         (when-let [remedy (:remedy result)]
+           (str "\nremedy · " remedy))
+         (when-let [facts (admit-refusal-facts result)]
+           (str "\n" facts))
+         "\n" (admit-rendered-next-call result))))
 
 ;; @spec MCP-OP-ADMIT-129
 (defn- edge-throwable-refusal

@@ -4406,9 +4406,16 @@
 (def ^:private admit-envelope-keys-for-witness
   "The same envelope this round's renderer excludes -- reimplemented here,
   not required from the tool namespace, so this witness does not depend on
-  the implementation agreeing with itself about what its own envelope is."
+  the implementation agreeing with itself about what its own envelope is.
+
+  `:files` and `:hashes` are excluded for the same reason the renderer
+  excludes them: per-file hunk spans and pre/post digests are diff
+  metadata the caller already sent, not the cause of the refusal, and the
+  digest a caller actually needs back is next_call's own
+  expect_pre_sha256, checked separately below via the next_call assertion."
   #{:ok :operation :error-type :error :next_call :remedy :elapsed_ms
-    :workspace-root :detectors_not_run :source-unchanged :mode})
+    :workspace-root :detectors_not_run :source-unchanged :mode
+    :files :hashes})
 
 ;; @spec MCP-OP-ADMIT-131
 ;; @spec MCP-OP-ADMIT-132
@@ -4427,7 +4434,8 @@
                                             (boolean? v) (keyword? v)
                                             (symbol? v)))))]
     (is (false? (:ok structured)) (str label " · fixture is not a refusal"))
-    (is (str/includes? text (str (:error-type structured)))
+    (is (str/includes? text (let [kind (:error-type structured)]
+                              (if (keyword? kind) (name kind) (str kind))))
         (str label " · the text does not name the error type"))
     (when-let [error (:error structured)]
       (is (str/includes? text error)
