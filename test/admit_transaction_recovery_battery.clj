@@ -18,9 +18,15 @@
 ;; would have reported "the enumeration claims kinds no fixture drives" and
 ;; taken the whole enumeration proof down for an unrelated reason.
 ;;
-;; Deliberately NOT wired into `make test`, `make test-fast` or
-;; `make mcp-test`. `make admit-transaction-recovery-battery` is its only
-;; entry point.
+;; @spec MCP-OP-ADMIT-150
+;; Deliberately NOT wired into `make test-fast` or `make mcp-test`: a flake in
+;; a busy-spinning timing bound would report `the enumeration claims kinds no
+;; fixture drives` and take the enumeration proof down for an unrelated
+;; reason. `make test` DOES run it, before `mcp-test`, because a skip bucket
+;; no lane empties is an exemption resting on a fixture nobody owns -- so the
+;; fast lane counts the receipt's absence and `make test` drives that count to
+;; zero. `make admit-transaction-recovery-battery` remains its direct entry
+;; point.
 
 (require '[clj-surgeon.mcp-admit-tool :as admit]
          '[clj-surgeon.admit-patch-test :as admit-test]
@@ -94,18 +100,41 @@
 
 ;; @spec MCP-OP-ADMIT-138
 (defn- write-receipt!
-  [passed]
-  (let [file (io/file "target/admit-transaction-recovery-battery-receipt.edn")]
+  "Write the receipt, naming its SUBJECT, its EVIDENCE and its VERDICT.
+
+  @spec MCP-OP-ADMIT-152
+  Round nine wrote `:arms-passed` and nothing else, unconditionally, before
+  exiting nonzero -- so a battery that failed 2 of 3 arms left an archive the
+  fast lane read as a fully satisfied precondition and reported `0
+  preconditions skipped`. A receipt now carries a verdict per arm, the arms
+  that failed, and an explicit overall verdict, and a failing run writes one
+  that says FAILED. The fast lane does not depend on this honesty -- it rejects
+  any receipt that does not record every declared arm as passed -- but a
+  receipt whose own words are `:verdict :failed, :failed-arms [8]` names the
+  arm a reader has to re-run."
+  [arm-verdicts]
+  (let [file (io/file "target/admit-transaction-recovery-battery-receipt.edn")
+        passed (count (filter true? (vals arm-verdicts)))
+        failed-arms (vec (sort (keep (fn [[arm ok]] (when-not (true? ok) arm))
+                                     arm-verdicts)))
+        verdict (if (empty? failed-arms) :passed :failed)]
     (io/make-parents file)
     (spit file
           (pr-str {:target "make admit-transaction-recovery-battery"
                    :script "test/admit_transaction_recovery_battery.clj"
                    :at (str (java.time.Instant/now))
                    :arms arms
+                   :arm-verdicts arm-verdicts
                    :arms-passed passed
+                   :failed-arms failed-arms
+                   :verdict verdict
                    :kinds-published @observed-kinds}))
-    (println (str "battery receipt · " (.getPath file) " · kinds "
-                  (pr-str @observed-kinds)))))
+    (println (str "battery receipt · " (.getPath file) " · verdict "
+                  (pr-str verdict) " · " passed "/" (count arms)
+                  " arms passed"
+                  (when (seq failed-arms)
+                    (str " · failed arms " (pr-str failed-arms)))
+                  " · kinds " (pr-str @observed-kinds)))))
 
 (defn- run-arm
   [n]
@@ -140,10 +169,11 @@
                              enumerated? wall-ms))
             false)))))
 
-(let [results (mapv run-arm arms)
-      passed (count (filter true? results))]
+(let [arm-verdicts (into (sorted-map) (map (juxt identity run-arm)) arms)
+      passed (count (filter true? (vals arm-verdicts)))]
   (println (format "admit-transaction-recovery-battery: %d/%d arms passed"
                    passed (count arms)))
   ;; @spec MCP-OP-ADMIT-138
-  (write-receipt! passed)
+  ;; @spec MCP-OP-ADMIT-152
+  (write-receipt! arm-verdicts)
   (System/exit (if (= passed (count arms)) 0 1)))

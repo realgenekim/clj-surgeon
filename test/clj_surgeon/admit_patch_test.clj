@@ -85,13 +85,74 @@
 (defn classify-battery-receipt
   "Classify a battery receipt into ABSENT, SATISFIED or FAILED.
 
-  RED STUB: any receipt that exists is accepted, which is exactly the round-nine
-  hole -- a battery that failed 2/3 arms wrote `:arms-passed 2` before exiting
-  nonzero and this said SATISFIED."
+  A receipt names its SUBJECT, its EVIDENCE and its VERDICT, and only a receipt
+  that carries all three -- the arm list the battery script declares, a verdict
+  for every one of those arms, and an overall verdict that agrees with them --
+  can satisfy the precondition. Everything else that EXISTS is FAILED: the
+  round-nine shape with no per-arm verdicts, a receipt whose arm list is shorter
+  than the script's, a receipt whose `:arms-passed` or `:verdict` contradicts
+  its own per-arm verdicts, and a receipt that will not read at all. Fail
+  CLOSED, and never fall back to the absent state's skip: a receipt that is
+  present and incomplete is evidence that the battery ran and did not finish,
+  which is strictly worse news than no battery at all.
+
+  Deliberately does NOT trust the battery to report its own failure. The
+  round-nine receipt was written by a battery that exited nonzero; a rule that
+  asked it to say FAILED would be asking the failing party for the verdict."
   [record declared-arms]
-  (if (nil? record)
-    {:state :absent}
-    {:state :satisfied}))
+  (let [failed (fn [reason] {:state :failed :reason reason})
+        verdicts (:arm-verdicts record)
+        failing (when (map? verdicts)
+                  (vec (sort (keep (fn [[arm ok]] (when-not (true? ok) arm))
+                                   verdicts))))]
+    (cond
+      (nil? record)
+      {:state :absent}
+
+      (not (map? record))
+      (failed (str "the receipt is not a map: " (pr-str record)))
+
+      (contains? record ::unreadable)
+      (failed (str "the receipt could not be read: "
+                   (pr-str (::unreadable record))))
+
+      (empty? declared-arms)
+      (failed "the battery script declares no arms to check the receipt against")
+
+      (not= (vec declared-arms) (vec (:arms record)))
+      (failed (str "the receipt declares arms " (pr-str (:arms record))
+                   " but the battery script declares "
+                   (pr-str (vec declared-arms))
+                   " · a receipt may not shrink its own subject"))
+
+      (not (map? verdicts))
+      (failed (str "the receipt records no per-arm verdict (`:arm-verdicts`),"
+                   " so it cannot show that every arm passed · it reports"
+                   " :arms-passed " (pr-str (:arms-passed record)) " of "
+                   (count declared-arms)))
+
+      (not= (set (keys verdicts)) (set declared-arms))
+      (failed (str "the receipt records verdicts for "
+                   (pr-str (vec (sort (keys verdicts))))
+                   " but the battery declares " (pr-str (vec declared-arms))))
+
+      (seq failing)
+      (assoc (failed (str "the battery did NOT pass every arm: "
+                          (count (remove (comp true? val) verdicts)) " of "
+                          (count declared-arms) " failed"))
+             :failed-arms failing)
+
+      (not= (:arms-passed record) (count declared-arms))
+      (failed (str "the receipt says :arms-passed "
+                   (pr-str (:arms-passed record)) " but declares "
+                   (count declared-arms) " arms"))
+
+      (not= :passed (:verdict record))
+      (failed (str "the receipt's verdict is " (pr-str (:verdict record))
+                   ", not :passed"))
+
+      :else
+      {:state :satisfied})))
 
 ;; @spec MCP-OP-ADMIT-152
 (defn check-battery-precondition!
