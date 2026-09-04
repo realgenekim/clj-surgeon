@@ -43,6 +43,10 @@
 
 (defn path-refusal
   [error-type message path]
+  ;; @spec MCP-OP-ALIAS-059
+  ;; forwarded-refusal-kind: every caller spells its kind as a keyword
+  ;; literal at its own call site; this constructor only forwards that
+  ;; argument verbatim and mints nothing of its own
   {:ok false
    :error_type (name error-type)
    :error message

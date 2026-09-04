@@ -1197,15 +1197,19 @@
   inside a composition is a FRAGMENT: the reviewer's `(str \"heldout-\"
   \"protocol-kind\")` mints one kind that appears nowhere in the source, and
   reading its pieces as kinds would enumerate two names that do not exist and
-  miss the one that does. A site that mints no keyword spells its kind
-  entirely at runtime and must declare that it is forwarding."
+  miss the one that does. `keyword` is a composer for the same reason `str`
+  is — `(keyword \"alias-migration-\" (name x))` mints a kind from a runtime
+  name and a literal PREFIX, and reading that prefix on its own as a minted
+  kind is exactly the fragment mistake this guard exists to avoid. A site
+  that mints no keyword spells its kind entirely at runtime and must declare
+  that it is forwarding."
   [node]
   (let [heads (head-position-keywords node)
         composed (set (for [candidate (node-seq node)
                             :when (= :list (n/tag candidate))
                             :let [head (node-value
                                          (first (significant-children candidate)))]
-                            :when (contains? '#{str format name subs} head)
+                            :when (contains? '#{str format name subs keyword} head)
                             piece (node-seq candidate)]
                         piece))]
     (->> (node-seq node)
@@ -1287,41 +1291,25 @@
   site can mint, this reports the sites that mint nothing a source scan can
   read — the reviewer's `(str \"heldout-\" \"protocol-kind\")` among them —
   so a kind composed at runtime fails the gate rather than disappearing from
-  the enumeration. The `refusal` constructor itself is exempt: its value IS
-  its argument, and its callers are scanned at their own call sites."
+  the enumeration.
+
+  Round-fourteen review finding 2: this used to also exempt any site whose
+  text merely CONTAINED one of its enclosing top-level def's own parameter
+  names — meant to read the `refusal` constructor's own `(name error-type)`
+  as a forward rather than a mint, it just as readily read
+  `(keyword (name kind))` and `(keyword \"alias-migration-\" (name x))` as
+  forwards too, in a router helper that MINTS a kind from a parameter rather
+  than merely relaying one. There is exactly one legitimate dynamic site —
+  the constructor's own — and it declares itself with the same
+  `forwarded-refusal-kind` marker every other dynamic site must carry. No
+  other exemption exists: a site not marked is named, whatever it mentions."
   [label text]
-  (let [forms (top-level-def-forms text)
-        parameters-of (fn [form-text]
-                        ;; the first vector in the form IS its parameter list,
-                        ;; read with the reader so a docstring holding a
-                        ;; bracket cannot be mistaken for one
-                        (let [form (first (n/children
-                                            (parser/parse-string-all form-text)))
-                              arglist (first (filter #(= :vector (n/tag %))
-                                                     (significant-children form)))]
-                          (set (for [parameter (some-> arglist node-seq)
-                                     :let [value (node-value parameter)]
-                                     :when (symbol? value)]
-                                 (str value)))))
-        constructor-site? (fn [site-text]
-                            ;; the kind is the enclosing function's ARGUMENT:
-                            ;; this site mints nothing, and its callers are
-                            ;; scanned where they spell the kind
-                            (some (fn [[_ form-text]]
-                                    (and (str/includes? form-text site-text)
-                                         (seq (clojure.set/intersection
-                                                (parameters-of form-text)
-                                                (set (map second
-                                                          (re-seq #"([a-z][a-z0-9-]*)"
-                                                                  site-text)))))))
-                                  forms))]
-    (vec
-      (for [site (error-type-value-sites text)
-            :when (and (nil? (:literal site))
-                       (empty? (minted-kinds-in (:value site)))
-                       (not (forwarding-marked? text (:text site)))
-                       (not (constructor-site? (:text site))))]
-        (str label " · " (:text site))))))
+  (vec
+    (for [site (error-type-value-sites text)
+          :when (and (nil? (:literal site))
+                     (empty? (minted-kinds-in (:value site)))
+                     (not (forwarding-marked? text (:text site))))]
+      (str label " · " (:text site)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- dynamic-refusal-kind-sites

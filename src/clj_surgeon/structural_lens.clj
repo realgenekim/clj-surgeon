@@ -38,14 +38,21 @@
                         (.getBytes source "UTF-8"))]
     (apply str (map #(format "%02x" (bit-and 0xff %)) digest))))
 
+;; @spec MCP-OP-ALIAS-059
+;; forwarded-refusal-kind: `error-type` is this function's own argument,
+;; forwarded verbatim at every throw below; every caller spells its kind as
+;; a keyword literal at its own call site, and this constructor mints
+;; nothing of its own
 (defn- one-complete-form [value error-type label]
   (when (nil? value)
+    ;; forwarded-refusal-kind
     (throw (ex-info (str label " is required") {:error-type error-type})))
   (let [source (if (string? value) value (pr-str value))]
     (try
       (let [root (z/of-string source {:track-position? true})
             forms (->> (iterate z/right root) (take-while some?) vec)]
         (when-not (= 1 (count forms))
+          ;; forwarded-refusal-kind
           (throw (ex-info (str label " must contain exactly one complete form")
                           {:error-type error-type})))
         {:sexpr (z/sexpr (first forms))
@@ -53,9 +60,11 @@
       (catch clojure.lang.ExceptionInfo e
         (if (= error-type (:error-type (ex-data e)))
           (throw e)
+          ;; forwarded-refusal-kind
           (throw (ex-info (str "Invalid " (str/lower-case label) ": " (.getMessage e))
                           {:error-type error-type}))))
       (catch Exception e
+        ;; forwarded-refusal-kind
         (throw (ex-info (str "Invalid " (str/lower-case label) ": " (.getMessage e))
                         {:error-type error-type}))))))
 

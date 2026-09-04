@@ -610,6 +610,11 @@
   [error-type message extra next-call]
   (merge {:ok false
           :operation "alias_migration"
+          ;; @spec MCP-OP-ALIAS-059
+          ;; forwarded-refusal-kind: every caller spells its kind as a
+          ;; keyword literal at its own call site, scanned there by the
+          ;; `:error_type "…"` scan; this constructor only forwards that
+          ;; argument verbatim and mints nothing of its own
           :error_type (name error-type)
           :error message
           :source_unchanged true

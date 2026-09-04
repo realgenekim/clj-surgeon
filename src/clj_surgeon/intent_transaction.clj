@@ -31,6 +31,10 @@
 (def ^:private change-aggregate-expectation-keys #{:changes :edits :files})
 
 (defn- refuse!
+  ;; @spec MCP-OP-ALIAS-059
+  ;; forwarded-refusal-kind: every caller spells its kind as a keyword
+  ;; literal at its own call site; this constructor only forwards that
+  ;; argument verbatim and mints nothing of its own
   [error-type message & [data]]
   (throw (ex-info message (merge {:error-type error-type} data))))
 
