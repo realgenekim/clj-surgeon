@@ -1427,6 +1427,27 @@
       (recur (next entries) false))))
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded-meta
+  "Writes `value`'s metadata, when the caller asked to see it.
+
+  Round-fifteen review finding 3: replacing `print-method`'s recursion
+  dropped two of its renderings — this one, and the record tag below. Core's
+  `print-meta` writes the map (or, for a lone `:tag`, the tag alone) under
+  exactly this condition, and the metadata itself recurses through the same
+  bounded writer as any other value, so nothing here is unbounded: a
+  poisonous object inside a metadata map renders as the same identity marker
+  it renders as anywhere else."
+  [^java.io.Writer writer value level]
+  (when (or *print-dup* (and *print-meta* *print-readably*))
+    (let [m (meta value)]
+      (when (and m (pos? (count m)))
+        (.write writer "^")
+        (if (and (= 1 (count m)) (:tag m))
+          (write-bounded writer (:tag m) level)
+          (write-bounded writer m level))
+        (.write writer " ")))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn- write-bounded
   "Writes `value` to `writer`, recursing into Clojure data and refusing to
   invoke `toString` on anything else.
@@ -1450,23 +1471,39 @@
     (zero? level)
     (.write writer "#")
 
+    ;; @spec MCP-OP-ALIAS-059
+    ;; a record is a map AND carries its own tag; `.getName` reads the class
+    ;; name without ever calling the value's `toString`, so the tag costs
+    ;; nothing the ceiling does not already bound
+    (record? value)
+    (do (write-bounded-meta writer value level)
+        (.write writer "#")
+        (.write writer (.getName (class value)))
+        (.write writer "{")
+        (write-bounded-map-entries writer value level)
+        (.write writer "}"))
+
     (map? value)
-    (do (.write writer "{")
+    (do (write-bounded-meta writer value level)
+        (.write writer "{")
         (write-bounded-map-entries writer value level)
         (.write writer "}"))
 
     (set? value)
-    (do (.write writer "#{")
+    (do (write-bounded-meta writer value level)
+        (.write writer "#{")
         (write-bounded-elements writer value level " ")
         (.write writer "}"))
 
     (vector? value)
-    (do (.write writer "[")
+    (do (write-bounded-meta writer value level)
+        (.write writer "[")
         (write-bounded-elements writer value level " ")
         (.write writer "]"))
 
     (or (list? value) (seq? value))
-    (do (.write writer "(")
+    (do (write-bounded-meta writer value level)
+        (.write writer "(")
         (write-bounded-elements writer value level " ")
         (.write writer ")"))
 
