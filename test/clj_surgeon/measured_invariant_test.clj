@@ -75,38 +75,106 @@
       (str/starts-with? path (str root "/")) (str "src/" (subs path (inc (count root))))
       :else path)))
 
+(defn- comment-stripped-source
+  "`file` as ONE subject: `;;` comments cut per line, the remainder joined with
+   a single space so every line break becomes ordinary whitespace.
+
+  Round-ten review finding 1, the blocker this replaces: every scan in this
+  file used to be handed a LINE. Both alternative builders write `\\s+` between
+  the receiver and the member -- so the authors' own stated intent is
+  ARBITRARY whitespace, and Clojure's whitespace includes the NEWLINE -- but
+  that tolerance was dead on the one axis where it mattered, because no string
+  ever offered to either pattern could contain a line break. Six newline-split
+  twins of round eight's faces, planted at the production receipt site inside
+  the hashed parity subject, left the gate at its exact baseline of 29 tests
+  and 176 assertions while publishing a raw sixteen-digit `nanoTime`, and
+  `(. System nanoTime)` -- the plainest raw-clock dot form there is, carried by
+  the pattern since round six -- was among them. A receipt line carrying a real
+  argument list is long, and a formatter wraps it; the longest spellings are
+  the most likely to be wrapped, so the fix that closed round eight created the
+  population most exposed to the hole.
+
+  The join character is the NEWLINE itself, one character wide, so `starts`
+  below stays in step with the line numbers and a match position can always be
+  turned back into a line. Nothing is normalised away: `\\s` matches `\\n`, which
+  is the whole point -- the patterns were already written for arbitrary
+  whitespace and only ever lacked an input that could contain any.
+
+  Measured before it was recommended and again after it was applied: hit counts
+  over the live tree are IDENTICAL to the per-line scan (clock 61, escape 19),
+  so not one allow-list entry moves.
+
+  `:starts` carries n+1 offsets, one per line plus the end, so a match position
+  can be turned back into a line number for the scans that report one."
+  [^java.io.File file]
+  (let [lines (str/split-lines (slurp file))
+        codes (mapv #(or (first (str/split % #";;")) "") lines)]
+    {:lines lines
+     :starts (vec (reductions + 0 (map #(inc (count %)) codes)))
+     :text (str/join "\n" codes)}))
+
+(defn- line-of
+  "The 0-based line `pos` falls in, given the `:starts` of a stripped source."
+  [starts pos]
+  (loop [lo 0 hi (- (count starts) 2)]
+    (if (>= lo hi)
+      (max 0 lo)
+      (let [mid (quot (+ lo hi 1) 2)]
+        (if (<= (nth starts mid) pos)
+          (recur mid hi)
+          (recur lo (dec mid)))))))
+
+(defn- matches-with-pos
+  "`[[start groups] ...]` for every non-overlapping match of `pattern` in
+   `text`.
+
+  The COUNT is the count of matches, which is what `re-seq` counted, so round
+  six's calls-not-lines property survives the move to a whole-file subject: a
+  form that already matched still cannot absorb a second clock read for free.
+  The START is what a whole-file subject additionally needs -- it is how a hit
+  is still attributed to a top-level form and, where the scan reports one, to a
+  line."
+  [pattern ^String text]
+  (let [m (re-matcher pattern text)]
+    (loop [acc []]
+      (if (.find m)
+        (recur (conj acc [(.start m) (re-groups m)]))
+        acc))))
+
 (defn- sites
-  "Every line of `file` matching `pattern`, named by the top-level form it sits
-   in. Line numbers are deliberately NOT part of the identity: an inventory
-   pinned to line numbers has to be re-blessed on every unrelated edit, and one
-   that is re-blessed reflexively stops being a ratchet.
+  "Every match of `pattern` in `file`, named by the top-level form it sits in.
+   Line numbers are deliberately NOT part of the identity: an inventory pinned
+   to line numbers has to be re-blessed on every unrelated edit, and one that is
+   re-blessed reflexively stops being a ratchet.
 
    `;;` comments are cut before matching: a comment EXPLAINING why a call was
    removed must not read as the call.
 
-   The hit count is a count of CALLS, `(count (re-seq pattern code))`, not of
-   matching lines. Round-six review §6: this folded one hit per matching line,
-   so a line that already matched absorbed an unlimited number of further clock
-   reads or laundering calls without moving the declared number, and the
-   reviewer found the shape live in the tree at
-   `worktree_lifecycle/valid-future-expiry?` -- two `Instant/parse` reads on one
-   line, declared 1, green. `re-seq` also counts the SAME spelling twice, which
-   is the case the reviewer's own example is and which a `distinct` over
-   alternatives would still get wrong."
+   The SUBJECT is the whole comment-stripped file, not a line -- see
+   `comment-stripped-source`, and round-ten review finding 1. A line is not a
+   form, and every multi-line spelling was invisible while it was.
+
+   The hit count is a count of CALLS, not of matching lines. Round-six review
+   §6: this folded one hit per matching line, so a line that already matched
+   absorbed an unlimited number of further clock reads or laundering calls
+   without moving the declared number, and the reviewer found the shape live in
+   the tree at `worktree_lifecycle/valid-future-expiry?` -- two `Instant/parse`
+   reads on one line, declared 1, green. The counter also counts the SAME
+   spelling twice, which is the case the reviewer's own example is and which a
+   `distinct` over alternatives would still get wrong."
   ([^java.io.File file pattern] (sites file pattern "src"))
   ([^java.io.File file pattern root]
-   (:hits
-    (reduce (fn [{:keys [form hits]} line]
-              (let [code (or (first (str/split line #";;")) "")
-                    form' (if (str/starts-with? line "(def")
-                            (second (str/split (str/trim line) #"[\s\[]+"))
-                            form)]
-                {:form form'
-                 :hits (into hits
-                             (repeat (count (re-seq pattern code))
-                                     [(site-path file root) form']))}))
-            {:form nil :hits []}
-            (str/split-lines (slurp file)))))) 
+   (let [{:keys [lines starts text]} (comment-stripped-source file)
+         forms (:acc (reduce (fn [{:keys [form acc]} line]
+                               (let [form' (if (str/starts-with? line "(def")
+                                             (second (str/split (str/trim line) #"[\s\[]+"))
+                                             form)]
+                                 {:form form' :acc (conj acc form')}))
+                             {:form nil :acc []}
+                             lines))]
+     (vec
+      (for [[pos _] (matches-with-pos pattern text)]
+        [(site-path file root) (nth forms (line-of starts pos) nil)])))))
 
 (def ^:private measured-namespace-file
   "The ONE file allowed to read a clock raw."
@@ -1486,19 +1554,91 @@
     (when-let [m (re-find #"clj-surgeon\.measured\s+:as\s+([\w-]+)" code)]
       (not= "measured" (second m))) :alias))
 
+(def ^:private measured-namespace-occurrence
+  "The namespace named as a bare token, anywhere. `(?![-\\w.])` is what keeps
+   `clj-surgeon.measured-invariant-test` and `clj-surgeon.measured/reading` out
+   of the bare case."
+  #"clj-surgeon\.measured(?![-\w.])")
+
+(def ^:private naming-subject-lookback
+  "How far back from an occurrence `enclosing-form` will look for the form that
+   ENCLOSES it, in characters.
+
+  This bound is the whole reason a whole-file subject is safe here. The offence
+  rules are `re-find`s for `:refer`, `:use` and the var-resolution verbs, so
+  handing them the WHOLE FILE would fire on any unrelated
+  `[clojure.test :refer [deftest is testing]]` in a file that also requires
+  `clj-surgeon.measured` -- which is most of them. The subject has to be the
+  form the occurrence sits IN.
+
+  A require vector is short and the occurrence is at its head, so the opener is
+  a handful of characters back and no padding can push it out of reach. What
+  the bound protects against is the opposite case: a mention inside a DOCSTRING
+  (`... See `clj-surgeon.measured`.`), whose nearest opener is the whole
+  enclosing `defn`. Those fall back to a bounded window and behave as the
+  per-line subject did."
+  300)
+
+(defn- enclosing-form
+  "The innermost `(`- or `[`-delimited form enclosing `pos` in `text`, or a
+   bounded window around `pos` when no opener is within
+   `naming-subject-lookback` characters."
+  [^String text pos]
+  (let [floor (max 0 (- pos naming-subject-lookback))
+        open (loop [i (dec pos) depth 0]
+               (if (< i floor)
+                 nil
+                 (let [c (.charAt text i)]
+                   (cond
+                     (or (= c \)) (= c \])) (recur (dec i) (inc depth))
+                     (or (= c \() (= c \[)) (if (zero? depth)
+                                              i
+                                              (recur (dec i) (dec depth)))
+                     :else (recur (dec i) depth)))))]
+    (if (nil? open)
+      (subs text floor (min (count text) (+ pos naming-subject-lookback)))
+      (let [close (loop [i (inc open) depth 0]
+                    (if (>= i (count text))
+                      (count text)
+                      (let [c (.charAt text i)]
+                        (cond
+                          (or (= c \() (= c \[)) (recur (inc i) (inc depth))
+                          (or (= c \)) (= c \])) (if (zero? depth)
+                                                   (inc i)
+                                                   (recur (inc i) (dec depth)))
+                          :else (recur (inc i) depth)))))]
+        (subs text open close)))))
+
 (defn- measured-naming-offenders
-  "Every line under `root` that names the measured namespace in any way other
-   than the one sanctioned require."
+  "Every reference under `root` that names the measured namespace in any way
+   other than the one sanctioned require.
+
+  The subject of each ruling is the FORM the occurrence sits in, taken from the
+  whole comment-stripped source, not the line it happens to be printed on.
+  Round-ten review finding 1b: `measured-naming-offence` returns nil for any
+  line that does not itself spell `clj-surgeon.measured`, so a require split
+  across three lines was an offence on NONE of them --
+
+      [clj-surgeon.measured        <- names it, no :refer on THIS line
+       :refer [raw-nanos]          <- :refer, but names no namespace
+       :as measured]               <- the sanctioned tail
+
+  -- and the bare `(raw-nanos)` it introduces is invisible to every other scan
+  in this file, all of which are written against the `measured/` prefix. That
+  is round three's §1b bypass verbatim, reopened by pressing Enter: a bare
+  `System/nanoTime` in an undeclared receipt field inside the hashed parity
+  subject, through the SANCTIONED namespace, with all 176 assertions green."
   ([] (vec (mapcat measured-naming-offenders scanned-roots)))
   ([root]
    (vec
     (for [^java.io.File file (remove #(= measured-namespace-file (site-path % root))
                                      (src-files root))
-          [n line] (map-indexed vector (str/split-lines (slurp file)))
-          :let [code (str/trim (or (first (str/split line #";;")) ""))
+          :let [{:keys [starts text]} (comment-stripped-source file)]
+          [pos _] (matches-with-pos measured-namespace-occurrence text)
+          :let [code (str/trim (enclosing-form text pos))
                 offence (measured-naming-offence code)]
           :when offence]
-      [(site-path file root) (inc n) offence code]))))
+      [(site-path file root) (inc (line-of starts pos)) offence code]))))
 
 ;; @spec MCP-OP-TIME-005
 (deftest the-measured-namespace-is-named-only-by-the-sanctioned-require
@@ -1526,8 +1666,11 @@
                  "                            1000000.0)})\n"))
       (try
         (let [offenders (measured-naming-offenders root)]
+          ;; The reported subject is the FORM the occurrence sits in, not the
+          ;; line it is printed on -- round-ten review finding 1b. It used to
+          ;; be the line, trailing `))` and all.
           (is (= [["src/clj_surgeon/planted_refer.clj" 3 :refer
-                   "[clj-surgeon.measured :as measured :refer [raw-nanos]]))"]]
+                   "[clj-surgeon.measured :as measured :refer [raw-nanos]]"]]
                  offenders)
               (str "the require witness did not see a planted :refer: "
                    (pr-str offenders))))
@@ -2025,11 +2168,11 @@
      (vec
       (for [^java.io.File file (remove #(= measured-namespace-file (site-path % root))
                                        (src-files root))
-            [n line] (map-indexed vector (str/split-lines (slurp file)))
-            :let [code (or (first (str/split line #";;")) "")]
-            verb (map second (re-seq measured-verb-pattern code))
+            :let [{:keys [starts text]} (comment-stripped-source file)]
+            [pos groups] (matches-with-pos measured-verb-pattern text)
+            :let [verb (second groups)]
             :when (not (contains? public-names verb))]
-        [(site-path file root) (inc n) verb])))))
+        [(site-path file root) (inc (line-of starts pos)) verb])))))
 
 ;; @spec MCP-OP-TIME-006
 (deftest every-measured-verb-named-in-source-is-a-public-var
