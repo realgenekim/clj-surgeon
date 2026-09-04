@@ -17,12 +17,7 @@
    Never referenced by any runner's namespace list; `test/tmp_leak_ratchet_test.sh`
    is its only caller.
 
-   @spec MCP-OP-TMPHYG-003
-   @spec MCP-OP-TMPHYG-004
-   @spec MCP-OP-TMPHYG-005
-   @spec MCP-OP-TMPHYG-006
-   @spec MCP-OP-TMPHYG-007
-   @spec MCP-OP-TMPHYG-008"
+   @spec MCP-OP-TMPHYG-003"
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.shell :as shell]

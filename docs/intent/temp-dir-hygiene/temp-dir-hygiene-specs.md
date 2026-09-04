@@ -23,6 +23,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   counted failure — and exit non-zero — whenever any entry created by that
   run survives inside that root after the run finishes.
 
+- [x] **MCP-OP-TMPHYG-003**: When a test runner resolves its temp base,
+  clj-surgeon shall refuse to run — exiting non-zero with a named message —
+  unless that base is POSITIVELY PROVEN to be real-disk backed: a base that
+  is, or is under, a path known to be RAM-backed by name (`/tmp`,
+  `/dev/shm`), and a base whose filesystem type no mount source can
+  determine, are both refusals.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb

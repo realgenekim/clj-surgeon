@@ -59,35 +59,135 @@
 
 (def ^:private reexec-sentinel "CLJ_SURGEON_TMPDIR_REEXEC")
 
-(defn- mount-fstype
-  "Best-effort filesystem type for `dir` via `findmnt`, falling back to a
-   longest-prefix scan of /proc/mounts. Returns nil if neither source can
-   answer (e.g. neither findmnt nor /proc/mounts exists on this platform)."
+(def ^:private ram-path-prefixes
+  "Paths that are RAM-backed on this seat BY NAME -- checked with no external
+   binary and no procfs, exactly as ~/bin/seat-tmp-guard.sh does it. This is
+   the check that refuses when no mount source can answer at all."
+  ["/tmp" "/dev/shm"])
+
+(defn- canonical
   [dir]
-  (or
-    (try
-      (let [{:keys [exit out]} (shell/sh "findmnt" "-n" "-o" "FSTYPE" "--target" (str dir))]
-        (when (and (zero? exit) (seq (str/trim out)))
-          (str/trim out)))
-      (catch Throwable _ nil))
-    (try
-      (when (.exists (io/file "/proc/mounts"))
-        (let [target (.getCanonicalPath (io/file (str dir)))
-              lines (str/split-lines (slurp "/proc/mounts"))
+  (try (.getCanonicalPath (io/file (str dir)))
+       (catch Throwable _ (str dir))))
+
+(defn literal-ram-path?
+  "True when `dir` IS, or is under, a path this seat knows to be RAM-backed
+   by name (/tmp, /dev/shm) -- checked both as written and canonicalised, so
+   a symlink into /tmp cannot slip past."
+  [dir]
+  (let [candidates (distinct [(str dir) (canonical dir)])]
+    (boolean
+      (some (fn [p]
+              (some (fn [prefix] (or (= p prefix) (str/starts-with? p (str prefix "/"))))
+                    ram-path-prefixes))
+            candidates))))
+
+(defn- mounts-file
+  "The mounts table to consult. `CLJ_SURGEON_MOUNTS_FILE` is a witness seam:
+   the ratchet's own gate points it at a nonexistent path to execute the
+   \"no mount source can answer\" branch."
+  []
+  (or (System/getenv "CLJ_SURGEON_MOUNTS_FILE") "/proc/mounts"))
+
+(defn- findmnt-fstype
+  [dir]
+  (try
+    (let [{:keys [exit out]} (shell/sh "findmnt" "-n" "-o" "FSTYPE" "--target" (str dir))]
+      (when (and (zero? exit) (seq (str/trim out)))
+        (str/trim out)))
+    (catch Throwable _ nil)))
+
+(defn- mounts-table-fstype
+  "Longest-mount-point-prefix scan of the mounts table.
+
+   MEASURED 2026-09-04, and the reason round one's fallback was unreachable
+   dead code: procfs reports st_size = 0, so `slurp`, `(.readAllBytes
+   (io/input-stream ...))` AND `(line-seq (io/reader ...))` all throw
+   `java.io.IOException: Invalid argument` on /proc/mounts -- on bb AND on a
+   real JVM. `java.nio.file.Files/lines` is the one approach that reads all
+   41 lines on both runtimes, so it is the one used here."
+  [dir]
+  (try
+    (let [file (io/file (mounts-file))]
+      (when (.exists file)
+        (let [target (canonical dir)
+              lines (with-open [stream (java.nio.file.Files/lines (.toPath file))]
+                      (vec (iterator-seq (.iterator stream))))
               best (->> lines
                         (keep (fn [line]
                                 (let [[_dev mnt fstype] (str/split line #"\s+")]
-                                  (when (and mnt (str/starts-with? target mnt))
+                                  (when (and mnt fstype
+                                             (or (= target mnt)
+                                                 (= mnt "/")
+                                                 (str/starts-with? target (str mnt "/"))))
                                     [mnt fstype]))))
                         (sort-by (comp count first) >)
                         first)]
-          (second best)))
-      (catch Throwable _ nil))))
+          (second best))))
+    (catch Throwable _ nil)))
+
+(defn mount-fstype
+  "Filesystem type for `dir` as a TRI-STATE: the fstype string when a mount
+   source could answer, or `:unknown` when none could.
+
+   Round one returned nil here and `tmpfs?` coerced nil to \"not tmpfs\",
+   so an undeterminable filesystem was treated as proven-safe and the suite
+   ran on RAM. `:unknown` is a refusal (see `base-refusal`), not a pass."
+  [dir]
+  (or (findmnt-fstype dir) (mounts-table-fstype dir) :unknown))
 
 (defn tmpfs?
-  "True when `dir`'s filesystem is tmpfs (RAM-backed)."
+  "True when `dir`'s filesystem is KNOWN to be tmpfs (RAM-backed). Note that
+   false here means \"not known to be tmpfs\" and is NOT on its own a licence
+   to run -- `base-refusal` is the decision function."
   [dir]
   (= "tmpfs" (mount-fstype dir)))
+
+(def ^:private refusal-remedy
+  (str "Launch with -Djava.io.tmpdir=/var/tmp/forge, or export "
+       "TMPDIR=/var/tmp/forge before invoking bb (bb does not read "
+       "JAVA_TOOL_OPTIONS -- see ~/bin/suite-run / seat-tmp-guard.sh)."))
+
+;; @spec MCP-OP-TMPHYG-003
+(defn base-refusal
+  "nil when `dir` is PROVEN to be a real-disk path; otherwise a typed refusal
+   map {:reason :ram-path-prefix|:tmpfs|:unknown-fstype :base ... :fstype ...}.
+
+   Fails CLOSED: every path out of this function that is not a positive proof
+   of real disk is a refusal."
+  [dir]
+  (if (literal-ram-path? dir)
+    {:reason :ram-path-prefix :base (str dir)}
+    (let [fstype (mount-fstype dir)]
+      (cond
+        (= :unknown fstype) {:reason :unknown-fstype :base (str dir)}
+        (= "tmpfs" fstype) {:reason :tmpfs :base (str dir) :fstype fstype}
+        :else nil))))
+
+(defn refusal-message
+  [{:keys [reason base fstype detail]}]
+  (format "tmp-refused: java.io.tmpdir base=%s %s %s"
+          base
+          (case reason
+            :ram-path-prefix
+            "is a RAM-backed path by name (/tmp or /dev/shm)."
+            :unknown-fstype
+            (str "has an UNDETERMINABLE filesystem type -- neither findmnt nor "
+                 "the mounts table could answer, so nothing proves it is not RAM. "
+                 "Refusing rather than assuming disk.")
+            :tmpfs
+            (format "is RAM-backed (tmpfs, fstype=%s)." fstype)
+            :unusable-base
+            (str "cannot be used as a temp base: " detail)
+            :sentinel-mismatch
+            (str "was handed a re-exec sentinel it does not own: " detail)
+            "is not usable as a temp base.")
+          refusal-remedy))
+
+(defn- refuse!
+  [refusal]
+  (binding [*out* *err*] (println (refusal-message refusal)))
+  {:refused true})
 
 (defn env-or-current-tmpdir
   "$TMPDIR when set (the seat's env, honored by a real `java` launch and by
@@ -137,18 +237,8 @@
   [target]
   (let [base (env-or-current-tmpdir)]
     (try (fs/create-dirs base) (catch Throwable _ nil))
-    (if (tmpfs? base)
-      (do
-        (binding [*out* *err*]
-          (println
-            (format
-              (str "tmp-refused: java.io.tmpdir base=%s is RAM-backed (tmpfs). "
-                   "Launch with -Djava.io.tmpdir=/var/tmp/forge, or export "
-                   "TMPDIR=/var/tmp/forge before invoking bb (bb does not "
-                   "read JAVA_TOOL_OPTIONS -- see ~/bin/suite-run / "
-                   "seat-tmp-guard.sh).")
-              base)))
-        {:refused true})
+    (if-let [refusal (base-refusal base)]
+      (refuse! refusal)
       (if (System/getenv reexec-sentinel)
         {:refused false :root (io/file (System/getProperty "java.io.tmpdir"))}
         (let [root (io/file base (str "clj-surgeon-suite-" (subs (str (random-uuid)) 0 8)))]
