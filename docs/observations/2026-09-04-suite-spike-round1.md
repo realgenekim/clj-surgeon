@@ -280,3 +280,18 @@ two concurrent suites from two clones, and require the failure to appear.
 - Commands: `TMPDIR=/var/tmp/forge clojure -Sdeps '{:aliases {:suite-timing {:main-opts ["-m"
   "suite-timing"]}}}' -M:clj-surgeon/mcp-test:suite-timing <out.edn>` (solo, instrumented);
   `TMPDIR=/var/tmp/forge clojure -M:clj-surgeon/mcp-test` in each clone (concurrent).
+
+## Round two, one layer up: this measurement is now CI
+
+The partition round one produced is the shape of `.github/workflows/mcp-main.yml` (landed on
+`bridge/gha`, 2026-09-04). `make mcp-test` is the merge gate and the only job anyone waits on;
+the eleven battery namespaces fan out one job per namespace, so the battery's wall is `max()`
+rather than `sum()`. The battery matrix is READ FROM `clj-surgeon.lane-manifest` at workflow
+time by `.github/scripts/lane_matrix.clj`, so this document's partition and CI's cannot drift.
+
+Measured: **merge verdict 716.7 s -> 209 s (3.4x); battery 1 013 s summed -> 499 s (2.0x);
+end to end 521 s at 16 runners wide.** Three defects the seat could not see, the per-namespace
+hazard table (strace, chmod-000, the network clone, the seat-absolute temp roots), the receipt
+format and the `gh` commands that read it:
+
+**`docs/observations/2026-09-04-gha-round1.md`.**
