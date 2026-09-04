@@ -708,9 +708,12 @@
         (receipt-leaf-pairs result)))
 
 ;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-047
+
 (defn receipt-fact-entries
   "One entry per receipt leaf `structural-text` does not already carry, in
-  receipt order: its JSON pointer and the line that renders it.
+  receipt order: its JSON pointer, the line that renders it, and the spelling
+  that line carries.
 
   The default is to RENDER: the rows a mode renders structurally satisfy the
   criterion where they can, and everything left over prints here. A receipt
@@ -720,35 +723,56 @@
   A COLLIDABLE leaf prints as `pointer=spelling` — the only rendering of it a
   reader can attribute to the leaf — and every other leaf as `pointer: value`.
 
-  Field evidence (Sol O2 round-2 review, section 3): the round-2 renderer
-  projected selected row fields, so `forms` dropped every `source_anchor`
-  range and both hashes, `outline` dropped every `platforms` entry, `match`
-  dropped every `hash` and `preorder`, `ls-deps` dropped every `leaf?`, and
-  every mode dropped its top-level metadata — 182 leaves over nine modes, not
-  one of them named anywhere as deliberately excluded."
+  Carriage is decided against the STRUCTURAL text ALONE. @spec MCP-OP-STUDY-047
+  — field evidence (Sol O2 round-5 review, 2026-09-04, section 2): this used
+  to accumulate each rendered line into the text it tested the NEXT leaf
+  against, so a leaf could be deemed carried by a fact line the budget then
+  dropped. On the branch's own primary fixture that made
+  `results[1].outline.requires[0]` invisible to the entry list, hence to the
+  count AND to the `dropped:` pointers: 784 declared against 785 audited. A
+  duplicate spelling is still credited to the entry that renders it, but that
+  is decided in `fact-block`, where whether it renders is known.
+
+  Deciding against a FIXED text is also what makes the fit affordable: the
+  accumulator rebuilt the whole text once per leaf, so one 10,000-leaf result
+  cost about 1.25 GB of string copying per candidate and 69,132 ms over a
+  fit."
   [structural-text result]
-  (first
-    (reduce
-      (fn [[entries text] [path value]]
-        (if (or (leaf-excluded? path)
-                (leaf-rendered? text path value))
-          [entries text]
-          (let [rendered (leaf-spelling value)
-                line (cond
-                       (collidable-leaf? value)
-                       (str "  " (labelled-leaf path value))
+  (into []
+        (comp
+          (remove (fn [[path value]]
+                    (or (leaf-excluded? path)
+                        (leaf-rendered? structural-text path value))))
+          (map (fn [[path value]]
+                 (let [rendered (leaf-spelling value)
+                       collidable (collidable-leaf? value)
+                       line (cond
+                              collidable
+                              (str "  " (labelled-leaf path value))
 
-                       (str/includes? rendered "\n")
-                       (str/join "\n"
-                                 (cons (str "  " (leaf-label path) ":")
-                                       (map #(str "    " %)
-                                            (str/split-lines rendered))))
+                              (str/includes? rendered "\n")
+                              (str/join "\n"
+                                        (cons (str "  " (leaf-label path) ":")
+                                              (map #(str "    " %)
+                                                   (str/split-lines rendered))))
 
-                       :else (str "  " (leaf-label path) ": " rendered))]
-            [(conj entries {:path path :label (leaf-label path) :line line})
-             (str text "\n" line)])))
-      [[] structural-text]
-      (receipt-leaf-pairs result))))
+                              :else
+                              (str "  " (leaf-label path) ": " rendered))]
+                   {:path path
+                    :label (leaf-label path)
+                    :line line
+                    ;; The characters ANOTHER entry's rendered line would
+                    ;; have to contain for this leaf to be carried without a
+                    ;; line of its own — the same needles `leaf-rendered?`
+                    ;; looks for. A collidable leaf is carried only as
+                    ;; `pointer=spelling`, and pointers are unique, so no
+                    ;; other entry can ever carry one.
+                    :needles (when-not collidable
+                               (if (str/includes? rendered "\n")
+                                 (into [] (remove str/blank?)
+                                       (str/split-lines rendered))
+                                 [rendered]))}))))
+        (receipt-leaf-pairs result)))
 
 ;; @spec MCP-OP-STUDY-044
 (defn receipt-fact-lines
@@ -815,8 +839,58 @@
           shown total
           (if dropped? " · the complete receipt is in structuredContent" "")))
 
+;; @spec MCP-OP-STUDY-047
+(defn- carrier-indices
+  "For each entry, the index of the earliest rendering position at which some
+  OTHER rendered line already carries this leaf — or nil when only its own
+  line can.
+
+  A leaf is carried by a line whose characters contain its spelling, and a
+  line's characters include its POINTER as well as its value: on this
+  branch's own fixture `results[1].file` is carried by the line
+  `file_hashes.src/clj_surgeon/mcp_inspect.clj: <hash>`, whose label spells
+  the path. Searching the spelling against whole LINES is therefore the same
+  question `leaf-rendered?` asks of the whole text, asked one line at a time
+  — and asking it per line is what keeps it affordable: the scan stops at the
+  first hit, which is at worst the entry's own index.
+
+  A multi-line spelling is carried when every one of its non-blank lines is,
+  so its index is the LATEST of their first hits."
+  [entries]
+  (let [lines (mapv :line entries)
+        n (count lines)
+        first-hit (memoize
+                    (fn [needle]
+                      (loop [index 0]
+                        (cond
+                          (>= index n) nil
+                          (str/includes? (nth lines index) needle) index
+                          :else (recur (inc index))))))]
+    (mapv (fn [entry]
+            (when-let [needles (seq (:needles entry))]
+              (let [hits (map first-hit needles)]
+                (when (every? some? hits) (apply max hits)))))
+          entries)))
+
+;; @spec MCP-OP-STUDY-047
+(defn- dropped-indices
+  "The indices of the entries a rendering of `shown` lines does NOT carry.
+
+  An entry past `shown` is dropped unless some line INSIDE `shown` already
+  carries it. Derived from the same carriage rule `uncarried-leaves` applies
+  to the published text, so the count the header declares and the count the
+  audit finds are two readings of one walk rather than two computations."
+  [carriers shown]
+  (into []
+        (comp (drop shown)
+              (keep (fn [[index carried-at]]
+                      (when-not (and carried-at (< carried-at shown))
+                        index))))
+        (map-indexed vector carriers)))
+
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-047
 (defn fact-block
   "The bounded receipt-fact section, whether any fact was dropped, and WHICH.
 
@@ -830,6 +904,11 @@
   every dropped fact is carried out, so a caller that walks the block can name
   them all even though the rendering names the first few and counts the rest.
 
+  @spec MCP-OP-STUDY-047 — the header's `X of N` is DERIVED from the same
+  carriage walk `uncarried-leaves` applies to the published text: `N` is every
+  entry, and `N - X` is every entry no rendered line carries. A duplicate
+  spelling is credited to the entry that renders it, and only while it renders.
+
   Field evidence (Opus O2 round-4 review, 2026-09-04, sections 2 and 3): round
   four charged the fact LINES and left the header and the `dropped:` line
   outside the allowance, so at allowance 0 the rendering was 22,785 characters
@@ -839,40 +918,53 @@
   [structural-text result budget]
   (let [entries (vec (receipt-fact-entries structural-text result))
         total (count entries)
-        labels (mapv :label entries)
+        carriers (carrier-indices entries)
         ;; Prefix sums so the descent below costs one comparison per step: a
         ;; section rendered per candidate would be quadratic in the fact
         ;; count, and the fit evaluates dozens of candidates.
         prefix (vec (reductions + 0 (map #(inc (count (:line %))) entries)))
+        dropped-labels-at
+        (memoize
+          (fn [shown]
+            (mapv #(:label (nth entries %))
+                  (dropped-indices carriers shown))))
+        section-at
+        (fn [shown]
+          (let [labels (dropped-labels-at shown)
+                dropped? (seq labels)
+                header (fact-section-header (- total (count labels)) total
+                                            (boolean dropped?))]
+            {:labels labels
+             :dropped (boolean dropped?)
+             :text (str/join
+                     "\n"
+                     (concat [header]
+                             (when dropped? [(dropped-line labels)])
+                             (map :line (subvec entries 0 shown))))}))
         section-length
         (fn [shown]
-          (let [dropped? (< shown total)]
-            (+ (count (fact-section-header shown total dropped?))
-               (if dropped?
-                 (inc (count (dropped-line (subvec labels shown))))
-                 0)
+          (let [labels (dropped-labels-at shown)
+                dropped? (seq labels)]
+            (+ (count (fact-section-header (- total (count labels)) total
+                                           (boolean dropped?)))
+               (if dropped? (inc (count (dropped-line labels))) 0)
                (nth prefix shown))))
         shown (loop [n total]
                 (if (or (zero? n) (<= (section-length n) budget))
                   n
                   (recur (dec n))))
-        dropped? (< shown total)
-        section (when (or (pos? shown) dropped?)
-                  (str/join
-                    "\n"
-                    (concat
-                      [(fact-section-header shown total dropped?)]
-                      (when dropped? [(dropped-line (subvec labels shown))])
-                      (map :line (subvec entries 0 shown)))))]
+        rendered (section-at shown)]
     {:lines (mapv :line (subvec entries 0 shown))
      :shown shown
      :total total
-     :dropped dropped?
-     :dropped-labels (subvec labels shown)
+     :dropped (:dropped rendered)
+     :dropped-labels (:labels rendered)
      ;; The section is rendered HERE because this is where it was charged. A
      ;; section assembled elsewhere out of these pieces would be a second
      ;; rendering, and the budget would have been spent on the other one.
-     :section (when (and section (<= (count section) budget)) section)}))
+     :section (let [text (when (or (pos? shown) (:dropped rendered))
+                           (:text rendered))]
+                (when (and text (<= (count text) budget)) text))}))
 
 ;; @spec MCP-OP-STUDY-044
 (defn fact-section
