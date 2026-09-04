@@ -1253,3 +1253,66 @@
       (is (str/includes? (str (:reason resolved)) "src/**/*.clj"))
       (is (false? (:complete (ft/thread-status [{:id "a" :status "FOUND"} resolved])))
           "an UNSCANNED leg must never be dropped from the denominator"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- B1': an unescaped `/` inside a regex CHARACTER CLASS
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-031
+(deftest a-slash-inside-a-regex-character-class-does-not-end-the-regex
+  (testing "`/[/}]/` is valid JavaScript; the `}` inside it closes nothing"
+    (doseq [[label literal] [["char class holding a slash and a brace" "/[/}]/"]
+                             ["negated class" "/[^/}]/"]
+                             ["class holding both braces" "/[/{}]/"]
+                             ["escaped closing bracket in the class" "/[/\\]}]/"]
+                             ["the natural instance" "/[/\\\\]/"]]]
+      (let [src (str "function trapRegexCharClassSlash(s) {\n"
+                     "  const re = " literal ";\n"
+                     "  return re.test(s);\n"
+                     "}\n")
+            lines (str/split src #"\n" -1)
+            {:keys [to boundary body]} (ft/script-body src lines 1)]
+        (is (= 4 to)
+            (str label ": the body ended at L" to
+                 " -- the `}` inside " literal " was counted as the function's"
+                 " closing brace"))
+        (is (= "brace-window(lexed,closed)" boundary) label)
+        (is (str/ends-with? (str/trim (str body)) "}") label))))
+
+  (testing "a split on a character class, the shape that happened to recover"
+    (let [src (str "function splitPathSegments(p) {\n"
+                   "  return p.split(/[/\\\\]/);\n"
+                   "}\n")
+          lines (str/split src #"\n" -1)]
+      (is (= 3 (:to (ft/script-body src lines 1))))))
+
+  (testing "and a character class is still exited by its own `]`"
+    (let [src (str "function afterClass(a, b) {\n"
+                   "  const m = /[abc]/;\n"
+                   "  const q = {x: 1};\n"
+                   "  return m.test(a) ? q : b;\n"
+                   "}\n")
+          lines (str/split src #"\n" -1)]
+      (is (= 5 (:to (ft/script-body src lines 1)))
+          "a `]` that closes the class must return the lexer to regex body")))
+
+  (testing "a wrong range is never labelled closed, end to end through the verb"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-charclass")]
+      (try
+        (write-file! scratch "resources/public/js/charclass.js"
+                     (str "function trapRegexCharClassSlash(s) {\n"
+                          "  const re = /[/}]/;\n"
+                          "  return re.test(s);\n"
+                          "}\n"))
+        (let [{:keys [structured]}
+              (call! {:subject "trapRegexCharClassSlash"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})
+              js (leg structured "js-function")]
+          (is (= "resources/public/js/charclass.js" (:file js)))
+          (is (= 4 (:to js))
+              (str "the published body stops at L" (:to js)
+                   " with boundary " (:boundary js)))
+          (is (str/includes? (str (:body js)) "return re.test(s);")
+              "the receipt published a truncated function body"))
+        (finally (delete-tree! scratch))))))

@@ -203,3 +203,10 @@ run as a test inside `make mcp-test`) enforces both halves.
   shall reproduce the candidate set the verb actually searched, including any
   `scope.paths` narrowing, so a caller pasting it into a shell cannot get an
   answer the receipt does not have.
+
+- [x] **MCP-OP-THREAD-031**: A character class is part of the regex. When the
+  script lexer is inside a regex literal and meets `[`, it shall enter character
+  class state and treat every `/` until the matching unescaped `]` as regex
+  content, so a valid literal such as `/[/}]/`, `/[^/}]/` or `p.split(/[/\\]/)`
+  never ends early and never yields a truncated body labelled
+  `brace-window(lexed,closed)`.
