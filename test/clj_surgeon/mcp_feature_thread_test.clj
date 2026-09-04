@@ -1700,3 +1700,48 @@
           (is (nil? (:after_context l))
               (str "leg " (:id l) " kept its after_context after its body was"
                    " elided for budget")))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR / round-three spec 2 -- the request contract
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-037
+(deftest the-rules-carry-the-request-contract-of-the-two-sides
+  (testing "what the handler reads from the body and what the JS posts"
+    (let [{:keys [text structured]} (thread! fixture-root)
+          rc (get-in structured [:rules :request_contract])]
+      (is (some? rc) "rules carries no request_contract row")
+      (is (= "/api/transform/format" (:route rc)))
+      (is (= ["sync"] (vec (:handler_reads rc)))
+          (str "handler_reads was " (pr-str (:handler_reads rc))
+               "; the handler destructures {:keys [sync]} off the parsed body"))
+      (is (= ["sync"] (vec (:js_posts rc)))
+          (str "js_posts was " (pr-str (:js_posts rc))
+               "; the JS calls postJSON('/api/transform/format', {sync})"))
+      (is (true? (:agree? rc)))
+      (is (str/includes? text "request_contract"))))
+
+  (testing "a disagreement is reported, and says WHICH side has the extra key"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-contract")]
+      (try
+        (let [f (io/file scratch "resources/public/js/editor-commands.js")]
+          (spit f (str/replace (slurp f)
+                               "postJSON('/api/transform/format', {sync})"
+                               "postJSON('/api/transform/format', {sync, selection})")))
+        (let [{:keys [structured]} (thread! (.getPath scratch))
+              rc (get-in structured [:rules :request_contract])]
+          (is (= ["sync"] (vec (:handler_reads rc))))
+          (is (= ["selection" "sync"] (sort (:js_posts rc))))
+          (is (false? (:agree? rc)))
+          (is (= ["selection"] (vec (:only_in_js rc)))
+              "the key the browser sends and the handler never reads")
+          (is (empty? (:only_in_handler rc))))
+        (finally (delete-tree! scratch)))))
+
+  (testing "a destructure of something that is NOT the request body is not a read"
+    (let [{:keys [structured]} (thread! fixture-root)
+          rc (get-in structured [:rules :request_contract])]
+      (is (not (contains? (set (:handler_reads rc)) "reason"))
+          (str "`(let [{:keys [reason] :as conflict} (ex-data e)]` is not a"
+               " read of the request body; handler_reads was "
+               (pr-str (:handler_reads rc)))))))
