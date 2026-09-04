@@ -57,6 +57,37 @@
   "Declaration order is execution order across lanes."
   [:fast :integration :battery])
 
+(def cadences
+  "The cadences a lane may be declared at, and what each one MEANS. Gene,
+   2026-09-04: the manifest declares WHEN a lane runs in the same place it
+   declares what is in it.
+
+   A lane's cadence is not decoration -- it is the reason the partition pays.
+   Splitting a suite into lanes buys nothing if every lane still runs at the
+   same moment; the win is that the 20.9 s of real tests stop queueing behind
+   674 s of cold launcher drives, and that is a statement about WHEN, not
+   about WHAT. Putting the two in one source of truth means moving a namespace
+   between lanes changes how often it runs, visibly, at the pin."
+  {:every-run
+   "Every run -- the inner loop. Seconds-scale; an agent runs it after each edit."
+
+   :merge-gate
+   "The merge gate, with the fast lane: `make mcp-test`. Runs before anything
+    is proposed for landing."
+
+   :landing-and-nightly
+   "Before every landing, under `flock /home/forge/tmp/suite.lock` because it
+    measures the machine and must not share a box lane with another JVM suite;
+    and nightly on the trunk tip. Minutes-scale, deliberately OUT of the merge
+    gate."})
+
+(def lane-cadence
+  "lane -> cadence. Set equality with `lanes` is asserted by the witness: a
+   lane with no cadence, or a cadence this map does not know, is a refusal."
+  {:fast :every-run
+   :integration :merge-gate
+   :battery :landing-and-nightly})
+
 (def manifest
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
@@ -142,6 +173,11 @@
    'clj-surgeon.mcp-formatter-test
    "ORPHAN as of 2026-09-04: required by no runner and no Make target. Declared here rather than silently adopted; adopting it is a round-three decision with its own measurement."})
 
+(defn cadence-of-lane
+  "The declared cadence for `lane`, or nil when the lane declares none."
+  [lane]
+  (get lane-cadence lane))
+
 (defn lane-of
   "The declared lane for `ns-sym`, or nil when it is not in the manifest."
   [ns-sym]
@@ -152,6 +188,21 @@
   [lane]
   (->> manifest (filter (comp #{lane} val)) (map key) sort vec))
 
+(defn cadence-of
+  "The cadence at which `ns-sym` runs, via its lane. nil when it has no lane,
+   or when its lane declares no cadence."
+  [ns-sym]
+  (some-> (lane-of ns-sym) cadence-of-lane))
+
+(defn lane-catalogue
+  "`lane (cadence)` for every lane, for refusal messages. A refusal that names
+   only the legal lanes leaves the reader to guess what choosing one costs."
+  []
+  (str/join ", "
+            (map (fn [lane]
+                   (format "%s (%s)" lane (pr-str (cadence-of-lane lane))))
+                 lanes)))
+
 (defn refusal-message
   "The typed refusal for a namespace the runner was asked to run that carries
    no lane declaration. Names the subject, the rule, and the remedy."
@@ -159,7 +210,8 @@
   (format (str "lane-refused: %s carries no lane declaration. Every JVM test "
                "namespace must appear in clj-surgeon.lane-manifest/manifest "
                "with one of %s AND carry the same {:lane ...} in its own ns "
-               "metadata (TEST-ISO-001). Add it to the manifest and to the ns "
-               "form, or declare why it belongs to no JVM lane in "
-               "clj-surgeon.lane-manifest/excluded.")
-          ns-sym (str/join ", " (map str lanes))))
+               "metadata (TEST-ISO-001). The lane you choose decides HOW OFTEN "
+               "it runs, which is why the cadence is named beside it here. Add "
+               "it to the manifest and to the ns form, or declare why it "
+               "belongs to no JVM lane in clj-surgeon.lane-manifest/excluded.")
+          ns-sym (lane-catalogue)))

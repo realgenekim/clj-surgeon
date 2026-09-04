@@ -84,21 +84,11 @@
 (defn -main
   [& args]
   (let [{:keys [lanes explicit]} (parse-args args)
-        _ (when (and (empty? lanes) (empty? explicit))
-            (binding [*out* *err*]
-              (println (str "lane-refused: no lane named. Usage: -m "
-                            "clj-surgeon.mcp-test-runner <lane>... where lane is "
-                            (str/join ", " (map name lm/lanes))
-                            " -- or --ns <namespace>...")))
-            (System/exit 96))
-        ;; Resolve the namespace set FIRST. The home decision below is a
-        ;; property of WHAT IS ABOUT TO RUN, not of how the caller spelled the
-        ;; invocation. `lane-namespaces` is pure -- it reads the manifest and
-        ;; loads nothing -- so this is safe before the re-exec.
-        {:keys [refusal message namespaces]} (lane-namespaces lanes explicit)
-        _ (when refusal
-            (binding [*out* *err*] (println message))
-            (System/exit 96))
+        ;; Resolve the namespace set FIRST, but do not ACT on it yet. The home
+        ;; decision below is a property of WHAT IS ABOUT TO RUN, not of how the
+        ;; caller spelled the invocation, and `lane-namespaces` is pure -- it
+        ;; reads the manifest and loads nothing.
+        resolved (lane-namespaces lanes explicit)
         ;; @spec TEST-ISO-006 -- a run is launched on a throwaway user.home
         ;; unless a BATTERY namespace is in it. Battery namespaces launch cold
         ;; `clojure`/`bb`/`git` children that legitimately need the seat's
@@ -112,15 +102,35 @@
         ;; isolation while a fast-lane witness asserted it had it, and all four
         ;; clones of the concurrency battery failed identically. A rule that
         ;; holds under one spelling of an invocation and not another is the
-        ;; same class as doctrine that disagrees with the prompt: true where it
-        ;; is written, false where it takes effect.
-        isolate-home? (and (seq namespaces)
-                           (not-any? #(= :battery (lm/lane-of %)) namespaces))
+        ;; same class as doctrine that disagrees with the installed prompt:
+        ;; true where it is written, false where it takes effect.
+        isolate-home? (and (seq (:namespaces resolved))
+                           (not-any? #(= :battery (lm/lane-of %))
+                                     (:namespaces resolved)))
+        ;; @spec MCP-OP-TMPHYG-003 -- THE TEMP GUARD RUNS FIRST, before any
+        ;; lane refusal, unconditionally. It is the check that refuses to write
+        ;; test fixtures into RAM, and a run that is about to be refused for
+        ;; some other reason must still not be allowed to reach a tmpfs on its
+        ;; way there. A first cut of the lane runner hoisted the "no lane
+        ;; named" refusal above this call; the tmp-leak ratchet's step 9 caught
+        ;; it immediately -- `ran (exit 96) with TMPDIR=/tmp instead of
+        ;; refusing` -- in all four clones of the concurrency battery.
         {:keys [refused root]}
         (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"
                                   :isolate-home? isolate-home?}
                                  args)
         _ (when refused (System/exit 97))
+        _ (when (and (empty? lanes) (empty? explicit))
+            (binding [*out* *err*]
+              (println (str "lane-refused: no lane named. Usage: -m "
+                            "clj-surgeon.mcp-test-runner <lane>... where lane is "
+                            (str/join ", " (map name lm/lanes))
+                            " -- or --ns <namespace>...")))
+            (System/exit 96))
+        _ (when (:refusal resolved)
+            (binding [*out* *err*] (println (:message resolved)))
+            (System/exit 96))
+        namespaces (:namespaces resolved)
         _ (println (format "lanes: %s -- %d namespace(s), home-isolated %s"
                            (if (seq lanes) (str/join "+" (map name lanes)) "--ns")
                            (count namespaces) isolate-home?))

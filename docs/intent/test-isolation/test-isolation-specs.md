@@ -49,6 +49,20 @@ listed here with `[ ]` so the family is one document rather than a memory.
   impossible.
   *Witness:* `.../the-partition-drops-nothing-round-one-measured`.
 
+- [x] **TEST-ISO-001c**: The lane manifest shall declare, in the SAME source
+  of truth as the lane, the CADENCE at which each lane runs -- `:fast` every
+  run, `:integration` the merge gate with fast, `:battery` before every
+  landing under `flock /home/forge/tmp/suite.lock` and nightly on the trunk
+  tip. A lane with no cadence, a cadence the runner does not know, or a
+  manifest namespace that resolves to neither shall be a refusal, and the
+  runner's lane refusal shall NAME the cadence beside each lane, because the
+  lane chosen decides how often the test runs and a refusal that hides that
+  makes the choice look free.
+  *Witness:* `clj-surgeon.lane-manifest-test/every-lane-declares-a-cadence-the-runner-knows`,
+  `.../every-manifest-namespace-resolves-to-a-known-cadence`,
+  `.../the-refusal-message-names-the-cadence-a-lane-costs`.
+  *(Building the nightly cron and a cadence receipt ledger is round three.)*
+
 - [x] **TEST-ISO-006**: Any run that contains no BATTERY namespace -- the
   fast lane, the integration lane, and the merge gate that is both -- shall
   have its JVM launched with both

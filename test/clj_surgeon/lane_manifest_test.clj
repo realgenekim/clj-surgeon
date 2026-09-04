@@ -87,6 +87,39 @@
                "declared in clj-surgeon.lane-manifest/excluded: "
                (str/join ", " unaccounted))))))
 
+(deftest every-lane-declares-a-cadence-the-runner-knows
+  (testing "lane -> cadence is set-equal with the lanes, both directions"
+    (is (= (set lm/lanes) (set (keys lm/lane-cadence)))
+        (str "a lane with no cadence, or a cadence for a lane that does not "
+             "exist: lanes " (pr-str lm/lanes) " vs "
+             (pr-str (sort (keys lm/lane-cadence)))))
+    (doseq [[lane cadence] lm/lane-cadence]
+      (is (contains? lm/cadences cadence)
+          (str "lane " lane " declares cadence " (pr-str cadence)
+               " which the runner does not know; known cadences are "
+               (pr-str (sort (keys lm/cadences)))))))
+  (testing "every cadence the manifest can name says what it MEANS"
+    (doseq [[cadence prose] lm/cadences]
+      (is (and (string? prose) (>= (count prose) 40))
+          (str "cadence " cadence " must say when it runs, not just be named")))))
+
+(deftest every-manifest-namespace-resolves-to-a-known-cadence
+  (let [orphans (sort (remove (comp lm/cadences lm/cadence-of) (keys lm/manifest)))]
+    (is (empty? orphans)
+        (str (count orphans) " namespace(s) with a lane but no cadence the "
+             "runner knows: " (str/join ", " orphans)))))
+
+(deftest the-refusal-message-names-the-cadence-a-lane-costs
+  (let [msg (lm/refusal-message 'clj-surgeon.no-such-test)]
+    (doseq [lane lm/lanes]
+      (is (str/includes? msg (str lane))
+          (str "the refusal must name lane " lane)))
+    (doseq [cadence (vals lm/lane-cadence)]
+      (is (str/includes? msg (str cadence))
+          (str "the refusal must name cadence " cadence
+               " -- choosing a lane decides how often the test runs, and a "
+               "refusal that hides that makes the choice look free")))))
+
 (deftest excluded-entries-are-real-and-carry-a-reason
   (doseq [[s reason] lm/excluded]
     (is (contains? @on-disk s) (str "excluded namespace " s " is not on disk"))
