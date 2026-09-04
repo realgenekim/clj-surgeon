@@ -1354,6 +1354,25 @@
            "what is known"))))
 
 ;; @spec MCP-OP-ALIAS-042
+;; @spec MCP-OP-ALIAS-059
+(defn- bounded-refusal-text
+  "One rendered refusal, held to the ceiling the verb publishes.
+
+  The last gate rather than the only one: every list this renderer embeds is
+  bounded in characters upstream, and this is what makes the whole a receipt
+  even when a field nobody bounded grows. It is a typed cut — the marker names
+  the length it replaced and where the whole refusal is — because a text block
+  silently shorter than the receipt it renders breaks the text ⊇ structured
+  contract with nothing in the text to show it."
+  [text]
+  (let [ceiling alias-migration/max-refusal-text-characters]
+    (if (<= (count text) ceiling)
+      text
+      (let [marker (str "\n… [refusal text truncated at " ceiling
+                        " characters; it rendered " (count text)
+                        " — every field is complete in structuredContent]")]
+        (str (subs text 0 (max 0 (- ceiling (count marker)))) marker)))))
+
 (defn alias-migration-summary
   "Render one compact visible summary whose length is constant in N.
 
@@ -1372,9 +1391,10 @@
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
             (:details_path result)
             (or (:details_retention result) "best-effort"))
-    (str/join
-      "\n"
-      (remove
+    (bounded-refusal-text
+      (str/join
+       "\n"
+       (remove
         nil?
         [(format (str "alias_migration\n"
                       "  refused · %s · %s\n\n"
@@ -1390,7 +1410,7 @@
          (refusal-fact-line result)
          (when-let [remedy (:remedy result)]
            (str "remedy · " remedy))
-         (rendered-next-call result)]))))
+         (rendered-next-call result)])))))
 
 (def alias-migration-tool-description
   (str

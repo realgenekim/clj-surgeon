@@ -23,6 +23,7 @@
    (java.util EnumSet UUID)))
 
 (declare unknown-profile?)
+(declare elide)
 
 (def request-fields
   #{:op :workspace_root :from :to :scope :expect :verify})
@@ -726,15 +727,52 @@
                    request [completing-scope-path]))))))
 
 ;; @spec MCP-OP-ALIAS-058
+(def max-refusal-root-list-characters
+  "Ceiling on the rendered root listing one refusal embeds, in CHARACTERS.
+
+  An item COUNT is not a size. Seven legal top-level directories, each named a
+  digit followed by 246 quotation marks, are six items — inside every count
+  bound this verb states — and 3,019 JSON characters, which carried the
+  visible refusal 794 characters past the 4,096 it publishes as its ceiling.
+  A bound that counts entries bounds the caller's patience and not the
+  receipt."
+  512)
+
+;; @spec MCP-OP-ALIAS-059
 (defn root-sizes
-  "The largest roots as `<pattern> (<sources>)`, bounded.
+  "The largest roots as `<pattern> (<sources>)`, bounded in CHARACTERS.
 
   What a caller needs when no call can be composed: not the sample the remedy
   would have sent, but the roots themselves with the weight of each, so the
-  scope they spell by hand is the part of the tree they meant."
+  scope they spell by hand is the part of the tree they meant.
+
+  Each entry is elided at the per-field ceiling, because a root NAME is
+  caller-supplied data, and the listing then stops at the first entry that
+  would carry it past `max-refusal-root-list-characters`. The ceiling is read
+  on the RENDERED form and not on the raw string: the remedy embeds
+  `(pr-str listing)`, and a root name of 246 quotation marks renders at twice
+  its own length, which is exactly how a listing inside every count bound
+  reached 3,019 characters. Where entries are dropped the listing says so and
+  says how many, so a caller reading six of seven roots knows the seventh
+  exists — silent truncation inside a remedy is the same defect as silent
+  truncation inside a fact line, and worse, because the caller acts on a
+  remedy."
   [{:keys [ranked counts]}]
-  (mapv (fn [pattern] (str pattern " (" (get counts pattern) ")"))
-        (take max-suggested-scope-paths ranked)))
+  (let [candidates (mapv (fn [pattern]
+                           (elide (str pattern " (" (get counts pattern) ")")))
+                         (take max-suggested-scope-paths ranked))
+        kept (first
+               (reduce (fn [[kept used] item]
+                         (let [next-used (+ used (count (pr-str item)) 1)]
+                           (if (> next-used max-refusal-root-list-characters)
+                             (reduced [kept used])
+                             [(conj kept item) next-used])))
+                       [[] 2]
+                       candidates))
+        dropped (- (count candidates) (count kept))]
+    (cond-> kept
+      (pos? dropped)
+      (conj (str "… [+" dropped " more roots, complete in structuredContent]")))))
 
 (defn expand-scope
   "The sources one scope selects, when the bounded scan admits it.

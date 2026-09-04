@@ -4072,7 +4072,12 @@
             (when ceiling
               (is (<= (count rendered) ceiling)
                   (str "the root listing renders " (count rendered)
-                       " characters, past its ceiling of " ceiling)))
+                       " characters, past its ceiling of " ceiling))
+              (is (<= (count (pr-str (alias-migration/root-sizes
+                                       (alias-migration/suggested-scope-paths
+                                         (.toPath workspace)))))
+                      ceiling)
+                  "the ceiling is not read on the rendered form"))
             (is (some #(str/includes? % "more roots") listing)
                 (str "the listing dropped roots in silence: "
                      (pr-str listing))))))
