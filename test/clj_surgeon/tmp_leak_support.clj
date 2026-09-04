@@ -358,10 +358,14 @@
    "TEMP" (str root)})
 
 (defn secure-tmpdir!
-  "Resolves the base temp directory (`env-or-current-tmpdir`). If it is
-   tmpfs-backed, prints a named refusal to *err* and returns
-   {:refused true} -- the caller must exit non-zero without running any
-   tests or re-exec'ing anything.
+  "Resolves the base temp directory (`env-or-current-tmpdir`) and REFUSES --
+   printing a named `tmp-refused:` line to *err* and returning
+   {:refused true}, on which the caller must exit 97 without running any
+   test or re-exec'ing anything -- unless that base is positively proven
+   usable real disk. It fails CLOSED: a RAM path by name (/tmp, /dev/shm), a
+   tmpfs mount, an fstype no mount source can determine, an unusable base,
+   and a re-exec sentinel this process does not own are all refusals
+   (MCP-OP-TMPHYG-003, -004, -008).
 
    Otherwise, ensures a fresh, randomly-named isolated sub-directory of the
    base exists, then:
