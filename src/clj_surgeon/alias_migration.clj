@@ -707,6 +707,27 @@
                      declared))))))
 
 ;; @spec MCP-OP-ALIAS-058
+(defn next-call-characters
+  "The wire length of one composed call.
+
+  `within-next-call-bound?` measures the JSON the MCP boundary publishes, so a
+  refusal that REPORTS the size it could not publish must measure it the same
+  way, or the caller cannot check the arithmetic the refusal states."
+  [call]
+  (count (json/generate-string call)))
+
+;; @spec MCP-OP-ALIAS-058
+(defn rescoping-call-shape
+  "The rescoping call as composed, whether or not it fits the bound.
+
+  `rescoping-call` answers nil past the ceiling, which is the right answer for
+  a caller and the wrong one for a refusal that must say HOW FAR past it the
+  call was: a call nobody composed has no length. This is the composition
+  without the guard, so the guard's own subject can be measured and named."
+  [request paths]
+  (assoc-in (base-call request) ["scope" "paths"] (vec paths)))
+
+;; @spec MCP-OP-ALIAS-058
 (defn rescoping-call
   "The same request with `scope.paths` replaced outright, or nil if it would not fit.
 
@@ -715,7 +736,7 @@
   only correction is a different spelling. `expect.files` is left exactly as
   declared, because not one file of the new scope has been read."
   [request paths]
-  (let [call (assoc-in (base-call request) ["scope" "paths"] (vec paths))]
+  (let [call (rescoping-call-shape request paths)]
     (when (and (seq paths) (within-next-call-bound? call)) call)))
 
 ;; @spec MCP-OP-ALIAS-015

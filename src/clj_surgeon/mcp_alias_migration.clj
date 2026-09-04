@@ -524,8 +524,71 @@
      :roots (count counts)
      :roots-listed (count listed)
      :truncated? truncated?
+     :ranked (vec ranked)
+     :counts counts
      :paths (cond-> listed
               truncated? (conj completing-scope-path))}))
+
+;; @spec MCP-OP-ALIAS-058
+(defn root-listing
+  "One candidate listing of `n` roots, completed when it does not name them all.
+
+  Separated from the bound so the listing can be SHRUNK: the completing
+  pattern keeps the selection whole at any listing size, so dropping a root
+  from the listing costs the caller a name and never a file."
+  [{:keys [ranked roots]} n]
+  (let [listed (vec (sort (take n ranked)))
+        truncated? (> roots (count listed))]
+    {:roots-listed (count listed)
+     :truncated? truncated?
+     :paths (cond-> listed
+              truncated? (conj completing-scope-path))}))
+
+;; @spec MCP-OP-ALIAS-058
+(defn fitting-suggestion
+  "The largest root listing whose rescoping call fits the next_call ceiling.
+
+  A remedy is executable or it is prose. `rescoping-call` answers nil past its
+  512-character bound, and six top-level directories with ordinary
+  fifty-two-character names compose a 539-character call — so the round-11
+  receipt published `next_call nil` beside a remedy that opened \"Resend the
+  next_call\". The bound belongs on the LISTING, which the completing `**`
+  makes free to shrink, and never on the selection: this drops one root name
+  at a time until the call fits, and the file set the call selects is the same
+  file set at every size.
+
+  When no listing fits — a request already carrying enough exclusions that the
+  one-pattern call `[\"**\"]` is past the ceiling — the widest listing is
+  returned with `:next-call nil` and `:next-call-characters`, the measured size
+  of that smallest possible call, so the refusal can name the ceiling, the size
+  that missed it, and the roots the caller must choose from rather than point
+  at a call nobody composed."
+  [request {:keys [ranked] :as suggestion}]
+  (let [ceiling (min max-suggested-scope-paths (count ranked))
+        fitted (first (keep (fn [n]
+                              (let [candidate (root-listing suggestion n)]
+                                (when-let [call (planner/rescoping-call
+                                                  request (:paths candidate))]
+                                  (assoc candidate :next-call call))))
+                            (range ceiling -1 -1)))]
+    (or fitted
+        (assoc (root-listing suggestion ceiling)
+               :next-call nil
+               :next-call-characters
+               (planner/next-call-characters
+                 (planner/rescoping-call-shape
+                   request [completing-scope-path]))))))
+
+;; @spec MCP-OP-ALIAS-058
+(defn root-sizes
+  "The largest roots as `<pattern> (<sources>)`, bounded.
+
+  What a caller needs when no call can be composed: not the sample the remedy
+  would have sent, but the roots themselves with the weight of each, so the
+  scope they spell by hand is the part of the tree they meant."
+  [{:keys [ranked counts]}]
+  (mapv (fn [pattern] (str pattern " (" (get counts pattern) ")"))
+        (take max-suggested-scope-paths ranked)))
 
 (defn expand-scope
   "The sources one scope selects, when the bounded scan admits it.
@@ -730,8 +793,16 @@
       ;; Four of four E3-P tool arms were refused here and told the wrong cause.
       (zero? scanned)
       (let [given (vec (get-in request [:scope :paths]))
-            {:keys [source-files roots roots-listed truncated? paths]}
-            (suggested-scope-paths root)]
+            suggestion (suggested-scope-paths root)
+            {:keys [source-files roots]} suggestion
+            ;; @spec MCP-OP-ALIAS-058
+            ;; the LISTING is shrunk until the call fits; the completing `**`
+            ;; keeps the selection whole at every listing size, so a remedy
+            ;; that would have published `next_call nil` publishes a shorter
+            ;; listing and a call the caller can actually resend
+            {:keys [roots-listed truncated? paths next-call
+                    next-call-characters]}
+            (fitting-suggestion request suggestion)]
         (refusal :alias-migration-scope-matches-nothing
                  (str "scope.paths " (pr-str given) " matched 0 files. "
                       "scope.paths are globs: an entry selects a file only when "
@@ -741,18 +812,51 @@
                       "namespace here requires "
                       (get-in request [:from :lib])
                       " is not known, because no file was read.")
-                 {:paths given
-                  :files_matched 0
-                  :source_files_under_root source-files
-                  :source_roots roots
-                  :roots_listed roots-listed
-                  :suggested_paths paths
-                  :expected_files expected
-                  :next_call (planner/rescoping-call request paths)
-                  :expect_files_unchanged_reason
-                  planner/expect-files-unchanged-reason
-                  :remedy
-                  (cond
+                 (cond->
+                  {:paths given
+                   :files_matched 0
+                   :source_files_under_root source-files
+                   :source_roots roots
+                   :roots_listed roots-listed
+                   :suggested_paths paths
+                   :expected_files expected
+                   :next_call next-call
+                   :expect_files_unchanged_reason
+                   planner/expect-files-unchanged-reason
+                   :remedy
+                   (cond
+                    ;; @spec MCP-OP-ALIAS-058
+                    ;; no source anywhere under the root: there is nothing to
+                    ;; derive a spelling from, and saying so is the honest
+                    ;; answer rather than a fabricated remedy
+                    (zero? roots)
+                    (str "This project root holds no .clj, .cljs or .cljc file "
+                         "at all, so no spelling of scope.paths can select one. "
+                         "Check workspace_root before correcting scope.paths.")
+
+                    ;; @spec MCP-OP-ALIAS-058
+                    ;; no listing fits the ceiling — a request already carrying
+                    ;; enough exclusions that even ["**"] is past it. A remedy
+                    ;; may name a next_call only when the receipt carries one:
+                    ;; the round-11 receipt said "Resend the next_call" two
+                    ;; lines above "next_call · none"
+                    (nil? next-call)
+                    (str "No next_call is composed: the shortest call this "
+                         "remedy can compose is " next-call-characters
+                         " characters, past the "
+                         planner/max-next-call-characters
+                         "-character next_call ceiling, so there is no call to "
+                         "resend. Spell scope.paths yourself. This tree's "
+                         (count (root-sizes suggestion)) " largest of " roots
+                         " top-level source roots, each with the number of "
+                         "sources it holds, are "
+                         (pr-str (root-sizes suggestion)) "; "
+                         (pr-str completing-scope-path)
+                         " on its own selects every one of the " source-files
+                         " sources the walk saw. expect.files declared "
+                         expected
+                         " and is left as declared, because no file was read.")
+
                     ;; @spec MCP-OP-ALIAS-058
                     ;; the listing is a bounded SAMPLE and the selection is
                     ;; complete; both facts are stated, because a remedy that
@@ -768,18 +872,22 @@
                          expected
                          " and is left as declared, because no file was read.")
 
-                    (seq paths)
+                    :else
                     (str "Resend the next_call: it replaces scope.paths with "
                          (pr-str paths) ", every one of the " roots
                          " source roots this tree holds, selecting all "
                          source-files " of its sources. expect.files declared "
                          expected
-                         " and is left as declared, because no file was read.")
+                         " and is left as declared, because no file was read."))}
 
-                    :else
-                    (str "This project root holds no .clj, .cljs or .cljc file "
-                         "at all, so no spelling of scope.paths can select one. "
-                         "Check workspace_root before correcting scope.paths."))}))
+                   ;; @spec MCP-OP-ALIAS-058
+                   ;; the roots and their weights ride the receipt only where
+                   ;; the caller must spell the scope by hand
+                   (and (pos? roots) (nil? next-call))
+                   (assoc :next_call_characters next-call-characters
+                          :max_next_call_characters
+                          planner/max-next-call-characters
+                          :source_root_sizes (root-sizes suggestion)))))
 
       (> scanned max-scope-files)
       ;; @spec MCP-OP-ALIAS-055
