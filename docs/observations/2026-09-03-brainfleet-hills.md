@@ -1906,3 +1906,25 @@ and costs ~20 min of exclusive lock); Sol's N=5 cell (its two strategies are ind
 E-FIRSTCALL-DESC (it is a chore's acceptance witness, it runs after the build, and at 4 arms, not 8).
 
 **Coordinator actions on receipt (00:57Z):** E-AFFORD amendment 2 sent before its affected arms (cells relabelled N-weak / N-salient; no prompt bytes, predictions, or withdrawal clauses changed); the 00:55Z Gene report corrected in place; the merged E-PREWRITE pre-registration copied to docs/observations/2026-09-04-eprewrite-preregistration.md and its runner launched (setup + the six §12 validations now; arms queue behind E-AFFORD on arm.lock). N=5 dropped permanently; N=80 waits for E-AFFORD; the description canary runs at 4 arms after the build.
+
+## 27. Seventh result: E-AFFORD (01:11Z) — the salience gradient: INCONCLUSIVE by its own wording; the tool's win survives with a clean denominator
+
+| cell | run | chars | chars/s | gap s | wall | strategy | gate | load |
+|---|---|---|---|---|---|---|---|---|
+| N-weak | 1 | 8,977 | 141.5 | 63.4 | 125† | literal | 6/6 | 5.6→8.2 |
+| N-salient | 1 | 2,822 | 137.4 | 20.5 | 119 | generated | 6/6 | 7.8→6.5 |
+| T | 1 | 1,214 | 172.9 | 7.0 | 37 | tool | 6/6 | 6.4→6.9 |
+| N-weak | 2 | 1,869 | 151.8 | 12.3 | 86 | generated | 6/6 | 6.5→5.0 |
+| N-salient | 2 | 10,090 | 141.8 | 71.2 | 133 | literal | 6/6 | 5.0→6.2 |
+| T | 2 | 549 | 165.2 | 3.3 | 32† | tool | 6/6 | 6.5→9.9 |
+| N-weak | 3 | 10,090 | 142.1 | 71.0 | 143† | literal | 6/6 | 9.9→9.0 |
+| N-salient | 3 | 3,604 | 145.9 | 24.7 | 95† | generated | 6/6 | 8.2→8.0 |
+| T | 3 | 1,136 | 181.1 | 6.3 | 42 | tool | 6/6 | 8.0→7.2 |
+
+Cell means N-weak 6,979 · N-salient 5,505 · T 966; ratios 7.22× / 5.70×. P1 HIT, P2 MISS, P3 MISS, P4 HIT. Withdrawal: neither clause fired (clause 1 missed by one arm, 1/3 ≥ 4,000). INCONCLUSIVE, reported as such.
+
+**What it found instead (runner):** between-cell difference 1,473 chars against within-cell spreads of 8,221 and 7,268 — the noise is ~5× the effect, interleaving rules out load drift. Strategy is bimodal and disjoint across all eight k=1 native arms of both cohorts: 4 literal (mean 9,438), 4 programmatic (mean 2,556), 0 stream-edit; the smallest literal (8,594) exceeds the largest generated (3,604). sed/perl/awk appeared in 5/6 native arms, always as a READER; the one perl edit printed a patch and fed it to apply_patch — native routes every write through apply_patch even when told it need not. The contemporaneous T cell (966) shows E-REG's historical comparator (749) overstated every ratio by 29%. Even native's best mode is 2.6× the tool.
+
+**Learning (runner, verbatim):** "a 'counterfactual' that varies the salience of a permission the control already had measures the noise floor, not the mechanism." The true zero rung (no licence at all) has never been run and is not worth running: the licensed cells already decline. **Caveat that becomes the next variable:** the HARNESS, not the prompt — an arm whose only write path is Bash with no apply_patch (E-HARNESS, filed for the next poll). Apparatus: the runner overwrote E-REG's 16 payload receipts during validation and restored them within the minute; both scorers now refuse to write outside their own root; E-REG's scorer would have scored an `awk -i` or JS rewrite as ZERO chars — a silent zero in exactly the licensed cell — fixed before arm 1.
+
+**Standing:** square 2's headline stands with the honest pair (7.2×/5.7× cell means; worst pairing 1.9×; strategy bimodal). Next on arm.lock: E-PREWRITE (square 4, running its validations), then E-CEILING80 (N=80, k=1, chars + strategy classifier; launched to queue behind E-PREWRITE).
