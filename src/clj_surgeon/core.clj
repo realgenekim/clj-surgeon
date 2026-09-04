@@ -726,7 +726,24 @@
 
 ;; @spec MCP-OP-CENSUS-018
 (defn census-workspace
-  "The tree a CLI census is over, canonical, or nil when it does not resolve.
+  "The tree a CLI census is over, canonical, or the TYPED REFUSAL it earns.
+
+   NEVER nil. Opus's round-nineteen item 2, blocking: this fn returned nil for
+   every exception, `escaping-source` opened with `(when workspace …)`, and a
+   nil workspace therefore answered \"not escaping\" for every path — not
+   merely absent, but affirmatively reporting a containment it never tested.
+   An unresolvable `:dir` is an ordinary operator typo and was enough to reach
+   it: `:dir <typo> :file <link leaving the tree>` READ the target and
+   published `{:ok true, :files-scanned 1, :read-complete true}` — a
+   completeness claim over a tree the request never named, with a GREEN
+   receipt, while the MCP entrance refused the identical request
+   `invalid-workspace-root`.
+
+   So a workspace that does not resolve is a REFUSAL, never a licence to read,
+   and the nil state is made unrepresentable rather than handled. The name is
+   the one the other entrance already publishes, because this is one
+   observation and the two entrances disagreeing about it is the defect class
+   this whole fence exists to close.
 
    Sol's round-eighteen item 2, blocking. Every read this op performs is now
    confined to this one answer, and the answer has to exist before the fence
@@ -749,16 +766,29 @@
    path-prefix question and `startsWith` on strings answers a different one
    (`/a/bc` starts with `/a/b`)."
   [dir file]
-  (try
-    (if (and (nil? dir) (string? file) (not (str/blank? file)))
-      (let [named (.toPath (java.io.File. (str (fs/absolutize file))))
-            parent (.getParent named)]
-        (when parent
-          (.resolve (.toRealPath parent (make-array java.nio.file.LinkOption 0))
-                    (.getFileName named))))
-      (.toRealPath (.toPath (java.io.File. (census-root dir)))
-                   (make-array java.nio.file.LinkOption 0)))
-    (catch Exception _ nil)))
+  (or (try
+        (if (and (nil? dir) (string? file) (not (str/blank? file)))
+          (let [named (.toPath (java.io.File. (str (fs/absolutize file))))
+                parent (.getParent named)]
+            (when parent
+              (.resolve (.toRealPath parent
+                                     (make-array java.nio.file.LinkOption 0))
+                        (.getFileName named))))
+          (.toRealPath (.toPath (java.io.File. (census-root dir)))
+                       (make-array java.nio.file.LinkOption 0)))
+        (catch Exception _ nil))
+      {:error-type :invalid-workspace-root
+       :error (str relation-census/workspace-root-token " is not an existing "
+                   "directory, so there is no tree for this census to be over "
+                   "and no fence a source could be inside of")}))
+
+(defn resolved-workspace
+  "The `java.nio.file.Path` in a `census-workspace` answer, or nil for a refusal.
+
+   One predicate, so \"did the workspace resolve\" is asked the same way at
+   every site rather than by each site's idea of what a workspace looks like."
+  [workspace]
+  (when (instance? java.nio.file.Path workspace) workspace))
 
 ;; @spec MCP-OP-CENSUS-018
 (defn escaping-source
@@ -773,13 +803,31 @@
    the caller must NOT do is publish it. The target is a fact about the box,
    the link is the fact about the request, and MCP-OP-CENSUS-014 has said since
    round sixteen which of those a refusal may name."
-  [^java.nio.file.Path workspace path]
-  (when workspace
-    (try
-      (let [real (.toRealPath (.toPath (java.io.File. (str path)))
-                              (make-array java.nio.file.LinkOption 0))]
-        (when-not (.startsWith real workspace) real))
-      (catch Exception _ nil))))
+  [workspace path]
+  ;; Opus's round-nineteen item 2, blocking. This opened `(when workspace …)`,
+  ;; so a workspace that did not resolve was answered \"contained\" — a fence
+  ;; reporting a test it never ran. The nil state is not handled here, it is
+  ;; REFUSED: a caller that has not resolved its workspace has no containment
+  ;; question to ask, and a guard returning nil in this position would
+  ;; reproduce the defect exactly.
+  (let [^java.nio.file.Path resolved (resolved-workspace workspace)]
+    (when-not resolved
+      (throw (ex-info (str "a containment question was asked with no resolved "
+                           "workspace; the workspace must be refused before "
+                           "any path is measured against it")
+                      {:error-type :census-fence-misuse})))
+    ;; `IOException` and not `Exception`, and NOT to nil: between the fence's
+    ;; existence check and this call the filesystem may change, and a path
+    ;; that no longer resolves is MISSING — which the caller publishes as
+    ;; `:not-found`, the cause the other entrance publishes for it. Silence
+    ;; here would be the fail-open again, one frame down.
+    (let [real (try (.toRealPath (.toPath (java.io.File. (str path)))
+                                 (make-array java.nio.file.LinkOption 0))
+                    (catch java.io.IOException _ ::unresolvable))]
+      (cond
+        (= ::unresolvable real) ::unresolvable
+        (.startsWith ^java.nio.file.Path real resolved) nil
+        :else real))))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-018
@@ -827,9 +875,12 @@
    that resolves to nothing is missing and not an escape; before regularity,
    because what a path outside the workspace IS is not this census's business
    to report."
-  [^java.nio.file.Path workspace path]
+  [workspace path]
   (let [given (str path)
-        absolute (str (fs/absolutize given))]
+        absolute (str (fs/absolutize given))
+        ;; DELAYED, so the ordering below is the ordering that runs: the
+        ;; containment question is asked after existence and never before it.
+        escape (delay (escaping-source workspace absolute))]
     (cond
       ;; Sol's round-eighteen item 3, and the only LEXICAL question this fence
       ;; asks: a path that is not a Clojure source is not a source this census
@@ -867,7 +918,21 @@
       ;; named, here or in the remedy. MCP-OP-CENSUS-014: a refusal that
       ;; publishes where a link points has told the caller a fact about the
       ;; box in the course of refusing to tell them one.
-      (escaping-source workspace absolute)
+      ;; Opus's round-nineteen item 2, blocking, asked HERE — after existence,
+      ;; before containment and before any open. A workspace that did not
+      ;; resolve is not a workspace this path can be inside of, and the fence
+      ;; fails CLOSED rather than answering a question it cannot ask.
+      (nil? (resolved-workspace workspace))
+      workspace
+
+      ;; The path resolved a moment ago and does not now: it is MISSING, and
+      ;; missing is the cause both entrances publish for it.
+      (= ::unresolvable @escape)
+      {:error-type :file-not-found
+       :cause :not-found
+       :error (str given " does not exist")}
+
+      @escape
       {:error-type :file-outside-workspace
        :cause :outside-project
        :error (str given " resolves outside the workspace this census is "
@@ -1170,9 +1235,12 @@
         ;; The entrance's own fence call, DELAYED: MCP-OP-CENSUS-016 requires
         ;; the shape pass to touch nothing, and a `let` binding is forced
         ;; before the first `cond` branch is tested.
+        ;; The workspace, resolved ONCE per request and DELAYED, because
+        ;; MCP-OP-CENSUS-016 requires the shape pass above to touch nothing
+        ;; and resolving a root is a filesystem question.
+        workspace (delay (census-workspace dir file))
         named-refusal (delay (when (string? file)
-                               (census-source-refusal
-                                 (census-workspace dir file) file)))
+                               (census-source-refusal @workspace file)))
         scan (delay (census-sources dir file {:declared? want-declared?}))
         ;; ONE fact bundle, published by EVERY receipt shape below that got as
         ;; far as a scan — success, no-fold-arms-found and every refusal. The
@@ -1201,9 +1269,33 @@
          :anchor anchor}
         (or-remedy (continue-with :doors) (overflow-remedy :doors)))
 
+      ;; @spec MCP-OP-CENSUS-018
+      ;; Opus's round-nineteen item 2, blocking. A `:dir` THE CALLER GAVE that
+      ;; does not resolve is refused HERE, at the entrance, before any path is
+      ;; measured and before anything is read — parity with the MCP entrance,
+      ;; which has refused this as `invalid-workspace-root` since it shipped.
+      ;;
+      ;; Guarded on `(some? dir)` deliberately. When the request names only a
+      ;; `:file`, the workspace IS that file, so a workspace that does not
+      ;; resolve means the FILE does not resolve, and the honest answer is the
+      ;; fence's `:file-not-found` — which is what the ten-shape parity
+      ;; enumeration asserts for a missing file, a symlink loop and a name too
+      ;; long. Refusing those as a bad workspace would be a second name for
+      ;; one observation, which is the defect this branch exists to close.
+      (and (some? dir) (nil? (resolved-workspace @workspace)))
+      (merge
+        {:ok false
+         :anchor anchor}
+        @workspace
+        {:remedy (str relation-census/workspace-root-token
+                      " is not an existing directory, so nothing about it can "
+                      "be narrowed and no source can be inside it: name a "
+                      "directory that exists with :dir, or name one source to "
+                      "census with :file.")})
+
       ;; @spec MCP-OP-CENSUS-014
-      ;; The FIRST filesystem question this op asks, and it is asked HERE, at
-      ;; the entrance, before `@scan` is forced. Sol's round-thirteen item 7:
+      ;; The FIRST filesystem question this op asks about a NAMED source, and
+      ;; it is asked HERE, at the entrance, before `@scan` is forced. Sol's round-thirteen item 7:
       ;; a `:file` that does not exist reached `census-sources`, which stats
       ;; the named path with `fs/size` before anything had asked whether it
       ;; was there, and the `java.nio.file.NoSuchFileException` surfaced

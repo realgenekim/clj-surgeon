@@ -864,6 +864,17 @@
   #{:unknown-arguments
     :dir-not-a-string
     :dir-not-decodable
+    ;; Opus's round-nineteen item 2, blocking. A `:dir` the caller gave that
+    ;; does not resolve to an existing directory. The SAME NAME the MCP
+    ;; entrance publishes, which is unusual in this set and deliberate: the
+    ;; two entrances name their refusals from different sets where their
+    ;; REMEDIES differ, and here they do not — the request named a tree that
+    ;; is not there, at both entrances, and a second name for one observation
+    ;; is what the parity enumeration exists to forbid. Before this name
+    ;; existed the CLI READ a source outside every tree the request named and
+    ;; published `:ok true` over it, because the fence's containment question
+    ;; was answered by a workspace that had never resolved.
+    :invalid-workspace-root
     :doors-not-a-string
     :too-many-doors
     :unknown-door-symbol

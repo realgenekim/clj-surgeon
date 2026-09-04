@@ -3212,7 +3212,10 @@
                ;; denied source has one — inside `workspace` the walk would
                ;; count it `skipped-outside-root` and every other drive's
                ;; figures would change.
-               :escaping (io/file parent "escaping")}]
+               :escaping (io/file parent "escaping")
+               ;; NEVER created: a `:dir` the caller gave that does not
+               ;; resolve, which is round twenty's item 2.
+               :missing-root (io/file parent "no-such-tree")}]
     (spit-file! (io/file (:workspace trees) "src/a/one.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/two.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/three.clj") arm-source)
@@ -3235,7 +3238,8 @@
 
 (defn- cli-refusal-drives
   "One drive per refusal `census/cli-refusal-types` declares the op can emit."
-  [{:keys [workspace empty-ws broken denied-file dir-named-clj escaping]}]
+  [{:keys [workspace empty-ws broken denied-file dir-named-clj escaping
+           missing-root]}]
   (let [named #(.getCanonicalPath ^java.io.File %)]
     (concat
       ;; Every row of the shared table the CLI can express, driven
@@ -3322,6 +3326,17 @@
         :expect-anchor (str (named workspace) "/src/a/notes.txt")
         :opts {:dir (named workspace)
                :file (str (named workspace) "/src/a/notes.txt")}}
+       ;; Opus's round-nineteen item 2, blocking: a `:dir` that does not
+       ;; resolve. Enumerated so it cannot ship unexercised. Driven by `:dir`
+       ;; alone, because the SUBJECT of this refusal is the root and
+       ;; `cli-anchor` prefers an explicit `:file`; the `:dir` + escaping
+       ;; `:file` shape — the one that READ a source outside every named tree
+       ;; and published `:ok true` over it — is driven through both real
+       ;; launchers by `mcp-relation-census-launcher-test`.
+       {:label :invalid-workspace-root
+        :error-type :invalid-workspace-root
+        :root missing-root
+        :opts {:dir (named missing-root)}}
        {:label :no-fold-arms-found
         :error-type :no-fold-arms-found
         :root empty-ws
