@@ -1971,3 +1971,24 @@
     (let [{:keys [structured]} (thread! fixture-root)]
       (is (= "handler-join" (:evidence (leg structured "handler"))))
       (is (= "transform/handle-format" (:route_handler structured))))))
+
+;; @spec MCP-OP-THREAD-012
+(deftest every-body-is-byte-for-byte-identical-in-both-faces
+  (testing "the text face never re-formats what the structured face carries"
+    (let [{:keys [text structured]} (thread! fixture-root {:budget_bytes 32768})
+          bodies (concat (keep :body (:legs structured))
+                         (mapcat #(keep :body (:co_primaries %)) (:legs structured))
+                         (mapcat #(keep :body (:peers %)) (:legs structured)))
+          ctx (mapcat :after_context (:legs structured))]
+      (is (<= 6 (count bodies)) "the witness needs bodies to compare")
+      (is (<= 12 (count ctx)) "and anchor context to compare")
+      (doseq [b bodies]
+        (is (str/includes? text b)
+            (str "a structured body is not VERBATIM in the text face; a caller"
+                 " reading the text and a caller reading the structure would"
+                 " write different patches. First 80 chars: "
+                 (pr-str (subs b 0 (min 80 (count b)))))))
+      (doseq [l ctx]
+        (is (str/includes? text l)
+            (str "an after_context line is not verbatim in the text face: "
+                 (pr-str l)))))))
