@@ -1162,3 +1162,7 @@ Apparatus gets the same discipline as product: the scorer that graded seven coho
 ## 03:23Z — FAN scorer r1 Sol NO-GO (ls-files failure not fail-closed → false-PASS possible) → r2; census r18 BUILT (3b7904a) → Sol review first
 
 The scorer verdict is the apparatus version of the night's theme: a listing that returns nothing reads as "nothing changed", which is the silent-zero class (the usage collector's false zero, the E-AFFORD scorer's awk -i zero, now this). Census r18 closed the two blockers as classes and, by enumerating from the schema rather than from a list, found three more unbounded fields on the other entrance — the enumerating-witness rule paying out on its first use.
+
+## 03:31Z — admit-gate round 2 BUILT (aa82b42); its landing onto MCP/main conflicts in 8 files → integrator launched
+
+The r2 RED for the waiver fix had 262 failures: sixteen commit-path tests were reaching the write path through the very hole being closed (verify:none + allow_partial as a convenience). A suite that depends on a defect to reach its own subject is the strongest evidence the defect was load-bearing. The composition onto the trunk is not mechanical (the gate branch forked before the six-lane integration: Makefile, intent contract, server, tool, three tests, the stdio smoke), so it goes to an integrator with the reviewer's condition (b) as the gate: every admit witness green at the composed tip on MCP/main, then an Opus review of THAT tip, then the merge. Claude meter noted at 36% five-hour remaining at 03:0xZ — this is the one Opus lane launched since.
