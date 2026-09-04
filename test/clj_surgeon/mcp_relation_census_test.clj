@@ -4996,6 +4996,110 @@
         (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Opus's round-sixteen NO-GO item 4: the contract disagrees with itself one
+;; level up. One unreadable FILE refuses the entire census; one unreadable
+;; DIRECTORY, which can hide a thousand files, was swallowed with `:continue`
+;; and no counter, and the receipt still said `read_complete true`:
+;;
+;;   tree: src/app/ok.clj (an arm) + src/app/hidden/ (chmod 000, holding an arm)
+;;   CLI  :dir  -> ok, sites 1, "review the raw sites…"
+;;   MCP  walk  -> ok = true, files_scanned = 1, files = 1, arms = 1
+;;
+;; A census is a COMPLETENESS claim, which is the whole reason a single
+;; unreadable member refuses it; a subtree the walk could not enter makes that
+;; claim false in exactly the same way and by a larger amount. So it is decided
+;; the way the file rule is decided — refuse, typed, counted, naming the
+;; directory project-relative — and both entrances decide it alike.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-018
+;; @spec MCP-OP-CENSUS-019
+(deftest an-unreadable-directory-refuses-the-census-on-both-entrances
+  (let [root (temp-dir)
+        arm "src/app/ok.clj"
+        hidden-dir (io/file root "src/app/hidden")
+        hidden "src/app/hidden"]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (spit-file! (io/file root "src/app/hidden/inner.clj") arm-source)
+      (deny-traversal! hidden-dir)
+      (let [named (.getCanonicalPath root)
+            declared (into census/cli-refusal-types census/mcp-refusal-types)]
+
+        (testing "the fixture is genuinely unlistable to this process"
+          (is (false? (.canRead hidden-dir))
+              "this process can still list the chmod-000 directory"))
+
+        (testing "the walk itself reports the subtree it could not enter"
+          (let [discovered (census-discovery/discover named)]
+            (is (= [hidden] (:unreadable-directories discovered))
+                (str "the walk swallowed a directory it could not enter: "
+                     (pr-str (select-keys discovered
+                                          [:files :unreadable-directories]))))))
+
+        (testing "the CLI :dir walk refuses instead of claiming completeness"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census {:dir named}))]
+            (is (nil? (:threw result))
+                (str "the walk threw instead of refusing: " (pr-str result)))
+            (is (false? (:ok result))
+                (str "an unreadable subtree was censused as complete: "
+                     (pr-str (select-keys result [:ok :sites :files-scanned
+                                                  :read-complete]))))
+            (is (= :file-not-readable (:error-type result))
+                (str "the walk refused " (pr-str (:error-type result))))
+            (is (contains? declared (:error-type result))
+                (str "the walk refused " (pr-str (:error-type result))
+                     ", which no declared refusal set contains"))
+            (is (= :directory-denied (:cause result))
+                (str "the refusal does not say WHY: " (pr-str result)))
+            (is (= hidden (:directory result))
+                (str "the refusal does not name the directory it could not "
+                     "enter: " (pr-str (:directory result))))
+            (is (str/includes? (str (:remedy result)) hidden)
+                (str "the remedy does not name the directory: "
+                     (pr-str (:remedy result))))
+            (is (not (contains? result :next-command))
+                (str "a path from the walk is not a request to narrow: "
+                     (pr-str (:next-command result))))))
+
+        (testing "the tool's walk refuses the same tree the same way"
+          (let [result (census-tool/execute-request! {:project-root named} {})]
+            (is (false? (:ok result))
+                (str "an unreadable subtree was censused as complete: "
+                     (pr-str (select-keys result [:ok :files :arms
+                                                  :read_complete]))))
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "the tool answered " (pr-str (:error_type result))))
+            (is (= "directory-denied" (:cause result))
+                (str "the tool published no shared cause: "
+                     (pr-str (:cause result))))
+            (is (= hidden (:directory result))
+                (str "the tool does not name the directory: "
+                     (pr-str (:directory result))))
+            (is (str/includes? (str (:remedy result)) hidden)
+                (str "the remedy does not name the directory: "
+                     (pr-str (:remedy result))))
+            (is (not (contains? result :next_call))
+                (str "a path from the walk is not a request to narrow: "
+                     (pr-str (:next_call result))))))
+
+        (testing "the two entrances agree about what they observed"
+          (let [cli (refusal-or-throw
+                      #(core/run-relation-census {:dir named}))
+                tool (census-tool/execute-request! {:project-root named} {})]
+            (is (= (some-> (:cause cli) name) (:cause tool))
+                (str "CLI " (pr-str (:cause cli)) " vs tool "
+                     (pr-str (:cause tool))))
+            (is (= (:directory cli) (:directory tool))
+                (str "CLI " (pr-str (:directory cli)) " vs tool "
+                     (pr-str (:directory tool)))))))
+      (finally
+        (allow-traversal! hidden-dir)
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-fifteen item 10 and NO-GO item 6: the ONE constructor refuses an
 ;; EMPTY `files` because "the published schema declares minItems 1" — and the
 ;; same schema declares the items are STRINGS, which it never asked.
