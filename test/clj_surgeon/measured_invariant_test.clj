@@ -777,6 +777,53 @@
           (.delete (.getParentFile victim))
           (.delete (io/file root)))))))
 
+;; @spec MCP-OP-TIME-006
+(deftest the-require-witness-catches-a-planted-reflective-resolution
+  (testing "round-five review finding 2: `ns-resolve` spells the namespace without a slash"
+    ;; `unwrap-readings` is private, and privacy in Clojure is a RESOLUTION
+    ;; CONVENTION rather than a boundary. The round-five defence against
+    ;; reaching past it was the naming rule plus the public-var scan, and
+    ;; `(ns-resolve 'clj-surgeon.measured 'unwrap-readings)` defeated both:
+    ;; `measured-naming-offence` fired `:fully-qualified` only on
+    ;; `clj-surgeon.measured/` — with a TRAILING SLASH — and there is no
+    ;; `measured/` token on the line for `unknown-measured-verbs` to check. The
+    ;; reviewer put an undeclared clock field in the parity hash subject with
+    ;; nineteen tests green.
+    (doseq [[label spelling]
+            [[:ns-resolve "((ns-resolve 'clj-surgeon.measured 'unwrap-readings) x)"]
+             [:resolve "((resolve 'clj-surgeon.measured/unwrap-readings) x)"]
+             [:find-var "((find-var 'clj-surgeon.measured/unwrap-readings) x)"]
+             [:requiring-resolve "((requiring-resolve 'clj-surgeon.measured/unwrap-readings) x)"]
+             [:quote-form "((ns-resolve (quote clj-surgeon.measured) (quote unwrap-readings)) x)"]
+             [:string-name "((ns-resolve (symbol \"clj-surgeon.measured\") (quote unwrap-readings)) x)"]
+             [:ns-interns "((get (ns-interns 'clj-surgeon.measured) 'unwrap-readings) x)"]
+             [:intern "(intern 'clj-surgeon.measured 'sneak identity)"]]]
+      (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                               (str "measured-reflective-plant-" (System/nanoTime))))
+            victim (io/file root "clj_surgeon" "planted_reflective.clj")]
+        (.mkdirs (.getParentFile victim))
+        (spit victim
+              (str "(ns clj-surgeon.planted-reflective\n"
+                   "  (:require\n"
+                   "   [clj-surgeon.measured :as measured]))\n\n"
+                   "(defn publish-an-undeclared-clock-field\n"
+                   "  [x]\n"
+                   "  {:ok false\n"
+                   "   :verification_wall_ms " spelling "})\n"))
+        (try
+          (let [offenders (measured-naming-offenders root)]
+            (is (= 1 (count offenders))
+                (str label ": the require witness saw " (count offenders)
+                     " offences on a reflective resolution: " (pr-str offenders)))
+            (is (contains? #{:reflective :fully-qualified}
+                           (nth (first offenders) 2 nil))
+                (str label ": the offence is not typed as a resolution: "
+                     (pr-str offenders))))
+          (finally
+            (.delete victim)
+            (.delete (.getParentFile victim))
+            (.delete (io/file root))))))))
+
 ;; @spec MCP-OP-TIME-005
 (deftest a-reading-does-not-open-to-anything-but-the-laundering-verb
   (testing "the round-three review's first bypass is now unrepresentable"
