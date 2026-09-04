@@ -1531,6 +1531,15 @@
                   ;; point with nothing after it makes the caller re-read.
                   (merge (after-context-for cache primary))))))))
 
+;; @spec MCP-OP-THREAD-041
+(defn- seed-noun
+  "What a leg of this kind needs the caller to have named."
+  [kind]
+  (case kind
+    :route "route"
+    :test "identifier or route"
+    "identifier"))
+
 ;; @spec MCP-OP-THREAD-004
 ;; @spec MCP-OP-THREAD-008
 (defn resolve-leg
@@ -1561,14 +1570,31 @@
         base {:id id :leg_kind (name kind) :globs globs}
         result
         (if (empty? searches)
+          ;; @spec MCP-OP-THREAD-041
+          ;; "Could not search" and "searched and found nothing" are different
+          ;; facts and were the same string. The leg stays COUNTED -- the verb
+          ;; cannot tell an unnamed route from an absent one and the safe
+          ;; direction is INCOMPLETE -- but it names the missing INPUT and how
+          ;; to supply it, instead of the jargon a real-repo recall run over
+          ;; six subjects printed six times.
           (merge base {:status "ABSENT"
-                       :searches ["no seed of the kind this leg needs"]
+                       :absent_cause "no-seed-of-this-leg-kind"
+                       :searches []
+                       :reason (str "this leg searches for a " (seed-noun kind)
+                                    " and the request named none")
+                       :remedy (str "Pass the " (seed-noun kind)
+                                    " as `subject` or in `also`. It is still"
+                                    " counted as missing: the verb cannot tell"
+                                    " an unnamed one from an absent one.")
                        :unreadable []})
           (loop [[[label regex :as s] & more] searches
              ran []
              unreadable []]
         (if (nil? s)
-          (merge base {:status "ABSENT" :searches ran :unreadable unreadable})
+          ;; @spec MCP-OP-THREAD-041
+          (merge base {:status "ABSENT"
+                       :absent_cause "searched-and-absent"
+                       :searches ran :unreadable unreadable})
           (let [result (scan cache paths globs regex)
                 hits (:hits result)
                 ran' (conj ran (render-search globs [label regex] scope-paths))
@@ -2138,9 +2164,19 @@
   (when-not (some #(= implementation-leg-id (:id %)) (:legs conventions))
     {:id implementation-leg-id
      :kind :def
+     ;; @spec MCP-OP-THREAD-040
+     ;; NOT the test leg's globs. `implementation` means the definition the
+     ;; seed names, and a definition inside a test file is a DOUBLE. Because
+     ;; the seed's real definition is usually already another leg, this leg
+     ;; excludes that range and takes the NEXT definition-shaped hit -- so
+     ;; inheriting `test/**/*.js` made `formatDraft` on social-media-writer
+     ;; @2df99c98 report `implementation FOUND
+     ;; test/js/editor_conflict_response_test.js` and read `4 of 6`.
      :globs (vec (distinct (concat implementation-clojure-globs
-                                   (filter script-path?
-                                           (mapcat :globs (:legs conventions))))))}))
+                                   (->> (:legs conventions)
+                                        (remove #(= :test (:kind %)))
+                                        (mapcat :globs)
+                                        (filter script-path?)))))}))
 
 (defn- seed-of-range
   "The seed whose definition the excluded range holds, or nil.
@@ -2513,9 +2549,14 @@
                 " bytes=" (:bytes leg)
                 " refetch=" (:refetch leg))))
     (str "leg " (:id leg) "  ABSENT"
+         ;; @spec MCP-OP-THREAD-041
+         (when (:absent_cause leg) (str " cause=" (:absent_cause leg)))
          (when (:evidence leg) (str " evid=" (:evidence leg)))
-         "\n  searched: "
-         (str/join "\n  searched: " (:searches leg))
+         (when (:reason leg) (str "\n  reason: " (:reason leg)))
+         (when (:remedy leg) (str "\n  remedy: " (:remedy leg)))
+         (when (seq (:searches leg))
+           (str "\n  searched: "
+                (str/join "\n  searched: " (:searches leg))))
          (when (seq (:unreadable leg))
            (str "\n  unreadable: "
                 (str/join ", " (map #(str (:file %) " (" (:reason %) ")")

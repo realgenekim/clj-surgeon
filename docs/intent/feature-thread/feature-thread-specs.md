@@ -272,3 +272,18 @@ run as a test inside `make mcp-test`) enforces both halves.
   its own peer, and a command in a different form is not a peer of this one.
   Peer BODIES are the first bodies cut after the sibling; peer ROWS are cut
   only when even their ranges will not fit, and the ledger names both.
+
+- [x] **MCP-OP-THREAD-040**: The implementation leg is never a test double.
+  When `feature_thread` builds the automatic `implementation` leg, it shall
+  inherit script globs only from legs that are NOT of kind `:test`, so a
+  definition-shaped stub inside a test file can never be reported as the
+  definition the seed names.
+
+- [x] **MCP-OP-THREAD-041**: An absent leg says whether it could search at all.
+  When `feature_thread` reports a leg ABSENT, it shall carry `absent_cause`:
+  `searched-and-absent` when searches ran and found nothing, or
+  `no-seed-of-this-leg-kind` when the request named no seed this leg could
+  search for — in which case it shall also carry the `reason` and a `remedy`
+  naming how to supply the seed. The leg is COUNTED either way, because the
+  verb cannot tell an unnamed route from an absent one and the safe direction
+  is INCOMPLETE.
