@@ -365,4 +365,41 @@ if [ -n "$hardcoded" ]; then
   fail "10: hard-coded /tmp write targets remain in Makefile / test / bench shell gates"
 fi
 
+# ============================================================
+# MCP-OP-TMPHYG-012: the Make layer refuses to propagate a RAM TMPDIR
+# ============================================================
+
+# `SELF_TEST_TMP` is the scratch root the benchmark self-test recipes hand to
+# their harnesses. Its default was `$(or $(TMPDIR),/var/tmp)`, which is right
+# when TMPDIR is unset and WRONG when TMPDIR is itself a RAM path: the Make
+# layer propagated /tmp happily and only the Clojure layer refused, so a
+# recipe that never reaches Clojure wrote to RAM. This arm EXECUTES make's own
+# variable expansion (--eval defines a throwaway target in the real Makefile;
+# nothing is added to the Makefile itself) and asserts the value, rather than
+# reading the assignment as text.
+# @spec MCP-OP-TMPHYG-012
+self_test_tmp() {
+  env TMPDIR="$1" make -s --eval='__tmphyg_print:; @echo $(SELF_TEST_TMP)' \
+    __tmphyg_print 2>/dev/null | tail -n 1
+}
+
+for ram in /tmp /dev/shm; do
+  got=$(self_test_tmp "$ram")
+  echo "--- SELF_TEST_TMP with TMPDIR=$ram -> $got ---"
+  case "$got" in
+    /tmp|/tmp/*|/dev/shm|/dev/shm/*)
+      fail "11: the Make layer propagated a RAM TMPDIR into SELF_TEST_TMP ($got)" ;;
+  esac
+done
+
+got=$(self_test_tmp "")
+echo "--- SELF_TEST_TMP with TMPDIR unset -> $got ---"
+[ "$got" = "/var/tmp" ] \
+  || fail "11: an unset TMPDIR must default SELF_TEST_TMP to /var/tmp, got $got"
+
+got=$(self_test_tmp "$FX")
+echo "--- SELF_TEST_TMP with TMPDIR=$FX -> $got ---"
+[ "$got" = "$FX" ] \
+  || fail "11: a real-disk TMPDIR must be honoured, got $got"
+
 echo "tmp-leak ratchet witness passed"
