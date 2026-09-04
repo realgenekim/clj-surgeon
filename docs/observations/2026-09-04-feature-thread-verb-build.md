@@ -479,7 +479,13 @@ is why the file-based and inline paths now have separate witnesses.
 
 ## 7. Gates
 
-| gate | result |
+**These are the ROUND-ONE numbers, as of 2026-09-04 at the first build.** They
+are kept for the record and are STALE by construction — every later round adds
+witnesses. Round five's review (finding 10) caught a focused count quoted here
+long after it had moved. The current counts live in section 7a below and are
+refreshed with each round; do not quote this table as current.
+
+| gate | result (round one) |
 |---|---|
 | `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` |
 | `~/bin/suite-run clojure -M:clj-surgeon/mcp-test` | `Ran 728 tests containing 8856 assertions.` / `0 failures, 0 errors.` (rc=0) |
@@ -499,3 +505,36 @@ places, including the add/remove `:tool-count` arithmetic),
 `forbids_job_clock(receipt)`), `mcp_operation_registry_test`, and the
 `enabled_tools` TOML line in `workspace_onboarding` and its byte-identical test
 mirror — which was also missing `admit_clojure_patch` and now names both.
+
+---
+
+## 7a. Gates — CURRENT (refreshed each round; round six, 2026-09-04)
+
+Round-five review, finding 10: the round-one focused count in section 7 was
+quoted long after it had moved. Section 7 is now dated and frozen; this section
+is the one to read, and it is refreshed with every round.
+
+Tip: `86b286f2` on `bridge/feature-thread-verb` (trunk `origin/MCP/main`
+merged at `5dfebf25`).
+
+| gate | result |
+|---|---|
+| `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` · EXIT=0 |
+| `make repository-hygiene` | `repository hygiene: no machine-local build cache is tracked at any depth` · EXIT=0 |
+| `sh test/tmp_leak_ratchet_test.sh` | `tmp-leak ratchet witness passed` · EXIT=0 |
+| `make mcp-smoke` | seven tools, `{:ok true, :operation :mcp-stdio-smoke, …, :response-count 3}` · EXIT=0 |
+| `~/bin/suite-run clojure -M:clj-surgeon/mcp-test` | `Ran 827 tests containing 12263 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+| `~/bin/suite-run bb test/run_all.clj` | `Ran 825 tests containing 6770 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+| intent audit (`audit-current-repository`) | `{:ok true, :violations 0}` |
+| `clj-surgeon.mcp-feature-thread-test` alone | `Ran 62 tests containing 2076 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+
+The feature-thread spec file carries 49 requirements (MCP-OP-THREAD-001 through
+-049); round six added -043 through -049.
+
+**Two things this table is NOT.** It is not a claim about any other branch, and
+it is not a claim that these numbers hold under arbitrary machine load: one run
+of the JVM suite during this round reported three failures on a box carrying
+three other seats' work, and the immediately following run on the same tree, and
+two after it, were clean. The failures' identities were lost because that run
+kept only `tail -2` of its output — which is itself the lesson: a gate that
+keeps only its summary cannot tell you what broke.
