@@ -207,11 +207,25 @@
         ;; source. A call the tool's own schema rejects is the same
         ;; unexecutable promise a caption in an argument position is, and
         ;; MCP-OP-CENSUS-014 forbids both by the same sentence.
+        ;; Opus's round-sixteen item 6. Half the rule is not the rule. The
+        ;; schema this cites declares `maxItems 512` as well as `minItems 1`,
+        ;; and 513 entries was refused only because it rendered over the byte
+        ;; ceiling — the SAME masking that hid the `items` half for sixteen
+        ;; rounds, and unreachable by accident rather than by construction.
+        ;;
+        ;; The item rule asked is the one the ENTRANCE applies, not a weaker
+        ;; paraphrase of it: a continuation is a call the caller replays into
+        ;; THIS tool, so an entry that `relative-source-path?` refuses is an
+        ;; unexecutable promise whatever JSON Schema thinks of it. A NUL byte
+        ;; is a string to JSON and a refusal here, which is why it travelled.
         publishable-files?
         (fn [files]
           (and (sequential? files)
                (seq files)
-               (every? #(and (string? %) (not (str/blank? %))) files)))
+               (<= (count files)
+                   (get-in census-tool-schema
+                           [:properties "files" :maxItems]))
+               (every? mcp-paths/relative-source-path? files)))
         faithful (when (and stamped
                             (or (not (contains? stamped :files))
                                 (publishable-files? (:files stamped))))
