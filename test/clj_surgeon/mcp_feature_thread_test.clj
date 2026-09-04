@@ -2990,6 +2990,7 @@
            :repo-label (token)
            :legs (mapv #(assoc % :id (token)) (:legs smw-conventions)))))
 
+;; @spec MCP-OP-THREAD-012
 (deftest text-is-a-superset-of-structured-for-any-custom-convention
   (testing "over randomly named custom conventions, every wire leaf is in the text"
     (doseq [seed (range 12)]
@@ -3012,6 +3013,8 @@
                                                        "=" (pr-str v)))
                                       (take 6 missing)))))))))
 
+;; @spec MCP-OP-THREAD-012
+;; @spec MCP-OP-THREAD-046
 (deftest the-delivered-face-carries-no-internal-routing-keys
   (testing "`elide` is elision plumbing and is not part of either face"
     (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 32768})]

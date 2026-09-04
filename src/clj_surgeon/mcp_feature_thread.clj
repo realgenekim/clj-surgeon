@@ -2993,12 +2993,23 @@
 ;; ---------------------------------------------------------------------------
 
 (defn leaf-paths
-  "Every scalar leaf of a structured receipt as `[path value]`."
+  "Every scalar leaf of a structured receipt as `[path value]`, AS THE CLIENT
+  RECEIVES IT.
+
+  A keyword is a leaf. JSON has no keywords, so `:elide :menu` reaches the
+  client as `\"elide\": \"menu\"` -- a string a text-reading client must be able
+  to find. Round-seven review, finding 6 (BLOCKING): this function collected
+  only strings, numbers and booleans, so every keyword-valued leaf was
+  invisible to it, and `ensure-superset` -- the backstop whose entire job is to
+  append whatever the designed lines forget -- could not see the leaf it was
+  meant to catch. A verifier blind to its own subject reports success."
   [node path]
   (cond
     (map? node) (mapcat (fn [[k v]] (leaf-paths v (conj path (name k)))) node)
     (sequential? node) (mapcat (fn [i v] (leaf-paths v (conj path (str i))))
                                (range) node)
+    ;; @spec MCP-OP-THREAD-012
+    (keyword? node) [[path (subs (str node) 1)]]
     (or (string? node) (number? node) (boolean? node)) [[path node]]
     :else []))
 
@@ -3008,7 +3019,15 @@
   (cond
     (map? node)
     (let [m (reduce-kv (fn [acc k v] (assoc acc k (face-walk v strip?))) {} node)
-          m (cond-> m (some? (:body node)) (assoc :body_in_text true))]
+          m (cond-> m (some? (:body node)) (assoc :body_in_text true))
+          ;; @spec MCP-OP-THREAD-012
+          ;; `:elide` is the elision loop's own routing key -- which body class
+          ;; to cut next -- and names nothing the caller can act on. It is
+          ;; dropped from BOTH faces, so the text has nothing to spell and the
+          ;; superset subject has nothing to demand. Round-seven finding 6: it
+          ;; was published as `elide="menu"` on every leg of an accepted custom
+          ;; convention, with no spelling anywhere in the text.
+          m (dissoc m :elide)]
       (cond-> m strip? (dissoc :body :after_context)))
 
     (sequential? node) (mapv #(face-walk % strip?) node)

@@ -99,7 +99,13 @@ run as a test inside `make mcp-test`) enforces both halves.
 
 - [x] **MCP-OP-THREAD-012**: Text superset. When `feature_thread` returns,
   every leaf value of `structuredContent` shall appear in the text block; the
-  text block shall never carry less than the structured result.
+  text block shall never carry less than the structured result. A leaf is
+  counted AS THE CLIENT RECEIVES IT, keyword values included — JSON has no
+  keywords, so `:elide :menu` reaches a client as the string `menu` — and the
+  property shall be witnessed generatively over custom conventions with randomly
+  spelled leg names, never only on a named case whose words may collide by
+  coincidence. Internal routing keys that name nothing the caller can act on
+  shall be dropped from the delivered face rather than spelled in the text.
 
 - [x] **MCP-OP-THREAD-013**: Honest status. When every COUNTED leg is FOUND,
   clj-surgeon shall report `COMPLETE (n of n)`; when any counted leg is ABSENT
