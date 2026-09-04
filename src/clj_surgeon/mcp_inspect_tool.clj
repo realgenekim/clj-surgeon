@@ -863,6 +863,18 @@
 
 (def ^:private max-refusal-detail-characters 512)
 
+;; @spec MCP-OP-STUDY-046
+(def max-refusal-cause-characters
+  "How much of a refusal's `:error` cause the STRUCTURAL line spells before it
+  is bounded with a typed marker naming the original length.
+
+  Public because a witness has to assert AT the bound rather than about the
+  constant. Field evidence (Sol O2 round-2 review, section 5): a synthetic
+  10,000-character path was bounded at 512 characters in its detail line and
+  then repeated in full as the cause — `cause_unbounded= true text_chars=
+  10612` — so the refusal text was bounded by the caller's input."
+  512)
+
 ;; @spec MCP-OP-STUDY-042
 (defn- refusal-detail-lines
   [result]

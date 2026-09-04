@@ -3036,3 +3036,72 @@
               (is (true? (:ok replayed)))
               (is (< (:returned result) (:returned replayed))
                   "a continuation that does not advance is a loop"))))))))
+
+;; ============================================================
+;; O2 ROUND 3 — the refusal enumeration comes from the CONSTRUCTORS, and the
+;; cause is bounded (Sol O2 round-2 review, section 5)
+;; ============================================================
+;; Two separate claims round two could not support. `src/clj_surgeon/
+;; mcp_inspect.clj` alone constructs 22 distinct `refuse!` reasons while the
+;; ratchet drove thirteen heterogeneous cases, so "every reachable refusal
+;; kind" was a hand-written list nobody could check; and a 10,000-character
+;; path was bounded in its detail line and then repeated in full as the
+;; cause, so the refusal text was bounded by the caller's input rather than
+;; by a constant.
+
+(defn- constructed-refusal-reasons
+  "Every refusal reason the inspect validator can construct, read out of the
+   SOURCE. A hand-written list of refusal kinds is a claim; this is a
+   measurement."
+  []
+  (into (sorted-set)
+        (map second)
+        (re-seq #"\(refuse! :([a-z0-9-]+)"
+                (slurp (str project-root "/src/clj_surgeon/mcp_inspect.clj")))))
+
+;; @spec MCP-OP-STUDY-046
+(deftest the-refusal-ratchet-drives-every-reason-the-source-constructs
+  (let [constructed (constructed-refusal-reasons)
+        exercised (into (sorted-set)
+                        (keep (fn [[_ params]] (:reason (run params)))
+                              refusal-ratchet-cases))
+        unreached (vec (remove exercised constructed))]
+    (is (<= 20 (count constructed))
+        "the scan must actually find the constructors")
+    (is (empty? unreached)
+        (str (count unreached)
+             " reasons the source constructs that no ratchet fixture reaches: "
+             (pr-str unreached)))))
+
+;; @spec MCP-OP-STUDY-046
+(deftest a-refusal-cause-is-bounded-and-still-travels
+  (let [synthetic (fn [cause]
+                    {:ok false
+                     :operation "inspect_clojure"
+                     :error_type "synthetic-refusal"
+                     :error cause
+                     :read_complete false
+                     :source_unchanged true
+                     :next_action "correct_request"
+                     :elapsed_ms 0.0})
+        bound inspect-tool/max-refusal-cause-characters
+        at-bound (apply str (repeat bound "c"))
+        over (str at-bound "c")]
+    (testing "at the bound the cause is spelled whole and carries no marker"
+      (let [text (inspect-tool/inspect-summary (synthetic at-bound))]
+        (is (str/includes? text at-bound))
+        (is (not (str/includes? text "characters)")))))
+    (testing "one character over, the structural line is bounded and says so"
+      (let [text (inspect-tool/inspect-summary (synthetic over))]
+        (is (str/includes? text (str "… (" (count over) " characters)"))
+            "the marker names the original length")
+        (is (str/includes? text over)
+            "and the complete cause still travels under the receipt-fact bound")))
+    (testing "a cause no bound can carry is dropped, declared, and the text stays bounded"
+      (let [huge (apply str (repeat 10000 "c"))
+            text (inspect-tool/inspect-summary (synthetic huge))]
+        (is (not (str/includes? text huge)))
+        (is (str/includes? text "the complete receipt is in structuredContent"))
+        (is (< (count text) 2048)
+            (str "the refusal text is bounded by a constant, not by the "
+                 "caller's input: " (count text) " characters"))))))
