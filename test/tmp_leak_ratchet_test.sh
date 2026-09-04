@@ -203,4 +203,55 @@ grep -q 'temp-leak:' "$FX/subproc.out" || fail "5b: no temp-leak: line naming it
 [ -z "$(ls -A "$FX/subbase")" ] \
   || fail "5c: entries left in the shared base: $(ls -A "$FX/subbase")"
 
+# ============================================================
+# MCP-OP-TMPHYG-007: an isolated root does not outlive its run
+# ============================================================
+
+# 7a. A killed parent. ~/bin/suite-run jobs are routinely wrapped in
+# `timeout`, and a timeout kill is a SIGTERM. Round one only swept on the
+# normal return path, so every killed run left one root behind for ever.
+mkdir -p "$FX/killbase"
+env TMPDIR="$FX/killbase" java -cp "$CP" clojure.main -m "$PROBE" --sleep \
+  >"$FX/kill.out" 2>&1 &
+kill_pid=$!
+i=0
+while [ "$i" -lt 150 ]; do
+  grep -q 'PROBE sleeping' "$FX/kill.out" 2>/dev/null && break
+  i=$((i + 1))
+  sleep 0.2
+done
+grep -q 'PROBE sleeping' "$FX/kill.out" || fail "7a: the probe never reached its sleep"
+kill -TERM "$kill_pid" 2>/dev/null || true
+wait "$kill_pid" 2>/dev/null || true
+i=0
+while [ "$i" -lt 50 ]; do
+  [ -z "$(ls -A "$FX/killbase")" ] && break
+  i=$((i + 1))
+  sleep 0.2
+done
+echo "--- kill-term (left in base) ---"
+ls -A "$FX/killbase" || true
+[ -z "$(ls -A "$FX/killbase")" ] \
+  || fail "7a: a SIGTERMed run left its isolated root behind: $(ls -A "$FX/killbase")"
+
+# 7b. Startup sweep of stale roots — and ONLY of stale roots this namespace
+# could have created, whose owning pid is dead. Never another tenant's entry.
+mkdir -p "$FX/stalebase"
+mkdir -p "$FX/stalebase/clj-surgeon-suite-4194303-deadbeef"      # dead pid, old
+mkdir -p "$FX/stalebase/clj-surgeon-suite-$$-aaaaaaaa"           # LIVE pid, old
+mkdir -p "$FX/stalebase/other-seat-precious-fixture"             # not ours
+touch -d '10 hours ago' "$FX/stalebase/clj-surgeon-suite-4194303-deadbeef" \
+  "$FX/stalebase/clj-surgeon-suite-$$-aaaaaaaa" \
+  "$FX/stalebase/other-seat-precious-fixture"
+run_probe stale-sweep TMPDIR="$FX/stalebase"
+[ "$PROBE_EXIT" -eq 0 ] || fail "7b: probe exit $PROBE_EXIT"
+echo "--- stalebase after ---"
+ls -A "$FX/stalebase" || true
+[ ! -d "$FX/stalebase/clj-surgeon-suite-4194303-deadbeef" ] \
+  || fail "7b: a stale root whose pid is dead was not swept"
+[ -d "$FX/stalebase/clj-surgeon-suite-$$-aaaaaaaa" ] \
+  || fail "7b: a root whose owning process is STILL ALIVE was swept"
+[ -d "$FX/stalebase/other-seat-precious-fixture" ] \
+  || fail "7b: another tenant's entry was swept"
+
 echo "tmp-leak ratchet witness passed"
