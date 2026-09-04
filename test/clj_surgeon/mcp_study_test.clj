@@ -2523,9 +2523,11 @@
                  (ls-tree-rendered-rows (text-block result)))))))))
 
 ;; @spec MCP-OP-STUDY-042
-(deftest every-refusal-kind-renders-its-cause-and-carries-no-unrendered-fact
-  (doseq [[label params]
-          [[:missing-fields {"requests" [{"operation" "deps"}]
+(def ^:private refusal-ratchet-cases
+  "Every refusal kind the ratchet drives, as `[label params]`. Named once so
+   the cause witness, the leaf-coverage witness, and the enumeration witness
+   all drive exactly the same set."
+  [[:missing-fields {"requests" [{"operation" "deps"}]
                              "expect" {"requests" 1 "files" 1}}]
            [:unknown-fields {"requests" [{"operation" "deps"
                                           "file" real-file "pattern" "x"}]
@@ -2558,7 +2560,11 @@
            [:invalid-study-limit {"mode" "ls-tree" "dir" "." "limit" 99999}]
            [:invalid-format {"mode" "ls-tree" "dir" "." "format" "EDN"}]
            [:dir-not-found {"mode" "ls-tree" "dir" "no-such-dir-xyz"}]
-           [:unknown-parameter {"mode" "ls-tree" "dir" "." "depth" 2}]]]
+   [:unknown-parameter {"mode" "ls-tree" "dir" "." "depth" 2}]])
+
+;; @spec MCP-OP-STUDY-042
+(deftest every-refusal-kind-renders-its-cause-and-carries-no-unrendered-fact
+  (doseq [[label params] refusal-ratchet-cases]
     (testing (name label)
       (let [response (run params)
             text (summary-of response)]
@@ -2797,6 +2803,11 @@
 ;; shape a client is handed, walks every leaf, and asserts each value appears
 ;; verbatim in the text block, through the same predicate the renderer uses.
 
+(def ^:private refusal-structural-keys-names
+  "The structural-key set as one searchable string, so a witness can say out
+   loud that the key it is probing really is a member."
+  (str/join " " (map name inspect-tool/refusal-structural-keys)))
+
 (defn- leaf-misses
   [text result]
   (inspect/uncarried-leaves text result))
@@ -2901,3 +2912,59 @@
   (is (str/includes? (:doc (meta #'inspect/text-excluded-leaf-keys))
                      "workspace_root")
       "every excluded key names, at its definition, why it is excluded"))
+
+;; ============================================================
+;; O2 ROUND 3 — a name in the structural-key set is not a free pass
+;; (Sol O2 round-2 review, section 6)
+;; ============================================================
+;; The round-2 refusal ratchet treats every member of
+;; `refusal-structural-keys` as rendered WITHOUT proving that any renderer
+;; consumes it. Sol reproduced the escape in a temp clone: add a top-level
+;; refusal fact, name it in the exclusion set, supply no renderer, and all
+;; 5,998 assertions stayed green. "A new refusal cannot ship text-blind" was
+;; therefore false — the set was the escape hatch.
+;;
+;; The fix is not a longer list. It is the SAME criterion the success modes
+;; got in MCP-OP-STUDY-044: whatever the receipt carries, the text carries.
+;; Then membership in the structural set decides only WHERE a fact is
+;; rendered, never WHETHER — and the escape is unrepresentable rather than
+;; merely detected.
+
+;; @spec MCP-OP-STUDY-044
+(deftest a-key-named-in-the-structural-set-is-not-a-free-pass
+  ;; Sol's escape, reproduced without editing src: three keys that are all
+  ;; named in `refusal-structural-keys` and that no refusal renderer prints.
+  (let [refusal {:ok false
+                 :operation "inspect_clojure"
+                 :error_type "synthetic-refusal"
+                 :error "a synthetic refusal driving the class ratchet"
+                 :read_complete false
+                 :source_unchanged true
+                 :next_action "correct_request"
+                 :elapsed_ms 0.0
+                 :file_hashes {"src/fixture.clj" "HIDDEN-REFUSAL-FACT"}
+                 :dir "src/some-scope"
+                 :limit 4096}
+        text (inspect-tool/inspect-summary refusal)]
+    (is (str/includes? refusal-structural-keys-names "file_hashes"))
+    (is (str/includes? text "HIDDEN-REFUSAL-FACT")
+        "a value under a key the ratchet calls structural still reaches the text")
+    (is (str/includes? text "src/some-scope"))
+    (is (str/includes? text "4096"))
+    (is (empty? (leaf-misses text refusal))
+        (str "the refusal carries facts the text never renders: "
+             (miss-report (leaf-misses text refusal))))))
+
+;; @spec MCP-OP-STUDY-044
+(deftest every-refusal-kind-text-carries-every-structured-content-leaf
+  (doseq [[label params] refusal-ratchet-cases]
+    (testing (name label)
+      (let [response (assoc (inspect-tool/fit-public-result (run params))
+                            :elapsed_ms 1.0)
+            text (inspect-tool/inspect-summary response)
+            misses (leaf-misses text response)]
+        (is (false? (:ok response)) "the fixture must actually refuse")
+        (is (empty? misses)
+            (str (name label) ": " (count misses)
+                 " receipt leaves the text does not carry — "
+                 (miss-report misses)))))))
