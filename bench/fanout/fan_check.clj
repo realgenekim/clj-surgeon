@@ -235,7 +235,12 @@
                       \"dangling\") and the link is NEVER followed
      anything else -> :errors :unclassifiable-entry (FIFO, socket, device)
      unstattable   -> :errors :unclassifiable-entry naming the exception
-     unlistable    -> :errors :unlistable-dir
+     unenterable   -> :errors :unenterable-dir, naming readable/executable/perms -- a
+                      directory whose read AND search permission are not both proven,
+                      or whose open throws, at ANY mode and any depth (Sol round-3
+                      review, finding 4: mode 0400 lists NAMES but stats nothing, so
+                      counting directories found against directories entered proved
+                      nothing at all)
 
    Returns {:files #{} :symlinks {path target-kind} :entries #{} :dirs-found N
             :dirs-entered M :entries-seen K :errors [{:kind :path :detail}]}.
@@ -268,14 +273,34 @@
                                 (catch Exception _ "dangling")))]
     (letfn [(walk [^java.nio.file.Path d]
               (swap! dirs-found inc)
-              (let [names (try
-                            (with-open [s (java.nio.file.Files/newDirectoryStream d)]
-                              ;; a DirectoryStream is Iterable; `into` must FORCE it
-                              ;; before `with-open` closes the stream underneath it.
-                              (into [] (iterator-seq (.iterator ^Iterable s))))
-                            (catch Exception e
-                              (err! :unlistable-dir d (str (.getSimpleName (class e)) ": " (.getMessage e)))
-                              ::failed))]
+              ;; ENTERABILITY IS TESTED, NOT INFERRED (Sol round-3 review, finding 4).
+              ;; The round-3 walk inferred pruning from `.listFiles` returning null.
+              ;; At mode 0400 it returns the NAMES -- opendir needs r -- while every
+              ;; child stat fails, because that needs x; both counters therefore stayed
+              ;; equal and every child was dropped in silence.  So: read AND search
+              ;; permission are asserted explicitly, the open is then ATTEMPTED and its
+              ;; exception caught, and a directory that cannot be entered is one typed
+              ;; error at ANY mode -- 0400, 0200, 0000 alike, at any depth.
+              (let [readable (java.nio.file.Files/isReadable d)
+                    executable (java.nio.file.Files/isExecutable d)
+                    perms (try (java.nio.file.attribute.PosixFilePermissions/toString
+                                 (java.nio.file.Files/getPosixFilePermissions d no-follow))
+                               (catch Exception ex (str "unreadable-mode(" (.getSimpleName (class ex)) ")")))
+                    names (if-not (and readable executable)
+                            (do (err! :unenterable-dir d
+                                      (format "readable=%s executable=%s perms=%s -- a directory that cannot be entered is an error at any mode"
+                                              readable executable perms))
+                                ::failed)
+                            (try
+                              (with-open [s (java.nio.file.Files/newDirectoryStream d)]
+                                ;; a DirectoryStream is Iterable; `into` must FORCE it
+                                ;; before `with-open` closes the stream underneath it.
+                                (into [] (iterator-seq (.iterator ^Iterable s))))
+                              (catch Exception e
+                                (err! :unenterable-dir d
+                                      (format "perms=%s open failed: %s: %s" perms
+                                              (.getSimpleName (class e)) (.getMessage e)))
+                                ::failed)))]
                 (when-not (= ::failed names)
                   (swap! dirs-entered inc)
                   (doseq [^java.nio.file.Path e names]
