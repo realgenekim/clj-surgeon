@@ -107,3 +107,104 @@
   (->> (str/split-lines text)
        (remove #(str/starts-with? % text-measured-prefix))
        (str/join "\n")))
+
+;; ============================================================
+;; The invariant: a measured field enters a receipt ONLY through the partition
+;; ============================================================
+
+(def measured-field-names
+  "Every field name in this repository whose value a CLOCK produced.
+
+  The partition was a site fix before it was an invariant. `hashed-channel`
+  removed a block whose key was literally `:measured`, and the shared MCP
+  operation finalizer attached its wall-clock reading as a top-level
+  `:elapsed_ms` — so measured data reached the hash subject by a SECOND route
+  and the projection was blind to it (Sol review, 2026-09-04, §1).
+
+  This set is the invariant's vocabulary. `partition-measured` relocates every
+  one of these, at any depth, into the `:measured` block at its own level, and
+  `clj-surgeon.measured-invariant-test` scans `src/` for clock reads and fails
+  when a new clock site publishes a name this set does not carry. A name is in
+  here because a clock produced it — never because it is merely a number."
+  #{:elapsed_ms :elapsed-ms :job_elapsed_ms :inspection_elapsed_ms
+    :scan_ms :window-ns :max-ns :wall-ms})
+
+(defn attach
+  "Add measured `fields` to `x`'s measured block, keeping what is already there."
+  [x fields]
+  (update x measured-key merge fields))
+
+(defn field
+  "Read one measured field from `x`'s measured block."
+  [x k]
+  (get-in x [measured-key k]))
+
+(defn partition-measured
+  "Relocate every `measured-field-names` entry in `x` into the `:measured`
+  block at its OWN level, at any depth.
+
+  This is the publication boundary's half of the invariant. Code inside an
+  operation may compute and pass a clock reading in whatever shape suits it;
+  what it may not do is PUBLISH one outside the partition. Applying this at the
+  single boundary every public result already passes through makes that
+  impossible by construction rather than by everybody remembering.
+
+  STRUCTURE-SHARING, like `hashed-channel`: a sub-value carrying no measured
+  field comes back `identical?`, so partitioning a large result allocates the
+  changed spine and nothing else. A `:measured` block is never descended into —
+  its contents are already measured, and relocating them again would nest one
+  partition inside another."
+  [x]
+  (cond
+    (map? x)
+    (let [found (reduce-kv (fn [acc k v]
+                             (if (contains? measured-field-names k)
+                               (assoc acc k v)
+                               acc))
+                           nil x)
+          base (reduce-kv (fn [acc k v]
+                            (cond
+                              (contains? measured-field-names k) (dissoc acc k)
+                              (= k measured-key) acc
+                              :else
+                              (let [v' (partition-measured v)]
+                                (if (identical? v' v) acc (assoc acc k v')))))
+                          x x)]
+      (if found (update base measured-key merge found) base))
+
+    (vector? x)
+    (reduce-kv (fn [acc i v]
+                 (let [v' (partition-measured v)]
+                   (if (identical? v' v) acc (assoc acc i v'))))
+               x x)
+
+    (set? x)
+    (let [ys (map partition-measured x)]
+      (if (every? true? (map identical? ys x)) x (set ys)))
+
+    (seq? x)
+    (map partition-measured x)
+
+    :else x))
+
+(defn unpartitioned-measured-paths
+  "Every path in `x` at which a `measured-field-names` entry sits OUTSIDE a
+  `:measured` block — empty when the invariant holds.
+
+  The witness's subject, and a diagnostic a reader can run on any result."
+  [x]
+  (letfn [(walk [node path]
+            (cond
+              (map? node)
+              (mapcat (fn [[k v]]
+                        (cond
+                          (= k measured-key) nil
+                          (contains? measured-field-names k) [(conj path k)]
+                          :else (walk v (conj path k))))
+                      node)
+
+              (or (vector? node) (seq? node) (set? node))
+              (mapcat #(walk %1 (conj path %2)) node (range))
+
+              :else nil))]
+    (vec (walk x []))))
