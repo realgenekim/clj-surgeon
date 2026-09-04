@@ -37,7 +37,9 @@ A second finding from building the placebo: on the real repo, formatDraft is the
 |---|---|---|---|---|---|---|---|
 | N native | 32 | 10 | 14 | 3 | 4 | six real sites | green (verified by the seat) |
 | T1 receipt (correct) | 24 | 2 | 7 | 2 | 4 | six real sites | green (verified) |
-| **X stale receipt** (every range +40, every sha altered, bodies intact) | 25 | 1 (a `sha256sum` check batched into `bd claim` — it verified the shas, found them wrong) + 2 later (test runner) | 5 | 2 | 7 (unit, js×2, integration, component, all) | six real sites, same as T1 | green (claimed) |
-| **P placebo** (a real receipt for an unrelated feature, 6 KB, INCOMPLETE 2 of 5) | 31 | 10 | 13 | 2 | 3 | six real sites | green (claimed) |
+| **X stale receipt** (every range +40, every sha altered, bodies intact) | 25 | 1 (a `sha256sum` check batched into `bd claim` — it verified the shas, found them wrong) + 2 later (test runner) | 5 | 2 | 7 (unit, js×2, integration, component, all) | six real sites, same as T1 | green — VERIFIED by the seat (JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0) |
+| **P placebo** (a real receipt for an unrelated feature, 6 KB, INCOMPLETE 2 of 5) | 31 | 10 | 13 | 2 | 3 | six real sites | green — VERIFIED by the seat |
 
 Reading, against the pre-registered withdrawal lines (Opus's): **P ≈ N** (31 vs 32; 10 reads each) — the effect is CONTENT, not priming; the confound is ruled out. **X ≈ T1** (25 vs 24) with the patch on the correct sites — Opus's line said "if X lands at ~24 like T1 the receipt is not an edit basis"; the mechanism says something sharper: X kept the BODIES and mangled only ranges and shas, and `apply_patch` anchors on context lines, not line numbers, so on THIS harness the bodies carry the whole discovery value and ranges/shas carry none. The agent even checked the shas (call 4), saw they did not match, and wrote from the bodies anyway. That is the finding: for a patch harness the receipt is a BODY delivery; ranges/shas become load-bearing only when the write is the admit gate, which binds on them. The seat's own receipt-line "a mismatch is a REFUSAL, never a retry" was ignored by the agent, as the round-one reviewer predicted a printed instruction would be.
+
+Independent gate re-run for X and P (seat, 08:1xZ): JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0 
