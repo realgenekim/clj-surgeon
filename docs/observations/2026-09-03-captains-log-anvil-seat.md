@@ -1876,3 +1876,5 @@ four blockers (above); the coverage comparison was the required deliverable and 
 branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat needs re-verification when the workflow lands.
 
 ## 23:43Z CORRECTION to the entry above: the GitHub API says the default branch is still `main` (`gh api repos/realgenekim/clj-surgeon --jq .default_branch` → main). My "now MCP/main (verified)" line was wrong — I wrote the sentence before reading the output. The nightly stays dormant; the mayor request stands.
+
+## 23:45Z gate r18 window run: assertions green (935/15436/0), the tmp-leak ratchet failed the lane on the builder's own witness leaks (the ratchet earning its keep); fix 09660168 unverified; gates owed for the next window
