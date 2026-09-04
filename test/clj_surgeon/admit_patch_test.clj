@@ -7,6 +7,7 @@
   (:require
    [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.mcp-admit-tool :as admit]
+   [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
    [clj-surgeon.mcp-write-refusal :as write-refusal]
@@ -3549,3 +3550,110 @@
           (is (= :clj-kondo-unavailable (:error-type result))
               "clj-kondo-unavailable is reserved for an analyzer that did not answer")))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-122
+(deftest the-analyzer-read-ceiling-is-not-the-receipt-budget
+  (let [root (temp-dir)
+        images (analyzer-heavy-images 24)
+        lint (fn [overrides]
+               (admit/default-lint-runner
+                 (merge {:project-root (.getPath root)} overrides) images))]
+    (try
+      (let [at-receipt-budget
+            (lint {:admit-analyzer-visible-bytes
+                   change-buffer/exact-verification-visible-bytes})
+            observed (long (:observed-bytes at-receipt-budget))]
+        (testing "the fixture is the shape the field replay met"
+          (is (= :analyzer-output-truncated (:error-type at-receipt-budget)))
+          (is (> observed
+                 (long change-buffer/exact-verification-visible-bytes))
+              "a real fan-out image out-talks the receipt budget"))
+        (testing "the ceiling decides, and it decides at the ceiling"
+          (let [over (lint {:admit-analyzer-visible-bytes (quot observed 2)})
+                under (lint {:admit-analyzer-visible-bytes (* 4 observed)})]
+            (is (= :analyzer-output-truncated (:error-type over)))
+            (is (> (long (:observed-bytes over)) (long (:cap over)))
+                "the refusal fires because the observed size passed the ceiling it names")
+            (is (true? (:ran under))
+                "and clears the moment the ceiling stands above the observed size")))
+        (testing "the shipped default reads the analyzer in full"
+          (let [shipped (lint {})]
+            (is (true? (:ran shipped))
+                "the receipt budget is no longer the detector's ceiling")
+            (is (true? (:ok shipped)))
+            (is (pos? (long (:baseline-count shipped))))
+            (is (= (:baseline-count shipped) (:future-count shipped)))
+            (is (zero? (long (:introduced-count shipped))))
+            (is (zero? (long (:removed-count shipped))))))
+        (testing "reading more does not publish more"
+          (let [shipped (lint {})]
+            (is (nil? (:findings shipped))
+                "the analyzer's raw findings never reach the receipt")
+            (is (nil? (:output shipped)))
+            (is (>= 20 (count (:introduced shipped))))
+            (is (>= 20 (count (:removed shipped)))))))
+      (finally (delete-tree! root)))))
+
+(defn- egater-fixture!
+  "Materialize one frozen E-GATE-R arm: its 21-file pre-image and its patch.
+
+  These are the bytes the field replay of 2026-09-04 ran, k=1 and k=6, copied
+  out of `/home/forge/tmp/arms` unchanged. On both, the shipped gate reported
+  `clj-kondo-unavailable` while clj-kondo was installed and answering."
+  [root shape]
+  (let [pre-image (io/file field-diff-dir (str "egater-" shape "-pre-image"))]
+    (doseq [file (file-seq pre-image)
+            :when (.isFile file)]
+      (let [relative (subs (.getPath file) (inc (count (.getPath pre-image))))
+            target (io/file root relative)]
+        (.mkdirs (.getParentFile target))
+        (io/copy file target)))
+    (slurp (io/file field-diff-dir (str "egater-" shape ".diff")))))
+
+;; @spec MCP-OP-ADMIT-122
+(deftest a-real-fan-out-patch-gets-a-lint-delta-that-ran
+  (doseq [shape ["k1" "k6"]]
+    (testing (str "E-GATE-R shape " shape)
+      (let [root (temp-dir)]
+        (try
+          (let [patch (egater-fixture! root shape)
+                result (admit/execute-request!
+                         {:project-root (.getPath root)}
+                         {:patch patch :mode "preview" :verify "focused"})
+                lint (:lint_delta result)]
+            (is (:ok result) (str "the gate refused this: " (:error result)))
+            (is (= 21 (count (:files result))))
+            (is (true? (:ran lint))
+                (str "the analyzer half never ran in the field: "
+                     (pr-str (select-keys lint [:error-type :cap
+                                                :observed-bytes]))))
+            (is (true? (:ok lint)))
+            (is (pos? (long (:baseline-count lint))))
+            (is (= (:baseline-count lint) (:future-count lint)))
+            (is (zero? (long (:introduced-count lint)))
+                "the E-GATE-R finding: this caller introduced nothing")
+            (is (zero? (long (:blocking-introduced-count lint))))
+            (is (false? (:mutation_attempted result)))
+            (is (true? (:source-unchanged result))))
+          (finally (delete-tree! root)))))))
+
+;; @spec MCP-OP-ADMIT-122
+(deftest a-denser-fan-out-image-yields-a-larger-baseline
+  (let [baselines
+        (into {}
+              (map (fn [shape]
+                     (let [root (temp-dir)]
+                       (try
+                         (let [patch (egater-fixture! root shape)
+                               result (admit/execute-request!
+                                        {:project-root (.getPath root)}
+                                        {:patch patch :mode "preview"
+                                         :verify "focused"})]
+                           [shape (long (get-in result [:lint_delta
+                                                        :baseline-count]))])
+                         (finally (delete-tree! root))))))
+              ["k1" "k6"])]
+    (is (> (get baselines "k6") (get baselines "k1"))
+        (str "k=6 requires more libraries per namespace than k=1, so it must "
+             "produce more findings; equal counts would mean neither read was "
+             "real: " (pr-str baselines)))))

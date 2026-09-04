@@ -890,6 +890,7 @@ rather than clean, so nothing was falsely green — but the gate's substantive
 detector had never run on a real input.
 
 - [x] **MCP-OP-ADMIT-121**: If the analyzer's output exceeds the byte ceiling the gate reads it under, then clj-surgeon shall publish the typed failure `analyzer-output-truncated` naming the ceiling, the observed output size, the detector, and a remedy naming both routes out — raise the ceiling or narrow the patch — and shall reserve `clj-kondo-unavailable` for an analyzer that did not answer at all.
+- [ ] **MCP-OP-ADMIT-122**: clj-surgeon shall read the analyzer's findings under a ceiling that exists only to bound this process's memory, distinct from and far above the byte budget that bounds what a receipt publishes; a fan-out patch whose findings exceed the receipt budget shall still be verified, and the receipt shall not grow because the read did.
 
 # #Witness Failure Baseline
 
