@@ -2212,3 +2212,84 @@
     (is (str/includes? text "structuredContent.results[request-1]")
         "and it must name where the evidence it dropped can be read")
     (is (str/includes? text "narrow the request"))))
+
+;; ============================================================
+;; Every refusal's text names its cause, its evidence, and its remedy
+;; ============================================================
+;; Reviewer findings 5 and 10 (2026-09-03). `diagnostic?` required BOTH a
+;; `failed_request` and a `:failures` entry; a study refusal has neither, so
+;; the `available owners (n/n): …` line was skipped — while the sentence that
+;; refers to that list was guarded only by `(seq available-owners)` and printed
+;; anyway. Measured at 26e4810, `ls-deps form=no-such-form-xyz`:
+;; `structuredContent` carried `:error` ("No top-level form named
+;; no-such-form-xyz in src/clj_surgeon/analyze.clj") and 27 `available_owners`;
+;; the TEXT carried NEITHER, and read:
+;;
+;;   inspect_clojure
+;;     refused · study-form-not-found · 55.12 ms
+;;     All listed owners are real snapshot evidence; ranking is
+;;     non-authoritative. …
+;;   → correct_request
+;;
+;; The ls-tree refusal branch (`mcp_inspect_tool.clj:857`) already printed the
+;; cause AND the next action. That shape is the class fix.
+
+;; @spec MCP-OP-STUDY-042
+(deftest a-study-refusal-text-names-its-cause-and-its-owners
+  (let [response (one "ls-deps" {"form" "no-such-form-xyz"})
+        text (summary-of response)]
+    (is (false? (:ok response)))
+    (is (= "study-form-not-found" (:error_type response)))
+    (is (= 27 (count (:available_owners response))))
+    (testing "the cause travels in the text, not only in structuredContent"
+      (is (str/includes? text (:error response))))
+    (testing "and so do the owners the sentence refers to"
+      (doseq [owner (:available_owners response)]
+        (is (str/includes? text owner)
+            (format "TEXT must list owner %s" owner))))
+    (testing "and the next action"
+      (is (str/includes? text (:next_action response))))))
+
+;; @spec MCP-OP-STUDY-042
+(deftest the-owners-vocabulary-sentence-prints-only-over-a-printed-list
+  (let [vocabulary "All listed owners are real snapshot evidence"
+        with-owners (summary-of (one "ls-deps" {"form" "no-such-form-xyz"}))
+        without-owners (summary-of (run {"requests" [{"operation" "deps"}]
+                                         "expect" {"requests" 1 "files" 1}}))]
+    (is (str/includes? with-owners vocabulary))
+    (is (not (str/includes? without-owners vocabulary))
+        "a sentence about a list that is not printed is worse than silence")))
+
+;; @spec MCP-OP-STUDY-042
+(deftest every-refusal-text-names-error-type-cause-and-next-action
+  (doseq [[label params]
+          [[:missing-fields {"requests" [{"operation" "deps"}]
+                             "expect" {"requests" 1 "files" 1}}]
+           [:unknown-fields {"requests" [{"operation" "deps"
+                                          "file" real-file
+                                          "pattern" "x"}]
+                             "expect" {"requests" 1 "files" 1}}]
+           [:invalid-xray {"requests" [{"operation" "xray" "file" real-file
+                                        "expression" "*"}]
+                           "expect" {"requests" 1 "files" 1}}]
+           [:study-form-not-found {"requests" [{"operation" "ls-extract"
+                                                "file" real-file
+                                                "form" "no-such-form-xyz"}]
+                                   "expect" {"requests" 1 "files" 1}}]
+           [:invalid-study-limit {"mode" "ls-tree" "dir" "." "limit" 99999}]
+           [:dir-not-found {"mode" "ls-tree" "dir" "no-such-dir-xyz"}]]]
+    (testing (name label)
+      (let [response (run params)
+            text (summary-of response)]
+        (is (false? (:ok response)))
+        (is (str/includes? text (or (:error_type response)
+                                    (str (:reason response))))
+            "the text names the error type")
+        (is (str/includes? text (:error response))
+            "the text names the cause, verbatim")
+        (is (or (str/includes? text (str (:next_action response)))
+                (str/includes? text "next call:"))
+            "the text names the next action or spells the next call")
+        (when (:remedy response)
+          (is (str/includes? text (:remedy response))
+              "the text carries the remedy"))))))
