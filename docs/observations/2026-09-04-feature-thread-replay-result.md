@@ -345,3 +345,24 @@ run synchronously inside the call — so the gate replaced three 30-second suite
 harness the gate is a correctness product (refuse a bad patch before it lands), not a wall product; the receipt + plate
 without the gate is the wall configuration. T6/T6b launched: receipt + contract, NO gate, smw-base2 — pre-registration:
 raw ≤ 15, wall ≤ 5 min, reads ≤ 1, bd turns ≤ 2; withdrawal if raw > 19 (T4's number) on both replicates.
+
+## T6 / T6b result (2026-09-04 22:1xZ) — receipt + landed plate, no gate, smw-base2 — PRE-REGISTRATION MET
+
+| arm | wall | turns | pre-write reads | bd | verify (own) | write | gates |
+|---|---:|---:|---:|---:|---:|---:|---|
+| T6 | 5.3 min | 13 | 0 | 1 (0.2 min) | 4 runs, 3.3 min | 3 | unit 229/721/0, js green |
+| T6b | 16 turns, 5.0 min | 16 | 0 | 2 (0.5 min) | 4 runs, 0.6 min | 1 | unit 242/797/0, js green |
+| N5 native, same plate, same hour | 6.3 min | 33 | 7 | 2 | 7 runs | 1 | green |
+| native, morning mean of 3 (old plate) | 9.0 min | 38 | 10–13 | ~5 | | | green |
+
+Met: raw ≤ 15 (13; T6b 16, one over), wall ≤ 5 min (5.3 / 5.0 — at the line), reads ≤ 1 (0/0), bd ≤ 2 (1/2). Withdrawal
+threshold (raw > 19 on both) not reached. Ratios: turns 2.3× fewer than same-plate native (33 → 13–16), 2.5× fewer than the
+morning native mean; wall 1.2× vs the same-hour native control, 1.7× vs the morning mean. Codex 0.147.0 on all four
+arms (pinned; the 0.153.3 install landed after these launched).
+
+What the pair says: with the receipt and the plate, the agent's decisions are at their floor — no reads before writing,
+one bd chain, three patches — and the remaining wall is (a) the suites the agent runs itself (3.3 min in T6, four runs)
+and (b) model turn latency. The gate was supposed to take (a) and instead cost more than it saved (T5). So the next
+wall lever on this harness is not a verb: it is running the repo's fast suite ONCE, or letting a cheap watcher run it,
+which the landing contract can state ("prove once: make runtests-unit && make test-js"). Astra's live-tool held-out
+arm decides whether any of this survives an unseen feature through the real MCP entrance. INJECTED receipt, as always.
