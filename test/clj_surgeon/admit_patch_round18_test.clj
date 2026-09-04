@@ -43,6 +43,9 @@
   ^Path [file]
   (.toPath (io/file file)))
 
+(def ^:private no-follow-opts
+  (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
+
 (defn delete-tree-nofollow!
   "Remove a fixture tree without ever descending through a symbolic link.
 
@@ -170,4 +173,108 @@
           (is (true? (:verify_ok result))
               (str "the overlay copy of an in-workspace link is still a link: "
                (pr-str (get-in result [:tests :commands])))))
+        (finally (delete-tree-nofollow! root))))))
+
+;; @spec MCP-OP-ADMIT-159
+(deftest the-overlay-preserves-the-modes-and-times-the-verify-runs-against
+  (testing "a repository whose verify command is its own ./bin/check passes"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [check (io/file root "bin/check")]
+          (.mkdirs (.getParentFile check))
+          (spit check "#!/bin/sh\necho CHECK-OK\nexit 0\n")
+          (.setExecutable check true false)
+          (let [result (admit/execute-request!
+                         (stub-config root {:admit-test-runner nil})
+                         {:patch clean-multi-file-patch
+                          :mode "commit"
+                          :verify (inline-verify ["./bin/check"])})
+                row (first (get-in result [:tests :commands]))]
+            (is (true? (:ok result))
+                (str "the repository's own executable script runs inside the"
+                     " overlay: " (pr-str (:error result))))
+            (is (= 0 (long (or (:exit row) -1)))
+                (pr-str row))
+            (is (str/includes? (str (:output_tail row)) "CHECK-OK")
+                (pr-str row))))
+        (finally (delete-tree-nofollow! root)))))
+  (testing "the copy carries the source's mode and modification time"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [check (io/file root "bin/check")]
+          (.mkdirs (.getParentFile check))
+          (spit check "#!/bin/sh\nexit 0\n")
+          (.setExecutable check true false)
+          ;; A time far enough in the past that a copy stamped "now" cannot
+          ;; coincide with it. Without this the witness is a race: on a fast
+          ;; box the copy and the write can land in the same millisecond.
+          (doseq [f [check (io/file root "src/app/core.clj")
+                     (io/file root "src/app/util.clj")]]
+            (.setLastModified f 1000000000000))
+          (let [overlay (admit/overlay-snapshot! (.getPath root) [])
+                copy (io/file (:root overlay) "bin/check")
+                source (io/file root "src/app/core.clj")
+                source-copy (io/file (:root overlay) "src/app/core.clj")]
+            (is (true? (:ok overlay)) (pr-str overlay))
+            (is (true? (.canExecute copy))
+                (str "the overlay copy of a 0755 script is executable;"
+                     " source perms "
+                     (pr-str (Files/getPosixFilePermissions (path check)
+                                                            no-follow-opts))
+                     " copy perms "
+                     (pr-str (Files/getPosixFilePermissions (path copy)
+                                                            no-follow-opts))))
+            (is (= (Files/getPosixFilePermissions (path check) no-follow-opts)
+                   (Files/getPosixFilePermissions (path copy) no-follow-opts))
+                "every permission bit survives the copy, not only the x bit")
+            (is (= (.lastModified source) (.lastModified source-copy))
+                (str "an incremental verify sees the tree's own times, not"
+                     " 'now': source " (.lastModified source)
+                     " copy " (.lastModified source-copy)))))
+        (finally (delete-tree-nofollow! root)))))
+  (testing "a command that cannot be LAUNCHED is not reported as a deadline"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [check (io/file root "bin/check")]
+          (.mkdirs (.getParentFile check))
+          (spit check "#!/bin/sh\nexit 0\n")
+          (.setExecutable check false false)
+          (let [result (admit/execute-request!
+                         (stub-config root {:admit-test-runner nil})
+                         {:patch clean-multi-file-patch
+                          :mode "commit"
+                          :verify (inline-verify ["./bin/check"])})
+                row (first (get-in result [:tests :commands]))]
+            (is (false? (:ok result)))
+            (is (= "did-not-start" (:status row))
+                (str "a launch failure has its own status word: a reader who"
+                     " sees a timeout's shape concludes the suite hung: "
+                     (pr-str row)))
+            (is (= :inline-verify-command-did-not-start
+                   (get-in result [:tests :reason]))
+                (pr-str (get-in result [:tests :reason])))
+            (is (str/includes? (str (:error result)) "Permission denied")
+                (str "the refusal carries the launcher's own error text: "
+                     (pr-str (:error result))))
+            (is (not (str/includes? (str (:error result)) "did not finish"))
+                (pr-str (:error result)))))
+        (finally (delete-tree-nofollow! root)))))
+  (testing "a verify cwd that does not exist is a launch failure, not a deadline"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands ["true"] :cwd "no/such/dir"}})
+              row (first (get-in result [:tests :commands]))]
+          (is (false? (:ok result)))
+          (is (= "did-not-start" (:status row)) (pr-str row))
+          (is (= :inline-verify-command-did-not-start
+                 (get-in result [:tests :reason]))
+              (pr-str (get-in result [:tests :reason]))))
         (finally (delete-tree-nofollow! root))))))
