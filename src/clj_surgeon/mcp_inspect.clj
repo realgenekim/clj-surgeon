@@ -429,6 +429,74 @@
   [value]
   (count (json/generate-string (json-data value))))
 
+;; @spec MCP-OP-STUDY-044
+(def text-excluded-leaf-keys
+  "The ONLY receipt facts the TEXT block deliberately does not carry, each
+  with the reason it is kept out.
+
+  The default is to RENDER. This set is the whole exception, a witness freezes
+  it, and adding a member is a reviewable diff — never an implicit projection.
+
+  - `:workspace_root` — an absolute filesystem path. MCP-OP-STUDY-026 already
+    forbids the workspace root inside a refusal's `error` string; a text block
+    travels into transcripts, logs, and screenshots that `structuredContent`
+    does not, and the root names the operator's machine rather than the
+    answer. Structured-content consumers still receive it."
+  #{:workspace_root})
+
+;; @spec MCP-OP-STUDY-044
+(defn receipt-leaf-pairs
+  "Every leaf of a receipt as `[path value]`, over the JSON shape a client is
+  handed — so a renderer and a witness walk exactly what `structuredContent`
+  carries, not what the kernel happens to hold."
+  ([result] (receipt-leaf-pairs [] (json-data result)))
+  ([path value]
+   (cond
+     (map? value)
+     (mapcat (fn [[key child]] (receipt-leaf-pairs (conj path key) child))
+             value)
+
+     (sequential? value)
+     (mapcat (fn [[index child]] (receipt-leaf-pairs (conj path index) child))
+             (map-indexed vector value))
+
+     :else [[path value]])))
+
+;; @spec MCP-OP-STUDY-044
+(defn leaf-rendered?
+  "Does `text` carry this receipt leaf VERBATIM?
+
+  ONE predicate, used both by the renderer that guarantees the property and by
+  the witness that checks it, so the two can never drift apart. A multi-line
+  value is carried when every one of its non-blank lines is."
+  [text value]
+  (let [rendered (cond (nil? value) nil
+                       (string? value) value
+                       :else (str value))]
+    (cond
+      (nil? rendered) true
+      (str/blank? rendered) true
+
+      (str/includes? rendered "\n")
+      (every? #(or (str/blank? %) (str/includes? text %))
+              (str/split-lines rendered))
+
+      :else (str/includes? text rendered))))
+
+;; @spec MCP-OP-STUDY-044
+(defn uncarried-leaves
+  "Every receipt leaf `text` does not carry, excluding the enumerated set.
+
+  The criterion, as one function: `content[0].text` shall be a superset of
+  every `structuredContent` leaf value. A caller reading only the text has the
+  whole receipt or knows exactly which part of it it does not have."
+  [text result]
+  (into []
+        (remove (fn [[path value]]
+                  (or (contains? text-excluded-leaf-keys (last path))
+                      (leaf-rendered? text value))))
+        (receipt-leaf-pairs result)))
+
 (defn- kernel-refusal
   [request index result]
   (let [error-type (or (:error-type result) :inspect-kernel-refusal)]

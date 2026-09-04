@@ -2769,3 +2769,95 @@
             (is (not (and (str/includes? text "text abridged")
                           (str/includes? text "complete tree · read_complete=true")))))
           (finally (inspect-tool/init! nil)))))))
+
+;; ============================================================
+;; O2 ROUND 3 — the strict criterion: `content[0].text` carries EVERY
+;; `structuredContent` leaf (Sol O2 round-2 review, section 3)
+;; ============================================================
+;; Round two rendered SELECTED row fields. That is enough for the narrower row
+;; strings MCP-OP-STUDY-041 asserts, and it is not the criterion: a projection
+;; is a decision nobody can review, and the fields it leaves out are invisible
+;; until someone walks the receipt by hand. Sol did, and found 182 uncarried
+;; leaves over nine modes.
+;;
+;; This is ONE machine-checked witness. It parses the receipt into the JSON
+;; shape a client is handed, walks every leaf, and asserts each value appears
+;; verbatim in the text block, through the same predicate the renderer uses.
+
+(defn- leaf-misses
+  [text result]
+  (inspect/uncarried-leaves text result))
+
+(defn- miss-report
+  [misses]
+  (str/join "; "
+            (map (fn [[path value]]
+                   (str (pr-str path) " = "
+                        (pr-str (if (and (string? value) (> (count value) 60))
+                                  (str (subs value 0 60) "…")
+                                  value))))
+                 (take 6 misses))))
+
+;; @spec MCP-OP-STUDY-044
+(deftest every-published-mode-text-carries-every-structured-content-leaf
+  (with-tmp-project
+    (fn [dir]
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (fs/create-dirs (str dir "/src/fixture"))
+      (spit (str dir "/src/fixture/core.clj") class-ratchet-fixture))
+    (fn [config]
+      (doseq [[operation extra] (sort class-ratchet-requests)]
+        (testing operation
+          (let [published (assoc
+                            (inspect-tool/fit-public-result
+                              (inspect-tool/execute-inspect!
+                                config
+                                {"requests" [(merge {"id" "r1"
+                                                     "operation" operation
+                                                     "file" "src/fixture/core.clj"}
+                                                    extra)]
+                                 "expect" {"requests" 1 "files" 1}}))
+                            :elapsed_ms 1.0)
+                text (inspect-tool/inspect-summary published)
+                misses (leaf-misses text published)]
+            (is (true? (:ok published)) (pr-str (:error published)))
+            (is (empty? misses)
+                (str operation ": " (count misses)
+                     " receipt leaves the text does not carry — "
+                     (miss-report misses))))))
+      (testing "ls-tree"
+        (let [published (assoc
+                          (inspect-tool/fit-public-result
+                            (inspect-tool/execute-ls-tree
+                              config {:mode "ls-tree" :dir "."
+                                      :format "text"}))
+                          :elapsed_ms 1.0)
+              text (inspect-tool/inspect-summary published)
+              misses (leaf-misses text published)]
+          (is (true? (:ok published)))
+          (is (empty? misses)
+              (str "ls-tree: " (count misses)
+                   " receipt leaves the text does not carry — "
+                   (miss-report misses)))))
+      (testing "ls-tree format=names"
+        (let [published (assoc
+                          (inspect-tool/fit-public-result
+                            (inspect-tool/execute-ls-tree
+                              config {:mode "ls-tree" :dir "."
+                                      :format "names"}))
+                          :elapsed_ms 1.0)
+              text (inspect-tool/inspect-summary published)
+              misses (leaf-misses text published)]
+          (is (empty? misses)
+              (str "ls-tree names: " (count misses) " — "
+                   (miss-report misses))))))))
+
+;; @spec MCP-OP-STUDY-044
+(deftest the-excluded-leaf-set-is-frozen-and-every-member-carries-its-reason
+  ;; An exclusion is a deliberate, reviewable decision. Growing this set is a
+  ;; failing test, not a silent projection.
+  (is (= #{:workspace_root} inspect/text-excluded-leaf-keys)
+      "a new exclusion needs a reason in the docstring and an edit here")
+  (is (str/includes? (:doc (meta #'inspect/text-excluded-leaf-keys))
+                     "workspace_root")
+      "every excluded key names, at its definition, why it is excluded"))
