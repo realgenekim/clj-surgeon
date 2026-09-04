@@ -1615,6 +1615,15 @@
      :new_file new-file
      :retired_to (:retired-file commit)}))
 
+;; @spec MCP-OP-ALIAS-034
+(def max-string-mention-sites
+  "How many `file:line` string-mention sites one receipt names.
+
+  The count is exact and the list is bounded: the receipt is constant in N or
+  it is not a receipt, and a caller with twenty sites already has a day's work
+  they can find the rest of by searching for the name the count reports."
+  20)
+
 ;; @spec MCP-OP-ALIAS-042
 (defn receipt
   "Render one receipt whose length is constant in the number of namespaces.
@@ -1635,7 +1644,10 @@
        :refer_sites (:refer-sites totals)
        :alias_histogram (into {} (:alias-histogram totals))
        :collisions_resolved (:collisions-resolved totals)
+       ;; @spec MCP-OP-ALIAS-034
        :string_mentions (count (:string-mentions totals))
+       :string_mention_sites (vec (take max-string-mention-sites
+                                        (:string-mentions totals)))
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
        ;; @spec MCP-OP-ALIAS-052

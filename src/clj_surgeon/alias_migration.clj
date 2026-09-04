@@ -1070,17 +1070,33 @@
 
 ;; @spec MCP-OP-ALIAS-034
 (defn string-mentions
-  "Files whose source contains the old lib name as a STRING literal.
+  "`file:line` of every STRING literal naming what this migration retires.
 
   These are not code references — they are assertions about the codebase
   (architecture tests), documentation paths, and data. The verb does not touch
   them and does not refuse for them, but a silent zero would hide real work, so
-  the count travels in the receipt."
-  [from-lib sources]
-  (vec (sort (keep (fn [{:keys [file source]}]
-                     (when (str/includes? source (str "\"" from-lib "\""))
-                       file))
-                   sources))))
+  the count travels in the receipt.
+
+  The needle is what the migration RETIRES and is chosen by the caller: a
+  lib-only migration retires the lib, so the lib name is the needle; a var
+  migration retires one qualified var and leaves the lib and its other vars
+  standing, so `lib/var` is the needle and a string naming the surviving lib is
+  not stale work. Var mode used to pass no needle at all — the count was a
+  literal `[]` — so every var migration published `string_mentions: 0`
+  whatever the tree held.
+
+  Sites rather than files: a file is where the caller must go, a line is where
+  they must look, and two mentions in one file are two edits. Sorted, so the
+  receipt is a function of the tree and not of read order."
+  [needle sources]
+  (let [quoted (str "\"" needle "\"")]
+    (vec (sort (mapcat (fn [{:keys [file source]}]
+                         (keep-indexed
+                           (fn [index line]
+                             (when (str/includes? line quoted)
+                               (str file ":" (inc index))))
+                           (str/split-lines source)))
+                       sources)))))
 
 ;; @spec MCP-OP-ALIAS-022
 ;; @spec MCP-OP-ALIAS-023
@@ -1233,9 +1249,15 @@
                                                          (frequencies (map :alias files)))
                                   :collisions-resolved
                                   (reduce + 0 (map #(count (:collided %)) files))
+                                  ;; @spec MCP-OP-ALIAS-034
+                                  ;; the needle follows what this migration
+                                  ;; retires: the lib in lib mode, the one
+                                  ;; qualified var in var mode
                                   :string-mentions
-                                  (if (nil? from-var)
-                                    (string-mentions (get-in request [:from :lib])
-                                                     sources)
-                                    [])}}
+                                  (string-mentions
+                                    (if (nil? from-var)
+                                      (get-in request [:from :lib])
+                                      (str (get-in request [:from :lib])
+                                           "/" from-var))
+                                    sources)}}
                   renamed (assoc :lib-rename renamed))))))))))
