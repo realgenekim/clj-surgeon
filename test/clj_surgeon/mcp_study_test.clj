@@ -4721,9 +4721,11 @@
   (let [result {:ok true
                 :decoy "XXabcdefghijklmnopYY"
                 :target "abcdefghijklmnop"}]
-    ;; Budget 90 pays for the declaration and the `decoy` line, and not for
-    ;; the `target` line — the reviewer's exact rung.
-    (doseq [budget [90 100 120]]
+    ;; SWEPT, not sampled. Budget 90 was the reviewer's rung, but which
+    ;; budget renders `decoy` and not `target` moves whenever the declaration
+    ;; changes size, and a witness pinned to one budget stops seeing the class
+    ;; the moment the arithmetic shifts under it.
+    (doseq [budget (range 40 240 4)]
       (testing (str "budget " budget)
         (let [report (carriage-report result budget)]
           (is (empty? (:orphans report))
@@ -4754,7 +4756,7 @@
   ;; recoverable." A pointer line each closes it.
   (let [twin "the-same-distinctive-value-rendered-twice"
         result {:ok true :alpha twin :beta twin}]
-    (doseq [budget [100 120 140 160]]
+    (doseq [budget (range 40 260 4)]
       (testing (str "budget " budget)
         (let [report (carriage-report result budget)]
           (is (empty? (:orphans report))
