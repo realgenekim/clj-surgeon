@@ -15,6 +15,7 @@
    causes."
   (:require
    [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.show-form :as show-form]
@@ -663,11 +664,19 @@
                projects root)
           text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
                 projects root)
-          {:keys [scan_ms bytes_scanned]} (get-in (last edn) [:receipt :resources])]
-      (is (number? scan_ms) "the EDN receipt carries no :resources block")
+          resources (get-in (last edn) [:receipt :resources])
+          ;; @spec MCP-OP-MEM-003 — the wall-clock half of the block lives on
+          ;; the MEASURED channel, off every hash. Still unconditional, still
+          ;; in the `:resources` block, just on the side of it that no
+          ;; determinism row hashes. See `clj-surgeon.measured`.
+          scan_ms (:scan_ms (get resources measured/measured-key))
+          bytes_scanned (:bytes_scanned resources)]
+      (is (number? scan_ms) "the EDN receipt carries no measured scan cost")
       (is (pos? scan_ms) "the scan really ran and the clock really measured it")
       (is (pos? bytes_scanned)
           "a duration with no denominator cannot tell slow from large")
+      (is (nil? (:scan_ms resources))
+          "a wall-clock reading is back on the hashed side of the block")
       (is (str/includes? text "scan_ms") "the text receipt charges it too"))))
 
 ;; @spec MCP-OP-MEM-005
@@ -712,8 +721,8 @@
           "the small scan charged itself the big scan's bytes")
       (is (= (bytes-under big) (:bytes_scanned rb))
           "the big scan charged itself the small scan's bytes")
-      (is (number? (:scan_ms ra)))
-      (is (number? (:scan_ms rb))))))
+      (is (number? (:scan_ms (get ra measured/measured-key))))
+      (is (number? (:scan_ms (get rb measured/measured-key)))))))
 
 ;; @spec MCP-OP-MEM-005
 (deftest ls-tree-output-is-unchanged-when-nothing-is-refused
@@ -744,7 +753,8 @@
         (is (= 'fixture.ok (:ns (first edn))))
         (is (nil? (:parser_admission_refused (:receipt (last edn))))
             "nothing was refused, so nothing is named")
-        (is (number? (get-in (last edn) [:receipt :resources :scan_ms]))
+        (is (number? (get-in (last edn) [:receipt :resources
+                                        measured/measured-key :scan_ms]))
             "the meter is dark on exactly the scans it exists to watch")
         (is (= (count "(ns fixture.ok)\n(defn hello [x] (inc x))\n")
                (get-in (last edn) [:receipt :resources :bytes_scanned])))))))

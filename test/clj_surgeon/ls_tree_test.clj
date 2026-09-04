@@ -249,7 +249,11 @@
     ;; by `outline-all-files`, so no meter was installed and the scan cost is
     ;; honestly zero.
     (is (= 2 (count result)))
-    (is (= {:resources {:scan_ms 0.0 :bytes_scanned 0}} (:receipt (last result))))
+    ;; @spec MCP-OP-MEM-003 — `:resources` is partitioned: the deterministic
+    ;; denominator is hashed, the wall-clock reading rides under `:measured`
+    ;; and no determinism, parity, or byte-identity row can see it.
+    (is (= {:resources {:bytes_scanned 0 :measured {:scan_ms 0.0}}}
+           (:receipt (last result))))
     (let [entry (first result)]
       (is (= 'proj.core (:ns entry)))
       (is (str/includes? (:file entry) "core.clj"))

@@ -23,7 +23,9 @@
    remedy and the narrowing `next_call`. Tuning `max-parse-nodes` down until it
    refuses large ORDINARY files converts this control into a worse copy of that
    one. See docs/intent/read-path-memory/read-path-memory-design.md for the
-   ceiling derivation and the measurements behind every number.")
+   ceiling derivation and the measurements behind every number."
+  (:require
+   [clj-surgeon.measured :as measured]))
 
 ;; ============================================================
 ;; Ceilings
@@ -391,12 +393,23 @@
 (defn meter-resources
   "The `:resources` block for a receipt: the scan's own cost WITH its
    denominator, so a reader can tell a slow scan from a large one. A figure
-   without a rate is a figure nobody can act on."
+   without a rate is a figure nobody can act on.
+
+   The block is PARTITIONED, and the partition is the whole point. The
+   denominator `bytes_scanned` is a count: deterministic, hashed, and a change
+   in it is a real regression a parity line must catch. `scan_ms` is a
+   WALL-CLOCK reading, so it rides on the MEASURED channel — published
+   unconditionally, as MEM-005 requires, and outside every hash, as MEM-003 and
+   MEM-011 require. See `clj-surgeon.measured`."
   [meter]
-  (if meter
-    {:scan_ms (/ (Math/round (* 1000.0 (/ (double @(:nanos meter)) 1e6))) 1000.0)
-     :bytes_scanned @(:bytes meter)}
-    {:scan_ms 0.0 :bytes_scanned 0}))
+  (merge
+    (if meter
+      {:bytes_scanned @(:bytes meter)}
+      {:bytes_scanned 0})
+    (measured/measured
+      {:scan_ms (if meter
+                  (/ (Math/round (* 1000.0 (/ (double @(:nanos meter)) 1e6))) 1000.0)
+                  0.0)})))
 
 ;; ============================================================
 ;; Admission

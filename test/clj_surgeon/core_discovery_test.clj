@@ -17,6 +17,8 @@
    [babashka.fs :as fs]
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clj-surgeon.measured :as measured]
+   [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [rewrite-clj.node :as rn]
@@ -214,10 +216,16 @@
             ;; MEM-005 (bridge/parser-admission) added a MEASURED `scan_ms` to
             ;; the ls-tree receipt, so two runs of the same scan never produce
             ;; byte-identical output. The discovery claim is about what was
-            ;; found, not how long it took: the wall-clock reading is masked and
-            ;; asserted separately, so everything else -- projects, files, forms,
-            ;; and `bytes_scanned` -- is still compared byte for byte.
-            (let [mask #(str/replace % #":scan_ms [0-9.]+" ":scan_ms <measured>")]
+            ;; found, not how long it took: the wall-clock reading is dropped
+            ;; and asserted separately, so everything else -- projects, files,
+            ;; forms, and `bytes_scanned` -- is still compared byte for byte.
+            ;;
+            ;; @spec MCP-OP-MEM-003 — the drop is the PRODUCT's own rule
+            ;; (`measured/hashed-channel`), not this witness's regex. While it
+            ;; was a local mask, the same wall-clock field went on to break the
+            ;; battery's parity line and MEM-003's byte-identity row, because
+            ;; nothing in src had ever said where a measured field may live.
+            (let [mask #(pr-str (measured/hashed-channel (edn/read-string %)))]
               (doseq [[what out] [["control" (:out control)] ["linked" (:out linked)]]]
                 (is (re-find #":scan_ms [0-9.]+" out)
                     (str "the " what " receipt still charges the scan")))

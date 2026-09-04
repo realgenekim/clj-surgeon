@@ -25,6 +25,7 @@
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
    [clojure.string :as str]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.memory-battery :as battery])
   (:import
    (java.io OutputStream)
@@ -147,14 +148,23 @@
 ;; ============================================================
 
 (defn- hash-result
-  "SHA-256 over the streamed printed form of a result. Streams into a digest
-  sink so hashing a large result does not itself materialise a large string."
+  "SHA-256 over the streamed printed form of a result's HASHED CHANNEL. Streams
+  into a digest sink so hashing a large result does not itself materialise a
+  large string.
+
+  @spec MCP-OP-MEM-011
+  The subject is `measured/hashed-channel`, never the raw result. A wall-clock
+  reading inside the digest makes output parity unsatisfiable: two reps of ONE
+  operation on ONE unchanged corpus produced four distinct hashes
+  (`nondeterministic:4`) and twelve `reference-mismatch` FAIL lines on
+  `cli-ls-tree` alone, differing in exactly `:scan_ms`. The projection is
+  structure-sharing, so it does not move the heap figures measured around it."
   [result]
   (let [md (MessageDigest/getInstance "SHA-256")
         dos (DigestOutputStream. (OutputStream/nullOutputStream) md)]
     (with-open [w (io/writer dos)]
       (binding [*out* w *print-length* nil *print-level* nil *print-dup* false]
-        (pr result)
+        (pr (measured/hashed-channel result))
         (flush)))
     (str/join (map #(format "%02x" %) (.digest md)))))
 

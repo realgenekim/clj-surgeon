@@ -23,6 +23,7 @@
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
@@ -570,9 +571,18 @@
         ;; ordinary scan's human output is byte-identical to before this control
         ;; existed; the EDN receipt carries it unconditionally, because that is
         ;; the surface a regression check reads.
-        (let [{:keys [scan_ms bytes_scanned]} (scan-resources projects)]
-          (.append sb (format "── resources: scan_ms %s, bytes_scanned %s\n"
-                              scan_ms bytes_scanned)))))
+        ;;
+        ;; @spec MCP-OP-MEM-003 — and the wall-clock half goes on its own
+        ;; LABELLED line. Text has no keys, so the hashed/measured partition has
+        ;; to be visible in the bytes: `measured/strip-measured-lines` is the
+        ;; text counterpart of `measured/hashed-channel`, and a byte-identity
+        ;; witness drops these lines by prefix rather than by regex.
+        (let [res (scan-resources projects)]
+          (.append sb (format "── resources: bytes_scanned %s\n"
+                              (:bytes_scanned res)))
+          (.append sb (format "%sscan_ms %s\n"
+                              measured/text-measured-prefix
+                              (:scan_ms (get res measured/measured-key)))))))
     (str sb)))
 
 (defn format-ls-tree-edn
@@ -585,7 +595,12 @@
    rare refusal branch is one nobody ever sees move — and it names and counts
    `:parser_admission_refused` only when something actually was refused. The
    human TEXT rendering keeps the older, quieter contract: an ordinary scan's
-   text is byte-identical to before this control existed."
+   text is byte-identical to before this control existed.
+
+   `:resources` is PARTITIONED. The deterministic denominator sits in it
+   directly; the wall-clock `scan_ms` sits under `:measured`, off the hashed
+   channel, so two scans of an unchanged tree agree everywhere a parity or
+   byte-identity row looks. See `clj-surgeon.measured`."
   ;; @spec MCP-OP-MEM-005
   [projects dir]
   (let [entries (vec

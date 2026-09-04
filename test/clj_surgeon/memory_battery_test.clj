@@ -14,6 +14,7 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.memory-battery :as battery]))
 
 ;; ------------------------------------------------------------------
@@ -697,3 +698,50 @@
         "no accountant is nil, which the verdict renders UNMEASURED")
     (is (= 0.0 (battery/reserved-peak-mb {:reserved {:heap-reserved-peak-bytes 0}}))
         "zero is a MEASUREMENT, not an absence")))
+
+;; ------------------------------------------------------------------
+;; What the battery hashes.
+;;
+;; The battery is deliberately unreachable from the ordinary test gates, so
+;; `clj-surgeon.measured-channel-test` cannot call the runner and names its
+;; subject instead. This witness is the binding: it reads the runner's actual
+;; hashing site and asserts that the subject really is the product's hashed
+;; channel. Without it, a witness could agree with itself for ever while the
+;; battery went on digesting a wall-clock reading.
+;; ------------------------------------------------------------------
+
+(defn- runner-text []
+  (slurp (io/file "src/clj_surgeon/memory_battery_runner.clj")))
+
+;; @spec MCP-OP-MEM-011
+(deftest the-battery-hashes-the-hashed-channel-and-not-the-raw-result
+  (let [text (runner-text)
+        hash-fn (second (re-find #"(?s)\(defn- hash-result(.*?)\n\(defn" text))]
+    (is (some? hash-fn) "hash-result is no longer where this witness looks")
+    (is (str/includes? hash-fn "(measured/hashed-channel result)")
+        (str "the battery digests something other than the product's hashed "
+             "channel; a measured field inside the digest makes output parity "
+             "unsatisfiable — twelve reference-mismatch FAIL lines on "
+             "cli-ls-tree alone, differing in exactly :scan_ms"))
+    (is (not (re-find #"\(pr result\)" hash-fn))
+        "the raw result is digested again")
+    (is (str/includes? text "[clj-surgeon.measured :as measured]")
+        "the runner does not require the namespace that owns the partition")))
+
+;; @spec MCP-OP-MEM-011
+(deftest the-hashed-channel-is-structure-sharing
+  (testing "the projection must not copy the result it is measuring"
+    ;; The battery hashes while the result is still referenced and the heap
+    ;; sampler is running. A projection that rebuilt a 10,000-record result
+    ;; would move the very peak the battery exists to measure.
+    (let [record {:file "src/a.clj" :forms [{:name 'f}]}
+          result [record {:receipt {:resources {:bytes_scanned 9
+                                               :measured {:scan_ms 1.5}}}}]
+          projected (measured/hashed-channel result)]
+      (is (identical? record (first projected))
+          "an untouched record was rebuilt rather than shared")
+      (is (= {:receipt {:resources {:bytes_scanned 9}}} (second projected))
+          "the measured block survived the projection")
+      (let [clean [record {:receipt {:resources {:bytes_scanned 9}}}]]
+        (is (identical? clean (measured/hashed-channel clean))
+            "a result with nothing measured in it must come back as itself")))))

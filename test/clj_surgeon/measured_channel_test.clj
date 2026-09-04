@@ -32,7 +32,8 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
-   [clj-surgeon.core :as core]))
+   [clj-surgeon.core :as core]
+   [clj-surgeon.measured :as measured]))
 
 ;; ============================================================
 ;; The subject
@@ -49,10 +50,9 @@
   source. A witness whose notion of the subject drifts from the battery's
   proves nothing about the battery.
 
-  TODAY the runner digests the result as it is: no projection, so the measured
-  field is inside the digest. That is the defect."
+  The projection is the product's own, not this witness's copy of it."
   [result]
-  result)
+  (measured/hashed-channel result))
 
 (defn- measured-scan-ms
   "The scan's own cost as the receipt publishes it."
