@@ -4895,6 +4895,107 @@
         (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
+;; Opus's round-sixteen NO-GO item 2, blocking. Round sixteen closed the
+;; raw-exception-text leak for `AccessDeniedException` by matching its class
+;; NAME, and wrote the rule into the spec GLOBALLY — "a refusal that names a
+;; path shall not publish the raw text of the exception that produced it as its
+;; explanation" — while its sibling `FileSystemException` still walked into the
+;; generic catch and published the server's absolute root:
+;;
+;;   error_type = "unreadable-source-path"
+;;   error = "/tmp/census17-sol-fx/workspace/src/app/loopa.clj: Too many levels
+;;            of symbolic links or unable to access attributes of symbolic link
+;;            (src/app/loopa.clj)"
+;;
+;; A symlink loop is a shape that occurs in real repositories, and a name too
+;; long is another; both throw `FileSystemException` and neither is an
+;; `AccessDeniedException`. The predicate was one class too narrow.
+;;
+;; The same drive is also where the two entrances were caught disagreeing about
+;; WHICH FACT they had observed. `fs/exists?` follows links, so the CLI calls a
+;; loop and an over-long name what they are — a path that does not resolve —
+;; while the tool called them "unreadable" and printed the exception. A `cause`
+;; both entrances publish from one vocabulary is what makes that comparable at
+;; all: the entrance-specific NAMES differ by MCP-OP-CENSUS-014's own design,
+;; and a witness that can only compare names cannot see this class.
+;; ---------------------------------------------------------------------------
+
+(defn- symlink!
+  [^java.io.File from ^java.io.File to]
+  (Files/createSymbolicLink (.toPath from) (.toPath to)
+                            (make-array FileAttribute 0)))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(deftest no-refusal-publishes-the-raw-text-of-the-exception-that-produced-it
+  (let [root (temp-dir)
+        arm "src/app/folds.clj"
+        loopa "src/app/loopa.clj"
+        loopb "src/app/loopb.clj"
+        ;; A single path component far over any filesystem's name limit. The
+        ;; kernel answers ENAMETOOLONG, which the JDK raises as a
+        ;; `FileSystemException` that is not an `AccessDeniedException` — the
+        ;; second member of the class the round-sixteen predicate missed.
+        too-long (str "src/app/" (apply str (repeat 10001 \a)) ".clj")]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (symlink! (io/file root loopa) (io/file root loopb))
+      (symlink! (io/file root loopb) (io/file root loopa))
+      (let [named (.getCanonicalPath root)
+            real-root (mcp-paths/real-root named)]
+
+        (testing "the resolver publishes no absolute path for any hostile shape"
+          (doseq [[label relative] [[:a-symlink-loop loopa]
+                                    [:a-name-too-long too-long]]]
+            (let [refusal (mcp-paths/resolve-source-path real-root relative)]
+              (is (false? (:ok refusal))
+                  (str label " resolved: " (pr-str refusal)))
+              (is (not (str/includes? (str (:error refusal)) named))
+                  (str label " published the server's absolute root: "
+                       (pr-str (subs (str (:error refusal)) 0
+                                     (min 200 (count (str (:error refusal))))))))
+              (is (not (re-find #"(?:^|[\s(])/\S" (str (:error refusal))))
+                  (str label " published an absolute path: "
+                       (pr-str (subs (str (:error refusal)) 0
+                                     (min 200 (count (str (:error refusal))))))))
+              (is (some? (:cause refusal))
+                  (str label " published no typed cause: " (pr-str refusal))))))
+
+        (testing "a symlink loop through the tool names the path relative"
+          (let [result (census-tool/execute-request!
+                         {:project-root named} {:files [loopa]})]
+            (is (= "unreadable-source-path" (:error_type result))
+                (str "the tool answered " (pr-str (:error_type result))))
+            (is (not (str/includes? (str (:error result)) named))
+                (str "the tool published the server's absolute root: "
+                     (pr-str (:error result))))
+            (is (str/includes? (str (:error result)) loopa)
+                (str "the tool does not name the path it refused: "
+                     (pr-str (:error result))))
+            (is (= "not-found" (:cause result))
+                (str "the tool published no shared cause for a path that does "
+                     "not resolve: " (pr-str (:cause result))))))
+
+        (testing "the CLI answers the same FACT about the same loop"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census
+                            {:file (str named "/" loopa)}))
+                tool (census-tool/execute-request!
+                       {:project-root named} {:files [loopa]})]
+            (is (nil? (:threw result))
+                (str "the CLI threw instead of refusing: " (pr-str result)))
+            (is (= :file-not-found (:error-type result))
+                (str "the CLI answered " (pr-str (:error-type result))))
+            (is (= :not-found (:cause result))
+                (str "the CLI published no typed cause: " (pr-str result)))
+            (is (= (some-> (:cause result) name) (:cause tool))
+                (str "the two entrances disagree about what they observed: "
+                     "CLI " (pr-str (:cause result)) " vs tool "
+                     (pr-str (:cause tool)))))))
+      (finally
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-fifteen item 10 and NO-GO item 6: the ONE constructor refuses an
 ;; EMPTY `files` because "the published schema declares minItems 1" — and the
 ;; same schema declares the items are STRINGS, which it never asked.
