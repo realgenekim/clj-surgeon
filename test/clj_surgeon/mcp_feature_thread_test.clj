@@ -2735,3 +2735,101 @@
           route (leg structured "route")]
       (is (= "FOUND" (:status route)))
       (is (= 2148 (:from route))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-EIGHT REVIEW, finding 4 (BLOCKING): the conventions FILE itself may be
+;; a symlink out of the workspace. `load-conventions` tested `.isFile` and then
+;; slurped, with no realpath containment — so `.clj-surgeon/feature-thread.edn`
+;; pointing at `../../outside/conventions.edn` was read and its `repo_label`
+;; published. The no-follow bounded source walk runs LATER and never saw it.
+;; ---------------------------------------------------------------------------
+
+(def ^:private outside-conventions-canary "OUTSIDE-CONVENTIONS-CANARY-THREAD8")
+
+(defn- symlink-path!
+  [^java.io.File link ^String target]
+  (.mkdirs (.getParentFile link))
+  (java.nio.file.Files/createSymbolicLink
+    (.toPath link)
+    (java.nio.file.Paths/get target (into-array String []))
+    (into-array java.nio.file.attribute.FileAttribute [])))
+
+(defn- outside-conventions-edn
+  []
+  (pr-str {:repo-label outside-conventions-canary
+           :legs [{:id "menu-caller" :kind :use :globs ["src/*.clj"]}
+                  {:id "js-function" :kind :def :globs ["src/*.clj"]}
+                  {:id "route" :kind :route :globs ["src/*.clj"]}
+                  {:id "handler" :kind :handler :globs ["src/*.clj"]}
+                  {:id "tests" :kind :test :globs ["src/*.clj"]}]}))
+
+(deftest the-conventions-file-may-not-be-a-symlink-out-of-the-workspace
+  (testing "a symlinked conventions FILE is a typed refusal, never a read"
+    (let [base (io/file (str (java.nio.file.Files/createTempDirectory
+                              "feature-thread-convsymlink"
+                              (into-array java.nio.file.attribute.FileAttribute []))))
+          root (io/file base "repo")]
+      (try
+        (write-file! base "outside/conventions.edn" (outside-conventions-edn))
+        (write-file! root "src/own.clj" "(ns own)\n(defn formatDraft [x] x)\n")
+        (symlink-path! (io/file root ".clj-surgeon/feature-thread.edn")
+                  "../../outside/conventions.edn")
+        (let [{:keys [structured text error?]}
+              (call! {:subject "formatDraft"
+                      :scope {:workspace_root (.getPath root)}})]
+          (is error? "a conventions file that escapes the root is a refusal")
+          (is (= "feature-thread-conventions-file-escapes-workspace"
+                 (:error_type structured))
+              (str "got " (pr-str (:error_type structured))))
+          (is (str/includes? (str (:error structured)) ".clj-surgeon/feature-thread.edn")
+              "the refusal must name the path AS SPELLED")
+          (is (str/includes? (str (:resolved_target structured)) "outside/conventions.edn")
+              (str "the refusal must name the resolved target; got "
+                   (pr-str (:resolved_target structured))))
+          (is (not (str/includes? (str text) outside-conventions-canary))
+              "the out-of-root canary reached the receipt")
+          (is (not (str/includes? (json/generate-string structured)
+                                  outside-conventions-canary))
+              "the out-of-root canary reached the structured face"))
+        (finally (delete-tree! base)))))
+
+  (testing "a symlinked PARENT directory is refused on the same rule"
+    (let [base (io/file (str (java.nio.file.Files/createTempDirectory
+                              "feature-thread-convdirlink"
+                              (into-array java.nio.file.attribute.FileAttribute []))))
+          root (io/file base "repo")]
+      (try
+        (write-file! base "outside-conf/feature-thread.edn" (outside-conventions-edn))
+        (write-file! root "src/own.clj" "(ns own)\n(defn formatDraft [x] x)\n")
+        (symlink-path! (io/file root ".clj-surgeon") "../outside-conf")
+        (let [{:keys [structured text error?]}
+              (call! {:subject "formatDraft"
+                      :scope {:workspace_root (.getPath root)}})]
+          (is error? "a symlinked .clj-surgeon directory is a refusal")
+          (is (= "feature-thread-conventions-file-escapes-workspace"
+                 (:error_type structured))
+              (str "got " (pr-str (:error_type structured))))
+          (is (not (str/includes? (str text) outside-conventions-canary))
+              "the out-of-root canary reached the receipt"))
+        (finally (delete-tree! base)))))
+
+  (testing "an ordinary in-workspace conventions file still loads"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                              "feature-thread-convplain"
+                              (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/own.clj" "(ns own)\n(defn formatDraft [x] x)\n")
+        (write-file! root ".clj-surgeon/feature-thread.edn"
+                     (pr-str {:repo-label "in-workspace"
+                              :legs [{:id "menu-caller" :kind :use :globs ["src/*.clj"]}
+                                     {:id "js-function" :kind :def :globs ["src/*.clj"]}
+                                     {:id "route" :kind :route :globs ["src/*.clj"]}
+                                     {:id "handler" :kind :handler :globs ["src/*.clj"]}
+                                     {:id "tests" :kind :test :globs ["src/*.clj"]}]}))
+        (let [{:keys [structured error?]}
+              (call! {:subject "formatDraft"
+                      :scope {:workspace_root (.getPath root)}})]
+          (is (not error?) (str "a plain conventions file was refused: "
+                                (pr-str (:error structured))))
+          (is (= "in-workspace" (:repo_label structured))))
+        (finally (delete-tree! root))))))
