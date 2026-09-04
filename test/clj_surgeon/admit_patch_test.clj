@@ -160,6 +160,17 @@
       (failed (str "the receipt's verdict is " (pr-str (:verdict record))
                    ", not :passed"))
 
+      ;; Round eleven's finding-3 site :174: `check-battery-precondition!`'s
+      ;; `:satisfied` branch reads `(set (:kinds-published record))` AFTER
+      ;; this function has already returned `:satisfied` -- so a malformed
+      ;; `:kinds-published` (a number, say) let the classification stand and
+      ;; threw one layer up, outside every catch. Coerce it HERE, before
+      ;; classifying, so `:satisfied` is never returned for a record whose
+      ;; caller cannot safely read it: coerce first, classify after.
+      (not (try (set (:kinds-published record)) true (catch Throwable _ false)))
+      (failed (str "the receipt's :kinds-published cannot be read as a set"
+                   " of published kinds: " (pr-str (:kinds-published record))))
+
       :else
       {:state :satisfied})))
 
@@ -198,8 +209,13 @@
   every state (MCP-OP-ADMIT-147) and returns the state it took."
   [^java.io.File receipt kind target declared-arms]
   (let [record (when (.exists receipt)
+                 ;; Round eleven's finding-3 site :166: a 60,000-deep nested
+                 ;; receipt threw StackOverflowError, an Error rather than an
+                 ;; Exception, straight past `(catch Exception e ...)` and
+                 ;; out of the run uncaught. `catch Throwable` closes every
+                 ;; shape the reader can throw, not only the checked ones.
                  (try (read-string (slurp receipt))
-                      (catch Exception e
+                      (catch Throwable e
                         {::unreadable (.getMessage e)})))
         {:keys [state reason failed-arms]}
         (classify-battery-receipt record declared-arms)]
