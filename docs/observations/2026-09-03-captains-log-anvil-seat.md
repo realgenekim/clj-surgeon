@@ -1313,3 +1313,7 @@ Medium for the routing loop; step up at the adjudication moments the mayor named
 
 Round 18 bounded strings; round 19's reviewer typed a colon. `parse-val` mints keywords and read-string forms from CLI text, the bound walks strings only, so a 10,001-character keyword rides through both launchers unmarked (20,287 B). The second: the containment fence fails open and the CLI reads a source outside every named tree. Lesson for the r20 brief: the bound must be over the VALUE as printed, not over one type inside it — bound at the print boundary (`pr-str` then bound), and the fence must be a typed refusal before any read, witnessed through the production path. The reviewer also found the fixture dir pre-populated by an earlier run (05:18Z) and discarded it — round 20's reviewer gets a directory nobody has written to.
 ## 05:53Z — usage watch: collector TIMED OUT at 120 s (exit 143, load 6.73); no figures — leftover collector process killed; rerun next watch. (Pushed to MCP/main: main is frozen.)
+
+## 05:53Z — q5z r15 (Sol): GO-WITH-FIX; trunk scorer self-tests green on 804febcb (make fanout-selftests EXIT 0)
+
+Round 14 closed toString for "other" objects by never calling it; round 15's reviewer made a Number whose toString throws — `number?` was the allowlist's hole. Same lesson as census r19 one lane over: an allowlist by TYPE admits every subtype; the bound has to sit at the print boundary over the bytes produced, with a guard around the call itself. Round 16 building; GO-WITH-FIX is not GO.
