@@ -40,13 +40,18 @@
   (let [m (read-string (slurp manifest-path))
         targets (:targets m)
         target-files (set (map :file targets))
-        gd (sh "git" "-C" wt "diff" "--name-only" base)
-        untracked (sh "git" "-C" wt "ls-files" "--others" "--exclude-standard")
+        ;; -z / NUL-separated, raw bytes: `--name-only` (no -z) C-quotes any path
+        ;; containing a backslash regardless of core.quotePath, so a legal POSIX
+        ;; path with a literal "\" component never string-matches the manifest's
+        ;; raw spelling (inb-9c18e2). -z disables that quoting entirely.
+        gd (sh "git" "-C" wt "diff" "-z" "--name-only" base)
+        untracked (sh "git" "-C" wt "ls-files" "-z" "--others" "--exclude-standard")
         _ (when-not (zero? (:exit gd))
             (println "CHECK 1 file-set: FAIL git diff failed:" (str/trim (:err gd)))
             (System/exit 1))
-        changed (into #{} (remove str/blank? (str/split-lines (:out gd))))
-        extra-untracked (into #{} (remove str/blank? (str/split-lines (:out untracked))))
+        split-nul (fn [s] (remove str/blank? (str/split s (re-pattern (str (char 0))))))
+        changed (into #{} (split-nul (:out gd)))
+        extra-untracked (into #{} (split-nul (:out untracked)))
         changed-all (into changed extra-untracked)]
 
     ;; ---- CHECK 1: file set equals the manifest's target set exactly, no extras ----
