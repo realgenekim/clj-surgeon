@@ -838,6 +838,54 @@
       (sequential? (:globs leg)) (update :globs vec))
     leg))
 
+(defn- escaping-glob-shape-reason
+  [shape]
+  (case shape
+    :absolute "it is an absolute path"
+    :home "it begins with `~`, which names a path outside the workspace"
+    :parent "it contains a `..` path segment"
+    "it names a path outside the workspace"))
+
+;; @spec MCP-OP-THREAD-043
+(defn escaping-glob-shape
+  "The shape that puts a glob OUTSIDE the workspace, or nil when it stays in.
+
+  Decided on the glob AS SPELLED, before any filesystem call: a glob is a
+  pattern, not a path, and resolving it to check it would be the very read the
+  refusal exists to prevent. Three shapes escape — an absolute path, a `~`
+  home reference, and any `..` segment. Everything else is repo-relative and
+  the bounded walk confines it.
+
+  Round-five review, finding 2 (BLOCKING): admission checked only that a glob
+  was a STRING, so `../outside/*.clj` and `/etc/passwd` were admitted and
+  rendered into the receipt's own `rg` lines as the file set the verb claimed
+  to have searched."
+  [glob]
+  (let [g (str/replace (str glob) "\\" "/")]
+    (cond
+      (or (str/starts-with? g "/")
+          (re-find #"^[A-Za-z]:[/\\]" g)) :absolute
+      (or (= g "~") (str/starts-with? g "~/")) :home
+      (or (= g "..")
+          (str/starts-with? g "../")
+          (str/includes? g "/../")
+          (str/ends-with? g "/..")) :parent
+      :else nil)))
+
+(defn- escaping-globs-in
+  "Every `[field glob shape]` in a convention set whose glob leaves the root."
+  [conventions]
+  (concat
+    (for [[i leg] (map-indexed vector (:legs conventions))
+          glob (when (map? leg) (:globs leg))
+          :let [shape (escaping-glob-shape glob)]
+          :when shape]
+      [(str "legs[" i "].globs") glob shape])
+    (for [glob (get-in conventions [:governance :globs])
+          :let [shape (escaping-glob-shape glob)]
+          :when shape]
+      ["governance.globs" glob shape])))
+
 (defn- valid-leg?
   [leg]
   (and (map? leg)
@@ -886,6 +934,28 @@
                  " needs a string :id, a keyword :kind and a non-empty :globs vector")
      :conventions_source source-label
      :remedy "Correct the malformed leg entries."}
+
+    ;; @spec MCP-OP-THREAD-043
+    ;; Before the walk, before any read: a convention set may not name a path
+    ;; outside the workspace it is a convention set FOR.
+    (seq (escaping-globs-in conventions))
+    (let [[field glob shape] (first (escaping-globs-in conventions))]
+      {:ok false
+       :error_type "feature-thread-conventions-escaping-glob"
+       :error (str "the glob '" glob "' in " field " of " source-label
+                   " names a path outside the workspace: "
+                   (escaping-glob-shape-reason shape))
+       :field field
+       :glob glob
+       :escaping_globs (mapv (fn [[f g sh]]
+                               {:field f :glob g
+                                :reason (escaping-glob-shape-reason sh)})
+                             (escaping-globs-in conventions))
+       :conventions_source source-label
+       :remedy (str "Every glob is repo-relative to the workspace root. Remove"
+                    " the leading `/`, the leading `~` or the `..` segment, or"
+                    " run feature_thread with that directory as the workspace"
+                    " root.")})
 
     :else
     {:ok true
@@ -3124,6 +3194,23 @@
       (refuse "feature-thread-invalid-scope"
               "scope.paths must be an array of repo-relative directory paths"
               {:remedy "Pass scope.paths as a vector of strings, or omit it."})
+
+      ;; @spec MCP-OP-THREAD-043
+      ;; scope.paths is rendered into the receipt's own `rg` lines as extra
+      ;; `-g` filters, so an escaping path would be PUBLISHED as part of the
+      ;; file set the verb claims to have searched. Same shapes, same refusal
+      ;; point: before any file is read.
+      (and (sequential? (:paths scope))
+           (some escaping-glob-shape (:paths scope)))
+      (let [bad (first (filter escaping-glob-shape (:paths scope)))]
+        (refuse "feature-thread-scope-path-escapes-workspace"
+                (str "the scope path '" bad "' names a path outside the"
+                     " workspace: "
+                     (escaping-glob-shape-reason (escaping-glob-shape bad)))
+                {:field "scope.paths"
+                 :path bad
+                 :remedy (str "Pass scope.paths as directories relative to the"
+                              " workspace root.")}))
 
       (and (some? budget_bytes)
            (not (and (integer? budget_bytes) (pos? budget_bytes))))

@@ -1555,6 +1555,20 @@
                  (:error_type structured))))
         (finally (delete-tree! base)))))
 
+  (testing "a scope path that climbs out of the root is refused before any read"
+    (let [[base root _] (escaping-fixture!)]
+      (try
+        (let [{:keys [structured error?]}
+              (call! {:subject "formatDraft"
+                      :config (escaping-conventions "js/*.js")
+                      :scope {:workspace_root (.getPath root)
+                              :paths ["../outside"]}})]
+          (is error?)
+          (is (= "feature-thread-scope-path-escapes-workspace"
+                 (:error_type structured)))
+          (is (str/includes? (:error structured) "../outside")))
+        (finally (delete-tree! base)))))
+
   (testing "a SYMLINKED directory cannot be refused by shape, so nothing it holds is read or published"
     (let [[base root outside] (escaping-fixture!)]
       (try

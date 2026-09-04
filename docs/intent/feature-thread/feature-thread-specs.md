@@ -294,3 +294,15 @@ run as a test inside `make mcp-test`) enforces both halves.
   `handler-join` search, because a route table that lives in the same namespace
   as its handlers writes the var unqualified and that is not a different kind
   of route entry.
+
+- [x] **MCP-OP-THREAD-043**: A convention set may not reach outside its
+  workspace. When a convention set — inline or read from
+  `.clj-surgeon/feature-thread.edn` — declares a leg or governance glob that is
+  an absolute path, begins with `~`, or contains a `..` path segment,
+  clj-surgeon shall refuse with `feature-thread-conventions-escaping-glob`
+  BEFORE the workspace walk and before any file is read, naming the field and
+  the glob AS SPELLED and never resolving it to the path it would reach; and
+  when `scope.paths` names such a path it shall refuse with
+  `feature-thread-scope-path-escapes-workspace` at admission. A path reached
+  through a symlink out of the root cannot be refused by shape, and shall be
+  neither read nor published by the bounded walk.
