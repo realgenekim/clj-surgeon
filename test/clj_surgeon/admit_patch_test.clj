@@ -5402,51 +5402,15 @@
         (shell/sh "chmod" "755" (.getPath (io/file root "src/b")))
         (delete-tree! root)))))
 
-;; @spec MCP-OP-ADMIT-133
-(deftest a-rollback-that-cannot-restore-a-file-demands-manual-recovery
-  ;; The one enumerated kind no single-threaded fixture can produce, because
-  ;; it exists to report exactly the case a single thread cannot create: a
-  ;; THIRD PARTY changed a file between the transaction's write and its
-  ;; rollback, so the recovery refuses to overwrite bytes it did not write.
-  ;;
-  ;; The window is widened rather than raced for. src/b is unwritable, so the
-  ;; failing write happens only after all 64 files in src/a have landed, and a
-  ;; watcher clobbers the first of them for the whole duration of those
-  ;; writes. It is stopped and joined before the assertion.
-  (let [root (temp-dir)
-        n 64
-        _ (write-sources! root (transaction-fixture-sources n))
-        first-file (io/file root "src/a/f000.clj")
-        original (slurp-safe first-file)
-        stop? (atom false)
-        watcher (Thread.
-                  (fn []
-                    (while (not @stop?)
-                      (let [current (slurp-safe first-file)]
-                        (when (and current (not= current original)
-                                   (not= current ";; CLOBBERED\n"))
-                          (try (spit first-file ";; CLOBBERED\n")
-                               (catch Exception _ nil)))))))]
-    (try
-      (shell/sh "chmod" "555" (.getPath (io/file root "src/b")))
-      (.start watcher)
-      (let [receipt (admit/execute-request!
-                      (stub-config root)
-                      {:patch (transaction-fixture-patch n) :mode "commit"
-                       :verify "focused"})]
-        (reset! stop? true)
-        (.join watcher 5000)
-        (is (false? (:ok receipt)))
-        (is (= :transaction-recovery-required (:error-type receipt))
-            (str "expected the unrecovered kind; got " (:error-type receipt)))
-        (is (not (true? (:source-unchanged receipt)))
-            (str "a transaction that could not restore a file must not claim "
-                 "the workspace is unchanged")))
-      (finally
-        (reset! stop? true)
-        (.join watcher 5000)
-        (shell/sh "chmod" "755" (.getPath (io/file root "src/b")))
-        (delete-tree! root)))))
+;; @spec MCP-OP-ADMIT-138
+;; `a-rollback-that-cannot-restore-a-file-demands-manual-recovery` used to
+;; live here. It raced a busy-spinning watcher thread against a 64-file write
+;; to widen a window, which is a TIMING bound, and a timing bound is a battery
+;; target and not a fast-suite witness. Worse, it was load-bearing for the
+;; `:once` set-equality assertion above: had it flaked, the enumeration proof
+;; would have gone red naming an unrelated cause. It now lives in
+;; `test/admit_transaction_recovery_battery.clj`, reachable as
+;; `make admit-transaction-recovery-battery`.
 
 ;; @spec MCP-OP-ADMIT-133
 (deftest an-unenumerated-refusal-kind-cannot-be-published
