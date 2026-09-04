@@ -1276,3 +1276,7 @@ Reframe accepted: the unit of cost is the tool call (a model return), not charac
 ## 05:29Z — MEM-003 r3 review (Opus): NO-GO — a one-key MAP is not a tag; round 4 launched with the trunk merged in first
 
 The tag rides the value only if the value cannot be opened; a map can be opened by its own key. Rung 5 needs a type with no ILookup (deftype), and a scan that forbids `:refer` on the measured namespace. The reviewer also found the branch already conflicts with the trunk (the admit gate landed a new `run-process!` arity) and that the branch\'s ratchet, applied to the trunk, names a clock read in the admit tool it has never seen — which is the ratchet working, and the reason r4 composes onto current MCP/main before anything else.
+
+## 05:30Z — E-SCALE-WALL pre-registration on MCP/main (6390c430); MEM-003 r4 launched (trunk merged in first; deftype reading; :refer forbidden)
+
+The wall cohort waits for a quiet box by design — seven agents and four Sol/Opus reviews are running now, and wall above load 4 is void under its own rule. Scheduling: after the current review lanes land, before any new builders.
