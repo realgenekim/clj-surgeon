@@ -911,6 +911,12 @@ caller to copy `expect_pre_sha256` from a preview's `next_call`, and the text
 never showed a `next_call` at all.
 
 - [x] **MCP-OP-ADMIT-131**: Every refusal kind clj-surgeon's admit gate constructs — enumerated from the source, not from a maintained list, so a kind added later without a text witness fails this gate the day it is written — shall render every leaf of its structured receipt in `content[0].text`, however deep, bounded per leaf and in total count rather than dropped: a leaf past the per-fact character ceiling is elided with a stated cut, and a refusal carrying more leaves than the text's fact budget states how many more live in structuredContent rather than silently stopping. `remedy`, when present, shall render as its own line.
+Adversarial review, round four (Sol, on the round-three landing). The
+text-is-a-superset ratchet MCP-OP-ADMIT-131 and MCP-OP-ADMIT-132 installed
+was, in each of four places, a universal claim standing on a partial witness.
+
+- [x] **MCP-OP-ADMIT-134**: The text block shall name every leaf its structured receipt spells, with NO exclusion by key and none by shape: `:files` and `:hashes` are leaves like any other, and an empty map, an empty vector, a `nil` and a blank string shall render with their label and the characters JSON spells for them — `key={}`, `key=[]`, `key=null`, `key=""`. The renderer's exclusion set shall be empty, so there is no policy for a witness to copy; if a key ever leaves the walk it shall be named here with its reason before it leaves. A leaf past the per-fact character ceiling shall be cut with the cut stated in characters, never dropped; a receipt whose facts exceed the fact section's share of the one public byte budget shall state exactly how many leaves it did not print, and that section — the overflow marker included — shall fit that budget. The witness shall walk the receipt AS JSON, through a second implementation sharing no function and no constant with the renderer. *(s2)*
+
 - [x] **MCP-OP-ADMIT-132**: Every receipt's `next_call` — refused or not — shall render in `content[0].text` as sendable JSON when it fits the text's own budget, as a bounded pointer naming its length in structuredContent when it does not, or as an explicit statement that no follow-up call exists; a preview's `next_call.arguments.expect_pre_sha256`, which the tool description tells a caller to copy for the commit that authorizes it, shall therefore be readable from the text alone.
 
 # #Witness Failure Baseline

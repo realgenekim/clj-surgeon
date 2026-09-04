@@ -4744,3 +4744,71 @@
         (is (false? (:ok result)))
         (assert-text-names-every-structured-leaf! result "live-commit-refusal"))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest the-fact-walk-has-no-exclusion-list-to-get-wrong
+  ;; The structural half of blocker 2. Round three's exclusion set had eleven
+  ;; members and its witness had eleven copies of them. The repair is not a
+  ;; better-maintained list; it is no list. This assertion fails the day one
+  ;; is reintroduced, which is the day the EARS text has to justify it.
+  (is (= #{} @#'admit/admit-receipt-fact-exclusions)
+      (str "a key was excluded from the fact walk; name it and its reason in "
+           "MCP-OP-ADMIT-134's EARS text, and give it a witness, before "
+           "relaxing this")))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-leaf-past-the-per-fact-ceiling-is-cut-with-the-cut-stated
+  ;; At the ceiling and one past it, read from the implementation rather than
+  ;; retyped: the assertion is about behaviour AT the bound, never about the
+  ;; number.
+  (let [ceiling @#'admit/max-admit-receipt-fact-characters
+        text-of (fn [value]
+                  (#'admit/summary
+                    {:ok false :operation :admit-patch-refused :mode "preview"
+                     :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                     :source-unchanged true :long_leaf value :next_call nil}))]
+    (testing "exactly at the ceiling, the value renders whole"
+      (let [value (apply str (repeat ceiling "x"))]
+        (is (str/includes? (text-of value) (str "long_leaf=" value)))
+        (is (not (str/includes? (text-of value) "characters in structuredContent")))))
+    (testing "one character past it, the value is cut and the cut is counted"
+      (let [value (apply str (repeat (inc ceiling) "x"))
+            text (text-of value)]
+        (is (not (str/includes? text (str "long_leaf=" value)))
+            "the whole value cannot have rendered")
+        (is (str/includes? text (str "long_leaf=" (subs value 0 ceiling)
+                                     "…[+1 characters in structuredContent]"))
+            "the text names the field, what it printed, and exactly what it cut")))))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-receipt-past-the-fact-section-budget-states-how-many-it-dropped
+  ;; The count elision, at the bound. A leaf is never dropped silently: the
+  ;; text states the exact number that live in structuredContent instead, and
+  ;; "exact" is checked against this witness's own independent leaf count.
+  (let [budget @#'admit/admit-fact-section-byte-budget
+        wide (into {} (for [i (range 4000)]
+                        [(keyword (format "leaf%04d" i))
+                         (apply str (repeat 40 "y"))]))
+        result (merge {:ok false :operation :admit-patch-refused :mode "preview"
+                       :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                       :source-unchanged true :next_call nil}
+                      wide)
+        text (#'admit/summary result)
+        fact-line (->> (str/split-lines text)
+                       (filter #(str/starts-with? % "facts · "))
+                       first)
+        marker (re-find #"\[\+(\d+) more facts in structuredContent\]" text)
+        printed (->> (str/split (subs fact-line (count "facts · ")) #" · ")
+                     (remove #(str/starts-with? % "[+"))
+                     count)
+        total (count (structured-leaves result))]
+    (is (some? fact-line))
+    (is (some? marker)
+        (str "a receipt whose leaves exceed the " budget
+             "-byte fact budget must say so, not stop"))
+    (is (< printed total) "some leaves were in fact elided")
+    (is (<= (count fact-line) budget)
+        "the fact section stayed inside the budget it states")
+    (is (= (- total printed) (Integer/parseInt (second marker)))
+        (str "the stated omitted count must equal this witness's own count of "
+             "leaves minus the facts actually printed: " total " - " printed))))

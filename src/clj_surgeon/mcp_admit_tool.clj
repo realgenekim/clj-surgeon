@@ -1942,120 +1942,180 @@
       "")))
 
 ;; ---------------------------------------------------------------------------
-;; The refusal text is a superset of structuredContent
+;; The text block is a superset of structuredContent -- on BOTH branches
 ;; ---------------------------------------------------------------------------
 
-;; @spec MCP-OP-ADMIT-131
-(def ^:private admit-refusal-envelope-keys
-  "Receipt keys the text renders on their own dedicated line, so the generic
-  fact walk below does not duplicate them, or that the fact walk would
-  otherwise bury the diagnostic that matters under low-value structural
-  detail.
+;; @spec MCP-OP-ADMIT-134
+(def admit-receipt-fact-exclusions
+  "The receipt keys the fact walk below does NOT render. It is EMPTY, and
+  that is the point.
 
-  `:files` and `:hashes` are excluded for the second reason: a multi-file
-  patch's per-file hunk spans and pre/post digests are already the largest
-  branch of the receipt, and a refusal's job is to say why, not to re-dump
-  diff metadata the caller already sent -- the pre-image digests a caller
-  actually needs back (to bind a commit) are `next_call`'s own
-  `expect_pre_sha256`, rendered verbatim by `admit-rendered-next-call`."
-  #{:ok :operation :error-type :error :next_call :remedy :elapsed_ms
-    :workspace-root :detectors_not_run :source-unchanged :mode
-    :files :hashes})
+  Round three excluded eleven keys and, separately, three SHAPES -- an empty
+  map, an empty vector, a `nil` -- and its witness re-declared the same
+  eleven keys on its own side before checking that they were absent. A test
+  that copies the policy it is auditing agrees with the implementation by
+  construction; the reviewer's word for it was `tautological`, and it was
+  right. Two of those eleven, `:files` and `:hashes`, were excluded on the
+  reasoning that they are `diff metadata the caller already sent` -- a
+  judgement about VALUE, not about whether the text is a superset, and the
+  caller who reads only the text is exactly the caller who cannot go look
+  them up.
 
-;; @spec MCP-OP-ADMIT-131
-(def ^:private max-admit-refusal-fact-characters
-  "Ceiling on one rendered leaf. A fact is elided past this length, never
-  dropped: the text still names the field and how much was cut."
+  So there is no exclusion list to get wrong. Every leaf of the receipt
+  renders in the fact walk, including the four the text also renders on
+  their own dedicated lines -- `:error-type` in the header, `:error`,
+  `:remedy`, and the verbatim `:next_call`. Those four are duplicated on
+  purpose: an exclusion set of size zero is a claim a witness can check with
+  no shared policy at all, and cheapness is not worth a hole. If a key ever
+  has to leave the walk, it is added here, with its reason, and the witness
+  fails until the EARS text names it too."
+  #{})
+
+;; @spec MCP-OP-ADMIT-134
+(def max-admit-receipt-fact-characters
+  "Ceiling on ONE rendered leaf's value. Past this the value is cut, never
+  the fact: the text still names the field, the first 200 characters, and
+  exactly how many characters it did not print."
   200)
 
-;; @spec MCP-OP-ADMIT-131
-(def ^:private max-admit-refusal-facts
-  "How many leaves one refusal text renders before it states how many more
-  there were, rather than silently stopping."
-  40)
+;; @spec MCP-OP-ADMIT-134
+(def admit-fact-section-byte-budget
+  "The share of the ONE public payload budget the fact walk may spend.
 
-;; @spec MCP-OP-ADMIT-131
-(def ^:private max-rendered-admit-next-call-characters
-  "Ceiling on the next_call JSON a receipt's text inlines verbatim.
+  Round three capped the walk at a flat 40 facts -- a second, invented
+  budget with no relation to the payload that actually has to fit. This is
+  half of `mcp-write-refusal/public-byte-budget`, the shared contract; the
+  other half is headroom for the header, error sentence, remedy, detector
+  note and the next_call, which is rendered last and never elided."
+  (quot write-refusal/public-byte-budget 2))
 
-  Above this, the text names the field, its length, and where the caller can
-  read it in full (structuredContent.next_call) -- never silence."
-  1024)
-
-;; @spec MCP-OP-ADMIT-131
-(defn- admit-leaf-entries
-  "Every scalar leaf reachable in `v`, as [dotted/bracketed-path value]
+;; @spec MCP-OP-ADMIT-134
+(defn admit-leaf-entries
+  "Every leaf reachable in `v`, as [dotted/bracketed-path display-string]
   pairs, depth-first.
 
-  An empty map or vector contributes no leaves -- an absent field is not a
-  fact -- and a `nil` leaf is likewise silent, because `nil` is the closed
-  receipt's own default for a field nothing populated."
+  A leaf here is what a JSON reader sees as a leaf, which includes the
+  value-less shapes: `{}`, `[]`, `null` and `\"\"` each contribute one
+  entry carrying the characters JSON spells for them. Round three returned
+  nothing for an empty collection or a `nil`, on the reasoning that `an
+  absent field is not a fact` -- but structuredContent still shows the key,
+  so a text that omits it is a strict subset of the structure, which is the
+  defect."
   [path v]
   (cond
-    (map? v)
+    (and (map? v) (seq v))
     (mapcat (fn [[k cv]]
               (admit-leaf-entries (str path (when (seq path) ".") (name k)) cv))
             (sort-by (comp str key) v))
 
-    (sequential? v)
+    (map? v)
+    [[path "{}"]]
+
+    (and (coll? v) (seq v))
     (apply concat
            (map-indexed
              (fn [i cv] (admit-leaf-entries (str path "[" i "]") cv))
-             v))
+             (if (set? v) (sort-by pr-str v) v)))
+
+    (coll? v)
+    [[path "[]"]]
 
     (nil? v)
-    []
+    [[path "null"]]
+
+    (= v "")
+    [[path "\"\""]]
+
+    (keyword? v)
+    ;; the characters cheshire spells for it, namespace included -- `name`
+    ;; would drop the namespace and disagree with structuredContent
+    [[path (subs (str v) 1)]]
 
     :else
-    [[path v]]))
+    [[path (str v)]]))
 
-;; @spec MCP-OP-ADMIT-131
-(defn- admit-refusal-facts
-  "Every leaf of a refusal `result` a text-reading client would otherwise
-  never see.
+;; @spec MCP-OP-ADMIT-134
+(defn- rendered-fact
+  "One `path=value` fact, its value cut at the per-leaf ceiling and the cut
+  stated in characters."
+  [[path text]]
+  (str path "="
+       (if (> (count text) max-admit-receipt-fact-characters)
+         (str (subs text 0 max-admit-receipt-fact-characters)
+              "…[+" (- (count text) max-admit-receipt-fact-characters)
+              " characters in structuredContent]")
+         text)))
 
-  A refusal has two faces -- structuredContent and content[0].text -- and a
-  client that reads only the text must not be told less than one that reads
-  the structure. A field renders only when it differs from the closed empty
-  receipt's own default for that key, so a refusal that never reached a
-  check does not bury its cause under a page of zeros and empty vectors --
-  and a field the gate actually populated, however deep, is never
-  suppressed by that filter."
+;; @spec MCP-OP-ADMIT-134
+(defn- admit-receipt-facts
+  "Every leaf of `result` a text-reading client would otherwise never see,
+  on a refusal and on a success alike.
+
+  Round three ran this on the refusal branch only, so an `:ok true` receipt
+  published its file records, pre/post digests, focused test namespaces and
+  `detectors_not_run` to structuredContent and to nobody reading the text.
+  A receipt has two faces and one of them must not say less.
+
+  The stated elision order, when the whole text will not fit: (1) each
+  leaf's VALUE is cut at `max-admit-receipt-fact-characters`, naming the
+  cut; (2) then whole leaves are dropped from the TAIL of the path-sorted
+  order until the section fits `admit-fact-section-byte-budget`, and the
+  text states how many were dropped; (3) the `next_call` is rendered after
+  this section, so everything else gives ground before it does."
   [result]
-  (let [baseline (empty-receipt (or (:mode result) "preview"))
-        leaves (->> (apply dissoc result admit-refusal-envelope-keys)
-                    (remove (fn [[k v]] (= v (get baseline k))))
-                    (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
-                    (filter (fn [[_ v]]
-                              (or (string? v) (number? v) (boolean? v)
-                                  (keyword? v) (symbol? v))))
-                    (sort-by first))
-        rendered (take max-admit-refusal-facts leaves)
-        overflow (- (count leaves) (count rendered))]
-    (when (seq rendered)
-      (str "facts · "
-           (str/join
-             " · "
-             (map (fn [[path v]]
-                    (let [text (if (or (keyword? v) (symbol? v)) (name v) (str v))]
-                      (str path "="
-                           (if (> (count text) max-admit-refusal-fact-characters)
-                             (str (subs text 0 max-admit-refusal-fact-characters) "…")
-                             text))))
-                  rendered))
-           (when (pos? overflow)
-             (str " · [+" overflow " more facts in structuredContent]"))))))
+  (let [facts (->> (apply dissoc result admit-receipt-fact-exclusions)
+                   (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
+                   (sort-by first)
+                   (map rendered-fact)
+                   vec)
+        line (fn [kept]
+               (let [omitted (- (count facts) (count kept))]
+                 (str "facts · " (str/join " · " kept)
+                      (when (pos? omitted)
+                        (str " · [+" omitted
+                             " more facts in structuredContent]")))))]
+    (when (seq facts)
+      ;; Shrink the WHOLE rendered line, marker included, until it fits.
+      ;; Budgeting the join of the parts and then appending the marker is how
+      ;; a bound gets quietly exceeded by the thing that announces it.
+      (loop [kept (let [budget admit-fact-section-byte-budget]
+                    ;; a cheap first cut, so the exact shrink below runs a
+                    ;; handful of times rather than once per dropped fact
+                    (subvec facts 0
+                            (min (count facts)
+                                 (max 0 (dec (count (take-while
+                                                      #(<= % budget)
+                                                      (reductions
+                                                        + (count "facts · ")
+                                                        (map #(+ 3 (count %))
+                                                             facts)))))))))]
+        (let [rendered (line kept)]
+          (if (or (empty? kept)
+                  (<= (count rendered) admit-fact-section-byte-budget))
+            rendered
+            (recur (subvec kept 0 (dec (count kept))))))))))
 
-;; @spec MCP-OP-ADMIT-131
+;; @spec MCP-OP-ADMIT-132
+(def ^:private max-rendered-admit-next-call-characters
+  "Round three's ceiling on the next_call JSON the text inlines verbatim.
+  Blocker 4 of the round-three review kills it; it survives this commit only
+  so that blocker 2's change is the only behaviour this commit alters."
+  1024)
+
 ;; @spec MCP-OP-ADMIT-132
 (defn- admit-rendered-next-call
-  "The next_call line: sendable JSON, a bounded pointer, or a stated absence.
+  "The next_call line: the JSON verbatim at any size, or a stated absence.
 
-  A receipt whose next_call the caller never sees costs a return at random --
-  whichever face of the receipt that caller happens to read. This is the
-  affordance the tool description tells a caller to copy expect_pre_sha256
-  from, so it must be readable from the text alone. Mirrors
-  MCP-OP-ALIAS-059's `rendered-next-call`."
+  Round three replaced a next_call above 1,024 characters with a pointer at
+  structuredContent -- an invented second budget one thirtieth the size of
+  the real one, and the tool description tells callers to copy
+  `expect_pre_sha256` out of this very field. A routine 14-file preview
+  produced 1,548 characters, so the instructed copy was impossible from the
+  text for an ordinary change. The next_call is the one thing in a receipt
+  a caller must be able to send back byte for byte; it is rendered last so
+  that everything else gives ground before it, and it never gives ground.
+  A next_call that alone cannot fit the public payload budget is a typed
+  refusal (`oversize-next-call-refusal`), never a pointer."
   [result]
   (if-let [call (:next_call result)]
     (let [encoded (json/generate-string call)]
@@ -2065,6 +2125,7 @@
              " characters, in structuredContent.next_call — send it verbatim")))
     (str "next_call · none — this receipt has no follow-up call")))
 
+;; @spec MCP-OP-ADMIT-134
 (defn- summary
   [result]
   (if (:ok result)
@@ -2094,8 +2155,10 @@
          ;; @spec MCP-OP-ADMIT-131
          (when-let [remedy (:remedy result)]
            (str "\nremedy · " remedy))
-         (when-let [facts (admit-refusal-facts result)]
+         ;; @spec MCP-OP-ADMIT-134
+         (when-let [facts (admit-receipt-facts result)]
            (str "\n" facts))
+         ;; @spec MCP-OP-ADMIT-132
          "\n" (admit-rendered-next-call result))))
 
 ;; @spec MCP-OP-ADMIT-129
