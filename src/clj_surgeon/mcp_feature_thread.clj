@@ -441,7 +441,7 @@
   brace that closes the first `{` found, or nil.
 
   `:mode` is one of :code :line-comment :block-comment :single :double
-  :template :regex, plus a stack for `${` interpolation inside a template."
+  :template :regex :regex-class, plus a stack for `${` interpolation."
   [^String source start-index limit-index]
   (let [n (min (count source) limit-index)]
     (loop [i start-index
@@ -477,12 +477,26 @@
               (= c \") (recur (inc i) :code depth opened? template-stack \")
               :else (recur (inc i) :double depth opened? template-stack prev-significant))
 
+            ;; @spec MCP-OP-THREAD-031
+            ;; A `/` inside a character class does NOT end a JavaScript regex:
+            ;; `/[/}]/` is valid. Ending the literal at the inner slash returns
+            ;; the scanner to :code and counts the `}` as the function's closing
+            ;; brace -- a truncated body labelled `closed`, with a sha256 over
+            ;; the truncation (round-three review, B1').
             :regex
             (cond
               (= c \\) (recur (+ i 2) :regex depth opened? template-stack prev-significant)
               (= c \newline) nil
+              (= c \[) (recur (inc i) :regex-class depth opened? template-stack prev-significant)
               (= c \/) (recur (inc i) :code depth opened? template-stack \/)
               :else (recur (inc i) :regex depth opened? template-stack prev-significant))
+
+            :regex-class
+            (cond
+              (= c \\) (recur (+ i 2) :regex-class depth opened? template-stack prev-significant)
+              (= c \newline) nil
+              (= c \]) (recur (inc i) :regex depth opened? template-stack prev-significant)
+              :else (recur (inc i) :regex-class depth opened? template-stack prev-significant))
 
             :template
             (cond
