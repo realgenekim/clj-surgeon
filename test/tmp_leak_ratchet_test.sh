@@ -268,4 +268,30 @@ grep -q 'tmp-refused:' "$FX/unwritable.out" || fail "8: no tmp-refused: line"
 grep -q 'Execution error' "$FX/unwritable.out" \
   && fail "8: the refusal is a raw stack trace, not a named message"
 
+# ============================================================
+# MCP-OP-TMPHYG-009: EVERY test entry point enforces the ratchet
+# ============================================================
+
+# Gene's ask was "make it impossible to make this mistake again". Round one
+# guarded 2 of the repo's 5 test entry points, and `make test` runs
+# analyzer-contract-test between the two protected lanes.
+assert_runner_refuses() {
+  ns=$1
+  out_file="$FX/runner-$(printf '%s' "$ns" | tr './' '--').out"
+  set +e
+  env TMPDIR=/tmp timeout 45 java -cp "$CP" clojure.main -m "$ns" >"$out_file" 2>&1
+  rc=$?
+  set -e
+  echo "--- runner $ns (exit=$rc) ---"
+  head -5 "$out_file"
+  [ "$rc" -eq 97 ] \
+    || fail "9: $ns ran (exit $rc) with TMPDIR=/tmp instead of refusing"
+  grep -q 'tmp-refused:' "$out_file" || fail "9: $ns printed no tmp-refused: line"
+}
+
+assert_runner_refuses analyzer-contract-test-runner
+assert_runner_refuses clj-surgeon.memory.memory-test-runner
+assert_runner_refuses clj-surgeon.memory-battery-runner
+assert_runner_refuses clj-surgeon.mcp-test-runner
+
 echo "tmp-leak ratchet witness passed"
