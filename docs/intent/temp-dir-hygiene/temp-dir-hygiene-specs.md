@@ -61,6 +61,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   clj-surgeon shall refuse with the same named, exit-97 message as every
   other refusal, never a raw stack trace.
 
+- [x] **MCP-OP-TMPHYG-009**: Every test entry point in this repository —
+  `test/run_all.clj`, `test/clj_surgeon/mcp_test_runner.clj`,
+  `test/analyzer_contract_test_runner.clj`,
+  `test/clj_surgeon/memory/memory_test_runner.clj` and
+  `src/clj_surgeon/memory_battery_runner.clj` — shall enforce this leaf's
+  refusal and isolation before running anything.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb
