@@ -11,6 +11,7 @@
   (:require
    [clojure.set :as set]
    [clojure.string :as str]
+   [clojure.walk :as walk]
    [rewrite-clj.node :as node]
    [rewrite-clj.parser :as parser]))
 
@@ -993,6 +994,69 @@
    bytes and was emitted under a 512-byte limit."
   ^long [text]
   (alength (.getBytes (str text) "UTF-8")))
+
+(def max-refusal-field-chars
+  "The longest any ONE field of a refusal may render, in characters.
+
+   Opus's round-sixteen item 7. Receipts are capped at 4,096 bytes and
+   continuations at 512; refusals were capped at nothing, so a 10,001-character
+   `files` entry yielded a 30,763-byte tool refusal and a 50,612-byte CLI one —
+   the caller's own bad input, echoed back four times, at the moment they are
+   least able to read it.
+
+   Characters and not bytes, deliberately: this bound exists to keep a refusal
+   READABLE, and the ceiling that exists to keep a continuation TRANSMISSIBLE
+   is measured in bytes because that is what a wire carries. Two different
+   promises, two different units, neither borrowed from the other."
+  1024)
+
+(def refusal-continuation-keys
+  "The refusal fields a bound must never touch.
+
+   A continuation is an EXECUTABLE promise, and MCP-OP-CENSUS-014 already
+   forbids putting anything in an argument position that does not execute: a
+   truncated path does not fail, it names a DIFFERENT file. These fields carry
+   their own bound — `max-next-call-bytes`, enforced at the one constructor per
+   entrance — so a continuation is short by construction and there is nothing
+   here for a length bound to do except damage."
+  #{:next-command :next-command-argv :next_call})
+
+(defn bound-refusal-text
+  "One refusal field, bounded, saying so when it had to be.
+
+   Truncation is honest only when it is VISIBLE: a silently shortened path
+   leaves the caller comparing it against the one they sent and finding a
+   difference the refusal never mentioned. So the marker names the original
+   length, which is also the fact that explains the refusal in the
+   name-too-long case."
+  [text]
+  (let [text (str text)]
+    (if (<= (count text) max-refusal-field-chars)
+      text
+      (str (subs text 0 max-refusal-field-chars)
+           "… [truncated: " (count text) " characters]"))))
+
+(defn bound-refusal
+  "Every string in a refusal, bounded, except the continuation it carries.
+
+   Applied at each entrance's LAST step rather than at the sites that build
+   the strings, for the reason MCP-OP-CENSUS-014 gives about the continuation
+   constructor: a bound enforced at some of a namespace's construction sites is
+   not a bound, it is those sites' habit, and the habit does not travel to the
+   site added next round."
+  [refusal]
+  (if-not (map? refusal)
+    refusal
+    (reduce-kv
+      (fn [acc k v]
+        (assoc acc k
+               (if (contains? refusal-continuation-keys k)
+                 v
+                 (walk/postwalk
+                   #(if (string? %) (bound-refusal-text %) %)
+                   v))))
+      (empty refusal)
+      refusal)))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn within-next-call-bytes?

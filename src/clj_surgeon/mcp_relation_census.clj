@@ -115,15 +115,22 @@
    not a smaller promise than a real one, it is a field the caller must
    interpret; the refusal says what it can offer instead, in `remedy`."
   [error-type message next-call & [data]]
-  (merge (cond-> {:ok false
-                  :operation "relation-census"
-                  :census_version census/census-version
-                  :error_type (name error-type)
-                  :error message
-                  :source_unchanged true
-                  :read_complete false}
-           (some? next-call) (assoc :next_call next-call))
-         data))
+  ;; Opus's round-sixteen item 7. Bounded HERE, at the one place every refusal
+  ;; this tool emits is assembled, rather than at the sites that build the
+  ;; strings — the same argument the continuation constructor is built on. The
+  ;; `next_call` is exempt and stays exact: it is an EXECUTABLE promise, it
+  ;; carries its own byte ceiling, and a truncated path in an argument position
+  ;; does not fail, it names a DIFFERENT file.
+  (census/bound-refusal
+    (merge (cond-> {:ok false
+                    :operation "relation-census"
+                    :census_version census/census-version
+                    :error_type (name error-type)
+                    :error message
+                    :source_unchanged true
+                    :read_complete false}
+             (some? next-call) (assoc :next_call next-call))
+           data)))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn- overflow-measurement

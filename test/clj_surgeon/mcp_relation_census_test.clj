@@ -5469,9 +5469,12 @@
                    " bytes, against a 4096-byte receipt cap"))
           (is (some #(str/includes? % "truncated") (all-strings tool))
               "the tool shortened a field without saying so")
-          (is (some #(str/includes? % "10009") (all-strings tool))
-              (str "the tool does not say how long the original was: "
-                   (pr-str (take 3 (all-strings tool))))))
+          (is (some #(str/includes? % (str (count long-name)))
+                    (all-strings tool))
+              (str "the tool does not say how long the original " (count long-name)
+                   "-character entry was: "
+                   (pr-str (map #(str/join (take-last 40 %))
+                                (all-strings tool))))))
 
         (testing "no field of the CLI's refusal is unbounded"
           (is (false? (:ok cli))

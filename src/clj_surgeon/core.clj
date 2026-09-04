@@ -1226,10 +1226,20 @@
    catch-all: a refusal typed `:invalid-arguments` is a refusal no enumeration
    witness can see."
   [opts]
-  (try
-    (run-relation-census* opts)
-    (catch Throwable error
-      (census-crash-refusal opts error))))
+  (let [result (try
+                 (run-relation-census* opts)
+                 (catch Throwable error
+                   (census-crash-refusal opts error)))]
+    ;; Opus's round-sixteen item 7. Applied HERE, at the op's last step,
+    ;; rather than at the sites that build the strings: a bound enforced at
+    ;; some of a namespace's construction sites is not a bound, it is those
+    ;; sites' habit. A receipt is not touched — it carries its own 4,096-byte
+    ;; cap and its own trimming rules — and neither is a continuation, which
+    ;; is short by construction and whose truncation would name a DIFFERENT
+    ;; file rather than fail.
+    (if (false? (:ok result))
+      (relation-census/bound-refusal result)
+      result)))
 
 (defn run-ls-tree [{:keys [dir format grep] :as _opts}]
   (when-not dir
