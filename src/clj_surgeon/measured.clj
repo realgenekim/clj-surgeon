@@ -144,7 +144,14 @@
   (toString [_] "#clj-surgeon.measured/reading")
   (equals [_ other]
     (and (instance? Reading other) (= launderable (-launder other))))
-  (hashCode [_] (hash launderable)))
+  ;; A CONSTANT, not `(hash launderable)`. The round-four review's §3: every
+  ;; other accessor withholds the number, but a hash derived from it is a
+  ;; clock-varying integer a caller can publish — `:some_field (hash r)` —
+  ;; through no verb any scan matches. The hashCode/equals contract only
+  ;; requires equal objects to hash equally, and these types are compared,
+  ;; never bucketed, so a constant satisfies it and carries no clock bits. The
+  ;; keyword's hash is deterministic across runs; an identity hash would not be.
+  (hashCode [_] (hash ::reading)))
 
 (deftype Tick [^:unsynchronized-mutable launderable]
   Launderable
@@ -153,7 +160,8 @@
   (toString [_] "#clj-surgeon.measured/tick")
   (equals [_ other]
     (and (instance? Tick other) (= launderable (-launder other))))
-  (hashCode [_] (hash launderable)))
+  ;; Constant, for the reason `Reading`'s hashCode states.
+  (hashCode [_] (hash ::tick)))
 
 ;; DETERMINISTIC printing, deliberately without the number. The default
 ;; `print-method` for a `deftype` writes `#object[... 0x1a2b3c ...]` — an
