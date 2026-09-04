@@ -1829,3 +1829,5 @@ banking if codex gates review throughput.
 ## 21:56Z study-ops r12 built (e24ee131): colliding wire keys refused, four specs rescued from a deleted block, a trunk `find` self-prune bug fixed; Sol r13 landing review launched
 
 ## 22:03Z T5 scored: one admitted gate call, zero refusals, zero bd ceremony — but 22 turns / 13.2 min (the gate turn is 5.7 min: payload + its own suites); withdrawn; T6/T6b (receipt + contract, no gate) launched on base2
+
+## 22:05Z Astra (GPT-6) assessment reconciled: six points accepted (injected ≠ live; buckets are attribution; native adapts; integrate real tasks earlier; ledger refreshed; held-out acceptance check being built); Sol-vs-Astra pre-registered for the codex boundary; nothing rejected — docs/observations/2026-09-04-astra-review-reconciled.md

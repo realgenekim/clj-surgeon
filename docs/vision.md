@@ -193,6 +193,10 @@ levers, neither of which is another feature_thread round. Withdrawal is pre-regi
 12 turns the contract did not remove the ceremony; if native with the gate also drops below 12, the
 gate is the whole effect.
 
+**Attribution caveat (Astra, 2026-09-04, accepted):** a species bucket assigns the time until the next call to the current
+call, so it includes the model's thinking about whatever comes next; buckets are attribution, not additive savings
+budgets. Wall totals are the claim; buckets say where to look.
+
 **The meter from here is wall per turn species**, from the rollout's own timestamps (the script is in
 the replay doc), reported next to turns and tokens. A call count that falls while wall stands still
 is a byte win, and byte wins do not ship rounds.
