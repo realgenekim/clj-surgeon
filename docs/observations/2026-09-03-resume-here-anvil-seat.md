@@ -375,3 +375,44 @@ Ten GOs unmerged; no merges observed from the mayor all night. Gene report at 2f
 | apparatus | **77e6237 GO** | CLOSED | — |
 
 GOs for the mayor now: the ten from the night + MEM-003 95b0881 + apparatus 77e6237 + kernel 5a2d254 (latent). No merges observed from the mayor yet. Weekly Claude limit resets 19:00Z (hit once today, 13:03–19:03Z outage). Usage watch unchanged 96/49/47. Follow-ups filed today: inb-ef6dd6 (MEM-005 absolute path in :error), inb-eca3b1 (System/exit in ls-tree op), inb-1f9a27, inb-00d296, inb-75aaf7.
+
+## RESUME DELTA 23:02Z — evening, after Gene's rulings
+
+Gene's rulings tonight (verbatim in the log): Gene reports = vs-native perf first, wins/losses, learnings, what's next, ALWAYS pasted to chat; "target 50% functional work (overall). But your call."; delegated approvals ("If you can approve responsibly, go for it!!!"); "Tell mayor to review CC merge with sol, and merge into main". ANDON inb-d27b79 CLOSED (merged a6df86ee, freeze lifted). Folder-trust dialog was the approval on Gene's phone → 112 dirs trusted, `~/bin/trust-dir` + `~/bin/worktree-add`.
+
+| lane | state | running now |
+|---|---|---|
+| integration branch bridge/integration-2026-09-03 | composing the GOs onto main (mayor's ask); registry ratchet first; merge points: kernel 2df05b3, study-ops NEWER tip when O2 lands, apparatus 89295d8 | Opus integrator in ~/src/clj-surgeon-integ |
+| E6-Lb | DONE: adoption 0/3 (0/13 program), no wall claim — docs/observations/2026-09-04-e6-lb-cohort.md | — |
+| E3-P | DONE: T 49.3 s vs N 137.0 s (0.36× direction, inside the 172 s floor), 3/3 both, pass line fails on refusals; RECORD CORRECTED (next_call existed in structuredContent) — docs/observations/2026-09-04-e3-p-cohort.md | — |
+| E6-Q (square 3 read-only, N/M/F) | running, port 7909 | Opus runner, /home/forge/tmp/arms/e6q |
+| E6-C (WHEN plate vs bare) | running, ports 7909/7910 | Opus runner, /home/forge/tmp/arms/e6c |
+| O2 ls-tree text rows + payload bound | building on bridge/study-ops-mcp | Opus, ~/src/clj-surgeon-study |
+| q5z fix (bare dir scope; text ⊇ structured for refusals; quoted symbols) | building on bridge/q5z-alias-migration | Opus, ~/src/clj-surgeon-q5z |
+| --k irregularity knob | building on bridge/fanout-fixtures-in-git | Sonnet, ~/src/clj-surgeon-fanout |
+| E-REG (k sweep) + E-SLOPE80 | QUEUED behind the q5z fix and the knob; brief in brainfleet §16 | — |
+| census | HELD e2d70d0; round 16 (one fence for every path) building | Opus, ~/src/clj-surgeon-census |
+| fold-diff (curtain-call) | GO 3d344432, pin may move; approved order to the mayor with Sol review | mayor |
+| kernel | GO 2df05b3 (merge point) | in the integration branch |
+
+Mayor: draining via the integration branch; owns curtain-call merges (Sol-reviewed per Gene). Weekly Claude limit resets 19:00Z. Usage watch 96/49/47 flat by construction (cohort servers log elsewhere).
+
+## RESUME DELTA 2026-09-04T01:41Z — MAIN IS FROZEN; this note now lives on bridge/anvil-seat-docs-2026-09-04
+
+- **Gene, verbatim (01:4xZ):** "no one should be merging to main, even mayor. People are using public repo, and I don't want to publish anything on main until we have clear and decisive winner that is tested and dogfooded for months." Nothing from this seat goes to origin/main — code OR docs. The ~/src/clj-surgeon checkout is on `bridge/anvil-seat-docs-2026-09-04`; all seat records commit and push THERE.
+- **Integration line:** `bridge/main-candidate-2026-09-04` @ 3411e3b = origin/main 56efeff + 2556a38 (code tree byte-identical to 2556a38; ten-gate seat pass applies). Next onto it, after their Sol verdicts: 0a38e3d (MEM-003 second landing), then the study-ops composition (bridge/integration-2026-09-03-studyops, building). The mayor fast-forwards NOTHING until Gene names a winner.
+- **Policy commit:** bridge/main-policy-2026-09-04 (CLAUDE.md first section + AGENTS.md + this pointer) — Gene decides whether it lands on main.
+- **Mayor:** OFFLINE since ~01:3xZ; told via inb-1165ce + queued session messages.
+- **Reviews running (Sol):** O2 r2 a0b0520, MEM-003 0a38e3d, census r17 fb7f3b1, q5z r12 61dd334 — verdicts at /home/forge/tmp/sol/{o2r2,mem003,census17,q5z12}-sol-review.md; file them on the seat branch.
+- **Cohorts:** E-HARNESS-2 (10 arms, both write-path flanks) on the lock; E-NSWEEP (12 native arms, N ∈ {30,40,55}) queued; E-GATE-R replay (0 arms) + chars/s vs load running. Standing: square 2 WIN bounded to N ≲ 40 (E-CEILING80: native writes a generator at N=80 and beats the tool on chars); squares single-edit/3/4 withdrawn; square 1 pending E-GATE-R.
+- **Single next action:** when a Sol verdict lands, file it on the seat branch, update the queue row, and if GO put the tip onto the candidate branch (merge --no-ff in ~/src/clj-surgeon-cand, push the branch).
+
+## RESUME DELTA 01:56Z — the working trunk is `MCP/main` (Gene); this note and all seat records live there
+
+- Gene, verbatim: "Get everything onto a branch called MCP/. Let's have that be our 'main' branch, if you know what I mean". `MCP/main` @ a93768f = candidate 3411e3b + seat records + policy. The ~/src/clj-surgeon checkout is ON `MCP/main`; commit and push seat records there. `main` stays frozen (public); nobody pushes it.
+- Landing rule on MCP/main: reviewed GO tips only, `merge --no-ff` from ~/src/clj-surgeon-cand (also on MCP/main) or this checkout; run mcp-test as the trailing check after each landing. bridge/anvil-seat-docs-2026-09-04 and bridge/main-candidate-2026-09-04 are retired (merged); do not push to them.
+- Pending landings: 0a38e3d after MEM-003 r2 GO; study-ops after O2 r3 GO; census after r17 GO; q5z after r12 GO; admit-gate after its fix round GO. Then restart the seat's MCP server (7906) on MCP/main and produce Gene's ls-tree-over-MCP receipt.
+
+## RESUME DELTA 05:04Z — temp files go to /var/tmp/forge, never /tmp (Gene)
+
+Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/seat-tmp-guard.sh refuses a tmpfs temp dir and is sourced by suite-run and sol-yolo. Every brief from here names /var/tmp/forge/<lane>-fx. Repo ratchet building on bridge/tmp-leak-ratchet (runners fail on leaked temp entries and refuse tmpfs). Heartbeats: df -i /tmp + count of forge-owned entries.

@@ -119,20 +119,67 @@
     (swap! *analyzer-mission* assoc
            :last-exit-epoch-ms (System/currentTimeMillis))))
 
+;; @spec MCP-OP-ADMIT-128
+(defn- extract-packaged-wrapper!
+  "Copy a wrapper that ships inside a jar somewhere it can be executed."
+  [url]
+  (let [target (java.io.File/createTempFile "clj-kondo-admission-" ".py")]
+    (.deleteOnExit target)
+    (with-open [source (io/input-stream url)]
+      (io/copy source target))
+    (.setExecutable target true false)
+    (.getCanonicalPath target)))
+
+;; @spec MCP-OP-ADMIT-128
+(def ^:private packaged-admission-wrapper
+  "The wrapper this build ships, located without reading `user.dir`.
+
+  `resources/clj-kondo-admission.py` resolved against the JVM's working
+  directory is a deployment landmine: a workspace-routed server started
+  anywhere but a clj-surgeon checkout resolves it to a path that does not
+  exist, every admit call on every workspace it routes then reports
+  `clj-kondo-unavailable`, and the receipt says nothing about why. This
+  build knows where its own code was loaded from, and the wrapper ships
+  beside it. Computed once, because a jar-packaged wrapper is extracted."
+  (delay
+    (try
+      (or (when-let [url (io/resource "clj-kondo-admission.py")]
+            (if (= "file" (.getProtocol url))
+              (.getCanonicalPath (io/file (.toURI url)))
+              (extract-packaged-wrapper! url)))
+          (when-let [url (io/resource "clj_surgeon/mcp_process.clj")]
+            (when (= "file" (.getProtocol url))
+              ;; <root>/src/clj_surgeon/mcp_process.clj -> <root>
+              (let [root (-> (io/file (.toURI url))
+                             .getParentFile .getParentFile .getParentFile)
+                    candidate (io/file root "resources"
+                                       "clj-kondo-admission.py")]
+                (when (.isFile candidate)
+                  (.getCanonicalPath candidate))))))
+      (catch Exception _ nil))))
+
+;; @spec MCP-OP-ADMIT-128
 (defn clj-kondo-admission-path
-  "Return the installed analyzer-lifetime admission wrapper."
+  "Return the installed analyzer-lifetime admission wrapper.
+
+  Explicit configuration first -- the test binding, then the environment --
+  then the wrapper installed for this user, then the one this build ships,
+  and only then the working-directory-relative path, which is kept last so
+  the previous behaviour remains reachable and is never the only answer."
   []
   ;; @spec MCP-OP-ANALYZER-005
   (let [installed (str (System/getProperty "user.home")
-                       "/bin/clj-kondo-admission")
-        working-tree (.getCanonicalPath
-                       (io/file "resources/clj-kondo-admission.py"))]
+                       "/bin/clj-kondo-admission")]
     (or *clj-kondo-admission-path*
-        (System/getenv "CLJ_SURGEON_CLJ_KONDO_ADMISSION")
+        ;; @spec MCP-OP-ADMIT-128
+        ;; not-empty: an exported-but-blank override is not an override, and
+        ;; resolving it would name the empty path as this server's wrapper.
+        (not-empty (System/getenv "CLJ_SURGEON_CLJ_KONDO_ADMISSION"))
         (when (and (.isFile (io/file installed))
                    (.canExecute (io/file installed)))
           installed)
-        working-tree)))
+        @packaged-admission-wrapper
+        (.getCanonicalPath (io/file "resources/clj-kondo-admission.py")))))
 
 (defn- clj-kondo-events-path []
   (or *clj-kondo-events-path*

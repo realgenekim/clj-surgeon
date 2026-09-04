@@ -153,6 +153,16 @@
   [x]
   (if (reading? x) (get x reading-key) x))
 
+(defn wall-clock-ms
+  "The epoch wall clock in milliseconds, as a TAGGED reading.
+
+  The receipt counterpart of `raw-ms`. A stamp saying WHEN something happened
+  is still a number a clock produced, so it belongs in the measured partition
+  exactly like a duration does — and a receipt field that wants one calls this
+  rather than earning an allow-list entry for a raw read."
+  []
+  (reading (raw-ms)))
+
 (defn elapsed-nanos
   "Nanoseconds since `started`, as a tagged reading."
   [started]

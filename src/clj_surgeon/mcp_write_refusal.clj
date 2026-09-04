@@ -10,7 +10,9 @@
 (def ^:private evidence-version 1)
 (def ^:private ordering-version 1)
 (def ^:private row-limit 128)
-(def ^:private public-byte-budget 32640)
+(def public-byte-budget
+  "The one public MCP payload budget. Every bounded public result shares it."
+  32640)
 
 (defn- canonical-value
   [value]
@@ -179,7 +181,8 @@
       (assoc :candidate_continuation
              (candidate-continuation evidence returned-count)))))
 
-(defn- json-bytes
+(defn json-bytes
+  "Serialized size of one public payload in UTF-8 bytes."
   [value]
   (count (.getBytes (json/generate-string value) "UTF-8")))
 
@@ -227,3 +230,51 @@
                         evidence))]
       (or direct summarized (fail-empty-result result summarize)))
     result))
+
+;; @spec MCP-OP-ADMIT-069
+;; @spec MCP-OP-ADMIT-085
+(defn bound-public-payload
+  "Trim named collection keys until one public result fits the shared budget.
+
+  `bound-public-refusal` fits a write refusal's structured evidence. This is
+  its sibling for results whose unbounded growth lives in ordinary receipt
+  collections rather than in `write_refusal_evidence`: the collections named
+  by `trimmable` are shortened, longest first. Both fit inside
+  `public-byte-budget`, which is the contract; neither invents a second budget.
+
+  The omission record is cumulative. Reporting only the last step's loss would
+  understate a payload trimmed several times over, and a reader who sees
+  `payload_omitted` at all is asking exactly one question: how much am I not
+  being shown?"
+  [result trimmable]
+  (let [annotation-keys [:payload_truncated :payload_truncation
+                         :payload_omitted :payload_omitted_bytes]
+        content (fn [value] (json-bytes (apply dissoc value annotation-keys)))
+        original-bytes (content result)]
+    (if (<= original-bytes public-byte-budget)
+      result
+      (loop [current result
+             omitted {}]
+        (let [candidates (->> trimmable
+                              (map (fn [key] [key (count (get current key))]))
+                              (filter (fn [[_ n]] (pos? n)))
+                              (sort-by second >))]
+          (if (empty? candidates)
+            (assoc current
+                   :payload_truncated true
+                   :payload_truncation "public-byte-budget"
+                   :payload_omitted omitted
+                   :payload_omitted_bytes (- original-bytes (content current)))
+            (let [[key n] (first candidates)
+                  kept (max 0 (dec (quot (* n 2) 3)))
+                  omitted (update omitted key (fnil + 0) (- n kept))
+                  trimmed (update current key #(vec (take kept %)))
+                  next-result (assoc trimmed
+                                     :payload_truncated true
+                                     :payload_truncation "public-byte-budget"
+                                     :payload_omitted omitted
+                                     :payload_omitted_bytes
+                                     (- original-bytes (content trimmed)))]
+              (if (<= (json-bytes next-result) public-byte-budget)
+                next-result
+                (recur trimmed omitted)))))))))

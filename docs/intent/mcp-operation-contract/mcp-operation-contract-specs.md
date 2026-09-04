@@ -9,6 +9,11 @@ This file is the stable intent registry for the MCP operation-contract leaf.
 IDs are never reused. The status marker records whether the current code and
 tests witness the requirement.
 
+The admission gate's own intents, `MCP-OP-ADMIT-nnn`, are registered in
+[admit-clojure-patch-specs.md](admit-clojure-patch-specs.md) beside the design
+that owns them. They are audited from that file by the same coherence gate, so
+they are not restated here; ids remain unique across the whole `MCP-OP` prefix.
+
 # #Finalized Results
 
 - [x] **MCP-OP-RESULT-001**: When a public MCP handler produces a successful domain result, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that result's `measured` partition.
