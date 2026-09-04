@@ -461,6 +461,11 @@
   [^Throwable error]
   {:ok false
    :error_type :source-not-readable
+   ;; The same cause name the CLI's `census-read-refusal` publishes, from the
+   ;; one vocabulary in `mcp-paths/source-refusal-causes`: the two entrances
+   ;; name their refusals differently by design, so the CAUSE is what a witness
+   ;; can compare across them.
+   :cause (name :read-failed-after-fence)
    :error (str "Source file passed the fence and then could not be read; its "
                "mode or its existence changed under the census ("
                (.getName (class error)) ")")})
@@ -923,6 +928,13 @@
                  (str (:error (:refusal loaded)) " (" (:file loaded) ")")
                  next-call
                  (cond-> (merge {:file (:file loaded)} facts)
+                   ;; The shared cause, carried out to the caller. Without it
+                   ;; the tool publishes one name — `unreadable-source-path` —
+                   ;; for missing, denied, irregular and unresolvable alike,
+                   ;; and nothing an entrance-crossing witness can compare.
+                   (:cause (:refusal loaded))
+                   (assoc :cause (:cause (:refusal loaded)))
+
                    (and (seq remaining) (nil? next-call))
                    (assoc :remedy (continuation-refused-remedy bytes))
 

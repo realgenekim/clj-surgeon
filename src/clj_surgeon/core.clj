@@ -544,7 +544,15 @@
          :parent parent
          :error (str given " cannot be read: the directory " parent
                      " may not be read by this process")}
+        ;; `:not-found` is published here for the reason every other branch of
+        ;; this fence publishes a cause: the two entrances name their refusals
+        ;; from different sets by design, so the CAUSE is the only field a
+        ;; witness can compare across them — and Opus's round-sixteen item 2
+        ;; found them disagreeing about a symlink loop and a name too long,
+        ;; which `fs/exists?` reports here as "not there" and the tool reported
+        ;; as unreadable with the exception text attached.
         {:error-type :file-not-found
+         :cause :not-found
          :error (str given " does not exist")})
 
       (not (fs/regular-file? absolute))
