@@ -1837,3 +1837,5 @@ banking if codex gates review throughput.
 ## 22:12Z T6/T6b MET their pre-registration: 13/16 turns, 5.3/5.0 min, 0 pre-write reads, on the landed SMW plate — 2.3× fewer turns than same-plate native (33), wall 1.2× vs the same-hour control and 1.7× vs the morning mean; the remaining wall is the agent's own suite runs + model latency. Capacity freed to Astra.
 
 ## 22:15Z MEM-003 r10 landing review (Opus): NO-GO on a one-line seam — line-at-a-time matching under whitespace-tolerant patterns; the sixth round in a row where the lesson is one rung down (a formatter wraps exactly the lines a scanner reads one at a time). Round 10 building; L cells running (live feature_thread on MVR ackReply/streamAction).
+
+## 22:30Z Held-out SMW acceptance check landed: 25 arms ACCEPT 4/4, G2 REJECT (the feature-absent arm, caught), three unchanged trees REJECT (negative controls). Every wall in the replay doc now has an independent ACCEPT beside it. Oracle shared with Astra.

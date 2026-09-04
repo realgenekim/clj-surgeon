@@ -366,3 +366,19 @@ and (b) model turn latency. The gate was supposed to take (a) and instead cost m
 wall lever on this harness is not a verb: it is running the repo's fast suite ONCE, or letting a cheap watcher run it,
 which the landing contract can state ("prove once: make runtests-unit && make test-js"). Astra's live-tool held-out
 arm decides whether any of this survives an unseen feature through the real MCP entrance. INJECTED receipt, as always.
+
+## Independent acceptance (2026-09-04 22:2xZ) — every arm now carries an ACCEPT/REJECT beside its wall
+
+Held-out check `/var/tmp/forge/tweezer/acceptance/check.sh <clone>` (Astra's point 6, accepted): boots the clone's app with file
+I/O disabled, DISCOVERS the route and payload shape from the clone itself, and drives four behavioural probes over HTTP —
+A1 selection transformed (dequoted AND formatted), A2 bytes outside the selection preserved (a whole-document implementation
+dies here), A3 empty selection refused with byte-identical readback, A4 the Edit menu markup carries the command. Uses no
+test, report or implementation detail from any arm. ~16 s per clone. Contract and receipts: docs/observations/2026-09-04-smw-acceptance-check.md.
+
+| verdict | clones |
+|---|---|
+| ACCEPT 4/4 (25) | N, N2, N3, NC, NS, N5, T1, T1b, T1c, T1C, T2, T3, T3b, T4, T4b, T5, T6, T6b, X, P, G, GN, GN2, GN3, G3 |
+| REJECT (4) | **G2** (suite-green, feature absent — caught), smw-base, smw-base2, smw-contract (negative controls) |
+
+So every wall number in this document belongs to a delivered feature except G2's, which was already withdrawn. From here an
+arm's row is (wall, turns, ACCEPT/REJECT), never (wall, turns, suite-green).
