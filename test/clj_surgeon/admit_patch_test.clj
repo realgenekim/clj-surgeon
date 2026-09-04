@@ -444,7 +444,7 @@
       (write-sources! root base-sources)
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch file-creation-patch :mode "commit" :verify "none" :allow_partial true})]
+                     {:patch file-creation-patch :mode "commit" :verify "focused" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (= "created" (:pre_image_binding result)))
@@ -660,25 +660,37 @@
       (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-ADMIT-042
+;; @spec MCP-OP-ADMIT-126
 (deftest verification-none-runs-nothing-and-claims-nothing
   (let [root (temp-dir)
-        touched (atom false)]
+        touched (atom false)
+        config (stub-config
+                 root
+                 {:admit-lint-runner
+                  (fn [_ _] (reset! touched true) {:ran true :ok true})
+                  :admit-test-runner
+                  (fn [_ _] (reset! touched true) {:ran true})})]
     (try
       (write-sources! root base-sources)
-      (let [result (admit/execute-request!
-                     (stub-config root
-                                  {:admit-lint-runner
-                                   (fn [_ _] (reset! touched true) {:ran true :ok true})
-                                   :admit-test-runner
-                                   (fn [_ _] (reset! touched true) {:ran true})})
-                     {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none" :allow_partial true})]
-        (is (:ok result))
-        (is (true? (:committed result)))
-        (is (false? @touched))
-        (is (false? (get-in result [:lint_delta :ran])))
-        (is (false? (get-in result [:tests :ran])))
-        (is (false? (:verification_complete result))))
+      (testing "preview is where a declined verification belongs"
+        (let [result (admit/execute-request!
+                       config
+                       {:patch clean-multi-file-patch
+                        :mode "preview" :verify "none" :allow_partial true})]
+          (is (:ok result))
+          (is (false? @touched))
+          (is (false? (get-in result [:lint_delta :ran])))
+          (is (false? (get-in result [:tests :ran])))
+          (is (false? (:verification_complete result)))))
+      (testing "and in commit mode allow_partial does not buy it a write"
+        (let [result (admit/execute-request!
+                       config
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "none" :allow_partial true})]
+          (is (false? (:ok result)))
+          (is (false? (:committed result)))
+          (is (false? @touched) "nothing was run, in either mode")
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
       (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-ADMIT-043
@@ -802,7 +814,7 @@
       (let [result (admit/execute-request!
                      (stub-config root)
                      {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none" :allow_partial true})]
+                      :mode "commit" :verify "focused" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (= :admit-patch! (:operation result)))
@@ -831,7 +843,7 @@
                             (fn [] (spit (io/file root "src/app/util.clj")
                                          drifted)))
                      {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none" :allow_partial true})]
+                      :mode "commit" :verify "focused" :allow_partial true})]
         (is (false? (:ok result)))
         (is (= :source-hash-mismatch (:error-type result)))
         (is (true? (:source-unchanged result)))
@@ -999,7 +1011,7 @@
                                 :admit-before-commit!
                                 (fn [] (spit (io/file root target) drifted)))
                          {:patch clean-multi-file-patch
-                          :mode "commit" :verify "none" :allow_partial true})]
+                          :mode "commit" :verify "focused" :allow_partial true})]
             (is (false? (:ok result)))
             (is (= :source-hash-mismatch (:error-type result)))
             (is (true? (:source-unchanged result)))
@@ -1031,7 +1043,7 @@
           (let [result (admit/execute-request!
                          (stub-config root)
                          {:patch clean-multi-file-patch :mode "commit"
-                          :verify "none" :allow_partial true
+                          :verify "focused" :allow_partial true
                           :expect_pre_sha256 binding})]
             (is (:ok result))
             (is (true? (:committed result)))
@@ -1351,7 +1363,7 @@
       (let [result (admit/execute-request!
                      (stub-config configured)
                      {:patch clean-multi-file-patch :mode "commit"
-                      :verify "none" :allow_partial true
+                      :verify "focused" :allow_partial true
                       :workspace_root (.getPath elsewhere)})]
         (is (:ok result))
         (is (= (.getCanonicalPath elsewhere) (:workspace-root result))
@@ -1606,10 +1618,20 @@
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch clean-multi-file-patch
-                        :mode "commit" :verify "none" :allow_partial true})]
+                        :mode "preview" :verify "none"})]
           (is (= :unverified (:verification_status result)))
           (is (= [:verification-not-requested] (:verification_reasons result)))
-          (is (:ok result) "nothing was asked for, so nothing is owed")))
+          (is (:ok result)
+              "nothing was asked for, so nothing is owed -- in preview"))
+        ;; @spec MCP-OP-ADMIT-126
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "none" :allow_partial true})]
+          (is (false? (:ok result))
+              "and allow_partial does not turn it back into a commit")
+          (is (false? (:committed result)))
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
       (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-ADMIT-085
@@ -1917,7 +1939,7 @@
           (let [result (admit/execute-request!
                          (stub-config root)
                          {:patch clean-multi-file-patch
-                          :mode "commit" :verify "none" :allow_partial true})]
+                          :mode "commit" :verify "focused" :allow_partial true})]
             (is (true? (:committed result)))
             (is (= expected (:lock_scope result))
                 "the guarantee a commit actually had is on the receipt")
@@ -2222,7 +2244,7 @@
                          "*** End Patch\n")
               result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                       {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
           (is (:ok result) (pr-str (:error result)))
           (is (= ["src/app/core.clj"] (mapv :file (:files result)))
               "the receipt names the project-relative path")
@@ -2237,7 +2259,7 @@
                              "-(def x 1)\n+(def x 2)\n*** End Patch\n")
                   result (admit/execute-request!
                            (stub-config root)
-                           {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                           {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
               (is (false? (:ok result)))
               (is (= :invalid-relative-source-path (:error-type result))
                   "normalisation never widens confinement")
@@ -2364,7 +2386,7 @@
                 "preview still writes nothing"))
           (let [result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                         {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
             (is (:ok result))
             (is (true? (:committed result)))
             (is (str/includes? (slurp (io/file root "src/app/clock.clj"))
@@ -2436,7 +2458,7 @@
           (write-sources! root base-sources)
           (let [result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                         {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
             (is (:ok result) (pr-str (:error result)))
             (is (= [:delete] (mapv :operation (:files result))))
             (is (= ["src/app/util.clj::app.util" "src/app/util.clj::clamp"]
@@ -2461,7 +2483,7 @@
                             "\n(defn go [x] (util/clamp x 0 9))\n")})
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none" :allow_partial true})
+                     {:patch patch :mode "commit" :verify "focused" :allow_partial true})
             hazard (hazard-of result :namespace-form-removed)]
         (is (false? (:ok result)))
         (is (= :namespace-form-removed (:error-type result)))
@@ -2479,7 +2501,7 @@
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch "*** Begin Patch\n*** Delete File: src/app/util.clj\n*** End Patch\n"
-                        :mode "commit" :verify "none" :allow_partial true})]
+                        :mode "commit" :verify "focused" :allow_partial true})]
           (is (:ok result))
           (is (empty? (:hazards result)))
           (is (not (.exists (io/file root "src/app/util.clj")))))
@@ -2507,7 +2529,7 @@
             "a move still reports the edit it carries"))
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                     {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (not (.exists (io/file root "src/app/util.clj")))
@@ -2536,7 +2558,7 @@
       (write-sources! root base-sources)
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                     {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
         (is (:ok result) (pr-str (:error result)))
         (is (true? (:committed result)))
         (is (= [:add :update :delete] (mapv :operation (:files result))))
@@ -3202,7 +3224,7 @@
         (write-sources! root {"src/app/a.clj" src})
         (let [result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
+                       {:patch patch :mode "commit" :verify "focused" :allow_partial true})]
           (is (:ok result) (str "refused: " (:error result)))
           (is (true? (:committed result)))
           (is (= 1 (count (:hazards result)))

@@ -1332,6 +1332,15 @@
   because a tree that ships a profile declaring no `:command` reported that
   same reason and would have inherited a waiver written for a different state.
 
+  What `allow_partial` may NOT do is authorise a write on a verification that
+  never happened. The waiver read `profile_absent` and never the status word,
+  so a dead analyzer beside an absent profile -- ZERO detectors, not one of
+  two -- waived the block all the same, and MCP-OP-ADMIT-124's whole purpose
+  bought nothing at the commit gate. It is denied unless the analyzer
+  produced a reading, the status is `partial`, and `verify` is `focused`;
+  `verify: \"none\"` is never waivable in commit mode, because that is rung L
+  one rung over, on any repository shipping no profile -- including this one.
+
   The requirement does not depend on `verify`, and that is the whole lesson of
   rung L. Leaving `verify: \"none\"` as an explicit waiver looked principled --
   the caller declined the check, the receipt said `unverified`, nothing was
@@ -1342,13 +1351,22 @@
   every one of the three was the only `verify: \"none\"` call in its run. A
   gate a caller can turn off is a caller's gate. Verification may still be
   declined -- in `preview`, which is where an unverified answer belongs."
-  [verification _verify allow-partial?]
+  [verification verify allow-partial?]
   (when (not= :complete (:verification_status verification))
     (let [reason (or (get-in verification [:tests :reason])
                      (first (:verification_reasons verification))
                      :verification-incomplete)
-          profile-absent? (true? (get-in verification [:tests :profile_absent]))]
-      (when-not (and allow-partial? profile-absent?)
+          profile-absent? (true? (get-in verification [:tests :profile_absent]))
+          ;; @spec MCP-OP-ADMIT-125
+          ;; @spec MCP-OP-ADMIT-126
+          ;; The same predicate `verification_status` and `detectors_not_run`
+          ;; use, so the three cannot disagree about what ran.
+          analyzer-read? (analyzer-clean-reading? (:lint_delta verification))]
+      (when-not (and allow-partial?
+                     (= "focused" verify)
+                     (= :partial (:verification_status verification))
+                     profile-absent?
+                     analyzer-read?)
         reason))))
 
 (defn- execute-in-context!
