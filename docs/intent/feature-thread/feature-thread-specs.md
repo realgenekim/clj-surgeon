@@ -384,9 +384,12 @@ run as a test inside `make mcp-test`) enforces both halves.
   When `feature_thread` resolves a leg and the hit's match sits inside a string
   literal — or, in a script, inside a template or regex literal — clj-surgeon
   shall report that leg CANDIDATE with the string named as the reason and shall
-  give it no insertion anchor, UNLESS the match spells a call (`subject(`) or is
-  a route literal beginning with `/`; a mention shall rank below every other
-  occurrence of the same leg rather than be dropped.
+  give it no insertion anchor, UNLESS the WHOLE literal is code: its entire
+  content is the call expression (`{:onclick "formatDraft()"}`) or its entire
+  content is the route path. A literal that carries the subject AND other words
+  — `"call formatDraft() later"` — is a mention however it is punctuated, and a
+  template interpolation (`${…}`) is never a literal at all. A mention shall
+  rank below every other occurrence of the same leg rather than be dropped.
 
 - [x] **MCP-OP-THREAD-051**: The conventions FILE is contained too. When
   `feature_thread` resolves its convention set from

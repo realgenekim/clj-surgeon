@@ -71,8 +71,19 @@ of its upstream bytes keeping only the ranges the recall names, plus `tests.edn`
 |---|---|---|---|---|
 | `formatDraft` | COMPLETE (6 of 6) | routes.clj L2148 | transform.clj L606-680 | transform_apply_test.clj L349-384 |
 | `saveDraft` | COMPLETE (5 of 5) | routes.clj **L2121** | book_workshop.clj L1922-1985 | editor_conflict_quarantine_test.js L185-199 |
-| `openTransformFromSelection` | COMPLETE (5 of 5) | routes.clj L2144 | chat.clj L324-352 | spa_lint_test.clj L509-521 |
+| `openTransformFromSelection` | INCOMPLETE (4 of 5) | routes.clj L2144 | chat.clj L324-352 | spa_lint_test.clj L509-521 (CANDIDATE) |
 | `expound` | INCOMPLETE (2 of 5) | ABSENT | ABSENT | ABSENT |
+
+Round ten moved `openTransformFromSelection` from COMPLETE (5 of 5) to
+INCOMPLETE (4 of 5). Its tests leg is real, and it is still reported with its
+file, its range and its hash — but every occurrence of the subject in
+`spa_lint_test.clj` is inside an assertion STRING about source text
+(`(str/includes? commands "function openTransformFromSelection()")`), which is
+the same shape as the round-nine reviewer's prose attack
+(`(def note "call formatDraft() later")`). MCP-OP-THREAD-050 admits only a
+whole-literal call or a whole-literal route as strong, so this leg is a LEAD.
+That is the rule choosing an honest INCOMPLETE over a COMPLETE it cannot vouch
+for.
 
 Two facts the redaction had been HIDING, both now visible here:
 

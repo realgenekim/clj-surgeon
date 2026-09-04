@@ -1299,22 +1299,83 @@
                       :else (recur (inc i) :code stack c)))))))))
 
 ;; @spec MCP-OP-THREAD-050
+(defn literal-span
+  "The `[start end)` CONTENT span of the literal that contains `off`, or nil
+  when `off` is not inside one.
+
+  `literal-mask` marks content characters and not the delimiters, so the run of
+  true cells around `off` IS the literal's content. A literal that spans lines
+  spans them here too: the span is over the whole source, never over one line."
+  [^booleans mask off]
+  (let [n (alength mask)]
+    (when (and (nat-int? off) (< off n) (aget mask off))
+      (let [s (loop [i off] (if (and (pos? i) (aget mask (dec i))) (recur (dec i)) i))
+            e (loop [i off] (if (and (< (inc i) n) (aget mask (inc i))) (recur (inc i)) (inc i)))]
+        [s e]))))
+
+;; @spec MCP-OP-THREAD-050
+(defn- whole-literal-call?
+  "True when the literal's content is EXACTLY `<subject>(<args>)` -- the match
+  ends at an open paren whose matching close paren is the literal's last
+  character, with nothing after it."
+  [^String text end lit-end]
+  (and (< end lit-end)
+       (= \( (.charAt text end))
+       (loop [i end depth 0]
+         (if (>= i lit-end)
+           false
+           (let [c (.charAt text i)
+                 d (cond (= c \() (inc depth)
+                         (= c \)) (dec depth)
+                         :else depth)]
+             (if (zero? d)
+               (= (inc i) lit-end)
+               (recur (inc i) d)))))))
+
+;; @spec MCP-OP-THREAD-050
 (defn string-shape
   "How a match that sits inside a string LITERAL spells the subject.
 
-  `\"call\"` -- the match is immediately followed by `(`: the shape of
-  `{:onclick \"formatDraft()\"}`, which is the NAMED case's own menu leg.
-  `\"route\"` -- the match begins with `/`, a route literal, a string by
-  construction and governed by MCP-OP-THREAD-044 instead.
-  `\"mention\"` -- everything else: prose that names the subject and nothing
-  more. Only `\"mention\"` is weak.
+  The question is about the WHOLE LITERAL, never about the line. Round-nine
+  review, finding 3 (BLOCKING): the old rule said `call` for any match followed
+  by `(` and `route` for any match beginning with `/`, so the prose string
+  `\"call formatDraft() later\"` returned five FOUND legs with insertion
+  anchors, and `\"call /fake() later; this is prose, not a route table\"` read
+  `COMPLETE (5 of 5)`. A literal cannot be inspected one character to the right:
+  a call spelling that is a leg is a literal that IS the call and holds nothing
+  else, and prose is a literal that holds the subject AND other words.
+
+  Exactly two strong spellings, both whole-literal:
+
+  `\"call\"` -- the literal's entire content is the call expression, the shape
+  of `{:onclick \"formatDraft()\"}`, which is the NAMED case's own menu leg:
+  the match begins at the literal's first character and the call's closing paren
+  is its last.
+  `\"route\"` -- the literal's entire content is the path: the match begins at
+  the literal's first character, spells a `/`-rooted path, and the content
+  carries no whitespace. A route literal is a string by construction and is
+  governed by MCP-OP-THREAD-044 as well.
+
+  `\"mention\"` -- everything else, prose that names the subject among other
+  words. Only `\"mention\"` is weak.
+
+  Template interpolation is not reached here at all: `literal-mask` never masks
+  `${…}`, so `${formatDraft(draft)}` is CODE and never has a string shape.
 
   Facts here, verdict in `leg-strength`: this function never decides a leg."
-  [^String line start end]
-  (let [matched (subs line start (min end (count line)))]
+  [^String text [lit-start lit-end] start end]
+  (let [content (subs text lit-start lit-end)
+        matched (subs text start (min end lit-end))
+        at-start? (= start lit-start)]
     (cond
-      (str/starts-with? matched "/") "route"
-      (= \( (get line end)) "call"
+      (and at-start?
+           (str/starts-with? matched "/")
+           (not (re-find #"\s" content)))
+      "route"
+
+      (and at-start? (whole-literal-call? text end lit-end))
+      "call"
+
       :else "mention")))
 
 
@@ -1554,18 +1615,24 @@
                         (fn [idx line]
                           (when-let [[start end] (match-span pattern line)]
                             (let [{:keys [^booleans mask offsets]} @literal
-                                  off (+ (nth offsets idx 0) start)
-                                  in-string? (and (< off (alength mask))
-                                                  (aget mask off))]
+                                  line-off (nth offsets idx 0)
+                                  off (+ line-off start)
+                                  ;; @spec MCP-OP-THREAD-050
+                                  ;; The literal's own extent, not the line's:
+                                  ;; a Clojure string runs across lines and the
+                                  ;; shape rule is about the WHOLE literal.
+                                  span (literal-span mask off)]
                               {:file relative
                                :line (inc idx)
                                :col start
                                :text (str/trim line)
                                :in_comment (or (comment-mention? line start clojure?)
                                                (contains? @commented (inc idx)))
-                               :in_string in-string?
-                               :string_shape (when in-string?
-                                               (string-shape line start end))})))
+                               :in_string (boolean span)
+                               :string_shape (when span
+                                               (string-shape
+                                                 source span off
+                                                 (+ line-off end)))})))
                         lines))))))
       {:hits [] :unreadable []}
       candidates)))
@@ -4142,8 +4209,9 @@
     "this verb never parses JavaScript and never presents a window as a matched "
     "body. A hit that sits inside a string literal, a comment or a regex "
     "literal and only MENTIONS the subject is CANDIDATE with the reason named "
-    "and no anchor -- a call spelling like {:onclick \"formatDraft()\"} and a "
-    "route literal are code and stay FOUND. Status is COMPLETE only when every "
+    "and no anchor -- only a literal whose WHOLE content is the call "
+    "({:onclick \"formatDraft()\"}) or the route path is code and stays FOUND. "
+    "Status is COMPLETE only when every "
     "declared leg is FOUND. Do NOT re-hash the ranges before editing: the "
     "per-leg sha256 is the human-checkable detail of what was read, and the "
     "pre-image gate is admit_clojure_patch, which BINDS the whole-file digests "

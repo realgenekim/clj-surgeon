@@ -2262,14 +2262,24 @@
            "tests" ["test/js/editor_conflict_quarantine_test.js" 185 199 "FOUND"]
            "implementation" [nil nil nil "N/A"]}}
 
+   ;; @spec MCP-OP-THREAD-050
+   ;; This row moved in round ten, and the move is the RULE working. The only
+   ;; occurrences of `openTransformFromSelection` in `spa_lint_test.clj` are
+   ;; inside assertion STRINGS about source text —
+   ;; `(str/includes? commands "function openTransformFromSelection()")` — which
+   ;; is character-for-character the shape of the round-nine reviewer's attack,
+   ;; `(def note "call formatDraft() later")`. No rule can refuse one and admit
+   ;; the other. The lead is still reported, with its file, its range, its hash
+   ;; and the reason it is only a lead; what it no longer does is make the
+   ;; thread read COMPLETE or hand out an insertion anchor into a lint string.
    "openTransformFromSelection"
    {:also ["/api/transform/apply"]
-    :status "COMPLETE (5 of 5)"
+    :status "INCOMPLETE (4 of 5)"
     :legs {"menu-caller" ["src/writer/views/components.clj" 102 113 "FOUND"]
            "js-function" ["resources/public/js/editor-commands.js" 332 344 "FOUND"]
            "route" ["src/writer/routes.clj" 2144 2144 "FOUND"]
            "handler" ["src/writer/handlers/chat.clj" 324 352 "FOUND"]
-           "tests" ["test/writer/spa_lint_test.clj" 509 521 "FOUND"]
+           "tests" ["test/writer/spa_lint_test.clj" 509 521 "CANDIDATE"]
            "implementation" [nil nil nil "N/A"]}}
 
    "expound"
