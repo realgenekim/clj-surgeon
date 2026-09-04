@@ -230,6 +230,34 @@
    ".toEpochMilli" "an Instant converted to an epoch number"
    "FileTime/fromMillis" "an epoch number turned back into a file time"})
 
+(def escape-hatch-spellings-the-ratchet-must-carry
+  "Every spelling that reaches a reading's number, with the route it opens.
+
+  This is the escape-hatch counterpart of
+  `clock-expressions-the-ratchet-must-carry`, and it exists for the reason the
+  round-five review gave (2026-09-04 §1): every alternative of the pattern was
+  anchored on the literal text `measured/`, so the protocol's own method —
+  which the JVM compiles to a munged Java interface method, `-launder` →
+  `_launder` — was reachable as PLAIN INTEROP with no namespace token at all.
+  The reviewer planted `(._launder (measured/elapsed-ms started))` at
+  `src/clj_surgeon/mcp_hot_verify.clj` and published an undeclared
+  clock-derived field inside the parity hash subject with nineteen tests and
+  seventy-five assertions green.
+
+  A hand-written alternation is a list of the spellings somebody thought of.
+  The pattern below is DERIVED from the namespace's interns, the protocol's
+  methods and the type's declared fields; this map is the fail-first witness ON
+  that derivation, one entry per route."
+  {"measured/raw-nanos" "the monotonic clock, untagged"
+   "measured/raw-ms" "the wall clock, untagged"
+   "measured/value" "THE one laundering verb"
+   "measured/-launder" "the protocol method `value` is built on"
+   "measured/unwrap-readings" "the private verb that strips tags at any depth (round-four §1)"
+   "measured/start-nanos" "the private verb that opens a start tick"
+   "._launder" "the protocol method as MUNGED Java interop — the round-five review's finding 1"
+   ".-launder" "the same method spelled as an unmunged field access"
+   ".-launderable" "the deftype's private field, which babashka's interop does not enforce"})
+
 (def ^:private escape-hatch-pattern
   "Every expression that hands back an UNTAGGED number from the measured
    namespace: the raw clock reads, `value`, which strips a reading's tag, and
@@ -406,6 +434,41 @@
                (pr-str (sort (remove (set (keys scanned)) (keys declared))))))
       (is (= declared scanned)
           "a form's untagged-clock call count changed; re-read it and re-justify"))))
+
+;; @spec MCP-OP-TIME-006
+(deftest the-escape-hatch-pattern-carries-every-route-to-a-readings-number
+  (testing "the pattern is derived from the namespace, not typed out"
+    (let [missing (vec (sort (remove #(re-find escape-hatch-pattern %)
+                                     (keys escape-hatch-spellings-the-ratchet-must-carry))))]
+      (is (= [] missing)
+          (str "spellings that reach a reading's number and no alternative of "
+               "escape-hatch-pattern matches, so their call sites cost nothing: "
+               (pr-str (mapv (juxt identity escape-hatch-spellings-the-ratchet-must-carry)
+                             missing)))))))
+
+;; @spec MCP-OP-TIME-006
+(deftest the-escape-hatch-scanner-catches-every-route-planted-in-a-receipt
+  (testing "each route, planted where a receipt is built"
+    (doseq [[spelling why] (sort escape-hatch-spellings-the-ratchet-must-carry)]
+      (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                               (str "measured-escape-route-" (System/nanoTime))))
+            victim (io/file root "clj_surgeon" "planted_route.clj")]
+        (.mkdirs (.getParentFile victim))
+        (spit victim
+              (str "(ns clj-surgeon.planted-route)\n\n"
+                   "(defn publish-a-receipt\n"
+                   "  [subject]\n"
+                   "  {:ok true :receipt {:wall_ms (" spelling " subject)}})\n"))
+        (try
+          (let [planted (scan escape-hatch-pattern root)]
+            (is (= {["src/clj_surgeon/planted_route.clj" "publish-a-receipt"] 1}
+                   planted)
+                (str "the escape-hatch scan did not see a planted " spelling
+                     " (" why "): " (pr-str planted))))
+          (finally
+            (.delete victim)
+            (.delete (.getParentFile victim))
+            (.delete (io/file root))))))))
 
 ;; @spec MCP-OP-TIME-005
 (defn- measured-naming-offence
