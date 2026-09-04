@@ -5179,8 +5179,12 @@
                   ;; produces
                   admit/checked-refusal-kind!
                   (fn [receipt]
+                    ;; @spec MCP-OP-ADMIT-137
+                    ;; the same predicate the guard uses, so the recorder
+                    ;; cannot see a narrower set of refusals than the guard
+                    ;; checks
                     (when (and *inside-the-entrance*
-                               (map? receipt) (false? (:ok receipt)))
+                               (map? receipt) (not (true? (:ok receipt))))
                       (swap! observed-refusal-kinds conj (:error-type receipt)))
                     (guard receipt))
                   admit/execute-request!

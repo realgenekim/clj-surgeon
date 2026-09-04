@@ -238,6 +238,7 @@
     :workspace-lock-unavailable})
 
 ;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-137
 (defn checked-refusal-kind!
   "Return `receipt` unchanged, or throw if it refuses under an unenumerated
   kind.
@@ -252,10 +253,18 @@
   `(catch Exception ...)`, which would swallow this throw and relabel it
   `:admit-tool-failure` -- an enumerated kind. A guard whose violation is
   caught and renamed to something legal is not a guard, so the enforcement
-  point is the one that sits outside every catch on the path."
+  point is the one that sits outside every catch on the path.
+
+  The predicate is `(not (true? ...))` and not `(false? ...)` because the
+  RENDERER's predicate is truthiness: `summary` shows anything falsey as a
+  refusal. A guard testing `false?` therefore let `:ok nil` reach the caller
+  as a refusal under a kind nothing enumerated, and `refusal` merges its
+  caller's `data` map last, so that override is one keyword away
+  (MCP-OP-ADMIT-137). The two faces of a receipt must not disagree about
+  which one it is."
   [receipt]
   (when (and (map? receipt)
-             (false? (:ok receipt))
+             (not (true? (:ok receipt)))
              (not (contains? admit-refusal-kinds (:error-type receipt))))
     (throw (IllegalArgumentException.
              (str "admit gate refusal kind is not enumerated: "
