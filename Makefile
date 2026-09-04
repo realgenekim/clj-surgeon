@@ -977,6 +977,14 @@ test:
 	$(MAKE) --no-print-directory repository-hygiene
 	$(MAKE) --no-print-directory test-fast
 	$(MAKE) --no-print-directory analyzer-contract-test
+	# @spec MCP-OP-ADMIT-150
+	# The lane that OWNS the recovery battery's receipt. `mcp-test` must not
+	# depend on a busy-spinning timing bound (a flake there would report `the
+	# enumeration claims kinds no fixture drives` and take the enumeration
+	# proof down for an unrelated reason), and a fresh clone must not go red
+	# on a gitignored artefact it cannot produce -- so the fast lane COUNTS
+	# the absence as a named skip and this lane drives that bucket to zero.
+	$(MAKE) --no-print-directory admit-transaction-recovery-battery
 	$(MAKE) --no-print-directory mcp-test
 	$(MAKE) --no-print-directory mcp-smoke
 	$(MAKE) --no-print-directory memory-battery-self-test
