@@ -1176,6 +1176,23 @@
       (str (subs text 0 max-refusal-field-chars)
            "… [truncated: " (count text) " characters]"))))
 
+(def refusal-identity-keys
+  "The refusal fields that carry the caller's own workspace ABSOLUTELY, and so
+   are exempt from the WHOLE-FIELD bound (never from the leaf bound).
+
+   `:anchor` and `:dir` name the workspace the caller named and are what a
+   reader checks their request against; `workspace_root` is the tool's half of
+   the same. MCP-OP-CENSUS-014 has always required them to carry the absolute
+   root, and `:anchor` is a MAP, so measuring it AS PRINTED and replacing it
+   with text destroys a structured field a caller reads by key — which is
+   exactly what a first cut of the whole-field bound did to a 1,000-character
+   root: `(:absolute (:anchor refusal))` came back nil.
+
+   Their LEAVES are still bounded, as they were before, so nothing here is a
+   licence to publish an unbounded string; what is exempt is only the
+   collapse of the field itself into prose."
+  #{:anchor :dir :workspace_root})
+
 (defn bound-refusal-leaf
   "One LEAF of a refusal, bounded by what it RENDERS as.
 
@@ -1229,7 +1246,8 @@
                (if (contains? refusal-continuation-keys k)
                  v
                  (let [walked (walk/postwalk bound-refusal-leaf v)]
-                   (if (and (not (string? walked))
+                   (if (and (not (contains? refusal-identity-keys k))
+                            (not (string? walked))
                             (> (count (pr-str walked)) max-refusal-field-chars))
                      (bound-refusal-text (pr-str walked))
                      walked)))))
