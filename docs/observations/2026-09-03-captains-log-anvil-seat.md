@@ -914,3 +914,7 @@ O2 r2 (a0b0520), Sol: NO-GO. The blocker that matters is (3): the builder's "tex
 Census r17 (fb7f3b1): Sol's filter refused the brief ("flagged for possible cybersecurity risk") — third refusal on confinement fixtures tonight; Opus fallback launched with the identical brief, named here per Gene's rule.
 Candidate 3411e3b: mcp-test 597/6305/0, EXIT 0 — byte-identical code tree to 2556a38, same count. Frozen: a branch only.
 MEM-003 (0a38e3d) Sol verdict is being written: first line NO-GO, blocking — "the advertised hashed/measured partition is not the only route by which measured receipt data enters the hash subject: hashed-channel removes only a map entry whose key is exactly :measured". Filed when its EXIT lands.
+
+## 01:45Z — E-GATE-R CLOSED (seat-branch doc f8ec6cc): square 1 detection withdrawn, 0/14; the gate's kondo half never ran (12,000-byte truncation) → inb-2f150d + fix round; chars/s load-invariant per mode
+
+Honest standing after eleven results: one square stands (2, bounded), four withdrawn or re-scoped. The gate defect is not shipped (bridge/admit-gate only) so no Andon; it would have been pull-worthy on main because a gate whose detector silently does not run is a broken verifier. The runner could not `bd create` (no beads DB on this seat) — inbox is the durable id. Chars/s: the earlier single-band sentence is struck; per-mode rates carry every conversion. E-ADMIT-SEED dropped (moot).
