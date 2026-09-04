@@ -459,3 +459,8 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## RESUME DELTA 07:29Z
 - feature_thread r2 = 9139b2c5 (Sol r3 review running: ft3.log / ft3-sol-review.md). REPLAY in progress: clone /home/forge/tmp/replay/smw-base @ 2df99c98; arms N / T1 / T2 pre-registered in the log; receipt for the clone to be computed from the nREPL (port 43791, root = the clone); counts from the codex logs (exec_command + apply_patch), never from the driver.
+
+## RESUME DELTA 08:20Z
+- REPLAY DONE and verified (docs/observations/2026-09-04-feature-thread-replay-result.md; Gene report 2026-09-04-gene-report-0815z.md): N 32 / T1 24 / X 25 / P 31 / T1b 22 raw; "edit basis" withdrawn for this run, "discovery accelerator" stands; 10× is a harness claim (admit-gate write + no ceremony). N2 replicate still running (50+ calls). Next arms pre-registered: T2 (MCP-attached), T3 (round-three receipt; spec in 2026-09-04-feature-thread-round3-spec.md + the recall item), G (admit-gate write), C (no-ceremony repo).
+- Lanes: feature_thread r2 = 9139b2c5 (Opus r3 review running); q5z r17 = 15fdf59c (Opus review); MEM-003 r5 = dc6ee93f (Sol review); tmp-leak r2 = 86bd9de3 (Sol review; one-line .PHONY conflict to compose at landing); census r22, gate r5, O2 r6 building. Trunk MCP/main last landing 804febcb (scorer). Sol filter refusals: 17 tonight — proposal to route census/gate to Opus first is with Gene.
+- Housekeeping: /var/tmp/forge swept of own suite leaks >60 min each heartbeat until tmp-leak r2 lands; nREPL 43791 on ~/src/clj-surgeon-thread (feature_thread worktree); replay clones under /home/forge/tmp/replay/smw-*; meters ~/bin/rollout-calls (codex) and ~/bin/call-watcher (this session).
