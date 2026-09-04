@@ -224,7 +224,6 @@
     :invalid-workspace-root
     :namespace-form-removed
     :next-call-exceeds-public-budget
-    :receipt-exceeds-public-budget
     :no-op-patch
     :overlapping-hunks
     :patch-does-not-apply
@@ -1968,7 +1967,7 @@
   [receipt]
   (when-let [call (:next_call receipt)]
     (let [characters (count (json/generate-string call))]
-      (when (> characters write-refusal/public-byte-budget)
+      (when (not (public-faces-fit? receipt))
         (let [receipt-bytes (write-refusal/json-bytes receipt)]
         (merge (empty-receipt (or (:mode receipt) "preview"))
                {:ok false
@@ -1995,51 +1994,92 @@
                              " digest per file")}))))))
 
 ;; @spec MCP-OP-ADMIT-139
-(defn- oversize-receipt-refusal
-  "A receipt the public budget cannot carry, after every trimmable collection
-  has been trimmed, is a typed refusal naming its size -- never a payload
-  published over the number the gate calls a budget.
+(def ^:private receipt-identity-keys
+  "The keys a receipt is not allowed to lose, whatever its size.
 
-  Round four bounded only the trimmable collections and only as JSON. A
-  sixty-file preview under 200-character directory names published a
-  125,104-byte receipt with `:ok true`, because `hashes` carries one entry per
-  path and is not a trimmable vector; the same receipt's text was 185,060
-  characters. The refusal names the bytes, the characters, the budget and the
-  fields that dominate, because the field that dominates is the one a caller
-  can do something about."
+  A receipt that will not fit is REDUCED, never replaced. The first draft of
+  this bound replaced an oversize receipt with a typed size complaint, and the
+  battery caught what that costs: a 64-file rolled-back transaction, whose
+  `transaction-recovery-required` means A THIRD PARTY CHANGED YOUR FILES AND
+  THE GATE COULD NOT PUT THEM BACK, came back to the caller as
+  `receipt-exceeds-public-budget` with a remedy of `use fewer files`. The most
+  safety-critical receipt this gate produces was swallowed by a size rule.
+  What may be dropped is bulk; what may never be dropped is the receipt's
+  answer to what happened, whether the workspace changed, and what to do."
+  [:ok :operation :mode :error-type :error :remedy :source-unchanged
+   :mutation_attempted :pre_image_binding :lock_scope :verification_complete
+   :verification_status :elapsed_ms :next_call])
+
+;; @spec MCP-OP-ADMIT-139
+(def ^:private receipt-reduction-keys
+  [:receipt_reduced :receipt_omitted_fields :receipt_bytes_before
+   :receipt_text_characters_before :public_byte_budget :error_truncated])
+
+;; @spec MCP-OP-ADMIT-139
+(defn- reduce-receipt-to-budget
+  "Shrink one receipt until BOTH its faces fit the one public budget, keeping
+  its identity and its safety claims.
+
+  Round four bounded only the trimmable VECTORS and only as JSON. A sixty-file
+  preview under 200-character directory names published a 125,104-byte receipt
+  with `:ok true` and a 185,060-character text -- four times the budget, with
+  no annotation at all -- because `hashes` is a MAP with one entry per path and
+  nothing shortened it.
+
+  Bulk fields go first, largest first, each one named in
+  `receipt_omitted_fields`; the identity keys stay. If even those will not fit,
+  the `error` and `remedy` sentences are cut with the cut stated rather than
+  the receipt being lost. What this function never does is change the receipt's
+  `error-type`: a caller must not learn that its patch was too wordy when what
+  actually happened is that its workspace needs manual recovery."
   [receipt]
-  (when-not (public-faces-fit? receipt)
-    (let [bytes (write-refusal/json-bytes receipt)
-          characters (summary-characters receipt)
-          largest (->> (dissoc receipt :ok :operation :mode)
-                       (map (fn [[k v]]
-                              [(name k) (write-refusal/json-bytes {k v})]))
-                       (sort-by second >)
-                       (take 5)
-                       (mapv (fn [[k n]] {:field k :bytes n})))]
-      (merge (empty-receipt (or (:mode receipt) "preview"))
-             {:ok false
-              :operation :admit-patch-refused
-              :error-type :receipt-exceeds-public-budget
-              :error (str "this receipt is " bytes " bytes of JSON and "
-                          characters " characters of text; the public payload"
-                          " budget is " write-refusal/public-byte-budget
-                          " bytes and both faces must fit it, so the receipt"
-                          " cannot be published -- publishing it over the"
-                          " budget, or shortening its text below its own"
-                          " structure, are the two answers this gate refuses")
-              :receipt_bytes bytes
-              :receipt_text_characters characters
-              :public_byte_budget write-refusal/public-byte-budget
-              :largest_fields largest
-              :blocked_receipt_for (:error-type receipt)
-              :source-unchanged (:source-unchanged receipt)
-              :remedy (str "narrow the request until its receipt fits "
-                           write-refusal/public-byte-budget
-                           " bytes; fewer files in one patch is the lever,"
-                           " because the receipt carries one entry per file in"
-                           " files, hashes and the follow-up call's"
-                           " expect_pre_sha256")}))))
+  (if (public-faces-fit? receipt)
+    receipt
+    (let [bytes-before (write-refusal/json-bytes receipt)
+          characters-before (summary-characters receipt)
+          annotate (fn [candidate omitted]
+                     (cond-> (assoc candidate
+                                    :receipt_reduced true
+                                    :receipt_omitted_fields omitted
+                                    :receipt_bytes_before bytes-before
+                                    :receipt_text_characters_before
+                                    characters-before
+                                    :public_byte_budget
+                                    write-refusal/public-byte-budget)
+                       (:error_truncated candidate) identity))
+          cut (fn [candidate omitted]
+                ;; last resort: the sentences, with the cut stated
+                (let [shrink (fn [c k]
+                               (if-let [text (get c k)]
+                                 (assoc c k
+                                        (str (subs (str text) 0
+                                                   (min 200 (count (str text))))
+                                             "…[cut to fit the public payload"
+                                             " budget; full text in the"
+                                             " server log]"))
+                                 c))]
+                  (assoc (-> candidate (shrink :error) (shrink :remedy))
+                         :error_truncated true)))]
+      (loop [current (annotate receipt [])
+             omitted []]
+        (if (public-faces-fit? current)
+          current
+          (let [droppable (->> (apply dissoc current
+                                      (concat receipt-identity-keys
+                                              receipt-reduction-keys))
+                               (map (fn [[k v]]
+                                      [k (write-refusal/json-bytes {k v})]))
+                               (sort-by second >))]
+            (if-let [[key _] (first droppable)]
+              (let [omitted (conj omitted (name key))]
+                (recur (annotate (dissoc current key) omitted) omitted))
+              ;; nothing left but identity: cut the sentences once, then stop.
+              ;; If a next_call is what still will not fit, the oversize
+              ;; next_call refusal below is the honest answer.
+              (let [final (annotate (cut current omitted) omitted)]
+                (if (or (:error_truncated current) (public-faces-fit? final))
+                  final
+                  final)))))))))
 
 ;; @spec MCP-OP-ADMIT-069
 ;; @spec MCP-OP-ADMIT-133
@@ -2073,13 +2113,16 @@
                     (write-refusal/bound-public-refusal pr-str)
                     ;; @spec MCP-OP-ADMIT-136
                     (write-refusal/bound-public-payload
-                      trimmable-receipt-keys public-faces-fit?))]
+                      trimmable-receipt-keys public-faces-fit?)
+                    ;; @spec MCP-OP-ADMIT-139
+                    reduce-receipt-to-budget)]
     ;; @spec MCP-OP-ADMIT-139
-    ;; The oversize decision is taken AFTER trimming, on the receipt that
-    ;; would actually be published, and the guard runs last so the refusal's
-    ;; own kind is checked too.
+    ;; The oversize decision is taken AFTER reduction, on the receipt that
+    ;; would actually be published: if something STILL will not fit once every
+    ;; droppable field is gone, the next_call is what is left, and blaming it
+    ;; is then a fact rather than a guess. The guard runs last so the
+    ;; refusal's own kind is checked too.
     (checked-refusal-kind! (or (oversize-next-call-refusal bounded)
-                              (oversize-receipt-refusal bounded)
                               bounded))))
 
 ;; ---------------------------------------------------------------------------

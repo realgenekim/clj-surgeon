@@ -5124,32 +5124,28 @@
                    budget "-byte number the gate calls a budget"))
           (is (false? (:ok published))
               "a call that cannot be carried inside the budget must refuse")
-          (is (contains? #{:next-call-exceeds-public-budget
-                           :receipt-exceeds-public-budget}
-                         (:error-type published))
-              (str "and it refuses under one of the two oversize kinds: "
+          (is (= :next-call-exceeds-public-budget (:error-type published))
+              (str "and it refuses under the oversize kind: "
                    (pr-str (:error-type published))))
           (is (contains? admit/admit-refusal-kinds (:error-type published))))))
     (testing "AT the budget the call fits and the ENVELOPE is what does not"
-      ;; the exact 271-byte class the review measured: the call is legal, the
-      ;; receipt carrying it is not, and the refusal says which
+      ;; the exact class the review measured: the call itself is exactly the
+      ;; budget's length, and the receipt carrying it is over -- and since
+      ;; there is nothing left to reduce, the next_call is what does not fit
       (let [published (publish budget)]
-        (is (= :receipt-exceeds-public-budget (:error-type published))
-            (str "at exactly the budget the call itself is legal; what fails "
-                 "is the receipt around it: " (pr-str (:error-type published))))
-        (is (> (:receipt_bytes published) budget))
-        (is (= budget (:public_byte_budget published)))
-        (is (seq (:largest_fields published))
-            "and it names the fields that dominate")))))
+        (is (= :next-call-exceeds-public-budget (:error-type published)))
+        (is (> (:receipt_bytes published) budget)
+            "the refusal names the size of the receipt it could not publish")
+        (is (= budget (:public_byte_budget published)))))))
 
 ;; @spec MCP-OP-ADMIT-139
-(deftest a-preview-whose-receipt-cannot-fit-refuses-through-the-entrance
+(deftest a-preview-whose-receipt-cannot-fit-is-reduced-and-says-so
   ;; The same rule through the real entrance, on the field that has no
   ;; trimmer. `hashes` carries one entry per path and is a MAP, so the
   ;; bounded-payload machinery -- which shortens vectors -- cannot touch it.
-  ;; Thirty files under 200-character directory names put the receipt past
-  ;; the budget while the follow-up call itself is still legal, so this is the
-  ;; receipt refusal and not the next_call one.
+  ;; Round four published this receipt whole and over the budget. It is now
+  ;; REDUCED: the bulk goes, the identity stays, and the receipt names what
+  ;; it dropped.
   (let [root (temp-dir)
         n 30
         dir-a (apply str (repeat 200 "a"))
@@ -5168,18 +5164,59 @@
       (write-sources! root sources)
       (let [receipt (admit/execute-request!
                       (stub-config root) {:patch patch :verify "none"})]
-        (is (false? (:ok receipt))
-            (str "a receipt this large must refuse, not publish: "
-                 (write-refusal/json-bytes receipt) " bytes"))
-        (is (= :receipt-exceeds-public-budget (:error-type receipt))
-            (str "got " (pr-str (:error-type receipt))))
         (is (<= (write-refusal/json-bytes receipt)
                 write-refusal/public-byte-budget)
-            "and the refusal itself fits the budget it names")
-        (is (> (:receipt_bytes receipt) write-refusal/public-byte-budget))
-        (is (= write-refusal/public-byte-budget (:public_byte_budget receipt)))
-        (is (str/includes? (:remedy receipt) "fewer files")))
+            (str "the published receipt is "
+                 (write-refusal/json-bytes receipt) " bytes, past the "
+                 write-refusal/public-byte-budget "-byte budget"))
+        (is (<= (count (#'admit/summary (assoc receipt :elapsed_ms 1.0)))
+                write-refusal/public-byte-budget)
+            "and so is the text that spells it")
+        (is (true? (:receipt_reduced receipt))
+            (str "a reduced receipt must say so: " (pr-str (:error-type receipt))))
+        (is (seq (:receipt_omitted_fields receipt))
+            "and must name the fields it dropped")
+        (is (> (:receipt_bytes_before receipt)
+               write-refusal/public-byte-budget)
+            "and the size it could not have published")
+        (assert-text-names-every-structured-leaf! receipt "reduced-preview"))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-139
+(deftest a-reduced-receipt-never-loses-its-kind-or-its-safety-claim
+  ;; The regression the battery caught. A 64-file rolled-back transaction is
+  ;; the most safety-critical receipt this gate produces -- a third party
+  ;; changed the files and the recovery could not put them back -- and the
+  ;; first draft of this bound replaced it with a size complaint whose remedy
+  ;; was "use fewer files". Reduction keeps the identity; only bulk goes.
+  (let [huge (into {} (for [i (range 400)]
+                        [(str "src/very/long/path/segment/" i "/file" i ".clj")
+                         {:pre (apply str (repeat 64 "a"))
+                          :post (apply str (repeat 64 "b"))}]))
+        receipt (#'admit/bound-receipt
+                  {:ok false
+                   :operation :admit-patch-refused
+                   :mode "commit"
+                   :error-type :transaction-recovery-required
+                   :error "the rollback could not restore src/a/f000.clj"
+                   :remedy "restore src/a/f000.clj from version control"
+                   :source-unchanged false
+                   :mutation_attempted true
+                   :hashes huge})]
+    (is (= :transaction-recovery-required (:error-type receipt))
+        (str "a size bound must never relabel a refusal: "
+             (pr-str (:error-type receipt))))
+    (is (false? (:source-unchanged receipt))
+        "nor lose the claim that the workspace WAS changed")
+    (is (true? (:mutation_attempted receipt)))
+    (is (str/includes? (str (:remedy receipt)) "version control")
+        "nor replace the remedy with one about payload size")
+    (is (true? (:receipt_reduced receipt)))
+    (is (some #{"hashes"} (:receipt_omitted_fields receipt))
+        (str "the bulk is what goes: "
+             (pr-str (:receipt_omitted_fields receipt))))
+    (is (<= (write-refusal/json-bytes receipt)
+            write-refusal/public-byte-budget))))
 
 ;; @spec MCP-OP-ADMIT-135
 (deftest a-next-call-that-alone-exceeds-the-public-budget-is-a-typed-refusal
