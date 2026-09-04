@@ -1777,3 +1777,5 @@ The receipt nobody on Anvil wrote: 429/4323/0 on the merge gate, 840/6916/0 bb, 
 skipped. The three CI-only findings are all the ambient-state class from 2026-09-03 (a resolver that only works where
 clj-kondo happens to live; a test asserting the box has eight cores; a broken make recipe nobody runs) — exactly what an
 independent machine is for. One escalation for Gene: the nightly is dormant until MCP/main is the default branch.
+
+## 20:50Z — usage watch: tools "admit_clojure_patch": 20 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 20:48Z load 12.13 ; === rc 0 end 20:50Z)
