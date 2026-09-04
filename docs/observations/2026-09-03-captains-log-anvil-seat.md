@@ -1521,3 +1521,10 @@ dispatch/fold seam (state.clj L380-425, L500-530; applyAuthoritativeEditorFrame;
 registry tail. Filed as the round-seven product ask (a seventh leg, "dispatch", plus a registry-tail sample) in the replay
 result doc. The raw floor on this harness is ~12 (7 feature + 5 repo ceremony); the receipt cannot remove ceremony — arm G
 (the admit gate) is the next lever. Gates on both clones run by the seat: test-js exit 0, runtests-unit 229/721/0 and 229/722/0.
+
+## 14:45Z admit gate round eight built (8b4f88d2); Sol round-nine review launched
+
+The blocking item (an unowned battery receipt in the fast gate) closed by a counted, loud skip rather than wiring a 3-arm
+battery into a merge gate; the round-nine brief asks Sol to argue whether a counted skip is an honest gate and to break the
+battery on a fresh clone to see what goes red. The order witness (MCP-OP-ADMIT-151) shows five failures when the ladder runs
+before the cheap move. Fresh-clone gates green. One .PHONY conflict vs the trunk, composed at landing.
