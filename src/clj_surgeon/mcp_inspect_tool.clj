@@ -1908,8 +1908,8 @@
     ;; The last two rungs of the fit ladder, before any mode dispatch: a
     ;; receipt that leaves no room to render itself still names the tool and
     ;; points at the receipt, in every mode.
-    (= "notice" (:text_omitted result)) inspect/text-omitted-notice
-    (= "name" (:text_omitted result)) inspect/minimum-text-block
+    (= "notice" (:text_omitted result)) (inspect/text-omitted-notice result)
+    (= "name" (:text_omitted result)) (inspect/minimum-text-block result)
 
     (and (= "verification-job" (:mode result)) (:status result))
     (verification-job-summary result)

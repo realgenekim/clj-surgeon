@@ -891,6 +891,7 @@
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
 ;; @spec MCP-OP-STUDY-047
+;; @spec MCP-OP-STUDY-048
 (defn fact-block
   "The bounded receipt-fact section, whether any fact was dropped, and WHICH.
 
@@ -903,6 +904,18 @@
   same bound governs both, because both are the receipt. The JSON pointer of
   every dropped fact is carried out, so a caller that walks the block can name
   them all even though the rendering names the first few and counts the rest.
+
+  @spec MCP-OP-STUDY-048 — the DECLARATION is the FLOOR. The count header and
+  the `dropped:` line are rendered whenever anything is dropped, whatever the
+  budget says. A rendering that omits leaves SILENTLY is the one outcome
+  MCP-OP-STUDY-044 exists to prevent, and it is worst exactly where the budget
+  is tightest; `fit-public-result` measures the whole candidate, so a
+  declaration the budget cannot pay for becomes a typed refusal THERE rather
+  than a silent omission here. Field evidence (Sol O2 round-5 review, section
+  3): this stopped at `shown = 0` before establishing that its own header and
+  `dropped:` line fit, and then gated `:section` on the same budget the lines
+  had been charged to — `allowance=0 dropped_line_chars=139 section_chars=nil
+  shown=0 total=2 dropped=true`.
 
   @spec MCP-OP-STUDY-047 — the header's `X of N` is DERIVED from the same
   carriage walk `uncarried-leaves` applies to the published text: `N` is every
@@ -962,15 +975,19 @@
      ;; The section is rendered HERE because this is where it was charged. A
      ;; section assembled elsewhere out of these pieces would be a second
      ;; rendering, and the budget would have been spent on the other one.
-     :section (let [text (when (or (pos? shown) (:dropped rendered))
-                           (:text rendered))]
-                (when (and text (<= (count text) budget)) text))}))
+     ;; @spec MCP-OP-STUDY-048 — NOT gated on fitting the budget. A
+     ;; declaration the allowance cannot pay for is still the truth about what
+     ;; this text omits; suppressing it publishes an undeclared omission.
+     :section (when (or (pos? shown) (:dropped rendered)) (:text rendered))}))
 
 ;; @spec MCP-OP-STUDY-044
 (defn fact-section
   "The rendered receipt-fact section, or nil when the structural rendering
-  already carried every leaf, or when the allowance cannot pay for even the
-  count line.
+  already carried every leaf.
+
+  @spec MCP-OP-STUDY-048 — never nil merely because the allowance is small:
+  an allowance too small to pay for the declaration is a reason to REFUSE, in
+  `fit-public-result`, not a reason to omit leaves silently here.
 
   An elision NAMES what it dropped. `receipt facts · 3 of 9 rendered` tells a
   caller that six leaves are missing; `dropped: error, path, … (+4 more)`
@@ -1935,21 +1952,54 @@
       {:blocks kept :dropped 0 :total (count blocks) :used used})))
 
 ;; @spec MCP-OP-STUDY-040
-(def text-omitted-notice
-  "The text block for a receipt that leaves no room to render itself.
-
-  The last rung before a refusal: it names the tool, says this text is not
-  the receipt, and points at the place the complete receipt is."
+(def text-omitted-notice-header
+  "The header of the text block for a receipt that leaves no room to render
+  itself: it names the tool, says this text is not the receipt, and points at
+  the place the complete receipt is."
   (str "inspect_clojure\n"
        "! text omitted · the complete receipt left no room to render it\n"
        "→ the complete result is in structuredContent\n"
        "→ read_structured_content"))
 
 ;; @spec MCP-OP-STUDY-040
-(def minimum-text-block
-  "The shortest honest text block there is: the tool's own name. A receipt
-  that cannot leave room even for this is a typed refusal."
+(def minimum-text-header
+  "The shortest honest naming there is: the tool's own name."
   "inspect_clojure")
+
+;; @spec MCP-OP-STUDY-048
+(defn- rung-text
+  "One fall-through rung's text: its fixed header, plus the DECLARATION of
+  every receipt leaf that header does not carry.
+
+  Field evidence (Sol O2 round-5 review, 2026-09-04, section 3): the notice
+  rung published 151 characters over ELEVEN uncarried leaves and zero fact
+  pointers. A rung exists to say `the receipt did not fit here`; a rung that
+  cannot say WHAT did not fit tells a caller less than the count line it
+  replaced. The declaration is bounded by construction — one count line and at
+  most `max-named-dropped-labels` pointers — so a rung carrying it is still a
+  rung."
+  [header result]
+  (let [block (fact-block header result 0)]
+    (if-let [section (fact-section block)]
+      (str header "\n\n" section)
+      header)))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-048
+(defn text-omitted-notice
+  "The text block for a receipt that leaves no room to render itself — the
+  last rung before a refusal, and it still names what it omits."
+  [result]
+  (rung-text text-omitted-notice-header result))
+
+;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-STUDY-048
+(defn minimum-text-block
+  "The shortest honest text block there is: the tool's own name, and the count
+  and first pointers of the receipt leaves it does not carry. A receipt that
+  cannot leave room even for this is a typed refusal."
+  [result]
+  (rung-text minimum-text-header result))
 
 ;; @spec MCP-OP-STUDY-041
 ;; @spec MCP-OP-STUDY-044
@@ -1961,8 +2011,8 @@
   claims terminal evidence over evidence it dropped."
   [result]
   (case (:text_omitted result)
-    "notice" text-omitted-notice
-    "name" minimum-text-block
+    "notice" (text-omitted-notice result)
+    "name" (minimum-text-block result)
     (let [results (:results result)
           forms (reduce + 0 (map #(or (:form_count %) 0) results))
           matches (reduce + 0 (map #(or (:match_count %) 0) results))

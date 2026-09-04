@@ -4389,17 +4389,30 @@
   ;; A receipt whose structuredContent alone leaves no room for any rendering:
   ;; the fit falls through the allowance band to the notice rung. That rung
   ;; must still say how many structured leaves it omits and point at them.
-  (let [filler (apply str (repeat (- inspect-tool/max-public-result-bytes 450)
-                                  "x"))
-        raw (clocked {:ok true
-                      :operation "inspect_clojure"
-                      :read_complete true
-                      :next_action "none"
-                      :source_character_count 0
-                      :request_count 1
-                      :file_count 1
-                      :results []
-                      :filler filler})
+  (let [padded (fn [n]
+                 (clocked {:ok true
+                           :operation "inspect_clojure"
+                           :read_complete true
+                           :next_action "none"
+                           :source_character_count 0
+                           :request_count 1
+                           :file_count 1
+                           :results []
+                           :filler (apply str (repeat n "x"))}))
+        ;; The notice rung sits in a narrow band: structuredContent must fit
+        ;; while leaving no room for ANY ordinary rendering. Search for it
+        ;; rather than hard-coding a padding, so the witness keeps finding the
+        ;; rung when the rendering's own size changes.
+        raw (or (first
+                  (for [n (range (- inspect-tool/max-public-result-bytes 200)
+                                 (- inspect-tool/max-public-result-bytes 900)
+                                 -1)
+                        :let [candidate (padded n)]
+                        :when (= "notice" (:text_omitted
+                                            (inspect-tool/fit-public-result
+                                              candidate)))]
+                    candidate))
+                (padded (- inspect-tool/max-public-result-bytes 450)))
         published (clocked (inspect-tool/fit-public-result raw))
         text (inspect-tool/inspect-summary published)
         audited (inspect/uncarried-leaves text published)
