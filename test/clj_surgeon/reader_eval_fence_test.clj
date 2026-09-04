@@ -242,10 +242,100 @@
 ;; ---------------------------------------------------------------------------
 
 (def evaluating-reader-names
-  "The `clojure.core` fns that READ AND EVALUATE. `read-string` honours
-   `*read-eval*` (true by default), so `#=(…)` in its input runs; `load-string`
-   compiles its input outright."
-  #{"read-string" "load-string"})
+  "The `clojure.core` fns that READ AND EVALUATE, by unqualified name.
+
+   Round-23 review finding 4 — the oracle correction, taken on the rung the
+   house rule names: *if an oracle existed and MISSED the bug, correct the
+   oracle in the same fix.* This set held `read-string` and `load-string`
+   only, which matched MCP-OP-SHELL-ARGV-005 as that requirement was written
+   but left five siblings of the same defect invisible. There was no present
+   violation either way — the allow-list is honestly empty on the wider set
+   too — so this buys nothing today and everything tomorrow, which is the
+   whole point of a ratchet.
+
+   Why each one is here:
+
+   - `read-string`  honours `*read-eval*` (true by default), so `#=(…)` runs.
+   - `read`         the SAME reader over a `PushbackReader`, and it honours
+                    `*read-eval*` identically. It was the one most likely to
+                    be reached for as the \"fix\" for `read-string`.
+   - `read+string`  `read`, returning the text beside the value; same reader,
+                    same `*read-eval*`.
+   - `load-string`  compiles its input outright.
+   - `load-reader`  the same, from a Reader.
+   - `load-file`    the same, from a path — and a PATH is the shape this
+                    round's finding 3 is about, so a build file naming one is
+                    exactly the vector to keep shut.
+   - `load`         the same, from classpath resource names.
+   - `eval`         not a reader, and included deliberately. Every entry above
+                    is dangerous only because it ENDS in evaluation; a rule
+                    that fences the readers and leaves the evaluator open
+                    fences a spelling rather than a capability. The two SCI
+                    evaluators in `src/` are `sci/eval-form` and
+                    `sci/eval-string+` — namespace-qualified to `sci`, not to
+                    `clojure.core` — so they are not hits here, which is
+                    correct: they are declared features behind an explicit
+                    allow-list interpreter, and their bounds are a separate
+                    question from this one."
+  #{"read-string" "read" "read+string"
+    "load-string" "load-reader" "load-file" "load"
+    "eval"})
+
+(def collides-with-ordinary-locals
+  "The subset of `evaluating-reader-names` that is ALSO a plausible local name,
+   and is therefore matched in OPERATOR POSITION only.
+
+   Found by running the widened set, not by reasoning about it. The corrected
+   oracle immediately reported five violations in a repository the round-23
+   review had swept and called clean — and every one was a false positive:
+
+     src/clj_surgeon/core.clj:1301   (let [read (try {:source (slurp p)} …)]
+     src/clj_surgeon/core.clj:1304     (if-let [error (:unreadable read)]
+     src/clj_surgeon/core.clj:1309     (let [source (:source read)
+
+   `read` there is a LOCAL holding the result of a slurp, and the same shape
+   accounts for the other four files. That is the failure mode a widened
+   ratchet actually has: not silence, but noise, and a gate that cries wolf
+   five times on its first run is a gate somebody switches off. So the wide
+   set is kept and the MATCH RULE is made precise instead of the set made
+   narrow again.
+
+   The rule, per tier:
+
+   - `read-string`, `read+string`, `load-string`, `load-reader`, `load-file`
+     are matched in ANY position, exactly as the round-23 oracle matched its
+     two. Nothing in this repository binds a local by those names and a
+     higher-order `(map read-string xs)` evaluates just as surely as a direct
+     call, so the original strength is preserved unchanged.
+
+   - `read`, `load` and `eval` are matched in operator position, or with a
+     namespace (`clojure.core/read`), or as interop. Bare and in argument
+     position they are overwhelmingly a local, as the five hits above show.
+
+   What this gives up, stated rather than hidden: a bare higher-order
+   reference to one of the three — `(map eval forms)` — is not a hit. It is
+   the price of the three names being ordinary English, it is narrower than
+   the gap round twenty-three shipped (which missed all six in every
+   position), and it is closed the moment the reference is namespaced."
+  #{"read" "load" "eval"})
+
+(def evaluating-interop-names
+  "The same capability reached by Java interop, matched on the WHOLE symbol.
+
+   `evaluating-reader-names` is matched by unqualified name against an alias
+   set for `clojure.core`, which cannot see these: `(namespace 'Compiler/load)`
+   is `\"Compiler\"`, and `Compiler` is not an alias of `clojure.core`, so
+   every one of these walked past that check. They are the same three
+   capabilities one layer down — the reader and the compiler clojure.core
+   itself calls — and a fence the caller can step around by writing
+   `RT/readString` instead of `read-string` is a fence around a spelling.
+
+   Matched on both the bare and the fully-qualified interop spellings, since
+   an `:import` makes the short form legal."
+  #{"Compiler/load" "Compiler/eval" "Compiler/loadFile"
+    "clojure.lang.Compiler/load" "clojure.lang.Compiler/eval"
+    "clojure.lang.Compiler/loadFile"
+    "RT/readString" "clojure.lang.RT/readString"})
 
 (def allowed-evaluating-reader-sites
   "The enumerated, JUSTIFIED exceptions. TARGET: EMPTY.
@@ -282,6 +372,53 @@
               (swap! aliases conj (name as)))))))
     @aliases))
 
+(defn- evaluating-reader-calls-in
+  "Every evaluating-reader call in one SOURCE TEXT, as `[label symbol]`.
+
+   Split out from the file-reading fn so the detector can be driven on
+   synthetic sources. Round-23 review finding 4 was that the oracle's NAME SET
+   was too narrow, and a witness for that cannot be written against `src/`:
+   the repository is clean, so the correct set and the wrong one both produce
+   an empty result there. The subject of that witness is the DETECTOR, and a
+   detector that can only be pointed at a real tree cannot be tested until
+   the tree is dirty."
+  [label text]
+  (let [root (p/parse-string-all text)
+        forms (try (n/sexpr root) (catch Exception _ nil))
+        aliases (core-aliases (when (seq? forms) forms))
+        hits (atom [])]
+    (letfn [(operator? [node parent]
+              ;; The head of a list — the position where a call actually
+              ;; evaluates. Whitespace and comment children are skipped so
+              ;; `(\n  read r)` is still operator position.
+              (and parent
+                   (= :list (n/tag parent))
+                   (identical? node
+                               (first (remove #(or (n/whitespace? %)
+                                                   (n/comment? %))
+                                              (n/children parent))))))
+            (walk [node parent]
+              (when (= :token (n/tag node))
+                (let [v (try (n/sexpr node) (catch Exception _ nil))]
+                  (when (and (symbol? v)
+                             (or (contains? evaluating-interop-names (str v))
+                                 (and (contains? evaluating-reader-names (name v))
+                                      (contains? aliases (namespace v))
+                                      ;; The two-tier rule. A name that also
+                                      ;; reads as an ordinary local counts only
+                                      ;; where it is being CALLED, or where it
+                                      ;; carries a namespace and so cannot be a
+                                      ;; local at all.
+                                      (or (not (contains? collides-with-ordinary-locals
+                                                          (name v)))
+                                          (some? (namespace v))
+                                          (operator? node parent)))))
+                    (swap! hits conj [label (str v)]))))
+              (when (n/inner? node)
+                (doseq [child (n/children node)] (walk child node))))]
+      (walk root nil))
+    @hits))
+
 (defn- evaluating-reader-calls
   "Every call to an evaluating reader in one source, as `[line symbol]`.
 
@@ -289,22 +426,64 @@
    or a comment naming the fn — three of which exist in `src/` and describe
    this very rule — is not a hit."
   [^java.io.File file]
-  (let [text (slurp file)
-        root (p/parse-string-all text)
-        forms (try (n/sexpr root) (catch Exception _ nil))
-        aliases (core-aliases (when (seq? forms) forms))
-        hits (atom [])]
-    (letfn [(walk [node]
-              (when (= :token (n/tag node))
-                (let [v (try (n/sexpr node) (catch Exception _ nil))]
-                  (when (and (symbol? v)
-                             (contains? evaluating-reader-names (name v))
-                             (contains? aliases (namespace v)))
-                    (swap! hits conj [(.getName file) (str v)]))))
-              (when (n/inner? node)
-                (doseq [child (n/children node)] (walk child))))]
-      (walk root))
-    @hits))
+  (evaluating-reader-calls-in (.getName file) (slurp file)))
+
+;; @spec MCP-OP-SHELL-ARGV-005
+(deftest the-oracle-names-every-evaluator-it-claims-to-fence
+  ;; Round-23 review finding 4, as a witness rather than a promise. This
+  ;; drives the DETECTOR, not the repository: `src/` is clean, so the narrow
+  ;; set and the corrected one both return empty there and the ratchet's
+  ;; own regression is invisible at its only call site. Shrink
+  ;; `evaluating-reader-names` back to the round-23 pair and this goes red
+  ;; naming the five it stopped seeing.
+  (doseq [[label source expected]
+          [["read"         "(ns x)\n(defn f [r] (read r))"                    "read"]
+           ["read+string"  "(ns x)\n(defn f [r] (read+string r))"             "read+string"]
+           ["read-string"  "(ns x)\n(defn f [s] (read-string s))"             "read-string"]
+           ["load-string"  "(ns x)\n(defn f [s] (load-string s))"             "load-string"]
+           ["load-reader"  "(ns x)\n(defn f [r] (load-reader r))"             "load-reader"]
+           ["load-file"    "(ns x)\n(defn f [p] (load-file p))"               "load-file"]
+           ["load"         "(ns x)\n(defn f [p] (load p))"                    "load"]
+           ["eval"         "(ns x)\n(defn f [form] (eval form))"              "eval"]
+           ["qualified"    "(ns x)\n(defn f [s] (clojure.core/read-string s))" "clojure.core/read-string"]
+           ["aliased"      "(ns x (:require [clojure.core :as c]))\n(defn f [s] (c/read-string s))" "c/read-string"]
+           ["Compiler/load"   "(ns x)\n(defn f [r] (Compiler/load r))"        "Compiler/load"]
+           ["RT/readString"   "(ns x)\n(defn f [s] (RT/readString s))"        "RT/readString"]
+           ["clojure.lang.RT" "(ns x)\n(defn f [s] (clojure.lang.RT/readString s))"
+                                                            "clojure.lang.RT/readString"]]]
+    (testing label
+      (let [hits (set (map second (evaluating-reader-calls-in label source)))]
+        (is (contains? hits expected)
+            (str "the class ratchet does not see " (pr-str expected)
+                 " — a source calling it would pass the gate. Saw: "
+                 (pr-str (vec (sort hits))))))))
+  (testing "a local named `read` is not a reader call"
+    ;; The five false positives the widened set produced on its first run,
+    ;; reduced to their shape. This is the assertion that keeps the two-tier
+    ;; rule honest: delete the tier and this goes red.
+    (let [local (str "(ns x)\n"
+                     "(defn f [p]\n"
+                     "  (let [read (try {:source (slurp p)} (catch Exception e {:err e}))]\n"
+                     "    (if-let [e (:err read)] e (:source read))))")]
+      (is (empty? (evaluating-reader-calls-in "local" local))
+          (str "a local binding named `read` was reported as a reader call: "
+               (pr-str (evaluating-reader-calls-in "local" local)))))
+    ;; …but calling it IS a hit, so the tier narrows the position and never
+    ;; the capability.
+    (is (seq (evaluating-reader-calls-in "call" "(ns x)\n(defn f [r] (read r))"))
+        "a real (read r) call must still be a hit"))
+  (testing "and it still does not fire on prose that merely names them"
+    ;; The other half of the correction. Widening a set is how a ratchet
+    ;; starts crying wolf, and three docstrings in src/ describe this very
+    ;; rule by name; a detector that reads them as violations gets switched
+    ;; off, which is worse than the narrow set it replaced.
+    (let [prose (str "(ns x\n  \"This docstring names read-string, load-file, "
+                     "eval and RT/readString, and calls none of them.\")\n"
+                     ";; nor does this comment: load-string, read+string\n"
+                     "(defn f [s] (clojure.edn/read-string s))")]
+      (is (empty? (evaluating-reader-calls-in "prose" prose))
+          (str "the ratchet fired on prose or on clojure.edn/read-string: "
+               (pr-str (evaluating-reader-calls-in "prose" prose)))))))
 
 ;; @spec MCP-OP-SHELL-ARGV-005
 (deftest no-source-in-this-repository-calls-the-evaluating-reader
