@@ -4478,7 +4478,7 @@
   ;; cheap enough to cover the whole enumeration, and the two named live
   ;; reproductions below (analyzer-memory-exhausted, verification-incomplete)
   ;; carry the real production path for the two kinds the review named.
-  (doseq [kind (admit-refusal-kinds-in-source)]
+  (doseq [kind (map name admit/admit-refusal-kinds)]
     (testing kind
       (assert-refusal-text-superset!
         {:ok false
@@ -5034,29 +5034,419 @@
   (atom #{}))
 
 ;; @spec MCP-OP-ADMIT-133
+(def ^:private ^:dynamic *inside-the-entrance* false)
+
+;; @spec MCP-OP-ADMIT-133
 (defn- record-and-check-refusal-kinds
+  "Record at the gate's own refusal constructor, which is the one point every
+  published refusal passes -- `bound-receipt` for everything
+  `execute-request!` returns, and the handler's edge for the three kinds only
+  the MCP surface can produce."
   [run-tests!]
   (reset! observed-refusal-kinds #{})
-  (let [original admit/execute-request!]
-    (with-redefs [admit/execute-request!
+  (let [guard admit/checked-refusal-kind!
+        execute admit/execute-request!
+        handle admit/handle-admit-clojure-patch]
+    (with-redefs [;; recorded only while a call is genuinely inside one of
+                  ;; the two public entrances -- a witness that calls the
+                  ;; guard directly to prove it rejects a planted kind must
+                  ;; not thereby report that kind as something the gate
+                  ;; produces
+                  admit/checked-refusal-kind!
+                  (fn [receipt]
+                    (when (and *inside-the-entrance*
+                               (map? receipt) (false? (:ok receipt)))
+                      (swap! observed-refusal-kinds conj (:error-type receipt)))
+                    (guard receipt))
+                  admit/execute-request!
                   (fn [& args]
-                    (let [receipt (apply original args)]
-                      (when (and (map? receipt) (false? (:ok receipt)))
-                        (swap! observed-refusal-kinds conj (:error-type receipt)))
-                      receipt))]
+                    (binding [*inside-the-entrance* true] (apply execute args)))
+                  admit/handle-admit-clojure-patch
+                  (fn [& args]
+                    (binding [*inside-the-entrance* true] (apply handle args)))]
       (run-tests!)))
   (testing "MCP-OP-ADMIT-133: the enumeration is the set the entrance produces"
-    (let [observed (into (sorted-set) (map name) @observed-refusal-kinds)
-          enumerated (admit-refusal-kinds-in-source)]
+    (let [observed @observed-refusal-kinds
+          enumerated admit/admit-refusal-kinds]
       (is (seq observed) "the suite drove no refusal at all; the driver is broken")
-      (is (empty? (clojure.set/difference observed enumerated))
+      (is (empty? (set/difference observed enumerated))
           (str "the entrance published kinds the enumeration has never heard "
-               "of: " (pr-str (clojure.set/difference observed enumerated))))
-      (is (empty? (clojure.set/difference enumerated observed))
+               "of: " (pr-str (set/difference observed enumerated))))
+      (is (empty? (set/difference enumerated observed))
           (str "the enumeration claims kinds no fixture drives, so nothing "
                "proves they exist or that their text is a superset: "
-               (pr-str (clojure.set/difference enumerated observed))))
+               (pr-str (set/difference enumerated observed))))
       (is (= enumerated observed)
           (str "enumerated " (count enumerated) ", observed " (count observed))))))
 
 (use-fixtures :once record-and-check-refusal-kinds)
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-ADMIT-133: one live fixture per enumerated kind the rest of this
+;; suite does not already provoke. Each drives the real entrance; the :once
+;; fixture above records what it produced and holds the enumeration to it.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-133
+(defn- refusal-kind-of
+  [root sources params & [overrides]]
+  (write-sources! root sources)
+  (let [receipt (admit/execute-request! (stub-config root overrides) params)]
+    (is (false? (:ok receipt))
+        (str "fixture did not refuse; it returned " (pr-str (:error-type receipt))))
+    (:error-type receipt)))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-invalid-workspace-root-refuses-at-the-router
+  (let [root (temp-dir)]
+    (try
+      (is (= :invalid-workspace-root
+             (refusal-kind-of root base-sources
+                              {:patch clean-multi-file-patch :verify "focused"
+                               :workspace_root "relative/not/canonical"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-binary-patch-is-refused-as-unsupported
+  (let [root (temp-dir)]
+    (try
+      (is (= :binary-patch-unsupported
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "diff --git a/src/app/core.clj b/src/app/core.clj\n"
+                            "index 0000000..1111111 100644\n"
+                            "Binary files a/src/app/core.clj and "
+                            "b/src/app/core.clj differ\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest two-hunks-that-overlap-refuse-before-anything-is-applied
+  ;; Out-of-order unified hunks: the second declares a :pre-start behind the
+  ;; cursor the first left, which is the shape locate-hunk refuses.
+  (let [root (temp-dir)]
+    (try
+      (is (= :overlapping-hunks
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "--- a/src/app/core.clj\n"
+                            "+++ b/src/app/core.clj\n"
+                            "@@ -9,2 +9,2 @@\n"
+                            " (defn label\n"
+                            "-  [state]\n"
+                            "+  [state ]\n"
+                            "@@ -5,2 +5,2 @@\n"
+                            " (defn handle-tick\n"
+                            "-  [state]\n"
+                            "+  [state  ]\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-source-path-that-is-a-directory-is-not-a-regular-file
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (.mkdirs (io/file root "src/app/dir.clj"))
+      (is (= :source-not-regular-file
+             (refusal-kind-of
+               root {}
+               {:patch (str "--- a/src/app/dir.clj\n"
+                            "+++ b/src/app/dir.clj\n"
+                            "@@ -1,1 +1,1 @@\n"
+                            "-(ns app.dir)\n"
+                            "+(ns app.dir2)\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-creation-whose-parent-is-a-regular-file-refuses
+  (let [root (temp-dir)]
+    (try
+      (is (= :target-parent-not-directory
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "--- /dev/null\n"
+                            "+++ b/src/app/core.clj/child.clj\n"
+                            "@@ -0,0 +1,1 @@\n"
+                            "+(ns app.child)\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-source-path-under-a-regular-file-is-an-invalid-source-path
+  ;; ENOTDIR from .toRealPath, which is a FileSystemException and not the
+  ;; NoSuchFileException the source-file-not-found catch takes.
+  (let [root (temp-dir)]
+    (try
+      (is (= :invalid-source-path
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "--- a/src/app/core.clj/child.clj\n"
+                            "+++ b/src/app/core.clj/child.clj\n"
+                            "@@ -1,1 +1,1 @@\n"
+                            "-(ns app.child)\n"
+                            "+(ns app.child2)\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-uninitialised-server-refuses-at-the-handlers-edge
+  ;; server-not-initialized is one of three kinds only the MCP surface can
+  ;; produce; execute-request! has no path to it.
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        received (promise)]
+    (try
+      (reset! config-atom nil)
+      (admit/handle-admit-clojure-patch
+        nil {"patch" clean-multi-file-patch "verify" "focused"}
+        (fn [result & _] (deliver received result)))
+      (is (some? (deref received 5000 nil))
+          "the handler must answer even with no server configured")
+      (finally (reset! config-atom previous)))))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- slurp-safe
+  [file]
+  (try (slurp file) (catch Exception _ nil)))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- transaction-fixture-sources
+  "Files across two directories; the second is made unwritable so its write
+  fails after the first directory's writes have already landed."
+  [n]
+  (into {"src/b/util.clj" util-source
+         ;; the focused-test files the gate derives by path convention;
+         ;; commit mode refuses verify=none outright (MCP-OP-ADMIT-120), so
+         ;; this fixture has to reach the transaction through a real
+         ;; verification that passes
+         "test/b/util_test.clj" "(ns app.util-test)\n"}
+        (mapcat (fn [i]
+                  [[(format "src/a/f%03d.clj" i)
+                    (format "(ns app.f%03d)\n\n(defn f\n  [x]\n  (inc x))\n" i)]
+                   [(format "test/a/f%03d_test.clj" i)
+                    (format "(ns app.f%03d-test)\n" i)]])
+                (range n))))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- transaction-fixture-patch
+  [n]
+  (str (apply str
+              (for [i (range n)]
+                (format (str "--- a/src/a/f%03d.clj\n+++ b/src/a/f%03d.clj\n"
+                             "@@ -1,5 +1,5 @@\n (ns app.f%03d)\n \n (defn f\n"
+                             "   [x]\n-  (inc x))\n+  (inc (inc x)))\n")
+                        i i i)))
+       "--- a/src/b/util.clj\n"
+       "+++ b/src/b/util.clj\n"
+       "@@ -2,4 +2,4 @@\n"
+       " \n"
+       " (defn clamp\n"
+       "   [value low high]\n"
+       "-  (max low (min high value)))\n"
+       "+  (long (max low (min high value))))\n"))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-write-that-fails-mid-transaction-rolls-back-and-says-so
+  ;; src/b is unwritable, so the last file's write fails after every file in
+  ;; src/a has landed. Nothing else touches the tree, so every rollback
+  ;; succeeds and the receipt is the rolled-back kind.
+  (let [root (temp-dir)
+        n 8]
+    (try
+      (write-sources! root (transaction-fixture-sources n))
+      (shell/sh "chmod" "555" (.getPath (io/file root "src/b")))
+      (let [receipt (admit/execute-request!
+                      (stub-config root)
+                      {:patch (transaction-fixture-patch n) :mode "commit"
+                       :verify "focused"})]
+        (is (false? (:ok receipt)))
+        (is (= :transaction-write-failed (:error-type receipt))
+            (str "reasons=" (pr-str (:verification_reasons receipt))
+                 " dnr=" (pr-str (:detectors_not_run receipt))
+                 " status=" (pr-str (:verification_status receipt))
+                 " err=" (pr-str (:error receipt))))
+        (is (true? (:source-unchanged receipt))
+            "a rolled-back transaction leaves the workspace as it found it"))
+      (finally
+        (shell/sh "chmod" "755" (.getPath (io/file root "src/b")))
+        (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-rollback-that-cannot-restore-a-file-demands-manual-recovery
+  ;; The one enumerated kind no single-threaded fixture can produce, because
+  ;; it exists to report exactly the case a single thread cannot create: a
+  ;; THIRD PARTY changed a file between the transaction's write and its
+  ;; rollback, so the recovery refuses to overwrite bytes it did not write.
+  ;;
+  ;; The window is widened rather than raced for. src/b is unwritable, so the
+  ;; failing write happens only after all 64 files in src/a have landed, and a
+  ;; watcher clobbers the first of them for the whole duration of those
+  ;; writes. It is stopped and joined before the assertion.
+  (let [root (temp-dir)
+        n 64
+        _ (write-sources! root (transaction-fixture-sources n))
+        first-file (io/file root "src/a/f000.clj")
+        original (slurp-safe first-file)
+        stop? (atom false)
+        watcher (Thread.
+                  (fn []
+                    (while (not @stop?)
+                      (let [current (slurp-safe first-file)]
+                        (when (and current (not= current original)
+                                   (not= current ";; CLOBBERED\n"))
+                          (try (spit first-file ";; CLOBBERED\n")
+                               (catch Exception _ nil)))))))]
+    (try
+      (shell/sh "chmod" "555" (.getPath (io/file root "src/b")))
+      (.start watcher)
+      (let [receipt (admit/execute-request!
+                      (stub-config root)
+                      {:patch (transaction-fixture-patch n) :mode "commit"
+                       :verify "focused"})]
+        (reset! stop? true)
+        (.join watcher 5000)
+        (is (false? (:ok receipt)))
+        (is (= :transaction-recovery-required (:error-type receipt))
+            (str "expected the unrecovered kind; got " (:error-type receipt)))
+        (is (not (true? (:source-unchanged receipt)))
+            (str "a transaction that could not restore a file must not claim "
+                 "the workspace is unchanged")))
+      (finally
+        (reset! stop? true)
+        (.join watcher 5000)
+        (shell/sh "chmod" "755" (.getPath (io/file root "src/b")))
+        (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-unenumerated-refusal-kind-cannot-be-published
+  ;; The reviewer's own sabotage, kept as a standing witness. A kind built
+  ;; dynamically has no literal for a source scan to find, so the guard is
+  ;; placed where the receipt is published rather than where it is written.
+  (let [planted (keyword (str "planted" "-runtime-kind"))]
+    (is (not (contains? admit/admit-refusal-kinds planted)))
+    (is (thrown-with-msg?
+          IllegalArgumentException #"refusal kind is not enumerated"
+          (#'admit/bound-receipt
+            {:ok false :operation :admit-patch-refused :mode "preview"
+             :error-type planted :error "a kind nothing enumerated"}))
+        "bound-receipt is outside every catch on the entrance's path")
+    (is (thrown-with-msg?
+          IllegalArgumentException #"refusal kind is not enumerated"
+          (admit/checked-refusal-kind! {:ok false :error-type nil}))
+        "a refusal with no kind at all is unenumerated too"))
+  (testing "and it is an IllegalArgumentException, not an ex-info"
+    ;; an ex-info carrying an :error-type is exactly what this namespace's
+    ;; catch clauses turn back into a receipt; the violation would launder
+    ;; itself into the surface the guard protects
+    (let [thrown (try (admit/checked-refusal-kind!
+                        {:ok false :error-type :nope})
+                      (catch Throwable t t))]
+      (is (instance? IllegalArgumentException thrown))
+      (is (nil? (ex-data thrown)))))
+  (testing "every enumerated kind passes, and no success is ever blocked"
+    (doseq [kind admit/admit-refusal-kinds]
+      (is (map? (admit/checked-refusal-kind! {:ok false :error-type kind}))
+          (str "the guard rejected its own enumerated kind " kind)))
+    (is (map? (admit/checked-refusal-kind! {:ok true :error-type nil})))))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private admit-refusal-kinds-not-reachable-from-the-entrance
+  "Kinds the source scan finds in the files the gate calls that the entrance
+  cannot publish, each with the reason it cannot.
+
+  This list is the complement, not the enumeration. It exists so the source
+  scan stays useful -- a NEW kind constructed in one of those files is caught
+  by the test below -- without letting the scan pretend to be the authority
+  it demonstrably is not. Every member was driven to ground before it was
+  written here:
+
+  `clj-kondo-unavailable` and `analyzer-output-truncated` are lint-RESULT
+  error types. Measured: they surface as a `detectors_not_run` reason and a
+  `verification_reasons` entry, while the top-level kind is
+  `verification-incomplete`. They are already correctly enumerated by
+  `unverifiable-lint-error-types`.
+
+  `patch-source-missing`, `invalid-compiled-transaction` and
+  `transaction-write-exception` are defensive guards on invariants the gate
+  itself establishes: `freeze-sources` supplies an entry for every parsed
+  file under the same key `apply-parsed` looks up; `compiled-transaction`
+  hardcodes `:ok true`; and the outer transaction catch can only see throws
+  from code whose every path is already taken by an earlier `catch
+  ExceptionInfo`, plus `*on-write-boundary*`, which this gate never binds.
+  Each is reachable only by calling those functions directly.
+
+  `invalid-target-path` has both branches dead on this platform: the `nil?
+  parent` branch cannot fire because the lexical path is always root-anchored
+  and absolute, and the catch-all needs an `InvalidPathException` for a
+  string that already passed `relative-source-path?`, which rejects absolute,
+  `.`, `..` and NUL. A related gap was found while proving this and is filed
+  rather than papered over: a creation target with a 300-character basename
+  returns `admit-tool-failure` from an escaped ENAMETOOLONG IOException,
+  where a typed path refusal is what should fire."
+  #{"analyzer-output-truncated"
+    "clj-kondo-unavailable"
+    "invalid-compiled-transaction"
+    "invalid-target-path"
+    "patch-source-missing"
+    "transaction-write-exception"})
+
+;; @spec MCP-OP-ADMIT-133
+(deftest the-source-scan-survives-only-as-a-complement
+  ;; It is no longer the enumeration; it is a tripwire on the enumeration. A
+  ;; kind constructed in one of the files the gate calls must be either
+  ;; enumerated or named unreachable with a reason -- never merely absent.
+  (let [scanned (admit-refusal-kinds-in-source)
+        enumerated (into (sorted-set) (map name) admit/admit-refusal-kinds)]
+    (is (empty? (set/difference scanned enumerated
+                                admit-refusal-kinds-not-reachable-from-the-entrance))
+        (str "a kind is constructed in the files the admit gate calls and is "
+             "neither enumerated nor justified as unreachable: "
+             (pr-str (set/difference
+                       scanned enumerated
+                       admit-refusal-kinds-not-reachable-from-the-entrance))))
+    (is (empty? (set/intersection
+                  enumerated admit-refusal-kinds-not-reachable-from-the-entrance))
+        "a kind cannot be both enumerated and declared unreachable")
+    (is (empty? (set/difference
+                  admit-refusal-kinds-not-reachable-from-the-entrance scanned))
+        (str "a kind is excused as unreachable that the scan no longer even "
+             "finds; delete the excuse rather than carrying it"))))
+
+;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-135
+(deftest a-preview-whose-next-call-cannot-fit-refuses-through-the-entrance
+  ;; The oversize refusal, driven through execute-request! rather than
+  ;; constructed. expect_pre_sha256 carries one path and one digest per file,
+  ;; so sixty files under deep paths put the follow-up call past the public
+  ;; budget on an otherwise clean preview -- a receipt the gate would
+  ;; happily have published, with a call the caller could not have sent.
+  (let [root (temp-dir)
+        n 60
+        dir-a (apply str (repeat 200 "a"))
+        dir-b (apply str (repeat 200 "b"))
+        path (fn [i] (str "src/" dir-a "/" dir-b "/"
+                          (apply str (repeat 200 "c")) i ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns n" i ")\n\n(defn f\n  [x]\n  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns n" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [receipt (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})]
+        (is (false? (:ok receipt)))
+        (is (= :next-call-exceeds-public-budget (:error-type receipt)))
+        (is (> (:next_call_characters receipt) write-refusal/public-byte-budget))
+        (is (= write-refusal/public-byte-budget (:public_byte_budget receipt))
+            "the refusal names the one budget, not a second one of its own")
+        (is (str/includes? (:remedy receipt) "fewer files")
+            "and the lever that would change the answer"))
+      (finally (delete-tree! root)))))

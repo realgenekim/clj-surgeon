@@ -181,6 +181,90 @@
    :source-unchanged true
    :next_call nil})
 
+;; @spec MCP-OP-ADMIT-133
+(def admit-refusal-kinds
+  "THE enumeration of `:error-type` values the admit gate may publish.
+
+  Round three DERIVED this set by scanning five source files for literal
+  shapes. That derivation was already wrong -- it missed
+  `:workspace-lock-unavailable`, which the suite drives live -- and it was
+  wrong in a way no witness could see, because a kind built dynamically
+  (`(keyword (str ...))`, or forwarded out of another namespace's `ex-data`
+  at line 1901 below) has no literal to scan for. A reviewer planted exactly
+  such a kind and every enumeration witness stayed green.
+
+  So the enumeration is no longer derived from TEXT. It is declared here,
+  enforced by `checked-refusal-kind!` at the choke point every published
+  receipt passes through, and proved complete by EXECUTION: the suite records
+  every kind the entrance actually publishes and asserts set equality with
+  this def in both directions. A kind that reaches the surface without a
+  member here throws. A member here that nothing drives is a claim about the
+  gate that no fixture supports, and fails the same witness. The source scan
+  survives only as a complement, checking that no kind constructed in the
+  files the gate calls is missing from this set or from the justified
+  not-reachable list beside it."
+  #{:admit-tool-error
+    :admit-tool-failure
+    :analyzer-memory-exhausted
+    :binary-patch-unsupported
+    :duplicate-definition
+    :duplicate-patch-target
+    :hunk-truncated
+    :invalid-admit-request
+    :invalid-patch
+    :invalid-relative-source-path
+    :invalid-source-path
+    :invalid-workspace-root
+    :namespace-form-removed
+    :next-call-exceeds-public-budget
+    :no-op-patch
+    :overlapping-hunks
+    :patch-does-not-apply
+    :patch-too-large
+    :path-outside-project
+    :require-removed
+    :server-not-initialized
+    :source-file-not-found
+    :source-hash-mismatch
+    :source-not-regular-file
+    :target-already-exists
+    :target-parent-not-directory
+    :transaction-recovery-required
+    :transaction-write-failed
+    :unreadable-post-image
+    :unsupported-patch-target
+    :verification-failed
+    :verification-incomplete
+    :workspace-lock-unavailable})
+
+;; @spec MCP-OP-ADMIT-133
+(defn checked-refusal-kind!
+  "Return `receipt` unchanged, or throw if it refuses under an unenumerated
+  kind.
+
+  A plain `IllegalArgumentException`, deliberately. An `ex-info` carrying an
+  `:error-type` is exactly the shape this namespace's own catch clauses know
+  how to turn back into a receipt, so the violation would launder itself into
+  the surface the guard exists to protect.
+
+  Called from `bound-receipt` and from the MCP handler's edge, and NOT from
+  the inner `refusal` helper. `refusal` runs inside the gate's own
+  `(catch Exception ...)`, which would swallow this throw and relabel it
+  `:admit-tool-failure` -- an enumerated kind. A guard whose violation is
+  caught and renamed to something legal is not a guard, so the enforcement
+  point is the one that sits outside every catch on the path."
+  [receipt]
+  (when (and (map? receipt)
+             (false? (:ok receipt))
+             (not (contains? admit-refusal-kinds (:error-type receipt))))
+    (throw (IllegalArgumentException.
+             (str "admit gate refusal kind is not enumerated: "
+                  (pr-str (:error-type receipt))
+                  " -- add it to clj-surgeon.mcp-admit-tool/admit-refusal-kinds"
+                  " with a fixture that drives it through the entrance, or"
+                  " stop constructing it"))))
+  receipt)
+
 ;; @spec MCP-OP-ADMIT-055
 (defn- refusal
   [context error-type message & [data]]
@@ -1858,15 +1942,21 @@
                              " digest per file")})))))
 
 ;; @spec MCP-OP-ADMIT-069
+;; @spec MCP-OP-ADMIT-133
 ;; @spec MCP-OP-ADMIT-135
 (defn- bound-receipt
   "Fit one public receipt inside the shared MCP payload budget, refusing
-  outright when its next_call alone cannot fit.
+  outright when its next_call alone cannot fit, and refusing to publish a
+  refusal whose kind is not enumerated.
 
   This is the one place every receipt `execute-request!` returns passes
-  through, and it sits OUTSIDE every `catch` on that path."
+  through, and it sits OUTSIDE every `catch` on that path -- so a kind built
+  dynamically, or forwarded out of another namespace's ex-data, cannot be
+  laundered into the public surface by the enumeration never having heard of
+  it. The oversize check runs first so its own refusal is checked too."
   [receipt]
   (-> (or (oversize-next-call-refusal receipt) receipt)
+      checked-refusal-kind!
       (write-refusal/bound-public-refusal pr-str)
       (write-refusal/bound-public-payload trimmable-receipt-keys)))
 
@@ -2258,7 +2348,9 @@
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(try
+    ;; @spec MCP-OP-ADMIT-133
+    {:execute #(checked-refusal-kind!
+                 (try
                  (if-let [config @runtime-config]
                    (execute-request! config params)
                    (merge (empty-receipt "preview")
@@ -2278,7 +2370,7 @@
                                       (.getName (class error)))}))
                  ;; @spec MCP-OP-ADMIT-129
                  (catch Throwable error
-                   (edge-throwable-refusal error)))
+                   (edge-throwable-refusal error))))
      :summarize summary
      :callback callback}))
 
