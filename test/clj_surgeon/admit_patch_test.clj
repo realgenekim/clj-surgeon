@@ -59,6 +59,99 @@
   (t/inc-report-counter :precondition-skipped)
   message)
 
+;; @spec MCP-OP-ADMIT-152
+(def precondition-failures
+  "Every precondition this run found PRESENT but NOT SATISFIED.
+
+  Round nine's reviewer forced one arm of the recovery battery red. The battery
+  exited nonzero and still wrote a receipt; the fast witness read the union of
+  kinds it published, saw the kind it wanted, and reported ZERO preconditions
+  skipped. A failed battery must not be able to buy a green fast lane, and it
+  must not be able to buy the honest SKIP either: a receipt that is present and
+  incomplete is a third state -- FAILED -- and it is red."
+  (atom []))
+
+;; @spec MCP-OP-ADMIT-152
+(defn fail-precondition!
+  "Record one precondition that was checkable and did NOT hold: counted, named,
+  and -- unlike a skip -- accompanied by a real failing assertion at the call
+  site, so the lane exits nonzero."
+  [message]
+  (swap! precondition-failures conj message)
+  (t/inc-report-counter :precondition-failed)
+  message)
+
+;; @spec MCP-OP-ADMIT-152
+(defn classify-battery-receipt
+  "Classify a battery receipt into ABSENT, SATISFIED or FAILED.
+
+  RED STUB: any receipt that exists is accepted, which is exactly the round-nine
+  hole -- a battery that failed 2/3 arms wrote `:arms-passed 2` before exiting
+  nonzero and this said SATISFIED."
+  [record declared-arms]
+  (if (nil? record)
+    {:state :absent}
+    {:state :satisfied}))
+
+;; @spec MCP-OP-ADMIT-152
+(defn check-battery-precondition!
+  "The fast lane's three-state check of one battery receipt.
+
+  Takes the receipt FILE so a witness can drive all three states through this
+  exact function rather than around it. Spends the same number of assertions in
+  every state (MCP-OP-ADMIT-147) and returns the state it took."
+  [^java.io.File receipt kind target declared-arms]
+  (let [record (when (.exists receipt)
+                 (try (read-string (slurp receipt))
+                      (catch Exception e
+                        {::unreadable (.getMessage e)})))
+        {:keys [state reason failed-arms]}
+        (classify-battery-receipt record declared-arms)]
+    (case state
+      :satisfied
+      (do
+        (is (contains? (set (:kinds-published record)) kind)
+            (str "the battery ran and did NOT publish the kind its"
+                 " exemption claims: " kind " · receipt " (pr-str record)))
+        (is (= target (:target record))
+            "the receipt names the target that wrote it")
+        (is (string? (:at record))
+            (str "the receipt does not say when it was written: "
+                 (pr-str record))))
+
+      :failed
+      (let [message (fail-precondition!
+                      (str "battery receipt at " (.getPath receipt)
+                           " is PRESENT but does NOT record a complete run · "
+                           reason
+                           (when (seq failed-arms)
+                             (str " · failing arms " (pr-str (vec failed-arms))))
+                           " · re-run `" target "` and make it pass before"
+                           " trusting this lane"))]
+        ;; The failing assertion IS the point: a receipt from a red battery
+        ;; must never read as the skip a fresh clone prints, and must never
+        ;; read as a satisfied precondition. It is RED.
+        (is (= :satisfied state) message)
+        (is (= 1 (count (filter #{message} @precondition-failures)))
+            "the failed precondition was recorded once in its own bucket")
+        (is (str/includes? message target)
+            (str "the failure must name the command that clears it: "
+                 message)))
+
+      :absent
+      (let [message (skip-precondition!
+                      (str "no battery receipt at " (.getPath receipt)
+                           " · run `" target "` to prove " kind
+                           " by execution rather than by the structural"
+                           " checks alone"))]
+        (is (= 1 (count (filter #{message} @precondition-skips)))
+            "the absent receipt was recorded once in the counted bucket")
+        (is (pos? (count @precondition-skips))
+            "the counted bucket must be visibly non-zero, never silent")
+        (is (str/includes? message target)
+            (str "the skip must name the command that clears it: " message))))
+    state))
+
 ;; @spec MCP-OP-ADMIT-147
 ;; @spec MCP-OP-ADMIT-150
 (defmethod t/report :summary
@@ -71,10 +164,18 @@
     ;; non-zero count is visible at the same place a reader already looks for
     ;; the failure count -- and each skip names the exact command that clears
     ;; it.
-    (let [skipped (or (:precondition-skipped m) 0)]
+    (let [skipped (or (:precondition-skipped m) 0)
+          failed (or (:precondition-failed m) 0)]
       (println skipped "preconditions skipped.")
       (doseq [message @precondition-skips]
-        (println "  SKIPPED ·" message)))))
+        (println "  SKIPPED ·" message))
+      ;; @spec MCP-OP-ADMIT-152
+      ;; A precondition that was CHECKABLE and did not hold is neither a skip
+      ;; nor an ordinary failure lost among thousands: it is printed here, on
+      ;; the line a reader already reads, next to the failure count it caused.
+      (println failed "preconditions failed.")
+      (doseq [message @precondition-failures]
+        (println "  FAILED ·" message)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixtures
@@ -5400,33 +5501,23 @@
       ;; by this test -- spending the SAME number of assertions in both
       ;; states, with `make test` owning the battery so the bucket is zero on
       ;; the lane that claims the proof.
-      (let [receipt (io/file
-                      "target/admit-transaction-recovery-battery-receipt.edn")
-            present? (.exists receipt)
-            record (when present? (read-string (slurp receipt)))]
-        (if present?
-          (do
-            (is (contains? (set (:kinds-published record)) kind)
-                (str "the battery ran and did NOT publish the kind its"
-                     " exemption claims: " kind " · receipt "
-                     (pr-str record)))
-            (is (= target (:target record))
-                "the receipt names the target that wrote it")
-            (is (string? (:at record))
-                (str "the receipt does not say when it was written: "
-                     (pr-str record))))
-          (let [message (skip-precondition!
-                          (str "no battery receipt at " (.getPath receipt)
-                               " · run `" target "` to prove " kind
-                               " by execution rather than by the structural"
-                               " checks alone"))]
-            (is (= 1 (count (filter #{message} @precondition-skips)))
-                "the absent receipt was recorded once in the counted bucket")
-            (is (pos? (count @precondition-skips))
-                "the counted bucket must be visibly non-zero, never silent")
-            (is (str/includes? message target)
-                (str "the skip must name the command that clears it: "
-                     message)))))
+      ;; @spec MCP-OP-ADMIT-152
+      ;; THREE states, not two. The declared arm list comes from the battery
+      ;; SCRIPT, so a receipt cannot shrink its own subject: a receipt is
+      ;; satisfied only when it records that every arm the script declares
+      ;; passed. Absent is the counted skip; present-and-incomplete is a
+      ;; counted FAILURE.
+      (let [declared-arms (let [m (re-find #"\(def arms \[([^\]]*)\]\)"
+                                           (slurp script))]
+                            (when m
+                              (mapv #(Long/parseLong %)
+                                    (re-seq #"\d+" (second m)))))]
+        (is (seq declared-arms)
+            (str "the battery script does not declare its arms, so no receipt"
+                 " can be checked against them: " (.getPath script)))
+        (check-battery-precondition!
+          (io/file "target/admit-transaction-recovery-battery-receipt.edn")
+          kind target declared-arms))
       (is (str/includes? (slurp makefile) (str "\n" target-name ":"))
           (str "the Makefile has no such target: " target))
       (is (not (str/includes? (slurp makefile)
@@ -5446,6 +5537,142 @@
                  " · nothing in the repository drives the skip bucket"
                  " to zero, so the exemption rests on a fixture no lane owns"
                  " · recipe: " (pr-str recipe)))))))
+
+;; @spec MCP-OP-ADMIT-152
+(defn- drive-precondition-state!
+  "Run `check-battery-precondition!` on `content` in complete isolation.
+
+  Isolated deliberately: the reports it emits are CAPTURED rather than reported
+  (a witness of a red state must not redden the run that witnesses it), its
+  report counters are bound to a throwaway ref, and both buckets are restored
+  afterwards. Returns the state, the captured reports and the bucket entries
+  the call added -- so this drives the exact function the fast lane runs, not a
+  re-implementation of its decision."
+  [content]
+  (let [root (temp-dir)
+        receipt (io/file root "admit-transaction-recovery-battery-receipt.edn")
+        skips-before @precondition-skips
+        failures-before @precondition-failures]
+    (try
+      (when (some? content)
+        (io/make-parents receipt)
+        (spit receipt (if (string? content) content (pr-str content))))
+      (let [reports (atom [])
+            state (binding [t/*report-counters* (ref t/*initial-report-counters*)]
+                    (with-redefs [t/do-report (fn [m] (swap! reports conj m))]
+                      (check-battery-precondition!
+                        receipt
+                        :transaction-recovery-required
+                        "make admit-transaction-recovery-battery"
+                        [8 32 64])))]
+        {:state state
+         :reports @reports
+         :failures (vec (drop (count failures-before) @precondition-failures))
+         :skips (vec (drop (count skips-before) @precondition-skips))})
+      (finally
+        (reset! precondition-skips skips-before)
+        (reset! precondition-failures failures-before)
+        (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-152
+(deftest a-receipt-from-a-failed-battery-is-a-failed-precondition-not-a-green
+  ;; Round nine's reviewer forced ONLY the n=8 arm red. The battery exited 2,
+  ;; wrote this receipt anyway, and the complete fast lane then ran
+  ;; 762/10553/0 and printed `0 preconditions skipped`, exit 0. The red
+  ;; battery's archive suppressed the very skip a fresh clone prints.
+  (let [round-nine-red {:target "make admit-transaction-recovery-battery"
+                        :script "test/admit_transaction_recovery_battery.clj"
+                        :at "2026-09-04T14:50:20.257007318Z"
+                        :arms [8 32 64]
+                        :arms-passed 2
+                        :kinds-published #{:transaction-recovery-required}}
+        complete {:target "make admit-transaction-recovery-battery"
+                  :script "test/admit_transaction_recovery_battery.clj"
+                  :at "2026-09-04T15:00:00.000000000Z"
+                  :arms [8 32 64]
+                  :arms-passed 3
+                  :arm-verdicts {8 true 32 true 64 true}
+                  :failed-arms []
+                  :verdict :passed
+                  :kinds-published #{:transaction-recovery-required}}
+        failed-shape (assoc complete
+                            :arms-passed 2
+                            :arm-verdicts {8 false 32 true 64 true}
+                            :failed-arms [8]
+                            :verdict :failed)
+        fail-count (fn [reports] (count (filter #(= :fail (:type %)) reports)))
+        pass-count (fn [reports] (count (filter #(= :pass (:type %)) reports)))]
+
+    (testing "absent · the counted skip, never red"
+      (let [{:keys [state reports skips failures]} (drive-precondition-state! nil)]
+        (is (= :absent state))
+        (is (zero? (fail-count reports))
+            "an absent receipt is a skip, not a failure")
+        (is (= 1 (count skips)) "exactly one skip was recorded")
+        (is (empty? failures))))
+
+    (testing "complete · satisfied, no skip and no failure"
+      (let [{:keys [state reports skips failures]} (drive-precondition-state! complete)]
+        (is (= :satisfied state))
+        (is (zero? (fail-count reports)))
+        (is (empty? skips) "a complete receipt clears the bucket")
+        (is (empty? failures))))
+
+    (testing "round nine's red receipt · FAILED, red, and NOT a skip"
+      (let [{:keys [state reports skips failures]}
+            (drive-precondition-state! round-nine-red)]
+        (is (= :failed state)
+            (str "a receipt from a battery that failed 2/3 arms must not"
+                 " satisfy the precondition: " (pr-str round-nine-red)))
+        (is (pos? (fail-count reports))
+            "a present-but-incomplete receipt must make the lane RED")
+        (is (empty? skips)
+            "a failed precondition must never be reported as a skip")
+        (is (= 1 (count failures))
+            "the failure is recorded once in its own counted bucket")
+        (is (str/includes? (str (first failures)) "make admit-transaction-recovery-battery")
+            (str "the failure must name the command that clears it: "
+                 (pr-str failures)))))
+
+    (testing "the fixed battery's FAILED receipt names its failing arm"
+      (let [{:keys [state failures]} (drive-precondition-state! failed-shape)]
+        (is (= :failed state))
+        (is (str/includes? (str (first failures)) "[8]")
+            (str "the failure must name the arm that failed: "
+                 (pr-str failures)))))
+
+    (testing "a receipt cannot shrink its own subject"
+      (doseq [[label record]
+              [["fewer arms than the script declares"
+                (assoc complete :arms [8] :arm-verdicts {8 true} :arms-passed 1)]
+               ["no per-arm verdicts at all"
+                (dissoc complete :arm-verdicts)]
+               ["an empty arm list"
+                (assoc complete :arms [] :arm-verdicts {} :arms-passed 0)]
+               ["a verdict that contradicts its own arms"
+                (assoc complete :arm-verdicts {8 false 32 true 64 true})]
+               ["arms-passed that contradicts its own arms"
+                (assoc complete :arms-passed 2)]]]
+        (testing label
+          (let [{:keys [state failures]} (drive-precondition-state! record)]
+            (is (= :failed state)
+                (str "a receipt with " label " must not satisfy the"
+                     " precondition: " (pr-str record)))
+            (is (= 1 (count failures)))))))
+
+    (testing "an unreadable receipt is FAILED, never satisfied and never absent"
+      (let [{:keys [state failures]} (drive-precondition-state! "{:arms [8 32")]
+        (is (= :failed state))
+        (is (= 1 (count failures)))))
+
+    (testing "every state spends the same number of assertions"
+      (let [counts (mapv (fn [content]
+                           (let [{:keys [reports]} (drive-precondition-state! content)]
+                             (+ (fail-count reports) (pass-count reports))))
+                         [nil complete round-nine-red])]
+        (is (apply = counts)
+            (str "the assertion count must not reveal which machine ran the"
+                 " battery (MCP-OP-ADMIT-147): " (pr-str counts)))))))
 
 ;; @spec MCP-OP-ADMIT-133
 (defn- record-and-check-refusal-kinds
