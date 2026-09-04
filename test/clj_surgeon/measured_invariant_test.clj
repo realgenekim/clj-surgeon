@@ -974,7 +974,22 @@
     :source "(.invoke (.getMethod (Class/forName \"java.lang.System\") \"nanoTime\" (into-array Class [])) nil (into-array Object []))"}
    {:label "K — the dot special form with a FULLY-QUALIFIED class"
     :pattern :clock
-    :source "(. java.lang.System nanoTime)"}])
+    :source "(. java.lang.System nanoTime)"}
+   ;; D2 and K2 are not the reviewer's. They exist because sabotaging the fix
+   ;; on a `git archive` copy showed that D and K alone do NOT witness it: both
+   ;; name `java.lang.System`, which the FLOOR carries by name, so removing the
+   ;; optional fully-qualified prefix from the dot-form alternative left all
+   ;; twenty-five tests green, and removing the string forms from the clock
+   ;; DERIVATION cost only the derivation witness. A rule that never fires
+   ;; produces no error. These two name classes the floor does not, so the only
+   ;; thing that can catch them is the derivation and the prefix tolerance —
+   ;; which is the property the fix actually claims.
+   {:label "D2 — Class/forName on a class the FLOOR does not name, so only the DERIVED class string sees it"
+    :pattern :clock
+    :source "(.invoke (.getMethod (Class/forName \"java.util.Calendar\") \"getInstance\" (into-array Class [])) nil (into-array Object []))"}
+   {:label "K2 — the fully-qualified dot form on a class the floor does not name, so only the PREFIX TOLERANCE sees it"
+    :pattern :clock
+    :source "(. java.time.Instant now)"}])
 
 ;; @spec MCP-OP-TIME-005
 ;; @spec MCP-OP-TIME-006
