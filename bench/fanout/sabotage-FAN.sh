@@ -6,6 +6,8 @@
 #   sabotage-FAN.sh --selftest-backslash [N] [seed] [scratch-dir]
 #   sabotage-FAN.sh --selftest-listing-failure [N] [seed] [scratch-dir]
 #   sabotage-FAN.sh --selftest-whitespace-path [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-incomplete-listing [N] [seed] [scratch-dir]
+#   sabotage-FAN.sh --selftest-pruned-walk [N] [seed] [scratch-dir]
 #
 # A scorer that has never gone red is a verdict label, not a meter (this program's
 # `verdict-label-was-a-noun` scar).  This harness builds the CORRECT tree (repo-N with
@@ -366,6 +368,211 @@ CLJEOF
     echo "SELFTEST-WHITESPACE-PATH: FAIL -- CHECK 1 misreads the whitespace-only path (want missing=0 extras=0)"
     exit 1
   fi
+fi
+
+# --- self-test: a `git ls-files` that exits 0 but is INCOMPLETE must fail the ----
+# gate closed, never a silent false PASS (Sol round-2 review, finding 1, BLOCKER) --
+#   sabotage-FAN.sh --selftest-incomplete-listing [N] [seed] [scratch-dir]
+#
+# --selftest-listing-failure (round 1) proved a NONZERO-exit ls-files fails closed.
+# It does not prove an exit-0, INCOMPLETE ls-files fails closed -- and the round-2
+# reviewer's exact PATH shim (`for arg in "$@"; do if [ "$arg" = ls-files ]; then
+# exit 0; fi; done; exec git "$@"`) does exactly that: exit 0, empty stdout, no
+# stderr, for a real untracked extra file the manifest does not own. This witness
+# plants TWO untracked extras, then runs fan_check.clj under two shims:
+#   - empty-output shim  -> exit 0, stdout entirely empty (the reviewer's repro)
+#   - partial-output shim -> exit 0, echoes ONE real record, silently drops the
+#     other (a shim that half-lies is a harder case than one that lies completely)
+# Both must fail closed: nonzero exit, a `CHECK 1 file-set: ERROR listing-incomplete`
+# line, and no `CHECK 1 file-set: PASS` line -- and the full six-check gate must not
+# report 6/6 with either shim on PATH.
+if [ "${1:-}" = "--selftest-incomplete-listing" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/tmp/fanout-r3-fx/selftest-incomplete-listing}
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  IPASS=0; IFAIL=0
+  ok()  { IPASS=$((IPASS+1)); echo "SELFTEST-INCOMPLETE-LISTING $1: PASS $2"; }
+  bad() { IFAIL=$((IFAIL+1)); echo "SELFTEST-INCOMPLETE-LISTING $1: FAIL $2"; }
+
+  REALGIT=$(command -v git)
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  rm -rf "$SCRATCH/repo"; mkdir -p "$SCRATCH/repo"
+  cp -r "$SCRATCH/gen/repo-$N/." "$SCRATCH/repo/"
+  ( cd "$SCRATCH/repo" && git init -q . \
+      && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" )
+  BASE=$(git -C "$SCRATCH/repo" rev-parse HEAD)
+
+  # simulate the CORRECT migration -- no server -- so the only defect present is
+  # the two untracked extras planted below (an ordinary migration would be 6/6).
+  cp -r "$SCRATCH/gen/canonical-$N/src/." "$SCRATCH/repo/src/"
+
+  # plant TWO untracked extras the manifest does not own.
+  printf '(ns acid.fanout.extra1)\n;; untracked, manifest does not own it\n' \
+    > "$SCRATCH/repo/src/acid/fanout/extra1.clj"
+  printf '(ns acid.fanout.extra2)\n;; untracked, manifest does not own it\n' \
+    > "$SCRATCH/repo/src/acid/fanout/extra2.clj"
+
+  # --- shim 1: exit 0, EMPTY stdout for `ls-files` -- the reviewer's exact repro
+  mkdir -p "$SCRATCH/bin-empty"
+  cat > "$SCRATCH/bin-empty/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = ls-files ]; then exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-empty/git"
+
+  # --- shim 2: exit 0, PARTIAL stdout for `ls-files` -- echoes extra1.clj only,
+  # silently drops extra2.clj, no stderr either way
+  mkdir -p "$SCRATCH/bin-partial"
+  cat > "$SCRATCH/bin-partial/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = ls-files ]; then printf 'src/acid/fanout/extra1.clj\0'; exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-partial/git"
+
+  # --- control: real git must catch both extras ------------------------------------
+  OUT_REAL=$(bb "$HERE/fan_check.clj" "$SCRATCH/repo" "$SCRATCH/gen/manifest-$N.edn" \
+    "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  CHECK1_REAL=$(printf '%s\n' "$OUT_REAL" | grep '^CHECK 1 ' | head -1)
+  echo "SELFTEST-INCOMPLETE-LISTING control: $CHECK1_REAL"
+  if printf '%s' "$CHECK1_REAL" | grep -q 'FAIL' && printf '%s' "$CHECK1_REAL" | grep -q 'extras=2'; then
+    ok "control real-git" "CHECK 1 correctly catches both untracked extras -- $CHECK1_REAL"
+  else
+    bad "control real-git" "expected CHECK 1 FAIL extras=2, got: $CHECK1_REAL"
+  fi
+
+  # --- empty-output shim: must not false-PASS ---------------------------------------
+  OUT_EMPTY=$(PATH="$SCRATCH/bin-empty:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+    "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  RC_EMPTY=$?
+  echo "SELFTEST-INCOMPLETE-LISTING empty-output-shimmed: rc=$RC_EMPTY"
+  printf '%s\n' "$OUT_EMPTY" | sed 's/^/    /'
+  if [ $RC_EMPTY -ne 0 ] \
+     && printf '%s' "$OUT_EMPTY" | grep -q 'CHECK 1 file-set: ERROR listing-incomplete' \
+     && ! printf '%s' "$OUT_EMPTY" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "empty-output-shimmed fail-closed" "rc=$RC_EMPTY, no false PASS, named listing-incomplete"
+  else
+    bad "empty-output-shimmed fail-closed" "rc=$RC_EMPTY -- want nonzero rc, a listing-incomplete ERROR line, and no PASS line"
+  fi
+
+  # --- partial-output shim: must not false-PASS -------------------------------------
+  OUT_PARTIAL=$(PATH="$SCRATCH/bin-partial:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+    "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  RC_PARTIAL=$?
+  echo "SELFTEST-INCOMPLETE-LISTING partial-output-shimmed: rc=$RC_PARTIAL"
+  printf '%s\n' "$OUT_PARTIAL" | sed 's/^/    /'
+  if [ $RC_PARTIAL -ne 0 ] \
+     && printf '%s' "$OUT_PARTIAL" | grep -q 'CHECK 1 file-set: ERROR listing-incomplete' \
+     && ! printf '%s' "$OUT_PARTIAL" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "partial-output-shimmed fail-closed" "rc=$RC_PARTIAL, no false PASS, named listing-incomplete"
+  else
+    bad "partial-output-shimmed fail-closed" "rc=$RC_PARTIAL -- want nonzero rc, a listing-incomplete ERROR line, and no PASS line"
+  fi
+
+  # --- the same, through the full six-check gate, exactly as the reviewer did ------
+  RSOUT=$(PATH="$SCRATCH/bin-empty:$PATH" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+    bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1)
+  RSRC=$?
+  echo "SELFTEST-INCOMPLETE-LISTING full-gate empty-output-shimmed: rc=$RSRC"
+  printf '%s\n' "$RSOUT" | sed 's/^/    /'
+  if [ $RSRC -ne 0 ] && ! printf '%s' "$RSOUT" | grep -q '6/6 checks passed'; then
+    ok "full-gate fail-closed" "rescore-FAN did not report 6/6 with an incomplete listing"
+  else
+    bad "full-gate fail-closed" "rescore-FAN reported 6/6 (or rc=0) with an incomplete listing -- false PASS reached the gate"
+  fi
+
+  echo "sabotage-FAN --selftest-incomplete-listing: $IPASS passed, $IFAIL failed"
+  [ $IFAIL -eq 0 ]
+  exit $?
+fi
+
+# --- self-test: an UNREADABLE subdirectory under src/ (real stock Git, no shim) ---
+# must fail the gate closed, never a silent false PASS (Sol round-2 review, --------
+# finding 1, BLOCKER -- the concrete stock-Git failure mode) -----------------------
+#   sabotage-FAN.sh --selftest-pruned-walk [N] [seed] [scratch-dir]
+#
+# With a real `chmod 000` subdirectory under src/, Git 2.53+ prints a warning on
+# stderr ("could not open directory ... Permission denied") but returns 0 and an
+# empty stdout listing for that subtree; Java's file-seq silently drops the same
+# subtree with no signal at all. This witness plants an untracked src/hidden/
+# containing forbidden `acid.fanout.store` residue -- CHECK 6 must catch it -- then
+# makes it unreadable with plain `chmod`, and proves fan_check.clj and the full
+# gate both fail closed under STOCK git, no PATH shim. The directory is restored
+# (chmod 755) on every exit path, including failure, via a trap.
+if [ "${1:-}" = "--selftest-pruned-walk" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/tmp/fanout-r3-fx/selftest-pruned-walk}
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  PPASS=0; PFAIL=0
+  ok()  { PPASS=$((PPASS+1)); echo "SELFTEST-PRUNED-WALK $1: PASS $2"; }
+  bad() { PFAIL=$((PFAIL+1)); echo "SELFTEST-PRUNED-WALK $1: FAIL $2"; }
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  rm -rf "$SCRATCH/repo"; mkdir -p "$SCRATCH/repo"
+  cp -r "$SCRATCH/gen/repo-$N/." "$SCRATCH/repo/"
+  ( cd "$SCRATCH/repo" && git init -q . \
+      && git -c user.name=fanout -c user.email=fanout@anvil add -A . \
+      && git -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" )
+  BASE=$(git -C "$SCRATCH/repo" rev-parse HEAD)
+
+  # simulate the CORRECT migration -- no server
+  cp -r "$SCRATCH/gen/canonical-$N/src/." "$SCRATCH/repo/src/"
+
+  # plant an untracked subdirectory with forbidden residue, then make it
+  # UNREADABLE -- the real stock-Git failure mode, not a lying shim.
+  mkdir -p "$SCRATCH/repo/src/hidden"
+  printf '(ns hidden.extra)\n(require (quote acid.fanout.store))\n' \
+    > "$SCRATCH/repo/src/hidden/extra.clj"
+  chmod 000 "$SCRATCH/repo/src/hidden"
+  restore_perms() { chmod 755 "$SCRATCH/repo/src/hidden" 2>/dev/null || true; }
+  trap restore_perms EXIT
+
+  GIT_STDERR=$(mktemp)
+  git -C "$SCRATCH/repo" ls-files -z --others --exclude-standard 2> "$GIT_STDERR" > /dev/null
+  echo "SELFTEST-PRUNED-WALK stock-git stderr: $(sed -n '1p' "$GIT_STDERR")"
+  rm -f "$GIT_STDERR"
+
+  OUT=$(bb "$HERE/fan_check.clj" "$SCRATCH/repo" "$SCRATCH/gen/manifest-$N.edn" \
+    "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
+  RC=$?
+  echo "SELFTEST-PRUNED-WALK fan_check: rc=$RC"
+  printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] \
+     && printf '%s' "$OUT" | grep -q 'CHECK 1 file-set: ERROR listing-incomplete' \
+     && ! printf '%s' "$OUT" | grep -q 'CHECK 1 file-set: PASS'; then
+    ok "fan_check fail-closed" "rc=$RC, no false PASS, named listing-incomplete"
+  else
+    bad "fan_check fail-closed" "rc=$RC -- want nonzero rc, a listing-incomplete ERROR line, and no PASS line"
+  fi
+
+  RSOUT=$(FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+    bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1)
+  RSRC=$?
+  echo "SELFTEST-PRUNED-WALK full-gate: rc=$RSRC"
+  printf '%s\n' "$RSOUT" | sed 's/^/    /'
+  if [ $RSRC -ne 0 ] && ! printf '%s' "$RSOUT" | grep -q '6/6 checks passed'; then
+    ok "full-gate fail-closed" "rescore-FAN did not report 6/6 with an unreadable subdirectory"
+  else
+    bad "full-gate fail-closed" "rescore-FAN reported 6/6 (or rc=0) with an unreadable subdirectory -- false PASS reached the gate"
+  fi
+
+  restore_perms
+  trap - EXIT
+
+  echo "sabotage-FAN --selftest-pruned-walk: $PPASS passed, $PFAIL failed"
+  [ $PFAIL -eq 0 ]
+  exit $?
 fi
 
 FIX=${1:-/home/forge/tmp/arms/e3/fanout}; N=${2:-21}
