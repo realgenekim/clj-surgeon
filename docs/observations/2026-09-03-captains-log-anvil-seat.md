@@ -1680,3 +1680,16 @@ format): round two of the suite spike = (a) full TEST-ISO family, (b) mechanism 
 recommended b, silence → b.
 
 ## 18:10Z Gene ruled the suite-spike round two: "B. Go" — mechanism first (001, 006, 009 on the round-one partition); witnesses round three
+
+## 18:20Z suite spike round one: 11 spawning namespaces are 94% of the lane; the "interference" is two timing races
+
+Per-namespace wall on mcp-test (716.7 s, 49 ns): reader-eval-fence-test 465 s (65%), census launcher 64 s, alias
+migration 60 s, census 36 s, prepared-wire 19 s … the 36 non-spawning namespaces total 20.9 s. No fixed port anywhere
+(every real bind is :port 0); nothing touches the repo's target/; the spec's "battery receipt in target/" named the wrong
+path — the real shared roots are the absolute seat paths MEMBAT_ROOT, PARSER_RED_ROOT and suite.lock, unreachable from
+mcp-test. Two concurrent suites: one member failed in both pairs, both timing races (stop-child!'s stderr future
+rethrowing through a finally, leaking the workspace into the tmp-leak ratchet; mcp-process-test's 50 ms margin). The
+JVM lane reaches the NETWORK: prepared-wire spawns `clojure -X:clj-surgeon/mcp` which git-clones clojure-mcp from GitHub
+and writes ~/.gitlibs. Partition proposed: fast 36 (~31 s cold), integration 2, battery 11 (674 s). Round two launched
+per Gene's "B. Go": partition + lane declaration + JVM isolation + the two races fixed under contention + the 4-wide battery.
+Docs on bridge/suite-spike: 2026-09-04-suite-spike-round1{,-timing,-classification}.md (commits 34e0e82a, e97a1979, c4f69081).
