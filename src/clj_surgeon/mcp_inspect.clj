@@ -448,56 +448,29 @@
 (defn receipt-leaf-pairs
   "Every leaf of a receipt as `[path value]`, over the JSON shape a client is
   handed — so a renderer and a witness walk exactly what `structuredContent`
-  carries, not what the kernel happens to hold."
+  carries, not what the kernel happens to hold.
+
+  An EMPTY map or vector is a leaf. Field evidence (Sol O2 round-3 review,
+  section 2): descending into `{}` and `[]` yielded nothing, so those receipt
+  facts were not excluded by the enumerated set — they were invisible to the
+  walker that DEFINES the criterion, and `results=[]` on a zero-result receipt
+  reached no client. A shape the walker skips is an exclusion nobody wrote
+  down."
   ([result] (receipt-leaf-pairs [] (json-data result)))
   ([path value]
    (cond
-     (map? value)
+     (and (map? value) (seq value))
      (mapcat (fn [[key child]] (receipt-leaf-pairs (conj path key) child))
              value)
 
-     (sequential? value)
+     (and (sequential? value) (seq value))
      (mapcat (fn [[index child]] (receipt-leaf-pairs (conj path index) child))
              (map-indexed vector value))
 
      :else [[path value]])))
 
 ;; @spec MCP-OP-STUDY-044
-(defn leaf-rendered?
-  "Does `text` carry this receipt leaf VERBATIM?
-
-  ONE predicate, used both by the renderer that guarantees the property and by
-  the witness that checks it, so the two can never drift apart. A multi-line
-  value is carried when every one of its non-blank lines is."
-  [text value]
-  (let [rendered (cond (nil? value) nil
-                       (string? value) value
-                       :else (str value))]
-    (cond
-      (nil? rendered) true
-      (str/blank? rendered) true
-
-      (str/includes? rendered "\n")
-      (every? #(or (str/blank? %) (str/includes? text %))
-              (str/split-lines rendered))
-
-      :else (str/includes? text rendered))))
-
-;; @spec MCP-OP-STUDY-044
-(defn uncarried-leaves
-  "Every receipt leaf `text` does not carry, excluding the enumerated set.
-
-  The criterion, as one function: `content[0].text` shall be a superset of
-  every `structuredContent` leaf value. A caller reading only the text has the
-  whole receipt or knows exactly which part of it it does not have."
-  [text result]
-  (into []
-        (remove (fn [[path value]]
-                  (or (contains? text-excluded-leaf-keys (last path))
-                      (leaf-rendered? text value))))
-        (receipt-leaf-pairs result)))
-
-(defn- leaf-label
+(defn leaf-label
   "`results[0].source_anchor.range.start.line` — the JSON pointer a caller
   reads the same fact back out of `structuredContent` with."
   [path]
@@ -510,14 +483,105 @@
                       path)))
 
 ;; @spec MCP-OP-STUDY-044
-(defn receipt-fact-lines
-  "One `path: value` line for every receipt leaf `structural-text` does not
-  already carry, in receipt order.
+(defn leaf-spelling
+  "The characters `structuredContent` spells one leaf value with.
+
+  A string is its own characters. Everything else is spelled as the JSON a
+  client parses spells it — `null`, `{}`, `[]`, `true`, `1.25` — so a caller
+  comparing the text against the receipt compares like with like. A BLANK
+  string is spelled quoted (`\"\"`, `\"   \"`), because unquoted blank
+  characters are not a spelling anyone can find."
+  [value]
+  (cond
+    (nil? value) "null"
+    (and (string? value) (str/blank? value)) (pr-str value)
+    (string? value) value
+    (and (map? value) (empty? value)) "{}"
+    (and (sequential? value) (empty? value)) "[]"
+    (coll? value) (json/generate-string value)
+    :else (str value)))
+
+;; @spec MCP-OP-STUDY-044
+(defn value-less-leaf?
+  "Is this leaf's value INDISTINGUISHABLE FROM ABSENCE inside a text block?
+
+  `null`, `{}`, `[]`, and a blank string have no characters a reader could
+  find and attribute to this leaf: `\"\"` matches at every index of every
+  text, `{}` matches any object rendering, and `null` and `[]` occur inside
+  unrelated words and lines. Such a leaf is carried by its LABEL or not at
+  all.
+
+  Field evidence (Sol O2 round-3 review, section 2): `leaf-rendered?`
+  returned true for exactly these shapes without inspecting `text` at all —
+  `nil_value present=false label_present=false` — so a second, unenumerated
+  exclusion mechanism sat beside the frozen set, and the renderer and the
+  witness agreed only because they shared it."
+  [value]
+  (or (nil? value)
+      (and (string? value) (str/blank? value))
+      (and (coll? value) (empty? value))))
+
+;; @spec MCP-OP-STUDY-044
+(defn labelled-leaf
+  "`results[0].platforms=[]` — the ONE spelling that carries a value-less
+  leaf, and the exact string its witness looks for."
+  [path value]
+  (str (leaf-label path) "=" (leaf-spelling value)))
+
+;; @spec MCP-OP-STUDY-044
+(defn leaf-rendered?
+  "Does `text` carry this receipt leaf VERBATIM?
+
+  ONE predicate, used both by the renderer that guarantees the property and by
+  the witness that checks it, so the two can never drift apart. A multi-line
+  value is carried when every one of its non-blank lines is; a VALUE-LESS leaf
+  is carried only as `pointer=spelling`, because nothing else about it can be
+  found in a text block."
+  [text path value]
+  (if (value-less-leaf? value)
+    (str/includes? text (labelled-leaf path value))
+    (let [rendered (leaf-spelling value)]
+      (if (str/includes? rendered "\n")
+        (every? #(or (str/blank? %) (str/includes? text %))
+                (str/split-lines rendered))
+        (str/includes? text rendered)))))
+
+;; @spec MCP-OP-STUDY-044
+(defn leaf-excluded?
+  "Is this leaf a member of the ONE enumerated exclusion?
+
+  Named so that the single exclusion mechanism has a single spelling: a leaf
+  is kept out of the text because it is in `text-excluded-leaf-keys`, and for
+  no other reason."
+  [path]
+  (contains? text-excluded-leaf-keys (last path)))
+
+;; @spec MCP-OP-STUDY-044
+(defn uncarried-leaves
+  "Every receipt leaf `text` does not carry, excluding the enumerated set.
+
+  The criterion, as one function: `content[0].text` shall be a superset of
+  every `structuredContent` leaf value. A caller reading only the text has the
+  whole receipt or knows exactly which part of it it does not have."
+  [text result]
+  (into []
+        (remove (fn [[path value]]
+                  (or (leaf-excluded? path)
+                      (leaf-rendered? text path value))))
+        (receipt-leaf-pairs result)))
+
+;; @spec MCP-OP-STUDY-044
+(defn receipt-fact-entries
+  "One entry per receipt leaf `structural-text` does not already carry, in
+  receipt order: its JSON pointer and the line that renders it.
 
   The default is to RENDER: the rows a mode renders structurally satisfy the
   criterion where they can, and everything left over prints here. A receipt
   field added tomorrow therefore travels into the text the day it is added,
   and only a member of `text-excluded-leaf-keys` can keep it out.
+
+  A value-less leaf prints as `pointer=spelling` — the only rendering of it a
+  reader can attribute to the leaf — and every other leaf as `pointer: value`.
 
   Field evidence (Sol O2 round-2 review, section 3): the round-2 renderer
   projected selected row fields, so `forms` dropped every `source_anchor`
@@ -528,20 +592,32 @@
   [structural-text result]
   (first
     (reduce
-      (fn [[lines text] [path value]]
-        (if (or (contains? text-excluded-leaf-keys (last path))
-                (leaf-rendered? text value))
-          [lines text]
-          (let [rendered (if (string? value) value (str value))
-                line (if (str/includes? rendered "\n")
+      (fn [[entries text] [path value]]
+        (if (or (leaf-excluded? path)
+                (leaf-rendered? text path value))
+          [entries text]
+          (let [rendered (leaf-spelling value)
+                line (cond
+                       (value-less-leaf? value)
+                       (str "  " (labelled-leaf path value))
+
+                       (str/includes? rendered "\n")
                        (str/join "\n"
                                  (cons (str "  " (leaf-label path) ":")
                                        (map #(str "    " %)
                                             (str/split-lines rendered))))
-                       (str "  " (leaf-label path) ": " rendered))]
-            [(conj lines line) (str text "\n" line)])))
+
+                       :else (str "  " (leaf-label path) ": " rendered))]
+            [(conj entries {:path path :label (leaf-label path) :line line})
+             (str text "\n" line)])))
       [[] structural-text]
       (receipt-leaf-pairs result))))
+
+;; @spec MCP-OP-STUDY-044
+(defn receipt-fact-lines
+  "The rendered lines of `receipt-fact-entries`, in receipt order."
+  [structural-text result]
+  (mapv :line (receipt-fact-entries structural-text result)))
 
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
