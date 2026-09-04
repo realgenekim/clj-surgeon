@@ -1465,3 +1465,4 @@ Gene went to sleep with one instruction: take the idea that a single question to
 ## 11:30Z — tmp-leak ratchet LANDED on MCP/main (d0b4e1ca) — Gene's "make it impossible to make this mistake again", four rounds later
 
 Round one fell open on the unknown case with a dead fallback beside it; round two was closed by execution; round three found the one exact-match filter; round four fixed it with both witnesses red first. Landed after the ratchet gate and the bb suite ran green on the merged tree, not on the branch. What the repo now refuses: any suite whose temp base is RAM by name, by fstype, or by "cannot tell"; any leftover entry; any subprocess escape; any forged mounts table. The seat guard covered clojure; this covers babashka too, which the seat guard never could.
+## 11:33Z — trunk mcp-test on the tmp-leak landing (d0b4e1ca): 712/8437/0. q5z r19: Sol's filter refused (22nd); Opus.
