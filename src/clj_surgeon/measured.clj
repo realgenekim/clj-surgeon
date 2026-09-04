@@ -136,6 +136,16 @@
 ;; `(get r k)` return nil, `(count r)` throws, and the only expression that
 ;; yields the number is `measured/value` — whose call sites in `src/` are named
 ;; one by one in the invariant witness's allow-list.
+;;
+;; ACCEPTED RESIDUAL, declared rather than chased (round-four review §3):
+;; `setAccessible` reflection with a COMPUTED field name —
+;; `(.getDeclaredField (class r) (str "launder" "able"))` — reads the number,
+;; and no textual scan can see it. The literal spelling IS in the escape-hatch
+;; pattern, so a plain plant is caught; the computed one is not, and a JVM
+;; without a security manager cannot prevent reflection at all. The reviewer's
+;; ruling, which this comment exists to record: "Textual scanning cannot close
+;; that, and a deliberate attacker is not the threat model here — record it, do
+;; not chase it."
 
 (deftype Reading [^:unsynchronized-mutable launderable]
   Launderable
