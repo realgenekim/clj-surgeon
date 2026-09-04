@@ -2639,13 +2639,30 @@
                     (when rolled-back?
                       (.delete (io/file (:receipt-file result))))
                     (merge
+                      ;; @spec MCP-OP-ALIAS-028
+                      ;; the same rule as the baseline branch: a profile that
+                      ;; reported a failure reports it again on an identical
+                      ;; re-send, so the generic "re-send the same request"
+                      ;; remedy would be a retry loop. The rollback restored
+                      ;; the tree, so the executable correction is the same
+                      ;; request without the profile — which is what this
+                      ;; refusal's next_call carries.
                       {:error (str "Verification failed; "
                                    (rollback-sentence rolled-back?
                                                       (:receipt-file result)
                                                       count-migrated))
                        :error-type (or (:error-type verification)
                                        :verification-failed)
-                       :verification verification}
+                       :verification verification
+                       :verification_profile verify
+                       :remedy (str "The \"" verify "\" profile reported a "
+                                    "failure and the migration was rolled "
+                                    "back, so re-sending this request "
+                                    "unchanged reports it again. Send the "
+                                    "next_call — this same request with the "
+                                    "profile dropped — or correct what the "
+                                    "profile reported and send this request "
+                                    "again after that.")}
                       report))))))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001

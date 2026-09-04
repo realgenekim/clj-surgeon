@@ -5186,3 +5186,37 @@
                  (pr-str (:next_call result)))))
       (finally
         (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-028
+;; @spec MCP-OP-ALIAS-059
+(deftest a-post-write-verification-refusal-names-the-one-change-that-works
+  ;; The same rule on the other side of the write. A profile that reported a
+  ;; failure reports it again on an identical re-send, so the generic
+  ;; "Re-send the same alias_migration request" remedy is a retry loop —
+  ;; published, in the live replay of the E-CALLER shape, BESIDE a next_call
+  ;; that had already dropped `verify`. A receipt whose remedy and whose
+  ;; next_call disagree about what to send is worse than either alone.
+  (let [workspace (workspace!)]
+    (try
+      (let [script (io/file workspace "bin" "failing-check")
+            _ (.mkdirs (.getParentFile script))
+            _ (spit script "#!/bin/bash\necho refused-by-profile\nexit 1\n")
+            _ (.setExecutable script true)
+            result (execute! workspace
+                             {:verify "strict"}
+                             {:verification-profiles
+                              {"strict" [(.getPath script)]}})
+            remedy (str (:remedy result))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (true? (:source_unchanged result))
+            (str "the rollback did not restore the tree: " (pr-str result)))
+        (is (not (str/includes? remedy "Re-send the same alias_migration"))
+            (str "the remedy prescribes the request the profile just "
+                 "refused: " remedy))
+        (is (some? (:next_call result))
+            "the refusal carries no executable correction at all")
+        (is (nil? (:verify (:next_call result)))
+            (str "the next_call carries the profile that failed: "
+                 (pr-str (:next_call result)))))
+      (finally
+        (delete-tree! workspace)))))
