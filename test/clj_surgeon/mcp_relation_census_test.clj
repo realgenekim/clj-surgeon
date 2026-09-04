@@ -6745,3 +6745,107 @@
       (finally
         (allow-traversal! ws)
         (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Opus's round-seventeen item 7. The CLI's `:file` reads through a symlink
+;; that its own `:dir` walk counts as `skipped-outside-root` and refuses to
+;; read. The reviewer recorded it as "the CLI disagrees with ITSELF" and did not
+;; call it blocking: no read escaped the tool's fence, and the CLI's `:file` is
+;; by contract an absolute operator-named path with no project root.
+;;
+;; THE RULE, decided this round and stated here because an undeclared
+;; divergence is indistinguishable from a defect: NAMING IS NOT WALKING.
+;;
+;;   * A source the caller NAMES is resolved as named, symlink and all, and is
+;;     then checked against whatever fence that entrance HAS. The tool has a
+;;     declared `workspace_root`, so a named source whose real path leaves it
+;;     refuses `outside-project`. The CLI's `:file` has no project root — there
+;;     is nothing for it to be outside OF — so it reads what the operator
+;;     typed, exactly as `cat` would.
+;;   * A source the WALK discovered is confined to the tree the census is
+;;     claiming completeness over, at BOTH entrances, and a link leaving that
+;;     tree is counted `skipped-outside-root` and never read.
+;;
+;; This is the same rule round fifteen already applied at the other end:
+;; `census-root` CANONICALISES a `:dir` that names a symlink, because the root
+;; is named rather than walked. What you name is resolved; what the walk finds
+;; is confined. The alternative — making `:file` refuse every symlinked source —
+;; would refuse the ordinary case of a source linked into `src/` in a normal
+;; repository, for no security gain, since the operator typed the path.
+;;
+;; A rule this witness can be green over is a rule nobody has to keep: all four
+;; cells are driven, including the one that READS.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-018
+(deftest naming-a-source-is-not-walking-a-tree
+  (let [parent (temp-dir)
+        ws (io/file parent "ws")
+        outside (io/file parent "outside")
+        secret "SECRET-OUTSIDE"]
+    (try
+      (spit-file! (io/file ws "src/app/arm.clj") arm-source)
+      ;; The outside arm writes into a DISTINCTLY named key, so its presence
+      ;; in a receipt is proof the file was read rather than an inference from
+      ;; a count.
+      (spit-file! (io/file outside "secret.clj")
+                  (str/replace arm-source ":xs" (str ":" secret)))
+      (java.nio.file.Files/createSymbolicLink
+        (.toPath (io/file ws "src/app/escape.clj"))
+        (.toPath (io/file "../../../outside/secret.clj"))
+        (make-array FileAttribute 0))
+      (let [named (.getCanonicalPath ws)]
+
+        (testing "the WALK is confined, at both entrances"
+          (let [tool (census-tool/execute-request! {:project-root named} {})
+                cli (core/run-relation-census {:dir named})]
+            (is (true? (:ok tool)))
+            (is (true? (:ok cli)))
+            (is (pos? (:skipped_outside_root tool 0))
+                (str "the tool's walk did not count the escaping link: "
+                     (pr-str (select-keys tool [:skipped_outside_root]))))
+            (is (pos? (:skipped-outside-root cli 0))
+                (str "the CLI's walk did not count the escaping link: "
+                     (pr-str (select-keys cli [:skipped-outside-root]))))
+            (is (not (str/includes? (json/generate-string tool) secret))
+                "the tool's walk READ a file outside the workspace root")
+            (is (not (str/includes? (pr-str cli) secret))
+                "the CLI's walk READ a file outside the tree it was pointed at")))
+
+        (testing "a NAMED source is checked against the fence the entrance has"
+          (let [tool (census-tool/execute-request!
+                       {:project-root named} {:files ["src/app/escape.clj"]})]
+            (is (false? (:ok tool))
+                "the tool read a named source whose real path leaves its root")
+            (is (= "outside-project" (:cause tool))
+                (str "the tool refused as " (pr-str (:cause tool))))
+            (is (not (str/includes? (json/generate-string tool) secret))
+                "the tool's refusal published the content it refused to read")))
+
+        (testing "the CLI's :file has no fence, so it reads what was typed"
+          ;; DECLARED, not tolerated. This assertion is written to FAIL if the
+          ;; behaviour is ever changed silently, in either direction.
+          (let [cli (core/run-relation-census
+                      {:file (str named "/src/app/escape.clj")})]
+            (is (true? (:ok cli))
+                (str "the CLI refused a source the operator named by absolute "
+                     "path: " (pr-str (select-keys cli [:ok :error-type]))))
+            (is (= 1 (:files-scanned cli)))
+            (is (str/includes? (pr-str cli) secret)
+                "the CLI did not read the source the operator named")))
+
+        (testing "a NAMED root is resolved, which is the same rule (round fifteen)"
+          ;; The other end of "naming is not walking": `census-root`
+          ;; canonicalises a `:dir` that names a symlink, so the walk enters
+          ;; the real tree rather than visiting a link and reporting nothing.
+          (let [link (io/file parent "link-to-ws")]
+            (java.nio.file.Files/createSymbolicLink
+              (.toPath link) (.toPath (io/file named))
+              (make-array FileAttribute 0))
+            (let [cli (core/run-relation-census {:dir (str link)})]
+              (is (true? (:ok cli)))
+              (is (pos? (:files-scanned cli 0))
+                  (str "the walk visited a link instead of the tree it names: "
+                       (pr-str (select-keys cli [:files-scanned]))))))))
+      (finally
+        (delete-tree! parent)))))
