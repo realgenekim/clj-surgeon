@@ -1594,3 +1594,9 @@ list, once more, this time the witness's alphabet rather than the scanner's. Uni
 still raw under STUDY-053. Both "unreproduced failures under load" disclosures of the night (feature_thread r6: 3,
 study-ops r8: 6) have now been re-run on fresh clones by reviewers and did not recur (0/10 and 0/2). Verdict: load 11–12
 with three seats on the box, not code. Scheduling remains the fix: cap concurrent JVM suites. Round 10 building.
+
+## 16:13Z admit gate r11 Sol review cut off by the filter after two items; Opus completes it, r12 fix in parallel
+
+Sol got as far as the mixed-type key attack (my brief's own suggestion) and found it fails closed but outside the typed
+bucket — a refusal nobody hears is the same class as round nine's. The filter then refused the rest. Opus completes the
+review on the same tip; the round-twelve builder closes Sol's item meanwhile on its own worktree. GO-WITH-FIX is not GO.
