@@ -993,6 +993,207 @@
           (= c \\) (recur (+ i 2) false)
           :else (recur (inc i) false))))))
 
+
+;; @spec MCP-OP-THREAD-032
+(defn- clj-token-at
+  "The token beginning at or after `i` in `text`, or nil. Used for exactly one
+  question: is the head of this list the symbol `comment`."
+  [^String text i]
+  (let [n (count text)
+        s (loop [j i]
+            (if (and (< j n) (Character/isWhitespace (.charAt text j))) (recur (inc j)) j))
+        e (loop [j s]
+            (if (and (< j n)
+                     (not (Character/isWhitespace (.charAt text j)))
+                     (not (contains? #{\( \) \[ \] \{ \} \" \;} (.charAt text j))))
+              (recur (inc j))
+              j))]
+    (when (> e s) (subs text s e))))
+
+(def ^:private clj-open-brackets #{\( \[ \{})
+(def ^:private clj-close-brackets #{\) \] \}})
+
+;; @spec MCP-OP-THREAD-032
+(defn clj-commented-line-set
+  "The 1-based lines of Clojure `text` the READER does not evaluate.
+
+  Three constructs, not one: a `;` line comment, a `(comment …)` form, and a
+  form discarded by `#_`. Only the first is visible one line at a time, which is
+  why `comment-mention?` alone reported a `(comment (widgetize …))` decoy as
+  live code and promoted the thread to COMPLETE (round-three review, B2')."
+  [^String text]
+  (let [n (count text)
+        offsets (line-start-offsets text)
+        lof (fn [i] (offset->line offsets i))
+        mark (fn [acc from-i to-i]
+               (reduce conj! acc (range (lof from-i) (inc (lof to-i)))))]
+    (loop [i 0 mode :code stack [] pending 0 acc (transient #{})]
+      (if (>= i n)
+        (persistent! acc)
+        (let [c (.charAt text i)
+              next-c (when (< (inc i) n) (.charAt text (inc i)))]
+          (case mode
+            :string
+            (cond
+              (= c \\) (recur (+ i 2) :string stack pending acc)
+              (= c \") (recur (inc i) :code stack pending acc)
+              :else (recur (inc i) :string stack pending acc))
+
+            :comment
+            (if (= c \newline)
+              (recur (inc i) :code stack pending acc)
+              (recur (inc i) :comment stack pending (conj! acc (lof i))))
+
+            :code
+            (cond
+              (= c \;) (recur (inc i) :comment stack pending (conj! acc (lof i)))
+
+              (and (= c \#) (= next-c \_))
+              (recur (+ i 2) :code stack (inc pending) acc)
+
+              ;; a character literal: `\;` and `\"` open nothing
+              (= c \\) (recur (+ i 2) :code stack pending acc)
+
+              (and (pos? pending) (= c \"))
+              (let [e (loop [j (inc i)]
+                        (cond (>= j n) j
+                              (= \\ (.charAt text j)) (recur (+ j 2))
+                              (= \" (.charAt text j)) (inc j)
+                              :else (recur (inc j))))]
+                (recur e :code stack (dec pending) (mark acc i (min (dec e) (dec n)))))
+
+              (= c \") (recur (inc i) :string stack pending acc)
+
+              (contains? clj-open-brackets c)
+              (let [discarded? (pos? pending)
+                    comment-form? (and (= c \()
+                                       (= "comment" (clj-token-at text (inc i))))]
+                (recur (inc i) :code
+                       (conj stack {:open i
+                                    :mark? (or discarded? comment-form?)
+                                    :outer (if discarded? (dec pending) pending)})
+                       0 acc))
+
+              (contains? clj-close-brackets c)
+              (if (seq stack)
+                (let [f (peek stack)]
+                  (recur (inc i) :code (pop stack) (:outer f)
+                         (if (:mark? f) (mark acc (:open f) i) acc)))
+                (recur (inc i) :code stack pending acc))
+
+              (and (pos? pending) (not (Character/isWhitespace c)))
+              ;; a discarded ATOM -- `#_foo`, `#_:kw`, `#_42`
+              (let [e (loop [j i]
+                        (if (and (< j n)
+                                 (not (Character/isWhitespace (.charAt text j)))
+                                 (not (contains? clj-open-brackets (.charAt text j)))
+                                 (not (contains? clj-close-brackets (.charAt text j))))
+                          (recur (inc j))
+                          j))]
+                (recur e :code stack (dec pending) (mark acc i (max i (dec e)))))
+
+              :else (recur (inc i) :code stack pending acc))))))))
+
+;; @spec MCP-OP-THREAD-032
+(defn script-commented-line-set
+  "The 1-based lines of script `text` inside a `//` or `/* … */` comment.
+
+  Same lexical states as `lexed-brace-match` -- strings, template literals and
+  regex literals (character classes included) cannot open a comment -- because a
+  `/*` inside a string is not a comment and a `//` inside a regex is not one
+  either. A multi-line block comment is invisible to a per-line test, which is
+  how a function that existed only inside `/* … */` was offered as the JS leg."
+  [^String text]
+  (let [n (count text)
+        offsets (line-start-offsets text)
+        lof (fn [i] (offset->line offsets i))]
+    (loop [i 0 mode :code stack [] prev nil acc (transient #{})]
+      (if (>= i n)
+        (persistent! acc)
+        (let [c (.charAt text i)
+              next-c (when (< (inc i) n) (.charAt text (inc i)))]
+          (case mode
+            :line-comment
+            (if (= c \newline)
+              (recur (inc i) :code stack prev acc)
+              (recur (inc i) :line-comment stack prev (conj! acc (lof i))))
+
+            :block-comment
+            (if (and (= c \*) (= next-c \/))
+              (recur (+ i 2) :code stack prev (conj! acc (lof i)))
+              (recur (inc i) :block-comment stack prev (conj! acc (lof i))))
+
+            :single
+            (cond
+              (= c \\) (recur (+ i 2) :single stack prev acc)
+              (= c \') (recur (inc i) :code stack \' acc)
+              :else (recur (inc i) :single stack prev acc))
+
+            :double
+            (cond
+              (= c \\) (recur (+ i 2) :double stack prev acc)
+              (= c \") (recur (inc i) :code stack \" acc)
+              :else (recur (inc i) :double stack prev acc))
+
+            :template
+            (cond
+              (= c \\) (recur (+ i 2) :template stack prev acc)
+              (= c \`) (recur (inc i) :code stack \` acc)
+              (and (= c \$) (= next-c \{)) (recur (+ i 2) :code (conj stack :tpl) prev acc)
+              :else (recur (inc i) :template stack prev acc))
+
+            :regex
+            (cond
+              (= c \\) (recur (+ i 2) :regex stack prev acc)
+              (= c \newline) (recur (inc i) :code stack prev acc)
+              (= c \[) (recur (inc i) :regex-class stack prev acc)
+              (= c \/) (recur (inc i) :code stack \/ acc)
+              :else (recur (inc i) :regex stack prev acc))
+
+            :regex-class
+            (cond
+              (= c \\) (recur (+ i 2) :regex-class stack prev acc)
+              (= c \newline) (recur (inc i) :code stack prev acc)
+              (= c \]) (recur (inc i) :regex stack prev acc)
+              :else (recur (inc i) :regex-class stack prev acc))
+
+            :code
+            (cond
+              (and (= c \/) (= next-c \/))
+              (recur (+ i 2) :line-comment stack prev (conj! acc (lof i)))
+
+              (and (= c \/) (= next-c \*))
+              (recur (+ i 2) :block-comment stack prev (conj! acc (lof i)))
+
+              (= c \') (recur (inc i) :single stack prev acc)
+              (= c \") (recur (inc i) :double stack prev acc)
+              (= c \`) (recur (inc i) :template stack prev acc)
+
+              (and (= c \})  (seq stack))
+              (recur (inc i) :template (pop stack) c acc)
+
+              (and (= c \/)
+                   (or (nil? prev)
+                       (contains? regex-preceding-chars prev)
+                       (contains? regex-context-keywords (word-before text i))))
+              (recur (inc i) :regex stack prev acc)
+
+              (Character/isWhitespace c) (recur (inc i) :code stack prev acc)
+              :else (recur (inc i) :code stack c acc))))))))
+
+;; @spec MCP-OP-THREAD-032
+(defn commented-line-set
+  "Every 1-based line of `text` that the language does not execute."
+  [^String text clojure?]
+  (if clojure? (clj-commented-line-set text) (script-commented-line-set text)))
+
+;; @spec MCP-OP-THREAD-032
+(defn commented-out?
+  "True when 1-based `line` of `text` is inside a comment, a `(comment …)` form,
+  a `#_` discard, or a `/* … */` block. Whole-file lexical state, not one line."
+  [^String text line clojure?]
+  (contains? (commented-line-set text clojure?) line))
+
 (defn- match-start
   [pattern ^String line]
   (let [m (re-matcher pattern line)]
@@ -1009,19 +1210,25 @@
         candidates (filter #(matches-any-glob? % globs) paths)]
     (reduce
       (fn [acc relative]
-        (let [{:keys [ok lines] :as read} (read-source cache relative)]
+        (let [{:keys [ok source lines] :as read} (read-source cache relative)]
           (if-not ok
             (update acc :unreadable conj {:file relative :reason (name (:reason read))})
-            (update acc :hits into
-                    (keep-indexed
-                      (fn [idx line]
-                        (when-let [start (match-start pattern line)]
-                          {:file relative
-                           :line (inc idx)
-                           :text (str/trim line)
-                           :in_comment (comment-mention?
-                                         line start (clojure-path? relative))}))
-                      lines)))))
+            ;; @spec MCP-OP-THREAD-032
+            ;; The whole-file comment set is computed ONCE per file and only when
+            ;; the file actually has a hit: `(comment ...)`, `#_` and `/* ... */`
+            ;; are not decidable from the hit line alone.
+            (let [clojure? (clojure-path? relative)
+                  commented (delay (commented-line-set source clojure?))]
+              (update acc :hits into
+                      (keep-indexed
+                        (fn [idx line]
+                          (when-let [start (match-start pattern line)]
+                            {:file relative
+                             :line (inc idx)
+                             :text (str/trim line)
+                             :in_comment (or (comment-mention? line start clojure?)
+                                             (contains? @commented (inc idx)))}))
+                        lines))))))
       {:hits [] :unreadable []}
       candidates)))
 

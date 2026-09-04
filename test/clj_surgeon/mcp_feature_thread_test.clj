@@ -1338,7 +1338,10 @@
               (str "a mention inside (comment …) was reported " (:status h)
                    " with weak_reason " (pr-str (:weak_reason h))))
           (is (str/includes? (str (:weak_reason h)) "comment"))
-          (is (not (str/includes? text "COMPLETE"))))
+          (is (str/starts-with? (:status structured) "INCOMPLETE")
+              (str "a thread whose handler leg is only a (comment …) decoy read "
+                   (:status structured)))
+          (is (str/includes? text "INCOMPLETE")))
         (finally (delete-tree! scratch)))))
 
   (testing "a hit discarded by `#_`"
@@ -1382,13 +1385,13 @@
           js "/*\n * ghost()\n */\nghost();\n"
           commented-out? (or (resolve 'clj-surgeon.mcp-feature-thread/commented-out?)
                              (constantly ::no-such-predicate))]
-      (is (false? (commented-out? clj 1 false))
+      (is (false? (commented-out? clj 1 true))
           "a live definition is not commented out")
-      (is (true? (commented-out? clj 3 false))
+      (is (true? (commented-out? clj 3 true))
           "line 3 is inside a (comment …) form")
-      (is (true? (commented-out? clj 4 false))
+      (is (true? (commented-out? clj 4 true))
           "line 4 is discarded by #_")
-      (is (true? (commented-out? js 2 true))
+      (is (true? (commented-out? js 2 false))
           "line 2 is inside a /* … */ block")
-      (is (false? (commented-out? js 4 true))
+      (is (false? (commented-out? js 4 false))
           "line 4 is live code after the block closed"))))

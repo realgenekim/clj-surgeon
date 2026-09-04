@@ -210,3 +210,10 @@ run as a test inside `make mcp-test`) enforces both halves.
   content, so a valid literal such as `/[/}]/`, `/[^/}]/` or `p.split(/[/\\]/)`
   never ends early and never yields a truncated body labelled
   `brace-window(lexed,closed)`.
+
+- [x] **MCP-OP-THREAD-032**: A comment is not code, however it is spelled. When
+  `feature_thread` classifies a hit, it shall treat a line inside a Clojure
+  `(comment …)` form, a form discarded by `#_`, or a script `/* … */` block
+  comment as a comment mention exactly as it already treats `;` and `//`, so
+  such a hit is CANDIDATE with a comment reason and can never make a leg FOUND
+  or a thread COMPLETE.
