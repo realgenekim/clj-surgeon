@@ -1874,3 +1874,5 @@ because eleven launcher-driven namespaces moved off it; the discipline that make
 on the landing path, the nightly) is exactly what the review found not yet on the landing gate. Sol's r3 verdict: NO-GO on
 four blockers (above); the coverage comparison was the required deliverable and it is the finding. GitHub's default
 branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat needs re-verification when the workflow lands.
+
+## 23:43Z CORRECTION to the entry above: the GitHub API says the default branch is still `main` (`gh api repos/realgenekim/clj-surgeon --jq .default_branch` → main). My "now MCP/main (verified)" line was wrong — I wrote the sentence before reading the output. The nightly stays dormant; the mayor request stands.
