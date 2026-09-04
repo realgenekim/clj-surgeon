@@ -5145,6 +5145,79 @@
                  "refused for LENGTH when it was refused for shape: "
                  (pr-str bytes))))))
 
+  ;; -------------------------------------------------------------------------
+  ;; Opus's round-sixteen NO-GO item 6. The constructor asks the schema's
+  ;; `items` rule and not its `maxItems 512`, and the item rule it asks is
+  ;; "a non-blank string" rather than the rule this tool's own ENTRANCE
+  ;; applies. Measured at 42df064:
+  ;;
+  ;;   513-entries  next-call? false bytes=5591  (dropped for LENGTH)
+  ;;   nul-byte     next-call? TRUE  bytes=76
+  ;;
+  ;; 513 entries is refused only because 5,591 bytes exceeds the 512-byte
+  ;; ceiling — the SAME masking by the ceiling that hid the `items` half until
+  ;; round sixteen — and a NUL-byte entry is published into a continuation that
+  ;; replaying returns "Expected a project-relative .clj, .cljs, .cljc, or .edn
+  ;; path without parent traversal". A continuation the tool's own entrance
+  ;; refuses is the unexecutable promise MCP-OP-CENSUS-014 forbids, whether the
+  ;; caption is a word or a control character.
+  ;; -------------------------------------------------------------------------
+  (testing "the constructor applies the WHOLE published files rule"
+    (doseq [[label entries]
+            [[:a-nul-byte-entry [(str "src/a" (char 0) ".clj")]]
+             [:an-absolute-entry ["/src/a.clj"]]
+             [:a-parent-traversal-entry ["../src/a.clj"]]
+             [:an-unsupported-extension ["src/a.txt"]]
+             [:an-empty-segment ["src//a.clj"]]
+             [:five-hundred-and-thirteen
+              (mapv #(str "s" % ".clj") (range 513))]]]
+      (let [{:keys [next-call bytes candidate]}
+            (census-tool/continuation {:workspace_root "/x" :files entries})]
+        (is (nil? next-call)
+            (str label " was admitted as a continuation: " (pr-str next-call)))
+        (is (nil? candidate)
+            (str label " was admitted as a candidate: "
+                 (pr-str (take 3 (:files candidate)))))
+        (is (nil? bytes)
+            (str label " reports a measured byte length, which says it was "
+                 "refused for LENGTH when the schema refuses it for SHAPE: "
+                 (pr-str bytes))))))
+
+  (testing "the count rule is enforced AT the ceiling, not near it"
+    ;; 512 is what the schema declares, so 512 passes the SHAPE question and
+    ;; whatever happens next is the byte ceiling's business. 513 does not, and
+    ;; must not be masked by the byte ceiling the way it was for sixteen
+    ;; rounds.
+    (let [at (census-tool/continuation
+               {:workspace_root "/x"
+                :files (mapv #(str "s" % ".clj") (range 512))})
+          over (census-tool/continuation
+                 {:workspace_root "/x"
+                  :files (mapv #(str "s" % ".clj") (range 513))})]
+      (is (some? (:candidate at))
+          "512 entries — exactly what the schema declares — was refused for shape")
+      (is (some? (:bytes at))
+          "512 entries carries no measured byte length, so it was refused for shape")
+      (is (nil? (:candidate over))
+          "513 entries was admitted for shape and left to the byte ceiling")))
+
+  (testing "nothing the constructor admits is refused by this tool's entrance"
+    ;; The class, stated as the property rather than as a list of shapes: a
+    ;; continuation is a call the caller replays into THIS tool, so every entry
+    ;; it carries must pass the entrance's own path rule.
+    (doseq [[label entries]
+            [[:ordinary ["src/app/folds.clj"]]
+             [:mixed ["src/app/a.cljc" "src/app/b.edn"]]
+             [:nul [(str "src/a" (char 0) ".clj")]]
+             [:absolute ["/src/a.clj"]]]]
+      (when-let [candidate (:candidate (census-tool/continuation
+                                         {:workspace_root "/x"
+                                          :files entries}))]
+        (doseq [entry (:files candidate)]
+          (is (mcp-paths/relative-source-path? entry)
+              (str label " published an entry this tool's entrance refuses: "
+                   (pr-str entry)))))))
+
   (testing "a well-formed files list still travels"
     (let [{:keys [next-call bytes]}
           (census-tool/continuation {:workspace_root "/x"
