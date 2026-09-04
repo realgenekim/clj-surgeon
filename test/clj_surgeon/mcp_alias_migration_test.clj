@@ -4286,3 +4286,79 @@
     (is (empty? sites)
         (str "refusal kinds spelled dynamically with no forwarding marker, "
              "which no source scan can ever enumerate: " (pr-str sites)))))
+
+;; ---------------------------------------------------------------------------
+;; every invisible or malformed code point in a scope entry is typed
+
+;; @spec MCP-OP-ALIAS-061
+(deftest every-invisible-or-malformed-code-point-in-a-scope-entry-is-typed
+  ;; Round-twelve review finding 4: only U+0000 was typed. Every other
+  ;; invisible spelling compiled as a glob, matched nothing, and was reported
+  ;; as a fact about the TREE:
+  ;;
+  ;;   NUL                 => "alias-migration-scope-path-refused"
+  ;;   SOH                 => "alias-migration-scope-matches-nothing"
+  ;;   DEL                 => "alias-migration-scope-matches-nothing"
+  ;;   C1-NEL              => "alias-migration-scope-matches-nothing"
+  ;;   ZERO-WIDTH-SPACE    => "alias-migration-scope-matches-nothing"
+  ;;   LONE-HIGH-SURROGATE => "alias-migration-scope-matches-nothing"
+  ;;   LONE-LOW-SURROGATE  => "alias-migration-scope-matches-nothing"
+  ;;
+  ;; NUL is not special: it is the one member of a class. A code point the
+  ;; caller cannot see in their own request is the cause a refusal most has to
+  ;; name, and `scope-matches-nothing` names the wrong subject entirely — it
+  ;; asserts something about the tree that the walk never established.
+  ;;
+  ;; Overlong UTF-8 cannot exist as a JVM string: Jackson normalises the
+  ;; overlong `C0 AF` encoding of `/` to `/` before the verb sees it. What a
+  ;; decoder that does NOT normalise emits is U+FFFD, so U+FFFD is the
+  ;; observable trace of a malformed sequence and is refused as one.
+  (let [workspace (temp-dir)]
+    (try
+      (write-tree! workspace {"src/two.clj" "(ns two)\n"})
+      (doseq [[label code point]
+              [["NUL" 0x0000 "U+0000"]
+               ["SOH" 0x0001 "U+0001"]
+               ["ESC" 0x001b "U+001B"]
+               ["DEL" 0x007f "U+007F"]
+               ["C1 NEL" 0x0085 "U+0085"]
+               ["C1 APC" 0x009f "U+009F"]
+               ["zero-width space" 0x200b "U+200B"]
+               ["zero-width no-break space" 0xfeff "U+FEFF"]
+               ["left-to-right override" 0x202e "U+202E"]
+               ["lone high surrogate" 0xd800 "U+D800"]
+               ["lone low surrogate" 0xdc00 "U+DC00"]
+               ["replacement character" 0xfffd "U+FFFD"]]]
+        (testing label
+          (let [entry (str "src/" (char code) "x/**")
+                result (scope-matches-nothing-refusal
+                         workspace {:scope {:paths [entry]}})
+                cause (str (:cause result))]
+            (is (= "alias-migration-scope-path-refused" (:error_type result))
+                (str label " was reported as a fact about the tree: "
+                     (pr-str (:error_type result))))
+            (is (str/includes? cause point)
+                (str label ": the refusal does not name the code point "
+                     point ": " (pr-str cause)))
+            (is (str/includes? cause "index 4")
+                (str label ": the refusal does not say where it is: "
+                     (pr-str cause)))
+            (is (true? (:source_unchanged result)) (pr-str result))
+            (is (nil? (:next_call result))
+                (str label ": a spelling only the caller knows was given a "
+                     "mechanical call")))))
+      (testing "an ordinary entry is untouched by the code-point gate"
+        (let [result (scope-matches-nothing-refusal
+                       workspace {:scope {:paths ["src/nope/**"]}})]
+          (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+              (str "a printable entry was refused as a code point: "
+                   (pr-str result)))))
+      (testing "a printable non-ASCII entry is not a control character"
+        (write-tree! workspace {"ρίζα/three.clj" "(ns three)\n"})
+        (let [scan (alias-migration/scan-scope (.toPath workspace)
+                                               {:paths ["ρίζα/**"]
+                                                :exclude []})]
+          (is (:ok scan) (pr-str scan))
+          (is (= ["ρίζα/three.clj"] (:files scan)) (pr-str scan))))
+      (finally
+        (delete-tree! workspace)))))
