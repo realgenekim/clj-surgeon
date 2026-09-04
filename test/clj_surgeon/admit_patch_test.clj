@@ -5,6 +5,7 @@
   those pairs with `diff -u`, so every hunk header in this file is arithmetic
   a patch producer actually emitted rather than a hand-counted guess."
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.mcp-admit-tool :as admit]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
@@ -3813,12 +3814,30 @@
           (is (str/includes? text "verification_status=unverified")
               "the text block carries the word, not only the boolean")
           (is (str/includes? text "did not run"))
-          (testing "the text block is a superset of the structured receipt"
+          ;; @spec MCP-OP-ADMIT-123
+          (testing "the text block names every detector and reason detectors_not_run carries"
+            ;; Renamed 2026-09-04 (inb-cbca17, admit gate round 3): this
+            ;; block only ever walked :detectors_not_run, which detector-note
+            ;; alone already makes true -- it is not evidence that the WHOLE
+            ;; text block is a superset of the structured receipt. The real
+            ;; claim is asserted separately below.
             (doseq [{:keys [detector reason]} (:detectors_not_run result)]
               (is (str/includes? text detector)
                   (str "the text block never names the detector " detector))
               (is (str/includes? text (name reason))
                   (str "the text block never names the reason " (name reason)))))
+          ;; @spec MCP-OP-ADMIT-132
+          (testing "the text block really is a superset of the structured receipt"
+            ;; This is an :ok true (unverified preview) receipt, not a
+            ;; refusal, so the general fact-line ratchet (MCP-OP-ADMIT-131)
+            ;; does not apply to it -- but its next_call does, and until this
+            ;; round nothing rendered next_call on the ok=true branch at all.
+            (is (some? (:next_call result))
+                "the fixture must actually carry a next_call, or this proves nothing")
+            (is (str/includes? text (json/generate-string (:next_call result)))
+                (str "the text block drops next_call entirely on a successful "
+                     "receipt; a caller reading only the text has no follow-up "
+                     "call at all")))
           (testing "and no field in it reads as clean"
             (is (empty? (:hazards result)))
             (is (str/includes? text "not a clean bill of health")
@@ -4209,3 +4228,381 @@
         (is (str/includes? source "heap-peak-MiB=%d budget-MiB=%d"))
         (is (str/includes? source "(System/exit (if (every? true? results) 0 1))")
             "a self-test that cannot fail the shell is a log line")))))
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-ADMIT-131 / MCP-OP-ADMIT-132: the refusal text is a superset of
+;; structuredContent, and next_call renders verbatim.
+;;
+;; Landing review round 3 (inb-cbca17): admit_clojure_patch, the catalog's
+;; only write tool, sat outside the trunk's text superset ratchet
+;; (MCP-OP-ALIAS-059). Every refusal's `remedy` and `next_call` were absent
+;; from `content[0].text`, including the two named cases: the number that
+;; would lift an `analyzer-memory-exhausted` refusal, and the follow-up call
+;; a `verification-incomplete` refusal itself proposes.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private known-non-kind-regex-artifacts
+  "Two matches the enumeration regexes below produce that are demonstrably
+  not error-type kind literals -- verified by reading the exact source line
+  each comes from, not guessed:
+
+  \"error\" -- mcp_admit_tool.clj's `stale-snapshot-refusal` builds
+  `(select-keys (refusal ...) [:ok :operation :committed :source-unchanged
+  :error-type :error :next_call :drifted])`; `:error-type\\s+:error` there is
+  two adjacent KEYS of a key vector, not a kind assignment.
+
+  \"else\" -- the `:else` branch keyword of the `cond` inside
+  `edge-throwable-refusal`, picked up by the same keyword-token scan that
+  finds that cond's three real kinds."
+  #{"error" "else"})
+
+;; @spec MCP-OP-ADMIT-131
+(defn- kind-pairs
+  "Literal `:error-type :kind` key/value pairs anywhere in `text`."
+  [text]
+  (into (sorted-set)
+        (remove known-non-kind-regex-artifacts)
+        (map second (re-seq #":error-type\s+:([a-z][a-z][a-z-]*)" text))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- refusal-call-kinds
+  "Kinds passed as the literal first (or second, after `context`) argument
+  to a `(refusal ...)` call."
+  [text]
+  (into (sorted-set) (map second)
+        (re-seq #"\(refusal\s*(?:context\s*)?\n?\s*:([a-z][a-z][a-z-]*)" text)))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- path-refusal-kinds
+  "Kinds passed to `mcp-paths/path-refusal`, which `freeze-sources` widens
+  into the admit gate's own `:error-type` via `(keyword (:error_type ...))`."
+  [text]
+  (into (sorted-set) (map second)
+        (re-seq #"(?s)path-refusal\s*\n?\s*:([a-z][a-z][a-z-]*)" text)))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- edge-throwable-kinds
+  "The literal keywords `edge-throwable-refusal`'s own `cond` can return."
+  [text]
+  (let [start (str/index-of text "(defn- edge-throwable-refusal")
+        end (str/index-of text "(defn handle-admit-clojure-patch")
+        body (subs text start end)
+        cond-at (str/index-of body "cond")
+        window (subs body cond-at (min (count body) (+ cond-at 400)))]
+    (into (sorted-set)
+          (remove known-non-kind-regex-artifacts)
+          (map second (re-seq #":([a-z][a-z][a-z-]*)" window)))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- hazard-refusal-kinds
+  "Hazard `:type` values built with class `:refusal` in `form_identity.clj`
+  -- these become the admit gate's own `:error-type` via
+  `(:type (first blocking))` when `refusal-hazards` finds one blocking.
+  A hazard built class `:note` or `:informational` never blocks, so its
+  type never reaches the top-level receipt and is excluded here."
+  [text]
+  (letfn [(refusal-class? [tail]
+            (= (re-find #":refusal|:note|:informational" tail) ":refusal"))]
+    (into (sorted-set)
+          (concat
+            (keep (fn [[_ typ tail]] (when (refusal-class? tail) typ))
+                  (re-seq #"\(hazard\s+:([a-z][a-z-]*)((?:.|\n){0,220})" text))
+            (keep (fn [[_ typ tail]] (when (refusal-class? tail) typ))
+                  (re-seq #":type\s+:([a-z][a-z-]*)((?:.|\n){0,220})" text))))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- commit-compiled-kinds
+  "Kinds `intent-transaction/commit-compiled!` itself can return, scoped to
+  that one function's body so an unrelated `:error-type` elsewhere in
+  intent_transaction.clj -- reachable from other verbs, not from the admit
+  gate's commit path -- is not swept in."
+  [text]
+  (let [start (str/index-of text "(defn commit-compiled!")
+        end (str/index-of text "(defn- reverse-edit")
+        body (subs text start end)]
+    (into (sorted-set)
+          (concat
+            (kind-pairs body)
+            (map second (re-seq #"refuse!\s*\n?\s*:([a-z][a-z][a-z-]*)" body))
+            ;; `:error-type (if rolled-back? :a :b)` -- both branches
+            (mapcat (fn [[_ a b]] [a b])
+                    (re-seq (re-pattern
+                              (str "\\:error-type\\s*\\(if\\s+\\S+\\s*\\n?\\s*"
+                                   ":([a-z][a-z-]*)\\s*\\n?\\s*:([a-z][a-z-]*)\\)"))
+                            body))))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- admit-refusal-kinds-in-source
+  "Every `:error-type` value the admit gate's top-level receipt can carry,
+  read from the source rather than from a maintained list.
+
+  Closed over the exact set of namespaces whose values reach that field: the
+  gate's own literal refusals and edge-of-handler classification; the two
+  namespaces it calls directly and widens their `:error-type`
+  (`patch-apply/parse-patch` and `patch-apply/apply-parsed`,
+  `mcp-paths/resolve-source-path` and `resolve-new-source-path` via the
+  gate's own `freeze-sources`); the one namespace whose hazard `:type` it
+  widens when a hazard blocks (`form-identity/refusal-hazards`); and the one
+  function whose `:error-type` it widens on commit
+  (`intent-transaction/commit-compiled!`). A kind constructed anywhere else
+  in those files, outside the functions the admit gate actually calls, is
+  not reachable from `execute-request!` and is deliberately not swept in
+  (commit-compiled-kinds' function-body scoping is the concrete guard)."
+  []
+  (let [admit (slurp "src/clj_surgeon/mcp_admit_tool.clj")
+        patch-apply (slurp "src/clj_surgeon/patch_apply.clj")
+        mcp-paths (slurp "src/clj_surgeon/mcp_paths.clj")
+        form-identity (slurp "src/clj_surgeon/form_identity.clj")
+        intent-tx (slurp "src/clj_surgeon/intent_transaction.clj")]
+    (into (sorted-set)
+          (concat (kind-pairs admit)
+                  (refusal-call-kinds admit)
+                  (edge-throwable-kinds admit)
+                  (refusal-call-kinds patch-apply)
+                  (path-refusal-kinds mcp-paths)
+                  (hazard-refusal-kinds form-identity)
+                  (commit-compiled-kinds intent-tx)))))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest the-derived-refusal-kind-enumeration-is-not-empty-and-is-stable
+  ;; A regression here (an empty set, or a set that lost a real kind to a
+  ;; regex miss) would silently turn the sweep below into a no-op that still
+  ;; reports green. Pinning the count is a tripwire on the derivation itself,
+  ;; not a claim that this exact number is meaningful.
+  (let [kinds (admit-refusal-kinds-in-source)]
+    (is (>= (count kinds) 30)
+        (str "expected at least 30 derived kinds, got " (count kinds) ": "
+             (pr-str kinds)))
+    (is (contains? kinds "analyzer-memory-exhausted"))
+    (is (contains? kinds "verification-incomplete"))
+    (is (contains? kinds "invalid-relative-source-path")
+        "a kind the manual enumeration in this round's review missed, and the derivation caught")
+    (is (not (contains? kinds "error")))
+    (is (not (contains? kinds "else")))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- leaves-of
+  "Independent recursive leaf walk over `v`, as [path value] pairs.
+
+  Deliberately reimplemented rather than calling
+  `clj-surgeon.mcp-admit-tool/admit-leaf-entries`: a bug shared by both sides
+  of an equality check proves nothing."
+  [path v]
+  (cond
+    (map? v)
+    (mapcat (fn [[k cv]] (leaves-of (str path (when (seq path) ".") (name k)) cv))
+            v)
+
+    (sequential? v)
+    (apply concat
+           (map-indexed (fn [i cv] (leaves-of (str path "[" i "]") cv)) v))
+
+    (nil? v) []
+
+    :else [[path v]]))
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private admit-envelope-keys-for-witness
+  "The same envelope this round's renderer excludes -- reimplemented here,
+  not required from the tool namespace, so this witness does not depend on
+  the implementation agreeing with itself about what its own envelope is."
+  #{:ok :operation :error-type :error :next_call :remedy :elapsed_ms
+    :workspace-root :detectors_not_run :source-unchanged :mode})
+
+;; @spec MCP-OP-ADMIT-131
+;; @spec MCP-OP-ADMIT-132
+(defn- assert-refusal-text-superset!
+  "Every leaf of `structured` (a refusal receipt: :ok false) that differs
+  from the closed empty-receipt baseline for its mode appears in the text
+  block, `remedy` renders as its own line, and `next_call` renders verbatim
+  (or a stated, bounded pointer to it)."
+  [structured label]
+  (let [text (#'admit/summary structured)
+        baseline (#'admit/empty-receipt (or (:mode structured) "preview"))
+        leaves (->> (apply dissoc structured admit-envelope-keys-for-witness)
+                    (remove (fn [[k v]] (= v (get baseline k))))
+                    (mapcat (fn [[k v]] (leaves-of (name k) v)))
+                    (filter (fn [[_ v]] (or (string? v) (number? v)
+                                            (boolean? v) (keyword? v)
+                                            (symbol? v)))))]
+    (is (false? (:ok structured)) (str label " · fixture is not a refusal"))
+    (is (str/includes? text (str (:error-type structured)))
+        (str label " · the text does not name the error type"))
+    (when-let [error (:error structured)]
+      (is (str/includes? text error)
+          (str label " · the text drops the error sentence")))
+    (when-let [remedy (:remedy structured)]
+      (is (str/includes? text remedy)
+          (str label " · the text drops the remedy")))
+    (doseq [[path v] leaves]
+      (let [rendered (if (or (keyword? v) (symbol? v)) (name v) (str v))
+            prefix (subs rendered 0 (min (count rendered) 40))]
+        (is (or (str/includes? text rendered) (str/includes? text prefix))
+            (str label " · the text drops leaf " path "=" rendered))))
+    (if-let [call (:next_call structured)]
+      (let [encoded (json/generate-string call)]
+        (is (or (str/includes? text encoded)
+                (and (str/includes? text "next_call")
+                     (str/includes? text (str (count encoded)))))
+            (str label " · the text drops the next_call the caller must send")))
+      (is (str/includes? text "next_call")
+          (str label " · an absent next_call is omitted rather than stated")))
+    text))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest every-admit-refusal-kind-renders-every-structured-leaf-in-its-text-block
+  ;; Synthetic receipts, one per derived kind, exactly as
+  ;; MCP-OP-ALIAS-059's every-refusal-kind test drives alias_migration:
+  ;; cheap enough to cover the whole enumeration, and the two named live
+  ;; reproductions below (analyzer-memory-exhausted, verification-incomplete)
+  ;; carry the real production path for the two kinds the review named.
+  (doseq [kind (admit-refusal-kinds-in-source)]
+    (testing kind
+      (assert-refusal-text-superset!
+        {:ok false
+         :operation :admit-patch-refused
+         :mode "commit"
+         :error-type kind
+         :error (str "one sentence stating the " kind " cause")
+         :remedy (str "Resend the next_call; it corrects " kind ".")
+         :elapsed_ms 1.25
+         :source-unchanged true
+         :committed false
+         :mutation_attempted false
+         ;; a nested map, to prove the walk actually recurses -- the review
+         ;; named exactly this shape (lint_delta's cap/observed-bytes)
+         :lint_delta {:ran false :ok false :cap 999 :observed-bytes 1234
+                      :detector "clj-kondo"}
+         :files [(str kind "-file.clj")]
+         :next_call {:tool "admit_clojure_patch"
+                     :arguments {:mode "preview" :verify "focused"}
+                     :patch_field "patch"
+                     :patch_sha256 "deadbeef"
+                     :blocked_by kind}}
+        kind))))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest a-refusal-with-no-next-call-states-its-absence
+  (assert-refusal-text-superset!
+    {:ok false
+     :operation :admit-patch-refused
+     :mode "preview"
+     :error-type "patch-too-large"
+     :error "patch is 999999 UTF-8 bytes; the admission limit is 262144"
+     :elapsed_ms 0.5
+     :source-unchanged true
+     :patch_bytes 999999
+     :next_call nil}
+    "patch-too-large-no-next-call"))
+
+;; ---------------------------------------------------------------------------
+;; Live reproductions of the two kinds the review named directly
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-131
+(deftest a-verification-incomplete-refusal-carries-the-analyzer-diagnostic-and-next-call
+  ;; The review, verbatim: "verification-incomplete (the dropped next_call
+  ;; is MCP-OP-ADMIT-120's own affordance)". Reproduced through the real
+  ;; production path: a lint runner that reports a genuine truncation (the
+  ;; E-GATE-R field shape), verify=focused, mode=commit, no allow_partial.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [truncated-lint
+            (fn [_ _]
+              {:ran false :ok false :status :unverified
+               :detector "clj-kondo" :error-type :analyzer-output-truncated
+               :cap 2000 :observed-bytes 5000
+               :remedy (str "clj-kondo answered with 5000 bytes of findings "
+                            "and this gate reads at most 2000; raise the "
+                            "analyzer read ceiling "
+                            "(:admit-analyzer-visible-bytes) or narrow the "
+                            "patch to fewer files")
+               :error (str "clj-kondo findings were cut at 2000 bytes of "
+                           "5000; the analyzer ran and the gate could not "
+                           "read its answer")})
+            result (admit/execute-request!
+                     (stub-config root {:admit-lint-runner truncated-lint})
+                     {:patch clean-multi-file-patch :mode "commit"
+                      :verify "focused"})
+            text (#'admit/summary (assoc result :elapsed_ms 1.0))]
+        (is (false? (:ok result)))
+        (is (= :verification-incomplete (:error-type result)))
+        (is (false? (:committed result)))
+        (is (= 2000 (get-in result [:lint_delta :cap])))
+        (is (= 5000 (get-in result [:lint_delta :observed-bytes])))
+        (is (some? (:next_call result))
+            "MCP-OP-ADMIT-120: the refusal proposes the verify that could lift it")
+        (is (= "focused" (get-in result [:next_call :arguments :verify])))
+        (testing "every leaf, including the nested analyzer diagnostic, is in the text"
+          (assert-refusal-text-superset! (assoc result :elapsed_ms 1.0)
+                                          "verification-incomplete-live")))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest an-analyzer-memory-exhausted-refusal-carries-its-remedy-and-heap-number-in-text
+  ;; The review, verbatim: "analyzer-memory-exhausted (the dropped remedy is
+  ;; the number that lifts it)". Reproduced through the real
+  ;; edge-throwable-refusal classifier, same construction as
+  ;; MCP-OP-ADMIT-129's own witness -- an OutOfMemoryError is constructed,
+  ;; never provoked.
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (reset! config-atom
+              {:project-root (.getPath root)
+               :admit-lint-runner (fn [_ _] (throw (OutOfMemoryError. "Java heap space")))})
+      (let [captured (atom nil)
+            _ (admit/handle-admit-clojure-patch
+                nil
+                {"patch" clean-multi-file-patch "verify" "focused"}
+                (fn [content error? result]
+                  (reset! captured {:text (first content) :result result})))
+            {:keys [text result]} @captured]
+        (is (= :analyzer-memory-exhausted (:error-type result)))
+        (is (pos? (long (:max_heap_mib result))))
+        (is (string? (:remedy result)))
+        (is (str/includes? (str text) (str (:remedy result)))
+            "the text drops the remedy -- the exact route that lifts this refusal")
+        (is (str/includes? (str text) (str (:max_heap_mib result)))
+            "the text drops the heap number the remedy itself refers to")
+        (testing "every leaf of the OOM receipt is in the text"
+          (assert-refusal-text-superset! (assoc result :elapsed_ms 1.0)
+                                          "analyzer-memory-exhausted-live")))
+      (finally
+        (reset! config-atom previous)
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-ADMIT-132: expect_pre_sha256 is copyable from the text alone
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-132
+(deftest a-preview-of-an-existing-file-carries-expect-pre-sha256-in-its-text
+  ;; The tool description: "Copy expect_pre_sha256 from a preview's
+  ;; next_call to bind the [commit] transaction." Before this round nothing
+  ;; rendered next_call on the :ok true branch at all, so that instruction
+  ;; was not satisfiable from content[0].text.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch clean-multi-file-patch :mode "preview"
+                      :verify "focused"})
+            text (#'admit/summary (assoc result :elapsed_ms 1.0))
+            expect-pre (get-in result [:next_call :arguments :expect_pre_sha256])]
+        (is (:ok result))
+        (is (map? expect-pre)
+            "fixture must actually touch existing files, or expect_pre_sha256 is never populated")
+        (is (str/includes? text "expect_pre_sha256")
+            "the field the description tells the caller to copy is absent from the text")
+        (is (str/includes? text (json/generate-string (:next_call result)))
+            "expect_pre_sha256 is not readable from the text alone")
+        (doseq [[file sha] expect-pre]
+          (is (str/includes? text sha)
+              (str "the text drops the pre-image hash for " file))))
+      (finally (delete-tree! root)))))
