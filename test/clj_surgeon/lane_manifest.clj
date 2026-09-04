@@ -93,7 +93,8 @@
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {
 
-   ;; ---- :fast (37) ----
+   ;; ---- :fast (38) ----
+   'clj-surgeon.battery-ledger-test                     :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
    'clj-surgeon.lane-manifest-test                      :fast

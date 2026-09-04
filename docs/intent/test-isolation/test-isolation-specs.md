@@ -99,6 +99,37 @@ listed here with `[ ]` so the family is one document rather than a memory.
   *Witness:* `test/suite_concurrency_battery.sh`; three runs recorded in
   `docs/observations/2026-09-04-suite-spike-round2.md`.
 
+- [x] **TEST-ISO-009a**: Every run of the battery lane shall append ONE line
+  to `docs/observations/battery-ledger.edn` naming `{:sha :started :wall_s
+  :verdict :host}`, whether it passed or FAILED. The ledger shall be
+  append-only -- appending shall never read or rewrite what is already there
+  -- and an entry that does not read shall be NAMED rather than skipped, so a
+  corrupted receipt cannot make the ledger look merely shorter. The runner
+  writes the file; the seat commits it.
+  *Witness:* `clj-surgeon.battery-ledger-test/an-entry-round-trips-through-one-line`,
+  `.../appending-never-rewrites-what-is-already-there`,
+  `.../a-failed-battery-is-still-recorded`,
+  `.../the-make-targets-are-wired-to-this-mechanism`.
+
+- [x] **TEST-ISO-009b**: `make battery-fresh` shall REFUSE, naming its subject
+  and its number and printing the exact remedy, when the newest battery
+  receipt is older than 26 h, when it records a failure, when the commit it
+  names is not an ancestor of HEAD, when that commit is more than 30 commits
+  behind HEAD, or when the ledger is empty or corrupt. The battery is out of
+  the merge gate by design, which makes its ABSENCE silent; a stale nightly
+  shall therefore be a refusal rather than a silence. The verdict shall be a
+  PURE function of the entries, the instant, and an injected ancestry lookup,
+  so that every refusal state is reachable in the fast lane without a `git`
+  call, a clone, or the passage of a day.
+  *Witness:* `clj-surgeon.battery-ledger-test/a-fresh-receipt-on-this-tree-passes`,
+  `.../an-empty-ledger-refuses`,
+  `.../a-receipt-older-than-the-budget-refuses-and-names-the-age`,
+  `.../a-failed-newest-receipt-refuses`,
+  `.../a-receipt-from-a-tree-this-one-does-not-descend-from-refuses`,
+  `.../a-receipt-more-than-thirty-commits-behind-refuses`,
+  `.../a-corrupt-line-refuses-rather-than-shortening-the-ledger`,
+  `.../every-refusal-carries-the-remedy`.
+
 - [x] **TEST-ISO-RACE-001**: A test's child-process teardown shall not be
   able to throw. `stop-child!` shall return a typed receipt naming any
   teardown failure and shall never propagate one, and the workspace's

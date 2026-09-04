@@ -60,7 +60,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: repository-hygiene repository-hygiene-self-test test test-fast test-integration test-battery test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
+.PHONY: repository-hygiene repository-hygiene-self-test test test-fast test-integration test-battery battery-fresh test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -69,6 +69,7 @@ help:
 	@echo "  make test-fast                 JVM FAST lane (no child process, no port, no network)"
 	@echo "  make test-integration          JVM INTEGRATION lane (ephemeral ports, in-process servers)"
 	@echo "  make test-battery              JVM BATTERY lane (cold child JVMs; minutes-scale)"
+	@echo "  make battery-fresh             refuse if the newest battery receipt is stale"
 	@echo "  make test-bb                   babashka lane (was: make test-fast, renamed 2026-09-04)"
 	@echo "  make anvil-arms-self-test      PF-5 smoke for the E3/E6 arm apparatus (fake driver)"
 	@echo "  make analyzer-contract-test    Run the serialized real-analyzer contracts"
@@ -1002,9 +1003,30 @@ test-integration:
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-integration
 
 # The eleven. Minutes-scale (~674 s), deliberately OUT of the merge gate.
+#
+# Taking it out of the merge gate is the point of the partition AND the risk:
+# a gate that does not run on every merge is a gate whose ABSENCE is silent.
+# So every run appends a receipt to docs/observations/battery-ledger.edn --
+# pass or fail, one line, append-only. The RUNNER writes the file; the SEAT
+# commits it. `make battery-fresh` is the tripwire that reads it back.
 test-battery:
 	@# @spec TEST-ISO-001
-	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-battery
+	@# @spec TEST-ISO-009a
+	@started=$$(date -u +%Y-%m-%dT%H:%M:%SZ); t0=$$(date +%s); \
+	 clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-battery; rc=$$?; \
+	 t1=$$(date +%s); verdict=pass; [ $$rc -eq 0 ] || verdict=fail; \
+	 bb test/clj_surgeon/battery_ledger.clj append \
+	    --sha "$$(git rev-parse HEAD)" --started "$$started" \
+	    --wall-s "$$((t1 - t0))" --verdict "$$verdict"; \
+	 exit $$rc
+
+# The freshness tripwire. Refuses when the newest battery receipt is older
+# than 26 h, failed, or names a commit that is not an ancestor of HEAD or is
+# more than 30 commits behind it -- and prints the exact remedy. A stale
+# nightly is a refusal, not a silence.
+battery-fresh:
+	@# @spec TEST-ISO-009b
+	@bb test/clj_surgeon/battery_ledger.clj check
 
 test-bb:
 	@# @spec MCP-OP-TMPHYG-001

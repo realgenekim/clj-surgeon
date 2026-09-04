@@ -290,13 +290,14 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 37 (count (lm/namespaces-for :fast))))
+    (is (= 38 (count (lm/namespaces-for :fast))))
     (is (= 4 (count (lm/namespaces-for :integration))))
     (is (= 11 (count (lm/namespaces-for :battery))))
-    (is (= 52 (count lm/manifest))
+    (is (= 53 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
-             "round three's adopted orphan (mcp-formatter-test)"))))
+             "round three's adopted orphan (mcp-formatter-test) and its "
+             "battery-ledger witness"))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -313,8 +314,9 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.fast-lane-isolation-test 3   ; TEST-ISO-006's witness (round two)
-    clj-surgeon.lane-manifest-test       17  ; TEST-ISO-001's witness (round two) + round three's exclusion/arithmetic pins
+  '{clj-surgeon.battery-ledger-test      12  ; TEST-ISO-009a/b's witness (round three)
+    clj-surgeon.fast-lane-isolation-test 3   ; TEST-ISO-006's witness (round two)
+    clj-surgeon.lane-manifest-test       18  ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins
     clj-surgeon.mcp-formatter-test       3}) ; the adopted orphan (round three)
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
@@ -328,9 +330,9 @@
   ;;   round one's 49 namespaces, today ........... 921 deftests  (>= 865: the
   ;;                                                trunk ADDED tests to them;
   ;;                                                it never removed any)
-  ;;   adopted since round one ..................... 23 deftests  (3 + 17 + 3)
+  ;;   adopted since round one ..................... 36 deftests  (12 + 3 + 18 + 3)
   ;;                                                --------------
-  ;;   total declared by the manifest .............. 944 deftests
+  ;;   total declared by the manifest .............. 957 deftests
   ;;
   ;; A namespace leaving a lane fails `the-partition-drops-nothing-...` by
   ;; name; a namespace's tests being deleted fails the >= below; anything
@@ -355,9 +357,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 23 adopted) (str "adopted tests: " adopted)))
+      (is (= 36 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 944 total) (str "manifest declares " total " tests"))
+      (is (= 957 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -414,3 +416,62 @@
         (str "requirement(s) marked implemented that no @spec marker claims -- "
              "an implementation that vanished leaves the document lying: "
              (str/join ", " unclaimed)))))
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-001
+;; The rename ratchet. Until 2026-09-04 the name `test-fast` MEANT
+;; `bb test/run_all.clj`; it now means the JVM fast lane, and the babashka
+;; corpus is `make test-bb`. A rename whose old meaning survives in living
+;; prose is worse than no rename: the target still resolves, the suite is
+;; still green, and the reader runs the wrong lane. Historical receipts under
+;; docs/observations keep the old name and MEAN the old lane -- correct, they
+;; are evidence of what ran. This covers the LIVING set only.
+;;
+;; The scan flags a sentence that EQUATES the two names -- the old name and a
+;; babashka spelling in the same line, or wrapped across the line before it,
+;; which is how all four real defects read. A window that also names
+;; `test-bb` is the rename being EXPLAINED, which is what we want, so it is
+;; exempt; that is why this comment names it.
+;; ---------------------------------------------------------------------------
+
+(def ^:private living-prose-roots
+  ["src" "test" "dev" "bench" "skills" "docs/intent" ".github"])
+
+(def ^:private living-prose-files
+  ["Makefile" "deps.edn" "README.md"
+   ;; reusable briefs and boot-read notes: prose an agent will ACT on
+   "docs/observations/2026-09-02-anvil-builder-seat-brief.md"])
+
+(defn- living-prose
+  []
+  (->> (concat (mapcat #(file-seq (io/file %)) living-prose-roots)
+               (map io/file living-prose-files))
+       (filter #(.isFile ^java.io.File %))
+       (remove #(str/includes? (.getPath ^java.io.File %) "/.git/"))))
+
+(def ^:private old-name (str "test-" "fast"))
+
+(deftest no-living-prose-still-calls-the-bb-lane-by-its-old-name
+  (let [bb-spelling #"(?i)babashka|run_all\.clj"
+        offenders
+        (sort-by first
+                 (for [^java.io.File f (living-prose)
+                       :let [lines (vec (str/split-lines (slurp f)))]
+                       [i line] (map-indexed vector lines)
+                       :when (str/includes? line old-name)
+                       ;; the claim, plus the line before it, because a
+                       ;; wrapped sentence puts "babashka's" on the line above
+                       :let [claim (str/join " " (subvec lines (max 0 (dec i)) (inc i)))]
+                       :when (re-find bb-spelling claim)
+                       :let [nearby (str/join " " (subvec lines
+                                                          (max 0 (- i 4))
+                                                          (min (count lines) (+ i 5))))]
+                       :when (not (str/includes? nearby "test-bb"))]
+                   [(str (.getPath f) ":" (inc i)) (str/trim line)]))]
+    (is (empty? offenders)
+        (str (count offenders)
+             " living line(s) still equating the babashka lane with the name "
+             "`" old-name "`. The babashka corpus is `make test-bb` since "
+             "2026-09-04 and that name is now the JVM fast lane, so this prose "
+             "sends the reader to the wrong suite: "
+             (str/join "; " (map (fn [[loc line]] (str loc " -- " line)) offenders))))))
