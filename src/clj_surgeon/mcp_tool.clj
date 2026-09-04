@@ -1625,7 +1625,15 @@
   says when it fired. No alias_migration refusal carries twelve discriminating
   facts today, so this bound has never dropped one; a bound that truncates in
   silence breaks the text ⊇ structured contract on the day it first fires, and
-  a reader of the text has no way to know it did."
+  a reader of the text has no way to know it did.
+
+  The print deadline is ONE budget for the whole line rather than one per fact,
+  which has a consequence worth stating: a fact late in a slow receipt gets
+  less of that budget, so an ordinary value can render as an identity marker
+  where on its own it would have rendered as itself. The degradation is typed
+  — a marker naming the value's class and identity hash — never wrong data and
+  never a hang, and it is the correct trade for a receipt bounded as the one
+  unit the caller actually waits on."
   [result]
   (let [;; @spec MCP-OP-ALIAS-059
         ;; EVERY non-envelope key, whatever the shape of its value. The old

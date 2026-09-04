@@ -1296,11 +1296,21 @@
   1. a symbol from `kind-minting-symbols` ANYWHERE — head, argument, or
      threaded — because a name-builder builds a name from whichever position
      it is called; and
-  2. a keyword LITERAL that is not a lookup head and not a keyword-as-function
-     argument of a `keyword-selector-heads` call, because such a keyword is a
-     value the expression can return as the kind. A literal table's entries
-     are exactly this shape, and `get`/`get-in` against one was exempt while
-     the kind it yields appeared in no source scan.
+  2. a keyword OR STRING literal that is not a lookup head and not a
+     keyword-as-function argument of a `keyword-selector-heads` call, because
+     such a literal is a value the expression can return as the kind. A
+     literal table's entries are exactly this shape, and `get`/`get-in`
+     against one was exempt while the kind it yields appeared in no source
+     scan.
+
+  Round-seventeen review finding 2: shape 2 tested `keyword?` alone. Every
+  `refusal` constructor in the reachable set forwards its kind through
+  `(name error-type)`, and `(name \"brand-new-kind\")` is `\"brand-new-kind\"` —
+  a string kind is a whole kind, and the reviewer drove one live through the
+  entrance from a marked `(get {\"a\" \"brand-new-kind\"} k)`. The blindness hid
+  itself in both directions, `minted-kinds-in` having read strings all along:
+  the marked site was exempt, so the enumeration read nothing from it, and it
+  minted a READABLE kind, so the runtime-spelled scan did not name it either.
 
   Returned as reasons rather than as a boolean so a witness that fails can say
   WHICH shape it found."
@@ -1314,7 +1324,7 @@
      (concat
        (when (and (symbol? value) (contains? kind-minting-symbols value))
          [(str "mints with `" value "`")])
-       (when (and (keyword? value)
+       (when (and (or (keyword? value) (string? value))
                   (not head?)
                   (not selector?)
                   (not (contains? keyword-selector-heads parent-head)))
@@ -1576,19 +1586,32 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- literal-refusal-kinds-in
-  "Every kind spelled as a KEYWORD LITERAL at a `(refusal …)` call of `text`.
+  "Every kind a `(refusal …)` call of `text` SPELLS from literals.
 
   Read as forms for the same reason the guard is: the regex this replaces,
   `#\"\\(refusal :([a-z][a-z0-9-]*)\"`, is anchored on a single space, so a
   literal kind written on the line BELOW its `(refusal` was missed by the
   enumeration and by the guard that exists to catch what the enumeration
-  cannot see — the one hole that hides a kind twice over."
+  cannot see — the one hole that hides a kind twice over.
+
+  Round-seventeen review finding 2's second half: this read a keyword at the
+  kind position and NOTHING else, so a non-literal expression that can still
+  hand back a literal kind — `(get {\"planted\" \"brand-new-kind\"} k)` — was
+  enumerated nowhere, while the guard exempted it as a marked forward. That is
+  a kind reaching neither reader, which is exactly what the reviewer's plantI
+  was. The `:error-type` shape has read its non-literal values with
+  `minted-kinds-in` since round fourteen; the call-site shape now reads them
+  the same way, so every site is either NAMED by
+  `dynamic-refusal-kind-sites-in` — it spells its kind entirely at runtime —
+  or ENUMERATED here, and never neither."
   [text]
   (for [site (refusal-call-sites-in text)
         :let [value (node-value (:kind site))]
-        :when (and (keyword? value)
-                   (re-matches #"[a-z][a-z0-9-]*" (name value)))]
-    (name value)))
+        kind (if (keyword? value)
+               [(name value)]
+               (minted-kinds-in (:kind site)))
+        :when (re-matches #"[a-z][a-z0-9-]*" kind)]
+    kind))
 ;; @spec MCP-OP-ALIAS-059
 (defn- unwrap-meta
   "The node a `^meta` or `#^meta` wrapper carries, however deep the wrapping."
@@ -1726,10 +1749,16 @@
     (vec
       (for [site (when own-refusal-constructor? (refusal-call-sites-in text))
             :let [value (node-value (:kind site))]
-            ;; a keyword literal is the kind itself, and `literal-refusal-kinds-in`
-            ;; already enumerated it
+            ;; a kind the enumeration can READ is not spelled at runtime: a
+            ;; keyword literal at the kind position is the kind itself, and a
+            ;; non-literal expression contributes every literal it can still
+            ;; hand back. `literal-refusal-kinds-in` reads both, so this is
+            ;; the same escape `runtime-spelled-kind-sites` has always had at
+            ;; the `:error-type` shape — and it is what makes every site
+            ;; either NAMED here or ENUMERATED there, never neither.
             :when (not (and (keyword? value)
                             (re-matches #"[a-z][a-z0-9-]*" (name value))))
+            :when (empty? (minted-kinds-in (:kind site)))
             :when (not (and (marked? (:row site))
                             (forwarded-kind-expression? (:kind site)
                                                         (:context site))))]
