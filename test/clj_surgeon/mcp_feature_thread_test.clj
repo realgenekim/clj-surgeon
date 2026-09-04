@@ -1437,3 +1437,41 @@
           (is (= (vec (distinct paths)) (vec paths))
               (str "the same file was walked more than once: " (pr-str paths))))
         (finally (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- 3.3 (a make recipe is not a shell command) and 3.4 (dup unreadable)
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-019
+(deftest a-verify-row-hands-back-a-runnable-shell-command
+  (testing "the Makefile recipe prefix is not part of the command"
+    (let [{:keys [structured]} (thread! fixture-root)
+          rows (get-in structured [:rules :verify])]
+      (is (seq rows) "the fixture Makefile has verify rows")
+      (is (not-any? #(re-find #"^[@+-]" (str (:command %))) rows)
+          (str "a Makefile recipe prefix was handed to the caller as a shell"
+               " command: " (pr-str (map :command rows))))
+      (is (some #(= "@" (:make_prefix %)) rows)
+          "the prefix that was stripped must still be named, not erased")
+      (is (some #(str/starts-with? (str (:command %)) "node --test") rows)
+          "the `test-js` recipe should be runnable as printed"))))
+
+;; @spec MCP-OP-THREAD-013
+(deftest an-unreadable-file-is-listed-once-per-leg
+  (testing "several searches over the same unreadable file make ONE entry"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-dupunread")]
+      (try
+        (let [h (io/file scratch "src/writer/handlers/transform.clj")]
+          (is (.setReadable h false false)
+              "this witness needs a filesystem that honours a read bit")
+          (let [{:keys [structured]} (thread! (.getPath scratch))
+                l (leg structured "handler")
+                us (:unreadable l)]
+            (is (= "ABSENT" (:status l)))
+            (is (seq us))
+            (is (= (vec (distinct us)) (vec us))
+                (str "the same unreadable file was listed more than once: "
+                     (pr-str us)))))
+        (finally
+          (.setReadable (io/file scratch "src/writer/handlers/transform.clj") true false)
+          (delete-tree! scratch))))))
