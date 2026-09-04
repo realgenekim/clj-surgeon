@@ -1795,3 +1795,57 @@
           (thread! fixture-root {:probe (vec (repeat 40 "x"))})]
       (is (false? (:ok structured)))
       (is (= "feature-thread-probe-too-many" (:error_type structured))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR / round-three spec 1 -- co-menu-item peers
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-039
+(deftest the-use-leg-names-its-co-menu-item-peers
+  (let [{:keys [text structured]} (thread! fixture-root {:budget_bytes 32768})
+        menu (leg structured "menu-caller")
+        peers (:peers menu)
+        by-id (into {} (map (juxt :identifier identity) peers))]
+    (testing "every other command bound in the same menu form is a peer"
+      (is (= #{"openTransformFromSelection" "expound" "bulletize"}
+             (set (map :identifier peers)))
+          (str "peers were " (pr-str (map :identifier peers))))
+      (is (not-any? #{"formatDraft"} (map :identifier peers))
+          "the subject is not its own peer")
+      (is (not-any? #{"saveDraft" "navigateBookNodeHistory"} (map :identifier peers))
+          "a command in a DIFFERENT menu form is not a peer of this one"))
+
+    (testing "a peer whose definition exists is located exactly"
+      (let [p (by-id "openTransformFromSelection")]
+        (is (= "FOUND" (:status p)))
+        (is (= "resources/public/js/editor-commands.js" (:file p)))
+        (is (= 332 (:from p)))
+        (is (string? (:sha256 p)))
+        (is (string? (:anchor p)))
+        (is (= "co-menu-item" (:evidence p)))
+        (is (str/includes? (str (:body p)) "function openTransformFromSelection"))
+        (is (str/starts-with? (str (:boundary p)) "brace-window(lexed,closed"))))
+
+    (testing "a peer with NO definition is named absent, with the search run"
+      (doseq [id ["expound" "bulletize"]]
+        (let [p (by-id id)]
+          (is (= "ABSENT" (:status p)) (str id " was " (:status p)))
+          (is (seq (str (:searched p)))
+              (str id " is called absent with no search behind it"))
+          (is (nil? (:body p))))))
+
+    (testing "and the text face carries them"
+      (is (str/includes? text "peer openTransformFromSelection"))
+      (is (str/includes? text "peer expound")))
+
+    (testing "peer bodies are the FIRST bodies cut after the sibling"
+      (let [{:keys [structured]} (thread! fixture-root)]
+        (is (some #(= "peers" (:leg %)) (:elided structured))
+            (str "at the default budget the peer bodies should be cut before"
+                 " anything else; elided was "
+                 (pr-str (map :leg (:elided structured)))))
+        (is (every? #(nil? (:body %)) (:peers (leg structured "menu-caller"))))
+        (is (every? #(:from %)
+                    (filter #(= "FOUND" (:status %))
+                            (:peers (leg structured "menu-caller"))))
+            "a cut peer keeps its range")))))
