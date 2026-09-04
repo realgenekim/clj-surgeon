@@ -90,6 +90,21 @@ backstop is the runner itself: any test namespace under `test/run_all.clj` or
 `test/clj_surgeon/mcp_test_runner.clj` that leaks now fails BOTH gates by
 name, unconditionally, with no allowlist and no per-test opt-out.
 
+**And be precise about what the audit is actually looking at for this leaf.**
+The audit scans `src/**` and the `Makefile`; the whole mechanism lives under
+`test/`. So for MCP-OP-TMPHYG-004, -006, -007, -008, -011, -012 and -013 the
+"implementation witness" the audit finds is an `@spec` **marker in the
+`tmp-leak-ratchet-self-test` Makefile recipe**, not code. A marker-presence
+check is not a ratchet: the audit would stay green with
+`test/clj_surgeon/tmp_leak_support.clj` gutted. **The assurance for this leaf
+is `tmp-leak-ratchet-self-test` itself**, which round two drove RED on six
+separate mutilations of the mechanism (fail-open fstype, dropped child
+`TMPDIR`, unforwarded JVM flags, blindly-trusted sentinel, pid-blind sweep,
+hard-coded `/tmp` in a gate), plus a seventh in round three (a seam-granted
+pass). Read the audit as "the intent is declared and annotated," never as
+"the intent is enforced"; the falsifier table below is where enforcement is
+claimed, and every row of it names an executed arm.
+
 ## Falsifier table
 
 Every witness below is EXECUTED behaviour. Round one's witnesses were a unit
