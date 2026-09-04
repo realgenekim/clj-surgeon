@@ -1245,6 +1245,34 @@
       result)))
 
 ;; @spec MCP-OP-SHELL-ARGV-002
+(defn- ls-tree-root-refusal-map
+  "The one spelling of the not-a-directory refusal, so the entrance pre-check
+   and the kernel's own `:dir-not-found` cannot answer differently."
+  [dir]
+  {:error (str ":ls-tree :dir must be an existing directory: "
+               (pr-str (str dir)))
+   :error-type :workspace-root-not-a-directory
+   :dir (str dir)
+   :next-action "pass_an_existing_directory_path"})
+
+;; @spec MCP-OP-SHELL-ARGV-002
+(defn ls-tree-root-refusal
+  "Typed refusal when an :ls-tree root is not an existing directory; nil when
+   the root is usable. A root that fails this check must never reach project
+   discovery: an empty result is indistinguishable from an empty tree, and the
+   caller needs to know its root was wrong (Andon pull inb-d27b79).
+
+   The predicate is `study/existing-directory?`, the SAME one the kernel's own
+   entrance applies, rather than a second copy of it: this branch moved the
+   `:ls-tree` kernel into `clj-surgeon.study`, and a refusal decided here by a
+   different test from the one the walk applies is two answers to one question.
+   `run-ls-tree` below returns this same map for the kernel's own
+   `:dir-not-found`, so the two routes cannot spell the refusal differently."
+  [dir]
+  (when-not (study/existing-directory? dir)
+    (ls-tree-root-refusal-map dir)))
+
+;; @spec MCP-OP-SHELL-ARGV-002
 (defn run-ls-tree
   "CLI entrance: one study kernel scan, then print. No second implementation.
 
@@ -1263,11 +1291,9 @@
   (let [scan (study/ls-tree opts)]
     (cond
       (= :dir-not-found (:error-type scan))
-      {:error (str ":ls-tree :dir must be an existing directory: "
-                   (pr-str (str (:dir opts))))
-       :error-type :workspace-root-not-a-directory
-       :dir (str (:dir opts))
-       :next-action "pass_an_existing_directory_path"}
+      ;; The same constructor the pre-check uses, so the two routes to this
+      ;; refusal cannot spell it differently.
+      (ls-tree-root-refusal-map (:dir opts))
 
       (not (:ok scan))
       ;; NOTE (inb-eca3b1): calling System/exit from inside a library operation

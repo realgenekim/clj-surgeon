@@ -90,7 +90,7 @@
     (boolean (some skip-dirs (str/split rel #"/")))))
 
 ;; @spec MCP-OP-SHELL-ARGV-001
-(defn- existing-directory?
+(defn existing-directory?
   "True only when `path` names an existing directory. Never throws: a string
    that is not a legal path (an embedded NUL, say) is simply not a directory."
   [path]
