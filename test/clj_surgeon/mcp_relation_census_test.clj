@@ -7146,7 +7146,17 @@
       :args [":op" ":relation-census" ":doors" big ":doors" big]}
      {:label :invalid-arguments
       :error-type :invalid-arguments
-      :args [":op" ":relation-census" ":doors" (str "[1" big "]")]}]))
+      :args [":op" ":relation-census" ":doors" (str "[1" big "]")]}
+     ;; Both dispatch refusals for an op nobody defines: `run-op`'s, which the
+     ;; launcher reaches for an ordinary invocation, and `-main`'s, which it
+     ;; reaches under `--help`. Two sites, one name, and only one of them was
+     ;; bounded when this set was first written.
+     {:label :unknown-operation
+      :error-type :unknown-operation
+      :args [":op" big]}
+     {:label :unknown-operation-under-help
+      :error-type :unknown-operation
+      :args [":op" big ":help" "true"]}]))
 
 ;; @spec MCP-OP-CENSUS-014
 (deftest every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit

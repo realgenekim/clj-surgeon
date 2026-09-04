@@ -944,7 +944,15 @@
    workspace the caller named — and a refusal raised before dispatch has no
    request, no workspace and no anchor to name. Two different promises."
   #{:duplicate-argument
-    :invalid-arguments})
+    :invalid-arguments
+    ;; Round nineteen, found BY declaring this set. `-main` has two dispatch
+    ;; refusals for an op nobody defines — one under `--help`, one in `run-op`
+    ;; — and only the first was routed through the launcher's bounded exit;
+    ;; the second printed a 10,468-byte receipt with a 10,001-character run
+    ;; and no marker. That is the reviewer's own finding one frame over, and
+    ;; it was invisible until the names were written down: an enumeration that
+    ;; describes a subset of what an entrance emits is green over the rest.
+    :unknown-operation})
 
 ;; @spec MCP-OP-CENSUS-014
 (def mcp-refusal-types
