@@ -1657,3 +1657,5 @@ The reviewer also put on the record what only Gene can grant: the read-side text
 doubling) is a product change, and no reviewer's GO covers it. Round 12 builds the fix and the trunk re-merge; the
 acceptance question goes to Gene with the morning report. Killed one orphaned JVM in a deleted gate5 fixture dir
 (load 16.9 with the spike's two concurrent clones running as designed).
+
+## 17:54Z — usage watch (untimed run, 3 min at load 11, window since 2026-08-30T15:00Z "until": "2026-09-04T17:50:46.926236Z"): tools "admit_clojure_patch": 1 "inspect_clojure": 148 ; inspect_clojure "count": 148 median 96 ms p90 331 ms max 8405 ms (collector figures verbatim; ok/refused split not in the tail captured — full JSON at /var/tmp/forge/usage-untimed.log)
