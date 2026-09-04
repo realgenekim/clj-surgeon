@@ -2097,6 +2097,33 @@
       (cond-> (into {} pairs)
         has-help? (assoc :help true)))))
 
+;; @spec MCP-OP-CENSUS-014
+(defn- print-launcher-refusal!
+  "THE ONE PLACE the LAUNCHER's own refusals are printed, and bounded.
+
+   Sol's round-eighteen item 1, blocking. `run-relation-census` bounds the op's
+   exits and `mcp-relation-census/entrance-bounded` bounds the tool's, and the
+   launcher — which is the public CLI entrance, the thing an operator actually
+   types — bounded nothing: `parse-args` throws BEFORE dispatch, so a repeated
+   10,001-character `:doors` reached the catch-all below and was printed
+   verbatim, twice in `:values` and once in the message, 20,228 bytes with no
+   truncation marker.
+
+   The bound is a property of the EXIT, not of the op. `census/bound-refusal`
+   is the same function the op's last step uses, for the reason its own
+   docstring gives: a bound enforced at some of the sites is not a bound, it is
+   those sites' habit, and the habit does not travel to the site added next
+   round. So there is ONE printing site for a launcher refusal, and it is
+   bounded; the names it can print are declared in
+   `census/launcher-refusal-types` and enumerated by a witness that drives both
+   real launchers as subprocesses.
+
+   Returns the bounded map, because `-main`'s exit code is decided from it."
+  [refusal]
+  (let [bounded (relation-census/bound-refusal refusal)]
+    (pp/pprint bounded)
+    bounded))
+
 (defn -main [& args]
   (try
     (let [result
@@ -2184,17 +2211,20 @@
                       op-def (get ops-registry canonical)]
                   (if op-def
                     (println (format-op-help canonical op-def))
-                    (let [error {:error (str "Unknown op: " (:op opts))
-                                 :error-type :unknown-operation}]
-                      (pp/pprint error)
-                      error)))
+                    ;; A launcher refusal like any other: the op name is the
+                    ;; caller's own string, so it is bounded at the same one
+                    ;; exit rather than printed raw.
+                    (print-launcher-refusal!
+                      {:error (str "Unknown op: " (:op opts))
+                       :error-type :unknown-operation})))
 
                 :else (run opts))))]
       (when (and (map? result) (:error result))
         (System/exit 1)))
     (catch Exception e
-      (pp/pprint (merge (or (ex-data e) {})
-                        {:error (.getMessage e)
-                         :error-type (or (:error-type (ex-data e))
-                                         :invalid-arguments)}))
+      (print-launcher-refusal!
+        (merge (or (ex-data e) {})
+               {:error (.getMessage e)
+                :error-type (or (:error-type (ex-data e))
+                                :invalid-arguments)}))
       (System/exit 1))))
