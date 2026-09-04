@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.admit-patch-test]
+   [clj-surgeon.admit-patch-round16-test]
    [clj-surgeon.census-pool-test]
    [clj-surgeon.core-discovery-test]
    [clj-surgeon.mcp-alias-migration-test]
@@ -68,6 +69,7 @@
         result
         (run-tests
           'clj-surgeon.admit-patch-test
+          'clj-surgeon.admit-patch-round16-test
           'clj-surgeon.census-pool-test
           'clj-surgeon.core-discovery-test
           'clj-surgeon.mcp-alias-migration-test

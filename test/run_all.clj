@@ -3,6 +3,7 @@
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.tmp-leak-support-test]
    [clj-surgeon.agent-routing-test]
+   [clj-surgeon.admit-patch-round16-test]
    [clj-surgeon.alias-migration-test]
    [clj-surgeon.analyze-test]
    [clj-surgeon.cli-dispatch-test]
