@@ -86,7 +86,8 @@
    ;; other entrance already publishes.
    ['clj-surgeon.mcp-relation-census-launcher-test/a-deeply-nested-argument-never-reaches-the-reader :r22]
    ['clj-surgeon.mcp-relation-census-launcher-test/the-launchers-last-resort-catch-is-over-throwable :r22]
-   ['clj-surgeon.mcp-relation-census-round20-test/the-two-entrances-name-one-observation-for-every-root-shape :r22]])
+   ['clj-surgeon.mcp-relation-census-round20-test/the-two-entrances-name-one-observation-for-every-root-shape :r22]
+   ['clj-surgeon.mcp-relation-census-round20-test/the-leaf-bound-is-what-saves-an-exempt-fields-non-string-leaf :r22]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]

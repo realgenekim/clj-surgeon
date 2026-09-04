@@ -252,3 +252,76 @@
                 ":ls-tree accepted a regular file as its root"))))
       (finally
         (doseq [f (reverse (file-seq parent))] (.delete ^java.io.File f))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND TWENTY-TWO, item 2 — Opus's round-twenty-one finding about the
+;; EVIDENCE rather than about the code.
+;;
+;; Round twenty offered the receipt "bound -> string?-only 118/28" as proof
+;; that `bound-refusal-leaf`'s non-string branch (8c93b878) closes round
+;; nineteen's blocking finding. It does not reproduce. Re-driven on a
+;; `git archive` export at this branch's tip:
+;;
+;;   SABOTAGE 1  (leaf bound reverted to `(if (string? x) …)`)
+;;     :BATTERY-RESULT {:test 26, :pass 1312, :fail 0, :error 0}
+;;   SABOTAGE 1b (WHOLE-FIELD bound removed entirely)
+;;     :BATTERY-RESULT {:test 26, :pass 1312, :fail 0, :error 0}
+;;
+;; So the reviewer's ruling is right and is worse than they measured: NEITHER
+;; bound was pinned. Every committed drive carries exactly ONE over-long leaf,
+;; and either bound alone catches that shape, so each was masking the other
+;; and a sabotage of either was invisible. In the reviewer's words: "A bound
+;; nothing can make red is not a ratchet."
+;;
+;; Two repairs, one per bound:
+;;
+;;   - the WHOLE-FIELD bound gets a launcher drive of its own,
+;;     `:many-small-leaves-at-the-ops-exit` — ten thousand two-character
+;;     keywords, every leaf tiny and the field thirty thousand characters,
+;;     which is the exact case `bound-refusal`'s docstring was written for.
+;;   - the LEAF bound gets the witness below, at the FUNCTION boundary rather
+;;     than at a launcher, and the reason is stated rather than hidden: the
+;;     three identity fields are exempt from the whole-field bound, so an
+;;     over-ceiling NON-STRING leaf inside one of them is the only input the
+;;     leaf bound alone can save — and no argv builds one today, because
+;;     `:anchor`'s `:given` and `:absolute` are `(str …)` and its `:kind` is
+;;     one of two short keywords. The honest statement is therefore that the
+;;     non-string leaf branch is DEFENCE IN DEPTH with no launcher-reachable
+;;     input at this tip, and the honest ratchet is one that drives the
+;;     function with the input the rule is about.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-014
+(deftest the-leaf-bound-is-what-saves-an-exempt-fields-non-string-leaf
+  (let [big (apply str (repeat 10001 \a))
+        ceiling census/max-refusal-field-chars
+        printed-len #(count (pr-str %))]
+
+    (testing "an over-ceiling NON-STRING leaf inside an exempt field is bounded"
+      (doseq [k census/refusal-identity-keys]
+        (let [refusal {:ok false
+                       :error-type :invalid-workspace-root
+                       k {:kind (keyword big) :given "/x" :absolute "/x"}}
+              bounded (census/bound-refusal refusal)
+              leaf (:kind (get bounded k))]
+          (is (<= (printed-len leaf) (+ ceiling 64))
+              (str k " published a leaf that RENDERS as " (printed-len leaf)
+                   " characters. It is EXEMPT from the whole-field bound by "
+                   "`refusal-identity-keys`, so the leaf bound is the only "
+                   "thing between it and the caller's terminal — and a leaf "
+                   "bound that asks `string?` is a bound on the type its "
+                   "author happened to picture"))
+          (is (map? (get bounded k))
+              (str k " was collapsed into prose: the exemption exists so a "
+                   "structured field a caller reads BY KEY survives")))))
+
+    (testing "the whole-field bound is a SECOND bound, not the same one"
+      ;; Many tiny leaves: every leaf is under the ceiling, the field is not.
+      ;; This is the shape the launcher drive `:many-small-leaves-at-the-ops-
+      ;; exit` drives through both real launchers.
+      (let [wide (vec (repeat 10000 :a))
+            bounded (census/bound-refusal {:ok false :value wide})]
+        (is (<= (printed-len (:value bounded)) (+ ceiling 64))
+            (str ":value rendered as " (printed-len (:value bounded))
+                 " characters with every leaf two characters long — the "
+                 "NUMBER of leaves is caller-controlled too"))))))

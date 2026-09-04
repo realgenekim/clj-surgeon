@@ -236,7 +236,20 @@
       :args [":op" ":relation-census" ":dir" "." ":doors" (str "[:" big "]")]}
      {:label :nested-map-at-the-ops-exit
       :error-type :doors-not-a-string
-      :args [":op" ":relation-census" ":dir" "." ":doors" (str "{:k :" big "}")]}]))
+      :args [":op" ":relation-census" ":dir" "." ":doors" (str "{:k :" big "}")]}
+     ;; ROUND TWENTY-TWO, item 2. The drive that pins the WHOLE-FIELD bound
+     ;; and nothing else. Every drive above carries ONE over-long leaf, which
+     ;; the LEAF bound alone already catches — measured: removing the
+     ;; whole-field bound entirely leaves the committed battery at 0 failures.
+     ;; The whole-field bound exists for the other half of
+     ;; `bound-refusal`'s own argument — "the NUMBER of leaves is
+     ;; caller-controlled too" — and until this drive there was no witness
+     ;; for it. Ten thousand two-character keywords: every leaf is tiny, the
+     ;; field is thirty thousand characters.
+     {:label :many-small-leaves-at-the-ops-exit
+      :error-type :doors-not-a-string
+      :args [":op" ":relation-census" ":dir" "."
+             ":doors" (str "[" (str/join " " (repeat 10000 ":a")) "]")]}]))
 
 ;; @spec MCP-OP-CENSUS-014
 (deftest no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value

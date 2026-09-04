@@ -1231,7 +1231,30 @@
    `pr-str` output, not a Java type, so `pr-str` is what is measured; a leaf
    that renders over the ceiling comes back as the bounded TEXT of its own
    rendering, marker and all, because a keyword truncated into a keyword is a
-   different name rather than a shortened one."
+   different name rather than a shortened one.
+
+   CORRECTION OF THE RECORD, round twenty-two. Round twenty offered the
+   receipt \"bound -> string?-only 118/28\" as proof that this branch closes
+   round nineteen's finding. IT DOES NOT REPRODUCE: re-driven on a
+   `git archive` export, reverting this fn to `(if (string? x) …)` leaves the
+   committed census battery at `{:test 26, :pass 1312, :fail 0, :error 0}`.
+   Removing the WHOLE-FIELD bound in `bound-refusal` instead leaves it at the
+   same 0 failures. Neither bound was pinned, because every committed drive
+   carried exactly ONE over-long leaf and either bound alone catches that
+   shape — each was masking the other. The reviewer's ruling, and it stands:
+
+     \"A bound nothing can make red is not a ratchet.\"
+
+   What is true, stated without the false receipt: the three
+   `refusal-identity-keys` are exempt from the whole-field bound, so an
+   over-ceiling NON-STRING leaf inside one of them is the only input this
+   branch alone can save — and no argv builds one at this tip, because
+   `:anchor`'s `:given` and `:absolute` are `(str …)` and its `:kind` is one
+   of two short keywords. So the non-string branch is DEFENCE IN DEPTH, and it
+   is pinned where the rule lives: `the-leaf-bound-is-what-saves-an-exempt-
+   fields-non-string-leaf` drives this fn with that input, and
+   `:many-small-leaves-at-the-ops-exit` drives the whole-field bound's own
+   case through both real launchers. Each sabotage now goes red on its own."
   [x]
   (cond
     (coll? x) x
