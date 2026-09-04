@@ -120,11 +120,25 @@
   (try
     (loop [^Path dir (.getParent (.normalize (.resolve root (str relative))))]
       (when (and dir (.startsWith dir root))
-        (if (Files/exists dir (make-array LinkOption 0))
-          (when-not (and (Files/isReadable dir) (Files/isExecutable dir))
-            (let [shown (.toString (.relativize root dir))]
-              (if (str/blank? shown) (.toString dir) shown)))
-          (recur (.getParent dir)))))
+        (cond
+          (not (Files/exists dir (make-array LinkOption 0)))
+          (recur (.getParent dir))
+
+          ;; Opus's round-seventeen item 3, the identical missing test on this
+          ;; side of the fence. It is unreachable today only because ENOTDIR
+          ;; arrives here as `FileSystemException` and never as
+          ;; `AccessDeniedException` — which makes it a defect waiting on a JDK
+          ;; wording change rather than a defect that is not there. A regular
+          ;; file in a path prefix is not an ancestor DIRECTORY this process may
+          ;; not read; it is ENOTDIR, and the `not-found` branch already says so.
+          (not (Files/isDirectory dir (make-array LinkOption 0)))
+          nil
+
+          (not (and (Files/isReadable dir) (Files/isExecutable dir)))
+          (let [shown (.toString (.relativize root dir))]
+            (if (str/blank? shown) (.toString dir) shown))
+
+          :else nil)))
     (catch Exception _ nil)))
 
 (defn resolve-source-path

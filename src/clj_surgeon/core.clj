@@ -493,10 +493,28 @@
   [path]
   (loop [dir (fs/parent (fs/absolutize path))]
     (when dir
-      (if (fs/exists? dir)
-        (when-not (and (fs/readable? dir) (fs/executable? dir))
-          (str dir))
-        (recur (fs/parent dir))))))
+      (cond
+        (not (fs/exists? dir))
+        (recur (fs/parent dir))
+
+        ;; Opus's round-seventeen item 3. The docstring said "ancestor
+        ;; DIRECTORY" and the code never asked. A mode-644 regular FILE is
+        ;; readable and not executable, so it passed the permission test by
+        ;; accident, and `src/app/afile.clj/x.clj` — an ordinary source file in
+        ;; a path prefix, which is ENOTDIR and not a permission problem at all
+        ;; — was published as a denied directory: a refusal stating a falsehood
+        ;; and carrying a remedy that cannot be followed, because the file is
+        ;; already readable and making it more readable changes nothing. The
+        ;; tool answered `not-found` for the same observation, which is the
+        ;; only cross-entrance cause disagreement the ten-shape parity
+        ;; enumeration found.
+        (not (fs/directory? dir))
+        nil
+
+        (not (and (fs/readable? dir) (fs/executable? dir)))
+        (str dir)
+
+        :else nil))))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-019
