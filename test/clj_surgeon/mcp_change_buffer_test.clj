@@ -719,6 +719,54 @@
              (change-buffer/compile-exact-profile
                "exact" {"exact" profile} :process))))))
 
+(deftest expand-command-resolves-through-runtime-path-after-paved-directories
+  ;; @spec MCP-OP-VERIFY-011
+  ;; GHA round one (docs/observations/2026-09-04-gha-round1.md, finding 1): the
+  ;; runner's clj-kondo lives on $PATH via setup-clojure's tool cache, in none
+  ;; of the five hardcoded directories, and the seat only ever passed because
+  ;; its own clj-kondo happens to sit in /usr/local/bin. Reproduce the runner
+  ;; shape directly by binding *executable-path* to a directory that is NOT
+  ;; one of the five paved ones.
+  (testing "an executable absent from every paved directory resolves via PATH"
+    (let [path-dir (tmp-leak/track!
+                     temp-roots
+                     (.toFile (java.nio.file.Files/createTempDirectory
+                                "clj-surgeon-change-buffer-path-"
+                                (make-array java.nio.file.attribute.FileAttribute 0))))
+          fake-clj-kondo (io/file path-dir "clj-kondo")]
+      (spit fake-clj-kondo "#!/bin/sh\nexit 0\n")
+      (.setExecutable fake-clj-kondo true)
+      (binding [process-env/*executable-path* (.getPath path-dir)]
+        (let [resolved (change-buffer/expand-command ["clj-kondo" "--lint"] [])]
+          (is (= (.getCanonicalPath fake-clj-kondo)
+                 (.getCanonicalPath (io/file (first resolved)))))
+          (is (.isAbsolute (io/file (first resolved)))
+              (str "resolved clj-kondo must be an absolute path, not a bare name: "
+                   (first resolved)))
+          (is (= ["--lint"] (rest resolved)))))))
+
+  (testing "nothing resolves in either the paved directories or PATH: typed refusal"
+    (let [empty-path-dir (tmp-leak/track!
+                           temp-roots
+                           (.toFile (java.nio.file.Files/createTempDirectory
+                                      "clj-surgeon-change-buffer-empty-path-"
+                                      (make-array java.nio.file.attribute.FileAttribute 0))))]
+      (binding [process-env/*executable-path* (.getPath empty-path-dir)]
+        (try
+          (change-buffer/expand-command
+            ["clj-kondo-nonexistent-binary-9483a4" "--lint"] [])
+          (is false "expand-command must throw a typed refusal when nothing resolves")
+          (catch clojure.lang.ExceptionInfo e
+            (let [data (ex-data e)]
+              (is (= :executable-unresolved (:error-type data)))
+              (is (= "clj-kondo-nonexistent-binary-9483a4"
+                     (:requested-executable data)))
+              (is (some #(str/includes? % "/usr/local/bin")
+                        (:searched-directories data))
+                  "must name the paved directories searched")
+              (is (some #{(.getPath empty-path-dir)} (:searched-directories data))
+                  "must name the PATH directories searched"))))))))
+
 (deftest exact-process-evidence-is-complete-bounded-and-honest
   ;; @spec MCP-OP-VERIFY-003
   ;; @spec MCP-OP-VERIFY-005
