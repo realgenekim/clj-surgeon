@@ -276,7 +276,7 @@ SHIMEOF
   fi
 
   # --- ls-files shimmed: must not false-PASS ---------------------------------------
-  OUT_LS=$(PATH="$SCRATCH/bin-ls-files:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+  OUT_LS=$(PATH="$SCRATCH/bin-ls-files:$PATH" FAN_GIT="$SCRATCH/bin-ls-files/git" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
     "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
   RC_LS=$?
   echo "SELFTEST-LISTING-FAILURE ls-files-shimmed: rc=$RC_LS"
@@ -290,7 +290,7 @@ SHIMEOF
   fi
 
   # --- diff shimmed: must also fail closed (already correct pre-fix; must stay so)
-  OUT_DIFF=$(PATH="$SCRATCH/bin-diff:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+  OUT_DIFF=$(PATH="$SCRATCH/bin-diff:$PATH" FAN_GIT="$SCRATCH/bin-diff/git" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
     "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
   RC_DIFF=$?
   echo "SELFTEST-LISTING-FAILURE diff-shimmed: rc=$RC_DIFF"
@@ -304,7 +304,7 @@ SHIMEOF
   fi
 
   # --- the same, through the full six-check gate, exactly as the reviewer did -----
-  RSOUT=$(PATH="$SCRATCH/bin-ls-files:$PATH" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+  RSOUT=$(PATH="$SCRATCH/bin-ls-files:$PATH" FAN_GIT="$SCRATCH/bin-ls-files/git" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
     bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1)
   RSRC=$?
   echo "SELFTEST-LISTING-FAILURE full-gate ls-files-shimmed: rc=$RSRC"
@@ -406,6 +406,9 @@ fi
 #   - empty-output shim  -> exit 0, stdout entirely empty (the reviewer's repro)
 #   - partial-output shim -> exit 0, echoes ONE real record, silently drops the
 #     other (a shim that half-lies is a harder case than one that lies completely)
+# Since round 4 the scorer never resolves `git` through PATH, so each shim is ALSO
+# handed to it as $FAN_GIT: the adversary's binary becomes the one the scorer runs,
+# which is strictly harder than the PATH attack these cases originally modelled.
 # Both must fail closed: nonzero exit, a `CHECK 1 file-set: ERROR listing-incomplete`
 # line, and no `CHECK 1 file-set: PASS` line -- and the full six-check gate must not
 # report 6/6 with either shim on PATH.
@@ -475,7 +478,7 @@ SHIMEOF
   fi
 
   # --- empty-output shim: must not false-PASS ---------------------------------------
-  OUT_EMPTY=$(PATH="$SCRATCH/bin-empty:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+  OUT_EMPTY=$(PATH="$SCRATCH/bin-empty:$PATH" FAN_GIT="$SCRATCH/bin-empty/git" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
     "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
   RC_EMPTY=$?
   echo "SELFTEST-INCOMPLETE-LISTING empty-output-shimmed: rc=$RC_EMPTY"
@@ -489,7 +492,7 @@ SHIMEOF
   fi
 
   # --- partial-output shim: must not false-PASS -------------------------------------
-  OUT_PARTIAL=$(PATH="$SCRATCH/bin-partial:$PATH" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
+  OUT_PARTIAL=$(PATH="$SCRATCH/bin-partial:$PATH" FAN_GIT="$SCRATCH/bin-partial/git" bb "$HERE/fan_check.clj" "$SCRATCH/repo" \
     "$SCRATCH/gen/manifest-$N.edn" "$SCRATCH/gen/canonical-$N" "$BASE" 2>&1)
   RC_PARTIAL=$?
   echo "SELFTEST-INCOMPLETE-LISTING partial-output-shimmed: rc=$RC_PARTIAL"
@@ -503,7 +506,7 @@ SHIMEOF
   fi
 
   # --- the same, through the full six-check gate, exactly as the reviewer did ------
-  RSOUT=$(PATH="$SCRATCH/bin-empty:$PATH" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
+  RSOUT=$(PATH="$SCRATCH/bin-empty:$PATH" FAN_GIT="$SCRATCH/bin-empty/git" FAN_FIXTURES="$SCRATCH/gen" FAN_BASE="$BASE" \
     bash "$HERE/rescore-FAN.sh" "$SCRATCH/repo" "$N" 2>&1)
   RSRC=$?
   echo "SELFTEST-INCOMPLETE-LISTING full-gate empty-output-shimmed: rc=$RSRC"
