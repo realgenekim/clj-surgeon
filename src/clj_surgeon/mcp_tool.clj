@@ -1232,11 +1232,21 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def alias-migration-refusal-envelope-keys
-  "Receipt keys the refusal text renders structurally rather than as facts."
-  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
-    :write_authority :next_action :next_call :remedy :elapsed_ms
-    :workspace_root :expect_files_unchanged_reason :receipt_hash
-    :undo_receipt :details_path :details_retained :details_retention})
+  "Receipt keys the refusal text renders structurally rather than as facts.
+
+  ONLY the keys this renderer actually renders. `mutation_attempted`,
+  `write_authority`, `source_unchanged`, `next_action` and
+  `expect_files_unchanged_reason` were listed here and rendered nowhere, so
+  they were removed from the fact line and then dropped from the text
+  altogether: the E-PREWRITE cohort read an `alias-policy-exhausted` refusal
+  whose structuredContent carried `mutation_attempted false` and
+  `write_authority false` — the two fields that separate \"refused before
+  touching anything\" from \"tried and rolled back\" — and whose text carried
+  neither. A key is envelope because the renderer HAS a place for it, never
+  because it looks structural."
+  #{:ok :operation :error_type :error :next_call :remedy :elapsed_ms
+    :workspace_root :receipt_hash :undo_receipt :details_path
+    :details_retained :details_retention})
 
 ;; @spec MCP-OP-ALIAS-059
 (def max-refusal-fact-characters
@@ -1248,8 +1258,14 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def max-refusal-facts
-  "How many discriminating facts one refusal text renders."
-  12)
+  "How many discriminating facts one refusal text renders.
+
+  Sixteen, not twelve: five keys that were listed as envelope and rendered
+  nowhere are facts now, and the widest live refusal —
+  `scope-matches-nothing` where no next_call can be composed — carries
+  fifteen. A bound that would drop one of them turns the fix for text ⊇
+  structured back into the defect it closed."
+  16)
 
 ;; @spec MCP-OP-ALIAS-059
 (def max-rendered-next-call-characters

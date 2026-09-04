@@ -1038,11 +1038,14 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def ^:private refusal-envelope-keys
-  "Receipt keys the refusal text renders structurally rather than as facts."
-  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
-    :write_authority :next_action :next_call :remedy :elapsed_ms
-    :workspace_root :expect_files_unchanged_reason :receipt_hash
-    :undo_receipt :details_path :details_retained :details_retention})
+  "Receipt keys the refusal text renders structurally rather than as facts.
+
+  Kept in step with `mcp-tool/alias-migration-refusal-envelope-keys`: a key
+  listed here is a key `assert-refusal-text!` does not require by name, so a
+  key that drifts into this set drops out of the gate with it."
+  #{:ok :operation :error_type :error :next_call :remedy :elapsed_ms
+    :workspace_root :receipt_hash :undo_receipt :details_path
+    :details_retained :details_retention})
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
@@ -1275,19 +1278,22 @@
         fact-count (fn [line]
                      (count (str/split (str/replace line "facts · " "")
                                        #" · ")))]
+    (is (= 16 mcp-tool/max-refusal-facts)
+        (str "the stated fact bound moved; the numbers below name it and must "
+             "move with it"))
     (testing "at the bound the line says nothing, because nothing was dropped"
-      (let [line (mcp-tool/refusal-fact-line (receipt 12))]
-        (is (= 12 (fact-count line)) line)
+      (let [line (mcp-tool/refusal-fact-line (receipt 16))]
+        (is (= 16 (fact-count line)) line)
         (is (not (str/includes? line "more"))
             "a complete fact line claims a truncation it did not make")))
     (testing "one past the bound"
-      (let [line (mcp-tool/refusal-fact-line (receipt 13))]
+      (let [line (mcp-tool/refusal-fact-line (receipt 17))]
         (is (str/includes? line "+1 more")
             (str "the fact line dropped a fact in silence: " line))
         (is (str/includes? line "structuredContent")
             "the line does not say where the dropped facts are")))
     (testing "three past the bound"
-      (is (str/includes? (mcp-tool/refusal-fact-line (receipt 15)) "+3 more")
+      (is (str/includes? (mcp-tool/refusal-fact-line (receipt 19)) "+3 more")
           "the fact line does not count the facts it dropped"))))
 
 ;; @spec MCP-OP-ALIAS-059
