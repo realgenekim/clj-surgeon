@@ -1590,6 +1590,108 @@
                    (re-matches #"[a-z][a-z0-9-]*" (name value)))]
     (name value)))
 ;; @spec MCP-OP-ALIAS-059
+(defn- unwrap-meta
+  "The node a `^meta` or `#^meta` wrapper carries, however deep the wrapping."
+  [node]
+  (if (contains? #{:meta :meta*} (n/tag node))
+    (recur (last (significant-children node)))
+    node))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- argument-vectors-in
+  "Every argument VECTOR of a function definition, read as FORMS.
+
+  Takes the definition's children AFTER the defined name and skips what the
+  reader says is not an argument vector — a docstring, an attribute map, a
+  metadata wrapper — then handles both shapes a definition takes: one vector
+  for a single arity, and a list per arity for a multi-arity body. A
+  `(def name (fn …))` is followed into the `fn`, whose own optional name is
+  skipped the same way."
+  [nodes]
+  (let [tail (drop-while (fn [node]
+                           (let [value (node-value node)]
+                             (or (string? value) (map? value) (symbol? value))))
+                         (map unwrap-meta nodes))
+        head (first tail)]
+    (cond
+      (nil? head) []
+      (= :vector (n/tag head)) [head]
+      (and (= :list (n/tag head))
+           (contains? '#{fn fn*}
+                      (node-value (first (significant-children head)))))
+      (argument-vectors-in (rest (significant-children head)))
+      :else (vec (for [node tail
+                       :when (= :list (n/tag node))
+                       :let [child (first (map unwrap-meta
+                                               (significant-children node)))]
+                       :when (and child (= :vector (n/tag child)))]
+                   child)))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- own-refusal-constructor-takes-kind?
+  "Whether this source's own `refusal` takes the KIND as its first argument.
+
+  Only such a source can spell a kind at a `(refusal …)` call site at all;
+  where the kind is a literal INSIDE the constructor — `mcp_workspace`'s
+  `[message value]`, spelling `\"invalid-workspace-root\"` in its own map —
+  the `:error_type \"…\"` scan already has it and the call sites carry no kind
+  to read.
+
+  Round-seventeen review finding 1: this was a TEXT regex over the argument
+  NAME, `#\"\\(defn-?\\s+refusal\\s*\\n?\\s*\\[\\s*(error-type|kind)\\b\"`, whose `\\s*\\[`
+  cannot cross a docstring, an attribute map, a multi-arity body or a
+  `(def refusal (fn …))`. Five of the reviewer's six constructor shapes
+  therefore switched the whole file's scan OFF while the form scan found the
+  planted site in all six, and `mcp_workspace.clj:8` — which has a docstring —
+  already tripped it, reaching the right answer for the wrong reason. Adding a
+  docstring to `mcp_alias_migration.clj`'s constructor is the most ordinary
+  edit anyone could make to that namespace and it disabled the guard for all
+  fifteen of its sites with nothing going red: `a-gate-a-caller-can-turn-off`.
+
+  Decided with the READER, and on the question that matters rather than on a
+  naming convention: the first parameter of the constructor's first arity, and
+  whether it reaches the `:error-type`/`:error_type` value the constructor
+  publishes.
+
+  ASSUMPTION, declared rather than implied: a call site is a list whose head
+  is the literal symbol `refusal`, so a constructor that is ALIASED or APPLIED
+  — `(def r refusal)`, `(let [r refusal] …)`, `(apply refusal …)` — is
+  invisible to this scan in either direction. `rg -n \"\\(apply refusal|\\(def r\"
+  src/` finds no such shape in the reachable set today, and one added later is
+  a hole this guard would not see."
+  [text]
+  (let [root (try (parser/parse-string-all text) (catch Exception _ nil))]
+    (boolean
+      (when root
+        (some
+          (fn [top-level]
+            (when (= :list (n/tag top-level))
+              (let [kids (map unwrap-meta (significant-children top-level))]
+                (when (and (contains? '#{defn defn- def}
+                                      (node-value (first kids)))
+                           (= 'refusal (node-value (second kids))))
+                  (when-let [arity (first (argument-vectors-in (drop 2 kids)))]
+                    (let [parameter (node-value
+                                      (first (significant-children arity)))]
+                      (and (symbol? parameter)
+                           (boolean
+                             (some
+                               (fn [candidate]
+                                 (and (= :map (n/tag candidate))
+                                      (some
+                                        (fn [[key-node value-node]]
+                                          (and (contains?
+                                                 #{:error-type :error_type}
+                                                 (node-value key-node))
+                                               (some #(= parameter
+                                                         (node-value %))
+                                                     (node-seq value-node))))
+                                        (partition 2 (significant-children
+                                                       candidate)))))
+                               (node-seq top-level)))))))))) 
+          (significant-children root))))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn- dynamic-refusal-kind-sites-in
   "Every `(refusal <non-literal>` site of ONE source, unmarked.
 
@@ -1618,10 +1720,9 @@
         ;; only a source whose OWN `refusal` takes the kind as its first
         ;; argument can spell a kind at the call site at all; where the kind
         ;; is a literal inside the constructor the `:error_type "…"` scan
-        ;; already has it
-        own-refusal-constructor?
-        (boolean
-          (re-find #"\(defn-?\s+refusal\s*\n?\s*\[\s*(error-type|kind)\b" text))]
+        ;; already has it. Decided with the READER — a text regex over the
+        ;; argument name was switched off by one docstring.
+        own-refusal-constructor? (own-refusal-constructor-takes-kind? text)]
     (vec
       (for [site (when own-refusal-constructor? (refusal-call-sites-in text))
             :let [value (node-value (:kind site))]
