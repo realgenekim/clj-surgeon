@@ -4000,3 +4000,116 @@
                        "account for the tree"))))))
       (finally
         (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; the visible refusal is bounded in CHARACTERS, not in items
+
+(defn- blowout-tree!
+  "Seven legal top-level roots, each a digit followed by 246 quotation marks."
+  []
+  (let [workspace (temp-dir)]
+    (write-tree! workspace
+                 (into {}
+                       (map (fn [index]
+                              [(str index (apply str (repeat 246 \")) "/x.clj")
+                               (requiring-source (str "n" index))])
+                            (range 7))))
+    workspace))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-visible-refusal-is-held-to-its-stated-character-ceiling
+  ;; Round-twelve review finding 2: `root-sizes` is bounded by ITEM COUNT and
+  ;; embedded whole in `:remedy`, and `max-refusal-text-characters` is stated
+  ;; but enforced nowhere. Seven legal roots of 246 quotation marks each:
+  ;;
+  ;;   error_type => alias-migration-scope-matches-nothing
+  ;;   next_call => nil
+  ;;   root count/listed => 7 6
+  ;;   root list count/json length/max item => 6 3019 254
+  ;;   error/remedy/text lengths => 353 3445 4890
+  ;;   text ceiling => 4096
+  ;;
+  ;; A ceiling a witness asserts and the renderer does not enforce is a
+  ;; number in a docstring.
+  (let [workspace (blowout-tree!)]
+    (try
+      (let [captured (atom nil)
+            _ (mcp-tool/init! (config workspace (io/file workspace "receipts")))
+            _ (mcp-tool/handle-alias-migration
+                nil
+                (json/parse-string
+                  (json/generate-string
+                    (request workspace
+                             {:scope {:paths ["no-such-dir/**"]
+                                      :exclude (vec (repeat 6 (apply str (repeat 60 "e"))))}
+                              :expect {:files 7}}))
+                  true)
+                (fn [content error? structured]
+                  (reset! captured {:content content :error? error?
+                                    :result structured})))
+            result (:result @captured)
+            text (first (:content @captured))]
+        (is (string? text)
+            (str "the entrance published no text block to bound: "
+                 (pr-str (:content @captured))))
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+            (pr-str result))
+        (is (nil? (:next_call result)) (pr-str (:next_call result)))
+        (is (<= (count text) alias-migration/max-refusal-text-characters)
+            (str "the visible refusal is " (count text)
+                 " characters, past its stated ceiling of "
+                 alias-migration/max-refusal-text-characters))
+        (testing "the root listing is bounded in characters and says so"
+          (let [ceiling (some-> (resolve
+                                  'clj-surgeon.mcp-alias-migration/max-refusal-root-list-characters)
+                                var-get)
+                listing (alias-migration/root-sizes
+                          (alias-migration/suggested-scope-paths
+                            (.toPath workspace)))
+                rendered (pr-str listing)]
+            (is (some? ceiling)
+                "the root listing states no character ceiling to be held to")
+            (when ceiling
+              (is (<= (count rendered) ceiling)
+                  (str "the root listing renders " (count rendered)
+                       " characters, past its ceiling of " ceiling)))
+            (is (some #(str/includes? % "more roots") listing)
+                (str "the listing dropped roots in silence: "
+                     (pr-str listing))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-text-ceiling-is-witnessed-at-the-ceiling-and-one-past-it
+  ;; The bound is asserted AT the number, in both directions: a refusal whose
+  ;; rendered text is exactly the ceiling is published whole and claims no
+  ;; truncation; one character more is truncated with a typed marker naming
+  ;; the length it replaced. A bound tested only far from its edge is a bound
+  ;; nobody has tested.
+  (let [ceiling alias-migration/max-refusal-text-characters
+        receipt (fn [remedy]
+                  {:ok false
+                   :operation "alias_migration"
+                   :error_type "alias-migration-empty-scope"
+                   :error "one sentence stating the cause"
+                   :elapsed_ms 1.25
+                   :source_unchanged true
+                   :remedy remedy})
+        base (count (mcp-tool/alias-migration-summary (receipt "")))
+        at (mcp-tool/alias-migration-summary
+             (receipt (apply str (repeat (- ceiling base) \x))))
+        past (mcp-tool/alias-migration-summary
+               (receipt (apply str (repeat (inc (- ceiling base)) \x))))]
+    (testing "exactly at the ceiling"
+      (is (= ceiling (count at))
+          (str "the fixture did not land on the ceiling: " (count at)))
+      (is (not (str/includes? at "truncated"))
+          "a refusal exactly at the ceiling claims a truncation it did not make"))
+    (testing "one character past the ceiling"
+      (is (<= (count past) ceiling)
+          (str "the refusal text is " (count past) " characters, past "
+               ceiling))
+      (is (str/includes? past "truncated")
+          "the refusal text was cut in silence")
+      (is (str/includes? past "structuredContent")
+          "the truncation marker does not say where the whole refusal is"))))
