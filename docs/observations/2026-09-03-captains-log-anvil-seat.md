@@ -1618,3 +1618,10 @@ its landing review. Reviews already in flight run to completion; no new polish r
 finding is a landing blocker.
 
 ## 16:55Z vision.md amended: the wall-clock rule (Gene: 2x on wall or withdraw); loop item 4 counts wins in minutes
+
+## 17:13Z feature_thread r9 (Sol): NO-GO, two blocking; round ten is the last round for this lane
+
+Both blockers are the same lesson as round seven, one rung up: the string rule now knows an occurrence is inside a
+literal but still lets the SPELLING (`subject(`) outrank the CONTEXT; and a refusal that names the resolved target
+publishes exactly the path the containment exists to hide. Plus a stale floor constant. Under the wall-clock rule this
+lane gets one more round scoped to landing blockers, lands on GO, and freezes; the wall levers are elsewhere.
