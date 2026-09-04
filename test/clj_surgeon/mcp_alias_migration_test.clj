@@ -1198,11 +1198,18 @@
   (let [text (mcp-tool/alias-migration-summary structured)]
     (is (str/includes? text (str (:error_type structured)))
         (str label " · the text block does not name the cause"))
-    (doseq [[field value] (sort-by key structured)
-            :when (and (not (contains? refusal-envelope-keys field))
-                       (or (string? value) (number? value) (boolean? value)
-                           (and (sequential? value)
-                                (every? #(or (string? %) (number? %)) value))))]
+    ;; @spec MCP-OP-ALIAS-059
+    ;; EVERY non-envelope key, whatever the shape of its value. Round-thirteen
+    ;; review finding 2: this filter admitted scalars and flat sequentials and
+    ;; skipped everything else, so a key whose value is a NESTED MAP was never
+    ;; asserted at all — `:helper_sabotage_detail {:nested "value"}` added to
+    ;; the live `mcp_workspace` refusal and made to disappear in the renderer
+    ;; left this witness, the dedicated live workspace witness, the live
+    ;; receipts witness and the any-shape witness ALL green over 259
+    ;; assertions. A witness that filters by the shape it is meant to police
+    ;; is not a witness.
+    (doseq [[field _] (sort-by key structured)
+            :when (not (contains? refusal-envelope-keys field))]
       (is (str/includes? text (name field))
           (str label " · the text block drops the discriminating field "
                (name field))))
@@ -4512,6 +4519,25 @@
                           :scope {:paths ["src/**"]}
                           :expect {:files 12}})
                #(delete-tree! workspace)))
+    ;; @spec MCP-OP-ALIAS-059
+    ;; Round-thirteen review finding 2: the list omitted the ONE refusal the
+    ;; reviewer sabotaged — the workspace router's, minted before the verb
+    ;; runs. A list of "every live refusal" that leaves out an entrance is a
+    ;; list, not an enumeration.
+    (let [workspace (workspace!)]
+      (record! "invalid-workspace-root"
+               (let [captured (atom nil)]
+                 (mcp-tool/init! (config workspace
+                                         (io/file workspace "receipts")))
+                 (mcp-tool/handle-alias-migration
+                   nil
+                   (json/parse-string
+                     (json/generate-string
+                       (request workspace {:workspace_root "relative/path"}))
+                     true)
+                   (fn [_content _error? structured] (reset! captured structured)))
+                 @captured)
+               #(delete-tree! workspace)))
     (let [workspace (backslash-tree!)]
       (record! "discovery-incomplete"
                (with-redefs-fn
@@ -4676,3 +4702,96 @@
         (is (str/includes? (last listing) "+1 more roots")
             (str "the marker names the wrong number of dropped roots: "
                  (pr-str (last listing))))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- counted-endless-seq
+  "An unchunked infinite sequence that counts realisations and refuses to be
+  realised past `budget`.
+
+  Deterministic where a timeout is not: a renderer that realises the whole
+  value before measuring it walks straight into the throw, and one that stops
+  at its ceiling never reaches it. `lazy-seq` rather than `map` over `range`,
+  because a chunked source realises thirty-two elements at a time and would
+  make the count a property of the chunk size."
+  [counter budget]
+  (letfn [(step [index]
+            (lazy-seq
+              (swap! counter inc)
+              (when (> index budget)
+                (throw (ex-info (str "the fact renderer realised " index
+                                     " elements of an endless value")
+                                {:realised index :budget budget})))
+              (cons index (step (inc index)))))]
+    (step 0)))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-fact-renderer-costs-bounded-work-whatever-the-value
+  ;; Round-thirteen review finding 2: "every value shape is elided" bounds the
+  ;; returned TEXT and not the WORK. `pr-str` realises the complete value and
+  ;; the ceiling is applied to the finished string:
+  ;;
+  ;;   function      => chars 352 named true elided true ms 0.9
+  ;;   lazy-100k     => chars 449 named true elided true ms 15.4
+  ;;   nested-map-10k=> chars 449 named true elided true ms 6.4
+  ;;   before infinite render
+  ;;   EXIT=124
+  ;;
+  ;; A bound on the output is not a bound on the cost of producing it: an
+  ;; infinite lazy sequence never reaches the gate, and a ten-megabyte string
+  ;; is rendered whole in order to be cut to 160 characters.
+  (let [ceiling mcp-tool/max-refusal-fact-characters
+        bounded? (fn [line] (<= (count line) (+ ceiling 64)))]
+    (testing "an endless value is never realised past the ceiling"
+      (let [realised (atom 0)
+            budget (* 4 ceiling)
+            line (mcp-tool/refusal-fact-line
+                   {:error_type "alias-migration-empty-scope"
+                    :endless (counted-endless-seq realised budget)})]
+        (is (string? line) "the renderer published no fact line at all")
+        (is (str/includes? line "endless")
+            (str "an endless fact is dropped rather than elided: " line))
+        (is (bounded? line)
+            (str "the fact line renders " (count line) " characters"))
+        (is (<= @realised (* 2 ceiling))
+            (str "the renderer realised " @realised
+                 " elements to publish " ceiling " characters"))))
+    ))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-fact-renderer-survives-a-deeply-nested-value
+  (let [ceiling mcp-tool/max-refusal-fact-characters
+        bounded? (fn [line] (<= (count line) (+ ceiling 64)))]
+    (testing "a deeply nested value does not take the renderer down"
+      (let [deep (reduce (fn [acc _] {:n acc}) {:leaf 1} (range 20000))
+            line (mcp-tool/refusal-fact-line
+                   {:error_type "alias-migration-empty-scope" :deep deep})]
+        (is (string? line) "the renderer published no fact line at all")
+        (is (str/includes? line "deep")
+            (str "a deep fact is dropped rather than elided: " line))
+        (is (bounded? line)
+            (str "the fact line renders " (count line) " characters"))))
+    ))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-fact-renderer-does-not-read-a-huge-value-whole
+  (let [ceiling mcp-tool/max-refusal-fact-characters
+        bounded? (fn [line] (<= (count line) (+ ceiling 64)))]
+    (testing "a ten-megabyte string is not rendered whole to be cut to 160"
+      ;; a coarse guard rather than a fine one, and the only shape of witness
+      ;; a String admits: a renderer that reads the whole value measured 362 ms
+      ;; here (635 ms cold) and one that stops at its ceiling measures a
+      ;; fraction of a millisecond, so the bound sits 3.6x below the failing
+      ;; side and three orders of magnitude above the passing one.
+      (let [big (apply str (repeat 10000000 \a))
+            started (System/nanoTime)
+            line (mcp-tool/refusal-fact-line
+                   {:error_type "alias-migration-empty-scope" :big big})
+            elapsed-ms (/ (- (System/nanoTime) started) 1e6)]
+        (is (str/includes? line "big")
+            (str "a huge fact is dropped rather than elided: " line))
+        (is (bounded? line)
+            (str "the fact line renders " (count line) " characters"))
+        (is (< elapsed-ms 100.0)
+            (str "the renderer took " elapsed-ms
+                 " ms to publish " ceiling " characters, so it read the whole "
+                 "of a ten-megabyte value before bounding it"))))))
