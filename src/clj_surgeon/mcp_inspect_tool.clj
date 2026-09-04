@@ -885,9 +885,9 @@
           ordered)))
 
 ;; @spec MCP-OP-STUDY-042
-(defn refusal-text
-  "The complete text block for one refusal: the type, the CAUSE, the evidence
-  the receipt lists, the remedy, and the next action.
+(defn- refusal-structural-text
+  "The refusal's structural rendering: the type, the CAUSE, the enumerated
+  detail lines, the owner evidence, the remedy, and the next action.
 
   The `ls-tree` refusal branch already had this shape and the generic branch
   did not, so seven of nine modes refused with an error type and an arrow. A
@@ -920,6 +920,26 @@
            (str "\n→ next call: " (:tool (:next_call result)) " "
                 (json/generate-string (:arguments (:next_call result)))))
          (format "\n→ %s" (or (:next_action result) "correct_request"))])))))
+
+;; @spec MCP-OP-STUDY-042
+;; @spec MCP-OP-STUDY-044
+(defn refusal-text
+  "The complete text block for one refusal: its structural rendering, plus a
+  bounded `path: value` line for every receipt leaf that rendering does not
+  already carry.
+
+  Field evidence (Sol O2 round-2 review, section 6): the round-2 ratchet
+  treated every member of `refusal-structural-keys` as rendered without
+  proving any renderer consumed it, so naming a new refusal fact in that set
+  kept it out of the text with the whole suite green. Membership now decides
+  only WHERE a fact is rendered, never WHETHER — the escape is
+  unrepresentable rather than merely detected."
+  [result extra-lines]
+  (let [structural (refusal-structural-text result extra-lines)
+        facts (inspect/fact-section
+                (inspect/fact-block structural result
+                                    inspect/max-evidence-characters))]
+    (if facts (str structural "\n\n" facts) structural)))
 
 ;; @spec MCP-OP-STUDY-036
 (def ^:private ls-tree-continuation-argument-order
