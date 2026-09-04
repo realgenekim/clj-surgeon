@@ -4812,3 +4812,56 @@
     (is (= (- total printed) (Integer/parseInt (second marker)))
         (str "the stated omitted count must equal this witness's own count of "
              "leaves minus the facts actually printed: " total " - " printed))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 3 (MCP-OP-ADMIT-134): the SUCCESS branch was never a
+;; superset either, and the relabelled witness only checked next_call
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-successful-preview-and-commit-text-names-every-leaf-of-its-receipt
+  ;; Sol's round-three receipt, verbatim: a real two-file COMMIT carried file
+  ;; records, pre/post hashes, focused test namespaces and detectors_not_run
+  ;; [], and its text was
+  ;;
+  ;;   "admit_clojure_patch\n  admit-patch! · 2 file(s) · owners +0 ~2 -0 ·
+  ;;    drift 0 bytes · hazards 0 · 1.00 ms\nverification_complete=true
+  ;;    verification_status=complete\nnext_call · none — this receipt has no
+  ;;    follow-up call"
+  ;;
+  ;; -- :text-has-first-file false, :text-has-first-pre false,
+  ;;    :text-has-first-test false.
+  ;;
+  ;; The ok branch rendered COUNTS, not the receipt's leaves: two file(s), not
+  ;; which two; hashes 0 drift, not the digests. The round-three witness that
+  ;; called itself "really ... a superset" asserted only that next_call
+  ;; appeared. This drives the same preview and the same commit through
+  ;; execute-request! and holds the ok branch to the identical rule the
+  ;; refusal branch already obeys.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"
+                                  "test/app/util_test.clj" "(ns app.util-test)\n"))
+      (let [config (stub-config root)
+            preview (admit/execute-request!
+                      config {:patch clean-multi-file-patch :verify "focused"})]
+        (is (true? (:ok preview)))
+        (is (seq (:files preview)) "the fixture must carry file records")
+        (is (seq (:hashes preview)) "the fixture must carry pre-image digests")
+        (assert-text-names-every-structured-leaf! preview "ok-preview")
+
+        (let [commit (admit/execute-request!
+                       config {:patch clean-multi-file-patch :mode "commit"
+                               :verify "focused"
+                               :expect_pre_sha256 (get-in preview
+                                                          [:next_call :arguments
+                                                           :expect_pre_sha256])})]
+          (is (true? (:ok commit)) (str "commit refused: " (:error commit)))
+          (is (true? (:committed commit)))
+          (is (= [] (:detectors_not_run commit))
+              "the fixture must carry the empty-list shape the review named")
+          (is (seq (get-in commit [:tests :namespaces]))
+              "the fixture must carry focused test namespaces")
+          (assert-text-names-every-structured-leaf! commit "ok-commit")))
+      (finally (delete-tree! root)))))
