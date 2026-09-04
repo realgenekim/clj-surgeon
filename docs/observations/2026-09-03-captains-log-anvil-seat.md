@@ -1632,3 +1632,5 @@ The read-eval item was rated non-blocking in round eleven ("printed a string"). 
 `#=(java.lang.System/exit 3)` killed the JVM running the suite. A gate that reads its own receipts with the core reader is
 a gate any writer of the receipt file can drive. clojure.edn from here, and the r14 brief asks Sol to reproduce the kill
 at the RED sha on a real clone and to try tagged literals. feature_thread r10 (last round, blockers only) building.
+
+## 17:23Z admit gate r14: Sol refused after provenance (read-eval attack in the brief); Opus fallback launched
