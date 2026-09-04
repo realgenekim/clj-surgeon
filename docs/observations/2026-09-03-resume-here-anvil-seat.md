@@ -440,3 +440,9 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 **Verdict files:** /home/forge/tmp/sol/<lane><n>-sol-review.md or -opus-review.md; logs /home/forge/tmp/sol/<lane><n>.log, finished when the LAST line is `EXIT n`. Inbox ids: inb-1165ce (mayor landings), inb-3e298e (O2), inb-b873d0 (q5z), inb-cbca17 (admit refusal text), inb-9483a4 (/tmp inode leak), inb-62a674 (enumerating-witness rule), inb-41c1cc (cclsp), inb-2f150d/84f801/10f4cd (gate defects), inb-55e00e (study, closed).
 
 **Single next action:** heartbeat; file any finished verdict; relaunch the next round for any NO-GO; land any GO by merge --no-ff onto MCP/main from the seat checkout with the trailing suite; keep the mayor's queue current on inb-1165ce.
+
+## RESUME DELTA 05:48Z (post-compaction, first action done)
+- Compaction happened ~05:5xZ; Gene fed the resume prompt; note re-read. Memento pointer is LINE 1 of CLAUDE.md on MCP/main (7751e1f8).
+- **FAN scorer LANDED on MCP/main = 804febcb** (Sol r5 GO, merge --no-ff; a .PHONY union conflict in Makefile resolved by hand; trailing `make fanout-selftests` log at /home/forge/tmp/trunk-fanout-selftests.log). Row F closed; inb-9c18e2 completed.
+- Still in flight: MEM-003 r4, O2 r5, gate r4, tmp-leak ratchet, feature_thread verb (builders); census r19 (Opus), q5z r15 (Sol) reviews. Branch tips unchanged since 05:21Z.
+- Next action: file census19/q5z15 verdicts when their logs end in EXIT; land MEM-003 r4 → recompose study-ops; E-SCALE-WALL waits for load < 2.0.
