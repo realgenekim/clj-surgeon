@@ -450,3 +450,6 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 ## RESUME DELTA 06:10Z
 - feature_thread verb BUILT @ 02e823e7 on bridge/feature-thread-verb; Sol r1 review running (ft1.log / ft1-sol-review.md; clone /home/forge/tmp/sol/ft1-wt; reviewer ports 8126–8128). Inbox inb-cc9a4a. Next after GO: land on MCP/main, then the adoption cohort on tool calls.
 - census r19 NO-GO filed; r20 builder merges the trunk in first (12-file conflict). q5z r15 GO-WITH-FIX filed; r16 building (ports 8123–8125).
+
+## RESUME DELTA 06:32Z — FOREGROUND PROGRAM (Gene): the 10x tweezer on feature_thread
+- Mission: prove tool-calls-to-a-green-edit 10x on the Dequote/Format replay; foreground tweezer, background orchestration. Baseline 17 calls to first patch (21 + patch to done). nREPL 43791 on ~/src/clj-surgeon-thread (bridge/feature-thread-verb @ ad49908c + round-two builder running on that worktree: implementation leg, governance anchors, co-primary tests, verify row, budget 24 KB + edit-aware elision). Receipt dump /var/tmp/forge/tweezer/r3-receipt.txt; watcher ~/bin/call-watcher. Next: naive-reader probe (Sol+Opus), then the measured replay: an agent given ONLY the receipt writes the patch; count calls with the watcher; then the cohort.
