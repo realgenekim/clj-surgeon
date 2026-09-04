@@ -71,6 +71,7 @@
   "Every repository file the receipt names, anywhere."
   [structured]
   (set (concat (keep :file (:legs structured))
+               (mapcat #(keep :file (:co_primaries %)) (:legs structured))
                (mapcat #(keep :file (:also %)) (:legs structured))
                (keep :file (get-in structured [:sibling :legs]))
                (keep :file (get-in structured [:rules :governance]))
@@ -85,14 +86,14 @@
 ;; @spec MCP-OP-THREAD-006
 ;; @spec MCP-OP-THREAD-008
 ;; @spec MCP-OP-THREAD-013
-(deftest t1-smw-thread-returns-five-legs-with-bodies
-  (testing "Edit -> Dequote/Format: five owners, two languages, one call"
+(deftest t1-smw-thread-returns-six-legs-with-bodies
+  (testing "Edit -> Dequote/Format: six owners, two languages, one call"
     (let [{:keys [text error? structured]} (thread! fixture-root)]
       (is (false? error?))
       (is (true? (:ok structured)))
-      (is (= "COMPLETE (5 of 5)" (:status structured)))
+      (is (= "COMPLETE (6 of 6)" (:status structured)))
       (is (true? (:complete structured)))
-      (is (= 5 (:legs_found structured)))
+      (is (= 6 (:legs_found structured)))
       (is (= [] (:legs_missing structured)))
 
       (testing "every ground-truth owner is named, at the leg the truth assigns it"
@@ -103,7 +104,7 @@
             (is (= file (:file l))
                 (str id " named " (:file l) ", ground truth is " file)))))
 
-      (testing "the JavaScript test witness is carried as a secondary member"
+      (testing "the JavaScript test witness is carried as a co-primary leg"
         (is (contains? (files-named structured) js-test-owner)
             "the node test witness is not named anywhere in the receipt"))
 
@@ -224,7 +225,7 @@
           (let [{:keys [text structured]} (thread! (.getPath scratch))
                 l (leg structured "js-function")]
             (is (= "ABSENT" (:status l)))
-            (is (= "INCOMPLETE (4 of 5)" (:status structured)))
+            (is (= "INCOMPLETE (5 of 6)" (:status structured)))
             (is (false? (:complete structured)))
             (is (= ["js-function"] (:legs_missing structured)))
             (is (seq (:searches l)) "an absent leg must quote its searches")
@@ -232,9 +233,9 @@
                 "the leg must name the file it could not read")
             (is (= #{"unreadable"} (set (map :reason (:unreadable l))))
                 "the reason must be typed, not blank")
-            (is (str/includes? text "INCOMPLETE (4 of 5)"))
+            (is (str/includes? text "INCOMPLETE (5 of 6)"))
             (is (str/includes? text "unreadable"))
-            (is (not (str/includes? text "COMPLETE (5 of 5)")))))
+            (is (not (str/includes? text "COMPLETE (6 of 6)")))))
         (finally
           (.setReadable (io/file scratch "resources/public/js/editor-commands.js")
                         true false)
@@ -247,10 +248,11 @@
       (delete-tree! (io/file scratch "resources/public/js"))
       (let [{:keys [structured]} (thread! (.getPath scratch))
             l (leg structured "js-function")]
-        (is (= 5 (count (:legs structured))) "five legs are always rendered")
+        (is (= 6 (count (:legs structured)))
+            "every declared leg plus the automatic implementation leg is rendered")
         (is (= "ABSENT" (:status l)))
         (is (seq (:searches l)))
-        (is (= "INCOMPLETE (4 of 5)" (:status structured))))
+        (is (= "INCOMPLETE (5 of 6)" (:status structured))))
       (finally (delete-tree! scratch)))))
 
 ;; ---------------------------------------------------------------------------
@@ -265,7 +267,7 @@
                   :also ["/api/transform/format" "mechanical-format"]
                   :config smw-conventions
                   :scope {:workspace_root after-root}})]
-      (is (= "COMPLETE (5 of 5)" (:status structured)))
+      (is (= "COMPLETE (6 of 6)" (:status structured)))
       (is (= "resources/public/js/editor-commands.js"
              (:file (leg structured "js-function"))))
       (is (str/starts-with? (:body (leg structured "js-function"))
@@ -306,7 +308,7 @@
       (is (some #(= "docs/intent/registry.edn" (:file %)) (:governance rules))
           "the registry entries are members of this feature and are RETURNED"))
     (testing "the assert line makes the receipt a write instrument"
-      (is (str/includes? (:assert rules) "stale pre-image")))))
+      (is (str/includes? (:assert rules) "typed refusal")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Admission
@@ -368,7 +370,12 @@
           (call! {:subject "formatDraft" :also ["/api/transform/format"]
                   :scope {:workspace_root fixture-root}})]
       (is (= ".clj-surgeon/feature-thread.edn" (:conventions_source structured)))
-      (is (= "COMPLETE (5 of 5)" (:status structured)))))
+      (testing "and with only formatDraft as a definition seed, the automatic
+                implementation leg DEDUPES against the js-function leg"
+        (is (= "COMPLETE (5 of 5)" (:status structured)))
+        (is (= "N/A" (:status (leg structured "implementation"))))
+        (is (str/includes? (:reason (leg structured "implementation"))
+                           "already a leg of this receipt")))))
 
   (testing "a workspace with no convention set names the path it searched"
     (let [scratch (scratch-copy! fixture-root "feature-thread-noconv")]
@@ -381,11 +388,12 @@
           (is (str/includes? text ".clj-surgeon/feature-thread.edn")))
         (finally (delete-tree! scratch)))))
 
-  (testing "a convention set that is not five leg roles is refused"
+  (testing "a convention set with FEWER than the five leg roles is refused"
     (let [{:keys [structured]}
           (thread! fixture-root {:config (update smw-conventions :legs pop)})]
       (is (= "feature-thread-conventions-invalid" (:error_type structured)))
-      (is (str/includes? (:error structured) "exactly five")))))
+      (is (str/includes? (:error structured) "at least the five"))
+      (is (str/includes? (:error structured) "found 4")))))
 
 ;; ---------------------------------------------------------------------------
 ;; The JavaScript body: a lexer, never a parser
@@ -534,9 +542,9 @@
           "the sibling's own JavaScript leg is located")
       (testing "the sibling's bodies are elided to ranges by default"
         (is (every? #(nil? (:body %)) (:legs sib))))
-      (testing "and the sibling never changes the five-leg status"
-        (is (= 5 (:legs_declared structured)))
-        (is (= 5 (count (:legs structured)))))))
+      (testing "and the sibling never changes the leg status"
+        (is (= 6 (:legs_declared structured)))
+        (is (= 6 (count (:legs structured)))))))
 
   (testing "an unresolvable sibling states the rule it applied"
     (let [root (alias-fixture! true)]
@@ -581,10 +589,15 @@
           (is (string? (:refetch l)))))))
 
   (testing "every body elided still names every cut"
-    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 8000})]
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 10240})]
       (is (true? (:ok structured)))
       (is (every? #(nil? (:body %)) (:legs structured)))
-      (is (= 7 (count (:elided structured)))
+      (is (every? #(nil? (:body %))
+                  (mapcat :co_primaries (:legs structured))))
+      (is (= #{"sibling" "governance-template" "next-call" "menu-caller"
+               "route" "tests(js)" "tests" "implementation" "js-function"
+               "handler"}
+             (set (map :leg (:elided structured))))
           "every step of the stated order is recorded when every body is cut")
       (is (str/includes? text "elided handler")))
 
@@ -663,13 +676,470 @@
 (deftest warm-up-meter-rounds-to-a-complete-thread
   (testing "the human baseline in the transcript is SIX batched read rounds"
     (let [{:keys [structured]} (thread! fixture-root)
-          bodies (count (filter :body (:legs structured)))
-          missing-after-receipt (- 5 bodies)
+          bodies (+ (count (filter :body (:legs structured)))
+                    (count (filter :body
+                                   (mapcat :co_primaries (:legs structured)))))
+          sites 7
+          missing-after-receipt (- sites bodies)
           verb-rounds (+ 1 (if (pos? missing-after-receipt) 1 0))]
-      (is (= 5 bodies)
-          "at the default budget every leg arrives with its body in round one")
+      (is (= sites bodies)
+          (str "at the default budget every leg AND every co-primary arrives"
+               " with its body in round one"))
       (is (= 1 verb-rounds)
           (str "rounds to a complete thread: " verb-rounds
                " (one call; nothing left to read afterwards). Human baseline: 6."))
       (is (= 0 missing-after-receipt)
           "nothing the caller must still read after the receipt"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND TWO -- the six sites the real edit touched
+;;
+;; Ground truth for every assertion below is the `diff -u` of the two fixture
+;; trees: components.clj @106, editor-commands.js @453, transform.clj @131,
+;; registry.edn @401, browser_runtime_classic_script_test.js @96,
+;; transform_apply_test.clj @383. Round one covered five of the six; each
+;; witness here closes one of the gaps, and each fails when its behaviour is
+;; reverted.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-014
+(deftest conventions-may-declare-more-than-the-five-leg-roles
+  (testing "a SIXTH declared leg is accepted and resolved like any other"
+    (let [six (update smw-conventions :legs conj
+                      {:id "extra-def" :kind :def :globs ["src/**/*.clj"]})
+          {:keys [structured]} (thread! fixture-root {:config six})]
+      (is (true? (:ok structured))
+          "a convention set with six leg roles must not be refused")
+      (is (some #(= "extra-def" (:id %)) (:legs structured))
+          "the sixth declared leg is missing from the receipt")
+      (is (= "src/writer/handlers/transform.clj"
+             (:file (leg structured "extra-def"))))))
+
+  (testing "FOUR leg roles is still a typed refusal that names the count"
+    (let [{:keys [structured]}
+          (thread! fixture-root {:config (update smw-conventions :legs pop)})]
+      (is (= "feature-thread-conventions-invalid" (:error_type structured)))
+      (is (str/includes? (:error structured) "at least the five"))
+      (is (str/includes? (:error structured) "found 4")))))
+
+;; @spec MCP-OP-THREAD-015
+(deftest def-legs-recognise-clojure-definitions
+  (testing "the definition-shaped search covers (defn / (defn- / (def"
+    (let [[[label regex]] (ft/searches-for-kind
+                            :def {:identifiers ["mechanical-format"] :routes []})]
+      (is (= "definition-shaped" label))
+      (is (re-find (re-pattern regex) "(defn mechanical-format")
+          "a Clojure defn is definition-shaped")
+      (is (re-find (re-pattern regex) "(defn- mechanical-format")
+          "so is a private defn")
+      (is (re-find (re-pattern regex) "(def mechanical-format")
+          "and so is a plain def")))
+
+  (testing "and a :def leg over Clojure sources therefore lands on the form"
+    (let [{:keys [structured]} (thread! fixture-root)
+          impl (leg structured "implementation")]
+      (is (= "FOUND" (:status impl)))
+      (is (= "src/writer/handlers/transform.clj" (:file impl)))
+      (is (= "mechanical-format" (:form_name impl))))))
+
+;; @spec MCP-OP-THREAD-016
+(deftest the-implementation-leg-is-automatic-deduped-and-honestly-uncounted
+  (testing "a five-leg conventions file gets the definition leg for free"
+    (let [{:keys [structured text]} (thread! fixture-root)
+          impl (leg structured "implementation")]
+      (is (= 5 (count (:legs smw-conventions)))
+          "the fixture's conventions file declares five roles and is unchanged")
+      (is (= 6 (count (:legs structured))))
+      (is (= "FOUND" (:status impl)))
+      (testing "at the form the real edit inserted after"
+        (is (= "src/writer/handlers/transform.clj" (:file impl)))
+        (is (= 81 (:from impl)))
+        (is (= 132 (:to impl)))
+        (is (= "form(parsed)" (:boundary impl)))
+        (is (= "after:L132" (:anchor impl))
+            "the transcript's patch put mechanical-format-selection at L133"))
+      (testing "and it counts toward the status"
+        (is (= "COMPLETE (6 of 6)" (:status structured)))
+        (is (= 6 (:legs_declared structured))))
+      (is (str/includes? text "leg implementation"))))
+
+  (testing "it never duplicates a leg the receipt already carries"
+    (let [{:keys [structured]} (thread! fixture-root)
+          impl (leg structured "implementation")
+          others (remove #(= "implementation" (:id %)) (:legs structured))]
+      (is (not-any? #(and (= (:file %) (:file impl))
+                          (= (:from %) (:from impl))
+                          (= (:to %) (:to impl)))
+                    others)
+          "the implementation leg repeated a range another leg already shipped")
+      (is (not= (:from (leg structured "handler")) (:from impl))
+          "the handler form is not re-printed as the implementation leg")))
+
+  (testing "no seed naming a definition is N/A -- not ABSENT, and NOT counted"
+    (let [{:keys [structured text]}
+          (call! {:subject "/api/transform/format"
+                  :config smw-conventions
+                  :scope {:workspace_root fixture-root}})
+          impl (leg structured "implementation")]
+      (is (= "N/A" (:status impl)))
+      (is (= "no seed names a definition" (:reason impl)))
+      (is (= 5 (:legs_declared structured))
+          "an inapplicable leg must not make a whole thread read INCOMPLETE")
+      (is (not (str/includes? (:status structured) "of 6")))
+      (is (str/includes? text "n/a (no seed names a definition)"))))
+
+  (testing "a conventions file that declares its own implementation leg keeps it"
+    (let [own (update smw-conventions :legs conj
+                      {:id "implementation" :kind :def
+                       :globs ["src/**/handlers/*.clj"]})
+          {:keys [structured]} (thread! fixture-root {:config own})]
+      (is (= 6 (count (:legs structured))))
+      (is (= 1 (count (filter #(= "implementation" (:id %)) (:legs structured))))
+          "the automatic leg was added a second time"))))
+
+;; @spec MCP-OP-THREAD-017
+(deftest governance-rows-carry-an-entry-end-and-an-anchor
+  (let [{:keys [structured text]} (thread! fixture-root)
+        rows (get-in structured [:rules :governance])
+        conf (first (filter #(str/includes? (:match %) "EDITOR-CONF-005") rows))]
+    (testing "the matched registry entry ends where the parser says it ends"
+      (is (some? conf) "the EDITOR-CONF-005 row is missing")
+      (is (= 382 (:line conf)))
+      (is (= 382 (:form_start conf)))
+      (is (= 400 (:form_end conf)))
+      (is (= "after:L400" (:anchor conf))
+          "the real edit inserted :EDITOR-DEQUOTE-016 at L401"))
+
+    (testing "a hit whose entry does not resolve says so rather than guessing"
+      (is (some #(= "unparsed" (:anchor %)) rows)
+          "the redacted registry has hits with no resolvable entry, and the
+           receipt must label them rather than invent an anchor")
+      (doseq [r rows]
+        (is (string? (:anchor r)) (str "row " (:file r) ":" (:line r)))
+        (is (string? (:refetch r)))))
+
+    (testing "one template row: the matched entry with the HIGHEST line"
+      (let [t (get-in structured [:rules :governance_template])]
+        (is (some? t))
+        (is (= "docs/intent/registry.edn" (:file t)))
+        (is (= 382 (:from t)))
+        (is (= 400 (:to t)))
+        (is (= "after:L400" (:anchor t)))
+        (is (>= (:line conf) (apply max (map :line (filter :form_end rows))))
+            "the template is not the last matched entry")
+        (is (str/includes? text "governance-template"))
+        (is (nil? (:body t)) "a template entry is a range, never inlined")))))
+
+;; @spec MCP-OP-THREAD-018
+(deftest the-tests-leg-has-one-primary-per-language
+  (let [{:keys [structured text]} (thread! fixture-root)
+        tests (leg structured "tests")
+        co (:co_primaries tests)
+        js (first (filter #(= js-test-owner (:file %)) co))]
+    (testing "the Clojure primary is the deftest that calls the handler"
+      (is (= "test/writer/handlers/transform_apply_test.clj" (:file tests)))
+      (is (= "after:L384" (:anchor tests))))
+
+    (testing "the JavaScript primary is a LEG row with its own boundary and hash"
+      (is (some? js) "the node test file is not a co-primary of the tests leg")
+      (is (= 63 (:from js)))
+      (is (= 94 (:to js))
+          "the enclosing test( call ends at L94; the real edit appended at L96")
+      (is (= "after:L94" (:anchor js)))
+      (is (= "js" (:language js)))
+      (is (str/includes? (:boundary js) "brace-window(lexed,closed)"))
+      (is (str/includes? (:boundary js) "test-call at L63")
+          "the anchor must name the enclosing call, not the assertion line")
+      (is (= (:sha256 js) (ft/sha256-hex (:body js))))
+      (is (str/starts-with? (:body js) "test("))
+      (is (str/includes? text "leg tests(js)")
+          "a co-primary is rendered as a leg row, never as an also row"))
+
+    (testing "and it is not ALSO printed as a secondary witness"
+      (is (not-any? #(= js-test-owner (:file %)) (:also tests))))))
+
+;; @spec MCP-OP-THREAD-019
+(deftest the-rules-row-names-how-to-run-the-tests-leg
+  (let [{:keys [structured text]} (thread! fixture-root)
+        verify (get-in structured [:rules :verify])]
+    (testing "the Makefile target whose recipe NAMES the JavaScript test file"
+      (is (some #(= {:target "test-js" :line 233
+                     :command "@node --test test/js/browser_runtime_classic_script_test.js"
+                     :for js-test-owner
+                     :evidence "names-the-file"}
+                    %)
+                verify)
+          (str "no verify row names the node test; rows were " (pr-str verify))))
+
+    (testing "and, for the Clojure test, the alias-running target, labelled"
+      (is (some #(and (= "runtests-unit" (:target %))
+                      (= 283 (:line %))
+                      (= "clojure -M:test:run-tests unit" (:command %))
+                      (= "alias" (:evidence %)))
+                verify)
+          "the Clojure test is run by an alias target and must say so"))
+
+    (is (str/includes? text "verify test-js"))
+
+    (testing "no Makefile is a reason, never a silent empty row"
+      (let [scratch (scratch-copy! fixture-root "feature-thread-nomake")]
+        (try
+          (.delete (io/file scratch "Makefile"))
+          (let [{:keys [structured]} (thread! (.getPath scratch))]
+            (is (= [] (get-in structured [:rules :verify])))
+            (is (= "no Makefile at the workspace root"
+                   (get-in structured [:rules :verify_reason]))))
+          (finally (delete-tree! scratch)))))))
+
+;; @spec MCP-OP-THREAD-020
+(deftest the-budget-default-and-the-elision-order-are-edit-aware
+  (testing "the default fits the six-leg receipt with every body"
+    (is (= 24576 ft/default-budget-bytes))
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (is (empty? (:elided structured))
+          (str "the default budget elided " (pr-str (map :leg (:elided structured)))
+               "; the whole point of raising it was that it must not"))))
+
+  (testing "the stated order elides context first and the edit sites last"
+    (is (= [:sibling :governance-template :secondary-tests :next-call :menu
+            :route :tests-js :tests :implementation :js-function :handler]
+           ft/elision-order)))
+
+  (testing "under pressure the handler and the seeds' definitions keep their bodies"
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 21000})
+          cut (set (map :leg (:elided structured)))]
+      (is (seq cut) "21000 bytes must force at least one cut")
+      (is (contains? cut "sibling"))
+      (is (string? (:body (leg structured "handler")))
+          "the handler body was cut while cheaper context survived")
+      (is (string? (:body (leg structured "implementation")))
+          "the definition the seed names was cut before the sibling")))
+
+  (testing "at 10240 every leg still names its range, its hash and its anchor"
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 10240})]
+      (is (true? (:ok structured)))
+      (is (<= (:text_bytes structured) 10240))
+      (doseq [l (:legs structured)
+              :when (= "FOUND" (:status l))]
+        (is (integer? (:from l)) (str (:id l)))
+        (is (re-matches #"[0-9a-f]{64}" (:sha256 l)) (str (:id l)))
+        (is (string? (:anchor l)) (str (:id l)))
+        (is (str/includes? text (:sha256 l)) (str (:id l))))
+      (testing "and the text is still a superset of the structured receipt"
+        (doseq [[path value] (#'ft/leaf-paths structured [])
+                :when (or (string? value) (number? value) (boolean? value))]
+          (is (str/includes? text (str value))
+              (str "the text block drops " (str/join "." path))))))))
+
+;; @spec MCP-OP-THREAD-021
+(deftest the-assert-line-costs-the-caller-no-calls
+  (testing "a naive reader obeyed the old wording with six refetch calls"
+    (let [{:keys [structured text]} (thread! fixture-root)
+          line (get-in structured [:rules :assert])]
+      (is (str/includes? line "do NOT re-read")
+          "the assert line must forbid re-reading the ranges it just shipped")
+      (is (str/includes? line "admit_clojure_patch"))
+      (is (str/includes? line "enforces nothing itself")
+          "the line must be advisory: this verb cannot issue that refusal")
+      (is (not (str/includes? line "re-hash each leg")))
+      (is (str/includes? text "do NOT re-read")))))
+
+;; @spec MCP-OP-THREAD-022
+(deftest the-header-names-the-number-the-budget-governs
+  (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 32768})
+        header (first (str/split-lines text))]
+    (is (str/includes? header (str "text=" (:text_bytes structured)
+                                   "B (budget 32768B)"))
+        (str "the header does not say which number the budget governs: " header))
+    (is (str/includes? header (str "structured=" (:structured_bytes structured)
+                                   "B (trunk cap " ft/trunk-public-byte-budget "B)")))
+    (is (str/includes? header (str "total=" (:receipt_bytes structured) "B")))
+    (is (not (str/includes? header "used="))
+        "`used=` beside `budget=` read as an overrun; it is gone")
+    (is (str/includes? header "status=COMPLETE (6 of 6) — legs, not bytes")
+        "COMPLETE is about legs and the header must say so")))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-ONE REVIEW (Opus, 2026-09-04, NO-GO) -- the two false greens and the
+;; four findings, each as a witness that fails without the fix.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-023
+(deftest a-regex-after-a-keyword-is-not-a-division
+  (testing "B1: `return /[}]/` lexed as division truncated a body and called it closed"
+    (let [src "function trapReturnRegex(s) {\n  return /[}]/.test(s);\n}\n"
+          lines (str/split src #"\n" -1)
+          {:keys [from to boundary body]} (ft/script-body src lines 1)]
+      (is (= 1 from))
+      (is (= 3 to)
+          "the body must run to the function's own closing brace, not to the
+           brace inside the regex literal")
+      (is (= "brace-window(lexed,closed)" boundary))
+      (is (str/ends-with? (str/trim body) "}"))))
+
+  (testing "every keyword that ends in an identifier character"
+    (doseq [kw ["return" "typeof" "case" "in" "of" "new" "delete" "void"
+                "yield" "do" "else" "instanceof" "throw" "await"]]
+      (let [src (str "function f(s) {\n  " kw " /[}]/;\n}\n")
+            lines (str/split src #"\n" -1)]
+        (is (= 3 (:to (ft/script-body src lines 1)))
+            (str "a regex after `" kw "` was lexed as a division")))))
+
+  (testing "and a genuine division is still a division"
+    (let [src "function g(a, b) {\n  const r = a / b / 2;\n  return r;\n}\n"
+          lines (str/split src #"\n" -1)]
+      (is (= 4 (:to (ft/script-body src lines 1))))))
+
+  (testing "the token scanner itself"
+    (is (= "return" (ft/word-before "  return /x/" 9)))
+    (is (= "a" (ft/word-before "a / b" 2)))
+    (is (nil? (ft/word-before "( /x/" 2)))))
+
+;; @spec MCP-OP-THREAD-024
+(deftest a-comment-mention-is-a-candidate-and-never-completes-a-thread
+  (testing "B2: a subject that exists only in comments and strings"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-ghost")]
+      (try
+        (spit (io/file scratch "src/writer/views/components.clj")
+              "\n;; TODO: someday add ghostFeature to the Edit menu\n"
+              :append true)
+        (spit (io/file scratch "src/writer/routes.clj")
+              "\n;; note: ghostFeature will get a route one day\n"
+              :append true)
+        (spit (io/file scratch "src/writer/handlers/transform.clj")
+              "\n;; ghostFeature will live here\n"
+              :append true)
+        (spit (io/file scratch "resources/public/js/editor-commands.js")
+              "\nconst NOTE = \"ghostFeature is not implemented\";\n"
+              :append true)
+        (let [{:keys [structured text]}
+              (call! {:subject "ghostFeature"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})]
+          (is (str/starts-with? (:status structured) "INCOMPLETE")
+              (str "a feature that exists only in comments must never read"
+                   " COMPLETE; got " (:status structured)))
+          (is (false? (:complete structured)))
+          (doseq [l (:legs structured)]
+            (is (not= "FOUND" (:status l))
+                (str "leg " (:id l) " was promoted to FOUND by a mention:"
+                     " evid=" (:evidence l) " boundary=" (:boundary l))))
+          (testing "a candidate says WHY it is only a candidate"
+            (doseq [l (:legs structured)
+                    :when (= "CANDIDATE" (:status l))]
+              (is (string? (:weak_reason l)))
+              (is (str/includes? text (:weak_reason l)))))
+          (testing "and a fallback hit is never stamped identifier(def)"
+            (doseq [l (:legs structured)]
+              (is (not= "identifier(def)" (:evidence l))
+                  (str "leg " (:id l) " called a fallback hit a definition")))))
+        (finally (delete-tree! scratch)))))
+
+  (testing "the strength rule itself"
+    (is (= "FOUND" (:status (ft/leg-strength {:boundary "form(parsed)"
+                                              :evidence "route-literal"}))))
+    (is (= "FOUND" (:status (ft/leg-strength
+                              {:boundary "brace-window(lexed,closed)"
+                               :evidence "identifier(def)"}))))
+    (is (= "CANDIDATE"
+           (:status (ft/leg-strength {:boundary "form(parsed)"
+                                      :evidence "route-assembled"})))
+        "an assembled route match is a lead, not the leg")
+    (is (= "CANDIDATE"
+           (:status (ft/leg-strength
+                      {:boundary "line-window(no-enclosing-top-level-form)"
+                       :evidence "route-literal"})))
+        "a line window does not know where the form ends")
+    (is (= "CANDIDATE"
+           (:status (ft/leg-strength {:boundary "form(parsed)"
+                                      :evidence "identifier-or-route"
+                                      :in-comment? true})))))
+
+  (testing "the comment lexer"
+    (is (true? (ft/comment-mention? ";; formatDraft here" 3 true)))
+    (is (false? (ft/comment-mention? "(formatDraft)" 1 true)))
+    (is (false? (ft/comment-mention? "(x \"a;b\" formatDraft)" 9 true))
+        "a semicolon inside a string does not start a comment")
+    (is (true? (ft/comment-mention? "// formatDraft" 3 false)))
+    (is (false? (ft/comment-mention? "const formatDraft = 1;" 6 false)))))
+
+;; @spec MCP-OP-THREAD-025
+(deftest the-receipt-hands-over-a-binding-the-write-gate-can-use
+  (let [{:keys [structured text]} (thread! fixture-root)
+        n (:next_call structured)]
+    (is (= "admit_clojure_patch" (:tool n))
+        "the receipt must name the call that can actually bind a pre-image")
+    (testing "the digests are over WHOLE FILES -- admit's own subject"
+      (doseq [[file sha] (:expect_pre_sha256 n)]
+        (is (= sha (ft/sha256-hex (slurp (io/file fixture-root (name file)))))
+            (str "expect_pre_sha256 for " (name file)
+                 " is not the digest of the whole file"))))
+    (testing "every located leg's file is covered"
+      (doseq [l (:legs structured)
+              :when (contains? #{"FOUND" "CANDIDATE"} (:status l))]
+        (is (contains? (set (map name (keys (:expect_pre_sha256 n)))) (:file l))
+            (str (:id l) "'s file is missing from expect_pre_sha256"))))
+    (is (str/includes? text "next_call admit_clojure_patch"))
+
+    (testing "and it is elided under budget pressure with a named refetch"
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 10240})]
+        (is (nil? (:next_call structured)))
+        (is (some #(= "next-call" (:leg %)) (:elided structured)))))))
+
+;; @spec MCP-OP-THREAD-026
+(deftest the-receipt-byte-counts-describe-the-delivered-text
+  (testing "text_bytes is the size of the text block the caller receives"
+    (doseq [budget [nil 32768 12000]]
+      (let [{:keys [text structured]}
+            (thread! fixture-root (if budget {:budget_bytes budget} {}))]
+        (is (= (:text_bytes structured) (ft/utf8-bytes text))
+            (str "budget " budget ": receipt claims " (:text_bytes structured)
+                 " bytes of text and delivered " (ft/utf8-bytes text))))))
+
+  (testing "the clock rides inside the measured receipt at a fixed width"
+    (is (= ft/receipt-tail-bytes (count (ft/receipt-tail nil))))
+    (is (= ft/receipt-tail-bytes (count (ft/receipt-tail 478.511625))))
+    (is (= ft/receipt-tail-bytes (count (ft/receipt-tail 0))))
+    (let [{:keys [text structured]} (thread! fixture-root)]
+      (is (str/includes? text (str "elapsed_ms=" (:elapsed_ms structured))))))
+
+  (testing "a refusal quotes the budget the CALLER asked for"
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 200})]
+      (is (= 200 (:budget_bytes structured)))
+      (is (str/includes? (:error structured) "budget of 200"))
+      (is (not (str/includes? text "-95"))
+          "an internal reserve subtraction must never leak into a refusal")
+      (is (nil? (:receipt_bytes structured))
+          "receipt_bytes means text+structured everywhere or it is absent")
+      (is (integer? (:text_bytes structured))))))
+
+;; @spec MCP-OP-THREAD-027
+(deftest subject-and-also-have-named-admission-ceilings
+  (testing "an oversized subject is refused BEFORE any file is read"
+    (let [{:keys [error? structured text]}
+          (thread! fixture-root {:subject (apply str (repeat 10001 \x))})]
+      (is (true? error?))
+      (is (= "feature-thread-subject-too-long" (:error_type structured)))
+      (is (= "subject" (:field structured))
+          "the refusal must name the field the caller got wrong")
+      (is (= ft/max-subject-chars (:max_subject_chars structured)))
+      (is (str/includes? text (str ft/max-subject-chars)))
+      (is (nil? (:legs structured)) "no leg was resolved, so no file was read")))
+
+  (testing "too many also seeds"
+    (let [{:keys [structured]}
+          (thread! fixture-root {:also (vec (repeat (inc ft/max-also-seeds) "x"))})]
+      (is (= "feature-thread-also-too-many" (:error_type structured)))
+      (is (= "also" (:field structured)))))
+
+  (testing "an oversized also seed"
+    (let [{:keys [structured]}
+          (thread! fixture-root {:also [(apply str (repeat 600 \y))]})]
+      (is (= "feature-thread-also-seed-too-long" (:error_type structured)))
+      (is (= "also" (:field structured)))))
+
+  (testing "and the ceiling is a real bound, asserted AT the ceiling"
+    (let [{:keys [structured]}
+          (thread! fixture-root {:subject (apply str (repeat ft/max-subject-chars \z))})]
+      (is (not= "feature-thread-subject-too-long" (:error_type structured))
+          "a subject exactly at the ceiling is admitted"))))

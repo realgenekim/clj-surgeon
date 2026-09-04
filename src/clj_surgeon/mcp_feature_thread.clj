@@ -54,12 +54,15 @@
   nothing, and the trunk's own `public-byte-budget` is likewise measured on one
   face. The structured half is guarded separately by that trunk budget.
 
-  The default is the fleet's 16384 rather than its text-only soft figure of
-  10240, because this receipt carries more than the minimal edit basis it
-  costed: the searches that found each leg, the governance rows, and the
-  elision ledger. 10240 is a good explicit `budget_bytes` for a caller that
-  wants only the bodies."
-  16384)
+  The default is 24576 rather than the fleet's text-only soft figure of 10240,
+  because this receipt carries more than the minimal edit basis it costed: the
+  searches that found each leg, the governance rows, and the elision ledger.
+  Round two raised it from 16384 after the Dequote/Format fixture measured SIX
+  legs: at 16384 four bodies elided, including the JavaScript function the
+  transcript re-read four times, which is exactly the call the verb exists to
+  save. 10240 is a good explicit `budget_bytes` for a caller that wants only
+  the ranges."
+  24576)
 
 ;; @spec MCP-OP-THREAD-002
 (def hard-cap-bytes
@@ -108,13 +111,76 @@
 
 (def clojure-extensions #{"clj" "cljc" "cljs" "edn"})
 
+(def script-extensions
+  "The extensions this verb treats as a SCRIPT language: lexed, never parsed."
+  #{"js" "mjs" "ts"})
+
+;; @spec MCP-OP-THREAD-016
+(def implementation-leg-id
+  "The id of the leg every convention set gets for free."
+  "implementation")
+
+;; @spec MCP-OP-THREAD-016
+(def implementation-clojure-globs
+  "Where a Clojure DEFINITION named by a seed lives. Added to whatever script
+  globs the convention set already declares, so a five-leg conventions file
+  keeps working unchanged and still gets the definition leg."
+  ["src/**/*.clj" "src/**/*.cljc"])
+
+;; @spec MCP-OP-THREAD-017
+(def governance-entry-ceiling-lines
+  "Largest top-level EDN entry a governance row will anchor to. The registry is
+  one vector of a thousand lines; the ENTRY is the map element the hit sits in,
+  and a ceiling is what tells the two apart without a semantic parse."
+  200)
+
+;; @spec MCP-OP-THREAD-018
+(def test-call-lookback-lines
+  "Lines a script test witness scans BACKWARD for its enclosing
+  `test(`/`it(`/`describe(` call before giving up and using the hit line."
+  200)
+
+;; @spec MCP-OP-THREAD-019
+
+;; @spec MCP-OP-THREAD-026
+(def receipt-tail-bytes
+  "Width, in ASCII bytes, of the operation-clock tail the receipt always ends
+  with.
+
+  FIXED, and that is the whole point: the clock is stamped by the finalizer
+  AFTER the receipt has measured itself, so a variable-width tail made
+  `text_bytes` describe a text nobody was delivered (round-one review,
+  finding 5: 15,392 claimed, 15,435 delivered). A constant-width tail is
+  measurable before its value is known."
+  96)
+
+(def max-subject-chars
+  "Longest `subject` this verb accepts, refused at ADMISSION with the field
+  named. A 10,001-character subject used to compile into a regex, scan the
+  whole tree for 333 ms, and only then be refused as a BUDGET error naming the
+  wrong field (round-one review, finding 4)."
+  512)
+
+(def max-also-seeds
+  "Most `also` seeds accepted in one request."
+  32)
+
+(def max-verify-rows
+  "Verify rows returned for one tests primary."
+  4)
+
 ;; @spec MCP-OP-THREAD-011
+;; @spec MCP-OP-THREAD-020
 (def elision-order
   "The order bodies are dropped when the receipt does not fit.
 
-  Cheapest evidence first; the handler last, because the handler is the form the
-  caller is about to edit. Fixed and stated so an elision is never a surprise."
-  [:secondary-tests :tests :sibling :menu :js-function :route :handler])
+  EDIT-AWARE, not merely cheap-first: what goes LAST is what the caller is about
+  to type into — the handler, the script function the seed names, and the
+  definition the seed names. What goes first is context the caller can re-fetch
+  without losing the edit basis. Fixed and stated so an elision is never a
+  surprise."
+  [:sibling :governance-template :secondary-tests :next-call :menu :route
+   :tests-js :tests :implementation :js-function :handler])
 
 ;; ---------------------------------------------------------------------------
 ;; Small utilities
@@ -131,6 +197,13 @@
 (defn utf8-bytes
   [^String text]
   (count (.getBytes (or text "") "UTF-8")))
+
+;; @spec MCP-OP-THREAD-024
+(defn located?
+  "A leg the receipt has a range and a body for -- FOUND, or the weaker
+  CANDIDATE. Everything a caller can READ is located; only FOUND COUNTS."
+  [leg]
+  (contains? #{"FOUND" "CANDIDATE"} (:status leg)))
 
 (defn- quote-literal
   [s]
@@ -170,6 +243,22 @@
 (defn clojure-path?
   [path]
   (contains? clojure-extensions (file-extension path)))
+
+(defn script-path?
+  [path]
+  (contains? script-extensions (file-extension path)))
+
+;; @spec MCP-OP-THREAD-018
+(defn language-of
+  "The LANGUAGE a path belongs to, for the one question this verb asks of it:
+  are two witnesses in the same language or not. `clj`, `js`, or the extension
+  itself when it is neither."
+  [path]
+  (let [ext (file-extension path)]
+    (cond
+      (contains? clojure-extensions ext) "clj"
+      (contains? script-extensions ext) "js"
+      :else ext)))
 
 ;; ---------------------------------------------------------------------------
 ;; Bounded workspace walk
@@ -311,6 +400,41 @@
   "Characters after which a `/` begins a regex literal rather than a division."
   #{\( \, \= \: \[ \! \& \| \? \{ \} \; \newline \return \+ \- \* \% \~ \^ \< \>})
 
+;; @spec MCP-OP-THREAD-023
+(def ^:private regex-context-keywords
+  "Keywords after which a `/` begins a REGEX, not a division.
+
+  Every one of these ends in an identifier character, so a punctuation-only
+  preceding-token test reads `return /[}]/` as a division — and then counts the
+  `}` inside the regex as a closing brace. That is the ONE failure mode this
+  lexer promised it did not have: a WRONG range labelled `closed`, with a
+  sha256 over the truncation offered as an edit pre-image. Found by the
+  round-one review (Opus, 2026-09-04) on `return /[}]/.test(s)`."
+  #{"return" "typeof" "case" "in" "of" "new" "delete" "void" "yield" "do"
+    "else" "instanceof" "throw" "await"})
+
+(defn- identifier-char?
+  [^Character c]
+  (or (Character/isLetterOrDigit c) (= c \_) (= c \$)))
+
+;; @spec MCP-OP-THREAD-023
+(defn word-before
+  "The identifier ending immediately before `index` in `source`, or nil.
+
+  Whitespace is skipped; anything that is not an identifier character ends the
+  scan. Used only to answer one question: is this `/` in regex context."
+  [^String source index]
+  (let [end (loop [j (dec index)]
+              (if (and (>= j 0) (Character/isWhitespace (.charAt source j)))
+                (recur (dec j))
+                j))]
+    (when (and (>= end 0) (identifier-char? (.charAt source end)))
+      (let [start (loop [j end]
+                    (if (and (>= j 0) (identifier-char? (.charAt source j)))
+                      (recur (dec j))
+                      (inc j)))]
+        (subs source start (inc end))))))
+
 ;; @spec MCP-OP-THREAD-006
 (defn lexed-brace-match
   "Scan forward from `start-index` in `source` and return the index just past the
@@ -382,7 +506,9 @@
 
               (and (= c \/)
                    (or (nil? prev-significant)
-                       (contains? regex-preceding-chars prev-significant)))
+                       (contains? regex-preceding-chars prev-significant)
+                       (contains? regex-context-keywords
+                                  (word-before source i))))
               (recur (inc i) :regex depth opened? template-stack prev-significant)
 
               (= c \{)
@@ -420,14 +546,25 @@
   [lines from to]
   (str/join "\n" (subvec (vec lines) (dec from) (min (count lines) to))))
 
-;; @spec MCP-OP-THREAD-006
-(defn script-body
-  "The body of a script-language leg at 1-based `hit-line`.
+(def ^:private test-call-pattern
+  #"^\s*(?:async\s+)?(?:test|it|describe)\s*\(")
 
-  Returns `{:from :to :body :boundary}` where `:boundary` is
-  `\"brace-window(lexed,closed)\"` for a closed lexed match or
-  `\"line-window(+/-N, unclosed at L<n>)\"` for the honest downgrade. Never a
-  claimed parse."
+;; @spec MCP-OP-THREAD-018
+(defn enclosing-test-call-line
+  "The 1-based line of the `test(`/`it(`/`describe(` call that ENCLOSES
+  `hit-line`, or nil.
+
+  A script test witness is almost never the assertion line the search matched:
+  it is the test case that assertion lives in, and an anchor after the assertion
+  would insert the new test INSIDE the old one. Scanning backward for the call
+  is lexical and bounded; failing to find one leaves the hit line, labelled."
+  [lines hit-line]
+  (some (fn [ln]
+          (when (re-find test-call-pattern (nth lines (dec ln) ""))
+            ln))
+        (range hit-line (max 0 (- hit-line test-call-lookback-lines)) -1)))
+
+(defn- script-body*
   [source lines hit-line]
   (let [total (count lines)
         start (line-start-index lines hit-line)
@@ -448,6 +585,22 @@
          :body (slice-lines lines from to)
          :boundary (str "line-window(+/-" js-window-radius
                         ", unclosed at L" hit-line ")")}))))
+
+;; @spec MCP-OP-THREAD-006
+(defn script-body
+  "The body of a script-language leg at 1-based `hit-line`.
+
+  Returns `{:from :to :body :boundary}` where `:boundary` is
+  `\"brace-window(lexed,closed)\"` for a closed lexed match or
+  `\"line-window(+/-N, unclosed at L<n>)\"` for the honest downgrade. Never a
+  claimed parse."
+  ([source lines hit-line] (script-body source lines hit-line nil))
+  ([source lines hit-line {:keys [test-call?]}]
+   (let [call-line (when test-call? (enclosing-test-call-line lines hit-line))
+         hit-line (or call-line hit-line)
+         result (script-body* source lines hit-line)]
+     (cond-> result
+       call-line (update :boundary str ", test-call at L" call-line)))))
 
 ;; ---------------------------------------------------------------------------
 ;; The Clojure body: PARSED, exact range
@@ -611,7 +764,7 @@
   ([relative source lines hit-line opts]
    (if (clojure-path? relative)
      (clojure-body relative source lines hit-line opts)
-     (script-body source lines hit-line))))
+     (script-body source lines hit-line opts))))
 
 ;; ---------------------------------------------------------------------------
 ;; Conventions as data
@@ -647,6 +800,7 @@
        (every? string? (:globs leg))))
 
 ;; @spec MCP-OP-THREAD-003
+;; @spec MCP-OP-THREAD-014
 (defn normalize-conventions
   "Validate one convention set. Five leg roles, each with an id, a kind and file
   globs. A convention set this verb cannot validate is REFUSED with the field
@@ -785,6 +939,39 @@
   (str label ": rg -n -e '" regex "'"
        (apply str (map #(str " -g '" % "'") globs))))
 
+;; @spec MCP-OP-THREAD-024
+(defn comment-mention?
+  "True when the match at `start` on `line` sits inside a line COMMENT.
+
+  `;` for Clojure, `//` for scripts, with in-line string state tracked so a
+  semicolon inside `\"a;b\"` is not a comment. A comment runs to end of line, so
+  the FIRST occurrence deciding is the same as every occurrence deciding.
+
+  Every search this verb runs is `re-find` over a raw line with no lexical
+  context, which is how a subject mentioned only in a `;; TODO` comment
+  promoted a leg to FOUND and a thread to COMPLETE (round-one review, B2)."
+  [^String line start clojure?]
+  (loop [i 0 in-string? false]
+    (if (>= i (min start (count line)))
+      false
+      (let [c (.charAt line i)]
+        (cond
+          in-string? (cond
+                       (= c \\) (recur (+ i 2) true)
+                       (= c \") (recur (inc i) false)
+                       :else (recur (inc i) true))
+          (= c \") (recur (inc i) true)
+          (and clojure? (= c \;)) true
+          (and (not clojure?) (= c \/) (< (inc i) (count line))
+               (= \/ (.charAt line (inc i)))) true
+          (= c \\) (recur (+ i 2) false)
+          :else (recur (inc i) false))))))
+
+(defn- match-start
+  [pattern ^String line]
+  (let [m (re-matcher pattern line)]
+    (when (.find m) (.start m))))
+
 (defn scan
   "Hits for one regex over the leg's candidate files.
 
@@ -802,8 +989,12 @@
             (update acc :hits into
                     (keep-indexed
                       (fn [idx line]
-                        (when (re-find pattern line)
-                          {:file relative :line (inc idx) :text (str/trim line)}))
+                        (when-let [start (match-start pattern line)]
+                          {:file relative
+                           :line (inc idx)
+                           :text (str/trim line)
+                           :in_comment (comment-mention?
+                                         line start (clojure-path? relative))}))
                       lines)))))
       {:hits [] :unreadable []}
       candidates)))
@@ -819,12 +1010,13 @@
   (str "nl -ba " file " | sed -n '" from "," to "p'"))
 
 (defn- hit->member
-  [cache {:keys [file line]} evidence & [opts]]
+  [cache {:keys [file line in_comment]} evidence & [opts]]
   (let [{:keys [ok source lines]} (read-source cache file)]
     (when ok
       (let [{:keys [from to body boundary form-name comment-start]}
             (body-at file source lines line opts)]
-        {:file file
+        {:in-comment? (boolean in_comment)
+         :file file
          :from from
          :to to
          :hit_line line
@@ -847,7 +1039,12 @@
   (let [idents (alternation identifiers)
         alias-re (re-pattern (str "(?:const|let|var) +(?:" idents
                                   ") *= *([A-Za-z_$][A-Za-z0-9_$]*) *;"))
-        real-re (re-pattern (str "(?:async +)?function +(?:" idents ")\\b"
+        ;; @spec MCP-OP-THREAD-015
+        ;; The Clojure alternative belongs here too: without it a genuine
+        ;; `(defn foo …)` hit falls through to the :else branch and is stamped
+        ;; `identifier(def)` by a branch that never recognised a definition.
+        real-re (re-pattern (str "\\(defn?-? +(?:" idents ")\\b"
+                                 "|(?:async +)?function +(?:" idents ")\\b"
                                  "|\\b(?:" idents
                                  ")\\s*[:=]\\s*(?:async\\s*)?(?:function|\\()"))
         real (first (filter #(re-find real-re (:text %)) hits))
@@ -876,7 +1073,12 @@
                                (:file alias-hit) ":" (:line alias-hit)
                                " -> " target "]")]}))
 
-      :else {:hits hits :evidence "identifier(def)"})))
+      ;; @spec MCP-OP-THREAD-024
+      ;; Neither definition-shaped nor an alias: these hits came from the bare
+      ;; identifier FALLBACK search, and a mention in a string or a comment is
+      ;; the commonest shape they take. Labelling them `identifier(def)` told a
+      ;; caller a string literal was the function definition.
+      :else {:hits hits :evidence "identifier"})))
 
 (defn- quoted-var-in
   "Pull `#'alias/handler-name` out of a route-table line."
@@ -933,35 +1135,129 @@
   [member]
   (select-keys member [:file :from :to :evidence :bytes :refetch]))
 
+(defn- distinct-by-range
+  "One member per (file, from, to). Two hits inside one test case or one form
+  are one witness, and printing it twice spends budget to say nothing."
+  [members]
+  (->> members (reduce (fn [[seen acc] m]
+                         (let [k [(:file m) (:from m) (:to m)]]
+                           (if (contains? seen k)
+                             [seen acc]
+                             [(conj seen k) (conj acc m)])))
+                       [#{} []])
+       second))
+
+;; @spec MCP-OP-THREAD-018
+(defn co-primary-members
+  "The best witness of every OTHER language present in `ranked`.
+
+  A tests leg whose ranked hits span two languages has TWO primaries. Round one
+  rendered the second as a secondary `also` row with no boundary, no hash and no
+  anchor -- and the JavaScript test file was one of the six sites the real edit
+  touched, so the caller still had to go read it."
+  [ranked]
+  (let [primary (first ranked)
+        lang (language-of (:file primary))]
+    (->> (rest ranked)
+         (remove #(= lang (language-of (:file %))))
+         (group-by #(language-of (:file %)))
+         (sort-by key)
+         (mapv (fn [[l members]] (assoc (first members) :language l))))))
+
+(def weak-evidence-kinds
+  "Evidence kinds that are a FALLBACK, not the leg's own shape."
+  #{"identifier" "route-assembled" "route-tail" "alias-only"})
+
+(defn- strong-boundary?
+  [boundary]
+  (boolean (and boundary
+                (or (str/starts-with? boundary "form(parsed")
+                    (str/starts-with? boundary "brace-window(lexed,closed")))))
+
+;; @spec MCP-OP-THREAD-024
+(defn leg-strength
+  "FOUND, or CANDIDATE with the reason it is only a candidate.
+
+  A leg is FOUND only when the receipt knows WHERE it ends -- a parsed Clojure
+  form or a closed lexed brace window -- and found it by the search that
+  expresses the leg's own shape. A labelled line window, an assembled or
+  tail-matched route, a bare identifier, or a comment mention is a lead, and a
+  lead must never make a thread read COMPLETE. Round-one review, B2: a decoy
+  comment in `routes.clj` reported the dev-reload endpoint as the route leg of
+  Dequote/Format and the thread as COMPLETE (5 of 5)."
+  [member]
+  (cond
+    (:in-comment? member)
+    {:status "CANDIDATE"
+     :weak_reason "the hit is a comment mention, not code"}
+
+    (not (strong-boundary? (:boundary member)))
+    {:status "CANDIDATE"
+     :weak_reason (str "the boundary is not a parsed form or a closed brace"
+                       " window: " (:boundary member))}
+
+    (contains? weak-evidence-kinds (:evidence member))
+    {:status "CANDIDATE"
+     :weak_reason (str "evidence " (:evidence member) " is a fallback search,"
+                       " not this leg's own shape")}
+
+    :else {:status "FOUND"}))
+
 (defn- found-leg
-  [base cache ranked searches unreadable]
-  (let [primary (first ranked)]
-    (merge (dissoc base :globs)
-           (dissoc primary :rank)
-           {:status "FOUND"
-            :searches [(last searches)]
-            :unreadable unreadable
-            :anchor (anchor-for cache primary)
-            :also (mapv secondary-row (take 4 (rest ranked)))})))
+  ([base cache ranked searches unreadable]
+   (found-leg base cache ranked searches unreadable nil))
+  ([base cache ranked searches unreadable co-primaries]
+   (let [primary (first ranked)
+         co (mapv (fn [m] (-> m
+                              (merge (leg-strength m))
+                              (dissoc :rank :in-comment?)
+                              (assoc :anchor (anchor-for cache m))))
+                  co-primaries)
+         co-keys (set (map (juxt :file :from :to) co))]
+     (merge (dissoc base :globs)
+            (dissoc primary :rank :in-comment?)
+            (leg-strength primary)
+            {:searches [(last searches)]
+             :unreadable unreadable
+             :anchor (anchor-for cache primary)
+             :co_primaries co
+             :also (->> (rest ranked)
+                        (remove #(contains? co-keys ((juxt :file :from :to) %)))
+                        (take 4)
+                        (mapv secondary-row))}))))
 
 ;; @spec MCP-OP-THREAD-004
 ;; @spec MCP-OP-THREAD-008
 (defn resolve-leg
   "One leg: FOUND with an exact range, a boundary label, a sha256 of the body
   bytes and the body; or ABSENT with every search that was run."
-  [cache paths seeds leg {:keys [handler-name]}]
+  [cache paths seeds leg {:keys [handler-name exclude-ranges]}]
   (let [{:keys [id kind globs]} leg
-        member-opts {:narrow? (contains? #{:use :route} kind)}
+        exclude-ranges (set exclude-ranges)
+        ;; What the exclusion DROPPED, kept so an empty result can say whether
+        ;; nothing was found or everything found was already in the receipt.
+        dropped (volatile! [])
+        keep-new (fn [members]
+                   (let [members (distinct-by-range members)
+                         [out cut] ((juxt remove filter)
+                                    #(contains? exclude-ranges
+                                                [(:file %) (:from %) (:to %)])
+                                    members)]
+                     (vswap! dropped into (map #(select-keys % [:file :from :to]) cut))
+                     (vec out)))
+        member-opts {:narrow? (contains? #{:use :route} kind)
+                     :test-call? (= kind :test)}
         joined (when (and (= kind :handler) handler-name)
                  [["handler-join"
                    (str "\\(defn-? +" (quote-literal handler-name) "\\b")]])
         searches (concat joined (searches-for-kind kind seeds))
-        base {:id id :leg_kind (name kind) :globs globs}]
-    (if (empty? searches)
-      (merge base {:status "ABSENT"
-                   :searches ["no seed of the kind this leg needs"]
-                   :unreadable []})
-      (loop [[[label regex :as s] & more] searches
+        base {:id id :leg_kind (name kind) :globs globs}
+        result
+        (if (empty? searches)
+          (merge base {:status "ABSENT"
+                       :searches ["no seed of the kind this leg needs"]
+                       :unreadable []})
+          (loop [[[label regex :as s] & more] searches
              ran []
              unreadable []]
         (if (nil? s)
@@ -973,11 +1269,11 @@
             (cond
               (and (= kind :def) (seq hits))
               (let [{hop-hits :hits hop-evidence :evidence extra :extra-search}
-                    (alias-hop cache paths globs (:identifiers seeds) hits)]
-                (if (seq hop-hits)
-                  (found-leg base cache
-                             (vec (keep #(hit->member cache % hop-evidence member-opts) hop-hits))
-                             ran' unreadable')
+                    (alias-hop cache paths globs (:identifiers seeds) hits)
+                    ranked (keep-new (keep #(hit->member cache % hop-evidence member-opts)
+                                           hop-hits))]
+                (if (seq ranked)
+                  (found-leg base cache ranked ran' unreadable')
                   (merge base {:status "ABSENT"
                                :evidence hop-evidence
                                :searches (cond-> ran'
@@ -991,12 +1287,17 @@
                                   (map #(merge % (rank-test-hit % handler-name)))
                                   (sort-by (juxt (comp - :rank) :file :from))
                                   vec)
-                             (vec members))]
+                             (vec members))
+                    ranked (keep-new ranked)]
                 (if (empty? ranked)
                   (recur more ran' unreadable')
-                  (found-leg base cache ranked ran' unreadable')))
+                  (found-leg base cache ranked ran' unreadable'
+                             (when (= kind :test) (co-primary-members ranked)))))
 
-              :else (recur more ran' unreadable'))))))))
+              :else (recur more ran' unreadable'))))))]
+    (cond-> result
+      (and (= "ABSENT" (:status result)) (seq @dropped))
+      (assoc :excluded (vec @dropped)))))
 
 ;; ---------------------------------------------------------------------------
 ;; The route -> handler join, run before the legs so the handler leg can use it
@@ -1025,7 +1326,7 @@
 (defn- adjacent-route-seed
   "The route entry beside the located one in the same table."
   [cache route-leg]
-  (when (and route-leg (= "FOUND" (:status route-leg)))
+  (when (and route-leg (located? route-leg))
     (let [{:keys [ok lines]} (read-source cache (:file route-leg))]
       (when ok
         (let [hit (:hit_line route-leg)
@@ -1081,12 +1382,58 @@
        sort
        vec))
 
+;; @spec MCP-OP-THREAD-017
+(defn governance-entry
+  "The top-level EDN entry containing `hit-line`, as `{:from :to}`, or nil.
+
+  The registry is one vector of a thousand lines and the ENTRY is the map
+  element the hit sits in. The two are told apart structurally -- the OUTERMOST
+  bracketed span containing the line that is still under the entry ceiling --
+  and never by a semantic parse of what a registry row means. A file whose
+  brackets do not resolve to an entry gets no anchor and SAYS so."
+  [cache relative hit-line]
+  (let [{:keys [ok source]} (read-source cache relative)]
+    (when (and ok (clojure-path? relative))
+      (let [offsets (line-start-offsets source)
+            sized (keep (fn [[open close]]
+                          (let [from (offset->line offsets open)
+                                to (offset->line offsets close)]
+                            ;; An ENTRY is a MAP element. A parenthesis inside a
+                            ;; rationale string is a bracket pair too, and
+                            ;; anchoring after it would name a line that is not
+                            ;; an entry at all -- which is how a redacted or
+                            ;; unbalanced registry earns `unparsed` instead of a
+                            ;; confident wrong answer.
+                            (when (and (= \{ (.charAt ^String source open))
+                                       ;; and it OPENS its line: an element of a
+                                       ;; multi-line vector does, a brace inside
+                                       ;; a rationale string does not. A
+                                       ;; redacted or unbalanced file desyncs the
+                                       ;; string lexer, and this is what keeps
+                                       ;; that failure at `unparsed` instead of
+                                       ;; a confident wrong anchor.
+                                       (str/blank? (subs source
+                                                        (nth offsets (dec from))
+                                                        open))
+                                       (<= from hit-line to)
+                                       (<= (inc (- to from))
+                                           governance-entry-ceiling-lines))
+                              {:from from :to to})))
+                        (clj-bracket-spans source))]
+        (first (sort-by (juxt :from (comp - :to)) sized))))))
+
 ;; @spec MCP-OP-THREAD-010
+;; @spec MCP-OP-THREAD-017
 (defn governance-rows
   "The governance tail: the intent registry rows, the intent-contract test and
   the test target -- not code, and the transcript shows the agent needed all of
   it after it had the five owners. Ranges only; a registry row is never inlined
-  whole."
+  whole.
+
+  Each row carries the END of the entry it sits in and an insertion anchor after
+  it, because the real edit's registry change was a NEW entry appended after the
+  matched one, and a row that names only the hit LINE tells the caller where to
+  read, never where to write."
   [cache paths conventions intents seeds]
   (let [globs (get-in conventions [:governance :globs])]
     (if (empty? globs)
@@ -1097,14 +1444,136 @@
           []
           (->> (:hits (scan cache paths globs regex))
                (map (fn [h]
-                      {:file (:file h)
-                       :line (:line h)
-                       :match (subs (:text h) 0 (min 64 (count (:text h))))
-                       :refetch (refetch-command (:file h)
-                                                 (max 1 (- (:line h) 4))
-                                                 (+ (:line h) 20))}))
+                      (let [entry (governance-entry cache (:file h) (:line h))
+                            row {:file (:file h)
+                                 :line (:line h)
+                                 :match (subs (:text h)
+                                              0 (min 64 (count (:text h))))}]
+                        (if entry
+                          (assoc row
+                                 :form_start (:from entry)
+                                 :form_end (:to entry)
+                                 :anchor (str "after:L" (:to entry))
+                                 :refetch (refetch-command (:file h) (:from entry)
+                                                           (:to entry)))
+                          (assoc row
+                                 :anchor "unparsed"
+                                 :refetch (refetch-command
+                                            (:file h)
+                                            (max 1 (- (:line h) 4))
+                                            (+ (:line h) 20)))))))
                (take 6)
                vec))))))
+
+;; @spec MCP-OP-THREAD-017
+(defn governance-template
+  "The entry a NEW governance row is modelled on: the matched row with the
+  HIGHEST line, as a range and a refetch, never inlined whole.
+
+  The real edit appended its new registry entry immediately after the last
+  matched one. So the last matched entry is both the insertion point and the
+  shape to copy, and naming it costs a range where inlining it would cost a
+  kilobyte."
+  [rows]
+  (when-let [row (->> rows (filter :form_end) (sort-by :line) last)]
+    {:file (:file row)
+     :from (:form_start row)
+     :to (:form_end row)
+     :anchor (:anchor row)
+     :refetch (refetch-command (:file row) (:form_start row) (:form_end row))}))
+
+;; ---------------------------------------------------------------------------
+;; The verify row: how the caller RUNS the tests leg it is about to add to
+;; ---------------------------------------------------------------------------
+
+(def ^:private make-target-pattern
+  #"^([A-Za-z0-9_][A-Za-z0-9_.\-/]*)\s*:(?!=)")
+
+(def ^:private clojure-test-alias-pattern
+  #"clojure\s+-[MX]\S*:\S*test")
+
+;; @spec MCP-OP-THREAD-019
+(defn makefile-targets
+  "Every `target:` declaration in a Makefile with its recipe lines.
+
+  Lexical and tiny: a target is a line whose first token ends in `:`, and its
+  recipe is the TAB-indented lines that follow. No Make semantics are claimed --
+  the receipt quotes the recipe line VERBATIM and names the line it came from,
+  so a caller can check it in one glance rather than trust an interpretation."
+  [lines]
+  (let [{:keys [acc current]}
+        (reduce
+          (fn [{:keys [acc current]} [idx line]]
+            (cond
+              (and current (str/starts-with? line "\t"))
+              {:acc acc
+               :current (update current :recipe conj
+                                {:line (inc idx) :command (str/trim line)})}
+
+              (re-find make-target-pattern line)
+              {:acc (cond-> acc current (conj current))
+               :current {:target (second (re-find make-target-pattern line))
+                         :line (inc idx)
+                         :recipe []}}
+
+              (str/blank? line) {:acc acc :current current}
+              :else {:acc (cond-> acc current (conj current)) :current nil}))
+          {:acc [] :current nil}
+          (map-indexed vector lines))]
+    (vec (cond-> acc current (conj current)))))
+
+(defn- verify-rows-matching
+  [targets pred evidence file]
+  (vec (for [t targets
+             r (:recipe t)
+             :when (pred (:command r))]
+         {:target (:target t) :line (:line t) :command (:command r)
+          :for file :evidence evidence})))
+
+;; @spec MCP-OP-THREAD-019
+(defn verify-rows-for
+  "The Makefile target(s) that RUN one tests file, strongest evidence first.
+
+  A recipe naming the FILE is the answer; a recipe naming its DIRECTORY is the
+  next best; a recipe running the Clojure test alias is labelled `alias`,
+  because that is what it is -- the target that runs this file among many, not
+  proof this file is in it. The transcript spent three calls finding this line."
+  [targets file]
+  (let [slash (.lastIndexOf ^String file "/")
+        dir (when (pos? slash) (subs file 0 slash))
+        by-file (verify-rows-matching targets #(str/includes? % file)
+                                      "names-the-file" file)
+        by-dir (when dir
+                 (verify-rows-matching targets #(str/includes? % dir)
+                                       "names-the-directory" file))
+        by-alias (verify-rows-matching targets
+                                       #(boolean (re-find clojure-test-alias-pattern %))
+                                       "alias" file)]
+    (vec (take max-verify-rows (or (seq by-file) (seq by-dir) (seq by-alias) [])))))
+
+;; @spec MCP-OP-THREAD-019
+(defn verify-row
+  "`:verify` for every tests primary in the thread, and the reason when there is
+  no Makefile to read."
+  [cache legs]
+  (let [{:keys [ok lines]} (read-source cache "Makefile")]
+    (if-not ok
+      {:verify [] :verify_reason "no Makefile at the workspace root"}
+      (let [targets (makefile-targets lines)
+            files (->> legs
+                       (filter #(and (= "test" (:leg_kind %))
+                                     (located? %)))
+                       (mapcat (fn [l] (into [(:file l)]
+                                             (map :file (:co_primaries l)))))
+                       distinct
+                       vec)
+            rows (vec (mapcat #(verify-rows-for targets %) files))]
+        (if (seq rows)
+          {:verify rows}
+          {:verify []
+           :verify_reason (str "no Makefile target names "
+                               (str/join ", " files)
+                               " or runs a Clojure test alias")})))))
 
 ;; @spec MCP-OP-THREAD-010
 (defn build-rules
@@ -1112,21 +1581,65 @@
   INTENT ids present in the located bodies resolved to their registry rows, and
   the one axis on which the new feature differs from its sibling."
   [cache paths conventions seeds legs axis]
-  (let [found (filter #(= "FOUND" (:status %)) legs)
+  (let [found (filter located? legs)
         handler (first (filter #(= "handler" (:leg_kind %)) legs))
-        intents (vec (distinct (mapcat #(intents-in cache %) found)))]
-    {:durable_path (if (and handler (= "FOUND" (:status handler)))
-                     (namespaced-calls (:body handler))
-                     [])
-     :refusal_statuses (if (and handler (= "FOUND" (:status handler)))
-                         (refusal-statuses (:body handler))
-                         [])
-     :intents intents
-     :governance (governance-rows cache paths conventions intents seeds)
-     :axis axis
-     :assert (str "before any edit, re-hash each leg's line range and compare to"
-                  " its sha256; a mismatch is a REFUSAL (stale pre-image), never"
-                  " a retry")}))
+        intents (vec (distinct (mapcat #(intents-in cache %) found)))
+        governance (governance-rows cache paths conventions intents seeds)]
+    (merge
+      {:durable_path (if (and handler (located? handler))
+                       (namespaced-calls (:body handler))
+                       [])
+       :refusal_statuses (if (and handler (located? handler))
+                           (refusal-statuses (:body handler))
+                           [])
+       :intents intents
+       :governance governance
+       :governance_template (governance-template governance)
+       :axis axis
+       ;; @spec MCP-OP-THREAD-021
+       ;; Two corrections in one line. A naive reader given only the receipt
+       ;; obeyed the old wording literally and planned SIX refetch+sha256sum
+       ;; calls before writing -- exactly the calls this verb exists to save.
+       ;; And the old wording asserted a REFUSAL that no code here can issue:
+       ;; this verb is read-only, and the only pre-image binding in the trunk
+       ;; is admit_clojure_patch's expect_pre_sha256 over WHOLE FILES. So the
+       ;; line is advisory about itself and points at the call that IS a gate.
+       :assert (str "the per-leg sha256 is the human-checkable detail of what"
+                    " this read-only verb read; it enforces nothing itself, so"
+                    " do NOT re-read the ranges to check it. Pass"
+                    " next_call.expect_pre_sha256 (whole-file digests) to"
+                    " admit_clojure_patch, which BINDS the pre-image at write"
+                    " time and answers a mismatch with a typed refusal, never"
+                    " a retry")}
+      (verify-row cache legs))))
+
+;; @spec MCP-OP-THREAD-025
+(defn next-call
+  "The call that can actually BIND what this receipt asserts.
+
+  `admit_clojure_patch` binds a pre-image as `expect_pre_sha256`, a map of FILE
+  to the sha256 of the WHOLE FILE -- a different digest subject from this
+  receipt's per-range hashes, which is why the old `a mismatch is a REFUSAL`
+  line named a control that did not exist. This row emits digests admit can
+  consume, so the receipt hands the caller the gate rather than an instruction."
+  [cache legs]
+  (let [files (->> legs
+                   (filter located?)
+                   (mapcat (fn [l] (into [(:file l)]
+                                         (map :file (:co_primaries l)))))
+                   (remove nil?)
+                   distinct
+                   sort)
+        digests (into {}
+                      (keep (fn [f]
+                              (let [{:keys [ok source]} (read-source cache f)]
+                                (when ok [f (sha256-hex source)])))
+                            files))]
+    (when (seq digests)
+      {:tool "admit_clojure_patch"
+       :expect_pre_sha256 digests
+       :note (str "whole-file digests, the subject admit_clojure_patch binds;"
+                  " the per-leg sha256 above is over the line range only")})))
 
 ;; ---------------------------------------------------------------------------
 ;; Assembling one thread
@@ -1143,20 +1656,74 @@
         :handler :handler
         :menu)))
 
+;; @spec MCP-OP-THREAD-016
+(defn implementation-leg
+  "The leg every convention set gets for FREE: the DEFINITION a seed names.
+
+  The Dequote/Format fixture is the argument. The seeds named
+  `mechanical-format`, the real edit inserted its new function immediately after
+  `(defn mechanical-format …)`, and a five-leg receipt never carried that form —
+  because no repository would think to declare a leg for `the definition my own
+  seed names`. So the verb declares it: Clojure sources plus whatever script
+  globs the convention set already has. A convention set that declares its own
+  `implementation` leg keeps it and gets no second one."
+  [conventions]
+  (when-not (some #(= implementation-leg-id (:id %)) (:legs conventions))
+    {:id implementation-leg-id
+     :kind :def
+     :globs (vec (distinct (concat implementation-clojure-globs
+                                   (filter script-path?
+                                           (mapcat :globs (:legs conventions))))))}))
+
+;; @spec MCP-OP-THREAD-016
+(defn resolve-implementation
+  "Resolve the automatic implementation leg against the already-resolved legs.
+
+  Deduped by file+range: when the only definition a seed names is a form the
+  receipt ALREADY carries (the handler itself, the script function), this leg
+  adds nothing and says so rather than printing the same body twice. When no
+  seed names a definition at all the leg is `N/A` and is NOT counted in the
+  status: a repository whose feature has no definition of its own is complete
+  without one."
+  [cache paths seeds auto-leg declared]
+  (let [taken (set (for [l declared :when (located? l)]
+                     [(:file l) (:from l) (:to l)]))
+        resolved (resolve-leg cache paths seeds auto-leg {:exclude-ranges taken})]
+    (if (located? resolved)
+      (assoc resolved :elide :implementation)
+      (merge (select-keys resolved [:id :leg_kind :searches :unreadable])
+             {:status "N/A"
+              :reason (if-let [dup (first (:excluded resolved))]
+                        (str "the only definition a seed names is already a leg"
+                             " of this receipt (" (:file dup) ":L" (:from dup)
+                             "-L" (:to dup) ")")
+                        "no seed names a definition")
+              :elide :implementation}))))
+
 (defn resolve-thread
-  "The five legs of one subject, in the convention set's declared order."
+  "The legs of one subject, in the convention set's declared order, plus the
+  automatic implementation leg."
   [cache paths conventions seeds handler]
-  (mapv (fn [leg]
-          (assoc (resolve-leg cache paths seeds leg {:handler-name (:name handler)})
-                 :elide (elision-class leg)))
-        (:legs conventions)))
+  (let [declared (mapv (fn [leg]
+                         (assoc (resolve-leg cache paths seeds leg
+                                             {:handler-name (:name handler)})
+                                :elide (elision-class leg)))
+                       (:legs conventions))]
+    (if-let [auto-leg (implementation-leg conventions)]
+      (conj declared (resolve-implementation cache paths seeds auto-leg declared))
+      declared)))
 
 ;; @spec MCP-OP-THREAD-013
+;; @spec MCP-OP-THREAD-016
 (defn thread-status
-  "COMPLETE only when every declared leg is FOUND. Computed from the leg vector,
-  never written as a literal."
+  "COMPLETE only when every COUNTED leg is FOUND. Computed from the leg vector,
+  never written as a literal. A leg reported `N/A` — the automatic
+  implementation leg when no seed names a definition — is not counted, because
+  counting an inapplicable leg would report INCOMPLETE for a thread that is
+  whole."
   [legs]
-  (let [total (count legs)
+  (let [legs (remove #(= "N/A" (:status %)) legs)
+        total (count legs)
         found (count (filter #(= "FOUND" (:status %)) legs))
         missing (mapv :id (remove #(= "FOUND" (:status %)) legs))]
     {:status (if (= found total)
@@ -1196,7 +1763,7 @@
          :legs (mapv (fn [l]
                        (cond-> (select-keys l [:id :status :file :from :to
                                                :evidence :sha256 :bytes :anchor])
-                         (= "FOUND" (:status l))
+                         (located? l)
                          (assoc :refetch (refetch-command (:file l) (:from l) (:to l)))))
                      sib-legs)}))))
 
@@ -1231,10 +1798,43 @@
       (str text "\n structured-only · " (str/join " · " missing))
       text)))
 
+;; @spec MCP-OP-THREAD-018
+(defn- co-primary-line
+  "A co-primary is rendered as a LEG row, never as an `also` row: it carries a
+  boundary, a hash, a body and an anchor, and a reader scanning for `leg ` must
+  see it."
+  [leg member]
+  (str "leg " (:id leg) "(" (:language member) ")  " (:file member)
+       " L" (:from member) "-L" (:to member)
+       " sha256:" (:sha256 member)
+       " evid=" (:evidence member)
+       " boundary=" (:boundary member)
+       " bytes=" (:bytes member)
+       " anchor=" (:anchor member)
+       " refetch=" (:refetch member)
+       (when (= "CANDIDATE" (:status member))
+         (str " CANDIDATE weak=" (:weak_reason member)))
+       (if (:body member)
+         (str "\n  BODY<<\n" (:body member) "\n  >>")
+         (str "\n  BODY ELIDED reason=" (:elided_reason member)
+              " range=L" (:from member) "-L" (:to member)))))
+
 (defn- leg-line
   [leg]
-  (if (= "FOUND" (:status leg))
-    (str "leg " (:id leg) "  " (:file leg) " L" (:from leg) "-L" (:to leg)
+  (cond
+    (= "N/A" (:status leg))
+    (str "leg " (:id leg) "  " (:status leg) " · " (:id leg)
+         ": n/a (" (:reason leg) ") — not counted in the leg status"
+         (when (seq (:searches leg))
+           (str "\n  searched: " (str/join "\n  searched: " (:searches leg)))))
+
+    :else
+    (if (located? leg)
+    (str "leg " (:id leg) "  "
+         (when (= "CANDIDATE" (:status leg))
+           (str "CANDIDATE weak=" (:weak_reason leg)
+                " — NOT counted toward COMPLETE — "))
+         (:file leg) " L" (:from leg) "-L" (:to leg)
          " sha256:" (:sha256 leg)
          " evid=" (:evidence leg)
          " boundary=" (:boundary leg)
@@ -1255,7 +1855,7 @@
          (when (seq (:unreadable leg))
            (str "\n  unreadable: "
                 (str/join ", " (map #(str (:file %) " (" (:reason %) ")")
-                                    (:unreadable leg))))))))
+                                    (:unreadable leg)))))))))
 
 (defn- also-line
   [leg]
@@ -1268,6 +1868,25 @@
                         (:also leg)))
          "  — BODIES ELIDED reason=rank(secondary witness)")))
 
+
+;; @spec MCP-OP-THREAD-026
+(defn receipt-tail
+  "The operation clock, padded to exactly `receipt-tail-bytes` ASCII bytes.
+
+  Carries BOTH spellings -- the rendered duration a human reads and the raw
+  `elapsed_ms` leaf -- so the text-superset guarantee finds the value it is
+  looking for and the padded width does not change between the measuring pass
+  and the delivered one."
+  [elapsed-ms]
+  (let [body (if (number? elapsed-ms)
+               (str "elapsed " (mcp-operation/format-elapsed-ms elapsed-ms)
+                    " (elapsed_ms=" elapsed-ms ")")
+               "elapsed pending (stamped by the finalizer)")
+        body (if (> (count body) receipt-tail-bytes)
+               (subs body 0 receipt-tail-bytes)
+               body)]
+    (apply str body (repeat (- receipt-tail-bytes (count body)) \space))))
+
 (defn render-receipt
   "The visible receipt. The completion pass at the end is the ratchet: whatever
   the designed lines forget, the text still carries, because a text-reading
@@ -1279,12 +1898,24 @@
                       (str " also=" (str/join "," (:also_seeds result))))
                     "  root=" (:workspace_root result)
                     "  repo=" (:repo_label result)
-                    "  budget=" (:budget_bytes result) "B"
-                    "  used=" (:receipt_bytes result) "B"
-                    "  text=" (:text_bytes result) "B"
-                    "  structured=" (:structured_bytes result) "B"
-                    "  status=" (:status result))
-        body-lines (remove nil? (concat (map leg-line legs) (map also-line legs)))
+                    ;; @spec MCP-OP-THREAD-022
+                    ;; Which number the budget governs, said in the header: a
+                    ;; reader shown `budget=32768B used=40641B ... COMPLETE`
+                    ;; read a budget overrun beside a false COMPLETE. The
+                    ;; budget governs the TEXT; COMPLETE is about LEGS.
+                    "  text=" (:text_bytes result) "B (budget "
+                    (:budget_bytes result) "B)"
+                    "  structured=" (:structured_bytes result) "B (trunk cap "
+                    trunk-public-byte-budget "B)"
+                    "  total=" (:receipt_bytes result) "B"
+                    "  status=" (:status result) " — legs, not bytes")
+        body-lines (remove nil?
+                           (concat (mapcat (fn [l]
+                                             (cons (leg-line l)
+                                                   (map #(co-primary-line l %)
+                                                        (:co_primaries l))))
+                                           legs)
+                                   (map also-line legs)))
         sibling (:sibling result)
         sibling-line
         (if (= "FOUND" (:status sibling))
@@ -1292,7 +1923,7 @@
                (when (:at sibling) (str " at=" (:at sibling)))
                "  legs: "
                (str/join " · " (map #(str (:id %) " " (:status %)
-                                          (when (= "FOUND" (:status %))
+                                          (when (located? %)
                                             (str " " (:file %) ":L" (:from %)
                                                  "-L" (:to %)
                                                  " sha256:" (:sha256 %)
@@ -1311,10 +1942,35 @@
              (when (seq (:governance rules))
                (str "\n  governance "
                     (str/join "\n  governance "
-                              (map #(str (:file %) ":" (:line %) "  " (:match %)
+                              (map #(str (:file %) ":" (:line %)
+                                         (when (:form_end %)
+                                           (str " entry L" (:form_start %)
+                                                "-L" (:form_end %)))
+                                         " anchor=" (:anchor %)
+                                         "  " (:match %)
                                          "  refetch=" (:refetch %))
                                    (:governance rules)))))
-             "\nassert " (:assert rules))
+             (when-let [t (:governance_template rules)]
+               (str "\n  governance-template " (:file t)
+                    " L" (:from t) "-L" (:to t)
+                    " anchor=" (:anchor t)
+                    " refetch=" (:refetch t)
+                    "  — the entry a new row is modelled on; NOT inlined"))
+             (if (seq (:verify rules))
+               (str "\n  verify "
+                    (str/join "\n  verify "
+                              (map #(str (:target %) " (Makefile:" (:line %) ")"
+                                         " for=" (:for %)
+                                         " evidence=" (:evidence %)
+                                         "  " (:command %))
+                                   (:verify rules))))
+               (str "\n  verify none · " (:verify_reason rules)))
+             "\nassert " (:assert rules)
+             (when-let [n (:next_call result)]
+               (str "\nnext_call " (:tool n) " expect_pre_sha256="
+                    (str/join " " (map (fn [[f sha]] (str f ":" sha))
+                                       (sort (:expect_pre_sha256 n))))
+                    "  — " (:note n))))
         elisions (:elided result)
         elision-lines (map #(str "elided " (:leg %) " " (:bytes %)
                                  "B reason=" (:reason %)
@@ -1325,8 +1981,9 @@
         designed (str/join "\n" (remove nil?
                                         (concat [header] body-lines
                                                 [sibling-line rules-line]
-                                                elision-lines)))
-        ]
+                                                elision-lines
+                                                [(receipt-tail
+                                                   (:elapsed_ms result))])))]
     (ensure-superset designed
                      (dissoc result :receipt_bytes :text_bytes
                              :structured_bytes))))
@@ -1357,7 +2014,7 @@
 
 (defn- elide-leg
   [leg reason]
-  (if (and (= "FOUND" (:status leg)) (:body leg))
+  (if (and (located? leg) (:body leg))
     [(-> leg
          (dissoc :body)
          (assoc :elided_reason reason))
@@ -1384,6 +2041,64 @@
                                    :from 0 :to 0 :sha256 "n/a"
                                    :refetch "re-run feature_thread with a larger budget_bytes"}))
          true]))
+
+    ;; @spec MCP-OP-THREAD-017
+    :governance-template
+    (if-let [t (get-in result [:rules :governance_template])]
+      [(-> result
+           (update :rules dissoc :governance_template)
+           (update :elided conj {:leg "governance-template"
+                                 :bytes 0
+                                 :reason "public-budget"
+                                 :from (:from t) :to (:to t)
+                                 :sha256 "n/a"
+                                 :refetch (:refetch t)}))
+       true]
+      [result false])
+
+    ;; @spec MCP-OP-THREAD-025
+    :next-call
+    (if-let [n (:next_call result)]
+      [(-> result
+           (dissoc :next_call)
+           (update :elided conj
+                   {:leg "next-call"
+                    :bytes 0
+                    :reason "public-budget"
+                    :from 0 :to 0 :sha256 "n/a"
+                    :refetch (str "re-run feature_thread with mode=locations"
+                                  " for the " (count (:expect_pre_sha256 n))
+                                  " whole-file digests admit_clojure_patch binds")}))
+       true]
+      [result false])
+
+    ;; @spec MCP-OP-THREAD-018
+    :tests-js
+    (let [idx (first (keep-indexed
+                       (fn [i l] (when (some :body (:co_primaries l)) i))
+                       (:legs result)))]
+      (if (nil? idx)
+        [result false]
+        (let [leg (nth (:legs result) idx)
+              cut (filterv :body (:co_primaries leg))
+              leg' (update leg :co_primaries
+                           #(mapv (fn [m]
+                                    (if (:body m)
+                                      (-> m (dissoc :body)
+                                          (assoc :elided_reason "public-budget"))
+                                      m))
+                                  %))]
+          [(-> result
+               (assoc :legs (assoc (vec (:legs result)) idx leg'))
+               (update :elided into
+                       (map (fn [m] {:leg (str (:id leg) "(" (:language m) ")")
+                                     :bytes (:bytes m)
+                                     :reason "public-budget"
+                                     :from (:from m) :to (:to m)
+                                     :sha256 (:sha256 m)
+                                     :refetch (:refetch m)})
+                            cut)))
+           true])))
 
     :sibling
     (if (seq (get-in result [:sibling :legs]))
@@ -1431,18 +2146,19 @@
         (let [refusal {:ok false
                        :operation "feature_thread"
                        :error_type "feature-thread-budget-exceeded"
-                       :error (str "the receipt is " total
+                       :error (str "the receipt text is " total
                                    " bytes with every body elided, above the"
-                                   " budget of " budget)
+                                   " budget of " budget " this request asked"
+                                   " for")
                        :budget_bytes budget
-                       :receipt_bytes total
+                       :text_bytes total
                        :subject (:subject result)
                        :status (:status result)
                        :remedy (str "Raise budget_bytes (hard cap "
                                     hard-cap-bytes ") or narrow scope.paths.")}]
           [(str "feature_thread refused · " (:error_type refusal) " · "
                 (:error refusal) "\nremedy · " (:remedy refusal)
-                "\nfacts · budget_bytes=" budget " receipt_bytes=" total
+                "\nfacts · budget_bytes=" budget " text_bytes=" total
                 " subject=" (:subject result) " status=" (:status result))
            refusal])
 
@@ -1453,11 +2169,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Admission
 ;; ---------------------------------------------------------------------------
-
-(def elapsed-reserve-bytes
-  "Bytes reserved in the budget for the operation clock line the finalizer adds
-  after the receipt is measured."
-  96)
 
 (def allowed-fields
   #{:subject :also :scope :config :budget_bytes :include_bodies :mode :mirror
@@ -1492,10 +2203,39 @@
               "subject must be a non-blank identifier or route"
               {:remedy "Pass the identifier or the route the feature is named by."})
 
+      ;; @spec MCP-OP-THREAD-027
+      (> (count subject) max-subject-chars)
+      (refuse "feature-thread-subject-too-long"
+              (str "subject is " (count subject) " characters, above the"
+                   " ceiling of " max-subject-chars)
+              {:max_subject_chars max-subject-chars
+               :field "subject"
+               :remedy (str "Pass an identifier or a route, at most "
+                            max-subject-chars " characters.")})
+
       (and (some? also) (not (and (sequential? also) (every? string? also))))
       (refuse "feature-thread-invalid-also"
               "also must be an array of additional identifier or route seeds"
               {:remedy "Pass also as a vector of strings, or omit it."})
+
+      ;; @spec MCP-OP-THREAD-027
+      (and (sequential? also) (> (count also) max-also-seeds))
+      (refuse "feature-thread-also-too-many"
+              (str "also carries " (count also) " seeds, above the ceiling of "
+                   max-also-seeds)
+              {:max_also_seeds max-also-seeds
+               :field "also"
+               :remedy (str "Pass at most " max-also-seeds " seeds.")})
+
+      ;; @spec MCP-OP-THREAD-027
+      (and (sequential? also) (some #(> (count %) max-subject-chars) also))
+      (refuse "feature-thread-also-seed-too-long"
+              (str "an also seed is longer than the ceiling of "
+                   max-subject-chars " characters")
+              {:max_subject_chars max-subject-chars
+               :field "also"
+               :remedy (str "Every seed is an identifier or a route, at most "
+                            max-subject-chars " characters.")})
 
       (and (some? scope) (not (map? scope)))
       (refuse "feature-thread-invalid-scope"
@@ -1556,9 +2296,15 @@
 (defn- strip-bodies
   [legs]
   (mapv (fn [l]
-          (if (and (= "FOUND" (:status l)) (:body l))
-            (-> l (dissoc :body) (assoc :elided_reason "mode=locations"))
-            l))
+          (cond-> l
+            (and (located? l) (:body l))
+            (-> (dissoc :body) (assoc :elided_reason "mode=locations"))
+
+            (seq (:co_primaries l))
+            (update :co_primaries
+                    #(mapv (fn [m] (-> m (dissoc :body)
+                                       (assoc :elided_reason "mode=locations")))
+                           %))))
         legs))
 
 (defn execute-request
@@ -1637,9 +2383,10 @@
                                 :legs legs
                                 :sibling sibling
                                 :rules rules
+                                :next_call (next-call cache legs)
                                 :elided []}
                                status)
-                        [_ fitted] (fit-to-budget base (- budget elapsed-reserve-bytes))]
+                        [_ fitted] (fit-to-budget base budget)]
                     fitted))))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -1649,18 +2396,19 @@
 ;; @spec MCP-OP-THREAD-012
 (defn summary
   "The text block. Re-rendered from the structured receipt, so the two faces of
-  the result cannot disagree, and completed so the text is a superset."
+  the result cannot disagree, and completed so the text is a superset.
+
+  The clock is rendered INSIDE the receipt at a fixed width rather than
+  appended afterwards, so `text_bytes` counts the text that is delivered."
   [result]
-  (let [elapsed (str "\nelapsed " (mcp-operation/format-elapsed-ms
-                                    (:elapsed_ms result)))]
-    (if (:ok result)
-      (str (render-receipt result) elapsed)
-      (ensure-superset
-        (str "feature_thread refused · " (:error_type result)
-             "\n→ " (:error result)
-             (when-let [remedy (:remedy result)] (str "\nremedy · " remedy))
-             elapsed)
-        result))))
+  (if (:ok result)
+    (render-receipt result)
+    (ensure-superset
+      (str "feature_thread refused · " (:error_type result)
+           "\n→ " (:error result)
+           (when-let [remedy (:remedy result)] (str "\nremedy · " remedy))
+           "\n" (receipt-tail (:elapsed_ms result)))
+      result)))
 
 (def feature-thread-schema
   {:type "object"
@@ -1681,10 +2429,12 @@
                                 " .clj-surgeon/feature-thread.edn under the"
                                 " workspace root.")}
     "budget_bytes" {:type "integer" :minimum 1 :maximum 32768
-                    :description (str "Receipt budget in UTF-8 bytes; default "
-                                      "10240, hard cap 32768. Over budget,"
-                                      " bodies are elided in a stated order and"
-                                      " every elision is named.")}
+                    :description (str "Receipt budget in UTF-8 bytes of the"
+                                      " rendered TEXT; default 24576, hard cap"
+                                      " 32768. Over budget, bodies are elided in"
+                                      " a stated edit-aware order — context"
+                                      " first, the forms you are about to edit"
+                                      " last — and every elision is named.")}
     "include_bodies" {:type "boolean"
                       :description "false returns ranges only (mode=locations)."}
     "mode" {:type "string" :enum ["edit-basis" "locations"]}
@@ -1739,9 +2489,16 @@
     "Also: an anchor per leg saying where a NEW sibling goes; the sibling "
     "feature the subject should mirror, bodies elided to ranges; and a rules "
     "row -- the path the handler routes through, the statuses it refuses with, "
-    "the INTENT identifiers found in comments above the located forms, and the "
+    "the INTENT identifiers found in comments above the located forms, the "
     "governance rows (intent registry, contract test, test target) that a "
-    "search on the subject never reaches. Clojure legs are PARSED to the "
+    "search on the subject never reaches, each with the END of the entry it "
+    "sits in and an anchor after it, and a `verify` row naming the Makefile "
+    "target that runs the tests leg, its line and its recipe verbatim. Every "
+    "convention set also gets an automatic `implementation` leg for the "
+    "DEFINITION a seed names, deduped against the legs already found and "
+    "reported n/a (uncounted) when no seed names one; and a tests leg whose "
+    "hits span two languages returns a primary per language, each with its own "
+    "boundary, hash and anchor. Clojure legs are PARSED to the "
     "enclosing top-level form, so the range is exact. Script legs are "
     "lexer-driven brace matches labelled brace-window(lexed,closed), "
     "downgrading to a labelled line window when the counter does not close; "

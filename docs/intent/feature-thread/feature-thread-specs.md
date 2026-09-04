@@ -25,7 +25,7 @@ run as a test inside `make mcp-test`) enforces both halves.
   reading any file.
 
 - [x] **MCP-OP-THREAD-002**: Budget admission. When `feature_thread` receives
-  `budget_bytes`, clj-surgeon shall default it to 12288, refuse a non-integer or
+  `budget_bytes`, clj-surgeon shall default it to 24576, refuse a non-integer or
   non-positive value, and refuse any value above the hard cap of 32768 with the
   cap named in the refusal; the request shall never silently receive a clamped
   budget.
@@ -33,17 +33,18 @@ run as a test inside `make mcp-test`) enforces both halves.
 - [x] **MCP-OP-THREAD-003**: Conventions as data. When `feature_thread`
   resolves the leg roles for a repository, clj-surgeon shall read them from
   `.clj-surgeon/feature-thread.edn` under the resolved workspace root or from an
-  inline `config` map, shall require exactly five leg roles each declaring an id,
+  inline `config` map, shall require AT LEAST five leg roles each declaring an id,
   file patterns and a kind, and shall refuse with the searched configuration path
   named when no convention set is available; it shall never infer leg roles from
   a built-in table of file names.
 
-- [x] **MCP-OP-THREAD-004**: Five legs, always rendered. When
-  `feature_thread` renders a receipt, clj-surgeon shall emit exactly the five
-  legs the convention set declares, in the declared order, each either FOUND
-  with a file, a line range, an evidence kind, a sha256 of the body bytes and
-  the body, or ABSENT with the exact searches that were run; it shall never omit
-  a leg from the receipt.
+- [x] **MCP-OP-THREAD-004**: Every leg, always rendered. When
+  `feature_thread` renders a receipt, clj-surgeon shall emit every leg the
+  convention set declares, in the declared order, plus the automatic
+  implementation leg, each either FOUND or CANDIDATE with a file, a line range,
+  an evidence kind, a sha256 of the body bytes and the body, or ABSENT with the
+  exact searches that were run, or N/A with the reason; it shall never omit a
+  leg from the receipt.
 
 - [x] **MCP-OP-THREAD-005**: Clojure legs are parsed. When a leg resolves to a
   Clojure file, clj-surgeon shall parse that file and report the range of the
@@ -87,8 +88,9 @@ run as a test inside `make mcp-test`) enforces both halves.
 
 - [x] **MCP-OP-THREAD-011**: Budget elision. When the rendered receipt exceeds
   the effective budget, clj-surgeon shall elide bodies to line ranges in the
-  order tests, sibling, menu/caller, js-function, route, handler, stopping as
-  soon as the receipt fits, and shall name every elided leg in an `elided:` row
+  stated edit-aware order — sibling, governance template, secondary witnesses,
+  next_call, menu, route, tests(js), tests, implementation, js-function,
+  handler — stopping as soon as the receipt fits, and shall name every elided leg in an `elided:` row
   of both the text block and `structuredContent`; it shall never cut a body
   without naming it and shall never emit a receipt larger than the hard cap.
 
@@ -96,8 +98,90 @@ run as a test inside `make mcp-test`) enforces both halves.
   every leaf value of `structuredContent` shall appear in the text block; the
   text block shall never carry less than the structured result.
 
-- [x] **MCP-OP-THREAD-013**: Honest status. When every declared leg is FOUND,
-  clj-surgeon shall report `COMPLETE (5 of 5)`; when any leg is ABSENT it shall
-  report `INCOMPLETE (k of 5)` and name each missing leg; the status shall be
-  computed from the leg results and shall never read COMPLETE while a leg is
-  ABSENT.
+- [x] **MCP-OP-THREAD-013**: Honest status. When every COUNTED leg is FOUND,
+  clj-surgeon shall report `COMPLETE (n of n)`; when any counted leg is ABSENT
+  or CANDIDATE it shall report `INCOMPLETE (k of n)` and name each missing leg;
+  the status shall be computed from the leg results and shall never read
+  COMPLETE while a counted leg is not FOUND.
+
+- [x] **MCP-OP-THREAD-014**: More than five leg roles. When a convention set
+  declares MORE than the five leg roles, clj-surgeon shall accept it and resolve
+  every declared leg in order; when it declares FEWER than five it shall refuse
+  with `feature-thread-conventions-invalid`, naming the count it found.
+
+- [x] **MCP-OP-THREAD-015**: Clojure definitions are definition-shaped. When a
+  `:def` leg searches for a seed identifier, clj-surgeon shall recognise a
+  Clojure `(defn`, `(defn-` or `(def` form as definition-shaped, in both the
+  leg's search and the one-hop alias check; it shall never stamp
+  `identifier(def)` on a hit that only the fallback identifier search matched.
+
+- [x] **MCP-OP-THREAD-016**: The automatic implementation leg. When a seed names
+  a DEFINITION in a source file, clj-surgeon shall report an `implementation`
+  leg for it over the Clojure sources and the script globs the convention set
+  declares, without the caller declaring that leg; it shall dedupe the leg by
+  file and line range against the legs already resolved; and when no seed
+  resolves to a definition it shall report the leg `N/A` with the reason and
+  shall NOT count it toward the thread status.
+
+- [x] **MCP-OP-THREAD-017**: Governance anchors. When `feature_thread` reports a
+  governance row, clj-surgeon shall report the END line of the top-level EDN
+  entry containing the hit and an insertion anchor after it, or `unparsed` when
+  no entry resolves; and it shall report exactly one `template` row — the
+  matched entry with the highest line — as a range and a refetch, never inlined.
+
+- [x] **MCP-OP-THREAD-018**: Co-primary per language. When the tests leg's
+  ranked hits span more than one language, clj-surgeon shall report the best hit
+  of EACH language as a primary carrying its own boundary, sha256, anchor and
+  body, shall anchor a script witness after its enclosing `test`/`it`/`describe`
+  call, and shall render it as a leg row rather than a secondary `also` row.
+
+- [x] **MCP-OP-THREAD-019**: The verify row. When a tests leg is located,
+  clj-surgeon shall report the Makefile target(s) that run it as
+  `{target, line, command, for, evidence}` with the recipe line verbatim,
+  strongest evidence first — the recipe naming the file, else its directory,
+  else the Clojure test alias labelled `alias`; when there is no Makefile it
+  shall report an empty verify list with the reason named.
+
+- [x] **MCP-OP-THREAD-020**: Edit-aware elision. When the receipt must shrink,
+  clj-surgeon shall drop context before edit sites — the forms the seeds name
+  and the handler last — in the fixed order `elision-order` declares.
+
+- [x] **MCP-OP-THREAD-021**: The assert line is advisory. When `feature_thread`
+  renders the rules row, its assert line shall tell the caller NOT to re-read
+  the ranges the receipt already shipped, shall state that this read-only verb
+  enforces nothing itself, and shall name `admit_clojure_patch` as the call that
+  binds the pre-image.
+
+- [x] **MCP-OP-THREAD-022**: The header names the governed number. When
+  `feature_thread` renders its header, it shall show which figure the budget
+  governs — the TEXT bytes — beside the structured bytes and their trunk cap and
+  the total, and shall not present the leg status as a byte figure.
+
+- [x] **MCP-OP-THREAD-023**: Regex versus division. When the script lexer meets
+  a `/` preceded by a JavaScript keyword that ends in an identifier character
+  (`return`, `typeof`, `case`, `in`, `of`, `new`, `delete`, `void`, `yield`,
+  `do`, `else`, `instanceof`, `throw`, `await`), it shall treat it as a regex
+  literal; it shall never label a truncated body `brace-window(lexed,closed)`.
+
+- [x] **MCP-OP-THREAD-024**: CANDIDATE, not FOUND. When a leg's hit is a comment
+  mention, or its boundary is not a parsed form or a closed brace window, or its
+  only evidence is a fallback search (`identifier`, `route-assembled`,
+  `route-tail`, `alias-only`), clj-surgeon shall report the leg `CANDIDATE` with
+  the reason named, shall carry its range and body as usual, and shall NOT count
+  it toward `COMPLETE`.
+
+- [x] **MCP-OP-THREAD-025**: A binding, not an instruction. When
+  `feature_thread` returns a located thread, it shall emit a `next_call` row
+  naming `admit_clojure_patch` and carrying `expect_pre_sha256` as WHOLE-FILE
+  digests of every located leg's file — the subject that verb actually binds.
+
+- [x] **MCP-OP-THREAD-026**: The receipt is right about its own size. When
+  `feature_thread` returns, `text_bytes` shall equal the UTF-8 size of the text
+  block delivered, the operation clock shall ride inside the measured receipt at
+  a fixed width, a budget refusal shall quote the budget the CALLER passed, and
+  `receipt_bytes` shall mean text plus structured wherever it appears.
+
+- [x] **MCP-OP-THREAD-027**: Seed ceilings at admission. When `subject` is
+  longer than `max-subject-chars`, or `also` carries more than `max-also-seeds`
+  seeds or a seed longer than `max-subject-chars`, clj-surgeon shall refuse
+  before reading any file, naming the field and the ceiling.
