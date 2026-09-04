@@ -190,7 +190,7 @@
                  @start
                  (binding [process/*clj-kondo-lock-path* lock-path
                            process/*clj-kondo-admission-path* admission-script]
-                   (run-admitted [analyzer "0.08"] "/tmp" 2000))))
+                   (run-admitted [analyzer "0.08"] "/tmp" rendezvous-timeout-ms))))
         a (run!)
         b (run!)]
     (deliver start true)
@@ -250,7 +250,12 @@
     (spit lock-path "{:pid 999999 :cwd \"/tmp/dead-owner\"}")
     (binding [process/*clj-kondo-lock-path* lock-path
               process/*clj-kondo-admission-path* admission-script]
-      (let [result (run-admitted [analyzer "0"] current-root 100)]
+      ;; A RENDEZVOUS budget, not a contract one: the claim under test is that
+      ;; a STALE lock file does not block admission, and a generous budget
+      ;; still discriminates -- a lock that really did own the OS lock would
+      ;; time out at 75 no matter how long the wait. 100 ms was a measurement
+      ;; of an idle box, and it read :admission-timeout at load 27.
+      (let [result (run-admitted [analyzer "0"] current-root rendezvous-timeout-ms)]
         (is (zero? (:exit result)))
         (is (= :admitted (get-in result [:admission :status])))
         (is (= (.getCanonicalPath (io/file current-root))
@@ -344,7 +349,7 @@
               process/*executable-path* (str shim-directory
                                              java.io.File/pathSeparator
                                              analyzer-directory)]
-      (let [result (run-admitted ["clj-kondo"] "/tmp" 500)]
+      (let [result (run-admitted ["clj-kondo"] "/tmp" rendezvous-timeout-ms)]
         (is (zero? (:exit result)))
         (is (= (.toRealPath analyzer
                             (make-array java.nio.file.LinkOption 0))
@@ -524,10 +529,10 @@
             (System/getProperty "user.dir") scope
             (fn []
               (let [first-five (mapv (fn [_]
-                                       (run-admitted [analyzer] "/tmp" 1000))
+                                       (run-admitted [analyzer] "/tmp" rendezvous-timeout-ms))
                                      (range 5))]
                 (try
-                  (run-admitted [analyzer] "/tmp" 1000)
+                  (run-admitted [analyzer] "/tmp" rendezvous-timeout-ms)
                   (catch clojure.lang.ExceptionInfo error
                     (reset! sixth-error (ex-data error))))
                 first-five))))]
