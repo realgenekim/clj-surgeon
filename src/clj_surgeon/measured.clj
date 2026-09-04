@@ -43,7 +43,8 @@
 
   @spec MCP-OP-MEM-003
   @spec MCP-OP-MEM-005
-  @spec MCP-OP-MEM-011"
+  @spec MCP-OP-MEM-011
+  @spec MCP-OP-TIME-006"
   (:require
    [clojure.string :as str]))
 
