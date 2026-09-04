@@ -1212,6 +1212,44 @@
             (str "the enumeration lost " kind))))))
 
 ;; @spec MCP-OP-ALIAS-059
+(deftest a-truncated-fact-line-says-how-many-facts-it-dropped
+  ;; Round-11 re-review finding 7: `refusal-fact-line` takes 12 facts and says
+  ;; nothing about the rest.
+  ;;
+  ;;   facts published = 15  · facts rendered = 12
+  ;;   dropped fields = (:f12 :f13 :f14)
+  ;;   does the text say it truncated? => false
+  ;;
+  ;; No live alias_migration refusal carries twelve discriminating facts today
+  ;; — the widest, scope-matches-nothing, carries ten — so the bound has never
+  ;; fired, which is exactly why it must say so before it does. It is the same
+  ;; silent-truncation class this branch has now paid for three times.
+  (let [receipt (fn [n]
+                  (into {:ok false
+                         :operation "alias_migration"
+                         :error_type "alias-migration-empty-scope"}
+                        (map (fn [index]
+                               [(keyword (format "f%02d" index)) index])
+                             (range n))))
+        fact-count (fn [line]
+                     (count (str/split (str/replace line "facts · " "")
+                                       #" · ")))]
+    (testing "at the bound the line says nothing, because nothing was dropped"
+      (let [line (mcp-tool/refusal-fact-line (receipt 12))]
+        (is (= 12 (fact-count line)) line)
+        (is (not (str/includes? line "more"))
+            "a complete fact line claims a truncation it did not make")))
+    (testing "one past the bound"
+      (let [line (mcp-tool/refusal-fact-line (receipt 13))]
+        (is (str/includes? line "+1 more")
+            (str "the fact line dropped a fact in silence: " line))
+        (is (str/includes? line "structuredContent")
+            "the line does not say where the dropped facts are")))
+    (testing "three past the bound"
+      (is (str/includes? (mcp-tool/refusal-fact-line (receipt 15)) "+3 more")
+          "the fact line does not count the facts it dropped"))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest a-refusal-without-a-remedy-does-not-point-at-one
   ;; The rendered no-next_call line said "the remedy above names what only the
   ;; caller can decide" unconditionally — on a receipt carrying no `:remedy` it
