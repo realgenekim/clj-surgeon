@@ -83,7 +83,7 @@ run_fake_child() {
 
 self_test() {
   local self_test_root started_ms finished_ms fast_finished stall_finished
-  self_test_root=$(mktemp -d /tmp/clj-surgeon-claude-harness-self-test.XXXXXX)
+  self_test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-claude-harness-self-test.XXXXXX")
   result_dir="$self_test_root/results"
   mkdir -p "$result_dir"
   started_ms=$(now_ms)
@@ -156,7 +156,7 @@ rg -q ':artifact :claude-skill' "$installed_receipt"
 rg -q ':mode :stable-copy' "$installed_receipt"
 rg -q ":source-commit \"$source_commit\"" "$installed_receipt"
 test -f "$installed_skill/SKILL.md"
-expected_skill=$(mktemp /tmp/clj-surgeon-expected-skill.XXXXXX)
+expected_skill=$(mktemp "${TMPDIR:-/var/tmp}/clj-surgeon-expected-skill.XXXXXX")
 cat "$canonical_skill" > "$expected_skill"
 printf '\nStable copy installed from commit %s.\nWhen working inside the clj-surgeon repository, the working-tree skill.md\nsupersedes this copy.\n' \
   "$source_commit" >> "$expected_skill"

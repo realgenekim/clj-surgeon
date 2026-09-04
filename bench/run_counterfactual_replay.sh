@@ -102,9 +102,9 @@ if [ -n "$mcp_write_user" ]; then
   setfacl -R -d -m "u:$mcp_write_user:rwx" "$workspace"
 fi
 
-setup_root=$(mktemp -d /tmp/clj-surgeon-counterfactual-run.XXXXXX)
+setup_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-counterfactual-run.XXXXXX")
 cleanup() {
-  if [[ -n "${setup_root:-}" && -d "$setup_root" && "$setup_root" = /tmp/clj-surgeon-counterfactual-run.* ]]; then
+  if [[ -n "${setup_root:-}" && -d "$setup_root" && "$setup_root" = "${TMPDIR:-/var/tmp}"/clj-surgeon-counterfactual-run.* ]]; then
     rm -rf -- "$setup_root"
   fi
 }

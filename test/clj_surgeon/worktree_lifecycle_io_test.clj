@@ -1,5 +1,6 @@
 (ns clj-surgeon.worktree-lifecycle-io-test
   (:require
+   [babashka.fs :as fs]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
@@ -206,8 +207,11 @@
         root-path (.getCanonicalPath root)
         inside (.getCanonicalPath (io/file root "target"))
         outside "/Users/genekim/src.local/clj-surgeon"]
-    (assert-context [(.isDirectory root)
-                     (.startsWith inside root-path)
-                     (not (.startsWith outside root-path))
-                     (not= inside outside)
-                     (str/includes? root-path "worktree-lifecycle-fixture")])))
+    (try
+      (assert-context [(.isDirectory root)
+                       (.startsWith inside root-path)
+                       (not (.startsWith outside root-path))
+                       (not= inside outside)
+                       (str/includes? root-path "worktree-lifecycle-fixture")])
+      (finally
+        (try (fs/delete-tree root) (catch Throwable _ nil))))))

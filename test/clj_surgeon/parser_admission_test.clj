@@ -19,10 +19,19 @@
    [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as lens]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
+   [clojure.test :refer [deftest is testing use-fixtures]]
    [rewrite-clj.zip :as z]))
+
+;; RATCHET (2026-09-04, inb-9483a4): this namespace's mem005* fixture
+;; builders relied on `.deleteOnExit`, which only fires at the JVM's own
+;; exit -- too late for the suite's own leak witness (which checks BEFORE
+;; exit) and too late if the process is ever killed. Track and sweep
+;; immediately after each test instead.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
 
 ;; ------------------------------------------------------------------
 ;; fixtures — built, never checked in, so a shape is legible in one line
@@ -160,8 +169,9 @@
 ;; @spec MCP-OP-MEM-005
 (deftest malformed-source-never-crashes-the-scan
   (testing "one extra `)` returns the reader's error, not an internal one"
-    (let [f (doto (java.io.File/createTempFile "mem005unbalanced" ".clj")
-              .deleteOnExit)]
+    (let [f (tmp-leak/track!
+              temp-roots
+              (java.io.File/createTempFile "mem005unbalanced" ".clj"))]
       (spit f "(defn f [x] (inc x)))\n(defn g [y] 1)\n")
       (is (= {:parse-depth 2 :delimiter-balance -1}
              (select-keys (admission/scan-shape (slurp f))
@@ -435,7 +445,9 @@
 (defn- tower-file!
   "The 710-byte prefix tower, on disk."
   []
-  (let [f (doto (java.io.File/createTempFile "mem005tower" ".clj") .deleteOnExit)]
+  (let [f (tmp-leak/track!
+            temp-roots
+            (java.io.File/createTempFile "mem005tower" ".clj"))]
     (spit f (prefix-tower "@" 700))
     (.getPath f)))
 
@@ -562,8 +574,10 @@
 (defn- scratch-tree!
   "Write a throwaway project holding one ordinary file and one refused file."
   []
-  (let [dir (java.nio.file.Files/createTempDirectory
-              "mem005" (into-array java.nio.file.attribute.FileAttribute []))
+  (let [dir (tmp-leak/track!
+              temp-roots
+              (java.nio.file.Files/createTempDirectory
+                "mem005" (into-array java.nio.file.attribute.FileAttribute [])))
         root (.toFile dir)
         src (io/file root "src" "fixture")]
     (.mkdirs src)
@@ -598,8 +612,10 @@
   "A throwaway project of two ORDINARY files. Nothing here is refusable; the
    witness forces the reader to blow up instead."
   []
-  (let [dir (java.nio.file.Files/createTempDirectory
-              "mem005soe" (into-array java.nio.file.attribute.FileAttribute []))
+  (let [dir (tmp-leak/track!
+              temp-roots
+              (java.nio.file.Files/createTempDirectory
+                "mem005soe" (into-array java.nio.file.attribute.FileAttribute [])))
         root (.toFile dir)
         src (io/file root "src" "fixture")]
     (.mkdirs src)
@@ -679,9 +695,11 @@
     ;; the assertion rather than milliseconds because bytes are EXACT: each
     ;; scan must account for its own tree's source bytes and nobody else's.
     (let [tree! (fn [n]
-                  (let [dir (java.nio.file.Files/createTempDirectory
-                              "mem005conc"
-                              (into-array java.nio.file.attribute.FileAttribute []))
+                  (let [dir (tmp-leak/track!
+                              temp-roots
+                              (java.nio.file.Files/createTempDirectory
+                                "mem005conc"
+                                (into-array java.nio.file.attribute.FileAttribute [])))
                         root (.toFile dir)
                         src (io/file root "src" "fixture")]
                     (.mkdirs src)
@@ -718,8 +736,10 @@
 ;; @spec MCP-OP-MEM-005
 (deftest ls-tree-output-is-unchanged-when-nothing-is-refused
   (testing "a clean scan's HUMAN output is byte-identical; its EDN meters"
-    (let [dir (java.nio.file.Files/createTempDirectory
-                "mem005ok" (into-array java.nio.file.attribute.FileAttribute []))
+    (let [dir (tmp-leak/track!
+                temp-roots
+                (java.nio.file.Files/createTempDirectory
+                  "mem005ok" (into-array java.nio.file.attribute.FileAttribute [])))
           root (.toFile dir)
           src (io/file root "src" "fixture")]
       (.mkdirs src)

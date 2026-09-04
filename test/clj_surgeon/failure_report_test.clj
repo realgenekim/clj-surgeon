@@ -62,13 +62,17 @@
   (let [root (.toFile
                (java.nio.file.Files/createTempDirectory
                  "clj-surgeon-report-draft"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
-        result (report/report-failure! {:receipt private-receipt
-                                        :tool-root (.getPath root)
-                                        :runner (fn [& _]
-                                                  (throw (Exception.
-                                                           "must not run")))})]
-    (is (:ok result))
-    (is (false? (:reported result)))
-    (is (= :local-beads-unavailable (:reason result)))
-    (is (map? (:issue-draft result)))))
+                 (make-array java.nio.file.attribute.FileAttribute 0)))]
+    (try
+      (let [result (report/report-failure! {:receipt private-receipt
+                                             :tool-root (.getPath root)
+                                             :runner (fn [& _]
+                                                       (throw (Exception.
+                                                                "must not run")))})]
+        (is (:ok result))
+        (is (false? (:reported result)))
+        (is (= :local-beads-unavailable (:reason result)))
+        (is (map? (:issue-draft result))))
+      (finally
+        (doseq [file (reverse (file-seq root))]
+          (.delete file))))))
