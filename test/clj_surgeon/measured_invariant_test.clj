@@ -1427,7 +1427,17 @@
               {:ok true :staged (sorted-map "a.clj" 1
                                             "b.clj" (measured/reading sentinel))}
               :refused]
-]]
+             ;; Round-five review §4, second residual: the three walkers walked
+             ;; CLOJURE collections only, so a reading inside a Java one was
+             ;; neither unwrapped, relocated, nor diagnosed -- it reached the
+             ;; published result untouched with `unpartitioned []`, and the
+             ;; failure only became visible when cheshire refused to encode it.
+             [:inside-a-java-list
+              {:ok true :rows (java.util.ArrayList. [(measured/reading sentinel)])}
+              :refused]
+             [:inside-a-java-map
+              {:ok true :m (java.util.HashMap. {"b.clj" (measured/reading sentinel)})}
+              :refused]]]
       (let [[outcome payload] (publish-outcome domain)]
         (is (= expected outcome)
             (str placement " was " outcome " (" (pr-str payload)
@@ -1460,6 +1470,29 @@
           (str "two publications of one result hash differently; A "
                (pr-str (measured/hashed-channel a))
                " B " (pr-str (measured/hashed-channel b)))))))
+
+(deftest a-reading-inside-a-java-collection-is-diagnosed
+  (testing "round-five review §4: the walkers walked Clojure collections only"
+    ;; The reviewer's exact probe, at the tip that shipped:
+    ;;   attach fed a reading in ArrayList   => {:ok true, :measured {:xs [#reading]}}
+    ;;   partition-measured w/ ArrayList     => {:ok true, :xs [#reading]}
+    ;;   unpartitioned paths w/ ArrayList    => []
+    ;; A `Reading` cannot be encoded to JSON, so the failure was loud rather
+    ;; than silent -- but it was a blind spot in the DIAGNOSTIC, and a blind
+    ;; spot is what every finding in five rounds has been.
+    (let [xs (java.util.ArrayList. [(measured/reading 1.0)])
+          m (doto (java.util.HashMap.) (.put "k" (measured/reading 2.0)))
+          nested (java.util.ArrayList. [{:inner (measured/reading 3.0)}])]
+      (is (seq (measured/unpartitioned-measured-paths
+                 (measured/attach {:ok true} {:xs xs})))
+          "a reading inside a java.util.List handed to `attach` is not diagnosed")
+      (is (seq (measured/unpartitioned-measured-paths {:ok true :m m}))
+          "a reading inside a java.util.Map is not diagnosed")
+      (is (seq (measured/unpartitioned-measured-paths {:ok true :rows nested}))
+          "a reading under a Clojure map inside a java.util.List is not diagnosed")
+      (is (= [] (measured/unpartitioned-measured-paths
+                  {:ok true :rows (java.util.ArrayList. ["a" 1])}))
+          "a Java collection with nothing measured in it became an offence"))))
 
 (deftest the-partition-shares-structure
   (testing "partitioning a large result may not copy it"
