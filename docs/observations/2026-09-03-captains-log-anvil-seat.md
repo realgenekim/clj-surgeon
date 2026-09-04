@@ -1454,3 +1454,4 @@ Gene went to sleep with one instruction: take the idea that a single question to
 
 **Why it matters.** The question Gene asked at the start — what is the one question that gives all the answers — has a measured answer tonight, and it is smaller and more precise than the hope: the receipt removes the discovery, and discovery was a third of the work. The rest of the ten is in the harness, and the harness is ours to change.
 ## 10:47Z — MEM-003 r5 (Opus): NO-GO — the sanctioned door is reachable as interop (._launder) and by ns-resolve; the requirement text encoded the hole ('public var', 'measured/ spelling'). Round 6: amend the intent first, derive the pattern from the namespace and the protocol's own interface, derive the clock class from the JDK including constructors.
+## 10:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, sixth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
