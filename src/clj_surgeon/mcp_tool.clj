@@ -1306,7 +1306,14 @@
   A refusal that carries an executable remedy the caller never sees costs a
   model return at random — whichever face of the receipt that caller happens to
   read. An absent next_call is STATED rather than omitted, because a missing
-  line and an uncomputable remedy are indistinguishable in silence."
+  line and an uncomputable remedy are indistinguishable in silence.
+
+  The stated absence does not point at a remedy unless one is there. The live
+  `invalid-workspace-root` receipt carried no `:remedy` and this line still
+  said \"the remedy above names what only the caller can decide\", sending a
+  caller to a sentence that does not exist — a receipt that describes its own
+  contents wrongly is worse than one that is merely thin, because the caller
+  stops looking."
   [result]
   (if-let [call (:next_call result)]
     (let [encoded (json/generate-string call)]
@@ -1314,8 +1321,12 @@
         (str "next_call · " encoded)
         (str "next_call · " (count encoded)
              " characters, in structuredContent.next_call — send it verbatim")))
-    (str "next_call · none — this refusal has no mechanically composable "
-         "correction; the remedy above names what only the caller can decide")))
+    (if (:remedy result)
+      (str "next_call · none — this refusal has no mechanically composable "
+           "correction; the remedy above names what only the caller can decide")
+      (str "next_call · none — this refusal has no mechanically composable "
+           "correction and carries no remedy; the cause above is the whole of "
+           "what is known"))))
 
 ;; @spec MCP-OP-ALIAS-042
 (defn alias-migration-summary
@@ -1418,6 +1429,12 @@
    :schema mcp-schema/alias-migration-schema
    :output-schema mcp-schema/alias-migration-output-schema
    :structured? true
+   ;; @spec MCP-OP-ALIAS-059
+   ;; the SDK wrapper publishes `mcp-adapter-failure` from outside
+   ;; `mcp-operation/invoke!`, so it never sees the summarizer the operation
+   ;; passes in; naming it on the tool is what lets that one refusal class
+   ;; render its two faces the same way every other one does
+   :summarize alias-migration-summary
    :tool-fn #'handle-alias-migration})
 
 (def clj-change-tool

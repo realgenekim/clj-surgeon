@@ -600,17 +600,36 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
-  "Every refusal kind alias_migration can emit, read from the SOURCE.
+  "Every refusal kind the alias_migration ENTRANCE can emit, read from SOURCE.
 
   Derived rather than listed, so a refusal kind added later without a text
-  witness fails this gate on the day it is written."
+  witness fails this gate on the day it is written.
+
+  The subject is the entrance, `handle-alias-migration`, and not the verb's own
+  namespace: three other sources reach the same renderer through it, and an
+  enumeration that reads only the verb's files is a listed set wearing a
+  derivation's clothes. `mcp_workspace` refuses the route before the verb runs;
+  `mcp_server` publishes the adapter's own failure after it throws; and the
+  transaction kernel's error-types are passed through VERBATIM by
+  `commit-refusal`, which names `(:error-type commit)` and not a constant, so
+  every `:error-type` the kernel can mint is a kind this text block must
+  render. Each of the three is scraped in its own spelling — the alias verb
+  writes its kinds as keywords or strings, the router and adapter as string
+  literals under `:error_type`, the kernel as keywords under `:error-type`."
   []
-  (let [text (str (slurp "src/clj_surgeon/alias_migration.clj")
-                  (slurp "src/clj_surgeon/mcp_alias_migration.clj")
-                  (slurp "src/clj_surgeon/mcp_tool.clj"))]
+  (let [alias-text (str (slurp "src/clj_surgeon/alias_migration.clj")
+                        (slurp "src/clj_surgeon/mcp_alias_migration.clj")
+                        (slurp "src/clj_surgeon/mcp_tool.clj"))
+        entrance-text (str (slurp "src/clj_surgeon/mcp_workspace.clj")
+                           (slurp "src/clj_surgeon/mcp_server.clj"))
+        kernel-text (str (slurp "src/clj_surgeon/intent_transaction.clj")
+                         (slurp "src/clj_surgeon/file_ops.clj"))]
     (into (sorted-set "invalid-mcp-request" "server-not-initialized")
-          (map second)
-          (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]" text))))
+          cat
+          [(map second (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]"
+                               alias-text))
+           (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))
+           (map second (re-seq #":error-type :([a-z-]+)" kernel-text))])))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- assert-refusal-text!
@@ -752,7 +771,11 @@
               "the live refusal carries no remedy at all")
           (is (str/includes? text (:remedy result))
               "the text block drops the remedy")
-          (is (not (str/includes? text "the remedy above"))
+          ;; the invariant, not the phrase: the line may name a remedy only
+          ;; when the receipt carries one. RED published this sentence over a
+          ;; receipt with no `:remedy` at all.
+          (is (or (:remedy result)
+                  (not (str/includes? text "the remedy above")))
               (str "the text pointed at a remedy the receipt does not carry:\n"
                    text))
           (is (str/includes? text "relative/path")
