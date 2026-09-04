@@ -2,9 +2,9 @@
   (:require
    [clj-surgeon.alias-migration :as alias-migration]
    [clj-surgeon.alias-migration-fixture :as fixture]
+   [clojure.set]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
-   [clojure.set]
    [rewrite-clj.node :as n]
    [rewrite-clj.parser :as parser]))
 
@@ -715,3 +715,243 @@
     (is (= 1 (:sites (:entry result))))
     (is (str/includes? (:migrated result) "'acid.fanout.store2/find-event")
         "the quoted fully-qualified symbol was narrowed to an alias")))
+
+;; @spec MCP-OP-ALIAS-062
+;; Faithful minimization of the 2026-09-04 HTTP mixed-bare incident: the
+;; original program evaluated [:selected :other], then lost other-event.
+(deftest selected-var-migration-preserves-unrelated-referred-imports
+  (doseq [policy [nil "preserve-refer" "alias-qualify"]
+          [label libspec body expected-old]
+          [["mixed bare" "[example.old :refer [find-event other-event]]"
+            "[(find-event) (other-event)]" '[example.old :refer [other-event]]]
+           ["unused unrelated import" "[example.old :refer [find-event other-event]]"
+            "[(find-event)]" '[example.old :refer [other-event]]]
+           ["qualified other" "[example.old :as old :refer [find-event]]"
+            "[(find-event) (old/other-event)]" '[example.old :as old :refer []]]
+           ["qualified selected" "[example.old :as old :refer [find-event other-event]]"
+            "[(old/find-event) (other-event)]" '[example.old :as old :refer [other-event]]]
+           ["refer all" "[example.old :refer :all]"
+            "[(find-event) (other-event)]" '[example.old :refer :all]]]]
+    (testing (str label " / " policy)
+      (let [source (str "(ns example.client (:require " libspec "))\n"
+                        "(defn result [] " body ")\n")
+            req {:workspace-root "/workspace"
+                 :from {:lib "example.old" :var "find-event"}
+                 :to (cond-> {:lib "example.new" :var "fetch-event"
+                              :alias-policy ["newlib"]}
+                       policy (assoc :refer-policy policy))
+                 :scope {:paths ["src/**"]} :expect {:files 1}}
+            plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+            entry (first (:files plan))
+            migrated (apply-edits source (:edits entry))
+            ns-form (n/sexpr (first (n/children (parser/parse-string-all migrated))))
+            imports (set (rest (nth ns-form 2)))]
+        (is (= true (:ok plan)) (pr-str plan))
+        (is (= :add (:require-mode entry)))
+        (is (contains? imports expected-old) migrated)
+        (is (contains? imports '[example.new :as newlib]) migrated)
+        (is (str/includes? migrated "(newlib/fetch-event)"))
+        (is (not (str/includes? migrated "(find-event)")))
+        (when (str/includes? body "(other-event)")
+          (is (str/includes? migrated "(other-event)")))))))
+
+;; @spec MCP-OP-ALIAS-062
+(deftest selected-refer-removal-preserves-comments-order-and-shadowed-forms
+  (doseq [refer-text ["find-event ; selected comment\n other-event third-event"
+                      "other-event find-event ; selected comment\n third-event"
+                      "other-event third-event ; selected comment\n find-event"]]
+    (let [protected "(defn local [find-event] (find-event))"
+          source (str "(ns example.client (:require [example.old :as old :refer ["
+                      refer-text "]]))\n(defn result [] [(find-event) (other-event)])\n"
+                      protected "\n")
+          req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"]}
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+          migrated (apply-edits source (:edits (first (:files plan))))
+          ns-form (n/sexpr (first (n/children (parser/parse-string-all migrated))))]
+      (is (= true (:ok plan)) (pr-str plan))
+      (is (= '[example.old :as old :refer [other-event third-event]]
+             (first (rest (nth ns-form 2)))))
+      (is (str/includes? migrated "; selected comment\n"))
+      (is (str/includes? migrated protected)))))
+
+;; @spec MCP-OP-ALIAS-062
+(deftest selected-refer-repair-respects-reader-branches-and-refusals
+  (let [req {:workspace-root "/workspace"
+             :from {:lib "example.old" :var "find-event"}
+             :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"]}
+             :scope {:paths ["src/**"]} :expect {:files 1}}
+        source (str "(ns example.client (:require [example.old :refer [find-event other-event]]))\n"
+                    "(defn result [] #?(:clj [(find-event) (other-event)] :cljs [(find-event)]))\n")
+        kept (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+        migrated (apply-edits source (:edits (first (:files kept))))
+        refused (alias-migration/plan req [{:file "src/example/client.cljc" :source source}])
+        ambiguous-source (str "(ns example.client (:require [example.old :refer [find-event other-event]]"
+                              " [example.competitor :refer [find-event]]))\n(defn result [] (find-event))")
+        ambiguous (alias-migration/plan req [{:file "src/example/client.clj" :source ambiguous-source}])]
+    (is (= true (:ok kept)))
+    (is (str/includes? migrated "[example.old :refer [find-event other-event]]"))
+    (is (str/includes? migrated ":clj [(newlib/fetch-event) (other-event)]"))
+    (is (str/includes? migrated ":cljs [(find-event)]"))
+    (is (= "alias-migration-indirect-reference" (:error_type refused)))
+    (is (= true (:source_unchanged refused)))
+    (is (nil? (:files refused)))
+    (is (= "alias-migration-ambiguous-ownership" (:error_type ambiguous)))
+    (is (= true (:source_unchanged ambiguous)))
+    (is (nil? (:files ambiguous)))))
+
+;; @spec MCP-OP-ALIAS-062
+(deftest selected-refer-repair-retains-positive-controls-and-noop
+  (doseq [policy [nil "preserve-refer" "alias-qualify"]
+          [libspec body expected-old]
+          [["[example.old :refer [find-event]]" "[(find-event)]" nil]
+           ["[example.old :as old]" "[(old/find-event) (old/other-event)]"
+            '[example.old :as old]]]]
+    (let [req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to (cond-> {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"]}
+                     policy (assoc :refer-policy policy))
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          source (str "(ns example.client (:require " libspec "))\n(defn result [] " body ")")
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+          entry (first (:files plan))
+          migrated (apply-edits source (:edits entry))
+          imports (set (rest (nth (n/sexpr (first (n/children (parser/parse-string-all migrated)))) 2)))]
+      (is (= true (:ok plan)))
+      (is (= (if expected-old :add :replace) (:require-mode entry)))
+      (is (= (cond-> #{'[example.new :as newlib]} expected-old (conj expected-old)) imports))
+      (is (str/includes? migrated "(newlib/fetch-event)"))
+      (let [noop (alias-migration/plan req [{:file "src/example/client.clj" :source migrated}])]
+        (is (= false (:ok noop)))
+        (is (= true (:source_unchanged noop)))
+        (is (nil? (:files noop)))))))
+
+;; @spec MCP-OP-ALIAS-062
+;; Independent review's valid metadata-bearing refer entries, 2026-09-04.
+(deftest selected-refer-repair-understands-metadata-symbol-identity
+  (doseq [policy ["preserve-refer" "alias-qualify"]
+          [refs selected-call keep-metadata?]
+          [["find-event ^:private other-event" "(find-event)" true]
+           ["^:private find-event other-event" "(old/find-event)" false]
+           ["^:private find-event other-event" "(find-event)" false]]]
+    (let [source (str "(ns example.client (:require [example.old :as old :refer [" refs "]]))\n"
+                      "(defn result [] [" selected-call " (other-event)])")
+          req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"] :refer-policy policy}
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+          migrated (apply-edits source (:edits (first (:files plan))))
+          forms (parser/parse-string-all migrated)
+          imports (set (rest (nth (n/sexpr (first (n/children forms))) 2)))]
+      (is (= true (:ok plan)) (pr-str plan))
+      (is (contains? imports '[example.old :as old :refer [other-event]]) migrated)
+      (is (str/includes? migrated "(newlib/fetch-event)"))
+      (is (str/includes? migrated "(other-event)"))
+      (is (= keep-metadata? (str/includes? migrated "^:private other-event"))))))
+
+;; @spec MCP-OP-ALIAS-062
+(deftest selected-renamed-refer-refuses-without-authorizing-a-different-migration
+  (doseq [policy ["preserve-refer" "alias-qualify"]
+          body ["[(old/find-event) (selected) (other-event)]" "[(selected) (other-event)]"]]
+    (let [source (str "(ns example.client (:require [example.old :as old :refer [find-event other-event]"
+                      " :rename {find-event selected}]))\n(defn result [] " body ")")
+          req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"] :refer-policy policy}
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])]
+      (is (= false (:ok plan)))
+      (is (= "alias-migration-indirect-reference" (:error_type plan)))
+      (is (= "unsupported-selected-renamed-refer" (:reason plan)))
+      (is (= true (:source_unchanged plan)))
+      (is (= "src/example/client.clj" (:file plan)))
+      (is (nil? (:files plan)))
+      (is (nil? (:next_call plan)))
+      (is (str/includes? (or (:remedy plan) "") "renamed binding")))))
+
+;; @spec MCP-OP-ALIAS-062
+(deftest unrelated-renamed-refer-remains-at-the-old-library
+  (let [source (str "(ns example.client (:require [example.old :refer [find-event other-event]"
+                    " :rename {other-event other}]))\n(defn result [] [(find-event) (other)])")
+        req {:workspace-root "/workspace"
+             :from {:lib "example.old" :var "find-event"}
+             :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"]}
+             :scope {:paths ["src/**"]} :expect {:files 1}}
+        plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+        migrated (apply-edits source (:edits (first (:files plan))))
+        imports (set (rest (nth (n/sexpr (first (n/children (parser/parse-string-all migrated)))) 2)))]
+    (is (= true (:ok plan)))
+    (is (contains? imports '[example.old :refer [other-event] :rename {other-event other}]))
+    (is (str/includes? migrated "[(newlib/fetch-event) (other)]"))))
+
+;; @spec MCP-OP-ALIAS-063
+(deftest refer-repair-preserves-discarded-entries-and-metadata-containers
+  (doseq [policy ["preserve-refer" "alias-qualify"]
+          [refer-value protected]
+          [["[#_find-event find-event other-event]" "#_find-event"]
+           ["^:private [find-event other-event]" ":refer ^:private ["]
+           ["^{:private true} [#_find-event ^:private find-event other-event]"
+            ":refer ^{:private true} [#_find-event"]]]
+    (let [source (str "(ns example.client (:require [example.old :refer " refer-value "]))\n"
+                      "(defn result [] [(find-event) (other-event)])")
+          req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"] :refer-policy policy}
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+          migrated (apply-edits source (:edits (first (:files plan))))]
+      (is (= true (:ok plan)) (pr-str plan))
+      (is (str/includes? migrated protected) migrated)
+      (is (str/includes? migrated "[(newlib/fetch-event) (other-event)]"))
+      (is (= '[example.old :refer [other-event]]
+             (first (rest (nth (n/sexpr (first (n/children (parser/parse-string-all migrated)))) 2))))))))
+
+;; @spec MCP-OP-ALIAS-063
+(deftest renamed-selected-refusal-sees-through-map-metadata
+  (doseq [policy ["preserve-refer" "alias-qualify"]]
+    (let [source (str "(ns example.client (:require [example.old :as old :refer [find-event other-event]"
+                      " :rename ^:private {find-event selected}]))\n"
+                      "(defn result [] [(old/find-event) (selected) (other-event)])")
+          req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"] :refer-policy policy}
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])]
+      (is (= false (:ok plan)))
+      (is (= "alias-migration-indirect-reference" (:error_type plan)))
+      (is (= "unsupported-selected-renamed-refer" (:reason plan)))
+      (is (= true (:source_unchanged plan)))
+      (is (nil? (:files plan)))
+      (is (nil? (:next_call plan))))))
+
+;; @spec MCP-OP-ALIAS-064
+(deftest discarded-libspec-option-values-are-not-live-import-authority
+  (doseq [policy ["preserve-refer" "alias-qualify"]
+          [libspec body refuse?]
+          [["[example.old :refer #_[decoy] [find-event other-event]]"
+            "[(find-event) (other-event)]" false]
+           ["[example.old :as old :refer [find-event other-event] :rename #_{} {find-event selected}]"
+            "[(old/find-event) (selected) (other-event)]" true]]]
+    (let [source (str "(ns example.client (:require " libspec "))\n(defn result [] " body ")")
+          req {:workspace-root "/workspace"
+               :from {:lib "example.old" :var "find-event"}
+               :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"] :refer-policy policy}
+               :scope {:paths ["src/**"]} :expect {:files 1}}
+          plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])]
+      (if refuse?
+        (do
+          (is (= false (:ok plan)))
+          (is (= "alias-migration-indirect-reference" (:error_type plan)))
+          (is (= "unsupported-selected-renamed-refer" (:reason plan)))
+          (is (= true (:source_unchanged plan)))
+          (is (nil? (:files plan)))
+          (is (nil? (:next_call plan))))
+        (let [migrated (apply-edits source (:edits (first (:files plan))))]
+          (is (= true (:ok plan)) (pr-str plan))
+          (is (str/includes? migrated ":refer #_[decoy] ["))
+          (is (str/includes? migrated "[(newlib/fetch-event) (other-event)]"))
+          (is (= '[example.old :refer [other-event]]
+                 (first (rest (nth (n/sexpr (first (n/children (parser/parse-string-all migrated)))) 2))))))))))
