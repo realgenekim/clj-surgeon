@@ -1399,3 +1399,4 @@ Round 20 found read-string with reader-eval in parse-val and fixed parse-val; th
 ## 07:51Z — usage watch: collector TIMED OUT at 120 s (rc 124, third consecutive, load 10.9); no figures — ledger inb-65c941 (warm-path collector). (Pushed to MCP/main: main is frozen.)
 ## 08:03Z — negative controls landed: P (placebo) 31 raw / 10 reads ≈ N — content, not priming; X (stale ranges+shas, bodies intact) 25 raw / 1 read, correct sites — on a patch harness the BODIES carry the value and ranges/shas carry none until the admit gate binds on them; the agent checked the shas, saw the mismatch, and wrote from the bodies anyway. Gates re-running independently.
 ## 08:04Z — X and P gates re-run independently: JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0  — all four arms verified green.
+## 08:04Z — Gene report written (docs/observations/2026-09-04-gene-report-0815z.md); replicates N2 + T1b launched for the variance floor.
