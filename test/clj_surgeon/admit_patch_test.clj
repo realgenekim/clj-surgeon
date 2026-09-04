@@ -6544,6 +6544,49 @@
                      (pr-str (receipt-self-description-holds? result)))))))
       (finally (delete-tree! root)))))
 
+
+;; @spec MCP-OP-ADMIT-148
+(deftest a-decoder-limit-is-not-reported-as-the-patch-being-too-large
+  ;; Round six's advisory 10a. Jackson's
+  ;; `StreamReadConstraints.getMaxNameLength()` is 50,000, so a
+  ;; 60,000-character KEY NAME throws before the request is destructured, and
+  ;; every `StreamConstraints` failure was mapped to `:patch-too-large`. A
+  ;; 230-byte patch published `error-type :patch-too-large` with
+  ;; `next_call.blocked_by` saying the same, no `patch_bytes` and no
+  ;; `remedy`. The sentence was honest and the machine-readable field was
+  ;; not, and an agent branches on the field: it splits a patch that was
+  ;; never too large, gets the same refusal, and splits again.
+  (let [root (temp-dir)
+        huge-key (apply str (repeat 60000 "k"))]
+    (try
+      (write-sources! root base-sources)
+      (let [{:keys [result text]}
+            (published-at-handler-edge
+              root {"patch" clean-multi-file-patch "verify" "focused"
+                    huge-key "x"})]
+        (is (false? (:ok result)))
+        (is (contains? admit/admit-refusal-kinds (:error-type result))
+            (str "an unenumerated kind: " (pr-str (:error-type result))))
+        (is (not= :patch-too-large (:error-type result))
+            (str "a " (count clean-multi-file-patch)
+                 "-byte patch was refused as too large because a KEY in the"
+                 " request tripped a decoder limit"))
+        (is (not= :patch-too-large
+                  (some-> result :next_call :blocked_by keyword))
+            (str "and the next_call says the same: "
+                 (pr-str (:next_call result))))
+        (is (some? (:remedy result))
+            "a decoder-limit refusal with no remedy leaves the caller nothing")
+        (is (str/includes? (str (:remedy result)) "decoder")
+            (str "the remedy must name the constraint, not the patch: "
+                 (pr-str (:remedy result))))
+        (is (<= (write-refusal/json-bytes result)
+                write-refusal/public-byte-budget))
+        (is (<= (count (str text)) write-refusal/public-byte-budget))
+        (is (true? (receipt-self-description-holds? result))
+            (pr-str (receipt-self-description-holds? result))))
+      (finally (delete-tree! root)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Round six: every field a caller can influence, driven with bulk
 ;; ---------------------------------------------------------------------------
