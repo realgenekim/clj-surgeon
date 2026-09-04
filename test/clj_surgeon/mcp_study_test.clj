@@ -3186,3 +3186,67 @@
         (is (< (count text) 2048)
             (str "the refusal text is bounded by a constant, not by the "
                  "caller's input: " (count text) " characters"))))))
+
+;; ============================================================
+;; O2 ROUND 3 — the retired contract stays visibly retired
+;; (Sol O2 round-2 review, section 8)
+;; ============================================================
+;; Round two reversed the "source-free companion" contract in EARS, tests, and
+;; code, and changed nothing in the design surface that owned it. The owning
+;; plan still promised "only a concise human summary" and "concise source-free
+;; summaries", the HLD still promised "concise human presentation", and the
+;; README still called the text an ordinary transcript summary. That contract
+;; never carried an EARS id — which is exactly how it survived its own
+;; reversal — so the retirement is enforced here instead: each of the three
+;; prose statements is retired IN PLACE, with a date and the superseding ids,
+;; and this witness fails if one is quietly restored or a notice removed.
+
+;; @spec MCP-OP-STUDY-044
+(defn- normalized-document
+  [path]
+  (str/replace (slurp (str project-root "/" path)) #"\s+" " "))
+
+(defn- claim-positions
+  [document claim]
+  (loop [from 0 found []]
+    (if-let [index (str/index-of document claim from)]
+      (recur (inc index) (conj found index))
+      found)))
+
+(defn- claim-stated-outside-a-retirement-notice
+  "Every position at which a retired claim is stated WITHOUT a dated
+   retirement notice immediately before it. A retired promise may be quoted —
+   that is how it stays legible — but only under the notice that retires it."
+  [document claim]
+  (remove (fn [index]
+            (str/includes? (subs document (max 0 (- index 900)) index)
+                           "RETIRED 2026-09-04"))
+          (claim-positions document claim)))
+
+;; @spec MCP-OP-STUDY-044
+(deftest the-retired-source-free-companion-contract-stays-visibly-retired
+  (doseq [[path claims]
+          [["docs/plans/typed-mcp-inspect-entrance.md"
+            ["MCP `content` contains only a concise human summary"
+             "deterministic normalization and concise source-free summaries"]]
+           ["docs/high-level-design.md"
+            ["cross-cutting result evidence and concise human presentation"]]
+           ["README.md"
+            ["the bounded text result is an ordinary transcript summary"]]]]
+    (testing path
+      (let [document (normalized-document path)]
+        (doseq [claim claims]
+          (is (empty? (claim-stated-outside-a-retirement-notice document claim))
+              (str path " states the retired source-free companion contract "
+                   "with no retirement notice before it: " (pr-str claim))))
+        (is (str/includes? document "MCP-OP-STUDY-044")
+            (str path " must name the intent that superseded it"))
+        (is (str/includes? document "RETIRED 2026-09-04")
+            (str path " must say, in place and dated, that it is retired")))))
+  (testing "and the EARS leaf records the retirement rather than only the new rule"
+    (let [specs (slurp (str project-root
+                            "/docs/intent/study-ops/study-ops-specs.md"))]
+      (is (str/includes? specs "RETIRES the \"source-free companion\" contract"))
+      (is (str/includes? specs "typed-mcp-inspect-entrance.md"))
+      (is (str/includes? specs "high-level-design.md"))
+      (is (str/includes? specs "README.md")))))

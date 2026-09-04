@@ -975,8 +975,14 @@ has a closed JSON schema and paths are confined to project-relative `.clj`,
 `.cljs`, and `.cljc` files. Distinct canonical files are read once, results
 retain request order and SHA-256 snapshot hashes, and any validation, parse,
 cardinality, or output-limit failure refuses the complete batch. Full evidence
-is in `structuredContent`; the bounded text result is an ordinary transcript
-summary. The read tool is annotated read-only, non-destructive, idempotent, and
+is in `structuredContent`, and the bounded text result carries all of it: since
+`MCP-OP-STUDY-044` the text block is a superset of every `structuredContent`
+leaf — each mode's rows in receipt order, the verbatim source a `forms` or
+`match` receipt returns, and a bounded `path: value` line for every remaining
+leaf — inside the same 32 KB public output budget, declaring anything that
+budget made it drop. RETIRED 2026-09-04, superseded by `MCP-OP-STUDY-041` and
+`MCP-OP-STUDY-044`: the earlier "source-free companion" promise — that the
+bounded text result is an ordinary transcript summary — no longer holds. The read tool is annotated read-only, non-destructive, idempotent, and
 closed-world. This experiment adds no resources, prompts, shell access,
 unrestricted evaluation, or custom MCP UI.
 

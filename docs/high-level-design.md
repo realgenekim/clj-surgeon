@@ -32,7 +32,14 @@ The MCP service does not parse CLI output or inherit CLI compatibility policy.
 Both entrances consume the same compiled domain facts and project them through
 their existing public contracts. The MCP service additionally uses a uniform
 public operation envelope around its projections; that envelope owns
-cross-cutting result evidence and concise human presentation.
+cross-cutting result evidence and human presentation. That presentation is
+not a summary of the receipt: since `MCP-OP-STUDY-044` (2026-09-04) the text
+block a client renders is a SUPERSET of every `structuredContent` leaf,
+bounded by the declared public output budget and declaring anything the bound
+made it drop. RETIRED 2026-09-04, superseded by `MCP-OP-STUDY-041` and
+`MCP-OP-STUDY-044`: the earlier "source-free companion" reading of this
+paragraph — that the envelope owns cross-cutting result evidence and concise
+human presentation — no longer holds.
 
 ## Target Users
 

@@ -141,8 +141,24 @@ and hashes. Every existing X-ray refusal remains a complete-batch refusal.
 
 ### Successful result
 
-Full evidence is returned in MCP `structuredContent`. MCP `content` contains
-only a concise human summary. Stable top-level fields are:
+> **RETIRED 2026-09-04 — superseded by `MCP-OP-STUDY-041` and
+> `MCP-OP-STUDY-044`** (`docs/intent/study-ops/study-ops-specs.md`). The
+> "source-free companion" rule below — *MCP `content` contains only a concise
+> human summary* — no longer holds and has not held since the O2 round-2
+> change. `content[0].text` is now a SUPERSET of every `structuredContent`
+> leaf: it carries each mode's rows in receipt order, the verbatim source a
+> `forms` or `match` receipt returns, and a bounded `path: value` line for
+> every remaining leaf, all inside the public output budget
+> (`MCP-OP-STUDY-040`). The reversal is a real behavioural change for a
+> consumer that logged or displayed only the formerly concise, source-free
+> text channel; that channel now includes source bodies which were already
+> available to structured-content consumers. The paragraph is kept, struck
+> through, rather than deleted, so the promise that was made stays legible
+> beside the promise that replaced it.
+
+Full evidence is returned in MCP `structuredContent`, and so, since
+`MCP-OP-STUDY-044`, is the text block — see the retirement notice above.
+Stable top-level fields are:
 
 ```json
 {
@@ -307,7 +323,9 @@ redefinition affects the next request without reconnecting.
 - exact comments, metadata, commas, reader macros, Unicode, and `#()` source;
 - real Java `LinkedHashMap` and `ArrayList` input;
 - output limits below, equal to, and above every boundary;
-- deterministic normalization and concise source-free summaries.
+- deterministic normalization and ~~concise source-free summaries~~ text
+  blocks that carry every receipt leaf (RETIRED 2026-09-04; superseded by
+  `MCP-OP-STUDY-041` and `MCP-OP-STUDY-044`).
 
 ### Boundary and protocol tests
 
