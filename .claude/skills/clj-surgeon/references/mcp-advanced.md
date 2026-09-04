@@ -27,6 +27,27 @@ default. Set `commit=true` only after the relation is decided. Narrow around
 comments; use semantic preparation or a tested refactor operation when caller
 completeness or namespace mechanics matter.
 
+## Relation census
+
+Use `relation_census` when the question is "which collection writes inside this
+projection's fold arms are unguarded". It classifies every write inside a
+`defmethod fold-event` arm as `:door` (routed through a known identity door),
+`:set`, `:guarded` (a recognised guard on the written value's identity
+dominates it), `:raw` (nothing recognised guards it), or `:unknown` with a
+reason, and it publishes the calls inside arms it does not model — a write
+behind one of those is not a site, so `raw 0` alone is not a clean bill of
+health.
+
+Omit `files` to census every file in the workspace that defines arms; pass
+`files` for an exact list, `doors` to extend the default identity doors, and
+`pool_size` for plan-phase parallelism (the answer never depends on it; the
+effective pool never exceeds the box). The CLI equivalent is
+`clj-surgeon :op :relation-census :dir . [:doors a,b] [:threads N]`.
+
+It reads only, and it is the one tool that enumerates the workspace tree: point
+it at the workspace you mean. It locates review work; it does not prove
+idempotency and it is not an enforcement gate.
+
 ## Heavyweight transaction operations
 
 Use `apply_clojure_changes` only for capabilities absent from compact editing:

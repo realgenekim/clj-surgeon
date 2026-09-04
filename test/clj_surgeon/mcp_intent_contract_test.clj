@@ -1,10 +1,16 @@
 (ns clj-surgeon.mcp-intent-contract-test
   (:require
    [clj-surgeon.mcp-intent-contract]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]))
+
+;; RATCHET (2026-09-04, inb-9483a4): `temp-dir` below never deleted what it
+;; created (surgeon-intent-scan / surgeon-intent-empty). Track and sweep.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
 
 (defn- audit-contract
   [input]
@@ -127,8 +133,10 @@
 
 (defn- temp-dir
   [prefix]
-  (str (java.nio.file.Files/createTempDirectory
-         prefix (into-array java.nio.file.attribute.FileAttribute []))))
+  (str (tmp-leak/track!
+         temp-roots
+         (java.nio.file.Files/createTempDirectory
+           prefix (into-array java.nio.file.attribute.FileAttribute [])))))
 
 (deftest a-new-intent-leaf-is-picked-up-by-adding-only-a-file
   (testing "a lane adds docs/intent/<leaf>/<leaf>-specs.md and nothing else"
@@ -194,8 +202,10 @@
    "docs/intent/prepared-request/prepared-request-specs.md"
    "docs/intent/read-path-memory/read-path-memory-specs.md"
    "docs/intent/read-request-normalization/read-request-normalization-specs.md"
+   "docs/intent/relation-census/relation-census-specs.md"
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
    "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
+   "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
    "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
    "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"])
 
@@ -217,7 +227,9 @@
    "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/memory/memory-transaction-specs.md"
    "docs/intent/read-path-memory/read-path-memory-specs.md"
-   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"])
+   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
+   "docs/intent/relation-census/relation-census-specs.md"
+   "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"

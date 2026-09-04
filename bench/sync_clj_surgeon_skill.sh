@@ -35,7 +35,7 @@ cmp "$canonical/SKILL.md" "$claude/SKILL.md"
 for reference in "${references[@]}"; do
   cmp "$canonical/references/$reference" "$claude/references/$reference"
 done
-rendered=$(mktemp "${TMPDIR:-/tmp}/clj-surgeon-root-skill.XXXXXX")
+rendered=$(mktemp "${TMPDIR:-/var/tmp}/clj-surgeon-root-skill.XXXXXX")
 trap 'rm -f -- "$rendered"' EXIT HUP INT TERM
 render_root_skill > "$rendered"
 cmp "$rendered" "$root_skill"

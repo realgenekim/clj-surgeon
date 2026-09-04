@@ -4,7 +4,7 @@ set -euo pipefail
 
 if [ "${1:-}" = "--self-test" ]; then
   self_repo=${2:-$(cd "$(dirname "$0")/.." && pwd -P)}
-  self_root=$(mktemp -d /tmp/clj-surgeon-candidate-materializer.XXXXXX)
+  self_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-candidate-materializer.XXXXXX")
   trap 'rm -rf "$self_root"' EXIT HUP INT TERM
   "$0" "$self_repo" HEAD "$self_root/candidate" >/dev/null
   test -x "$self_root/candidate/bin/clj-surgeon"

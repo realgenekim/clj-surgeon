@@ -1,3 +1,5 @@
+> **ON FIRST ACTION AFTER COMPACTION (the Memento rule): `git pull --ff-only` on branch `MCP/main` and read `docs/observations/2026-09-03-resume-here-anvil-seat.md` (the last RESUME DELTA is the state), then `docs/observations/2026-09-03-merge-queue-for-mayor.md`. Nothing else first. Written 2026-09-04 05:4xZ at the mayor's URGENT: a resume note is durable; the instruction to read it is what compaction eats.**
+
 ## TEMP FILES GO TO /var/tmp — never /tmp (Gene, 2026-09-04)
 
 Gene, verbatim: *"You must use /var/tmp — tmp is tmpfs, which uses ram."* and *"Make it impossible to make this
@@ -259,6 +261,13 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
   absent from the compact editor, or gates that must participate in rollback.
   Use the process-starting CLI only when MCP is unavailable, the operation is
   not exposed there, or the CLI itself is under test.
+- For a projection's collection writes, use the read-only `relation_census` MCP
+  tool (or `clj-surgeon :op :relation-census`). It classifies every write inside
+  a `defmethod fold-event` arm as `:door`, `:set`, `:guarded`, `:raw`, or
+  `:unknown` with a reason, and names the calls inside arms it cannot see
+  through. It locates review work; it does not prove idempotency and it is not
+  an enforcement gate. It is also the one tool that ENUMERATES the workspace
+  tree, so point it at the workspace you mean.
 - Do not discover, register, or call the semantic backend directly. For
   cross-file definitions, references, implementations, incoming calls, and
   outgoing calls, use Surgeon `inspect_clojure` preparation. Surgeon owns any

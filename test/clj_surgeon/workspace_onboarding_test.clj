@@ -1,10 +1,19 @@
 (ns clj-surgeon.workspace-onboarding-test
   (:require
+   [babashka.fs :as fs]
    [cheshire.core :as json]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.workspace-onboarding :as onboarding]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]))
+
+;; RATCHET (2026-09-04, inb-9483a4): every temp dir this namespace created
+;; (cclsp-onboarding, cclsp-prune, kondo-config, up-workspace, up-restart,
+;; workspace-onboarding, concurrent-up) went unswept. Track them and sweep
+;; after each test.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
 
 (def options
   {:surgeon-url "http://127.0.0.1:7889/mcp"
@@ -39,9 +48,11 @@
                (:error-type (ex-data error)))))))
   (testing "the real boundary selects a parent config for a nested workspace"
     (let [root (.toFile
-                 (java.nio.file.Files/createTempDirectory
-                   "clj-surgeon-kondo-config"
-                   (make-array java.nio.file.attribute.FileAttribute 0)))
+                 (tmp-leak/track!
+                   temp-roots
+                   (java.nio.file.Files/createTempDirectory
+                     "clj-surgeon-kondo-config"
+                     (make-array java.nio.file.attribute.FileAttribute 0))))
           workspace (io/file root "server2")
           config (io/file root ".clj-kondo" "config.edn")]
       (.mkdirs (io/file root ".git"))
@@ -117,7 +128,7 @@
     (is (str/includes? block "[mcp_servers.clj-surgeon]"))
     (is (str/includes? block "required = true"))
     (is (str/includes? block
-                       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"alias_migration\"]"))
+                       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"relation_census\", \"alias_migration\"]"))
     (is (not (str/includes? block "[mcp_servers.cclsp]")))
     (is (not (str/includes? block "resolve_var_surface")))
     (is (not (str/includes? block "rename")))))
@@ -198,9 +209,11 @@
 
 (deftest installation-is-atomic-and-preserves-existing-config
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-workspace-onboarding"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-workspace-onboarding"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         codex-dir (io/file root ".codex")
         target (io/file codex-dir "config.toml")]
     (.mkdirs codex-dir)
@@ -226,9 +239,11 @@
 
 (deftest cclsp-config-installation-uses-the-canonical-workspace
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-cclsp-onboarding"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-cclsp-onboarding"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         target (io/file root "state" "cclsp.json")
         receipt (onboarding/install-cclsp-config!
                   {:workspace (.getPath root)
@@ -240,9 +255,11 @@
 
 (deftest cclsp-config-installation-prunes-a-missing-managed-worktree
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-cclsp-prune"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-cclsp-prune"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         missing (io/file root "deleted-worktree")
         target (io/file root "state" "cclsp.json")]
     (.mkdirs (.getParentFile target))
@@ -272,40 +289,45 @@
         second-entered (promise)
         release-first (promise)
         calls (atom 0)]
-    (spit config-file
-          (str (json/generate-string {"servers" [unrelated]} {:pretty true}) "\n"))
-    (with-redefs [onboarding/upsert-cclsp-workspace
-                  (fn [source options]
-                    (case (swap! calls inc)
-                      1 (do (deliver first-entered true)
-                            @release-first)
-                      2 (deliver second-entered true)
-                      nil)
-                    (original-upsert source options))]
-      (let [install #(onboarding/install-cclsp-workspace!
-                       {:workspace (.getPath %)
-                        :config-file (.getPath config-file)
-                        :lsp-command "/usr/local/bin/clojure-lsp"})
-            first-result (future (install workspace-a))]
-        (is (= true (deref first-entered 1000 ::timeout)))
-        (let [second-result (future (install workspace-b))]
-          (is (= ::timeout (deref second-entered 100 ::timeout))
-              "the second read-modify-write waits outside the locked boundary")
-          (deliver release-first true)
-          (is (:persisted @first-result))
-          (is (:persisted @second-result)))))
-    (let [servers (get (json/parse-string (slurp config-file)) "servers")
-          roots (set (map #(get % "rootDir") servers))]
-      (is (= 3 (count servers)))
-      (is (contains? roots (.getCanonicalPath workspace-a)))
-      (is (contains? roots (.getCanonicalPath workspace-b)))
-      (is (some #(= unrelated %) servers)))))
+    (try
+      (spit config-file
+            (str (json/generate-string {"servers" [unrelated]} {:pretty true}) "\n"))
+      (with-redefs [onboarding/upsert-cclsp-workspace
+                    (fn [source options]
+                      (case (swap! calls inc)
+                        1 (do (deliver first-entered true)
+                              @release-first)
+                        2 (deliver second-entered true)
+                        nil)
+                      (original-upsert source options))]
+        (let [install #(onboarding/install-cclsp-workspace!
+                         {:workspace (.getPath %)
+                          :config-file (.getPath config-file)
+                          :lsp-command "/usr/local/bin/clojure-lsp"})
+              first-result (future (install workspace-a))]
+          (is (= true (deref first-entered 1000 ::timeout)))
+          (let [second-result (future (install workspace-b))]
+            (is (= ::timeout (deref second-entered 100 ::timeout))
+                "the second read-modify-write waits outside the locked boundary")
+            (deliver release-first true)
+            (is (:persisted @first-result))
+            (is (:persisted @second-result)))))
+      (let [servers (get (json/parse-string (slurp config-file)) "servers")
+            roots (set (map #(get % "rootDir") servers))]
+        (is (= 3 (count servers)))
+        (is (contains? roots (.getCanonicalPath workspace-a)))
+        (is (contains? roots (.getCanonicalPath workspace-b)))
+        (is (some #(= unrelated %) servers)))
+      (finally
+        (try (fs/delete-tree parent) (catch Throwable _ nil))))))
 
 (deftest up-is-one-idempotent-shared-stack-entrance
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-up-workspace"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-up-workspace"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         state (io/file root "state")
         commands (atom [])
         probes (atom [])
@@ -359,9 +381,11 @@
 
 (deftest internal-semantic-provider-restart-does-not-invalidate-agent-sessions
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-up-restart"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-up-restart"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         state (io/file root "state")
         runner (fn [_ command]
                  (let [state-argument (first (filter #(str/starts-with?

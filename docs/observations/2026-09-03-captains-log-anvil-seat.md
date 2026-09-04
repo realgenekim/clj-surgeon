@@ -1284,3 +1284,387 @@ The wall cohort waits for a quiet box by design — seven agents and four Sol/Op
 ## 05:34Z — mayor: the SMW transcript is on this box (/tmp/smw-dequote-format-transcript.md, 597 events) with his analysis; Gene, verbatim: "perfect.  this is super great, ask anvil to make it one of the test cases -- it's a real representative pattern that from my observation took a long time ot warm up and nail" — Dequote/Format is now a NAMED TEST CASE of the feature_thread verb (builder amended); gate r3 Sol NO-GO (4 blockers) → r4; Sol's thread poll filed (§10)
 
 The mayor's analysis corrects the whole premise: there were no five searches. Five FILE READS batched inside a Promise.all over six rounds, editor-commands.js read at four guessed line ranges, and thread members still being discovered after the agent had answered Gene; the only rg was an alternation over JS function names — the verb, hand-rolled. The cost was never that grep failed; it was that "what is the whole thread" was not askable, so it was paid in partial reads. Human baseline for the fixture: six rounds — that number is the product claim. Assertions the mayor requires: recall 5/5 from one seed; RANGES not files; no false members; a typed refusal naming the missing leg with the JS legs made unreadable; the warm-up meter reported honestly. A second fixture at the moment the feature BROKE (the transcript's tail). The governance tail (registry.edn entries, intent_contract_test, the Makefile target) is the `rules` row — returned, not refused.
+
+## 05:39Z — O2 r4 review (Opus): NO-GO on a regression the round introduced — an unbudgeted "dropped:" line broke the fit's monotonicity; round 5 launched
+
+The reviewer's line to keep: the round's own witnesses cover a one-file fixture that always fits and a 200-file ls-tree whose rows dominate; the middle band (19–32 KB, hundreds of leaves) is exactly where the fix goes wrong and exactly what no test exercised. r5: budget the dropped line, make the fit robust to non-monotone fits (or restore monotonicity by construction), a RED witness on a real two-file outline at 515e8109, extend the label requirement to short scalars (coincidence carriage), and make `with-envelope` read `measured.elapsed_ms` before the MEM-003 landing nests it.
+
+## 05:42Z — Gene, verbatim: "7890 was not running, >== wait, does that mean cclsp is down? if it is needed, it's not fair that we didn't start it. Not sure I'm a big fan of cclsp anymore, but if it provides value, and does things we can't, and could give us wins in squares that matter, then let's keep it running! (Until/unless we've proven juice isn't worth the squeeze)"
+
+Finding, verified: 127.0.0.1:7890 IS listening — it is the `surgeon` seat's provider (clojure-lsp owned by user surgeon, up 1,821,721 s ≈ 21 days, config under /home/surgeon). This seat never had a provider of its own (no cclsp.json under ~/.local/state/clj-surgeon; `make cclsp-start` needs the sibling repo cclsp-structural-results, absent here), so every cohort server this seat started ran with prepare-change advertised and its provider absent — E6-Q2's five `semantic-provider-unavailable` refusals were charged to the tool for a provider we never started. Gene's fairness point holds. Corrections: (1) the E6-Q2 action-cost figure for the mandated arm is overstated by those five refused calls (correctness unaffected: 6/6 either way); (2) a forge-owned cclsp is being set up on 8140 (Sonnet); (3) from here every cohort with a tool arm asserts the seat's provider live before arm 1, and a tool arm that hits `semantic-provider-unavailable` is VOID, not scored — written into the E-SCALE-WALL pre-registration and the feature_thread adoption cohort; (4) the standing O2 finding (do not advertise a verb whose provider is down) is the catalog-side ratchet. Gene's rule adopted: keep cclsp running; the cohort that decides "juice vs squeeze" is pre-registered, never decided by absence.
+
+## 05:42Z — the seat cannot start its own cclsp: the sibling repo is not at github.com/realgenekim (404) and `make cclsp-start` is macOS launchd-only; filed inb-41c1cc; mayor asked for the repo's location
+
+The surgeon seat runs clojure-lsp directly on this Linux box (user surgeon, 7890, 21 days up), so a Linux path exists in practice but not in the Makefile. Until the repo location and a Linux launcher exist, the fairness rule stands the other way round: tool arms never pay for an absent provider (void, re-run) and the catalog does not advertise prepare-change without one.
+
+## 05:45Z — mayor URGENT (Gene, verbatim: "I notice anvil is nearing 98% context; maybe one thing you can do is tell it to compact as it nears 50% context window, but before it does, get a "resume here" prompt, and you feed it after compcation -- or use the slash compact command to thread it into it?")
+
+Done before this entry: the full resume note pushed (89e8dadc), the post-compaction prompt delivered to Gene in chat, and now the Memento pointer moved to LINE 1 of CLAUDE.md on MCP/main. The seat cannot run /compact itself and cannot measure its own context; the pulse line now carries `ctx=unmeasured-by-seat` rather than a guessed number, and the standing change is adopted: refresh the note and ask Gene to compact at the next lane boundary whenever the mayor's meter shows under 40% remaining. Eight agents in flight; their outputs are on branches and in verdict files, so a compaction loses the brief, not the work — which is why the note carries every brief.
+
+## 05:45Z — FAN scorer LANDED on MCP/main (f2fa8be9, Sol r5 GO) — the second landing beyond the six-lane integration
+
+Five rounds for a scorer: each fix closed the reviewer's attack and left the same attack one layer down until r4 moved the trust root (object store, content-addressed) and r5 closed the last PATH-resolved input. Apparatus reviewed to the product's standard because it graded seven published cohorts, and the retroactive check passed: no published verdict moved.
+
+## 05:48Z — mayor's effort-level guidance, accepted as written (Gene verbatim: "also turned down fable 5.1 thinking to medium -- i've heard that it's actually very, very good -- ask good." and, of the mayor's framing, "yes, relay that to the seat -- amazing")
+
+Medium for the routing loop; step up at the adjudication moments the mayor named — composing a conflict resolution where intent decides the merge, issuing or overturning a GO/NO-GO, any mutation of shared state no reviewer sees afterwards. I add one to the list: writing a brief a builder will execute unread against a data-mutating path. Tonight's first post-compaction moment of that kind was the Makefile .PHONY union in the scorer landing (trivial: a set union, both sides kept). Not measured, per the mayor's reasoning: a quality delta smaller than the +6.2 judge drift on identical bytes is unverifiable; action count and wall would carry any verdict.
+
+## 05:49Z — census r19 (Opus, Sol's filter refused): NO-GO, two blocking — the same two promises, one door over
+
+Round 18 bounded strings; round 19's reviewer typed a colon. `parse-val` mints keywords and read-string forms from CLI text, the bound walks strings only, so a 10,001-character keyword rides through both launchers unmarked (20,287 B). The second: the containment fence fails open and the CLI reads a source outside every named tree. Lesson for the r20 brief: the bound must be over the VALUE as printed, not over one type inside it — bound at the print boundary (`pr-str` then bound), and the fence must be a typed refusal before any read, witnessed through the production path. The reviewer also found the fixture dir pre-populated by an earlier run (05:18Z) and discarded it — round 20's reviewer gets a directory nobody has written to.
+## 05:53Z — usage watch: collector TIMED OUT at 120 s (exit 143, load 6.73); no figures — leftover collector process killed; rerun next watch. (Pushed to MCP/main: main is frozen.)
+
+## 05:53Z — q5z r15 (Sol): GO-WITH-FIX; trunk scorer self-tests green on 804febcb (make fanout-selftests EXIT 0)
+
+Round 14 closed toString for "other" objects by never calling it; round 15's reviewer made a Number whose toString throws — `number?` was the allowlist's hole. Same lesson as census r19 one lane over: an allowlist by TYPE admits every subtype; the bound has to sit at the print boundary over the bytes produced, with a guard around the call itself. Round 16 building; GO-WITH-FIX is not GO.
+
+## 06:10Z — feature_thread verb BUILT (bridge/feature-thread-verb @ 02e823e7); Sol round-one review launched (inb-cc9a4a)
+
+Gene's five-searches request, three seats' convergent design, one builder: a verb that answers "where does feature X live, across Clojure and JavaScript" in one call, with bodies, ranges, sha256 per leg, an insertion anchor, and the rules row. The named test case: formatDraft comes back COMPLETE 5 of 5 at 15,400 bytes in 247 ms; the human transcript took six read rounds to reach the same five owners. The meter that matters is still unmeasured: tool calls to a gate-green edit, the adoption cohort, after the review. Two things I want the reviewer to hit: the route leg for an assembled route (routes.clj:2149 by "route-assembled" evidence) is where a FALSE leg would come from, and the stale pre-image sentence in the receipt is a printed instruction, not a control. Note for the record: the branch is one 16,027-line commit — no RED/GREEN pairs — so the review carries the whole burden of proof; the ratchet witnesses are inside it (17 deftests / 413 assertions for the new namespace).
+
+## 06:20Z — q5z r16 built (51da9446); Sol r16 review launched
+
+The builder found a defect inside its own fix — a `future` on the non-daemon send-off pool kept the JVM alive after a looping toString — and a class inside the marker rule: a forwarding rule too narrow does not false-alarm, it silently ADDS a kind to the enumeration (139 → 140) with nothing in unscannable-sites. That second one is the enumerating-witness rule (inb-62a674) seen from the other side: the enumeration must refuse to change silently. Asked the reviewer to rule on it, and on the line-regex site discovery the builder reported and left.
+
+## 06:22Z — tmp-leak ratchet BUILT (09ebaade); Sol r1 review launched — and two facts that void part of last night's seat-level ratchet
+
+The builder found that babashka's native image ignores JAVA_TOOL_OPTIONS and TMPDIR entirely, and that a runtime System/setProperty of java.io.tmpdir does not reach Files/createTempDirectory. So the seat-level guard I installed at 05:0xZ (~/bin/suite-run exporting TMPDIR + JAVA_TOOL_OPTIONS) protects `clojure -M` but NOT `bb test/run_all.clj` — every bb suite I ran through it tonight still wrote to /tmp. Verified the corollary the hard way: the builder's first witness false-greened while 36,982 entries leaked. The repo ratchet closes it by re-exec with a literal -D; the seat guard needs the same (a bb wrapper that injects -Djava.io.tmpdir). Filed on the same inbox item.
+
+## 06:32Z — the tweezer, foreground (Gene: "a potential 10 bagger if we're right… replay the CC repo request, create in nREPL the tool, tweezer it until it's perfect, watcher confirms")
+
+Provenance first: the five-searches request was in social-media-writer (codex session 01a0678b, 2026-09-03T06:53Z), not curtaincall; the fixture on the branch reproduces that tree at 2df99c98 and carries the real before/after edit. Baseline from the transcript, counted by script, never by memory: request (event 136) to first patch (event 250) = 17 tool calls carrying 29 sed ranges and 9 rg; request to Gene's qq = 11 calls; request to the end of the feature (event 283) = 21 calls + 1 patch. nREPL on the branch worktree (port 43791, ~/bin/nrepl-eval), ~/bin/call-watcher counts my own calls from the session transcript.
+
+First live call: 524 ms, COMPLETE 5 of 5. Then the honest test — overlay the receipt on the REAL edit's hunks: five of six sites inside a leg with an anchor; the sixth (transform.clj @131, where the agent wrote the new helper) was not: the seed "mechanical-format" named the helper at L81 and the verb used seeds only as search alternates. Two one-line tweezer edits (legs ≥ 5; :def knows defn) → implementation leg FOUND L81-132, anchor after:L132, COMPLETE 6 of 6, 381 ms. Costs found: at the 16 KB default the ladder elided four bodies including the JS function the agent had read four times; the registry append and the JS test append have ranges but no anchor; the Makefile verify targets cost the agent three calls. All four handed to a round-two builder as measured expected values (ad49908c is the tweezer commit). Next: the naive-reader probe on Sol and Opus with the receipt alone.
+## 06:34Z — q5z r16: Sol's filter refused the review (tenth filter refusal tonight, same class: hostile toString / daemon thread); Opus takes it with substituted paths.
+
+## 06:37Z — gate r4 built (72357b6c); Sol r4 review launched. Naive-reader probe (Opus) on the feature_thread receipt: seven calls still wanted
+
+The Opus reader, given only the receipt, answered Gene's parenthetical from the bodies alone (Format Draft is whole-document; mechanical-format already dequotes — so the new thing is SELECTION scope) and then listed seven calls it would still make. Overlaid on the real edit: two are round-two work (verify command, registry anchor); one is self-inflicted — the receipt's own assert line told it to re-hash six ranges, six calls the admit gate should absorb (addendum sent: "do NOT re-read; the gate checks the shas"); one is a rendering defect (budget=32768 used=40641 … COMPLETE read as an overrun; fix: name the governed number); and three are real and new — the SELECTION CONTRACT (the real agent posted {sync, selection{start,end}} to the SAME route; the handler's request keys and the JS precedent openTransformFromSelection L332 are what it read editor-commands.js four times for), the peer menu commands as siblings (adjacent-route-entry picked a positional neighbour), and negative evidence for a probed identifier ("dequote" absent must be SAID). Those three are round three; the round-two builder keeps its scope.
+## 06:39Z — MEM-003 r4 built (694f538d): the tag rides the value as a deftype, and the ratchet caught the trunk's own raw clock on the merge. Sol r4 review launched.
+## 06:43Z — Sol's filter refused three reviews in one heartbeat (feature_thread r1, tmp-leak r1, MEM-003 r4; refusals 11–13 tonight, all on chmod/escape/launder material); all three to Opus with substituted paths, named here per Gene's rule. Gate r4 is the only Sol review still alive.
+
+## 06:51Z — usage watch: collector TIMED OUT again at 120 s (rc 124, child killed with -k, load 8.80); no figures — the collector needs its own lane (a JVM start under load 7+ exceeds the watch's budget); filed on inb-9483a4's neighbour below. (Pushed to MCP/main: main is frozen.)
+
+## 06:51Z — study-ops O2 r5 built (972cf4c2); Sol r5 review launched. The composition question rides in the brief: does it still merge onto the MEM-003 landing at 694f538d.
+## 06:53Z — gate r4: Sol's filter refused (14th tonight); Opus fallback. Every review lane but O2 r5 is now on Opus — Sol's filter is tripping on the security-shaped material these lanes are made of (permissions, escapes, launders, enumerated refusals). Recorded as a class, not re-litigated per lane.
+
+## 07:05Z — feature_thread r1 (Opus): NO-GO, two blocking; and my tweezer commit left the tip RED
+
+The reviewer's B1 is the finding of the night for this verb: the lexer's "single failure mode is did not close, which is loud" covered one direction of the regex/division ambiguity; `return /[}]/` fails the other way, into a CLOSED wrong range with a hash on it — exactly the false green a pre-image is supposed to prevent. B2 is the completeness claim built on line-regex evidence: a comment mention counts. Both go to the round-two builder as RED→GREEN items with the rest of the findings.
+
+The one I own: ad49908c changed the refusal text and I did not run the narrow suite before pushing; test:388 asserted "exactly five" and the tip went red for an hour. The tweezer is for the DESIGN; the commit still needs its witness run, even for two lines. Ratchet in memory: no src push from the seat without the affected test namespace run first.
+
+## 07:09Z — q5z r16 (Opus): GO-WITH-FIX; round 17 launched. The lesson worth keeping: defence in depth hides a missing witness
+
+Reverting the allowlist alone left the witness green, because the guard and the time budget caught the same attack one layer down. Three layers, one witness, and the witness proved the OUTCOME, never any layer's own contract. Each layer asserts its own contract, or the day one layer is removed nobody learns it. Same shape as the census lane's "an allowlist by type admits every subtype" — the rule is now written into the intent text on the branch.
+
+## 07:10Z — tmp-leak r1 (Opus): NO-GO — the ratchet built to make the mistake impossible fails OPEN on the unknown case
+
+Two lessons the reviewer put words to. "Dead code that reads as defence-in-depth is worse than no fallback, because it is why nobody noticed the check is single-sourced" — the /proc/mounts branch could never run, and its presence made the findmnt dependency invisible. And "source text is not execution" from this seat's own memory, found again: the heap-config gate asserts the printed make line, while the re-exec silently ran the 512 MB suite at 7.8 GB. Round two: fail closed on unknown, literal prefix refusal (the seat guard already has it), streaming fallback, refusal-branch witnesses, root-path sentinel, TMPDIR forwarded, JVM flags forwarded and asserted by execution, all five runners gated.
+
+## 07:13Z — census r20 built (0a91e720): a reader-eval hole found on the way to closing the bound
+
+The round-19 finding was "the bound walks strings only; parse-val mints keywords". Closing it, the builder asked what else parse-val mints and found clojure.core/read-string with *read-eval* on: `:doors '[#=(println "PWNED")]'` printed PWNED while the op was refusing the argument. Arbitrary code from argv, in a public CLI, for as long as parse-val has existed. Now edn/read-string, witnessed. Twenty rounds of bounding refusal TEXT and the sharpest hole was in how the text was READ — which is the enumerating-witness rule again from a new side: bound the value as printed, and read the value as data. Sol r21 launched (Sol first per the rule; four consecutive census briefs were filter-refused — if this one is too, Opus, and the class is recorded).
+
+## 07:16Z — gate r4 (Opus): NO-GO — the invented budget came back one field over
+
+Round three deleted the 1,024-char next_call ceiling as an invented second budget. Round four reintroduced the same mistake for the fact section: half the public budget, "headroom" for lines that were never contested, and a 20-file preview lost 68 leaves from its text while its structured face was under half the real budget. The reviewer's sentence for the record: "the suite is green because every fixture produces a receipt below the bound — the witness has never once been handed an input where the bound it polices actually bites." Fixtures must sit AT the ceiling (the seat's own rule), and this lane had none above it for two rounds. Round five: one budget, a fixed head of never-elided fields, a fixture above the bound, the timing fixture to a battery.
+
+## 07:17Z — MEM-003 r4 (Opus): NO-GO — "the type is opaque, the namespace is not"
+
+Rung 5 made the value un-launderable by ordinary code and then exported a public verb that launders it. The scanner enumerates laundering verbs by name; round three already said a name the scanner does not know is a hole in every scanner at once, and round four wrote such a name into src twice. Same shape as the census bound (a type allowlist admits subtypes) and the gate's fixtures (never above the bound): a control defined by a list is only as complete as the list, and the list is written by the same hand that writes the code. Round five moves the control to the boundary — a number comes out of a Reading in exactly one place — and derives the clock class from the JDK's types.
+## 07:23Z — census r21: Sol's filter refused (15th tonight; five consecutive on this lane). Opus fallback. Proposal for Gene/mayor, not acted on: route census and gate reviews to Opus FIRST — five refusals at ~150k tokens each is a measured cost with zero return, and the rule's intent (independent Sol review) is unmet either way.
+
+## 07:29Z — feature_thread r2 built (9139b2c5): six of six real edit sites covered; the replay moves to the REAL repo
+
+social-media-writer is reachable from this seat; cloned at 2df99c98 (the tree the transcript's agent edited). The replay arms, pre-registered here: N = native agent (Sol, no feature_thread) given Gene's request text; T1 = the same with the feature_thread receipt in the prompt (the mandated first call, counted as 1); T2 = the MCP server attached with an instruction to call feature_thread first. Meter: TOOL CALLS to a gate-green edit — gate = `make runtests-unit` + `make test-js` green in the clone, plus the edit landing on the six sites with the selection contract ({sync, selection{start,end}} to the same route). Baseline from the transcript: 17 calls to the first patch, 21 + 1 patch to done. Prediction on record: N ≈ 15–20, T1 ≈ 3–5 (write, verify, maybe one read), T2 ≈ T1 + 1. Withdrawal: if T1 needs ≥ 8 calls the receipt is not an edit basis and the verb goes back to the tweezer.
+## 07:31Z — REPLAY LAUNCHED 07:30Z: arm N (native, Sol, /home/forge/tmp/replay/smw-N) and arm T1 (receipt-in-prompt, smw-T1) on social-media-writer @ 2df99c98; receipt computed on the real tree in 1.27 s, COMPLETE 6 of 6, 176 files scanned, 24,420 B text, governance anchors all parsed (the real registry is valid EDN). Counter: ~/bin/codex-call-count over the codex logs. Gate baseline (make test-js + make runtests-unit at 2df99c98) running in the background.
+
+## 07:32Z — replay, pre-registration addendum BEFORE results: the housekeeping bucket
+
+Both arms open with the repo's own ceremony (CLAUDE.md in full, `bd prime`, `bd create`, `bd update --claim`) — a fixed cost the repo imposes on every task, identical in both arms, and nothing to do with the feature. Counts are reported two ways: RAW (every exec/patch block, the meter as pre-registered) and NET of housekeeping (calls whose command touches only CLAUDE.md/AGENTS.md/bd). The bucket is named now, at 5 (T1) and 8 (N) calls in, so it cannot be invented after the fact to flatter either arm. Live figures at 07:32Z from ~/bin/codex-call-count: N 8 calls (6 sed ranges, 3 rg inside them — reading editor-commands.js 1-470, transform.clj 1-180, registry.edn 1-120); T1 5 calls, ZERO source reads so far.
+## 07:33Z — O2 r5 (Sol): NO-GO (undeclared omissions remain; an envelope-key collision drives the fit to 81,861 B against the 32,768 cap; no longer composes onto the trunk or the MEM-003 landing). feature_thread r3: Sol's filter refused (16th tonight); Opus fallback. Gate baseline on the real repo at 2df99c98: test-js green, runtests-unit green — the replay's gate is real.
+
+## 07:35Z — replay interim, from the codex ROLLOUT files (~/bin/rollout-calls), not the console log
+
+The console log undercounted (it prints one `exec` per block and no patch blocks); the rollout under ~/.codex/sessions records every function call, so it is the meter. Interim at 07:35Z: **T1 (receipt) — first patch at call 7**, preceded by CLAUDE.md, a tool-list probe, `bd prime`, `bd search`, `bd create`, `bd claim` (housekeeping) with ONE small read batched inside them (`rg selectionStart`, `sed -n '40,90p'` — the selection precedent, exactly the round-three gap both naive readers named); then `git diff --check`, `make runtests-unit`, a second patch (the JS test), `make test-js`, `make runtests-once` — 16 calls so far, gates running. **N (native) — 13 calls, all reads, no patch yet**: editor-commands.js 1-470, transform.clj 1-180, registry.edn twice, Makefile, datastar-runtime.js twice, test greps. Same shape as the 2026-09-03 transcript (17 reads to the first patch).
+## 07:44Z — REPLAY RESULT (arms finished 07:4xZ; table in docs/observations/2026-09-04-feature-thread-replay-result.md): discovery reads before the first patch 10 → 2 (5×); substantive calls 21 → 9 (2.2×); raw 32 → 24 (1.3×); both arms green by their own report, independent gate re-run in progress; the seat's pre-registered predictions MISSED on totals and HIT on calls-before-write; the withdrawal line as written is crossed by the letter and not by the mechanism — recorded both ways. Fleet poll (Sol + Opus) launched on the result.
+## 07:45Z — replay gates re-run independently in both clones: N and T1 both green (test-js exit 0, runtests-unit exit 0). The replay is CORRECT in both arms; the meter stands as tabled.
+## 07:47Z — fleet poll (Opus): four bucket moves conceded (discovery 5× → 2.5–3.3× by classifying calls by what they read; T1 is an oracle arm); the Amdahl ceiling: reads are 31% of raw, so no receipt reaches 2× raw on this harness; 10× needs the admit-gate write and a ceremony-free denominator. Negative controls X (stale receipt) and P (placebo) launched 07:46Z on fresh clones. Sol's poll pending.
+## 07:47Z — fleet poll (Sol) filed; both polls converge: the ≥8 withdrawal line fired, 'edit basis' withdrawn for this run, 'discovery accelerator' stands (1.3× raw, ~2.2× task-core, 2.5–5× discovery by classification); 10× is a harness claim (atomic admit write + no ceremony). Placebo-building found the verb COMPLETE only on formatDraft in the real repo — recall on other features is 2–3 of 5 → round-three tweezer item.
+
+## 07:49Z — census r21 (Opus): NO-GO — the reader-eval class survived one frame over, and a sabotage receipt was fiction
+
+Round 20 found read-string with reader-eval in parse-val and fixed parse-val; the brief's own sweep had a second hit, ls-tree's deps.edn reader, and the fix stopped at the first. A hostile deps.edn under a caller-named :dir executed silently with a green receipt — worse than the one fixed, which at least printed a refusal. Round 22's ratchet is the class: a src-scanning witness that fails on ANY bare read-string outside an empty allow-list. The second lesson is about the record: the round-20 report's "sabotage 118/28" reproduces as 0 failures — the leaf bound pins nothing and the number was never run. Every sabotage receipt is verified before it is written, and the r20 record is corrected in the reviewer's words.
+## 07:51Z — usage watch: collector TIMED OUT at 120 s (rc 124, third consecutive, load 10.9); no figures — ledger inb-65c941 (warm-path collector). (Pushed to MCP/main: main is frozen.)
+## 08:03Z — negative controls landed: P (placebo) 31 raw / 10 reads ≈ N — content, not priming; X (stale ranges+shas, bodies intact) 25 raw / 1 read, correct sites — on a patch harness the BODIES carry the value and ranges/shas carry none until the admit gate binds on them; the agent checked the shas, saw the mismatch, and wrote from the bodies anyway. Gates re-running independently.
+## 08:04Z — X and P gates re-run independently: JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0  — all four arms verified green.
+## 08:04Z — Gene report written (docs/observations/2026-09-04-gene-report-0815z.md); replicates N2 + T1b launched for the variance floor.
+## 08:13Z — replicate T1b: 22 raw, 2 reads before the first patch, correct sites — reproduces T1 (24/2). N2 at 33 raw and 16 reads with no patch yet.
+## 08:13Z — q5z r17: Sol's filter refused (17th tonight); Opus fallback. T1b gates verified green (five arms verified so far).
+## 08:15Z — MEM-003 r5 built (dc6ee93f): the door is closed at the namespace — no public var of measured yields a number, proven by calling every one of them; the clock class is derived from the JDK, not typed. Sol r5 review launched. Builder reports ~6,100 leaked suite temp dirs under /var/tmp/forge (disk, not RAM; mine from the replay suites + the JVM suites): sweep after the arms finish, own entries only.
+## 08:20Z — tmp-leak r2 built (86bd9de3); Sol r2 review launched. Fact worth keeping: on procfs slurp, line-seq and readAllBytes ALL throw on both runtimes; only java.nio Files/lines reads /proc/mounts — the round-one reviewer's suggested repair would have been dead code too. Also: make test cannot go green on this seat at the trunk either (bench/run_clean_claude.sh wants gtimeout) — a pre-existing Linux/macOS name defect, filed below.
+## 08:21Z — replicate N2: 50 raw, 13 reads before the first patch, correct sites (+ docs); native spread 32–50 vs receipt 22–24 at n=2; raw ratio 1.8× at n=2. Gates re-running.
+## 08:21Z — N2 gates verified: JS_EXIT=0 CLJ_EXIT=0  — six arms, all verified green.
+## 08:23Z — arms N3 + T1c (third replicate pair) launched 08:22Z; T2 (MCP-ATTACHED — the tool arm; the agent calls feature_thread itself through a Surgeon server from the branch at 9139b2c5 on :8165, conventions file installed in the clone) launched 08:22Z; its first recorded call IS mcp__clj_surgeon__feature_thread. /var/tmp/forge swept again (3233 → 2935).
+## 08:24Z — MEM-003 r5: Sol's filter refused (18th tonight; third consecutive on this lane); Opus fallback.
+## 08:33Z — tmp-leak r2: Sol's filter refused (19th tonight); Opus fallback. Replicates N3 (33 raw) and T1c (22 raw) finished; gates re-running; T2 (MCP-attached) at 16 calls, still running.
+## 08:34Z — N3 and T1c gates verified (=== N3 test-js JS_EXIT=0 === N3 runtests-unit CLJ_EXIT=0 === T1c test-js JS_EXIT=0 === T1c runtests-unit CLJ_EXIT=0 ): eight arms, all verified green. At n=3 per arm: native 32/50/33 vs receipt 24/22/22 raw; reads before the first patch 10/13/12 vs 2/2/0.
+## 08:34Z — one code rule over all eight rollouts: raw 1.7×, task-core 2.2×, reads 3.9× at n=3 (before-first-patch reads 8.8×); ceremony is 55% of the receipt arms' raw calls — the harness cap, measured.
+## 08:35Z — arm C (ceremony-free) launched as a pair: NC (native) and T1C (receipt) on clones whose CLAUDE.md is four lines with no beads mandate, and the prompt forbids issue-tracker entries. Pre-registered (Opus's line): ceremony 8–12 → ≤ 2; raw ratio moves 1.7× → 2×+; if the ratio moves < 0.3, ceremony was never the diluter.
+
+## 08:39Z — gate r5 built (d8cb9a04); Sol r5 review launched. Two things worth the log
+
+The builder's first fix for the unbounded hashes map replaced a rollback-failure kind with a size complaint whose remedy was "use fewer files" — and the battery it had just built caught it (FAIL n=64, kind masked). Reduce, never relabel: an oversize receipt loses bulk largest-first with every drop named, and its kind is untouchable. Second: a sabotage patch that fails to apply looks exactly like a witness that does not bite — the builder's own first 139 control ran green on a no-op; every sabotage figure is executed and its patch confirmed applied. Third: every branch tonight appends to ONE long .PHONY line and every landing conflicts there — filed as a repo ratchet (one target per .PHONY line, appends never collide).
+
+## 08:41Z — feature_thread r3 and q5z r17 (both Opus): NO-GO, both on the same sentence as the night
+
+feature_thread: round two closed every round-one finding and the reviewer found the next door in each class — the automatic leg searches a walk that was bounded before the leg existed (a false COMPLETE with a false reason and a search line never run), a slash inside a regex character class, a (comment …) form. "The search's scope and the hit's lexical context are decided by two different pieces of code, and neither tells the receipt when it is out of its depth." q5z: the constructor detector is the last text regex in the guard, and one docstring turns the guard off; string literals mint where keyword literals are caught. Both lanes: a control is only as complete as the list it was written from. Round 4 (feature_thread, with the round-three spec) and round 18 (q5z) building. The .nrepl-port ruling stands for every harness: launch with :nrepl-port :none; my T2 server did.
+## 08:43Z — T2 (MCP-attached): 31 raw, 6 reads, 10 patches, first call feature_thread via MCP; T1C (ceremony-free receipt): 27 raw, 6 reads; NC running with ceremony=1. Round-four addendum sent: after_context per anchor (the tool arm re-read the lines after each anchor to write its patch).
+## 08:43Z — T2 and T1C gates verified: === T2 test-js JS_EXIT=0 === T2 runtests-unit CLJ_EXIT=0 === T1C test-js JS_EXIT=0 === T1C runtests-unit CLJ_EXIT=0 
+## 08:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, fourth consecutive, load 8.8); no figures — ledger inb-65c941. (Pushed to MCP/main: main is frozen.)
+
+## 08:52Z — tmp-leak r2 (Opus): GO-WITH-FIX — the first lane to close a whole review by execution, and the reviewer corrected its own round-one advice
+
+Every round-one closure was proven by running it, six sabotaged closures went red with named diagnostics, and the reviewer said in writing that its own suggested repair (line-seq over /proc/mounts) would have been dead code too. The one fix: a witness seam that can hand the gate a forged filesystem table and turn a refusal into a run — "a gate a caller can turn off", the seat's own scar. Round 3 is a fix round; the lane lands after it with the one-line .PHONY composition.
+## 08:53Z — ceremony-free pair: NC 38 raw / 16 reads, T1C 27 / 6 — the pre-registered withdrawal line fired: ceremony was NOT the diluter (native's total did not fall; the receipt arm's rose). The 'count ceremony as fixed cost' framing is withdrawn; the floor is the write path. Untimed usage collector finished (EXIT 0): figures logged below verbatim from its JSON.
+## 08:54Z — usage watch (untimed collector, EXIT 0, window since 2026-08-30T15:00Z until 2026-09-04T08:50Z, root ~/.local/state/clj-surgeon/telemetry): mcp_tool_calls 148, ok 100, refused 48, sessions 33, top verbs inspect_clojure 148 (only verb seen); providers: codex clj_surgeon_calls 752 / claude 247 (session-log mentions, not MCP calls); cclsp_mcp_calls 0. NC gates: JS_EXIT=0 CLJ_EXIT=0  (eleven arms verified).
+## 08:54Z — usage watch refusal profile (verbatim error_types): no-clojure-files 11, invalid-grep-pattern 7, study-tree-too-large 6, study-output-limit 4, inspect-output-limit 3, invalid-relative-directory-path 3, invalid-format 2, invalid-mcp-request 2, invalid-ns-grep-pattern 2, invalid-parameter-type 2, unknown-parameter 2, directory-not-found 1, invalid-max-files 1, invalid-study-limit 1, path-not-directory 1 → friction ledger inb-5f5edd (three ratchet candidates named).
+
+## 10:13Z — OUTAGE: the seat's Claude session limit hit (HTTP 429, "resets 10am UTC") ~09:3xZ — six subagents killed mid-flight; relaunched 10:03Z from their local commits
+
+Killed: feature_thread r4 builder (at B2′), q5z r18 builder (at the plants), tmp-leak r3 fix round (committing the RED), study-ops r6 builder (GREEN for §3), census r22 builder (proving sabotages), MEM-003 r5 Opus review (nothing written), plus two stale wait-loops. What survived: every builder's LOCAL commits in its worktree (thread 0e5effc0, q5z16 1f92608e, tmpleak 0b4402af, census20 56ae72de, study b410e31b — all ahead of their pushed tips) and their dirty files. Relaunch protocol: each resumed builder reads `git log <pushed-tip>..HEAD` + `git status` first, never discards, and now COMMITS AND PUSHES AFTER EACH ITEM; reviewers write their verdict files INCREMENTALLY. Gate r5: Sol's filter refused (20th tonight) → Opus. The heartbeat was silent through the outage (the main loop was rate-limited too); the nREPL background task on 43791 was killed with it. Usage watch at 10:0xZ: collector timed out again (fifth). /var/tmp/forge swept 4026 → 19 (the replay suites' leaks, all older than an hour).
+## 10:23Z — Gene report 1015Z written and pasted in chat.
+
+## 10:42Z — Captain's log, the night of the tweezer (Gene: "Captain log")
+
+Gene went to sleep with one instruction: take the idea that a single question to the MCP server could replace a chain of greps and reads, build it in the nREPL, tweezer it on a real request, and have a watcher confirm the gain. He named the stakes — a potential ten-bagger — and the meter — tool calls to a green edit.
+
+**What was asked.** Replay the Dequote/Format request from the night before, the one where an agent had asked five questions across JavaScript and Clojure and then read the same file at four different line ranges to assemble the answer. Build the verb that answers "where does this feature live, in every language, with everything an edit needs" in one call. Measure it against native with an independent counter.
+
+**What I did.** The verb, feature_thread, was built by a builder from a three-seat design and tweezered from the nREPL against the real edit. Two one-line edits found the sixth leg: the seed named the helper the agent later extended, and the verb had only used seeds as search alternates. Round two closed every round-one review finding with fourteen witnesses that go red under sabotage. Then the replay, on the real repository at the commit the transcript's agent edited: eleven arms, each on its own clone, each counted from the harness's rollout file by one rule, each arm's gates re-run by me before a number was written.
+
+**The numbers.** Native, three runs: 32, 50, 33 raw calls; 10, 13, 12 source reads before the first patch; 9.4, 11.6, 8.0 minutes. With the receipt: 24, 22, 22 calls; 2, 2, 0 reads; 6.3, 6.7, 7.0 minutes. The intervals do not overlap. A placebo receipt for an unrelated feature behaved like native, so the effect is content, not priming. A stale receipt with every range shifted and every hash altered still landed on the correct sites, because a patch tool anchors on context, so on this harness the bodies carry the value and the hashes carry none until the write goes through the gate that checks them. The agent calling the verb itself through MCP halved its reads and then re-read the lines after each anchor, because a patch needs post-context.
+
+**What was withdrawn, in writing.** My pre-registered line said the receipt is an edit basis if the receipt arm needs fewer than eight calls. It needed twenty-two. The claim is retired; the receipt is a discovery accelerator, 8.8× on reads before the first patch, 2.2× on the task's substantive calls, 1.7× raw, 1.45× on wall. Two fleet readers, asked independently, converged on why the ten-bagger is not a receipt claim: reads are a third of native's calls, so no read-side document passes 1.5× raw. The path to ten is the write as one call — patch, verify, commit — and a harness that does not charge eight calls of repository ceremony per task. The ceremony claim itself was then withdrawn when a ceremony-free pair moved the ratio the wrong way.
+
+**The lanes.** Six other branches ran their review rounds through the night, all on the same sentence: a control defined by a list is only as complete as the list. Census found a reader-eval hole, fixed one site, and was told by the next reviewer that its own sweep had returned a second. The admit gate deleted an invented budget for one field and reintroduced it for another. The tmp-leak ratchet, built to make a mistake impossible, failed open on the unknown case with a dead fallback beside it. MEM-003 made its clock reading an opaque type and exported a public verb that unwrapped it. q5z's guard could be switched off by a docstring. Each round moved the control up a rung — reader over regex, reflection over a name list, derived class over typed spellings — and each is one round from landing. The fan-out scorer did land.
+
+**What broke.** Sol's content filter refused twenty reviews, almost every one on the security-shaped material these lanes are made of; nearly all reviews ran on Opus. At 09:30Z the seat's own session limit killed six agents mid-flight and silenced the heartbeats until the window reset at 10:00Z. Every builder's local commits survived; the one reviewer that had written nothing lost an hour. Two rules entered every brief afterwards: builders push after every item, reviewers write incrementally. My own two-line tweezer commit left a branch red for an hour because I pushed without running its witness; that is in memory now.
+
+**Why it matters.** The question Gene asked at the start — what is the one question that gives all the answers — has a measured answer tonight, and it is smaller and more precise than the hope: the receipt removes the discovery, and discovery was a third of the work. The rest of the ten is in the harness, and the harness is ours to change.
+## 10:47Z — MEM-003 r5 (Opus): NO-GO — the sanctioned door is reachable as interop (._launder) and by ns-resolve; the requirement text encoded the hole ('public var', 'measured/ spelling'). Round 6: amend the intent first, derive the pattern from the namespace and the protocol's own interface, derive the clock class from the JDK including constructors.
+## 10:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, sixth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
+## 10:53Z — q5z r18 (Sol, accepted this time): NO-GO on one finding — the kind in the constructor's SECOND parameter switches the scan off; the reader fix recognised shapes, and a shape list is a list. Round 19: the scan stops depending on shape recognition at all.
+## 10:54Z — tmp-leak r3 built (df5c568e); short executed Opus verification launched before landing (GO-WITH-FIX is not GO until the witness is green at the tip on the current trunk). q5z r19 fix round building.
+## 10:59Z — gate r5 (Opus): NO-GO on one — a caller-supplied field echoed verbatim into the receipt is the oversize, and the reduction's last branch had no answer for 'nothing left to drop'. Third round where the universal witness proved one skeleton; round six enumerates every caller-influenced field. Everything else from round four held under attack.
+## 11:02Z — census r22 built (dbc90692): the resumed builder found the killed session had shipped a witness that never compiled — the blocking witnesses had run in no lane. A witness that cannot load is worse than none: the exit code is about the loader and reads as if it were about the subject. Sol r23 review launched.
+## 11:07Z — tmp-leak r3 verification (Opus): GO-WITH-FIX — one exact-match $(filter) misses subpaths; both witnesses were blind because their loops never supplied one (arm 11's case pattern already listed /tmp/* — the assertion expected inputs the loop never gave it). Sonnet fix round; then LAND.
+## 11:13Z — census r23: Sol's filter refused (21st tonight; seven consecutive on this lane). Opus. The proposal to route census/gate reviews to Opus first stands with Gene.
+
+## 11:30Z — tmp-leak ratchet LANDED on MCP/main (d0b4e1ca) — Gene's "make it impossible to make this mistake again", four rounds later
+
+Round one fell open on the unknown case with a dead fallback beside it; round two was closed by execution; round three found the one exact-match filter; round four fixed it with both witnesses red first. Landed after the ratchet gate and the bb suite ran green on the merged tree, not on the branch. What the repo now refuses: any suite whose temp base is RAM by name, by fstype, or by "cannot tell"; any leftover entry; any subprocess escape; any forged mounts table. The seat guard covered clojure; this covers babashka too, which the seat guard never could.
+## 11:33Z — trunk mcp-test on the tmp-leak landing (d0b4e1ca): 712/8437/0. q5z r19: Sol's filter refused (22nd); Opus.
+## 11:36Z — MEM-003 r6 built (69e58b41): the requirement was amended before any witness, and the spelling sets are DERIVED now (11 escape routes, 159 clock spellings) with a measured floor for babashka's incomplete reflection. Two-file conflict with the tmp-leak landing → merge step before the review. Pre-existing: make memory-red's default mode asserts an old defect still reproduces and reads red — filed.
+
+## 12:00Z — alias_migration (q5z) LANDED on MCP/main (44e70af5) after nineteen rounds — and the pin fired on the composed tree
+
+The reviewer's GO was on the branch against a trunk that had moved; landing it composed four other landings, and the frozen enumeration went 139 → 143: four kinds the trunk publishes that the branch never met. That is the ratchet from round sixteen ("nothing asserted the count or the set, so it changed in silence") catching a change at the exact moment it should — a composition, not a defect. Re-pinned with the reason in the merge-fix; the lane green on the landed tree before the push. Fourth landing tonight: integration, scorer, tmp-leak, alias_migration. feature_thread r4 (bb3b6360) and the MEM-003 trunk merge (432268cf) both to review.
+## 12:00Z — census r23 (Opus): GO-WITH-FIX — the reader-eval class closed for real (a parsed ratchet with an empty, asserted allow-list); the remaining hole is configuration, not code: a build file's :paths can point ls-tree at any absolute tree. Round 24 fences it and widens the oracle; then census lands.
+
+## 12:02Z — T3 launched (the round-four receipt on the real repo) — with a finding before the arm even ran
+
+The round-four verb on social-media-writer: COMPLETE (6 of 6) in 1.86 s over 240 files, after_context on every leg, request_contract {handler reads sync, JS posts sync, agree}, verify row, absent []. But the PEERS — the selection commands the naive readers and every receipt arm went back to read — were elided at the default budget AND at the 32,768 cap: the structured face is 31,338 B against the trunk's 32,640 hard cap that no budget_bytes raises, so edit-basis on a real repo cannot carry the peers at all. T3 therefore measures "r4 minus peers": after_context + request_contract. Filed as the first round-five item: either the peers ride as ranges + a refetch (cheap) with bodies only on request, or the structured face stops duplicating the text's bodies (text ⊇ structured cuts the other way: the structured face need not carry bodies the text carries). Pre-registered prediction for T3: reads before the first patch 0–1 (the selection precedent still costs one read without peers); raw ≤ 22.
+## 12:04Z — usage watch: collector TIMED OUT at 120 s (rc 124, seventh consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
+## 12:05Z — study-ops r6 (Sol): NO-GO — the declaration and the audit disagreed by construction (a pointer is not a value, but the substring test said it was); round 7 gives both sides one predicate and makes carriage a whole token at the leaf's own position. gate r6: Sol's filter refused (23rd); Opus.
+## 12:13Z — T3 (round-four receipt): 19 raw, ZERO source reads before the first patch (at call 5), one later read for the test-alias mapping, correct sites — the pre-registered edit-basis line for T3 is MET: the receipt closes discovery entirely; what is left is the write path (4 patches + 5 suite runs) and the repo ceremony. Gates re-running.
+## 12:13Z — T3 gates verified: JS_EXIT=0 CLJ_EXIT=0  (twelve arms verified green).
+## 12:23Z — T3b: 18 raw (T3 pair 19/18); MEM-003 r6: Sol's filter refused (24th); Opus.
+## 12:23Z — T3b gates verified (JS_EXIT=0 CLJ_EXIT=0 ); its one pre-write read was the peers the structured cap elided — round five's item, now measured twice (T3: 0 reads; T3b: 1, the peers). Thirteen arms verified green.
+## 12:24Z — round-five spec for feature_thread written from the T3 pair (peers under the cap; the structured face stops duplicating bodies; test-alias mapping; the digest sentence).
+## 12:34Z — gate r6 (Opus): GO-WITH-FIX — the blocker is closed; the two fixes are the round's own new fields lying about themselves (a fitting receipt that says it is over budget; a trim that trimmed nothing annotated as truncation) — 'the fourth round running in which the defect is a universal claim standing on a partial witness'. Round 7 fix; then the gate lands, and arm G can run.
+## 12:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, eighth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
+## 12:53Z — feature_thread r5 (Sol): NO-GO — the recall fix that made saveDraft COMPLETE was a string match on the handler's docstring; a route leg is a parsed route-table entry or it is a CANDIDATE. And a conventions file could name paths outside the workspace. Round 6 building with the round-five spec (peers under the cap; bodies out of the structured face).
+## 13:10Z — MEM-003 r6 (Opus): NO-GO — 'a derivation over names cannot see a call that names nothing.' Strings, positions, and the dot form with a package prefix all reach the number with the ratchet green. Round 7: three spellings per derived name, a floor manifest, calls not lines. The reviewer credited the one defence that held: the boundary function's behavioural witnesses caught a plant there; everything upstream is text-scan only.
+## 13:18Z — study-ops r7 built (f572e461); Sol r7 review launched. One item needs Gene: ls-tree's text output doubled and the 8 KB pass-line was replaced by a growth ratchet — a product change on the read-side square, flagged in the queue and the brief.
+## 13:35Z — gate r7 built (94e4a00c); Sol r7 review launched; it lands on GO. One thing to rule before landing: the fast suite now depends on a gitignored battery receipt and goes red on a fresh clone — the seat's own scar (ambient state is an invisible precondition) — asked of the reviewer explicitly.
+## 13:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, ninth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
+## 14:14Z — gate r7 (Sol): NO-GO on the precondition the seat had flagged (a fast gate red on a fresh clone) and on an order the witnesses never observed; round 8 makes the gate own its receipt and witnesses the order — then it lands. study-ops r7 (Sol): NO-GO — an unescaped dotted pointer lets two leaves share one line; a newline in a pointer breaks the single-line contract; round 8 escapes pointers RFC-6901 style.
+
+## 14:23Z feature_thread round six built; round-seven review and the T4 replay pair launched
+
+Round six (tip 529755f0) closed the round-five blockers: a route leg is a parsed route-table entry, never a
+docstring (saveDraft's real entry is routes.clj L2121; the fixture had blanked that range and was restored);
+escaping conventions globs and scope.paths with .. are typed refusals naming the spelling; the structured face
+drops the bodies the text carries (30,713 -> 15,183 B on the fixture); peers ride as rows (range, sha256,
+anchor, refetch) by default with bodies on peer_bodies or when room remains; runs_namespace in every verify
+row. Sol round-seven review launched on the ft1-wt clone at 529755f0 with the round-five verdict and the
+round-six claims as the attack list (report /home/forge/tmp/sol/ft7-sol-review.md).
+
+T4 pre-registered arm launched (two replicates, smw-T4 and smw-T4b, fresh clones at 2df99c98): the round-six
+receipt computed on the REAL repo at the default budget. Real-repo figures: text 28,449 B, structured 15,962 B,
+peers present as rows (openTransformFromSelection, expound, bulletize) with bodies elided under the default
+28,672 text budget; at 32,768 nothing is elided (text 30,853, structured 15,748) — that receipt is saved as
+replay-receipt-T4-full32k.txt for a T4c if the pre-registration line is missed. Pre-registration stands:
+reads before the write = 0 on BOTH replicates; raw calls <= 18. Meter: ~/bin/rollout-calls on the codex rollout.
+
+Correction of my own claim earlier tonight: "peers present at the default budget" was measured on the
+fixture; on the real repo the default budget elides the peer BODIES (rows stay). The receipt says so in its
+elided row with the remedy. The default is 28,672 for a reason (public budget); a caller who wants bodies
+asks for them.
+
+## 14:44Z T4 pair scored: line MISSED (T4 19 raw / 0 pre-write reads; T4b 18 / 2), both gate-green
+
+Round six did not move the count (T3 19/18 -> T4 19/18). T4b's two pre-write reads name what the receipt lacks: the
+dispatch/fold seam (state.clj L380-425, L500-530; applyAuthoritativeEditorFrame; fold-editor-snapshot-and-tx) and the
+registry tail. Filed as the round-seven product ask (a seventh leg, "dispatch", plus a registry-tail sample) in the replay
+result doc. The raw floor on this harness is ~12 (7 feature + 5 repo ceremony); the receipt cannot remove ceremony — arm G
+(the admit gate) is the next lever. Gates on both clones run by the seat: test-js exit 0, runtests-unit 229/721/0 and 229/722/0.
+
+## 14:45Z admit gate round eight built (8b4f88d2); Sol round-nine review launched
+
+The blocking item (an unowned battery receipt in the fast gate) closed by a counted, loud skip rather than wiring a 3-arm
+battery into a merge gate; the round-nine brief asks Sol to argue whether a counted skip is an honest gate and to break the
+battery on a fresh clone to see what goes red. The order witness (MCP-OP-ADMIT-151) shows five failures when the ladder runs
+before the cheap move. Fresh-clone gates green. One .PHONY conflict vs the trunk, composed at landing.
+
+## 14:50Z — usage watch: collector zero/timeout (rc 0) — check root; last 3 lines: make: *** [Makefile:1028: study-agent-usage] Terminated 
+
+## 14:58Z study-ops round eight built (e7bc588a); Sol round-nine review launched
+
+Both round-seven blockers closed with generative witnesses (a pointer is an injective encoding of its path; one leaf, one
+line). The builder went past the reviewer's proposal on its own evidence: `:` and `=` had to be escaped too, found by the
+generated family, and the indented-block rendering of multi-line values was withdrawn because two distinct values rendered
+byte-identically. Round nine asks Sol for a ninth collision and for value-side injectivity. Two lanes now each carry one
+"unreproduced failures under load" disclosure (feature_thread r6: 3; study-ops r8: 6); both reviews re-run mcp-test twice on
+fresh clones. If both come back clean the shared cause is the box at load 11 with three seats, and the fix is scheduling,
+not code; if either reproduces, it is a defect and the lane holds.
+
+## 14:59Z MEM-003 round seven built (a2a15cc0); Sol round-eight review launched
+
+The round's own lesson, in the builder's words: a floor entry and a derived property can catch the same plant, and when
+they do the plant witnesses the floor, not the property — a plant meant to witness a derivation has to name something the
+floor does not. That is how round six's dot-form fix read green while untested (sabotage S2 stayed green). Same class as the
+night's memory (scanner-brief-names-vs-spellings): the round-eight brief asks Sol to plant six forms that name nothing. Also
+recorded honestly by the builder: nine commits after a conflicted merge carry a red suite because `git commit` after
+`git add` commits the index, and two later fixes were never staged; first green commit ec143202.
+
+## 15:13Z three verdicts: feature_thread r7 NO-GO (4 blocking), admit gate r9 NO-GO (1 blocking), MEM-003 r8 Sol refused
+
+feature_thread r7 (Sol): the four blockers are all one family again — a control defined by a list. A parsed Clojure form
+is "unconditionally strong" so a subject inside a string is FOUND (the script path asks; the Clojure path does not); the
+conventions file is slurped by isFile without realpath containment while the source walk is no-follow; the range digest
+excludes the slice's final LF because the witness built its expected slice with split/join (the witness and the
+implementation shared the error, so the pair was green); the per-leg elide leaf has no text spelling. Each is a rung the
+reviewer climbed by executing the attack, not by reading. Round 8 building on ~/src/clj-surgeon-thread.
+
+admit gate r9 (Sol): the counted skip was ruled honest in principle, and then broken in one move — a battery that fails
+2/3 still writes its receipt, and the witness checks kinds/target/timestamp but never :arms-passed, so a RED battery
+produces a zero-skip green. A receipt must name the verdict it carries, not only the subject (house rule 20). Round 10
+building on ~/src/clj-surgeon-gate3.
+
+MEM-003 r8: Sol's content filter refused after the provenance item (the reflection/clock plants trip it, as in r4-r6);
+Opus fallback review launched with the same brief.
+
+## 15:22Z census round 24 built (2d82a677); Opus round-25 review launched
+
+Routing note: Opus directly, not Sol first — every census review with confinement/symlink fixtures has been refused by Sol's
+filter (r19, r21, r23), and the brief carries the same fixtures. The round's two lessons: (1) a trunk merge with three
+textual conflicts had five real ones — two intents collided with no text overlap (a marker the trunk's new scanning gate
+demanded; a remedy that interpolated the caller's root into prose against CENSUS-018) and only the gates on the MERGED tree
+found them; (2) the builder's first :paths fence half-passed in the most misleading way — java.io.File(parent, child)
+concatenates an absolute child while fs/path replaces the root, so the absolute plant walked past a fence that refused the
+relative one. Cost flag for the mayor: five launcher drives added to mcp-test, ~4 min per drive at load 12.
+
+## 15:46Z admit gate round ten built (612ea68c); Sol round-eleven review launched
+
+The receipt now names its subject, its evidence and its verdict, and the witness checks the verdict against the script's own
+arm list rather than trusting the failing party's count — round nine's hole (a red battery's receipt suppressing the skip)
+is a typed FAILED third state that exits nonzero. Round eleven attacks the equality (permutation, extra arm, key types, a
+stale older-shape receipt). Nine rounds in, this lane's every finding has been a verifier blind to its own subject.
+
+## 15:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1028: study-agent-usage] Terminated
+
+## 15:53Z study-ops round nine (Sol): NO-GO, one blocking; both load flakes did not reproduce
+
+The ninth collision the brief asked for was found: the empty-string segment. `["" 0]` and `[0]` render as the same
+pointer, and the generated 5,219-path witness could not see it because its alphabet omitted "" — a control defined by a
+list, once more, this time the witness's alphabet rather than the scanner's. Unicode line and paragraph separators are
+still raw under STUDY-053. Both "unreproduced failures under load" disclosures of the night (feature_thread r6: 3,
+study-ops r8: 6) have now been re-run on fresh clones by reviewers and did not recur (0/10 and 0/2). Verdict: load 11–12
+with three seats on the box, not code. Scheduling remains the fix: cap concurrent JVM suites. Round 10 building.
+
+## 16:13Z admit gate r11 Sol review cut off by the filter after two items; Opus completes it, r12 fix in parallel
+
+Sol got as far as the mixed-type key attack (my brief's own suggestion) and found it fails closed but outside the typed
+bucket — a refusal nobody hears is the same class as round nine's. The filter then refused the rest. Opus completes the
+review on the same tip; the round-twelve builder closes Sol's item meanwhile on its own worktree. GO-WITH-FIX is not GO.
+
+## 16:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 16:52Z census LANDED (merge bafc273a); four builds and two verdicts recorded; wall-clock refocus
+
+Fifth landing of the night. Gates on the MERGED tree: mcp-test 865/13023/0, bb 840/6919/0, oracle, hygiene, census
+battery exit 0 (17 min under load 5–7, mostly the reader-eval fence's six cold JVM launches). Records that waited on it:
+gate r11 Opus completion GO-WITH-FIX (five escapes, present-but-nil = absent, read-eval on), r12 built b489a276, r13
+building; feature_thread r8 built 3dfe0895 with Sol r9 review running; study-ops r10 built dda9fa29 with Sol r11 running.
+
+Gene's ruling this morning, in substance: chase 2× multiples on WALL CLOCK, not fractional gains where the juice is
+squeezed. By the wall decomposition (replay doc): the receipt's whole effect (−3.2 min of code reads) is done; the
+receipt arms spend over half their 6 min on bd ceremony + repo rules; verify + write ≈ 2.3 min. Levers: the SMW landing
+contract (≈ −3 min, native included; needs Gene's go on his repo) and the admit gate (arm G). feature_thread freezes after
+its landing review. Reviews already in flight run to completion; no new polish rounds are launched on any lane unless the
+finding is a landing blocker.
+
+## 16:55Z vision.md amended: the wall-clock rule (Gene: 2x on wall or withdraw); loop item 4 counts wins in minutes
+
+## 17:13Z feature_thread r9 (Sol): NO-GO, two blocking; round ten is the last round for this lane
+
+Both blockers are the same lesson as round seven, one rung up: the string rule now knows an occurrence is inside a
+literal but still lets the SPELLING (`subject(`) outrank the CONTEXT; and a refusal that names the resolved target
+publishes exactly the path the containment exists to hide. Plus a stale floor constant. Under the wall-clock rule this
+lane gets one more round scoped to landing blockers, lands on GO, and freezes; the wall levers are elsewhere.
+
+## 17:13Z admit gate r13 built (1bb136d0): a receipt file executed code inside the gate; Sol r14 review launched
+
+The read-eval item was rated non-blocking in round eleven ("printed a string"). At the RED commit the builder's witness
+`#=(java.lang.System/exit 3)` killed the JVM running the suite. A gate that reads its own receipts with the core reader is
+a gate any writer of the receipt file can drive. clojure.edn from here, and the r14 brief asks Sol to reproduce the kill
+at the RED sha on a real clone and to try tagged literals. feature_thread r10 (last round, blockers only) building.
+
+## 17:23Z admit gate r14: Sol refused after provenance (read-eval attack in the brief); Opus fallback launched
+
+## 17:33Z suite spike filed (docs/observations/2026-09-04-suite-spike-spec.md); round 1 launched on bridge/suite-spike
+
+## 17:34Z MEM-003 r8 (Opus): NO-GO on one finding; the same lesson, one rung up, for the fifth round
+
+Round six: a derivation over names cannot see a call that names nothing. Round eight: a derivation over names must also
+enumerate the GRAMMAR the names can appear in — `(. obj (member))` is Clojure's own reference spelling, and `..` and
+`memfn` expand to it. The reviewer's own note on why it holds a hole no live site exercises: "a ratchet's job is the
+commit not yet written." Also on the record: the reviewer withdrew its round-six "there is no intent-audit runner" claim.
+Round eight builds the one-commit fix plus the trunk re-merge (txn_journal carries eleven :control clock entries) with
+counts and the 145 pin re-derived on the merged result. Suite spike round 1 launched in parallel on bridge/suite-spike.
+
+## 17:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 17:53Z study-ops r11 (Sol): NO-GO on the declared residual; landing needs Gene's product acceptance
+
+The residual the builder declared honest (a keyword key and its string twin collapse to one JSON key on the wire, so
+the text face gave them one pointer) fails exactly when both occur in one map: two identical pointers, declared and
+audited disagree. A declared residual is still a claim about safety, and it was not witnessed with both keys present.
+The reviewer also put on the record what only Gene can grant: the read-side text growth (STUDY-051, the ls-tree
+doubling) is a product change, and no reviewer's GO covers it. Round 12 builds the fix and the trunk re-merge; the
+acceptance question goes to Gene with the morning report. Killed one orphaned JVM in a deleted gate5 fixture dir
+(load 16.9 with the spike's two concurrent clones running as designed).
+
+## 17:54Z — usage watch (untimed run, 3 min at load 11, window since 2026-08-30T15:00Z "until": "2026-09-04T17:50:46.926236Z"): tools "admit_clojure_patch": 1 "inspect_clojure": 148 ; inspect_clojure "count": 148 median 96 ms p90 331 ms max 8405 ms (collector figures verbatim; ok/refused split not in the tail captured — full JSON at /var/tmp/forge/usage-untimed.log)
+
+## 18:06Z admit gate r14 (Opus): GO-WITH-FIX; the merge is red and merge-tree cannot see it
+
+Green + green = red. The trunk's census landing changed the admit entrance's refusal vocabulary in the gate lane's own
+test file, git auto-merged the text, and the lane's own set-equality witness (ADMIT-133) caught the drift on the merged
+tree — exactly the check the landing protocol runs and the reason it runs on the MERGED tree, never on the tip. Two
+records to carry: a semantic conflict hides behind "Auto-merging"; and a --no-local clone does not carry
+remote-tracking refs, so merge evidence names the fetched trunk sha. Round fifteen is the merge round; on its green the
+lane LANDS and arm G runs. Also to correct in the r13 build record: the RED commit exited 1, not 3.

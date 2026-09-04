@@ -143,6 +143,60 @@ by files-that-must-be-read × edit sites (`docs/closure-catalogue.md`). The slop
 (`docs/observations/2026-09-02-slope-spec-sl1.md`) draws the curve for the alias class; the
 ladder that promotes a verb from hand-drive to battery is `docs/tweezer-loop.md`.
 
+## The wall-clock rule (Gene, 2026-09-04, morning: "2x multiples or more based on wall clock time")
+
+Gene, after the first replay program: *"maybe we focus on bigger gains. 2x multiples or more based on
+wall clock time. Less trying to find fractional gains where juice has already been squeezed, where
+improvement doesn't really matter. For SMW things that would shave off 10s, not 1s (maybe
+collectively)."* This section is that ruling, with the arithmetic that makes it decidable.
+
+**The arithmetic.** A model turn costs ~16 s of wall whatever it contains, so the wall of a task is
+turns × 16 s plus what the turns run; a JVM suite is 30–60 s on a quiet box and up to 4 min at load
+12. Those two facts rank every lever, and they rank most of the summer's polish at zero. Measured on
+the SMW change (Edit → Dequote/Format, Sol, apply_patch harness; codex rollout timestamps, a turn's
+wall = time until the next call), minutes by what the turn was FOR:
+
+| arm | wall | turns | repo rules | code reads | bd ceremony | write | verify |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| native (mean of 3) | 9.0 | 38 | 2.2 | 3.2 | 0.4 | 0.9 | 1.3 |
+| feature_thread receipt (mean of 4) | 6.0 | 18.5 | 1.5 | 0 | 1.8 | 0.8 | 1.5 |
+
+**What it says.** The receipt removed the code reads entirely; that is its whole effect (1.45× on
+wall), it is done, and no further receipt polish buys a second. In the receipt arms the repo's own
+ceremony (bd create/claim/close, the tracked `.beads/.local_version` bd rewrites, a 671-line CLAUDE.md
+read in three slices) is over half the remaining wall, and the bd ceremony is *worse* than native
+because a receipt-armed agent spends its saved turns writing longer bead descriptions. Verify + write
+is the rest and grows with load.
+
+**The rule.** A lever is worth building only if it removes minutes from a real task on a real repo:
+a whole species of turn, or a suite run, or the box's own load. Bytes, budgets, leaf spellings,
+digest conventions, per-form churn: these are correctness ratchets, paid once to land a verb, and
+never a reason for another round. **Fractional gains on a squeezed square are withdrawn from, in
+writing, the way parity squares are.**
+
+**The levers that clear the bar, in order:**
+1. **The landing contract** — one call answers "what must be true for this change to be accepted in
+   this repo, and what is the one command that proves each": the bd chain as the exact command, the
+   registry id pattern and next id, the minimal verify set, the dispatch seam a handler's result
+   travels through, the dozen binding rules of a long CLAUDE.md. Mostly static per repo, so it lives
+   in the conventions file and rides on the receipt. ≈ −3 min on the SMW change, native included —
+   which is why the repo's own prompt plate is fixed FIRST (untrack the beads version file, an
+   8-line bd block, rules at the top) and native is re-run on the slimmed plate as the honest baseline.
+2. **The admit gate** — write + verify as one call instead of four patches, five suite runs and three
+   diff checks (≈ −1.5 min quiet, more under load); the only ≥2× lever not yet run (arm G).
+3. **A quiet box for arms** — five concurrent JVM lanes quadrupled suite times on 2026-09-04 and
+   manufactured two phantom flakes; that multiplier hit both arms and was noise. Arms run serialized.
+
+Projected from the table: 9 min → ~3 (contract) → ~2 (gate). Three to four times on wall, from two
+levers, neither of which is another feature_thread round. Withdrawal is pre-registered in
+`docs/observations/2026-09-04-feature-thread-replay-result.md` (T5): if the contract arm stays above
+12 turns the contract did not remove the ceremony; if native with the gate also drops below 12, the
+gate is the whole effect.
+
+**The meter from here is wall per turn species**, from the rollout's own timestamps (the script is in
+the replay doc), reported next to turns and tokens. A call count that falls while wall stands still
+is a byte win, and byte wins do not ship rounds.
+
 ## What We Proved
 
 The original session proved that a Babashka CLI could outline a 2,768-line
@@ -624,7 +678,9 @@ winning in the squares we choose to compete against native. that's what your wor
    during any program; the collector's figures go into the log verbatim; a false zero is a
    telemetry-root question, not a finding. Free-choice adoption is the acceptance test: a feature
    the agent declines when the tool is optional has not shipped.
-4. **Steer toward decisively winning the chosen squares, and withdraw from the rest.** Every
+4. **Steer toward decisively winning the chosen squares, and withdraw from the rest.** Wins are
+   counted in minutes of wall on a real task (the wall-clock rule above): a lever that cannot
+   remove a species of turn or a suite run is not a round, however clean the ratchet. Every
    result is judged by the square it wins or loses: the gate on the agent's own patch, fan-out
    across N owners, questions grep answers wrong, proof before write. A square where the numbers
    say native is at parity is not defended; it is withdrawn from, in writing, with the measurement.

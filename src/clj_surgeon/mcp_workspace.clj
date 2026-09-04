@@ -6,6 +6,19 @@
    (java.security MessageDigest)))
 
 (defn- refusal
+  "One stable workspace-root refusal, carrying its own cause and remedy.
+
+  `workspace_root` is an ENVELOPE key on every receipt this server publishes —
+  the routed root, rendered structurally rather than as a discriminating fact —
+  so on the one refusal that is ABOUT that value it was suppressed, and the
+  receipt named no other fact that separated a blank root from a relative one.
+  `workspace_root_given` is the caller's own text, `pr-str`d so nil and \"\"
+  stay distinguishable, and it is not an envelope key.
+
+  The remedy is carried rather than implied: a refusal renderer that has none
+  to show still has to say what the caller does next, and the alternative it
+  had been reduced to was a text block pointing at a remedy that was not
+  there."
   [message value]
   {:ok false
    :operation "workspace-route"
@@ -13,9 +26,23 @@
    :reason "invalid-workspace-root"
    :path ["workspace_root"]
    :workspace_root value
+   :workspace_root_given (pr-str value)
    :error message
    :source_unchanged true
-   :next_action "pass_an_existing_absolute_workspace_root"})
+   :next_action "pass_an_existing_absolute_workspace_root"
+   ;; @spec MCP-OP-CENSUS-018
+   ;; The remedy names the FIELD, not the value. The caller's own text is
+   ;; already published twice as a discriminating fact — `workspace_root` and
+   ;; `workspace_root_given` — and both are declared root-carrying fields; a
+   ;; third copy interpolated into PROSE is the one place the rule forbids,
+   ;; because prose is where a fact about the box gets read as a fact about
+   ;; the request. The remedy loses nothing: the value it would have quoted is
+   ;; in the receipt beside it.
+   :remedy (str "Resend with workspace_root set to an absolute path naming a "
+                "directory that already exists; the value this receipt "
+                "publishes as workspace_root_given is not one. No next_call "
+                "is composed because only the caller knows which workspace "
+                "it meant.")})
 
 (defn canonical-root
   "Return one existing canonical absolute directory, or a stable refusal."

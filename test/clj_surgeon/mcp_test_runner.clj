@@ -1,8 +1,13 @@
 (ns clj-surgeon.mcp-test-runner
   (:require
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.admit-patch-test]
+   [clj-surgeon.census-pool-test]
    [clj-surgeon.core-discovery-test]
    [clj-surgeon.mcp-alias-migration-test]
+   [clj-surgeon.mcp-relation-census-launcher-test]
+   [clj-surgeon.reader-eval-fence-test]
+   [clj-surgeon.mcp-relation-census-round20-test]
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-combinable-transaction-test]
@@ -30,6 +35,7 @@
    [clj-surgeon.mcp-program-tool-test]
    [clj-surgeon.mcp-read-request-normalization-test]
    [clj-surgeon.mcp-recovery-test]
+   [clj-surgeon.mcp-relation-census-test]
    [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
@@ -47,12 +53,27 @@
    [clojure.test :refer [run-tests]]))
 
 (defn -main
-  [& _]
-  (let [result
+  [& args]
+  ;; RATCHET (2026-09-04, inb-9483a4): same enforcement as test/run_all.clj
+  ;; -- refuse on tmpfs, then isolate java.io.tmpdir into a private per-run
+  ;; root (via a re-exec'd child with -Djava.io.tmpdir=<root> -- a runtime
+  ;; System/setProperty is NOT honored by real temp-file creation either;
+  ;; see clj-surgeon.tmp-leak-support's docstring) so leaks fail the run by
+  ;; name with no cross-seat false positives.
+  (let [{:keys [refused root]}
+        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"} args)
+        _ (when refused (System/exit 97))
+        tmp-root root
+        tmp-before (tmp-leak/tmp-entries)
+        result
         (run-tests
           'clj-surgeon.admit-patch-test
+          'clj-surgeon.census-pool-test
           'clj-surgeon.core-discovery-test
           'clj-surgeon.mcp-alias-migration-test
+          'clj-surgeon.mcp-relation-census-launcher-test
+          'clj-surgeon.reader-eval-fence-test
+          'clj-surgeon.mcp-relation-census-round20-test
           'clj-surgeon.mcp-contract-test
           'clj-surgeon.mcp-create-files-test
           'clj-surgeon.mcp-extraction-test
@@ -73,6 +94,7 @@
           'clj-surgeon.mcp-operation-registry-test
           'clj-surgeon.mcp-operation-test
           'clj-surgeon.mcp-recovery-test
+          'clj-surgeon.mcp-relation-census-test
           'clj-surgeon.mcp-paths-test
           'clj-surgeon.mcp-process-test
           'clj-surgeon.mcp-prepared-request-test
@@ -93,5 +115,6 @@
           'clj-surgeon.repository-hygiene-test
           'clj-surgeon.scope-stream-test
           'clj-surgeon.txn-journal-test
-          'clj-surgeon.workspace-onboarding-test)]
-    (System/exit (+ (:fail result) (:error result)))))
+          'clj-surgeon.workspace-onboarding-test)
+        leak-fail (tmp-leak/report-and-sweep-leak! tmp-root tmp-before)]
+    (System/exit (+ (:fail result) (:error result) leak-fail))))

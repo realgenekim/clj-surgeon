@@ -3,6 +3,7 @@
  :deps
  {org.clojure/clojure {:mvn/version "1.12.1"}
   cheshire/cheshire {:mvn/version "5.13.0"}
+  com.climate/claypoole {:mvn/version "1.1.4"}
   org.babashka/sci {:mvn/version "0.10.47"}
   rewrite-clj/rewrite-clj {:mvn/version "1.2.50"}}
 
@@ -42,6 +43,8 @@
 
   :clj-surgeon/memory-test
   {:extra-paths ["test"]
+   :extra-deps {babashka/fs {:mvn/version "0.5.30"}
+                babashka/process {:mvn/version "0.6.23"}}
    :main-opts ["-m" "clj-surgeon.memory.memory-test-runner"]}
 
   ;; Tree-scale memory battery (MCP-OP-MEM-011). Deliberately separate from the
@@ -49,13 +52,18 @@
   ;; is never a prerequisite of test/test-fast/mcp-test. The heap flag is
   ;; supplied by the Make target, not here, so MEMBAT_XMX is the only knob.
   :clj-surgeon/memory-battery
-  {:extra-deps {babashka/fs {:mvn/version "0.5.30"}
+  ;; "test" is on the path for clj-surgeon.tmp-leak-support only -- the
+  ;; temp-dir hygiene ratchet every test entry point shares
+  ;; (MCP-OP-TMPHYG-009).
+  {:extra-paths ["test"]
+   :extra-deps {babashka/fs {:mvn/version "0.5.30"}
                 babashka/process {:mvn/version "0.6.23"}}
    :main-opts ["-m" "clj-surgeon.memory-battery-runner"]}
 
   :clj-surgeon/analyzer-contract-test
   {:extra-paths ["test"]
    :extra-deps {babashka/fs {:mvn/version "0.5.30"}
+                babashka/process {:mvn/version "0.6.23"}
                 nrepl/nrepl {:mvn/version "1.3.1"}}
    :main-opts ["-m" "analyzer-contract-test-runner"]}
 
