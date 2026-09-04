@@ -16,6 +16,7 @@
    an independent review found the refusal failed open."
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
@@ -80,6 +81,20 @@
     (is (false? (tmp-leak/own-isolated-root? "/var/tmp/forge/other-seat-fixture"))))
   (testing "a per-run root is"
     (is (true? (tmp-leak/own-isolated-root? "/var/tmp/forge/clj-surgeon-suite-42-deadbeef")))))
+
+;; @spec MCP-OP-TMPHYG-004
+(deftest sweep-root-refuses-a-directory-it-did-not-create
+  (testing "a directory that is not one of this namespace's per-run roots
+            survives sweep-root!, which returns false"
+    (tmp-leak/with-temp-dir [parent "tmp-leak-sweep-guard-"]
+      (let [foreign (io/file parent "other-seat-precious-fixture")]
+        (.mkdirs foreign)
+        (is (false? (tmp-leak/sweep-root! foreign)))
+        (is (.exists foreign) "the sweep must not delete what it did not create"))
+      (let [ours (io/file parent "clj-surgeon-suite-42-deadbeef")]
+        (.mkdirs ours)
+        (is (true? (tmp-leak/sweep-root! ours)))
+        (is (not (.exists ours)))))))
 
 (deftest tmpfs-predicate-tells-ram-from-disk
   (testing "/dev/shm is tmpfs-backed -- this is what secure-tmpdir! refuses on"

@@ -91,6 +91,15 @@ grep -q 'tmp-refused:' "$FX/arm-b.out" \
 grep -q 'PROBE role=child' "$FX/arm-b.out" \
   && fail "3b (arm B): the child RAN -- the suite executed on tmpfs"
 
+# 3f. Neither mount source can answer AND the base is /tmp: only the literal
+# name check can refuse here. (3b alone does not witness it: on this box the
+# mounts table still answers "tmpfs" for /tmp when findmnt is shimmed away.)
+run_probe name-only TMPDIR=/tmp PATH="$FX/shim:$PATH" \
+  CLJ_SURGEON_MOUNTS_FILE="$FX/no-such-mounts-file"
+[ "$PROBE_EXIT" -eq 97 ] || fail "3f: /tmp must be refused BY NAME when no mount source can answer, got $PROBE_EXIT"
+grep -q 'RAM-backed path by name' "$FX/name-only.out" \
+  || fail "3f: the refusal did not come from the literal name check"
+
 # 3c. /dev/shm is refused by literal prefix with no external binary at all.
 run_probe devshm TMPDIR=/dev/shm PATH="$FX/shim:$PATH"
 [ "$PROBE_EXIT" -eq 97 ] || fail "3c: /dev/shm must exit 97, got $PROBE_EXIT"
