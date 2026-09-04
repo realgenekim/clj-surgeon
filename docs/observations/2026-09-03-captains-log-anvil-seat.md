@@ -1762,3 +1762,11 @@ without the failing test's output, so the agent went blind and re-implemented lo
 Both trees correct and gate-green — correctness is not the finding. The product asks (accept the harness's own patch
 representation; refusals carry the failing output; a propose mode) are the gate lane's next round. Written up in the
 replay doc; this is the negative Gene asked for in the log, not a footnote.
+
+## 20:15Z CORRECTION of my own record (20:1xZ entry): the gate refused on a MISSING PROFILE, not a failing test
+
+Verbatim from arm G's log: "Verification did not complete (partial: no-focused-test-profile); nothing was written."
+SMW has no verification profile onboarded; the gate cannot run a verify it has not been told, and the agent could not
+tell it. My first write-up said the agent's test failed inside the gate — wrong, corrected in the replay doc in place
+with the correction dated. The product ask moved to first place: inline verify commands, or onboarding from the
+receipt's verify rows, in one call.

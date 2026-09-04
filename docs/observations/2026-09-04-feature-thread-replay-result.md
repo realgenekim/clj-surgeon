@@ -233,21 +233,24 @@ Pre-registration: G raw ≤ 12, agent-run suite invocations 0, wall < 4 min; WIT
 write path, in its current contract, is a wall LOSS for an agent on this harness. What the rollouts show:
 - The agent spent 4–5 minutes CONSTRUCTING gate payloads in shell (whole-file expect_pre_sha256 for eight files, the
   full file bodies as the patch representation) before the first call — the gate's input shape is the cost.
-- G's first gate calls were REFUSED with `admit-patch-refused · error-type verification-failed · mutation_attempted=false
-  · source-unchanged=true · pre_image_binding=bound` — the agent's own new test failed INSIDE the gate's snapshot, and the
-  refusal did not carry the failing test's output, so the agent could not see why; it fell back to apply_patch (17
-  calls), ran the suites itself, fixed the test, and re-submitted. The blind refusal turned one round-trip into a
-  local re-implementation.
+- G's gate calls were REFUSED, verbatim: `admit-patch-refused · source-unchanged=true · mutation_attempted=false ·
+  pre_image_binding=bound · error=Verification did not complete (partial: no-focused-test-profile); nothing was written.
+  Run mode preview … and repair no-focused-test-profile before committing.` — CORRECTION (20:2xZ) to the first draft of
+  this section: no test failed inside the gate; the gate could not run ANY verify because the SMW repo has no
+  verification profile onboarded, and the agent — holding the exact verify commands in its receipt — had no way to pass
+  them. It fell back to apply_patch (17 calls) and ran the suites itself. The refusal's remedy ("repair
+  no-focused-test-profile") names a state the agent cannot repair from inside a task.
 - GN never reached the MCP tool at all (0 MCP calls) despite the mandate: it read about the gate, built payloads, and
   wrote with apply_patch — the same "mandate ≠ path" finding as the summer's adoption cohorts.
 - Both landed correct, gate-green trees; correctness is not the finding, wall is.
 
-**The product ask that falls out (the gate lane's next round, not a polish):** (1) accept the harness's own patch
-representation (apply_patch / unified diff) and derive the pre-image binding itself — never ask the agent for
-whole-file digests or bodies; (2) a verification refusal MUST carry the failing test's output verbatim (the naive-reader
-probe: "what is your next call?" is unanswerable from `verification-failed` alone); (3) a `propose` mode that runs the
-verify in the snapshot and returns the result WITHOUT refusing, so the agent iterates inside the gate instead of
-falling back to the tree. Until those land, the gate's measured square is the one it was built for — refusing a bad
+**The product ask that falls out (the gate lane's next round, not a polish):** (1) accept inline verify commands
+(`verify {:commands [...]}` — the receipt's verify rows are exactly that) or onboard the profile from the receipt, so a
+repo with no `.clj-surgeon` profile is admissible in one call; a refusal on a missing profile must say so in its first
+words and name the one call that supplies it; (2) accept the harness's own patch representation (apply_patch / unified
+diff) and derive the pre-image binding itself — never ask the agent for whole-file digests or bodies; (3) when a verify
+DOES fail, carry its output verbatim; (4) a `propose` mode that runs the verify in the snapshot and returns the result
+without refusing, so the agent iterates inside the gate. Until those land, the gate's measured square is the one it was built for — refusing a bad
 patch before it lands (E-ADMIT-SEED) — not wall.
 
 Standing sentence, amended: the receipt is the only measured wall win (1.45×, capped near 2×); the plate and the gate
