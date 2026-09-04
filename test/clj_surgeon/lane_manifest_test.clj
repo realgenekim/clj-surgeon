@@ -13,7 +13,9 @@
    directions is the refusal-kind pattern: absence is as loud as presence."
   (:require
    [clj-surgeon.lane-manifest :as lm]
+   [clj-surgeon.battery-ledger :as ledger]
    [clj-surgeon.mcp-test-runner :as runner]
+   [clj-surgeon.runner-membership :as rm]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -129,30 +131,115 @@
     (is (not (contains? lm/manifest s))
         (str s " is both excluded and in the manifest"))))
 
-(deftest every-exclusion-names-a-runner-that-actually-exists
-  (testing "an exclusion is a REDIRECTION, never a declaration of orphanhood"
-    ;; Round two declared `mcp-formatter-test` excluded with the reason
-    ;; "required by no runner and no Make target". That made the omission
-    ;; VISIBLE, which is better than silence -- but visible loss is still
-    ;; loss, and the round-two review called it blocking. The instance fix is
-    ;; to give that namespace a lane. THIS is the class fix: an entry in
-    ;; `excluded` must name the OTHER runner that runs it, and that runner
-    ;; must exist. A namespace no runner runs cannot be declared away; it can
-    ;; only be adopted into a lane or deleted.
-    (let [makefile (slurp (io/file "Makefile"))
-          deps (slurp (io/file "deps.edn"))
-          target? (fn [t] (or (re-find (re-pattern (str "(?m)^" (java.util.regex.Pattern/quote t) ":")) makefile)
-                              (str/includes? makefile (str " " t " "))))
-          alias? (fn [a] (str/includes? deps (str ":clj-surgeon/" a)))]
-      (doseq [[s reason] lm/excluded]
-        (let [targets (map second (re-seq #"`make ([a-z0-9\-]+)`" reason))
-              aliases (map second (re-seq #":clj-surgeon/([a-z0-9\-]+)" reason))
-              named (concat (filter target? targets) (filter alias? aliases))]
-          (is (seq named)
-              (str "excluded namespace " s " names no runner that exists. An "
-                   "exclusion must redirect to a real `make <target>` or "
-                   ":clj-surgeon/<alias> that runs it (TEST-ISO-001); its "
-                   "reason was: " (pr-str reason))))))))
+(deftest every-exclusion-is-actually-run-by-the-runner-it-names
+  (testing "an exclusion is a REDIRECTION, and membership -- not existence -- is the proof"
+    ;; ROUND FIVE, the round-three landing review's finding 4. The predicate
+    ;; this replaces asked only `does a target with this name exist?`, and the
+    ;; reviewer's archive-copy sabotage walked straight through it: an
+    ;; exclusion reading "`make test-fast`" was accepted for a namespace
+    ;; `test-fast` does not run, because that target exists. Existence is a
+    ;; SPELLING; the runner's own selection is the fact. `resolve-runner`
+    ;; follows the Makefile recipe and the deps.edn alias to the concrete
+    ;; namespace set, and an exclusion that is not IN that set is refused.
+    (let [violations (rm/exclusion-violations lm/excluded (rm/repo-context))]
+      (is (empty? violations)
+          (str (count violations) " exclusion(s) that no named runner runs:\n  "
+               (str/join "\n  " (map :message violations)))))))
+
+(deftest a-false-redirection-to-an-existing-target-is-refused-by-name
+  (testing "the reviewer's finding-4 sabotage, reachable without committing it"
+    ;; THE SABOTAGE AS A WITNESS. `make test-fast` exists and runs the whole
+    ;; :fast lane; it does not run `clj-surgeon.analyzer-contract-test`. The
+    ;; old predicate said yes. This asserts the refusal, its KIND, and that
+    ;; the message names the namespace -- so a future rewrite that goes back
+    ;; to existence-checking fails here instead of in a reviewer's window.
+    (let [saboteur {'clj-surgeon.analyzer-contract-test
+                    "false redirection for sabotage -- `make test-fast`"}
+          [v :as vs] (rm/exclusion-violations saboteur (rm/repo-context))]
+      (is (= 1 (count vs))
+          (str "the false redirection must be refused exactly once, got "
+               (pr-str (mapv :kind vs))))
+      (is (= :not-a-member (:kind v))
+          (str "expected :not-a-member -- the target exists, and does not run "
+               "it -- got " (pr-str (:kind v))))
+      (is (str/includes? (str (:message v)) "clj-surgeon.analyzer-contract-test")
+          "the refusal must name its subject")
+      (is (str/includes? (str (:message v)) "make test-fast")
+          "the refusal must name the runner that was falsely claimed"))))
+
+(deftest an-exclusion-naming-an-unreadable-runner-fails-closed
+  (testing "unproven membership is a refusal, never an assumption"
+    ;; `I could not work out what that runs` must not read the same as `it
+    ;; runs your namespace`. A target no rule defines resolves to nothing, and
+    ;; nothing is a refusal.
+    (let [saboteur {'clj-surgeon.analyzer-contract-test
+                    "redirected to `make no-such-target-anywhere`"}
+          [v] (rm/exclusion-violations saboteur (rm/repo-context))]
+      (is (= :unresolved-runner (:kind v)) (str "got " (pr-str v)))
+      (is (str/includes? (str (:message v)) "no-such-target-anywhere")))))
+
+(deftest the-lane-runner-resolves-to-exactly-the-lane-it-names
+  (testing "the resolver follows the runner's own selection, not a restatement"
+    ;; The membership check is only as good as the resolution under it, so the
+    ;; resolution is pinned against the manifest directly: `make test-fast`
+    ;; must come back as the :fast lane and `make mcp-test` as fast+integration
+    ;; -- which is also the pin that catches someone changing an alias's
+    ;; :main-opts without changing what the gate is understood to cover.
+    (let [ctx (rm/repo-context)]
+      (is (= (set (lm/namespaces-for :fast))
+             (:namespaces (rm/resolve-runner "make test-fast" ctx))))
+      (is (= (into (set (lm/namespaces-for :fast)) (lm/namespaces-for :integration))
+             (:namespaces (rm/resolve-runner "make mcp-test" ctx))))
+      (is (= (set (lm/namespaces-for :battery))
+             (:namespaces (rm/resolve-runner "make test-battery" ctx)))))))
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-009b -- the battery discipline ON THE LANDING PATH
+;; ---------------------------------------------------------------------------
+
+(deftest the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire
+  (testing "the freshness tripwire is a PREREQUISITE of landing, not an option"
+    ;; The round-three landing review's finding 2: `make battery-fresh` exists,
+    ;; and neither `~/bin/land` nor `make mcp-test` invokes it, so the eleven
+    ;; namespaces moved off the merge gate are not mechanically required
+    ;; before a landing. A tripwire nobody's path runs is a diary entry.
+    ;;
+    ;; `make landing-gate` is THE target ~/bin/land runs. It is asserted here
+    ;; by RESOLUTION, not by grepping for a word: the target must exist, and
+    ;; its prerequisite/recipe closure must contain both names.
+    (let [{:keys [makefile-text] :as ctx} (rm/repo-context)
+          rule (rm/make-target makefile-text "landing-gate")
+          closure (set (concat (:prerequisites rule)
+                               (map second (re-seq #"\$\(MAKE\)(?:\s+--[a-z\-]+)*\s+([a-z0-9\-]+)"
+                                                   (str (:recipe rule))))))]
+      (is (some? rule)
+          "no rule in the Makefile defines `landing-gate` -- ~/bin/land has no gate to call")
+      (is (contains? closure "battery-fresh")
+          (str "`make landing-gate` must run the battery freshness tripwire; "
+               "its closure is " (pr-str (sort closure))))
+      (is (contains? closure "mcp-test")
+          (str "`make landing-gate` must run the merge gate; its closure is "
+               (pr-str (sort closure))))
+      (is (str/includes? makefile-text ".PHONY: repository-hygiene")
+          "sanity: the .PHONY line was found")
+      (is (re-find #"(?m)^\.PHONY:.*\blanding-gate\b" makefile-text)
+          "`landing-gate` must be .PHONY -- it produces no file"))))
+
+(deftest the-landing-gate-refuses-a-stale-battery-receipt
+  (testing "the refusal the landing path actually delivers, as data"
+    ;; The tripwire's verdict function, driven at the exact boundary the
+    ;; landing gate depends on: a receipt older than the ceiling is a refusal
+    ;; that carries the remedy. Pure, so the fast lane can hold the landing
+    ;; path to it without a repository shaped to produce it.
+    (let [now 1000000000000
+          entry {:sha "deadbeef" :started (str (java.time.Instant/ofEpochMilli
+                                                 (- now (* 27 60 60 1000))))
+                 :wall_s 700 :verdict :pass :host "anvil"}
+          r (ledger/freshness [entry] now (constantly 0))]
+      (is (false? (:ok r)))
+      (is (= :stale (:reason r)))
+      (is (str/includes? (:remedy r) "make test-battery")
+          (str "the refusal must carry the remedy, got " (pr-str (:remedy r)))))))
 
 (deftest every-manifest-namespace-declares-its-lane-in-its-own-ns-form
   (testing "source metadata agrees with the manifest, per namespace"
