@@ -51,6 +51,20 @@
   (select-keys result envelope-keys))
 
 ;; @spec MCP-OP-STUDY-040
+;; @spec MCP-OP-TIME-003
+(defn request-elapsed-ms
+  "The request clock, wherever the envelope carries it.
+
+  A renderer needs the number, not its address. Reading `:elapsed_ms` at the
+  top level is one shape of the envelope, and the moment the wire nests the
+  clock under `measured` every text block would render `nil` and throw — the
+  same class as the budget gate naming one shape, one layer up."
+  [result]
+  (if (contains? result :elapsed_ms)
+    (:elapsed_ms result)
+    (get-in result [:measured :elapsed_ms])))
+
+;; @spec MCP-OP-STUDY-040
 (defn finalized?
   "Does this result carry the envelope the publisher publishes?
 

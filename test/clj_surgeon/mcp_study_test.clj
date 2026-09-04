@@ -4230,3 +4230,25 @@
                            "result it replaced — "
                            (pr-str (select-keys substitute
                                                 mcp-operation/envelope-keys)))))))))))))
+
+;; @spec MCP-OP-STUDY-046
+(deftest an-unenumerated-refusal-reason-reaches-the-caller-as-a-crash
+  ;; Said out loud (Opus O2 round-4 review, section 5). Enforcing the
+  ;; enumeration AT CONSTRUCTION means an unenumerated reason throws a plain
+  ;; `IllegalArgumentException` out of `execute-inspect!` — the tool's
+  ;; `catch Exception` sits inside `capture-snapshots`, not around validation
+  ;; — so the caller receives an exception and the callback never fires. That
+  ;; is the intended trade: it is a defect in this namespace, not a bad
+  ;; request, and a typed refusal would tell a caller its request was wrong
+  ;; when the tool was. It is pinned here rather than left to be rediscovered.
+  (let [fired (atom 0)]
+    (is (thrown-with-msg?
+          IllegalArgumentException #"not enumerated"
+          (mcp-operation/invoke!
+            {:execute #(#'inspect/refuse! :brand-new-reason ["requests" 0]
+                                          "synthetic")
+             :summarize (fn [_] "unreachable")
+             :callback (fn [_ _ _] (swap! fired inc))}))
+        "the reason is refused at construction, by throwing")
+    (is (zero? @fired)
+        "and the callback never fires: a crash, not a refusal receipt")))

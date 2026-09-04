@@ -1840,7 +1840,10 @@
                             (plural (:file_count result) "file")]
                      (pos? forms) (conj (plural forms "form"))
                      (pos? matches) (conj (plural matches "match")))
-          elapsed (:elapsed_ms result)
+          ;; @spec MCP-OP-STUDY-040
+          ;; The clock is read through the envelope's own accessor, so the
+          ;; text renders whatever shape the wire gives it.
+          elapsed (mcp-operation/request-elapsed-ms result)
           render
           (fn [abridged? fact-text]
             (str "inspect_clojure\n"

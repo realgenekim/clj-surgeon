@@ -936,7 +936,8 @@
                  (if (seq labels)
                    (str/join " · " labels)
                    "unknown-error")
-                 (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+                 (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result)))
          (when (:error result) "")
          ;; @spec MCP-OP-STUDY-046
          ;; The cause is bounded like every other refusal detail, with a
@@ -1097,7 +1098,8 @@
                    (:returned result)
                    (:file_count result)
                    (if (= 1 (:file_count result)) "" "s")
-                   (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+                   (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result)))
            (when (seq payload) "")
            (when (seq payload) payload)
            ""
@@ -1445,7 +1447,8 @@
       (:site-count result)
       (:file-count result)
       (:basis result)
-      (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+      (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result))
       surface-lines
       (if exact-source?
         "✓ exact named owner · no semantic index required"
@@ -1469,7 +1472,8 @@
            "→ decide, or open another retained site")
       (:buffer-count result)
       (:source-character-count result)
-      (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+      (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result))
       buffer-lines)))
 
 (defn extraction-plan-summary
@@ -1484,7 +1488,8 @@
     (get-in result [:evidence_counts :caller_candidates :returned])
     (get-in result [:evidence_counts :quoted_var_references :returned])
     (count (get-in result [:plan :required-public-forms]))
-    (mcp-operation/format-elapsed-ms (:elapsed_ms result))))
+    (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result))))
 
 (defn verification-job-summary
   "Render one bounded cold-verification job without repeating its full output."
@@ -1495,11 +1500,13 @@
         clock-summary
         (if-let [job-elapsed-ms (:job_elapsed_ms result)]
           (str "request "
-               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+               (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result))
                " · job "
                (mcp-operation/format-elapsed-ms job-elapsed-ms))
           (str "request "
-               (mcp-operation/format-elapsed-ms (:elapsed_ms result))))]
+               (mcp-operation/format-elapsed-ms
+        (mcp-operation/request-elapsed-ms result))))]
     (format
       (str "inspect_clojure · cold verification\n"
            "  %s · %s · %s\n\n"
@@ -1525,11 +1532,16 @@
   scratch would reach the publisher with no clock at all — and the publisher
   adds nothing back, which is exactly the property that retired the 64-byte
   publish reserve (Sol O2 round-3 review, section 5). Carrying the envelope
-  keeps the bytes measured and the bytes published the same bytes."
+  keeps the bytes measured and the bytes published the same bytes.
+
+  WHICH keys are the envelope is `mcp-operation`'s to say, not this
+  namespace's. Field evidence (Opus O2 round-4 review, 2026-09-04, section
+  7): this copied `:elapsed_ms` by name, so the MEM-003 landing that nests
+  the clock under `measured` would have made every substitute drop it
+  silently — a gate that loses the envelope of the result it replaces is
+  measuring one thing and publishing another."
   [substitute measured]
-  (cond-> substitute
-    (contains? measured :elapsed_ms)
-    (assoc :elapsed_ms (:elapsed_ms measured))))
+  (merge substitute (mcp-operation/envelope measured)))
 
 (defn enforce-public-result-budget
   "Refuse an oversized public result without returning partial source."
@@ -1997,14 +2009,18 @@
   budget was never allowed to lower."
   [raw-result]
   ;; @spec MCP-OP-STUDY-040
-  ;; The fit measures the FINAL envelope. A result with no clock is not one
+  ;; The fit measures the FINAL envelope. A result with no envelope is not one
   ;; the publisher could publish, and measuring it would reintroduce exactly
   ;; the gap the publish reserve used to paper over — so it is a typed
-  ;; refusal here rather than a silent 17-byte error later.
-  (when-not (contains? raw-result :elapsed_ms)
+  ;; refusal here rather than a silent 17-byte error later. The question is
+  ;; asked about the ENVELOPE, never about one of its shapes: naming
+  ;; `:elapsed_ms` here would have thrown on the first request the moment the
+  ;; wire nested the clock under `measured`.
+  (when-not (mcp-operation/finalized? raw-result)
     (throw (IllegalArgumentException.
              (str "fit-public-result measures the published envelope and "
-                  "needs the finalized result: :elapsed_ms is absent"))))
+                  "needs the finalized result: it carries none of "
+                  (pr-str mcp-operation/envelope-keys)))))
   (let [measure (fn [result]
                   (mcp-result-byte-count (inspect-summary result) result))
         required (measure raw-result)]
