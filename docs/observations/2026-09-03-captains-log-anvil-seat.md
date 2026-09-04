@@ -1616,3 +1616,5 @@ receipt arms spend over half their 6 min on bd ceremony + repo rules; verify + w
 contract (≈ −3 min, native included; needs Gene's go on his repo) and the admit gate (arm G). feature_thread freezes after
 its landing review. Reviews already in flight run to completion; no new polish rounds are launched on any lane unless the
 finding is a landing blocker.
+
+## 16:55Z vision.md amended: the wall-clock rule (Gene: 2x on wall or withdraw); loop item 4 counts wins in minutes
