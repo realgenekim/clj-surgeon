@@ -4547,6 +4547,53 @@
         (str "refusal kinds spelled dynamically with no forwarding marker, "
              "which no source scan can ever enumerate: " (pr-str sites)))))
 
+;; @spec MCP-OP-ALIAS-059
+(deftest the-source-guard-exempts-only-the-forwarded-refusal-kind-marker
+  ;; Round-fourteen review finding 2: `constructor-site?` treated ANY dynamic
+  ;; `:error-type` expression that merely CONTAINS one of its enclosing
+  ;; function's own parameters as the `refusal` constructor's legitimate
+  ;; forward — far broader than the one constructor it was meant to exempt.
+  ;; `(keyword (name kind))` and `(keyword "alias-migration-" (name x))` each
+  ;; mention their enclosing function's sole parameter and each mints a live,
+  ;; unscannable kind; the heuristic swallowed both silently. The only
+  ;; legitimate exemption is the explicit `forwarded-refusal-kind` marker —
+  ;; asserted here on both a marked and an unmarked instance of the same
+  ;; shape, so the fix cannot be "stop scanning `:error_type` sites at all".
+  (let [route-a (str "(defn- route-a-refusal\n"
+                     "  [kind]\n"
+                     "  {:ok false\n"
+                     "   :operation \"alias_migration\"\n"
+                     "   :error_type (keyword (name kind))\n"
+                     "   :error \"routed refusal\"})\n")
+        route-b (str "(defn- route-b-refusal\n"
+                     "  [x]\n"
+                     "  {:ok false\n"
+                     "   :operation \"alias_migration\"\n"
+                     "   :error_type (keyword \"alias-migration-\" (name x))\n"
+                     "   :error \"routed refusal\"})\n")
+        route-a-marked (str "(defn- route-a-refusal-marked\n"
+                            "  [kind]\n"
+                            "  {:ok false\n"
+                            "   :operation \"alias_migration\"\n"
+                            "   ;; forwarded-refusal-kind: kind is this fn's own argument\n"
+                            "   :error_type (keyword (name kind))\n"
+                            "   :error \"routed refusal\"})\n")]
+    (doseq [[label text]
+            [["(keyword (name kind)) mentions the enclosing parameter" route-a]
+             ["(keyword \"alias-migration-\" (name x)) mentions the enclosing parameter"
+              route-b]]]
+      (testing label
+        (is (= 1 (count (runtime-spelled-kind-sites label text)))
+            (str "a kind derived from an enclosing parameter with no "
+                 "forwarded-refusal-kind marker was not named: "
+                 (pr-str (runtime-spelled-kind-sites label text))))))
+    (testing "the same shape marked forwarded-refusal-kind is exempt"
+      (is (empty? (runtime-spelled-kind-sites "route-a-marked" route-a-marked))
+          (str "a site explicitly marked forwarded-refusal-kind was still "
+               "named: "
+               (pr-str (runtime-spelled-kind-sites
+                        "route-a-marked" route-a-marked)))))))
+
 ;; ---------------------------------------------------------------------------
 ;; every invisible or malformed code point in a scope entry is typed
 
