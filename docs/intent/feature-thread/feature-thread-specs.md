@@ -287,3 +287,10 @@ run as a test inside `make mcp-test`) enforces both halves.
   naming how to supply the seed. The leg is COUNTED either way, because the
   verb cannot tell an unnamed route from an absent one and the safe direction
   is INCOMPLETE.
+
+- [x] **MCP-OP-THREAD-042**: A route entry may name its handler var without a
+  namespace. When `feature_thread` reads a route table entry, it shall accept
+  `#'handler-name` as well as `#'alias/handler-name` and run the same
+  `handler-join` search, because a route table that lives in the same namespace
+  as its handlers writes the var unqualified and that is not a different kind
+  of route entry.

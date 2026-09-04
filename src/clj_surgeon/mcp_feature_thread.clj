@@ -1348,10 +1348,21 @@
       ;; caller a string literal was the function definition.
       :else {:hits hits :evidence "identifier"})))
 
+;; @spec MCP-OP-THREAD-042
 (defn- quoted-var-in
-  "Pull `#'alias/handler-name` out of a route-table line."
+  "Pull `#'alias/handler-name` -- or a bare `#'handler-name` -- out of a
+  route-table line.
+
+  The namespace is optional because a route table that lives in the same
+  namespace as its handlers writes the var unqualified, and that is not a
+  different kind of route entry. Requiring the slash cost `saveDraft` its
+  handler leg on social-media-writer @2df99c98: a route entry naming
+  `#'handle-save` produced no handler name at all, so the leg fell back to
+  hunting the seed's own identifier in handler files -- which a handler named
+  after the ROUTE does not contain."
   [text]
-  (when-let [m (re-find #"#'([A-Za-z0-9_.<>*+!?-]+)/([A-Za-z0-9_.<>*+!?-]+)" text)]
+  (when-let [m (re-find #"#'(?:([A-Za-z0-9_.<>*+!?-]+)/)?([A-Za-z0-9_.<>*+!?-]+)"
+                        text)]
     {:ns (nth m 1) :name (nth m 2)}))
 
 ;; @spec MCP-OP-THREAD-004
