@@ -5913,3 +5913,103 @@
             (str "and its text face for " key " is "
                  (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
                  " characters, past " budget))))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: a reduction that cannot reach the budget has an ANSWER
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-141
+(deftest a-reduction-that-cannot-reach-the-budget-says-so-in-a-typed-way
+  ;; Round five's second finding. The tail of `reduce-receipt-to-budget` was
+  ;;
+  ;;   (if (or (:error_truncated current) (public-faces-fit? final))
+  ;;     final
+  ;;     final)
+  ;;
+  ;; -- both arms identical, the predicate computed and thrown away. So
+  ;; "nothing left to drop" had no answer: a 60,563-byte receipt came back
+  ;; carrying `receipt_reduced true`, which a reader can only read as a
+  ;; reduction that worked.
+  (let [bulk (apply str (repeat 60000 "z"))
+        reduced (#'admit/reduce-receipt-to-budget
+                  {:ok false
+                   :operation :admit-patch-refused
+                   ;; an identity key: reduction may not drop it, and `cut`
+                   ;; shortens only the two sentences
+                   :mode bulk
+                   :error-type :invalid-patch
+                   :error "the patch does not parse"
+                   :remedy "resend a unified diff"
+                   :files [] :hashes {}})]
+    (is (true? (:receipt_reduced reduced))
+        "reduction ran")
+    (is (true? (:receipt_over_budget reduced))
+        (str "and could not reach the budget, which the receipt must SAY: "
+             (pr-str (select-keys reduced [:receipt_reduced
+                                           :receipt_over_budget]))))
+    (is (> (:receipt_residual_bytes reduced) write-refusal/public-byte-budget)
+        (str "naming the size it could not bring inside: "
+             (pr-str (:receipt_residual_bytes reduced))))
+    (is (pos? (long (:receipt_residual_text_characters reduced)))
+        "and the same for the text face")
+    (is (= "mode" (first (:receipt_unreducible_fields reduced)))
+        (str "and what could not be dropped, largest first: "
+             (pr-str (:receipt_unreducible_fields reduced))))
+    (testing "the text face carries the same statement, where elision cannot reach"
+      (let [text (#'admit/summary (assoc reduced :elapsed_ms 1.0))]
+        (is (<= (count text) write-refusal/public-byte-budget))
+        (is (str/includes? text "receipt_over_budget=true")
+            "a text-only reader must not be told a green-shaped receipt")
+        (is (str/includes? text (str "receipt_residual_bytes="
+                                     (:receipt_residual_bytes reduced))))))))
+
+;; @spec MCP-OP-ADMIT-141
+(deftest reduction-never-drops-the-notice-that-says-the-payload-was-cut
+  ;; Round five's advisory 4a. `payload_truncated`, `payload_truncation`,
+  ;; `payload_omitted` and `payload_omitted_bytes` were in neither the
+  ;; identity nor the reduction key set, so they sorted into the droppable
+  ;; pile like bulk and were measured being dropped -- a receipt jettisoning
+  ;; the only annotation that makes its own cut honest.
+  ;; The bulk sits in an IDENTITY key, exactly as the review measured it, so
+  ;; reduction exhausts every droppable field -- which is the only condition
+  ;; under which the four annotations were reached at all.
+  (let [bulk (apply str (repeat 40000 "y"))
+        reduced (#'admit/reduce-receipt-to-budget
+                  {:ok false
+                   :operation :admit-patch-refused
+                   :mode bulk
+                   :error-type :invalid-patch
+                   :error "e" :remedy "r"
+                   :payload_truncated true
+                   :payload_truncation "public-byte-budget"
+                   :payload_omitted {:files 25}
+                   :payload_omitted_bytes 41234
+                   :hashes {:a "small"}})]
+    (is (true? (:receipt_reduced reduced)))
+    (is (some #{"hashes"} (:receipt_omitted_fields reduced))
+        (str "the bulk is what goes: "
+             (pr-str (:receipt_omitted_fields reduced))))
+    (doseq [key [:payload_truncated :payload_truncation :payload_omitted
+                 :payload_omitted_bytes]]
+      (is (contains? reduced key)
+          (str "reduction dropped the receipt's own truncation notice: " key
+               " -- omitted " (pr-str (:receipt_omitted_fields reduced)))))))
+
+;; @spec MCP-OP-ADMIT-141
+(deftest the-elision-note-never-renders-longer-than-the-budget-it-was-handed
+  ;; Round five's advisory 4g. Below roughly 191 characters of remainder the
+  ;; note that ANNOUNCES the elision was itself longer than the remainder, so
+  ;; the section exceeded the budget in order to say that it had to -- a bound
+  ;; announced by a thing not charged against it, the same shape as this
+  ;; round's blocker.
+  (let [receipt (into {:ok false :operation :admit-patch-refused
+                       :mode "preview" :error-type :invalid-patch
+                       :error "e" :elapsed_ms 1.0 :source-unchanged true}
+                      (for [i (range 64)]
+                        [(keyword (format "leaf%02d" i))
+                         (apply str (repeat 40 "y"))]))]
+    (doseq [budget [1200 600 300 191 150 80 20]]
+      (let [rendered (#'admit/admit-receipt-facts receipt budget)]
+        (is (<= (count (str rendered)) budget)
+            (str "the fact section rendered " (count (str rendered))
+                 " characters against a budget of " budget))))))
