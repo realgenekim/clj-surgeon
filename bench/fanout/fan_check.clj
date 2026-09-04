@@ -7,6 +7,7 @@
 ;;   bb fan_check.clj <worktree> <manifest.edn> <canonical-dir> <base-sha>
 (ns fan-check
   (:require [clojure.string :as str]
+            [clojure.set :as set]
             [clojure.java.io :as io]
             [clojure.java.shell :refer [sh]]
             [rewrite-clj.parser :as p]
@@ -36,10 +37,62 @@
     {:ok true :tree (keep norm (n/children (p/parse-file-all (io/file f))))}
     (catch Exception e {:ok false :err (.getMessage e)})))
 
+;; Every consumed listing in this file is audited fail-closed (Sol round-2 review,
+;; finding 4): `git diff` (name+exit checked below, now stderr too), `git ls-files`
+;; (name+exit, now stderr too), the manifest read (below, a named ERROR instead of
+;; a raw stack trace), and rescore-FAN.sh's own base-sha resolution
+;; (rescore-FAN.sh:38-42, already `[ -n "$BASE" ]`-guarded -- unchanged here).
+
+(defn walk-src
+  "Recursively lists every regular file under `<wt>/src`, paths relative to `wt`
+   (e.g. \"src/acid/fanout/ns_003.clj\"), by hand -- never `file-seq`, which
+   silently drops an unreadable directory's contents with no signal at all (Sol
+   round-2 review, finding 1/4). Returns
+   {:files #{...} :dirs-found N :dirs-entered M :pruned [rel-dir-path ...]}:
+   `dirs-found` counts every directory NAME seen from a parent's own successful
+   listing (including src/ itself); `dirs-entered` counts only the ones whose OWN
+   contents this walk could list. A gap between the two IS the pruning finding 4
+   asks to surface -- e.g. `chmod 000` on a subdirectory: the parent listing still
+   names it, but listing IT returns null."
+  [wt]
+  (let [root (io/file wt "src")
+        wt-path (.toPath (io/file wt))
+        dirs-found (atom 0) dirs-entered (atom 0)
+        pruned (atom []) files (atom [])
+        ;; NOT a `\`->`/` normalization: this repo is POSIX-only (no sudo, no
+        ;; Windows lane), and `\` is a legal POSIX filename byte a manifest path
+        ;; can legitimately contain (inb-9c18e2, --selftest-backslash) -- rewriting
+        ;; it would corrupt exactly the path this program already had to fix once.
+        ;; `.relativize(...).toString()` already yields `/`-separated components
+        ;; verbatim on this JVM's (POSIX) file separator.
+        rel (fn [^java.io.File f] (.toString (.relativize wt-path (.toPath f))))]
+    (letfn [(walk [^java.io.File d]
+              (swap! dirs-found inc)
+              (let [entries (.listFiles d)]
+                (if (nil? entries)
+                  (swap! pruned conj (rel d))
+                  (do (swap! dirs-entered inc)
+                      (doseq [^java.io.File e entries]
+                        (cond
+                          (.isDirectory e) (walk e)
+                          (.isFile e) (swap! files conj (rel e))))))))]
+      (walk root))
+    {:files (into #{} @files) :dirs-found @dirs-found :dirs-entered @dirs-entered :pruned @pruned}))
+
 (defn -main [wt manifest-path canon base]
-  (let [m (read-string (slurp manifest-path))
+  (let [m (try (read-string (slurp manifest-path))
+               (catch Exception e
+                 (println (format "CHECK 1 file-set: ERROR manifest unreadable: %s" (.getMessage e)))
+                 (System/exit 1)))
         targets (:targets m)
         target-files (set (map :file targets))
+        ;; NUL framing (-z) only ever produces EMPTY separators between records --
+        ;; never a separator that is nonempty whitespace -- so the right predicate
+        ;; is `empty?`. `str/blank?` is also true for a legal POSIX path that is
+        ;; itself all whitespace (e.g. a file literally named " "), which would
+        ;; silently drop a real record instead of just the framing artifacts.
+        split-nul (fn [s] (remove empty? (str/split s (re-pattern (str (char 0))))))
+
         ;; -z / NUL-separated, raw bytes: `--name-only` (no -z) C-quotes any path
         ;; containing a backslash regardless of core.quotePath, so a legal POSIX
         ;; path with a literal "\" component never string-matches the manifest's
@@ -47,6 +100,15 @@
         gd (sh "git" "-C" wt "diff" "-z" "--name-only" base)
         _ (when-not (zero? (:exit gd))
             (println "CHECK 1 file-set: FAIL git diff failed:" (str/trim (:err gd)))
+            (System/exit 1))
+        ;; A listing can exit 0 and STILL be incomplete: stock Git prints an
+        ;; unreadable-directory WARNING on stderr while returning 0 and an empty
+        ;; stdout for that subtree (Sol round-2 review, finding 1, BLOCKER -- the
+        ;; real `chmod 000` case). Reject nonempty stderr on every listing this
+        ;; check trusts, whether or not its exit code was 0.
+        _ (when (seq (str/trim (:err gd)))
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete git diff stderr: %s"
+                              (str/trim (:err gd))))
             (System/exit 1))
         ;; Every git listing this check consumes is fail-closed: a listing process
         ;; that cannot be trusted must never read as an empty set (a missing
@@ -58,15 +120,57 @@
             (println (format "CHECK 1 file-set: ERROR git ls-files exit=%d %s"
                               (:exit untracked) (str/trim (:err untracked))))
             (System/exit 1))
-        ;; NUL framing (-z) only ever produces EMPTY separators between records --
-        ;; never a separator that is nonempty whitespace -- so the right predicate
-        ;; is `empty?`. `str/blank?` is also true for a legal POSIX path that is
-        ;; itself all whitespace (e.g. a file literally named " "), which would
-        ;; silently drop a real record instead of just the framing artifacts.
-        split-nul (fn [s] (remove empty? (str/split s (re-pattern (str (char 0))))))
+        _ (when (seq (str/trim (:err untracked)))
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete git ls-files stderr: %s"
+                              (str/trim (:err untracked))))
+            (System/exit 1))
         changed (into #{} (split-nul (:out gd)))
         extra-untracked (into #{} (split-nul (:out untracked)))
-        changed-all (into changed extra-untracked)]
+        changed-all (into changed extra-untracked)
+
+        ;; ---- independent completeness cross-check (Sol round-2 review, finding 1
+        ;; residual: "If the contract must defend against a shim that silently
+        ;; lies without stderr, CHECK 1 needs an independent inventory rather than
+        ;; trusting the same listing process.") -----------------------------------
+        ;; An enumeration that shares no code with EITHER git call above: a PATH
+        ;; shim keyed on `ls-files` specifically (the reviewer's exact repro --
+        ;; exit 0, empty OR partial stdout, no stderr at all) defeats both checks
+        ;; above, so this cross-checks the listing against ground truth that never
+        ;; calls `ls-files`: `ls-tree` reads straight from git's OBJECT DATABASE
+        ;; (unaffected by working-tree permissions, and not matched by an
+        ;; `ls-files`-keyed shim) for "what src/ held at the base commit", and the
+        ;; hand-rolled `walk-src` above -- never `file-seq` -- for "what src/
+        ;; holds right now". Every fanout target is an in-place edit
+        ;; (gen-fanout.clj never adds or removes a file), so absent a real
+        ;; injected file these two sets are exactly equal; any gap is either a
+        ;; vanished/unreadable file (pruning) or a real untracked file the git
+        ;; listing above failed to report.
+        walk (walk-src wt)
+        _ (when (seq (:pruned walk))
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete pruned dirs-found=%d dirs-entered=%d %s"
+                              (:dirs-found walk) (:dirs-entered walk) (pr-str (:pruned walk))))
+            (System/exit 1))
+        base-tree (sh "git" "-C" wt "ls-tree" "-r" "--name-only" "-z" base "--" "src")
+        _ (when-not (zero? (:exit base-tree))
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete git ls-tree exit=%d %s"
+                              (:exit base-tree) (str/trim (:err base-tree))))
+            (System/exit 1))
+        _ (when (seq (str/trim (:err base-tree)))
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete git ls-tree stderr: %s"
+                              (str/trim (:err base-tree))))
+            (System/exit 1))
+        baseline-src (into #{} (split-nul (:out base-tree)))
+        walked-src (:files walk)
+        vanished (sort (set/difference baseline-src walked-src))
+        _ (when (seq vanished)
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete vanished=%d %s (present at base, absent from the independent filesystem walk)"
+                              (count vanished) (pr-str (vec (take 4 vanished)))))
+            (System/exit 1))
+        unreported (sort (remove extra-untracked (set/difference walked-src baseline-src)))
+        _ (when (seq unreported)
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete unreported=%d %s (present on disk, absent from git's untracked listing)"
+                              (count unreported) (pr-str (vec (take 4 unreported)))))
+            (System/exit 1))]
 
     ;; ---- CHECK 1: file set equals the manifest's target set exactly, no extras ----
     (let [missing (sort (remove changed-all target-files))
@@ -112,9 +216,11 @@
                       (pr-str (vec (take 4 (map (juxt :file :label) gone)))))))
 
     ;; ---- CHECK 6: residue, and no introduced alias shadows a binding ------------
-    (let [src (io/file wt "src")
-          all-src (filter #(and (.isFile %) (re-find #"\.cljc?$" (.getName %)))
-                          (file-seq src))
+    ;; Reuses the SAME `walk` this file already validated fail-closed for CHECK 1
+    ;; (pruning checked, exit before this code is ever reached) instead of a
+    ;; second, unchecked `file-seq` call over src/ (Sol round-2 review, finding 4).
+    (let [all-src (map #(io/file wt %)
+                        (filter #(re-find #"\.cljc?$" %) (:files walk)))
           lib-re (re-pattern (str (str/replace (:lib (:old m)) "." "\\.") "(?![0-9A-Za-z_-])"))
           lib-hits (for [f all-src
                          :let [c (slurp f)]
