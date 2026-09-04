@@ -485,3 +485,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 ## RESUME DELTA 12:54Z
 - Lanes: feature_thread r6 building (Sol r5 NO-GO: escaping conventions globs; saveDraft route from a docstring; + the round-five spec); MEM-003 r6 Opus review (Sol refused; 432268cf); census r24 fix build (trunk merge + :paths fence; from r23 GO-WITH-FIX) → lands after; study-ops r7 build (r6 Sol NO-GO: one carriage predicate); gate r7 fix build (r6 Opus GO-WITH-FIX: stale over-budget annotations; empty trim annotated) → lands after; then arm G. T4 waits on ft r6.
 - Sol filter refusals: 24 tonight. Landings: 4 (integration, scorer, tmp-leak d0b4e1ca, q5z 44e70af5).
+
+## RESUME DELTA 14:14Z
+- Lanes (all builders, no reviews running): gate r8 fix (r7 Sol NO-GO: the gate must own its battery receipt; witness the cheap-move-first ORDER) → lands on GO; study-ops r8 (r7 Sol NO-GO: escape dotted pointers; single-line rendering) — the ls-tree text-doubling product change awaits Gene; census r24 fix (r23 GO-WITH-FIX: :paths fence + oracle names + trunk merge) → lands after; feature_thread r6 (r5 Sol NO-GO: escaping globs; route from a docstring; + the round-five spec) → T4 after; MEM-003 r7 (r6 Opus NO-GO: three spellings per derived name; floor manifest; calls not lines).
+- Sol refusals: 24; every gate lane except gate r7 and O2 went to Opus. Landings: 4. Reviewers write incrementally; builders push per item (the census builder needed a nudge at 13:4xZ and complied).
