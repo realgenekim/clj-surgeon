@@ -1457,6 +1457,121 @@
         (finally (delete-tree! root))))))
 
 ;; ---------------------------------------------------------------------------
+;; ROUND SIX -- review finding 2: a conventions file may not reach outside the
+;; workspace
+;; ---------------------------------------------------------------------------
+
+(def ^:private outside-canary "CANARY-OUTSIDE-THREAD6")
+
+(defn- escaping-fixture!
+  "A workspace root with a sibling `outside/` directory holding a canary file.
+   Returns `[base root outside]`."
+  []
+  (let [base (io/file (str (java.nio.file.Files/createTempDirectory
+                             "feature-thread-escape"
+                             (into-array java.nio.file.attribute.FileAttribute []))))
+        root (io/file base "repo")
+        outside (io/file base "outside")]
+    (write-file! outside "secret.clj"
+                 (str "(ns secret)\n;; " outside-canary "\n"
+                      "(defn formatDraft [x] x)\n"))
+    (write-file! root "src/own.clj" "(ns own)\n")
+    [base root outside]))
+
+(defn- escaping-conventions
+  [glob]
+  {:repo-label "escape-fixture"
+   :legs [{:id "menu-caller" :kind :use :globs ["src/*.clj"]}
+          {:id "js-function" :kind :def :globs [glob]}
+          {:id "route" :kind :route :globs ["src/*.clj"]}
+          {:id "handler" :kind :handler :globs ["src/*.clj"]}
+          {:id "tests" :kind :test :globs ["src/*.clj"]}]})
+
+;; @spec MCP-OP-THREAD-043
+(deftest a-convention-glob-may-not-name-a-path-outside-the-workspace
+  (testing "a relative glob that climbs out of the root is a typed refusal"
+    (let [[base root _] (escaping-fixture!)]
+      (try
+        (let [{:keys [structured text error?]}
+              (call! {:subject "formatDraft"
+                      :config (escaping-conventions "../outside/*.clj")
+                      :scope {:workspace_root (.getPath root)}})]
+          (is error? "an escaping glob is a refusal, not a receipt")
+          (is (= "feature-thread-conventions-escaping-glob"
+                 (:error_type structured)))
+          (is (= "legs[1].globs" (:field structured))
+              "the refusal names the field it refused")
+          (is (str/includes? (:error structured) "../outside/*.clj")
+              "the refusal names the glob AS SPELLED")
+          (is (nil? (:legs structured))
+              "no leg was resolved: the refusal precedes the walk")
+          (is (not (str/includes? text outside-canary))
+              "nothing outside the root was read")
+          (is (not (str/includes? (json/generate-string structured)
+                                  outside-canary))
+              "nothing outside the root was read"))
+        (finally (delete-tree! base)))))
+
+  (testing "an absolute glob is a typed refusal and its target is never resolved"
+    (let [[base root outside] (escaping-fixture!)]
+      (try
+        (let [{:keys [structured text error?]}
+              (call! {:subject "formatDraft"
+                      :config (escaping-conventions
+                                (str (.getPath outside) "/*.clj"))
+                      :scope {:workspace_root (.getPath root)}})]
+          (is error?)
+          (is (= "feature-thread-conventions-escaping-glob"
+                 (:error_type structured)))
+          (is (nil? (:legs structured)))
+          (is (not (str/includes? text outside-canary)))
+          (is (not (str/includes? (json/generate-string structured)
+                                  outside-canary))))
+        (finally (delete-tree! base)))))
+
+  (testing "the same refusal comes from the conventions FILE, not only inline"
+    (let [[base root _] (escaping-fixture!)]
+      (try
+        (write-file! root ".clj-surgeon/feature-thread.edn"
+                     (pr-str (escaping-conventions "../outside/*.clj")))
+        (let [{:keys [structured error?]}
+              (call! {:subject "formatDraft"
+                      :scope {:workspace_root (.getPath root)}})]
+          (is error?)
+          (is (= "feature-thread-conventions-escaping-glob"
+                 (:error_type structured)))
+          (is (str/includes? (:error structured) "../outside/*.clj")))
+        (finally (delete-tree! base)))))
+
+  (testing "a `~` glob is refused with the same type"
+    (let [[base root _] (escaping-fixture!)]
+      (try
+        (let [{:keys [structured error?]}
+              (call! {:subject "formatDraft"
+                      :config (escaping-conventions "~/outside/*.clj")
+                      :scope {:workspace_root (.getPath root)}})]
+          (is error?)
+          (is (= "feature-thread-conventions-escaping-glob"
+                 (:error_type structured))))
+        (finally (delete-tree! base)))))
+
+  (testing "a SYMLINKED directory cannot be refused by shape, so nothing it holds is read or published"
+    (let [[base root outside] (escaping-fixture!)]
+      (try
+        (symlink! (io/file root "hop") outside)
+        (let [{:keys [structured text]}
+              (call! {:subject "formatDraft"
+                      :config (escaping-conventions "hop/*.clj")
+                      :scope {:workspace_root (.getPath root)}})
+              json (json/generate-string structured)]
+          (is (not (str/includes? text outside-canary))
+              "a symlinked directory's contents are never read")
+          (is (not (str/includes? json outside-canary)))
+          (is (not (str/includes? json "\"hop/secret.clj\""))
+              "a path reached through a symlink out of the root is never published"))
+        (finally (delete-tree! base))))))
+
+;; ---------------------------------------------------------------------------
 ;; ROUND FOUR -- 3.3 (a make recipe is not a shell command) and 3.4 (dup unreadable)
 ;; ---------------------------------------------------------------------------
 
