@@ -442,3 +442,237 @@ No Surgeon MCP server was started. `MEMBAT_ALLOW_ANY_ROOT` was not used.
   branch.
 - The two pre-existing `held-scales-with-n` FAILs on `rename-ns-plan-full-match`
   and `workspace-sources-read-all`. Named as known at `2556a38`; untouched here.
+
+---
+
+# Round 3 — closing Sol's round-2 NO-GO (reviewed tip `dd9d8b9`)
+
+Sol returned NO-GO on four blocking findings. **Every one was reproduced at
+`dd9d8b9`, with the review's own commands, before anything was changed.** The
+receipts below are this seat's runs.
+
+RED `6882eea` → GREEN `8b13684` → MEM-021 `84b48f6`.
+
+```
+RED    Ran 16 tests containing 36 assertions. 15 failures, 0 errors.
+GREEN  Ran 16 tests containing 36 assertions.  0 failures, 0 errors.
+```
+
+## §1 (BLOCKING) — a name vocabulary is not provenance
+
+**Reproduced.** The ordinary path was already correct at `dd9d8b9` —
+`:elapsed-survives-hash false` — and the attack walked straight past it. On a
+scratch archive of `dd9d8b9`, with the review's exact diff (one clock read
+bound to a local, published under the declared `:elapsed_ms` AND an undeclared
+`:verification_wall_ms`):
+
+```
+{:inventoried-sites 34, :classes {:receipt 14, :control 20}}
+{:undeclared-field 1.559259, :hashed-field 1.559259, :unpartitioned-paths []}
+Ran 6 tests containing 16 assertions. 0 failures, 0 errors.
+```
+
+The undeclared clock field is in the parity hash, the diagnostic reports none,
+and every witness passes. No clock-read COUNT changed, and the new name was in
+nobody's vocabulary.
+
+**THE RULE: the tag rides the VALUE, not the name.** `clj-surgeon.measured`
+owns every raw clock read in `src/`. `start` returns an OPAQUE tick —
+`(- (raw-nanos) (start))` does not typecheck — so the only way to turn it into
+a duration is `elapsed-ms` / `elapsed-nanos`, and those return a TAGGED
+READING. `partition-measured` relocates every reading it finds under **any key
+at all**, and unwraps it inside the block so the wire carries a number rather
+than an object.
+
+Fourteen receipt clock sites moved across ten namespaces. The
+`measured-field-names` vocabulary is kept as a second, weaker net for fields an
+adapter constructs from data — but it is no longer the invariant.
+
+**The boundary REFUSES rather than publishes.** A measured value it cannot
+relocate (a reading sitting directly in a vector, with no key) raises
+`:unpartitioned-measured-field`. The bad state is unrepresentable downstream
+instead of merely diagnosed.
+
+### The witness is now two exact-match allow-lists and a plant
+
+1. **No raw clock read outside `clj-surgeon.measured`** — `System/nanoTime`,
+   `System/currentTimeMillis`, `Instant/now`, `.getTime`, scanned over `src/`
+   by `[file, form]`. Every remaining site is `:control` and carries the reason
+   its value is never published; a `:receipt` entry is refused by the test
+   itself as a contradiction.
+2. **Every call site of the verbs that hand back an UNTAGGED number** —
+   `measured/value`, `measured/raw-nanos`, `measured/raw-ms` — named with why
+   it needs a bare number. Laundering stays legitimate and stays greppable.
+3. **`clj-surgeon.measured` may not be aliased to any other name**, or the
+   scanner has a hole in it.
+4. **A plant proves the scanner** — a raw read written into a scratch copy of
+   `src/` must be reported. A ratchet nobody has seen go red is a hope.
+
+**Both plants, on scratch archives of the GREEN tip `8b13684`:**
+
+```
+PLANT A — the review's own raw-API diff
+  raw clock reads with no allow-list entry:
+    (["src/clj_surgeon/mcp_hot_verify.clj" "verify!"])
+  Ran 9 tests containing 21 assertions. 2 failures, 0 errors.
+
+PLANT B — the same two names, built from the SANCTIONED clock read
+  {:undeclared-field nil, :hashed-field nil,
+   :in-partition 1.21982, :unpartitioned-paths []}
+  Ran 16 tests containing 36 assertions. 0 failures, 0 errors.
+```
+
+The undeclared name is relocated into the partition rather than published, and
+never reaches the hashed channel. Sol's §1 command now goes the right way.
+
+## §2 (BLOCKING) — one boundary means one boundary
+
+**Reproduced at `dd9d8b9`:**
+
+```
+{:is-error true,
+ :structured-content {"error_type" "mcp-adapter-failure", "ok" false,
+                      "error" "boom", "operation" "boom"},
+ :has-measured false}
+```
+
+`recovery/recover!` was not the only bypass. The SDK adapter's `catch` built
+its own result — no `measured` block, invalid against every canonical output
+schema — and it is reachable whenever execution, finalization, summary
+rendering or serialization throws.
+
+The catch routes through `mcp-operation/finalize-failure`, which IS
+`invoke!`'s finalizer. At `8b13684`, the review's exact command:
+
+```
+{:is-error true,
+ :structured-content {"measured" {"elapsed_ms" 0.763604},
+                      "error_type" "mcp-adapter-failure", "ok" false,
+                      "error" "boom", "operation" "boom"},
+ :has-measured true}
+```
+
+Two witnesses: a source scan that enumerates every `structured-call-result`
+call site by `[file, form]` and asserts each names the boundary verb it routes
+through (a NEW publish site fails it), and a behavioral one in the mcp-test
+suite that throws from a tool-fn and asserts `measured.elapsed_ms` present, no
+top-level clock, and the typed error preserved.
+
+## §3 (BLOCKING) — the silent zero
+
+**Reproduced at `dd9d8b9`**, one event, two shapes, same clock file:
+
+```
+current shape (measured.elapsed_ms)  -> no :server-authoritative-elapsed-ms at all
+legacy  shape (top-level elapsed_ms) -> :server-authoritative-elapsed-ms 12.5
+```
+
+`bench/event_timing.clj` reads `measured.elapsed_ms` now and REFUSES a
+top-level `elapsed_ms` loudly:
+
+```
+current shape -> :server-authoritative-elapsed-ms 12.5
+legacy  shape -> benchmark event timing failed: MCP result carries a top-level
+                 elapsed_ms; the server clock lives in measured.elapsed_ms
+                 (MCP-OP-TIME-005)
+                 {:item-id "m", :tool "inspect_clojure", :legacy-elapsed-ms 12.5}
+```
+
+A false absence is worse than an error: it terminates investigation instead of
+starting one. The self-test fixture carries the current shape and asserts the
+refusal, and `bb test/run_all.clj` now RUNS that self-test, so the bench reader
+is bound to the ordinary gate.
+
+**Every other in-repository `elapsed_ms` reader was swept and none is stale**
+— confirming the review's own reading:
+
+| reader | what it reads | verdict |
+|---|---|---|
+| `bench/event_timing.clj:133` | MCP `structuredContent` | **was stale; moved** |
+| `skills/study-agent-usage/scripts/collect_agent_usage.py:1398,1407` | cclsp `lsp_request_*` and `mcp_request_complete` TELEMETRY events | not this wire |
+| `bench/anvil-arms/watch.py:881,904,907` | the watcher's own action durations, computed from its timestamps | not this wire |
+| `bench/anvil-arms/score.py:425-427` | the watcher records above | not this wire |
+| `bench/profile_mcp_startup.sh:65` | its own RSS-sample TSV column header | not this wire |
+
+## §4 (BLOCKING) — the intent chain and the code say one wire
+
+**Reproduced at `dd9d8b9`** — the LLD claimed a top-level clock at six places
+and the HLD at one, while the EARS rows already named the partition:
+
+```
+47:+-- shared finalizer records elapsed_ms
+78:4. Associates authoritative `elapsed_ms` with the result.
+92:top-level public request clock, and it is never silently overwritten without
+114:Every public output schema declares `elapsed_ms` as a required number with a
+280:- the outcome reaches the single publication choke point and finalizer ;
+505:-> shared finalizer adds elapsed_ms only
+1001:- Every public MCP operation returns a finite, non-negative `elapsed_ms` on
+```
+
+All three files name `measured.elapsed_ms` now, and the witness holds them to
+one rule: **a line that names `elapsed_ms` names the partition it lives in.**
+After:
+
+```
+the-intent-chain-names-the-partition: 0 offenders across
+  docs/high-level-design.md
+  docs/intent/mcp-operation-contract/mcp-operation-contract-design.md
+  docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md
+```
+
+## §6 — the owed memory-red row, registered as MCP-OP-MEM-021
+
+Sol ruled "best of 3" a filed follow-up rather than a fifth blocker, and said
+it must be ratified before anyone cites the gate as a tail-latency guarantee.
+It is a rule now, not a comment: the sampling and the host receipt moved out of
+the bench script into `clj-surgeon.timing-sample`, whose `best` REFUSES fewer
+than three probes (`:insufficient-timing-probes`) or a probe with no reading
+(`:missing-timing-reading`). The row's misreadings block states the boundary in
+its own words — minimum-of-N estimates UNCONTENDED cost and is deliberately
+silent about tail latency and reliability.
+
+Filed as **MEM-021, not MEM-012**: MEM-012 is already the read-set manifest row
+in the memory-transaction lane, and the audit deduplicates by id, so the
+collision would have registered nothing at all (spec count stayed 259 until the
+renumber; 260 after).
+
+## Gates at the round-3 tip
+
+| gate | result |
+|---|---|
+| `suite-run bb test/run_all.clj` | `Ran 886 tests containing 7043 assertions. 0 failures, 0 errors.` (873/7016 at `dd9d8b9`) |
+| `suite-run clojure -M:clj-surgeon/mcp-test` | `Ran 602 tests containing 6365 assertions. 0 failures, 0 errors.` (601/6359 at `dd9d8b9`) |
+| `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` |
+| `audit-current-repository` | `ok=true specs=260 violations=0` (259 at `dd9d8b9`; +MCP-OP-MEM-021) |
+| `make txn-kernel-warning-check` | `kernel warning check: 2 namespace(s), 0 warning(s)` |
+| `make memory-battery-self-test` | `generate_tree self-test: ok` / `Ran 32 tests containing 171 assertions. 0 failures, 0 errors.` |
+| `make memory-red PARSER_RED_EXPECT=green` | `memory-red: 6/6 assertions held (expect=green)` — `{:best-scan-ms 13, :scan-ms [14 13 13]}` |
+| `make memory-red-kernel` (flock) | `Ran 4 tests containing 25 assertions. 0 failures, 0 errors.` |
+| `make memory-battery` (ONCE, flock, fresh `MEMBAT_ROOT=/home/forge/tmp/membat-mem003r3`) | **FAIL (INCOMPLETE) exit 1** — `reference-mismatch-count=0`; the two pre-existing `held-scales-with-n`; four UNMEASURED |
+
+The battery's reference was built by an explicit
+`make memory-battery-reference` under the same `flock`, run ONCE, and
+`MEMBAT_ALLOW_ANY_ROOT` was never set. Its two failures are the ones named as
+pre-existing at `2556a38` and unchanged:
+
+```
+FAIL held-scales-with-n {:op :rename-ns-plan-full-match, :observed  9.9, :limit 3.0, :small-n-observed 1.0}
+FAIL held-scales-with-n {:op :workspace-sources-read-all, :observed 40.9, :limit 6.5, :small-n-observed 4.5}
+```
+
+`cli-ls-tree`'s held heap stays flat across the 10x corpus (9.2 MB at 1,000
+files, 9.6 MB at 10,000), so its `held-scales-with-n` line stays gone. Full run
+at
+`/home/forge/tmp/membat-mem003r3/receipts/20260904T044438.685828175Z-battery.edn`;
+its reference at `.../20260904T043810.060999894Z-reference.edn`.
+
+No Surgeon MCP server was started.
+
+## What is NOT closed
+
+- The four `UNMEASURED reserved-peak-over-budget` lines — MEM-001's subject,
+  the memory-boundedness lane's, not this branch's.
+- The two pre-existing `held-scales-with-n` FAILs on
+  `rename-ns-plan-full-match` and `workspace-sources-read-all`, named as known
+  at `2556a38` and untouched here.
+- Ten TREND lines, reported and never gated, unchanged.
