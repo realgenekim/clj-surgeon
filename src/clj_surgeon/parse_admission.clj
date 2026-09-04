@@ -488,7 +488,16 @@
          t0 (System/nanoTime)
          {:keys [parse-nodes parse-depth]} (scan-shape source)
          _ (record-scan! (- (System/nanoTime) t0) (.length ^String source))
-         measured {:parse-nodes parse-nodes :parse-depth parse-depth}
+         ;; @spec MCP-OP-TIME-005
+         ;; `:shape`, NOT `:measured`. These two figures are deterministic
+         ;; counts of the source's structure — the same file yields the same
+         ;; pair on every machine forever — and `:measured` is the repository's
+         ;; well-known marker for "a clock produced this". Under the old name
+         ;; the global projector silently DROPPED them from the hashed channel,
+         ;; so a change in a refused file's node count could never be caught by
+         ;; a parity row. The key that names the partition has to mean one
+         ;; thing, in both directions.
+         shape {:parse-nodes parse-nodes :parse-depth parse-depth}
          over (cond
                 (> parse-depth max-parse-depth)
                 [:max-parse-depth max-parse-depth parse-depth]
@@ -503,7 +512,7 @@
           :reason reason
           :limit limit
           :observed observed
-          :measured measured
+          :shape shape
           :remedy (remedy-for reason limit observed)})))))
 
 ;; @spec MCP-OP-MEM-005

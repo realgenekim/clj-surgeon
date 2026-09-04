@@ -286,8 +286,14 @@
       (is (string? (:remedy r)))
       (is (seq (:remedy r)))
       (is (= {:parse-nodes (nodes-of over) :parse-depth (depth-of over)}
-             (:measured r))
-          "both measured shape figures travel with the refusal")
+             (:shape r))
+          "both shape figures travel with the refusal")
+      ;; @spec MCP-OP-TIME-005
+      (is (= (:shape r) (:shape (measured/hashed-channel r)))
+          "the shape counts are DETERMINISTIC and belong in the hashed
+           channel; under the key `:measured` the global projector dropped
+           them, so a refused file's node count could never be a parity
+           subject")
       (is (not (contains? r :next_call))
           (str "no narrower clj-surgeon call exists for a refused file — "
                "every structural read of it builds the same tree")))))
