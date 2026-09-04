@@ -172,7 +172,11 @@
    :verification_status :unverified
    :verification_reasons []
    ;; @spec MCP-OP-ADMIT-123
-   :detectors_not_run []
+   ;; @spec MCP-OP-ADMIT-125
+   ;; Absent, not empty. `[]` is the affirmative claim that every requested
+   ;; detector answered, and the seed is merged onto receipts -- refusals
+   ;; parsed, no-op and hazard -- where no detector was ever consulted.
+   :detectors_not_run nil
    :verification_complete false
    :source-unchanged true
    :next_call nil})
@@ -763,7 +767,48 @@
     :analyzer-output-truncated
     :process-interrupted})
 
+;; @spec MCP-OP-ADMIT-125
+(defn analyzer-clean-reading?
+  "Did the analyzer produce a reading with nothing blocking in it?
+
+  The one predicate for the analyzer half. `verification-status` decided the
+  word, `detectors-not-run` decided the list and the commit waiver decided
+  permission, each from its own arithmetic over the same map; they are folded
+  here so they cannot answer differently."
+  [lint]
+  (and (true? (:ran lint)) (not (false? (:ok lint)))))
+
 ;; @spec MCP-OP-ADMIT-123
+;; @spec MCP-OP-ADMIT-125
+(defn detector-verdicts
+  "Normalize both detectors to one shape: did it answer, was the answer clean.
+
+  `verification_status` and `detectors_not_run` are two readings of the same
+  fact and were computed from two different predicates -- the status from the
+  evidence verdict, the detector list from whether a child process exited. A
+  runner that exited and wrote an unusable report satisfies the second and
+  not the first, so a receipt could publish `partial` beside
+  `detectors_not_run []`: the affirmative claim that every requested detector
+  answered, on a receipt where the substantive half had answered nothing.
+  `:ran` is a fact about the operating system. `reading?` is the fact the
+  receipt is about.
+
+  A check that ran and came back bad news -- a suite that failed, an analyzer
+  that introduced a blocking finding -- produced exactly the reading this
+  gate asked for. It is already blocking on its own terms and must not also
+  be reported silent."
+  [lint evidence]
+  [{:detector (or (:detector lint) "clj-kondo")
+    :reading? (true? (:ran lint))
+    :clean? (analyzer-clean-reading? lint)
+    :reason (or (:error-type lint) (:reason lint) :analyzer-unverified)}
+   {:detector "focused-tests"
+    :reading? (or (true? (:ok evidence)) (= :tests-failed (:reason evidence)))
+    :clean? (true? (:ok evidence))
+    :reason (or (:reason evidence) :no-test-evidence)}])
+
+;; @spec MCP-OP-ADMIT-123
+;; @spec MCP-OP-ADMIT-125
 (defn detectors-not-run
   "Name every requested detector that produced no reading at all.
 
@@ -772,20 +817,15 @@
   without ever learning that the substantive half was silent. That is the
   shape the field replay had: `ok` true, `hazards` all class note, an empty
   blocking set, and an analyzer that never executed."
-  [verify lint tests]
-  (let [requested? (= "focused" verify)
-        reason (fn [value fallback]
-                 (if requested?
-                   (or (:error-type value) (:reason value) fallback)
-                   :verification-not-requested))]
-    (cond-> []
-      (not (true? (:ran lint)))
-      (conj {:detector (or (:detector lint) "clj-kondo")
-             :reason (reason lint :analyzer-unverified)})
-
-      (not (true? (:ran tests)))
-      (conj {:detector "focused-tests"
-             :reason (reason tests :no-test-evidence)}))))
+  [verify verdicts]
+  (if (not= "focused" verify)
+    (mapv (fn [{:keys [detector]}]
+            {:detector detector :reason :verification-not-requested})
+          verdicts)
+    (into []
+          (comp (remove :reading?)
+                (map #(select-keys % [:detector :reason])))
+          verdicts)))
 
 ;; @spec MCP-OP-ADMIT-082
 (defn verification-status
@@ -798,8 +838,9 @@
   [verify lint evidence]
   (if (not= "focused" verify)
     {:status :unverified :reasons [:verification-not-requested]}
-    (let [lint-ok (and (:ran lint) (not (false? (:ok lint))))
-          tests-ok (:ok evidence)
+    (let [;; @spec MCP-OP-ADMIT-125
+          lint-ok (analyzer-clean-reading? lint)
+          tests-ok (true? (:ok evidence))
           ;; @spec MCP-OP-ADMIT-124
           unverifiable (or (contains? unverifiable-test-reasons (:reason evidence))
                            (contains? unverifiable-lint-error-types
@@ -872,13 +913,15 @@
                          tests
                          profile-provenance)
             evidence (test-evidence tests namespaces)
+            ;; @spec MCP-OP-ADMIT-125
+            verdicts (detector-verdicts lint evidence)
             {:keys [status reasons]} (verification-status verify lint evidence)
             lint-blocking (and (:ran lint) (false? (:ok lint)))
             tests-blocking (and (:ran tests)
                                 (pos? (long (or (:failed tests) 0))))]
         {:lint_delta lint
          ;; @spec MCP-OP-ADMIT-123
-         :detectors_not_run (detectors-not-run verify lint tests)
+         :detectors_not_run (detectors-not-run verify verdicts)
          :tests (cond-> tests
                   (not (:ok evidence)) (assoc :reason (:reason evidence))
                   (some? (:exit evidence)) (assoc :runner_exit (:exit evidence))
@@ -1455,6 +1498,18 @@
                               no-op? (every? #(= (:pre %) (:post %)) images)
                               blocking (form-identity/refusal-hazards
                                          (:hazards report))
+                              ;; @spec MCP-OP-ADMIT-125
+                              ;; These two branches refuse before any
+                              ;; detector is consulted. Saying so is not the
+                              ;; same claim as `[]`.
+                              not-attempted
+                              (detectors-not-run
+                                verify
+                                (detector-verdicts
+                                  {:ran false
+                                   :reason :verification-not-attempted}
+                                  {:ok false
+                                   :reason :verification-not-attempted}))
                               base (assoc (merge (empty-receipt mode) report)
                                           :pre_image_binding base-binding)]
                           (cond
@@ -1469,6 +1524,8 @@
                                     :operation :admit-patch-refused
                                     :committed false
                                     :source-unchanged true
+                                    ;; @spec MCP-OP-ADMIT-125
+                                    :detectors_not_run not-attempted
                                     :error-type :no-op-patch
                                     :error (str "The patch produces a post-image "
                                                 "identical to the pre-image for "
@@ -1485,6 +1542,8 @@
                                     :committed false
                                     :mutation_attempted false
                                     :source-unchanged true
+                                    ;; @spec MCP-OP-ADMIT-125
+                                    :detectors_not_run not-attempted
                                     :error-type (:type (first blocking))
                                     :error (:message (first blocking))
                                     ;; @spec MCP-OP-ADMIT-116
@@ -1509,8 +1568,10 @@
                                      :verification_complete false
                                      ;; @spec MCP-OP-ADMIT-123
                                      :detectors_not_run
-                                     (detectors-not-run verify {:ran false}
-                                                        {:ran false})
+                                     (detectors-not-run
+                                       verify
+                                       (detector-verdicts {:ran false}
+                                                          {:ok false}))
                                      :tests {:ran false :passed 0 :failed 0
                                              :skipped 0 :namespaces []
                                              :profile_absent
