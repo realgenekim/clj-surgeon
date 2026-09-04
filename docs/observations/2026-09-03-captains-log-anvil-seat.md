@@ -1753,3 +1753,12 @@ within the hour. Six race sites, not two; the last two inverted the lesson (a ge
 had already left"). Nothing dropped: 885/13128 = 865/13023 + exactly the twenty new witnesses. Rename to know:
 make test-fast is now the JVM fast lane; the bb lane is make test-bb. Independent Sol review on the fresh clone
 suite-wt; on GO it lands and round three (GHA, ledger + tripwire, runtime witnesses) follows.
+
+## 20:15Z Arm G WITHDRAWN as pre-registered: the gate as the write path is a 2.6–2.8× wall LOSS in its current contract
+
+G 53 turns / 18.5 min (4 MCP calls, 17 apply_patch); GN 40 / 17.0 min (0 MCP calls despite the mandate); native same hour
+30 / 6.5. The rollouts name why: 4–5 min building whole-file payloads before the first call; a verification refusal
+without the failing test's output, so the agent went blind and re-implemented locally; a mandate that is not a path.
+Both trees correct and gate-green — correctness is not the finding. The product asks (accept the harness's own patch
+representation; refusals carry the failing output; a propose mode) are the gate lane's next round. Written up in the
+replay doc; this is the negative Gene asked for in the log, not a footnote.

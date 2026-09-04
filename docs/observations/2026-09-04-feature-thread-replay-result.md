@@ -217,3 +217,39 @@ ceremony. The pair is same-hour, same-load, so the confound is native's own vari
 amended: the landing contract's share is only measurable once the receipt has removed the reads — T5 (receipt +
 contract) as pre-registered, and the contract's rules row must be a DISTILLATION (the dozen binding lines), not a
 shorter file. The local SMW branch stays local; nothing is pushed to Gene's repo.
+
+## Arm G / GN (the admit gate as the write path; MCP server from the landed trunk 8d32d619 on 8171) — 2026-09-04 19:53Z–20:1xZ
+
+Pre-registration: G raw ≤ 12, agent-run suite invocations 0, wall < 4 min; WITHDRAW if G raw > 18 or the gate refuses the same patch twice for the same reason.
+
+| arm | wall | turns | gate turns (payload + calls) | apply_patch | reads | rules | verify (own) | gates |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| G (receipt + gate mandated) | 18.5 min | 53 (4 MCP calls) | 3.9 min / 13 | 17 | 14 (3.3 min) | 2.7 min | 1 | unit 229/723/0, js green |
+| GN (native + gate mandated) | 17.0 min | 40 (0 MCP calls) | 4.9 min / 11 | 14 | 7 | 3.2 min | 2 | unit 229/723/0, js green |
+| NC (native, same hour) | 6.5 min | 30 | — | 6 | 7 | 1.3 | 7 | green |
+| T4 (receipt, no gate) | 5.6 min | 19 | — | 4 | 0 | 1.0 | 3 | green |
+
+**WITHDRAWN, as pre-registered.** Both gate arms exceeded 18 raw and ran 2.6–2.8× NATIVE's wall. The gate as the
+write path, in its current contract, is a wall LOSS for an agent on this harness. What the rollouts show:
+- The agent spent 4–5 minutes CONSTRUCTING gate payloads in shell (whole-file expect_pre_sha256 for eight files, the
+  full file bodies as the patch representation) before the first call — the gate's input shape is the cost.
+- G's first gate calls were REFUSED with `admit-patch-refused · error-type verification-failed · mutation_attempted=false
+  · source-unchanged=true · pre_image_binding=bound` — the agent's own new test failed INSIDE the gate's snapshot, and the
+  refusal did not carry the failing test's output, so the agent could not see why; it fell back to apply_patch (17
+  calls), ran the suites itself, fixed the test, and re-submitted. The blind refusal turned one round-trip into a
+  local re-implementation.
+- GN never reached the MCP tool at all (0 MCP calls) despite the mandate: it read about the gate, built payloads, and
+  wrote with apply_patch — the same "mandate ≠ path" finding as the summer's adoption cohorts.
+- Both landed correct, gate-green trees; correctness is not the finding, wall is.
+
+**The product ask that falls out (the gate lane's next round, not a polish):** (1) accept the harness's own patch
+representation (apply_patch / unified diff) and derive the pre-image binding itself — never ask the agent for
+whole-file digests or bodies; (2) a verification refusal MUST carry the failing test's output verbatim (the naive-reader
+probe: "what is your next call?" is unanswerable from `verification-failed` alone); (3) a `propose` mode that runs the
+verify in the snapshot and returns the result WITHOUT refusing, so the agent iterates inside the gate instead of
+falling back to the tree. Until those land, the gate's measured square is the one it was built for — refusing a bad
+patch before it lands (E-ADMIT-SEED) — not wall.
+
+Standing sentence, amended: the receipt is the only measured wall win (1.45×, capped near 2×); the plate and the gate
+are both withdrawn as wall levers at n=1–2 on this harness; the gate's next round is its input contract and its refusal
+receipt, measured by the same pair.
