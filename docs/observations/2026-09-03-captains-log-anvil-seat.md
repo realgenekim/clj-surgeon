@@ -1530,3 +1530,13 @@ battery on a fresh clone to see what goes red. The order witness (MCP-OP-ADMIT-1
 before the cheap move. Fresh-clone gates green. One .PHONY conflict vs the trunk, composed at landing.
 
 ## 14:50Z — usage watch: collector zero/timeout (rc 0) — check root; last 3 lines: make: *** [Makefile:1028: study-agent-usage] Terminated 
+
+## 14:58Z study-ops round eight built (e7bc588a); Sol round-nine review launched
+
+Both round-seven blockers closed with generative witnesses (a pointer is an injective encoding of its path; one leaf, one
+line). The builder went past the reviewer's proposal on its own evidence: `:` and `=` had to be escaped too, found by the
+generated family, and the indented-block rendering of multi-line values was withdrawn because two distinct values rendered
+byte-identically. Round nine asks Sol for a ninth collision and for value-side injectivity. Two lanes now each carry one
+"unreproduced failures under load" disclosure (feature_thread r6: 3; study-ops r8: 6); both reviews re-run mcp-test twice on
+fresh clones. If both come back clean the shared cause is the box at load 11 with three seats, and the fix is scheduling,
+not code; if either reproduces, it is a defect and the lane holds.
