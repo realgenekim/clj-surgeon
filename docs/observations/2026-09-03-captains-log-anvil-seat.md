@@ -1815,3 +1815,13 @@ isolation entrances, four race stages red under contention, N=6 green), and the 
 out to cover real behaviour. Round three wires it, sweeps the rename, refreshes the counts, merges the trunk and adds
 the battery receipt ledger with the freshness tripwire. Usage watch 21:51Z: admit_clojure_patch 52 (today's arms and
 reviews), inspect 148.
+
+## 21:54Z Mayor's heads-up: codex 0.153.3 installed user-local ahead of PATH; seat decision = PIN FOR STABILITY
+
+The mayor (at Gene's request, for the astra model) installed codex 0.153.3 at ~/.local/bin, which precedes /usr/bin
+in this seat's PATH; ~/bin/sol-yolo resolved codex through PATH. Decision: sol-yolo now invokes /usr/bin/codex (0.147.0)
+explicitly; every arm and review of the replay program stays on the version it started on; 0.153.3 is adopted at a
+clean boundary (after T5 and the current review rounds), with the version named in every arm record from then on.
+Verified which binary the in-flight arms run (see the pulse). Quota facts the mayor verified: this seat's Claude pool is
+30% remaining, resets Sep 10 19:00Z, separate from the mayor's; codex reports 2 usage-limit resets available — worth
+banking if codex gates review throughput.
