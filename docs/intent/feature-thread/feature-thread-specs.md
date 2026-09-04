@@ -306,3 +306,14 @@ run as a test inside `make mcp-test`) enforces both halves.
   `feature-thread-scope-path-escapes-workspace` at admission. A path reached
   through a symlink out of the root cannot be refused by shape, and shall be
   neither read nor published by the bounded walk.
+
+- [x] **MCP-OP-THREAD-044**: A route leg is a parsed route-table ENTRY. When
+  `feature_thread` resolves a leg of kind `:route` in a Clojure file, it shall
+  report `FOUND` only for an occurrence whose immediately enclosing bracketed
+  form is a VECTOR or a MAP — the shape of a route-table entry — and shall rank
+  every such entry above a bare string occurrence of the same literal wherever
+  the two sit in the file; an occurrence that is a string inside another form
+  (a docstring, a message) shall be reported `CANDIDATE` with the enclosing
+  form named in its `weak_reason`, and shall still be carried as a lead rather
+  than dropped. A route file in another language is not decided by this rule,
+  because this verb never parses another language.

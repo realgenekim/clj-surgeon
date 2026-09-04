@@ -389,60 +389,60 @@
 
 
 
+(defn handle-save
+  "POST /api/save — one compound command carrying the visible editor snapshot.
+   Sync validation, state commit, timestamped archive, book-node settle, and
+   durable acknowledgement are serialized. A stale snapshot returns 409 and
+   performs NO save. An explicit force-conflict choice may keep browser text,
+   but only for the same editor identity and displayed server revision."
+  [request]
+  (let [{:keys [sync force-conflict conflict-version]}
+        (try (parse-json-body request) (catch Exception _ {}))]
+    (try
+      (locking state/session-admission-lock
+        (let [journal-headers (when (map? sync)
+                                (editor-journal/journal-receipt sync))
+              sync-result
+              (when (map? sync)
+                (if force-conflict
+                  (dispatch/force-fold-editor-snapshot! sync conflict-version)
+                  (dispatch/fold-editor-snapshot! sync)))]
+          (when sync-result
+            (let [{:keys [before after]} sync-result]
+              (state/log-event!
+               {:type (if force-conflict
+                        "draft.save.conflict-resolved"
+                        "draft.save.sync-accepted")
+                :browser-version (:state-version sync)
+                :server-version (:state-version after)
+                :editor-sync-key (state/editor-sync-key after)
+                :server-draft-len (count (or (:draft before) ""))
+                :incoming-draft-len (count (or (:draft sync) ""))})
+              (when force-conflict
+                (write-conflict-snapshot! "server" (:draft before)))))
+          (if (and sync-result
+                   (not (dispatch/book-ack-ok? (:book sync-result))))
+            (do
+              (sse/push-notify!
+               "⚠ SAVE FAILED—Book node durability did not confirm; keep this page open")
+              {:status 503})
+            (let [response (persist-current-state!)
+                  response (if (and (< (:status response) 400) journal-headers)
+                             (update response :headers merge journal-headers)
+                             response)]
+              (when (< (:status response) 400)
+                (sse/clear-draft-sync-conflict!))
+              response))))
+      (catch clojure.lang.ExceptionInfo e
+        (let [{:keys [reason] :as conflict} (ex-data e)]
+          (cond
+            (draft-conflict-reasons reason)
+            (draft-conflict-response "draft.save" conflict)
 
+            (= "invalid-journal-receipt" reason)
+            (journal-conflict-response "draft.save" conflict)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            :else (throw e)))))))
 
 
 

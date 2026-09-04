@@ -32,6 +32,14 @@ fixture file and of the kept ranges joined. Three files are redacted because
 they are large and only their thread-bearing regions matter:
 `src/writer/routes.clj`, `docs/intent/registry.edn`, `Makefile`.
 
+`src/writer/routes.clj` keeps one range that is not part of the Dequote/Format
+thread: **L392-L445**, `(defn handle-save "POST /api/save — …" …)`. It is here
+because the round-five review found the verb reporting that DOCSTRING as the
+`route` leg of `saveDraft` and the thread `COMPLETE (5 of 5)`, 1,729 lines from
+the real entry at L2121 — and the redaction had blanked the decoy, so the
+fixture could not reproduce the live defect. A fixture that cannot hold the bug
+is not a fixture for it (MCP-OP-THREAD-044).
+
 ## Ground truth (the five owners, two languages)
 
 | leg | file | language |

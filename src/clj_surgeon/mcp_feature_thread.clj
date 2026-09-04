@@ -807,6 +807,35 @@
         :form-name (some-> (:name enclosing) str)
         :comment-start (:comment-start enclosing)}))))
 
+;; @spec MCP-OP-THREAD-044
+(defn route-entry-hit?
+  "True when the route literal at 1-based `line`, 0-based `col`, sits directly
+  inside a VECTOR or a MAP — the shape of a route-table entry.
+
+  A route literal can appear in a Clojure file in exactly two ways: as the
+  first element of a table entry, or as a STRING inside some other form — a
+  docstring, a log message, an error string. The bracket that immediately
+  encloses the occurrence tells the two apart, and nothing else does. Round-five
+  review, finding 3 (BLOCKING): `saveDraft` on social-media-writer @2df99c98
+  reported `src/writer/routes.clj:L392-L445` — the body of
+  `(defn handle-save \"POST /api/save …\" …)` — as evidence `route-literal`, and
+  the thread as COMPLETE (5 of 5). The real entry was 1,729 lines further down.
+
+  A non-Clojure route file is not decided here: this verb never parses another
+  language, and claiming a structural fact it did not check would be the same
+  false green in a different file extension."
+  [relative ^String source line col]
+  (if-not (clojure-path? relative)
+    true
+    (let [offsets (line-start-offsets source)
+          offset (+ (nth offsets (dec line) 0) (or col 0))
+          containing (filter (fn [[o c]] (<= o offset c))
+                             (clj-bracket-spans source))]
+      (boolean
+        (when (seq containing)
+          (let [[o _] (apply max-key first containing)]
+            (contains? #{\[ \{} (.charAt source (int o)))))))))
+
 (defn body-at
   "Body for one hit, routed by file kind."
   ([relative source lines hit-line] (body-at relative source lines hit-line nil))
@@ -1330,6 +1359,7 @@
                           (when-let [start (match-start pattern line)]
                             {:file relative
                              :line (inc idx)
+                             :col start
                              :text (str/trim line)
                              :in_comment (or (comment-mention? line start clojure?)
                                              (contains? @commented (inc idx)))}))
@@ -1348,12 +1378,12 @@
   (str "nl -ba " file " | sed -n '" from "," to "p'"))
 
 (defn- hit->member
-  [cache {:keys [file line in_comment]} evidence & [opts]]
+  [cache {:keys [file line col in_comment]} evidence & [opts]]
   (let [{:keys [ok source lines]} (read-source cache file)]
     (when ok
       (let [{:keys [from to body boundary form-name comment-start]}
             (body-at file source lines line opts)]
-        {:in-comment? (boolean in_comment)
+        (cond-> {:in-comment? (boolean in_comment)
          :file file
          :from from
          :to to
@@ -1365,7 +1395,11 @@
          :sha256 (sha256-hex body)
          :bytes (utf8-bytes body)
          :body body
-         :refetch (refetch-command file from to)}))))
+         :refetch (refetch-command file from to)}
+          ;; @spec MCP-OP-THREAD-044
+          (:route-entry-check? opts)
+          (assoc :route-entry? (route-entry-hit? file source line col)
+                 :enclosing-form-name form-name))))))
 
 ;; @spec MCP-OP-THREAD-007
 (defn- alias-hop
@@ -1559,6 +1593,15 @@
     {:status "CANDIDATE"
      :weak_reason "the hit is a comment mention, not code"}
 
+    ;; @spec MCP-OP-THREAD-044
+    (false? (:route-entry? member))
+    {:status "CANDIDATE"
+     :weak_reason (str "the route literal is a string inside "
+                       (if (:enclosing-form-name member)
+                         (str "`" (:enclosing-form-name member) "`")
+                         "another form")
+                       ", not a route-table entry")}
+
     (not (strong-boundary? (:boundary member)))
     {:status "CANDIDATE"
      :weak_reason (str "the boundary is not a parsed form or a closed brace"
@@ -1588,7 +1631,7 @@
          co (mapv (fn [m] (let [strength (leg-strength m)]
                             (cond-> (-> m
                                         (merge strength)
-                                        (dissoc :rank :in-comment?))
+                                        (dissoc :rank :in-comment? :route-entry? :enclosing-form-name))
                               (= "FOUND" (:status strength))
                               (-> (assoc :anchor (anchor-for cache m))
                                   (merge (after-context-for cache m))))))
@@ -1596,7 +1639,7 @@
          co-keys (set (map (juxt :file :from :to) co))
          strength (leg-strength primary)]
      (merge (dissoc base :globs)
-            (dissoc primary :rank :in-comment?)
+            (dissoc primary :rank :in-comment? :route-entry? :enclosing-form-name)
             strength
             (cond-> {:searches [(last searches)]
                      :unreadable unreadable
@@ -1643,7 +1686,8 @@
                                   cut))
                      (vec out)))
         member-opts {:narrow? (contains? #{:use :route} kind)
-                     :test-call? (= kind :test)}
+                     :test-call? (= kind :test)
+                     :route-entry-check? (= kind :route)}
         joined (when (and (= kind :handler) handler-name)
                  [["handler-join"
                    (str "\\(defn-? +" (quote-literal handler-name) "\\b")]])
@@ -1700,12 +1744,23 @@
 
               (seq hits)
               (let [members (keep #(hit->member cache % label member-opts) hits)
-                    ranked (if (= kind :test)
+                    ranked (cond
+                             (= kind :test)
                              (->> members
                                   (map #(merge % (rank-test-hit % handler-name)))
                                   (sort-by (juxt (comp - :rank) :file :from))
                                   vec)
-                             (vec members))
+
+                             ;; @spec MCP-OP-THREAD-044
+                             ;; A parsed route-table ENTRY outranks a string
+                             ;; occurrence of the same literal, wherever the
+                             ;; two sit in the file. `sort-by` is stable, so
+                             ;; within each class the scan order is kept and a
+                             ;; non-entry hit is still carried as a lead.
+                             (= kind :route)
+                             (vec (sort-by #(if (:route-entry? %) 0 1) members))
+
+                             :else (vec members))
                     ranked (keep-new ranked)]
                 (if (empty? ranked)
                   (recur more ran' unreadable')
@@ -2367,7 +2422,7 @@
                 {:identifier id :status "ABSENT" :searched searched}
                 (let [strength (leg-strength m)]
                   (cond-> (merge {:identifier id :searched searched}
-                                 (dissoc m :in-comment? :rank)
+                                 (dissoc m :in-comment? :rank :route-entry? :enclosing-form-name)
                                  strength)
                     (= "FOUND" (:status strength))
                     (assoc :anchor (anchor-for cache m)))))))
