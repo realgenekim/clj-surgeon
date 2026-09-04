@@ -63,7 +63,10 @@ run as a test inside `make mcp-test`) enforces both halves.
   of the form `const X = Y;`, clj-surgeon shall follow that alias exactly one hop
   and, when the target definition is found, report the target's body with the
   alias site named in the evidence; when the target is not found, it shall report
-  the leg ABSENT with evidence `alias-only` and both searches quoted, and shall
+  the leg `CANDIDATE` at the ALIAS SITE with evidence `alias-only` and both
+  searches quoted — a located lead that carries no anchor and does not count
+  toward `COMPLETE`, which is what THREAD-024 already required of `alias-only`
+  evidence (round-five review, finding 9: the two said different things) — and shall
   never report the alias line as the implementation.
 
 - [x] **MCP-OP-THREAD-008**: Content hash. When a leg is FOUND, clj-surgeon
@@ -196,7 +199,9 @@ run as a test inside `make mcp-test`) enforces both halves.
   report `N/A` only when a search really ran and found nothing new — naming the
   SEED whose definition is already a leg, never an unrelated leg's range — and
   shall report `UNSCANNED`, COUNTED toward the leg status, whenever the leg's
-  globs were not part of the walk.
+  globs were not part of the walk. When the range it excluded belongs to a
+  `CANDIDATE` leg, the reason shall say the occurrence is already a CANDIDATE
+  leg — a lead, not a definition — and shall never call it a definition.
 
 - [x] **MCP-OP-THREAD-030**: A printed search is a search that ran. When
   `feature_thread` renders a leg's `found by:`/`searched:` line, the command
@@ -317,3 +322,11 @@ run as a test inside `make mcp-test`) enforces both halves.
   form named in its `weak_reason`, and shall still be carried as a lead rather
   than dropped. A route file in another language is not decided by this rule,
   because this verb never parses another language.
+
+- [x] **MCP-OP-THREAD-045**: A cut names what bound it, and a remedy the caller
+  can execute. When `feature_thread` elides for budget, each ledger row's
+  `reason` shall be `public-budget` when the caller's `budget_bytes` is the
+  unsatisfied constraint and `structured-cap` when the trunk's fixed structured
+  ceiling is; and a `structured-cap` row shall never advise a larger
+  `budget_bytes`, because no `budget_bytes` raises that ceiling — it shall name
+  `mode=locations` and quote the ceiling instead.

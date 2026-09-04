@@ -1438,7 +1438,15 @@
           {:hits target-hits
            :evidence (str "identifier(def, one hop: alias at " (:file alias-hit)
                           ":" (:line alias-hit) " -> " target ")")}
-          {:hits []
+          ;; @spec MCP-OP-THREAD-007
+          ;; @spec MCP-OP-THREAD-024
+          ;; The alias LINE, carried as the CANDIDATE it is. Round-five review,
+          ;; finding 9: THREAD-024 already listed `alias-only` among the
+          ;; fallback evidences that make a leg CANDIDATE while the code
+          ;; reported ABSENT, and CANDIDATE is the truthful one — the verb has a
+          ;; located range and simply does not vouch for it as the definition.
+          ;; It still does not count toward COMPLETE and still names no anchor.
+          {:hits [alias-hit]
            :evidence "alias-only"
            :extra-search ["alias-target"
                           (str target-re " [after following the alias at "
@@ -1731,15 +1739,21 @@
               (and (= kind :def) (seq hits))
               (let [{hop-hits :hits hop-evidence :evidence extra :extra-search}
                     (alias-hop cache paths globs (:identifiers seeds) hits)
+                    ;; @spec MCP-OP-THREAD-007
+                    ;; The search that FOLLOWED the alias is the evidence for
+                    ;; the CANDIDATE, so it rides with it: `found-leg` keeps
+                    ;; only the last search, and without this the receipt says
+                    ;; `alias-only` while quoting the search that found the
+                    ;; alias rather than the one that failed to find its target.
+                    ran' (cond-> ran'
+                           extra (conj (render-search globs extra scope-paths)))
                     ranked (keep-new (keep #(hit->member cache % hop-evidence member-opts)
                                            hop-hits))]
                 (if (seq ranked)
                   (found-leg base cache ranked ran' unreadable')
                   (merge base {:status "ABSENT"
                                :evidence hop-evidence
-                               :searches (cond-> ran'
-                                           extra (conj (render-search
-                                                         globs extra scope-paths)))
+                               :searches ran'
                                :unreadable unreadable'})))
 
               (seq hits)
@@ -2363,8 +2377,9 @@
                     " nothing was searched for a definition: "
                     (str/join " " missing-globs))
        :elide :implementation}
-      (let [taken (set (for [l declared :when (located? l)]
-                         [(:file l) (:from l) (:to l)]))
+      (let [taken-status (into {} (for [l declared :when (located? l)]
+                                    [[(:file l) (:from l) (:to l)] (:status l)]))
+            taken (set (keys taken-status))
             resolved (resolve-leg cache paths seeds auto-leg
                                   {:exclude-ranges taken
                                    :scope-paths (:scope-paths auto-leg)})]
@@ -2372,13 +2387,28 @@
           (assoc resolved :elide :implementation)
           (merge (select-keys resolved [:id :leg_kind :searches :unreadable])
                  {:status "N/A"
+                  ;; @spec MCP-OP-THREAD-029
+                  ;; Round-five review, finding 9: an excluded CANDIDATE range
+                  ;; was read as proof that a definition exists, so the row said
+                  ;; "the definition of ghostOnly is already a leg" about a
+                  ;; STRING MENTION. A CANDIDATE is a lead; saying it is the
+                  ;; definition is the same false green in a quieter field.
                   :reason (if-let [dup (first (:excluded resolved))]
-                            (str "the definition of "
-                                 (or (seed-of-range cache (:identifiers seeds) dup)
-                                     "the seed")
-                                 " is already a leg of this receipt ("
-                                 (:file dup) ":L" (:from dup)
-                                 "-L" (:to dup) ")")
+                            (let [seed (or (seed-of-range cache
+                                                          (:identifiers seeds) dup)
+                                           "the seed")
+                                  where (str "(" (:file dup) ":L" (:from dup)
+                                             "-L" (:to dup) ")")]
+                              (if (= "CANDIDATE"
+                                     (get taken-status [(:file dup) (:from dup)
+                                                        (:to dup)]))
+                                (str "the only occurrence of " seed
+                                     " is already a CANDIDATE leg of this"
+                                     " receipt " where
+                                     " — a lead, not a definition")
+                                (str "the definition of " seed
+                                     " is already a leg of this receipt "
+                                     where)))
                             "no seed names a definition")
                   :elide :implementation}))))))
 
@@ -2889,6 +2919,31 @@
          t]
         (recur total t st (inc rounds))))))
 
+;; @spec MCP-OP-THREAD-045
+(defn elision-reason
+  "The label a cut carries, naming WHAT bound.
+
+  `public-budget` is the caller's `budget_bytes`; `structured-cap` is the
+  trunk's fixed ceiling on the structured face, which no `budget_bytes` raises."
+  [binder]
+  (if (= binder :structured-cap) "structured-cap" "public-budget"))
+
+;; @spec MCP-OP-THREAD-045
+(defn elision-remedy
+  "How to get the cut content back — the remedy that actually works for the
+  constraint that made the cut.
+
+  Round-five review, finding 6: at `budget_bytes 32768` — the hard cap — the
+  receipt cut `sibling` and `peers` to satisfy the STRUCTURED cap and told the
+  caller to \"re-run with a larger budget_bytes\". There is no larger one. A
+  remedy the caller cannot execute is worse than no remedy: it spends a call to
+  learn the advice was impossible."
+  [binder]
+  (if (= binder :structured-cap)
+    (str "re-run feature_thread with mode=locations — budget_bytes cannot raise"
+         " the structured cap of " trunk-public-byte-budget "B")
+    "re-run feature_thread with a larger budget_bytes"))
+
 (defn- elide-leg
   [leg reason]
   (if (and (located? leg) (:body leg))
@@ -2905,8 +2960,11 @@
 
 ;; @spec MCP-OP-THREAD-011
 (defn apply-elision
-  "Apply one step of the stated elision order. Returns `[result applied?]`."
-  [result class]
+  "Apply one step of the stated elision order. Returns `[result applied?]`.
+
+  `binder` names the constraint that forced the cut, so every ledger row says
+  what actually bound and offers a remedy the caller can execute."
+  [result class binder]
   (case class
     :secondary-tests
     (let [dropped (reduce + 0 (map #(count (:also %)) (:legs result)))]
@@ -2916,10 +2974,10 @@
              (update :legs #(mapv (fn [l] (assoc l :also [])) %))
              (update :elided conj {:leg "secondary-witnesses"
                                    :bytes 0
-                                   :reason (str "public-budget; " dropped
+                                   :reason (str (elision-reason binder) "; " dropped
                                                 " secondary witness rows dropped")
                                    :from 0 :to 0 :sha256 "n/a"
-                                   :refetch "re-run feature_thread with a larger budget_bytes"}))
+                                   :refetch (elision-remedy binder)}))
          true]))
 
     ;; @spec MCP-OP-THREAD-017
@@ -2929,7 +2987,7 @@
            (update :rules dissoc :governance_template)
            (update :elided conj {:leg "governance-template"
                                  :bytes 0
-                                 :reason "public-budget"
+                                 :reason (elision-reason binder)
                                  :from (:from t) :to (:to t)
                                  :sha256 "n/a"
                                  :refetch (:refetch t)}))
@@ -2944,7 +3002,7 @@
            (update :elided conj
                    {:leg "next-call"
                     :bytes 0
-                    :reason "public-budget"
+                    :reason (elision-reason binder)
                     :from 0 :to 0 :sha256 "n/a"
                     :refetch (str "re-run with mode=locations for the "
                                   (count (:expect_pre_sha256 n))
@@ -2965,7 +3023,7 @@
                            #(mapv (fn [m]
                                     (if (:body m)
                                       (-> m (dissoc :body)
-                                          (assoc :elided_reason "public-budget"))
+                                          (assoc :elided_reason (elision-reason binder)))
                                       m))
                                   %))]
           [(-> result
@@ -2973,7 +3031,7 @@
                (update :elided into
                        (map (fn [m] {:leg (str (:id leg) "(" (:language m) ")")
                                      :bytes (:bytes m)
-                                     :reason "public-budget"
+                                     :reason (elision-reason binder)
                                      :from (:from m) :to (:to m)
                                      :sha256 (:sha256 m)
                                      :refetch (:refetch m)})
@@ -2999,7 +3057,7 @@
                                                   (if (:body pp)
                                                     (-> pp (dissoc :body)
                                                         (assoc :elided_reason
-                                                               "public-budget"))
+                                                               (elision-reason binder)))
                                                     pp))
                                                 ps)))
                                 l))
@@ -3007,10 +3065,10 @@
              (update :elided conj
                      {:leg "peers"
                       :bytes 0
-                      :reason (str "public-budget; " cut
+                      :reason (str (elision-reason binder) "; " cut
                                    " co-menu-item peer bodies dropped")
                       :from 0 :to 0 :sha256 "n/a"
-                      :refetch "re-run feature_thread with a larger budget_bytes"}))
+                      :refetch (elision-remedy binder)}))
          true]))
 
     ;; @spec MCP-OP-THREAD-039
@@ -3027,7 +3085,7 @@
              (update :elided conj
                      {:leg "peer-rows"
                       :bytes 0
-                      :reason (str "public-budget; " (count ids)
+                      :reason (str (elision-reason binder) "; " (count ids)
                                    " co-menu-item peer rows dropped entirely")
                       :from 0 :to 0 :sha256 "n/a"
                       :refetch (str "feature_thread subject="
@@ -3062,7 +3120,7 @@
                       :reason (str "public-budget; the anchor context of "
                                    (count cut) " legs dropped")
                       :from 0 :to 0 :sha256 "n/a"
-                      :refetch "re-run feature_thread with a larger budget_bytes"}))
+                      :refetch (elision-remedy binder)}))
          true]))
 
     :sibling
@@ -3072,7 +3130,7 @@
            (assoc-in [:sibling :elided] true)
            (update :elided conj {:leg "sibling"
                                  :bytes 0
-                                 :reason "public-budget"
+                                 :reason (elision-reason binder)
                                  :from 0 :to 0 :sha256 "n/a"
                                  :refetch (str "feature_thread subject="
                                                (get-in result [:sibling :seed]))}))
@@ -3083,7 +3141,7 @@
           idx (first (keep-indexed (fn [i l] (when (= class (:elide l)) i)) legs))]
       (if (nil? idx)
         [result false]
-        (let [[leg' entry] (elide-leg (nth legs idx) "public-budget")]
+        (let [[leg' entry] (elide-leg (nth legs idx) (elision-reason binder))]
           (if (nil? entry)
             [result false]
             [(-> result
@@ -3134,7 +3192,14 @@
            refusal])
 
         :else
-        (let [[next-result applied?] (apply-elision current (first remaining))]
+        ;; @spec MCP-OP-THREAD-045
+        ;; Which constraint is still unsatisfied decides the ledger's wording:
+        ;; over the caller's text budget is `public-budget`; under it and still
+        ;; over the trunk's structured ceiling is `structured-cap`, which no
+        ;; `budget_bytes` can raise.
+        (let [binder (if (> total budget) :text-budget :structured-cap)
+              [next-result applied?] (apply-elision current (first remaining)
+                                                    binder)]
           (recur (if applied? next-result current) (rest remaining)))))))
 
 ;; ---------------------------------------------------------------------------

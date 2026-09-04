@@ -510,11 +510,25 @@
                       :config alias-conventions
                       :scope {:workspace_root (.getPath root)}})
               l (leg structured "js-function")]
-          (is (= "ABSENT" (:status l)))
+          ;; @spec MCP-OP-THREAD-007
+          ;; @spec MCP-OP-THREAD-024
+          ;; Round-five review, finding 9: THREAD-024 lists `alias-only` among
+          ;; the fallback evidences that make a leg CANDIDATE, and the code said
+          ;; ABSENT. They now agree, and CANDIDATE is the truthful one: the verb
+          ;; HAS a located range — the alias line — it simply does not vouch for
+          ;; it as the definition.
+          (is (= "CANDIDATE" (:status l)))
           (is (= "alias-only" (:evidence l)))
+          (is (= "js/commands.js" (:file l))
+              "the located range is the alias site itself")
+          (is (seq (:weak_reason l))
+              "a CANDIDATE names why it is only a candidate")
+          (is (nil? (:anchor l))
+              "a CANDIDATE never names an insertion point")
           (is (some #(str/includes? % "runDraftFormatter") (:searches l))
               "the search that followed the alias must be quoted")
-          (is (= "INCOMPLETE (4 of 5)" (:status structured)))
+          (is (= "INCOMPLETE (4 of 5)" (:status structured))
+              "a CANDIDATE still does not count toward COMPLETE")
           (is (str/includes? text "alias-only")))
         (finally (delete-tree! root))))))
 
@@ -1455,6 +1469,79 @@
           (is (= (vec (distinct paths)) (vec paths))
               (str "the same file was walked more than once: " (pr-str paths))))
         (finally (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND SIX -- review findings 6 and 9: what the receipt SAYS about a cut and
+;; about a candidate-only hit
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-029
+(deftest an-na-implementation-row-never-calls-a-candidate-a-definition
+  (testing "a string-only hit is a CANDIDATE lead, and the N/A row says so"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-ghost"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/views.clj" "(ns views)\n(def menu {:onclick \"other()\"})\n")
+        (write-file! root "src/routes.clj" "(ns routes)\n(def table [[\"/api/x\" {}]])\n")
+        (write-file! root "src/handlers.clj" "(ns handlers)\n(defn handle-x [r] r)\n")
+        (write-file! root "test/t.clj" "(ns t)\n(deftest x 1)\n")
+        (write-file! root "js/commands.js"
+                     (str "function unrelated() {\n"
+                          "  const message = \"ghostOnly is not defined here\";\n"
+                          "  return message;\n"
+                          "}\n"))
+        (let [{:keys [structured]}
+              (call! {:subject "ghostOnly"
+                      :config alias-conventions
+                      :scope {:workspace_root (.getPath root)}})
+              js (leg structured "js-function")
+              impl (leg structured "implementation")]
+          (is (= "CANDIDATE" (:status js))
+              (str "the string mention is a lead: " (pr-str js)))
+          (is (= "N/A" (:status impl)))
+          (is (not (str/includes? (:reason impl) "is already a leg of this receipt"))
+              (str "the N/A row calls a CANDIDATE a definition: "
+                   (pr-str (:reason impl))))
+          (is (str/includes? (:reason impl) "ghostOnly")
+              "the N/A row names the seed")
+          (is (str/includes? (:reason impl) "CANDIDATE")
+              (str "the N/A row names the reason: " (pr-str (:reason impl)))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-THREAD-045
+(deftest an-elision-forced-by-the-structured-cap-says-so
+  (testing "the label names what bound"
+    (is (= "public-budget" (ft/elision-reason :text-budget)))
+    (is (= "structured-cap" (ft/elision-reason :structured-cap))))
+
+  (testing "the remedy at the structured cap is not a budget the cap ignores"
+    (let [advice (ft/elision-remedy :structured-cap)]
+      (is (not (str/includes? advice "larger budget_bytes"))
+          (str "the caller is told to raise a budget that cannot lift this"
+               " cut: " (pr-str advice)))
+      (is (str/includes? advice "mode=locations")
+          (str "the remedy names what actually works: " (pr-str advice)))
+      (is (str/includes? advice (str ft/trunk-public-byte-budget))
+          "the remedy quotes the cap that bound"))
+    (is (str/includes? (ft/elision-remedy :text-budget) "larger budget_bytes")
+        "a text-budget cut IS undone by a larger budget"))
+
+  (testing "no cut anywhere pairs a structured-cap reason with budget advice"
+    (doseq [root [fixture-root after-root]
+            budget [32768 24576 20000 11264]]
+      (let [{:keys [structured]}
+            (call! {:subject "dequoteFormatSelection"
+                    :also ["/api/transform/format" "mechanical-format"]
+                    :mirror "formatDraft"
+                    :budget_bytes budget
+                    :config smw-conventions
+                    :scope {:workspace_root root}})]
+        (doseq [c (:elided structured)]
+          (is (not (and (str/includes? (str (:reason c)) "structured-cap")
+                        (str/includes? (str (:refetch c)) "larger budget_bytes")))
+              (str "an elision forced by the structured cap advises a budget the"
+                   " hard cap forbids: " (pr-str c))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; ROUND SIX -- review finding 3: a route leg is a route-table ENTRY
