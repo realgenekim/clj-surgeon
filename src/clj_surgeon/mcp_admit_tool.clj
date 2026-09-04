@@ -182,6 +182,13 @@
    :next_call nil})
 
 ;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-138
+;; One member of this set -- `:transaction-recovery-required` -- is proved by
+;; `make admit-transaction-recovery-battery` rather than by the fast suite,
+;; because the only fixture that can produce it is a widened race and a timing
+;; bound is a battery target. The exemption is declared in
+;; `clj-surgeon.admit-patch-test/battery-only-refusal-kinds` with the target
+;; that proves it.
 (def admit-refusal-kinds
   "THE enumeration of `:error-type` values the admit gate may publish.
 

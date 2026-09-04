@@ -5161,6 +5161,44 @@
 ;; @spec MCP-OP-ADMIT-133
 (def ^:private ^:dynamic *inside-the-entrance* false)
 
+;; @spec MCP-OP-ADMIT-138
+(def ^:private battery-only-refusal-kinds
+  "Kinds proved by a battery target rather than by this suite, each mapped to
+  the target that proves it.
+
+  The exemption names its own evidence. An enumerated kind no fixture drives
+  is normally a failure -- nothing proves it exists or that its text is a
+  superset -- and the answer to a kind whose only fixture is a TIMING bound is
+  not to excuse it but to move the proof somewhere a timing bound belongs.
+  `transaction-recovery-required` needs a third party to change a file inside
+  the window between a transaction's write and its rollback, which a single
+  thread cannot do; the fixture widens that window with a busy-spinning
+  watcher against a 64-file write. That is a battery, not a merge gate, and
+  while it lived here a flake in it would have reported `the enumeration
+  claims kinds no fixture drives` and taken the enumeration proof down for an
+  unrelated reason."
+  {:transaction-recovery-required "make admit-transaction-recovery-battery"})
+
+;; @spec MCP-OP-ADMIT-138
+(deftest a-battery-only-kind-names-a-target-that-exists-and-drives-it
+  ;; The exemption is only as good as the evidence it points at.
+  (doseq [[kind target] battery-only-refusal-kinds]
+    (is (contains? admit/admit-refusal-kinds kind)
+        (str "a battery-only kind must still be enumerated: " kind))
+    (let [script (io/file "test/admit_transaction_recovery_battery.clj")
+          makefile (io/file "Makefile")
+          target-name (str/replace target #"^make " "")]
+      (is (.exists script)
+          (str "the battery target's script is missing: " (.getPath script)))
+      (is (str/includes? (slurp script) (name kind))
+          (str "the battery script never names the kind it is excused for: "
+               kind))
+      (is (str/includes? (slurp makefile) (str "\n" target-name ":"))
+          (str "the Makefile has no such target: " target))
+      (is (not (str/includes? (slurp makefile)
+                              (str "mcp-test: " target-name)))
+          "a battery target must not be wired into the fast gate"))))
+
 ;; @spec MCP-OP-ADMIT-133
 (defn- record-and-check-refusal-kinds
   "Record at the gate's own refusal constructor, which is the one point every
@@ -5201,12 +5239,23 @@
       (is (empty? (set/difference observed enumerated))
           (str "the entrance published kinds the enumeration has never heard "
                "of: " (pr-str (set/difference observed enumerated))))
-      (is (empty? (set/difference enumerated observed))
-          (str "the enumeration claims kinds no fixture drives, so nothing "
-               "proves they exist or that their text is a superset: "
-               (pr-str (set/difference enumerated observed))))
-      (is (= enumerated observed)
-          (str "enumerated " (count enumerated) ", observed " (count observed))))))
+      ;; @spec MCP-OP-ADMIT-138
+      (is (empty? (set/difference enumerated observed
+                                  (set (keys battery-only-refusal-kinds))))
+          (str "the enumeration claims kinds no fixture drives and no battery "
+               "target proves, so nothing shows they exist or that their text "
+               "is a superset: "
+               (pr-str (set/difference enumerated observed
+                                       (set (keys battery-only-refusal-kinds))))))
+      (is (empty? (set/intersection
+                    observed (set (keys battery-only-refusal-kinds))))
+          (str "a kind this suite DOES drive is excused to a battery; delete "
+               "the excuse rather than carrying it: "
+               (pr-str (set/intersection
+                         observed (set (keys battery-only-refusal-kinds))))))
+      (is (= enumerated (into observed (keys battery-only-refusal-kinds)))
+          (str "enumerated " (count enumerated) ", observed " (count observed)
+               ", battery-only " (count battery-only-refusal-kinds))))))
 
 (use-fixtures :once record-and-check-refusal-kinds)
 
