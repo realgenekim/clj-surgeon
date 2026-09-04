@@ -298,3 +298,21 @@ inline verify. G3 raw ≤ 14, wall ≤ 6.5 min (native control), ≥ 1 admit cal
 withdrawal: G3 raw > 18 or wall > 6.5, or the same refusal twice.
 
 **SMW plate landed ($NOW):** realgenekim/social-media-writer main = d5b1ba53 (landing contract merged on Gene's "a: go"). Replay bases: smw-base @ 2df99c98 (all arms so far), smw-base2 @ d5b1ba53 (T5 and later). Cross-base comparisons name the base.
+
+## G3 / GN2 results (21:43Z) — the r16 gate ADMITTED; still withdrawn on wall; a new gate defect (overlay drops executable bits)
+
+| arm | wall | turns | MCP calls | feature landed | gates |
+|---|---:|---:|---:|---|---|
+| G3 (receipt + r16 gate, the gate's own prescription) | 12.7 min | 35 | 13 (2 committed receipts) | YES, 9 files | unit 243/802/0, js green |
+| GN2 (native + the old, wrong mandate) | see below | | 0 | (for the record) | |
+| NC native control (same day) | 6.5 min | 30 | — | yes | green |
+
+G3 by species: gate/MCP 4.0 min over 11 turns; reads 2.6; write 2.0; bd 1.1; rules 1.3; waits 1.2. Pre-registration (≤14
+turns, ≤6.5 min) MISSED → withdrawn on wall; but the gate is no longer a functional failure: inline verify ran the repo's
+own commands in the snapshot and admitted. NEW GATE DEFECT found by the arm: the overlay copy changed executable CLI
+fixtures from 0755 to 0644, so the verify failed until the agent added a Makefile mode-normalization workaround — the
+gate forced a product change on the caller. Sent to the r17 review; r18 asks: preserve modes/symlinks in the overlay;
+opaque non-Clojure files in the same snapshot; a next_call that never repeats a refused call.
+T5 + N5 LAUNCHED 21:43Z on smw-base2 (d5b1ba53, the merged landing contract): T5 = receipt + contract + gate as prescribed;
+N5 = native on the new plate (contract-only baseline). Pre-registration (from the T5 section above): T5 raw 5–7 predicted,
+withdrawal if T5 raw > 12 on both replicates or N5 also < 12.
