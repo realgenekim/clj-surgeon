@@ -39,3 +39,10 @@ cclsp.json
 
 # the prompt checker builds its comparison copy here, under the apparatus
 bench/anvil-arms/prompts/.check/
+
+# @spec MCP-OP-ADMIT-138
+# The transaction-recovery battery's record of what it actually published.
+# It is EVIDENCE OF A RUN on this machine, read by the fast suite's
+# battery-only exemption; committing it would turn a record of execution
+# back into a claim in a file, which is the defect it exists to close.
+target/

@@ -508,3 +508,20 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
   edn/read-string) then Sol/Opus review; study-ops r11 Sol review on dda9fa29; MEM-003 r8 Opus review on a2a15cc0 (Sol refused).
 - Gene decisions outstanding: SMW landing-contract branch go; cclsp repo (inb-41c1cc); ls-tree text doubling (STUDY-051).
 - Usage collector: 12 consecutive 120 s timeouts under load (ledger inb-65c941). maven-w is not installed on this seat.
+
+
+## RESUME DELTA 21:30Z — the "in charge" evening (Gene delegated decisions at 19:1xZ)
+- LANDED today (6): integration, scorer, tmp-leak, alias_migration, census (bafc273a), ADMIT GATE (8d32d619). MCP/main head bc0bec26.
+- ONE-SHOTS in ~/bin (use them, never the hand versions): sol-finished, replay-arm (MCP_URL env), usage-watch, land (runs in
+  /home/forge/src/clj-surgeon-land, detached; pushes HEAD:MCP/main only on green). Memories: anvil-seat-one-shots, landing-runs-in-its-own-worktree.
+- WALL-CLOCK RULE in vision.md; the receipt is the only measured win (1.45x); plate (NC/NS) and gate-as-write-path (G/GN, G2) WITHDRAWN;
+  G3/GN3 running on the r16 gate (server 8173 from 2ac33278; 8171 = landed trunk) with the gate's own prescription (JS natively, clj/edn via gate).
+- SUITE SPIKE: bridge/suite-spike 2ecce8c4 (merge gate 717 s -> 150 s; fast lane 30 s; N=4 battery 12/12; lane manifest with cadence;
+  make test-fast = JVM fast lane, bb = make test-bb) — Sol review running (suite2). On GO: ~/bin/land, then nightly cron + receipt ledger + tripwire.
+- GHA: bridge/gha 5ce8aaea — workflow green on runners (gate 205 s; battery 11-wide 10/11); lands with the spike. Nightly DORMANT until the repo's
+  default branch is MCP/main — seat lacks admin; request filed for the mayor in the merge queue doc; Gene ruled "y".
+- SMW: landing contract MERGED into realgenekim/social-media-writer main d5b1ba53 (Gene "a: go"); replay bases smw-base@2df99c98, smw-base2@d5b1ba53.
+- Lanes: feature_thread 508f26f5 Sol r12 LANDING review (ft12) then FREEZE; MEM-003 a9963bd3 Opus r10 landing review; admit gate r16 2ac33278
+  Opus r17 review (Sol refused) + next_call-loop attack; study-ops r12 building (residual as refusal; STUDY-051 ACCEPTED by the seat, capped);
+  CI fixes bridge/ci-findings (Opus takeover; Sonnet stalls on backgrounded suites — Opus for any brief that runs a suite).
+- Gene rulings today: wall-clock rule; "B. Go" (spike r2 = mechanism first); invest in suite/CI ("option value"); STUDY-051 delegated; SMW "a: go".

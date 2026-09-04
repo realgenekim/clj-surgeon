@@ -1634,3 +1634,176 @@ a gate any writer of the receipt file can drive. clojure.edn from here, and the 
 at the RED sha on a real clone and to try tagged literals. feature_thread r10 (last round, blockers only) building.
 
 ## 17:23Z admit gate r14: Sol refused after provenance (read-eval attack in the brief); Opus fallback launched
+
+## 17:33Z suite spike filed (docs/observations/2026-09-04-suite-spike-spec.md); round 1 launched on bridge/suite-spike
+
+## 17:34Z MEM-003 r8 (Opus): NO-GO on one finding; the same lesson, one rung up, for the fifth round
+
+Round six: a derivation over names cannot see a call that names nothing. Round eight: a derivation over names must also
+enumerate the GRAMMAR the names can appear in — `(. obj (member))` is Clojure's own reference spelling, and `..` and
+`memfn` expand to it. The reviewer's own note on why it holds a hole no live site exercises: "a ratchet's job is the
+commit not yet written." Also on the record: the reviewer withdrew its round-six "there is no intent-audit runner" claim.
+Round eight builds the one-commit fix plus the trunk re-merge (txn_journal carries eleven :control clock entries) with
+counts and the 145 pin re-derived on the merged result. Suite spike round 1 launched in parallel on bridge/suite-spike.
+
+## 17:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 17:53Z study-ops r11 (Sol): NO-GO on the declared residual; landing needs Gene's product acceptance
+
+The residual the builder declared honest (a keyword key and its string twin collapse to one JSON key on the wire, so
+the text face gave them one pointer) fails exactly when both occur in one map: two identical pointers, declared and
+audited disagree. A declared residual is still a claim about safety, and it was not witnessed with both keys present.
+The reviewer also put on the record what only Gene can grant: the read-side text growth (STUDY-051, the ls-tree
+doubling) is a product change, and no reviewer's GO covers it. Round 12 builds the fix and the trunk re-merge; the
+acceptance question goes to Gene with the morning report. Killed one orphaned JVM in a deleted gate5 fixture dir
+(load 16.9 with the spike's two concurrent clones running as designed).
+
+## 17:54Z — usage watch (untimed run, 3 min at load 11, window since 2026-08-30T15:00Z "until": "2026-09-04T17:50:46.926236Z"): tools "admit_clojure_patch": 1 "inspect_clojure": 148 ; inspect_clojure "count": 148 median 96 ms p90 331 ms max 8405 ms (collector figures verbatim; ok/refused split not in the tail captured — full JSON at /var/tmp/forge/usage-untimed.log)
+
+## 18:06Z admit gate r14 (Opus): GO-WITH-FIX; the merge is red and merge-tree cannot see it
+
+Green + green = red. The trunk's census landing changed the admit entrance's refusal vocabulary in the gate lane's own
+test file, git auto-merged the text, and the lane's own set-equality witness (ADMIT-133) caught the drift on the merged
+tree — exactly the check the landing protocol runs and the reason it runs on the MERGED tree, never on the tip. Two
+records to carry: a semantic conflict hides behind "Auto-merging"; and a --no-local clone does not carry
+remote-tracking refs, so merge evidence names the fetched trunk sha. Round fifteen is the merge round; on its green the
+lane LANDS and arm G runs. Also to correct in the r13 build record: the RED commit exited 1, not 3.
+
+## 18:09Z feature_thread r10 built (4d51ebc3); merge round before the landing review; the TEST-ISO decision carded to Gene
+
+Round ten's honest move: the recall table LOST a leg (openTransformFromSelection 5/5 → 4/5) because its only occurrences
+are inside assertion strings, character-for-character the reviewer's own attack; no rule can refuse one and admit the
+other, so the number moved and the README says why. The floor dispute resolved as two receipts, not one wrong number.
+Eight pre-existing conflicts with the census-merged trunk (the tool-count witnesses), so — the gate lane's lesson — the
+merge round runs first and the landing review reviews the merged tip. Decision card to Gene (help-gene-decide, phone
+format): round two of the suite spike = (a) full TEST-ISO family, (b) mechanism first + battery, (c) witnesses first;
+recommended b, silence → b.
+
+## 18:10Z Gene ruled the suite-spike round two: "B. Go" — mechanism first (001, 006, 009 on the round-one partition); witnesses round three
+
+## 18:20Z suite spike round one: 11 spawning namespaces are 94% of the lane; the "interference" is two timing races
+
+Per-namespace wall on mcp-test (716.7 s, 49 ns): reader-eval-fence-test 465 s (65%), census launcher 64 s, alias
+migration 60 s, census 36 s, prepared-wire 19 s … the 36 non-spawning namespaces total 20.9 s. No fixed port anywhere
+(every real bind is :port 0); nothing touches the repo's target/; the spec's "battery receipt in target/" named the wrong
+path — the real shared roots are the absolute seat paths MEMBAT_ROOT, PARSER_RED_ROOT and suite.lock, unreachable from
+mcp-test. Two concurrent suites: one member failed in both pairs, both timing races (stop-child!'s stderr future
+rethrowing through a finally, leaking the workspace into the tmp-leak ratchet; mcp-process-test's 50 ms margin). The
+JVM lane reaches the NETWORK: prepared-wire spawns `clojure -X:clj-surgeon/mcp` which git-clones clojure-mcp from GitHub
+and writes ~/.gitlibs. Partition proposed: fast 36 (~31 s cold), integration 2, battery 11 (674 s). Round two launched
+per Gene's "B. Go": partition + lane declaration + JVM isolation + the two races fixed under contention + the 4-wide battery.
+Docs on bridge/suite-spike: 2026-09-04-suite-spike-round1{,-timing,-classification}.md (commits 34e0e82a, e97a1979, c4f69081).
+
+## 18:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 18:53Z — usage watch (untimed run started 18:50Z at load 20.6): tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; full JSON /var/tmp/forge/usage-untimed.log)
+
+## 19:15Z MEM-003 r8 built (cb14686c); the composition with the landed census is red; decided option (i)
+
+Both parents green, the merge 11 failures 3 errors, identical twice: two lanes that never disagreed on text disagree
+on an invariant — the census publishes a clock-derived field outside the measured block, and the measured-clock
+ratchet landed after the census did. Not a defect in either lane; a composition the queue did not model. Decided here
+(consequential, reversible, no external users of the trunk): the census adapts — phases read through `measured`,
+published inside the block, per TIME-004; CENSUS-013 still satisfied. Reason it is not Gene's: it moves no product
+behaviour, only the partition of an existing field on an unreleased trunk; reversal is one commit. Round nine on the
+MEM-003 branch; the 8 reader_eval_fence failures (changed launcher refusal prose) get a separate look in the same round.
+
+## 19:23Z Gene: "You are in charge… generate wins"; two decisions taken; the seat's four one-shots built
+
+Decisions under delegated authority (reversible, no external users of the trunk): STUDY-051 ACCEPTED with the 12 KB
+growth ratchet as the cap (study-ops lands on its next GO); the SMW landing-contract branch cut LOCALLY
+(/home/forge/tmp/replay/smw-contract@f004359c: .beads/.local_version untracked, the vendor bd block replaced by a
+five-line chain at the top of CLAUDE.md, 671 → 634 lines) — Gene's repo untouched; the push is his call. Arms NC
+(control plate) and NS (slim plate) launched together at load 24–27 so the comparison shares its noise.
+Per make-our-tools-perfect: ~/bin/sol-finished, replay-arm, usage-watch, land — each verified on a real case; two edges
+found by the real cases (binary bytes in a log; an arm log with no wrapper line) fixed in the same turn. Memory
+anvil-seat-one-shots. A kill I did not need: I killed NC/NS on a false reading of my own prompt check; relaunched 1 min later.
+
+## 19:30Z Gene ratified investing in the suite/CI ("massively increase option value"); GitHub Action + receipt ledger added to spike round three. ls-tree: inside MCP on bridge/study-ops-mcp (r12 building), lands on its GO with STUDY-051 accepted.
+
+## 19:35Z GitHub Actions for MCP/main: seat token has the workflow scope (no mayor request needed); Curtain Call basis fetched (build-and-deploy.yml: setup-java@v4, setup-clojure@12.5, cache@v4; no matrix — ours adds one); builder launched on bridge/gha based on bridge/suite-spike (fast+integration gate, battery MATRIX from the lane manifest, nightly, receipt job for ~/bin/land)
+
+## 19:36Z NC/NS scored: slim plate a MISS as a native-side lever (30/6.5 min vs 54/11.2 min; reads 7 vs 16 dominate); churn removed as designed; T5 is where the contract is measured
+
+## 19:5xZ Process defect, mine: the admit-gate merge reached origin before its gates finished
+
+`land` merged 97157953 onto MCP/main in the seat checkout at 19:29Z and ran the gates there; at 19:35Z, 19:38Z and 19:44Z I
+committed records in the same checkout and pushed — each push carried the merge (8d32d619) beneath it. The JVM suite on
+the merged tree was already green and the branch's fresh-clone bb/oracle/hygiene/audit were green, so nothing unverified
+by anyone reached the trunk, but the landing command's promise ("push only if every gate is green") was broken by its
+neighbour. Fix: `land` now runs in its own worktree (/home/forge/src/clj-surgeon-land), swapped in after this run; memory
+landing-runs-in-its-own-worktree. Had a gate gone red the remedy would have been a revert commit, never a force push.
+
+## 19:51Z — usage watch: tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim, untimed run === rc 0 end 19:51Z; window since 2026-08-30T15:00Z)
+
+## 19:51Z ADMIT GATE LANDED on MCP/main (merge 8d32d619; gates on the merged tree: mcp-test 919/15214/0, bb, oracle, hygiene, audit ok)
+
+Sixth landing of the night, fifteen rounds. The gate is the untested ≥2× wall lever: arm G runs next — the SMW edit written
+through admit_clojure_patch as one call (patches + the named verify), receipt injected; the control is native with the
+same gate mandated and no receipt. Pre-registration: G raw ≤ 12, agent-run suite invocations 0 (the gate runs them), wall
+< 4 min; withdrawal if G raw > 18 or the gate refuses the agent's patch twice on the same reason (then the finding is the
+gate's contract, not the claim).
+
+## 20:11Z suite spike round two: the merge gate 717 s → 150 s (fast lane 30 s); four clones at once 12/12 green; Sol review launched
+
+Round two's own defects were all caught by gates, never by reading: the four-clone battery caught `isolate-home?` keyed on
+one spelling (fast alone isolated, the merge gate not, a witness asserting otherwise) — the same class as doctrine
+disagreeing with the installed prompt; the repo's existing tmp-leak ratchet caught the fix's refusal-ordering regression
+within the hour. Six race sites, not two; the last two inverted the lesson (a generous ceiling cannot fix "the other party
+had already left"). Nothing dropped: 885/13128 = 865/13023 + exactly the twenty new witnesses. Rename to know:
+make test-fast is now the JVM fast lane; the bb lane is make test-bb. Independent Sol review on the fresh clone
+suite-wt; on GO it lands and round three (GHA, ledger + tripwire, runtime witnesses) follows.
+
+## 20:15Z Arm G WITHDRAWN as pre-registered: the gate as the write path is a 2.6–2.8× wall LOSS in its current contract
+
+G 53 turns / 18.5 min (4 MCP calls, 17 apply_patch); GN 40 / 17.0 min (0 MCP calls despite the mandate); native same hour
+30 / 6.5. The rollouts name why: 4–5 min building whole-file payloads before the first call; a verification refusal
+without the failing test's output, so the agent went blind and re-implemented locally; a mandate that is not a path.
+Both trees correct and gate-green — correctness is not the finding. The product asks (accept the harness's own patch
+representation; refusals carry the failing output; a propose mode) are the gate lane's next round. Written up in the
+replay doc; this is the negative Gene asked for in the log, not a footnote.
+
+## 20:15Z CORRECTION of my own record (20:1xZ entry): the gate refused on a MISSING PROFILE, not a failing test
+
+Verbatim from arm G's log: "Verification did not complete (partial: no-focused-test-profile); nothing was written."
+SMW has no verification profile onboarded; the gate cannot run a verify it has not been told, and the agent could not
+tell it. My first write-up said the agent's test failed inside the gate — wrong, corrected in the replay doc in place
+with the correction dated. The product ask moved to first place: inline verify commands, or onboarding from the
+receipt's verify rows, in one call.
+
+## 20:25Z GitHub Actions shipped (bridge/gha 5ce8aaea): merge gate green in 205 s on runners; CI found three defects the seat could not
+
+The receipt nobody on Anvil wrote: 429/4323/0 on the merge gate, 840/6916/0 bb, battery 11-wide 10/11 with nothing
+skipped. The three CI-only findings are all the ambient-state class from 2026-09-03 (a resolver that only works where
+clj-kondo happens to live; a test asserting the box has eight cores; a broken make recipe nobody runs) — exactly what an
+independent machine is for. One escalation for Gene: the nightly is dormant until MCP/main is the default branch.
+
+## 20:50Z — usage watch: tools "admit_clojure_patch": 20 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 20:48Z load 12.13 ; === rc 0 end 20:50Z)
+
+## 20:51Z feature_thread r11 merge round built (508f26f5; 988/17487/0 on the merged tree; catalog 8 tools); Sol r12 LANDING review launched — the last review, then freeze
+
+## 21:02Z MEM-003 r9 built (a9963bd3): composition green — the census read elapsed at top level after the partition moved it; the eight fence failures were this branch's own streaming encoders; Opus r10 landing review launched
+
+## 21:08Z admit gate r16 built (2ac33278: inline verify in an overlay, harness-native patches with derived binding, failing output, propose mode); Sol r17 review + arms G2/GN2 on 8173 launched
+
+## 21:24Z G2 withdrawn AND a functional failure: the r16 gate refused the task's JavaScript files (Clojure-only scope); two admit calls, both refused, no feature landed; product ask = opaque non-Clojure files in the same snapshot (gate r18). Sol r17 review refused by the filter → Opus fallback running.
+
+## 21:24Z CORRECTION: G2's failure was my mandate contradicting the gate's correct remedy (apply JS natively); the gate's defect is a looping next_call — sent to the r17 Opus review; G3/GN3 relaunched with the gate's own prescription
+
+## 21:27Z default-branch flip: seat identity lacks admin (404 on PATCH); request filed for the mayor in the merge queue doc; Gene can also flip it in Settings → Branches
+
+## 21:29Z SMW landing contract MERGED into realgenekim/social-media-writer main (d5b1ba53; Gene "a: go"): .beads/.local_version untracked, bd as a five-line chain at the top of CLAUDE.md; branch deleted; new replay base smw-base2 @ d5b1ba53 (smw-base @ 2df99c98 kept for comparability; T5 runs on base2)
+
+## 21:50Z admit gate r17 (Opus): NO-GO — the overlay copy escapes its root and truncates files outside the workspace
+
+Security-boundary class (memory: security-boundary-review-before-merge): six lines added in round sixteen follow
+symlinks and compute destinations from canonical paths, so a symlink out of the workspace makes the copy open the real
+inode for read and write and truncate it — in the two modes that promise no write. Not on the trunk, not imminent
+(NO-GO), so no cord; recorded here loudly. Same loop: modes and mtimes lost (the G3 finding, confirmed with a control);
+and the "tail" of a failing command is its head, unflagged. The reviewer's ruling on the overlay: keep the byte copy,
+never hardlink (shared inodes are exactly the aliasing this code is careless about). Round 18 builds the fix as one
+edit (Files/copy COPY_ATTRIBUTES + NOFOLLOW_LINKS + a typed refusal for any destination outside the root) with RED
+witnesses that reproduce the truncation and the mode loss, plus the four non-blocking items. Opaque non-Clojure files
+(the G2 ask) wait for r19: safety first.
+
+## 21:51Z — usage watch: tools "admit_clojure_patch": 52 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:48Z load 14.50 ; === rc 0 end 21:51Z)

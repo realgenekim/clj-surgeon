@@ -202,3 +202,117 @@ grows under load. Levers by wall: (1) the SMW landing contract (bd chain, untrac
 native included; (2) the admit gate (write + verify in one call) ≈ −1.5 min quiet, more under load. Projected: 9 → ~3 → ~2 min,
 3–4× on wall from two levers, neither of which is another feature_thread round. Standing meter from here: wall per species
 (this script), not call counts. Refocus ratified in principle by Gene: no fractional gains where the juice is squeezed.
+
+## NC / NS pair (control plate vs slim landing-contract plate, native, same hour, load 8–27) — 2026-09-04 19:2xZ–19:4xZ
+
+| arm | wall | turns | code reads | rules | bd | verify+write | .local_version churn | gates |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| NC (2df99c98, vendor bd block, 671-line CLAUDE.md) | 6.5 min | 30 | 1.0 min (7) | 1.3 | 0.2 | 3.2 | (not exercised) | unit 227/712/0, js green |
+| NS (landing-contract f004359c: .local_version untracked, bd as a 5-line chain at the top, 634 lines) | 11.2 min | 54 | 4.1 min (16) | 1.2 | 0.2 | 3.1 | 0 mentions, clean tree | unit 229/725/0, js green |
+
+Verdict: a MISS for the plate as a native-side lever at n=1. The plate did exactly what it was built to do (zero
+.local_version churn, bd at three calls, clean tree) but the rules cost is unchanged (CLAUDE.md still read in three
+slices — 634 lines is not distilled) and native's code reads (7 vs 16 turns, 1.0 vs 4.1 min) swamp a half-minute of
+ceremony. The pair is same-hour, same-load, so the confound is native's own variance, not the box. Standing sentence
+amended: the landing contract's share is only measurable once the receipt has removed the reads — T5 (receipt +
+contract) as pre-registered, and the contract's rules row must be a DISTILLATION (the dozen binding lines), not a
+shorter file. The local SMW branch stays local; nothing is pushed to Gene's repo.
+
+## Arm G / GN (the admit gate as the write path; MCP server from the landed trunk 8d32d619 on 8171) — 2026-09-04 19:53Z–20:1xZ
+
+Pre-registration: G raw ≤ 12, agent-run suite invocations 0, wall < 4 min; WITHDRAW if G raw > 18 or the gate refuses the same patch twice for the same reason.
+
+| arm | wall | turns | gate turns (payload + calls) | apply_patch | reads | rules | verify (own) | gates |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| G (receipt + gate mandated) | 18.5 min | 53 (4 MCP calls) | 3.9 min / 13 | 17 | 14 (3.3 min) | 2.7 min | 1 | unit 229/723/0, js green |
+| GN (native + gate mandated) | 17.0 min | 40 (0 MCP calls) | 4.9 min / 11 | 14 | 7 | 3.2 min | 2 | unit 229/723/0, js green |
+| NC (native, same hour) | 6.5 min | 30 | — | 6 | 7 | 1.3 | 7 | green |
+| T4 (receipt, no gate) | 5.6 min | 19 | — | 4 | 0 | 1.0 | 3 | green |
+
+**WITHDRAWN, as pre-registered.** Both gate arms exceeded 18 raw and ran 2.6–2.8× NATIVE's wall. The gate as the
+write path, in its current contract, is a wall LOSS for an agent on this harness. What the rollouts show:
+- The agent spent 4–5 minutes CONSTRUCTING gate payloads in shell (whole-file expect_pre_sha256 for eight files, the
+  full file bodies as the patch representation) before the first call — the gate's input shape is the cost.
+- G's gate calls were REFUSED, verbatim: `admit-patch-refused · source-unchanged=true · mutation_attempted=false ·
+  pre_image_binding=bound · error=Verification did not complete (partial: no-focused-test-profile); nothing was written.
+  Run mode preview … and repair no-focused-test-profile before committing.` — CORRECTION (20:2xZ) to the first draft of
+  this section: no test failed inside the gate; the gate could not run ANY verify because the SMW repo has no
+  verification profile onboarded, and the agent — holding the exact verify commands in its receipt — had no way to pass
+  them. It fell back to apply_patch (17 calls) and ran the suites itself. The refusal's remedy ("repair
+  no-focused-test-profile") names a state the agent cannot repair from inside a task.
+- GN never reached the MCP tool at all (0 MCP calls) despite the mandate: it read about the gate, built payloads, and
+  wrote with apply_patch — the same "mandate ≠ path" finding as the summer's adoption cohorts.
+- Both landed correct, gate-green trees; correctness is not the finding, wall is.
+
+**The product ask that falls out (the gate lane's next round, not a polish):** (1) accept inline verify commands
+(`verify {:commands [...]}` — the receipt's verify rows are exactly that) or onboard the profile from the receipt, so a
+repo with no `.clj-surgeon` profile is admissible in one call; a refusal on a missing profile must say so in its first
+words and name the one call that supplies it; (2) accept the harness's own patch representation (apply_patch / unified
+diff) and derive the pre-image binding itself — never ask the agent for whole-file digests or bodies; (3) when a verify
+DOES fail, carry its output verbatim; (4) a `propose` mode that runs the verify in the snapshot and returns the result
+without refusing, so the agent iterates inside the gate. Until those land, the gate's measured square is the one it was built for — refusing a bad
+patch before it lands (E-ADMIT-SEED) — not wall.
+
+Standing sentence, amended: the receipt is the only measured wall win (1.45×, capped near 2×); the plate and the gate
+are both withdrawn as wall levers at n=1–2 on this harness; the gate's next round is its input contract and its refusal
+receipt, measured by the same pair.
+
+## G2 / GN2 pre-registration (written 21:08Z, before any result) — the admit gate with the round-sixteen contract (server from 2ac33278 on 8173)
+
+Arms: G2 = receipt + gate mandated (inline verify as argv arrays, apply_patch-format patch, propose then commit); GN2 = native + the same mandate.
+Same task, same clones (smw-base@2df99c98), same-hour control = NC (30 turns / 6.5 min).
+Pre-registration: G2 raw ≤ 12, wall ≤ 5 min, ≥ 1 MCP admit call, ≤ 1 refusal, 0 agent-run suite invocations; GN2 ≤ 18 raw and ≥ 1 MCP call (the mandate becomes a path).
+WITHDRAWAL: G2 raw > 18 or G2 wall > 6.5 min (native control) → the r16 contract did not make the gate a wall lever on this harness;
+the finding becomes the refusal texts and the next_call (naive-reader probe). Any refusal repeated twice for the same reason = a gate contract finding, reported verbatim.
+
+## G2 result (21:24Z) — WITHDRAWN, and a functional failure: the gate refuses the task's JavaScript files
+
+| arm | wall | turns | admit calls | feature landed | gates |
+|---|---:|---:|---:|---|---|
+| G2 (receipt + r16 gate, mandated) | 7.0 min | 15 | 2 (both refused) | NO — diff is only .beads/.local_version | unit 227/712/0 (unchanged tree) |
+
+The agent did what the mandate said: it built the patch in apply_patch format, called the gate with inline verify, was
+refused because the patch set contains JavaScript files (the gate admits Clojure files only), did not bypass with
+apply_patch, and stopped with "Implementation is blocked because the mandated gate rejects JavaScript files". Two admit
+calls, both refused, tests.ran=false on both. Pre-registration: raw 15 (> 12), wall 7.0 (> 6.5 control) → withdrawn;
+correctness: the feature was not implemented at all.
+
+**The finding is the gate's scope, not its contract this time.** A real feature change on a real repo is mixed-language
+(this one: 2 clj, 1 js, 1 js test, 1 edn, 1 tests.edn); a gate that admits only .clj cannot be THE write path for a
+feature. Product ask for the gate lane's next round (r18): admit non-Clojure files in the same patch set as OPAQUE
+files — no analysis, whole-file derived pre-image binding, written atomically with the Clojure files in one snapshot,
+verified by the same inline commands — with the receipt naming which files were analysed and which were opaque. Until
+then any gate-mandated arm on this task is a functional failure by construction, and the mandate text was wrong to
+forbid apply_patch for files the gate cannot take.
+
+**CORRECTION to the G2 entry (minutes later, from the refusal text itself):** the gate refused with a typed kind and a
+correct remedy — `unsupported-patch-target · The gate admits Clojure and EDN sources only; apply these natively:
+resources/public/js/editor-commands.js, test/js/browser_runtime_classic_script_test.js` — and my arm mandate ("do not
+apply_patch first") forbade exactly that remedy, so the agent stopped. The functional failure was the mandate, not the
+gate. The gate's actual defect is smaller: its `next_call` after that refusal is the SAME call that was just refused
+(mode preview, same patch_sha256, "resend the same patch text"), so an agent following next_call loops (two identical
+refusals, 39.66 ms and 8.75 ms). Sent to the r17 review as an attack. G3/GN3 relaunched with the mandate the gate
+prescribes: JS natively, clj/edn through the gate with inline verify.
+G3/GN3 pre-registration (21:24Z): same task, same clones, same server (8173); mandate = JS natively, clj/edn via the gate with
+inline verify. G3 raw ≤ 14, wall ≤ 6.5 min (native control), ≥ 1 admit call ADMITTED, 0 agent-run suite invocations;
+withdrawal: G3 raw > 18 or wall > 6.5, or the same refusal twice.
+
+**SMW plate landed ($NOW):** realgenekim/social-media-writer main = d5b1ba53 (landing contract merged on Gene's "a: go"). Replay bases: smw-base @ 2df99c98 (all arms so far), smw-base2 @ d5b1ba53 (T5 and later). Cross-base comparisons name the base.
+
+## G3 / GN2 results (21:43Z) — the r16 gate ADMITTED; still withdrawn on wall; a new gate defect (overlay drops executable bits)
+
+| arm | wall | turns | MCP calls | feature landed | gates |
+|---|---:|---:|---:|---|---|
+| G3 (receipt + r16 gate, the gate's own prescription) | 12.7 min | 35 | 13 (2 committed receipts) | YES, 9 files | unit 243/802/0, js green |
+| GN2 (native + the old, wrong mandate) | see below | | 0 | (for the record) | |
+| NC native control (same day) | 6.5 min | 30 | — | yes | green |
+
+G3 by species: gate/MCP 4.0 min over 11 turns; reads 2.6; write 2.0; bd 1.1; rules 1.3; waits 1.2. Pre-registration (≤14
+turns, ≤6.5 min) MISSED → withdrawn on wall; but the gate is no longer a functional failure: inline verify ran the repo's
+own commands in the snapshot and admitted. NEW GATE DEFECT found by the arm: the overlay copy changed executable CLI
+fixtures from 0755 to 0644, so the verify failed until the agent added a Makefile mode-normalization workaround — the
+gate forced a product change on the caller. Sent to the r17 review; r18 asks: preserve modes/symlinks in the overlay;
+opaque non-Clojure files in the same snapshot; a next_call that never repeats a refused call.
+T5 + N5 LAUNCHED 21:43Z on smw-base2 (d5b1ba53, the merged landing contract): T5 = receipt + contract + gate as prescribed;
+N5 = native on the new plate (contract-only baseline). Pre-registration (from the T5 section above): T5 raw 5–7 predicted,
+withdrawal if T5 raw > 12 on both replicates or N5 also < 12.
