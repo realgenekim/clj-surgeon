@@ -4878,3 +4878,131 @@
               "the fixture must carry focused test namespaces")
           (assert-text-names-every-structured-leaf! commit "ok-commit")))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 4 (MCP-OP-ADMIT-135): a reachable next_call became
+;; non-copyable text while the description told the caller to copy it
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-135
+(defn- next-call-text
+  [call]
+  (#'admit/summary {:ok false :operation :admit-patch-refused :mode "preview"
+                    :error-type :invalid-patch :error "an error sentence"
+                    :elapsed_ms 1.0 :source-unchanged true :next_call call}))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest a-next-call-renders-verbatim-at-any-size
+  ;; Sol's round-three receipt, verbatim:
+  ;;   {:probe :next-call-bound, :padding-length 968, :encoded-length 1025,
+  ;;    :verbatim false, :pointer true}
+  ;; The tool description (mcp_admit_tool.clj:66) tells a caller to copy
+  ;; expect_pre_sha256 out of next_call. Above 1,024 characters the text
+  ;; replaced it with a pointer at structuredContent -- which a text-only
+  ;; caller, the only caller this ratchet exists for, cannot read.
+  (doseq [padding [1 2048 8192]]
+    (testing (str "padding " padding)
+      (let [call {:tool "admit_clojure_patch"
+                  :arguments {:mode "commit" :verify "focused"
+                              :expect_pre_sha256
+                              {"src/app/core.clj" (apply str (repeat padding "a"))}}}
+            encoded (json/generate-string call)
+            text (next-call-text call)]
+        (is (str/includes? text (str "next_call · " encoded))
+            (str "a " (count encoded) "-character next_call must render "
+                 "verbatim; the caller is told to copy it"))
+        (is (not (str/includes? text "in structuredContent.next_call"))
+            "no pointer may stand where the call itself belongs")))))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest an-ordinary-wide-preview-can-be-copied-out-of-its-own-text
+  ;; Sol, verbatim: "A routine 14-file preview produced 1,554 characters, so a
+  ;; text-only caller cannot perform the instructed copy/send operation. This
+  ;; is not merely a synthetic boundary case." Driven through the real
+  ;; entrance, then the JSON is parsed BACK OUT of the text and used, so the
+  ;; assertion is that the text is sendable rather than that it is long.
+  (let [root (temp-dir)
+        n 14
+        sources (into {} (for [i (range n)]
+                           [(str "src/app/m" i ".clj")
+                            (str "(ns app.m" i ")\n\n(defn f\n  [x]\n  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/src/app/m" i ".clj\n"
+                            "+++ b/src/app/m" i ".clj\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns app.m" i ")\n"
+                            " \n"
+                            " (defn f\n"
+                            "   [x]\n"
+                            "-  (inc x))\n"
+                            "+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [preview (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})
+            encoded (json/generate-string (:next_call preview))
+            text (#'admit/summary (assoc preview :elapsed_ms 1.0))]
+        (is (true? (:ok preview)) (str "preview refused: " (:error preview)))
+        (is (= n (count (:files preview))))
+        (is (> (count encoded) 1024)
+            (str "the fixture must actually exceed round three's ceiling, or "
+                 "this proves nothing; it is " (count encoded) " characters"))
+        (is (str/includes? text (str "next_call · " encoded))
+            "a routine 14-file preview's next_call must be copyable from text")
+        (testing "and what is copied out of the text is what the gate meant"
+          (let [line (->> (str/split-lines text)
+                          (filter #(str/starts-with? % "next_call · "))
+                          first)
+                recovered (json/parse-string
+                            (subs line (count "next_call · ")) true)]
+            (is (= (:next_call preview) recovered)
+                "the JSON parsed back out of the text is the receipt's own call")
+            (is (= n (count (get-in recovered [:arguments :expect_pre_sha256])))
+                "every pre-image digest the commit needs survived the render"))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest a-next-call-that-alone-exceeds-the-public-budget-is-a-typed-refusal
+  ;; The other end of the rule. If the call genuinely cannot be published,
+  ;; the honest answer is a refusal naming the size and the budget -- never a
+  ;; pointer, which is the same failure one level down: a text-only client has
+  ;; no structuredContent to be pointed at.
+  (let [budget write-refusal/public-byte-budget
+        huge {:tool "admit_clojure_patch"
+              :arguments {:mode "commit"
+                          :expect_pre_sha256
+                          {"src/app/core.clj" (apply str (repeat (inc budget) "a"))}}}
+        published (#'admit/bound-receipt
+                    {:ok true :operation :admit-patch-preview :mode "preview"
+                     :files [] :next_call huge})]
+    (is (false? (:ok published))
+        "a next_call the budget cannot carry must refuse, not publish")
+    (is (= :next-call-exceeds-public-budget (:error-type published)))
+    (is (str/includes? (str (:error published)) (str (count (json/generate-string huge))))
+        "the refusal names the exact size")
+    (is (str/includes? (str (:error published)) (str budget))
+        "and the budget that would have to change")
+    (is (some? (:remedy published)) "and what the caller can do about it")))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest the-next-call-is-the-last-thing-a-crowded-receipt-gives-up
+  ;; The stated elision order. Other leaves elide first; the next_call is
+  ;; rendered after them and never elided.
+  (let [call {:tool "admit_clojure_patch"
+              :arguments {:mode "commit" :verify "focused"
+                          :expect_pre_sha256
+                          {"src/app/core.clj" (apply str (repeat 2000 "a"))}}}
+        encoded (json/generate-string call)
+        crowded (merge {:ok false :operation :admit-patch-refused :mode "preview"
+                        :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                        :source-unchanged true :next_call call}
+                       (into {} (for [i (range 4000)]
+                                  [(keyword (format "leaf%04d" i))
+                                   (apply str (repeat 40 "y"))])))
+        text (#'admit/summary crowded)]
+    (is (str/includes? text "more facts in structuredContent]")
+        "the fixture must actually be over the fact budget")
+    (is (str/includes? text (str "next_call · " encoded))
+        (str "the next_call is rendered last and never elided; everything "
+             "else gives ground before it does"))))
