@@ -1,7 +1,7 @@
 ---
 parent: test-isolation-design
 prefix: TEST-ISO
-status: "round two implemented 2026-09-04; spike docs/observations/2026-09-04-suite-spike-spec.md"
+status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witnesses); spike docs/observations/2026-09-04-suite-spike-spec.md, record -round4.md"
 ---
 
 # JVM Test-Suite Isolation Specifications
