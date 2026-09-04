@@ -1307,20 +1307,56 @@
       (close []))))
 
 ;; @spec MCP-OP-ALIAS-059
+(def ^:private print-safe-scalar-classes
+  "The EXACT classes `print-method` may be handed, enumerated by class.
+
+  Round-fifteen review finding 1: an allowlist BY TYPE admits every SUBTYPE.
+  The predicate this replaces admitted everything satisfying `number?` — that
+  is `(instance? java.lang.Number …)` — and `print-method`'s own `Number`
+  implementation is `print-simple`, which writes `(str o)`. `java.lang.Number`
+  is not final, so a `proxy` or an anonymous subclass carries an ARBITRARY
+  `toString` straight through the branch the renderer called safe: a throwing
+  one escaped `bounded-pr-str` and a looping one hung it — exactly the two
+  failures the round-fourteen fix closed for every other class.
+
+  Measured on this JVM (`Modifier/isFinal`): `String` and `Boolean` are final
+  and cannot be subclassed at all, so their `instance?` tests were already
+  exact. `clojure.lang.Keyword`, `clojure.lang.Symbol`, `java.math.BigInteger`,
+  `java.math.BigDecimal`, `clojure.lang.Ratio` and `java.lang.Number` are NOT
+  final, and `print-method` reaches `print-simple` — `(str o)` — for Keyword,
+  Symbol and Number alike. So membership is decided by `(class value)` and not
+  by `instance?`, uniformly, for every scalar: a subclass of any of them is
+  not this class and renders as an identity marker.
+
+  The set is the numeric representations Clojure and the JVM really produce
+  plus the four other scalars the renderer has always printed. `Character` is
+  deliberately absent: it was not admitted before this change either, and
+  admitting it now would alter a rendering."
+  #{java.lang.String
+    java.lang.Boolean
+    clojure.lang.Keyword
+    clojure.lang.Symbol
+    java.lang.Long
+    java.lang.Integer
+    java.lang.Short
+    java.lang.Byte
+    java.lang.Double
+    java.lang.Float
+    java.math.BigInteger
+    java.math.BigDecimal
+    clojure.lang.BigInt
+    clojure.lang.Ratio})
+
+;; @spec MCP-OP-ALIAS-059
 (defn- print-safe-leaf?
   "True when `value` is a scalar `print-method` can render without ever
   reaching an arbitrary object's `toString`.
 
-  Strings, numbers, keywords, symbols and booleans all print through core
-  implementations that write their own known characters; nothing here can
-  invoke a caller-supplied `toString`."
+  Decided on the value's EXACT class, never on `instance?`: see
+  `print-safe-scalar-classes`."
   [value]
   (or (nil? value)
-      (string? value)
-      (number? value)
-      (keyword? value)
-      (symbol? value)
-      (boolean? value)))
+      (contains? print-safe-scalar-classes (class value))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- opaque-object-marker
@@ -1340,6 +1376,26 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (declare write-bounded)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-safe-leaf
+  "Prints one admitted scalar, with the CALL ITSELF guarded.
+
+  The allowlist decides which classes may reach `print-method`; this decides
+  what happens if one of them misbehaves anyway. Defence in depth, and cheap:
+  for every class in `print-safe-scalar-classes` the guard can never fire,
+  because none of them can be subclassed into hostility while remaining that
+  exact class. The ceiling's own refusal is re-thrown rather than swallowed —
+  it is the renderer stopping on purpose, not a leaf failing."
+  [^java.io.Writer writer value]
+  (try
+    (print-method value writer)
+    (catch clojure.lang.ExceptionInfo e
+      (if (::print-ceiling (ex-data e))
+        (throw e)
+        (.write writer (opaque-object-marker value))))
+    (catch Throwable _
+      (.write writer (opaque-object-marker value)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- write-bounded-elements
@@ -1389,7 +1445,7 @@
   [^java.io.Writer writer value level]
   (cond
     (print-safe-leaf? value)
-    (print-method value writer)
+    (write-safe-leaf writer value)
 
     (zero? level)
     (.write writer "#")
@@ -1418,6 +1474,27 @@
     (.write writer (opaque-object-marker value))))
 
 ;; @spec MCP-OP-ALIAS-059
+(def ^:private print-time-budget-ms
+  "The wall-clock floor under one bounded rendering.
+
+  Round-fifteen review finding 1: the ceiling bounds CHARACTERS, and work that
+  emits no character is unbounded by it — a `lazy-seq` whose body never
+  returns never yields its first element, so nothing is ever written and the
+  renderer waits forever. Two seconds is three orders of magnitude above the
+  slowest ordinary rendering measured here (a ten-megabyte string publishes
+  160 characters in a fraction of a millisecond) and far below any timeout a
+  caller waits on."
+  2000)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- bounded-text
+  [^StringBuilder builder ceiling]
+  (let [text (.toString builder)]
+    (if (> (count text) ceiling)
+      (str (subs text 0 ceiling) "…")
+      text)))
+
+;; @spec MCP-OP-ALIAS-059
 (defn bounded-pr-str
   "`pr-str` bounded in WORK as well as in output.
 
@@ -1441,17 +1518,52 @@
   writer's own character ceiling is what actually stops an endless or huge
   value, exactly as before."
   [value ceiling]
-  (let [builder (StringBuilder.)]
-    (try
-      (binding [*print-readably* true]
-        (write-bounded (ceiling-writer builder ceiling) value ceiling))
-      (catch clojure.lang.ExceptionInfo e
-        (when-not (::print-ceiling (ex-data e))
-          (throw e))))
-    (let [text (.toString builder)]
-      (if (> (count text) ceiling)
-        (str (subs text 0 ceiling) "…")
-        text))))
+  (let [builder (StringBuilder.)
+        outcome-promise (promise)
+        ;; @spec MCP-OP-ALIAS-059
+        ;; a DAEMON thread and not `future`: the send-off pool's threads are
+        ;; not daemons, so one abandoned inside a `toString` that never
+        ;; returns keeps its JVM — an MCP server — from ever exiting. Measured
+        ;; on this branch: a probe that rendered a looping `Number` correctly
+        ;; then hung at JVM exit until it was killed. A rendering the budget
+        ;; abandons must cost a leaked thread and nothing else.
+        worker (doto (Thread.
+                       ^Runnable
+                       (bound-fn []
+                         (deliver outcome-promise
+                                  (try
+                                    (binding [*print-readably* true]
+                                      (write-bounded
+                                        (ceiling-writer builder ceiling)
+                                        value ceiling))
+                                    ::completed
+                                    (catch Throwable t t))))
+                       "clj-surgeon-bounded-print")
+                 (.setDaemon true)
+                 (.start))
+        outcome (deref outcome-promise print-time-budget-ms ::timed-out)]
+    (cond
+      ;; @spec MCP-OP-ALIAS-059
+      ;; A character ceiling cannot stop work that produces no character. A
+      ;; `lazy-seq` whose body never returns yields no first element, so the
+      ;; ceiling writer is never called and the renderer waits forever; the
+      ;; same is true of any admitted leaf that could be made to loop. The
+      ;; TIME bound is the outer floor under both, and it returns the same
+      ;; identity marker every other unrenderable value gets. The builder is
+      ;; deliberately NOT read here: the abandoned thread may still be writing
+      ;; to it, and a partially-written buffer read across a race is worse
+      ;; than an honest marker.
+      (= ::timed-out outcome)
+      (do (.interrupt ^Thread worker)
+          (if (nil? value) "nil" (opaque-object-marker value)))
+
+      (instance? Throwable outcome)
+      (if (and (instance? clojure.lang.ExceptionInfo outcome)
+               (::print-ceiling (ex-data ^clojure.lang.ExceptionInfo outcome)))
+        (bounded-text builder ceiling)
+        (throw ^Throwable outcome))
+
+      :else (bounded-text builder ceiling))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn refusal-fact-line
