@@ -294,4 +294,19 @@ assert_runner_refuses clj-surgeon.memory.memory-test-runner
 assert_runner_refuses clj-surgeon.memory-battery-runner
 assert_runner_refuses clj-surgeon.mcp-test-runner
 
+# ============================================================
+# MCP-OP-TMPHYG-010: no gate writes to a hard-coded /tmp path
+# ============================================================
+
+# A refusal at the runner is worthless if the gates around it still create
+# directories in RAM by name. This is a source scan on purpose -- "never X
+# anywhere" cannot be witnessed by executing one path.
+# `${TMPDIR:-...}` forms and prose mentions of /tmp are not matches; only a
+# literal /tmp/<name> used as a path is.
+hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]' Makefile test/*.sh || true)
+if [ -n "$hardcoded" ]; then
+  echo "$hardcoded" >&2
+  fail "10: hard-coded /tmp write targets remain in Makefile / test shell gates"
+fi
+
 echo "tmp-leak ratchet witness passed"
