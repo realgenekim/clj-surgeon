@@ -35,7 +35,6 @@ before the andon hardening — which is why the eight conflicts exist at all.
 | `0b6a494` | `merge --no-ff origin/bridge/admit-gate` — 8 conflicts, all union |
 | `215acf8` | composition fix: the gate branch's own catalog witness had not met `alias_migration` |
 | `1bb0c9d` | composition fix: register the admit lane in the trunk's drift ratchet; six tools moves two hot-reload counts |
-
 | `fc2efb6` | this record |
 
 **Pushed tip: `fc2efb6` (`MCP/gate-landing-2026-09-04`); last code commit `1bb0c9d`.** Every gate
