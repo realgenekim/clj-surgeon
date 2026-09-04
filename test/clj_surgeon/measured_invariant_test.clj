@@ -283,6 +283,40 @@
       ;; The class, named the only way `Class/forName` accepts it.
       (for [^Class c clock-source-classes]
         (str "\"" (.getName c) "\""))
+      ;; And the class as a BARE SOURCE SYMBOL -- round-eight review finding 2.
+      ;; The morpheme narrowing's argument for withholding a string form from a
+      ;; morpheme-free method name was that `Class/forName` cannot reach
+      ;; `Calendar/getInstance` without the string `"java.util.Calendar"`. True,
+      ;; and `Class/forName` is not the only route to a class: on the JVM a
+      ;; class IS an ordinary source symbol, so
+      ;; `(.getMethod java.util.Calendar "getInstance" (into-array Class []))`
+      ;; reaches the factory with NEITHER the class (bare) nor the method
+      ;; (morpheme-free) a clock alternative. The reviewer's N7 carried it to a
+      ;; receipt through a POSITIONAL field read, `(.get cal 14)`, so no
+      ;; accessor name is spelled anywhere in the route.
+      ;;
+      ;; A class gets the bare form EXACTLY WHEN it carries a clock member the
+      ;; morpheme narrowing withholds a string form from -- which is the gap,
+      ;; stated as a rule rather than as a list. `java.io.File`'s clock members
+      ;; are all spelled `lastModified...`, so its string form already closes
+      ;; every reflective route to it and a bare form would buy nothing while
+      ;; matching every `^java.io.File` type hint in the tree (measured: 40
+      ;; lines). `java.time.Instant` and `java.util.Calendar` carry `from` and
+      ;; `getInstance`, and they are what this emits for.
+      (for [^Class c clock-source-classes
+            ;; The withheld case, exactly: a STATIC returning a time value is
+            ;; derived with no morpheme required (that is what makes
+            ;; `Calendar/getInstance` and `OffsetDateTime/now` visible), and a
+            ;; morpheme-free name is the one that gets no string form. Every
+            ;; other derived shape already requires a morpheme and so already
+            ;; has one.
+            :when (some (fn [^java.lang.reflect.Method m]
+                          (let [nm (.getName m)]
+                            (and (java.lang.reflect.Modifier/isStatic (.getModifiers m))
+                                 (time-type? (.getReturnType m))
+                                 (not (some #(str/includes? nm %) clock-name-fragments)))))
+                        (.getMethods c))]
+        (.getName c))
       (for [^Class c clock-source-classes
             :when (time-type? c)
             ^java.lang.reflect.Constructor k (.getConstructors c)
@@ -345,6 +379,26 @@
 
     (str/ends-with? expression ".")
     (str "\\b" (java.util.regex.Pattern/quote (subs expression 0 (dec (count expression)))) "\\.")
+
+    ;; A BARE SOURCE SYMBOL naming a clock class -- round-eight review finding
+    ;; 2. Matched where the class is used AS A VALUE, which is the reflective
+    ;; route the finding names (`(.getMethod java.util.Calendar ...)`), and not
+    ;; in the two positions where a fully-qualified class name is not a value:
+    ;;
+    ;;   - `Class/member` CALL POSITION -- `(java.nio.file.Files/exists p)` is
+    ;;     an ordinary qualified call the slash spelling already classifies on
+    ;;     its own method name. Without the `(?![/.])` lookahead this
+    ;;     alternative matched every fully-qualified call in the tree: 55 new
+    ;;     sites, measured, most of them `Files/`.
+    ;;   - A TYPE HINT -- `^java.io.File` is a compiler instruction and reads no
+    ;;     clock. Without `^` in the lookbehind that is 40 more lines, measured.
+    ;;
+    ;; This file's own argument is why the two exclusions are there rather than
+    ;; the entries: an allow-list padded with entries that are not clock routes
+    ;; is an allow-list nobody reads carefully.
+    (and (str/includes? expression ".")
+         (not (str/includes? expression "/")))
+    (str "(?<![\\w.$^])" (java.util.regex.Pattern/quote expression) "\\b(?![/.$])")
 
     :else
     (java.util.regex.Pattern/quote expression)))
@@ -414,6 +468,12 @@
    "(.. Calendar getInstance" "the `..` face of the java.util.Calendar factory — babashka underives it, so the floor is what carries it"
    "(memfn getInstance" "the `memfn` face of the same factory"
    "(memfn getTimeInMillis" "the `memfn` face of Calendar's epoch accessor"
+   ;; Round-eight review finding 2: the class as a BARE SOURCE SYMBOL. Named
+   ;; by the floor witness on the first run after the emission landed —
+   ;; babashka's thin reflection cannot see `Calendar/getInstance`, so it
+   ;; cannot see that Calendar is a class the morpheme narrowing withholds a
+   ;; string form from, and so cannot derive the bare form either.
+   "java.util.Calendar" "the clock source class as an ordinary source SYMBOL: `(.getMethod java.util.Calendar \"getInstance\" ...)` reaches the factory with neither the class nor the method a clock alternative"
    "Date." "a CONSTRUCTOR reads the clock, and a constructor is not a method, so .getMethods cannot see one"})
 
 (def ^:private clock-pattern
@@ -818,6 +878,14 @@
   a file timestamp, the battery harness's own row. A `:receipt` entry here
   would be a contradiction and the test below refuses one.
 
+  A THIRD kind arrived with round-eight review finding 2, and it is named here
+  so a reader is not left to infer it: a form the scan matches WITHOUT A READ
+  HAPPENING AT ALL — a clock class named inside a string literal or a
+  docstring. A source-TEXT scan cannot tell a string literal from source, and
+  the honest form of that limit is an entry a reader can see rather than a
+  special case in the pattern nobody would find. Such an entry says
+  `NOT A READ` in its `:why`, and its count still ratchets.
+
   Adding a control clock read means adding a line here and saying why the value
   is never published. That is the whole cost, and it is the cost on purpose."
   {["src/clj_surgeon/ls_tree_snapshot.clj" "prune!"]
@@ -901,7 +969,19 @@
    ["src/clj_surgeon/worktree_lifecycle_io.clj" "capture-inventory"]
    {:reads 1 :channel :control :why "inventory captured-at stamp"}
    ["src/clj_surgeon/worktree_lifecycle_io.clj" "issue-current?"]
-   {:reads 2 :channel :control :why "issue freshness cutoff: `Instant/now` against a CALLER-supplied expiry string it parses; the predicate returns a boolean"}})
+   {:reads 2 :channel :control :why "issue freshness cutoff: `Instant/now` against a CALLER-supplied expiry string it parses; the predicate returns a boolean"}
+   ;; Round-eight review finding 2 widened the clock vocabulary to a clock
+   ;; class named as a BARE SOURCE SYMBOL. These two are the WHOLE cost of that
+   ;; on this tree, and neither is a read: both are the literal TEXT
+   ;; `"(:import java.time.Instant)"` inside a replay fixture's edit payload.
+   ;; They are named rather than excluded because a text scan cannot tell a
+   ;; string literal from source, and the honest form of that limit is an entry
+   ;; a reader can see, not a special case in the pattern nobody would find.
+   ;; The count is still a ratchet: adding a real read to either form moves it.
+   ["dev/experiments/namespace_tolerance_replay.clj" "falsifier-report"]
+   {:reads 1 :channel :control :why "NOT A READ: the fixture's replacement text is the string \"(:import java.time.Instant)\", which names a clock class and reads nothing"}
+   ["dev/experiments/namespace_tolerance_replay_test.clj" "law-b-requires-direct-uncontested-namespace-clause-children"]
+   {:reads 1 :channel :control :why "NOT A READ: the same fixture string in the test that drives it"}})
 
 (def escape-hatch-allow-list
   "Every form in `src/` that calls a verb handing back an UNTAGGED number.
@@ -1525,7 +1605,12 @@
                                   ;; underivable class, round-eight finding 1.
                                   "(.. Calendar getInstance"
                                   "(memfn getInstance"
-                                  "(memfn getTimeInMillis"]))
+                                  "(memfn getTimeInMillis"
+                                  ;; And the bare class symbol, round-eight
+                                  ;; finding 2: a class earns that form by
+                                  ;; carrying a morpheme-free clock static, and
+                                  ;; `getInstance` is not visible here.
+                                  "java.util.Calendar"]))
           ;; A spelling the derivation CANNOT produce by construction, and must
           ;; not: the derivation emits the SIMPLE class name, and the
           ;; fully-qualified dot form is a property of the ALTERNATIVE -- the
@@ -1639,6 +1724,12 @@
                      (str "(Class/forName " expression ")")
                      (str "(.getMethod (class subject) " expression
                           " (into-array Class []))"))
+                   ;; A BARE CLASS SYMBOL is planted the way finding 2's N7
+                   ;; used it: as a VALUE handed to reflection, which is what
+                   ;; makes it a route at all.
+                   (and (str/includes? expression ".")
+                        (not (str/includes? expression "/")))
+                   (str "(.getMethods " expression ")")
                    :else (str "(" expression ")"))]
         (.mkdirs (.getParentFile victim))
         (spit victim
