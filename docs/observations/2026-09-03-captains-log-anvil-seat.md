@@ -1878,3 +1878,5 @@ branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat need
 ## 23:43Z CORRECTION to the entry above: the GitHub API says the default branch is still `main` (`gh api repos/realgenekim/clj-surgeon --jq .default_branch` → main). My "now MCP/main (verified)" line was wrong — I wrote the sentence before reading the output. The nightly stays dormant; the mayor request stands.
 
 ## 23:45Z gate r18 window run: assertions green (935/15436/0), the tmp-leak ratchet failed the lane on the builder's own witness leaks (the ratchet earning its keep); fix 09660168 unverified; gates owed for the next window
+
+## 23:48Z — usage watch DEFERRED: the collector is a JVM and a peer quiet window is open (owner=astra start=23:43Z end=00:00Z purpose=native-cleanretry-and-primary-pairs); last collector figures (22:51Z run, verbatim): tools "admit_clojure_patch": 59 "inspect_clojure": 154. Re-run in the next verification window.
