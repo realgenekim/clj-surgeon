@@ -502,6 +502,31 @@
           "a literal one-key map is a reading again; the map shape is back"))))
 
 ;; @spec MCP-OP-TIME-005
+(deftest a-readings-hash-carries-no-clock-bits
+  (testing "round-four review §3: `(hash r)` was a clock-derived integer"
+    ;; The type withholds its number from `pr-str`, `str`, `bean`, `seq`,
+    ;; `deref`, `into {}`, cheshire and `read-string` — the reviewer proved all
+    ;; of those shut. `hashCode` was the one accessor still consulting it, so
+    ;; `:some_field (hash r)` put a clock-varying integer into the parity hash
+    ;; subject with no verb any scan matches. `hashCode` never needed the
+    ;; number: these types are compared, not bucketed.
+    (let [a (measured/reading 1.5)
+          b (measured/reading 987654.321)
+          t1 (measured/start)
+          t2 (measured/start)]
+      (is (= (hash a) (hash b))
+          (str "two readings with different numbers hash differently, so a "
+               "hash is a clock-derived number: " (hash a) " vs " (hash b)))
+      (is (= (hash t1) (hash t2))
+          (str "two start ticks hash differently: " (hash t1) " vs " (hash t2)))
+      (is (= a (measured/reading 1.5))
+          "equality stopped consulting the number, which breaks the type's own tests")
+      (is (false? (= a b))
+          "two readings with different numbers became equal")
+      (is (= (hash a) (hash (measured/reading 1.5)))
+          "equal readings must hash equally; the contract is not optional"))))
+
+;; @spec MCP-OP-TIME-005
 (deftest the-clock-scanner-catches-a-planted-raw-read
   (testing "the ratchet goes RED when the defect is reintroduced"
     (let [root (str (io/file (System/getProperty "java.io.tmpdir")
