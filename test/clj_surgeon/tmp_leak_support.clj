@@ -57,7 +57,19 @@
    [clojure.set :as set]
    [clojure.string :as str]))
 
-(def ^:private reexec-sentinel "CLJ_SURGEON_TMPDIR_REEXEC")
+(def ^:private reexec-sentinel
+  "Env var the parent sets on the re-exec'd child. Its VALUE is the ABSOLUTE
+   PATH of the private root the parent created -- never a bare flag. The
+   child refuses unless its own java.io.tmpdir IS that path
+   (MCP-OP-TMPHYG-004): a sentinel that only said \"1\" made any process that
+   inherited it treat the SHARED base as its private run root, and
+   `report-and-sweep-leak!` then delete-treed another tenant's working set."
+  "CLJ_SURGEON_TMPDIR_REEXEC")
+
+(def ^:private isolated-root-prefix
+  "Every root this namespace creates -- and the ONLY name shape it will ever
+   delete-tree -- is `clj-surgeon-suite-<pid>-<8 hex>`."
+  "clj-surgeon-suite-")
 
 (def ^:private ram-path-prefixes
   "Paths that are RAM-backed on this seat BY NAME -- checked with no external
@@ -69,6 +81,10 @@
   [dir]
   (try (.getCanonicalPath (io/file (str dir)))
        (catch Throwable _ (str dir))))
+
+(defn- current-pid
+  []
+  (try (.pid (java.lang.ProcessHandle/current)) (catch Throwable _ 0)))
 
 (defn literal-ram-path?
   "True when `dir` IS, or is under, a path this seat knows to be RAM-backed
@@ -213,6 +229,31 @@
      (str "-Djava.io.tmpdir=" tmp-root)
      "clojure.main" "-m" main-ns]))
 
+;; @spec MCP-OP-TMPHYG-004
+(defn own-isolated-root?
+  "True only for a directory this namespace could have created: a
+   `clj-surgeon-suite-*` entry that has a parent. The shared base itself can
+   never satisfy this, which is what makes deleting another tenant's working
+   set unrepresentable rather than merely unlikely."
+  [root]
+  (let [f (io/file (str root))]
+    (boolean (and (some? (.getParentFile f))
+                  (str/starts-with? (.getName f) isolated-root-prefix)))))
+
+;; @spec MCP-OP-TMPHYG-004
+(defn sweep-root!
+  "Deletes `root` -- but ONLY when it is one of this namespace's own private
+   per-run roots. Anything else is a typed, printed refusal returning false."
+  [root]
+  (if (own-isolated-root? root)
+    (do (try (fs/delete-tree root) (catch Throwable _ nil)) true)
+    (do (binding [*out* *err*]
+          (println (format (str "tmp-refused: refusing to delete %s -- it is not a private "
+                                "per-run root (its name must start with %s). Sweeping a shared "
+                                "base would destroy another tenant's working set.")
+                           root isolated-root-prefix)))
+        false)))
+
 (defn secure-tmpdir!
   "Resolves the base temp directory (`env-or-current-tmpdir`). If it is
    tmpfs-backed, prints a named refusal to *err* and returns
@@ -239,16 +280,30 @@
     (try (fs/create-dirs base) (catch Throwable _ nil))
     (if-let [refusal (base-refusal base)]
       (refuse! refusal)
-      (if (System/getenv reexec-sentinel)
-        {:refused false :root (io/file (System/getProperty "java.io.tmpdir"))}
-        (let [root (io/file base (str "clj-surgeon-suite-" (subs (str (random-uuid)) 0 8)))]
+      (if-let [declared (System/getenv reexec-sentinel)]
+        ;; CHILD branch. The sentinel is only believed when it NAMES the root
+        ;; this process was actually launched on, and that root carries this
+        ;; namespace's own name shape. Anything else is an inherited sentinel
+        ;; in a process the parent never spawned -- refuse (MCP-OP-TMPHYG-004).
+        (let [actual (System/getProperty "java.io.tmpdir")]
+          (if (and (= (canonical declared) (canonical actual))
+                   (own-isolated-root? actual))
+            {:refused false :root (io/file actual)}
+            (refuse! {:reason :sentinel-mismatch
+                      :base actual
+                      :detail (format (str "it names root=%s but this process's java.io.tmpdir "
+                                           "is %s. Refusing to treat a shared base as a private "
+                                           "run root.")
+                                      (pr-str declared) (pr-str actual))})))
+        (let [root (io/file base (format "%s%d-%s" isolated-root-prefix (current-pid)
+                                         (subs (str (random-uuid)) 0 8)))]
           (fs/create-dirs root)
           (let [cmd (reexec-child-command target root)
                 {:keys [exit]} (apply proc/shell
                                        {:continue true
-                                        :extra-env {reexec-sentinel "1"}}
+                                        :extra-env {reexec-sentinel (str root)}}
                                        cmd)]
-            (try (fs/delete-tree root) (catch Throwable _ nil))
+            (sweep-root! root)
             (System/exit exit)))))))
 
 (defn tmp-entries
@@ -284,7 +339,7 @@
                                (str/join ", " (take 5 leaked))
                                (if (> (count leaked) 5) ", ..." ""))))
                    1))]
-    (try (fs/delete-tree root) (catch Throwable _ nil))
+    (sweep-root! root)
     result))
 
 (defn track!

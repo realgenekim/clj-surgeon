@@ -30,6 +30,12 @@ required), `[x]` implemented (implementation and test witnesses required),
   `/dev/shm`), and a base whose filesystem type no mount source can
   determine, are both refusals.
 
+- [x] **MCP-OP-TMPHYG-004**: When a test runner proceeds as the re-exec'd
+  child, clj-surgeon shall refuse to run unless the re-exec sentinel names
+  the exact private root that process was launched on, and shall refuse —
+  with a named message — to delete any directory that is not one of its own
+  `clj-surgeon-suite-*` per-run roots.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb
