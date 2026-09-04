@@ -113,6 +113,7 @@ suite and calls `System/exit`.
 | MCP-OP-TMPHYG-008 | An unwritable base produces a stack trace instead of a refusal. | Exit 97 with a `tmp-refused:` line and no clojure `Execution error` banner. | `tmp-leak-ratchet-self-test` 8. |
 | MCP-OP-TMPHYG-009 | Any of the five test entry points runs with a RAM-backed base. | All five exit 97 with a named message. | `tmp-leak-ratchet-self-test` 9 (drives all four `-m`-able runners; `run_all.clj` is covered by 3a's bb arm). |
 | MCP-OP-TMPHYG-010 | A Makefile recipe or a `test/*.sh` gate names a `/tmp/<path>` write target. | The scan finds none. | `tmp-leak-ratchet-self-test` 10. |
+| MCP-OP-TMPHYG-011 | A caller supplies a forged `CLJ_SURGEON_MOUNTS_FILE` claiming disk while `findmnt` cannot answer, and the run PROCEEDS. | Exit 97, `UNDETERMINABLE`: a seam-sourced non-tmpfs answer is `:unknown`; a seam-sourced `tmpfs` answer still refuses. | `tmp-leak-ratchet-self-test` 3g, 3h; `a-seam-sourced-fstype-can-never-prove-real-disk`. |
 
 ## Measured facts added in round two
 

@@ -98,12 +98,16 @@
                     ram-path-prefixes))
             candidates))))
 
-(defn- mounts-file
-  "The mounts table to consult. `CLJ_SURGEON_MOUNTS_FILE` is a witness seam:
-   the ratchet's own gate points it at a nonexistent path to execute the
+(defn- seam-mounts-file
+  "The mounts-table override, or nil. `CLJ_SURGEON_MOUNTS_FILE` is a witness
+   seam: the ratchet's own gate points it at a nonexistent path to execute the
    \"no mount source can answer\" branch."
   []
-  (or (System/getenv "CLJ_SURGEON_MOUNTS_FILE") "/proc/mounts"))
+  (System/getenv "CLJ_SURGEON_MOUNTS_FILE"))
+
+(defn- mounts-file
+  []
+  (or (seam-mounts-file) "/proc/mounts"))
 
 (defn- findmnt-fstype
   [dir]
@@ -150,7 +154,21 @@
    so an undeterminable filesystem was treated as proven-safe and the suite
    ran on RAM. `:unknown` is a refusal (see `base-refusal`), not a pass."
   [dir]
-  (or (findmnt-fstype dir) (mounts-table-fstype dir) :unknown))
+  (or (findmnt-fstype dir)
+      ;; A seam-sourced fstype is NEVER positive proof of real disk. The gate
+      ;; only ever needs the seam to produce a REFUSAL, so a forged table can
+      ;; refuse (tmpfs) but a non-tmpfs answer from it reads as `nothing could
+      ;; answer`. Without this, an operator handing the check a lying table
+      ;; converts `I cannot prove this is disk` into `proven disk` -- a gate a
+      ;; caller can turn off, and the review ran a whole suite on RAM that way.
+      ;; @spec MCP-OP-TMPHYG-011
+      (let [fstype (mounts-table-fstype dir)]
+        (cond
+          (nil? fstype) nil
+          (= "tmpfs" fstype) fstype
+          (some? (seam-mounts-file)) nil
+          :else fstype))
+      :unknown))
 
 (defn tmpfs?
   "True when `dir`'s filesystem is KNOWN to be tmpfs (RAM-backed). Note that

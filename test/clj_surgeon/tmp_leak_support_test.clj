@@ -96,6 +96,32 @@
         (is (true? (tmp-leak/sweep-root! ours)))
         (is (not (.exists ours)))))))
 
+;; @spec MCP-OP-TMPHYG-011
+(deftest a-seam-sourced-fstype-can-never-prove-real-disk
+  (let [findmnt (ns-resolve 'clj-surgeon.tmp-leak-support 'findmnt-fstype)
+        table (ns-resolve 'clj-surgeon.tmp-leak-support 'mounts-table-fstype)
+        seam (ns-resolve 'clj-surgeon.tmp-leak-support 'seam-mounts-file)
+        disk "/var/tmp/forge"]
+    (testing "with no seam set, a mounts-table ext4 answer IS proof of disk"
+      (with-redefs-fn {findmnt (constantly nil)
+                       table (constantly "ext4")
+                       seam (constantly nil)}
+        #(do (is (= "ext4" (tmp-leak/mount-fstype disk)))
+             (is (nil? (tmp-leak/base-refusal disk))))))
+    (testing "the SAME answer, sourced from the seam, is :unknown -- a refusal.
+              An operator handing the check a forged table must not be able to
+              convert `I cannot prove this is disk` into `proven disk`."
+      (with-redefs-fn {findmnt (constantly nil)
+                       table (constantly "ext4")
+                       seam (constantly "/forged/mounts")}
+        #(do (is (= :unknown (tmp-leak/mount-fstype disk)))
+             (is (= :unknown-fstype (:reason (tmp-leak/base-refusal disk)))))))
+    (testing "and the seam is still sound in the REFUSING direction"
+      (with-redefs-fn {findmnt (constantly nil)
+                       table (constantly "tmpfs")
+                       seam (constantly "/forged/mounts")}
+        #(is (= :tmpfs (:reason (tmp-leak/base-refusal disk))))))))
+
 ;; @spec MCP-OP-TMPHYG-010
 (deftest no-gate-names-a-hard-coded-ram-path
   (testing "a refusal at the runner is worthless if the gates around it create

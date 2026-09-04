@@ -221,6 +221,7 @@ tmp-leak-ratchet-self-test:
 	@# @spec MCP-OP-TMPHYG-006
 	@# @spec MCP-OP-TMPHYG-007
 	@# @spec MCP-OP-TMPHYG-008
+	@# @spec MCP-OP-TMPHYG-011
 	@sh test/tmp_leak_ratchet_test.sh
 
 # @spec MCP-OP-ADMIT-130

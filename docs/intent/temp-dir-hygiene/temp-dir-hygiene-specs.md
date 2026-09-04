@@ -72,6 +72,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   name a hard-coded `/tmp/<path>` write target; scratch roots derive from
   `TMPDIR` with a real-disk default.
 
+- [x] **MCP-OP-TMPHYG-011**: When the mounts-table witness seam
+  (`CLJ_SURGEON_MOUNTS_FILE`) supplies the filesystem type, clj-surgeon shall
+  never treat that answer as positive proof of real disk: a seam-sourced
+  `tmpfs` answer refuses as normal, and any other seam-sourced answer is
+  `:unknown` — also a refusal. The seam exists only so a gate can execute the
+  "no mount source can answer" branch; it can never turn a refusal into a run.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb
