@@ -6013,3 +6013,94 @@
         (is (<= (count (str rendered)) budget)
             (str "the fact section rendered " (count (str rendered))
                  " characters against a budget of " budget))))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: the kind and the safety claim are untouchable at every rung
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-142
+(deftest a-safety-critical-refusal-keeps-its-kind-at-every-reduction-rung
+  ;; Round five's finding 1d. The reduction arm was fixed for this in round
+  ;; five and the next_call arm was not -- and the next_call arm is the one
+  ;; that fires. A `transaction-recovery-required` refusal carrying an
+  ;; oversize next_call was published as `:next-call-exceeds-public-budget`
+  ;; with `mutation_attempted false` (a write WAS attempted and rolled back
+  ;; badly) and a remedy of "fewer files in one patch is the lever". The kind
+  ;; survived only in `:blocked_next_call_for`, which no `error-type` consumer
+  ;; reads.
+  (let [budget write-refusal/public-byte-budget
+        base {:ok false
+              :operation :admit-patch-refused
+              :mode "commit"
+              :error-type :transaction-recovery-required
+              :error "the rollback could not restore src/a/f000.clj"
+              :remedy "restore src/a/f000.clj from version control by hand"
+              :source-unchanged false
+              :mutation_attempted true}
+        huge-map (into {} (for [i (range 400)]
+                            [(str "src/very/long/path/segment/" i "/f" i ".clj")
+                             {:pre (apply str (repeat 64 "a"))
+                              :post (apply str (repeat 64 "b"))}]))
+        huge-call {:tool "admit_clojure_patch"
+                   :arguments {:mode "commit"
+                               :expect_pre_sha256
+                               {"src/app/core.clj"
+                                (apply str (repeat 40000 "a"))}}}
+        rungs {"fits, nothing reduced" base
+               "bulk dropped" (assoc base :hashes huge-map)
+               "sentences cut" (assoc base
+                                      :error (apply str (repeat 40000 "e"))
+                                      :hashes huge-map)
+               "next_call oversize" (assoc base :next_call huge-call)
+               "next_call oversize AND bulk"
+               (assoc base :next_call huge-call :hashes huge-map)}]
+    (doseq [[rung receipt] rungs]
+      (testing rung
+        (let [published (#'admit/bound-receipt receipt)]
+          (is (= :transaction-recovery-required (:error-type published))
+              (str "a size bound relabelled a safety-critical refusal at the "
+                   "rung `" rung "`: " (pr-str (:error-type published))))
+          (is (true? (:mutation_attempted published))
+              (str "and dropped the claim that a write WAS attempted at `"
+                   rung "`: " (pr-str (:mutation_attempted published))))
+          (is (false? (:source-unchanged published))
+              (str "and the claim that the workspace WAS changed at `"
+                   rung "`"))
+          (is (not (str/includes? (str (:remedy published)) "fewer files"))
+              (str "and replaced a manual-recovery remedy with a size one at `"
+                   rung "`: " (pr-str (:remedy published))))
+          (is (<= (write-refusal/json-bytes published) budget)
+              (str "the published receipt at `" rung "` is "
+                   (write-refusal/json-bytes published) " bytes, past "
+                   budget))
+          (is (<= (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
+                  budget)
+              (str "and so is its text face at `" rung "`")))))
+    (testing "the oversize call is NAMED as omitted rather than silently gone"
+      (let [published (#'admit/bound-receipt (assoc base :next_call huge-call))]
+        (is (nil? (:next_call published))
+            "a next_call that cannot be sent back byte for byte is not carried")
+        (is (true? (:next_call_omitted published)))
+        (is (= :transaction-recovery-required
+               (:blocked_next_call_for published)))
+        (is (> (:next_call_characters published) budget)
+            "the receipt names the size of the call it could not carry")
+        (is (= budget (:public_byte_budget published)))
+        (is (str/includes? (str (:next_call_omission published)) (str budget))
+            "and the budget that would have to change")
+        (let [text (#'admit/summary (assoc published :elapsed_ms 1.0))]
+          (is (str/includes? text "next_call_omitted=true")
+              "and the text-only reader is told the same"))))
+    (testing "a receipt that was NOT otherwise a refusal still becomes one"
+      ;; the enumerated `:next-call-exceeds-public-budget` kind keeps a
+      ;; fixture that drives it, and it carries its own safety claims forward
+      (let [published (#'admit/bound-receipt
+                        {:ok true :operation :admit-patch-commit
+                         :mode "commit" :files []
+                         :mutation_attempted true :source-unchanged false
+                         :next_call huge-call})]
+        (is (= :next-call-exceeds-public-budget (:error-type published)))
+        (is (true? (:mutation_attempted published))
+            "a committed write's own claim is not reset by a size rule")
+        (is (false? (:source-unchanged published)))
+        (is (<= (write-refusal/json-bytes published) budget))))))
