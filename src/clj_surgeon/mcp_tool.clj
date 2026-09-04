@@ -1276,11 +1276,6 @@
   names its length — never dropped in silence."
   1024)
 
-;; @spec MCP-OP-ALIAS-059
-(defn- renderable-fact?
-  [value]
-  (or (string? value) (number? value) (boolean? value)
-      (and (sequential? value) (every? #(or (string? %) (number? %)) value))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn refusal-fact-line
@@ -1300,12 +1295,21 @@
   silence breaks the text ⊇ structured contract on the day it first fires, and
   a reader of the text has no way to know it did."
   [result]
-  (let [renderable (->> result
+  (let [;; @spec MCP-OP-ALIAS-059
+        ;; EVERY non-envelope key, whatever the shape of its value. The old
+        ;; predicate admitted strings, numbers, booleans and flat sequentials
+        ;; and dropped everything else IN SILENCE, so a nested map added to a
+        ;; live refusal was carried by structuredContent and absent from the
+        ;; text — and the source-derived key witness could not see it, because
+        ;; it probed every key with the string "probe-value". A value too
+        ;; large to render whole is ELIDED at the per-fact bound, which is the
+        ;; only honest way to bound a fact: named, cut, and pointed at the
+        ;; structure.
+        renderable (->> result
                         (remove (fn [[field _]]
                                   (contains?
                                     alias-migration-refusal-envelope-keys
                                     field)))
-                        (filter (fn [[_ value]] (renderable-fact? value)))
                         (sort-by key))
         dropped (max 0 (- (count renderable) max-refusal-facts))
         facts (->> renderable
