@@ -32,8 +32,12 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # --- the self-test roster, DERIVED from this file's own dispatch ------------------
 # `selftest_modes` greps the very lines that decide which mode runs, so the printed
 # list cannot drift from the modes that exist -- which a typed count already did once.
+# (round-4 review, finding 10: the earlier pattern only matched a line beginning
+# literally `if` and a mode name of `[a-z-]` -- so an `elif` dispatch, or a mode name
+# carrying a digit/underscore/uppercase, ran but never appeared in the roster.  Now
+# matches `if` or `elif` and `[A-Za-z0-9_-]*` after `--selftest-`.)
 selftest_modes () {
-  sed -n 's/^if \[ "\${1:-}" = "\(--selftest-[a-z-]*\)" \];.*/\1/p' "${BASH_SOURCE[0]}" \
+  sed -n 's/^\(el\)\?if \[ "\${1:-}" = "\(--selftest-[A-Za-z0-9_-]*\)" \];.*/\2/p' "${BASH_SOURCE[0]}" \
     | grep -v -- '^--selftest-list$'
 }
 print_selftest_roster () {
@@ -1142,6 +1146,93 @@ SHIMEOF
 
   echo "sabotage-FAN --selftest-base-resolution: $BPASS passed, $BFAIL failed"
   [ $BFAIL -eq 0 ]
+  exit $?
+fi
+
+# --- self-test: the roster's OWN grep can miss a dispatchable mode (round-4 review, --
+# finding 10, non-blocking) ---------------------------------------------------------
+#   sabotage-FAN.sh --selftest-roster-injection [scratch-dir]
+#
+# `selftest_modes` claims "the roster IS the dispatch", but the pre-fix pattern
+# (`^if .* "\(--selftest-[a-z-]*\)"`) only matched a line beginning literally `if`
+# and a mode name of lowercase-and-hyphen -- so a mode dispatched via `elif`, or
+# named with a digit or underscore, would run but never appear in `--selftest-list`.
+# This makes a scratch, content-verified copy of THIS file, injects one real,
+# dispatchable mode via an `elif` branch whose name carries a digit and an
+# underscore (`--selftest-inj3ct_2` -- exactly the two things the narrow pattern
+# missed), and asserts (a) the roster count rises by exactly one and names it, and
+# (b) the injected mode is actually dispatchable, not merely textually present.
+if [ "${1:-}" = "--selftest-roster-injection" ]; then
+  SCRATCH=${2:-/var/tmp/forge/fanout-r5-fx/selftest-roster-injection}
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  RPASS=0; RFAIL=0
+  ok()  { RPASS=$((RPASS+1)); echo "SELFTEST-ROSTER-INJECTION $1: PASS $2"; }
+  bad() { RFAIL=$((RFAIL+1)); echo "SELFTEST-ROSTER-INJECTION $1: FAIL $2"; }
+
+  cp "${BASH_SOURCE[0]}" "$SCRATCH/sabotage-FAN.sh"
+  chmod +x "$SCRATCH/sabotage-FAN.sh"
+  SRCSHA=$(sha256sum "${BASH_SOURCE[0]}" | awk '{print $1}')
+  COPYSHA=$(sha256sum "$SCRATCH/sabotage-FAN.sh" | awk '{print $1}')
+  echo "SELFTEST-ROSTER-INJECTION export-sha256=$COPYSHA source-sha256=$SRCSHA"
+  if [ "$SRCSHA" = "$COPYSHA" ]; then
+    ok "export-verified" "scratch copy content-identical to the running script"
+  else
+    bad "export-verified" "scratch copy does NOT match the running script -- aborting"
+    echo "sabotage-FAN --selftest-roster-injection: $RPASS passed, $RFAIL failed"
+    exit 1
+  fi
+
+  BEFORE=$("$SCRATCH/sabotage-FAN.sh" --selftest-list | head -1)
+  BEFORE_N=$(printf '%s' "$BEFORE" | sed -n 's/.*modes (\([0-9]*\)).*/\1/p')
+  echo "SELFTEST-ROSTER-INJECTION before: $BEFORE"
+
+  # attach the injected mode as an ELIF onto the (otherwise untouched) --selftest-list
+  # dispatch, so exactly ONE new dispatchable name enters the file -- proving the
+  # `elif` half and the digit/underscore half of the widened pattern together, with
+  # a clean +1 on the roster count.
+  INJECTED='--selftest-inj3ct_2'
+  python3 - "$SCRATCH/sabotage-FAN.sh" "$INJECTED" <<'PYEOF'
+import sys
+path, mode = sys.argv[1], sys.argv[2]
+s = open(path).read()
+anchor = ('if [ "${1:-}" = "--selftest-list" ]; then\n'
+          '  print_selftest_roster\n'
+          '  selftest_modes\n'
+          '  exit 0\n'
+          'fi\n')
+assert anchor in s, "anchor not found -- sabotage-FAN.sh structure changed"
+replacement = ('if [ "${1:-}" = "--selftest-list" ]; then\n'
+               '  print_selftest_roster\n'
+               '  selftest_modes\n'
+               '  exit 0\n'
+               'elif [ "${1:-}" = "' + mode + '" ]; then\n'
+               '  echo "SELFTEST-ROSTER-INJECTION: the injected elif mode ran"\n'
+               '  exit 0\n'
+               'fi\n')
+s = s.replace(anchor, replacement, 1)
+open(path, "w").write(s)
+PYEOF
+
+  AFTER=$("$SCRATCH/sabotage-FAN.sh" --selftest-list | head -1)
+  AFTER_N=$(printf '%s' "$AFTER" | sed -n 's/.*modes (\([0-9]*\)).*/\1/p')
+  echo "SELFTEST-ROSTER-INJECTION after: $AFTER"
+
+  if [ -n "$BEFORE_N" ] && [ -n "$AFTER_N" ] && [ "$AFTER_N" -eq $((BEFORE_N + 1)) ] \
+     && printf '%s' "$AFTER" | grep -qF -- "$INJECTED"; then
+    ok "roster-count-rises" "roster went from $BEFORE_N to $AFTER_N and names $INJECTED"
+  else
+    bad "roster-count-rises" "want roster count $((BEFORE_N + 1)) naming $INJECTED, got before=$BEFORE_N after=$AFTER_N"
+  fi
+
+  RUNOUT=$("$SCRATCH/sabotage-FAN.sh" "$INJECTED" 2>&1); RUNRC=$?
+  if [ $RUNRC -eq 0 ] && printf '%s' "$RUNOUT" | grep -q 'the injected elif mode ran'; then
+    ok "injected-mode-dispatchable" "running $INJECTED actually executes the injected elif branch"
+  else
+    bad "injected-mode-dispatchable" "running $INJECTED did not execute the injected branch (rc=$RUNRC)"
+  fi
+
+  echo "sabotage-FAN --selftest-roster-injection: $RPASS passed, $RFAIL failed"
+  [ $RFAIL -eq 0 ]
   exit $?
 fi
 
