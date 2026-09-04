@@ -114,6 +114,42 @@ run_probe unknown-fstype TMPDIR="$FX/realdisk" PATH="$FX/shim:$PATH" \
 grep -q 'UNDETERMINABLE' "$FX/unknown-fstype.out" \
   || fail "3d: the refusal must name the undeterminable fstype"
 
+# 3g. The witness SEAM cannot grant a PASS. `CLJ_SURGEON_MOUNTS_FILE` exists so
+# the gate can execute the "no mount source can answer" branch (3d/3f); it must
+# never be able to turn a refusal into a run. Round two's review drove exactly
+# that: with findmnt dead and a forged table claiming ext4, a full suite ran
+# with java.io.tmpdir on a REAL tmpfs. A seam-sourced fstype is therefore never
+# positive proof of disk -- any non-tmpfs answer from it reads as :unknown, so
+# this base (genuinely ext4, and accepted in 3e via the REAL mounts table)
+# must still be refused when only the forged table can answer for it.
+# @spec MCP-OP-TMPHYG-011
+mkdir -p "$FX/seamdisk"
+cat >"$FX/forged-mounts" <<EOFORGED
+/dev/forged / ext4 rw,relatime 0 0
+/dev/forged $FX ext4 rw,relatime 0 0
+EOFORGED
+run_probe seam-escape TMPDIR="$FX/seamdisk" PATH="$FX/shim:$PATH" \
+  CLJ_SURGEON_MOUNTS_FILE="$FX/forged-mounts"
+[ "$PROBE_EXIT" -eq 97 ] \
+  || fail "3g: a forged mounts table PROVED disk -- the witness seam granted a pass (exit $PROBE_EXIT)"
+grep -q 'UNDETERMINABLE' "$FX/seam-escape.out" \
+  || fail "3g: the refusal must name the undeterminable fstype"
+grep -q 'PROBE role=child' "$FX/seam-escape.out" \
+  && fail "3g: the child RAN on a base whose only proof of disk came from the seam"
+
+# 3h. The seam is still SOUND in the refusing direction: a table that says
+# tmpfs refuses, so the seam can never be used to hide RAM either.
+# @spec MCP-OP-TMPHYG-011
+cat >"$FX/forged-tmpfs-mounts" <<EOTMPFS
+/dev/forged / ext4 rw,relatime 0 0
+tmpfs $FX tmpfs rw,relatime 0 0
+EOTMPFS
+run_probe seam-tmpfs TMPDIR="$FX/seamdisk" PATH="$FX/shim:$PATH" \
+  CLJ_SURGEON_MOUNTS_FILE="$FX/forged-tmpfs-mounts"
+[ "$PROBE_EXIT" -eq 97 ] || fail "3h: a seam-sourced tmpfs answer must refuse, got $PROBE_EXIT"
+grep -q 'RAM-backed (tmpfs' "$FX/seam-tmpfs.out" \
+  || fail "3h: the refusal did not come from the tmpfs branch"
+
 # 3e. The mounts-table fallback is ALIVE, not dead code: with findmnt shimmed
 # to fail, the real mounts table still answers "this is a real disk" and the
 # run proceeds. Round one's fallback used `slurp`, which throws
