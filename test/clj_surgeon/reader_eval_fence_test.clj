@@ -237,6 +237,51 @@
                      "refused — exit " exit)))
           (finally (fs/delete-tree root)))))))
 
+;; @spec MCP-OP-SHELL-ARGV-007
+(deftest a-deeply-nested-build-file-is-refused-typed-not-overflowed
+  ;; The round-23 review's §2, the gap the builder disclosed. `refuse-over-nested!`
+  ;; guards `parse-val`'s two collection branches, so argv is bounded — but the
+  ;; build file the op DISCOVERS under the caller's :dir is read with no depth
+  ;; bound at all. A 10,001-deep `:paths` overflows the reader's stack and
+  ;; leaves through `-main`'s last-resort `catch Throwable`.
+  ;;
+  ;; The review ruled that non-blocking and it was right: nothing is evaluated,
+  ;; no caller bytes are published, the exit is bounded and typed `1`. But
+  ;; `:invalid-arguments` + "the launcher failed with java.lang.StackOverflowError
+  ;; and no message" is the LAST-RESORT exit — the one whose whole docstring
+  ;; says it exists because the depth bound is a guess that might be wrong.
+  ;; Taking it on an input we can measure before reading is using the airbag as
+  ;; a brake. The same ceiling that governs argv governs a build file's bytes.
+  (doseq [runtime [:jvm :bb]]
+    (testing (name runtime)
+      (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                            "deep-build-file"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))]
+        (try
+          (.mkdirs (io/file root "src"))
+          (spit (io/file root "src" "a.clj") "(ns a)\n")
+          (spit (io/file root "deps.edn")
+                (str "{:paths " (str/join (repeat 10001 "["))
+                     (str/join (repeat 10001 "]")) "}\n"))
+          (let [{:keys [out err exit]}
+                (run-launcher runtime [":op" ":ls-tree" ":dir" (.getPath root)])
+                text (str out err)]
+            (is (not (str/includes? text "StackOverflowError"))
+                (str "a build file the op discovered overflowed the reader "
+                     "instead of being refused unread by the same ceiling that "
+                     "governs argv — exit " exit ", output "
+                     (pr-str (subs text 0 (min 400 (count text))))))
+            (is (str/includes? text "build-file-nesting-too-deep")
+                (str "the refusal is not the TYPED one; it took the last-resort "
+                     "Throwable exit — exit " exit ", output "
+                     (pr-str (subs text 0 (min 400 (count text))))))
+            ;; Measured and named, so the caller learns which ceiling and by
+            ;; how much — the argv refusal's own contract, applied here.
+            (is (str/includes? text "deps.edn")
+                "the refusal must name the build file it refused")
+            (is (= 1 exit) "a refused build file is still exit 1"))
+          (finally (fs/delete-tree root)))))))
+
 ;; ---------------------------------------------------------------------------
 ;; The class: no evaluating reader anywhere in src/
 ;; ---------------------------------------------------------------------------
