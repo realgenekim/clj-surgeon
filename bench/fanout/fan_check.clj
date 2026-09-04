@@ -211,40 +211,108 @@
       {:files (into #{} (walk "src" (:id src))) :commit full :tree root})))
 
 (defn walk-src
-  "Recursively lists every regular file under `<wt>/src`, paths relative to `wt`
-   (e.g. \"src/acid/fanout/ns_003.clj\"), by hand -- never `file-seq`, which
+  "An EXHAUSTIVE inventory of every directory ENTRY under `<wt>/src`, by TYPE, paths
+   relative to `wt` (e.g. \"src/acid/fanout/ns_003.clj\").  Never `file-seq`, which
    silently drops an unreadable directory's contents with no signal at all (Sol
-   round-2 review, finding 1/4). Returns
-   {:files #{...} :dirs-found N :dirs-entered M :pruned [rel-dir-path ...]}:
-   `dirs-found` counts every directory NAME seen from a parent's own successful
-   listing (including src/ itself); `dirs-entered` counts only the ones whose OWN
-   contents this walk could list. A gap between the two IS the pruning finding 4
-   asks to surface -- e.g. `chmod 000` on a subdirectory: the parent listing still
-   names it, but listing IT returns null."
+   round-2 review, finding 1/4), and -- since Sol round-3 review, finding 3 (BLOCKER)
+   -- never `.isFile`/`.isDirectory` either, because BOTH of those FOLLOW SYMLINKS.
+
+   Git does not follow links: it inventories a symlink as ONE leaf path (mode 120000)
+   and never looks through it.  The round-3 walk recorded only `.isFile` paths and
+   recursed on `.isDirectory`, ignoring everything else, so a symlink to an EMPTY
+   directory, a dangling symlink and a FIFO all vanished from the walk entirely --
+   and with a successful-but-empty `ls-files` the complete gate reported 6/6.  A
+   symlink to a NONEMPTY directory was worse than missing: the walk reported paths
+   THROUGH the link, which git can never list.
+
+   So: every name a successful directory listing returns becomes exactly ONE
+   classified entry or ONE NAMED ERROR -- never a silent skip.
+
+     regular file  -> :files, and an entry
+     directory     -> recursed into (and counted)
+     symlink       -> :symlinks, and an entry, exactly as git lists it; the TARGET's
+                      type is recorded for the reader (\"file\"/\"dir\"/\"other\"/
+                      \"dangling\") and the link is NEVER followed
+     anything else -> :errors :unclassifiable-entry (FIFO, socket, device)
+     unstattable   -> :errors :unclassifiable-entry naming the exception
+     unlistable    -> :errors :unlistable-dir
+
+   Returns {:files #{} :symlinks {path target-kind} :entries #{} :dirs-found N
+            :dirs-entered M :entries-seen K :errors [{:kind :path :detail}]}.
+   `:entries` is files + symlink leaves -- the set CHECK 1 reconciles against git's
+   own view, which lists a link and not its target."
   [wt]
-  (let [root (io/file wt "src")
-        wt-path (.toPath (io/file wt))
-        dirs-found (atom 0) dirs-entered (atom 0)
-        pruned (atom []) files (atom [])
+  (let [wt-path (.toPath (io/file wt))
+        dirs-found (atom 0) dirs-entered (atom 0) entries-seen (atom 0)
+        files (atom []) symlinks (atom []) errors (atom [])
         ;; NOT a `\`->`/` normalization: this repo is POSIX-only (no sudo, no
         ;; Windows lane), and `\` is a legal POSIX filename byte a manifest path
         ;; can legitimately contain (inb-9c18e2, --selftest-backslash) -- rewriting
         ;; it would corrupt exactly the path this program already had to fix once.
         ;; `.relativize(...).toString()` already yields `/`-separated components
         ;; verbatim on this JVM's (POSIX) file separator.
-        rel (fn [^java.io.File f] (.toString (.relativize wt-path (.toPath f))))]
-    (letfn [(walk [^java.io.File d]
+        rel (fn [^java.nio.file.Path p] (.toString (.relativize wt-path p)))
+        err! (fn [kind ^java.nio.file.Path p detail]
+               (swap! errors conj {:kind kind :path (rel p) :detail detail}))
+        no-follow (into-array java.nio.file.LinkOption [java.nio.file.LinkOption/NOFOLLOW_LINKS])
+        follow (into-array java.nio.file.LinkOption [])
+        attrs (fn [^java.nio.file.Path p opts]
+                (java.nio.file.Files/readAttributes
+                  p java.nio.file.attribute.BasicFileAttributes ^"[Ljava.nio.file.LinkOption;" opts))
+        link-target-kind (fn [^java.nio.file.Path p]
+                           ;; the ONLY place the link is resolved, and only to LABEL it
+                           (try (let [a (attrs p follow)]
+                                  (cond (.isDirectory a) "dir"
+                                        (.isRegularFile a) "file"
+                                        :else "other"))
+                                (catch Exception _ "dangling")))]
+    (letfn [(walk [^java.nio.file.Path d]
               (swap! dirs-found inc)
-              (let [entries (.listFiles d)]
-                (if (nil? entries)
-                  (swap! pruned conj (rel d))
-                  (do (swap! dirs-entered inc)
-                      (doseq [^java.io.File e entries]
+              (let [names (try
+                            (with-open [s (java.nio.file.Files/newDirectoryStream d)]
+                              ;; a DirectoryStream is Iterable; `into` must FORCE it
+                              ;; before `with-open` closes the stream underneath it.
+                              (into [] (iterator-seq (.iterator ^Iterable s))))
+                            (catch Exception e
+                              (err! :unlistable-dir d (str (.getSimpleName (class e)) ": " (.getMessage e)))
+                              ::failed))]
+                (when-not (= ::failed names)
+                  (swap! dirs-entered inc)
+                  (doseq [^java.nio.file.Path e names]
+                    (swap! entries-seen inc)
+                    (let [a (try (attrs e no-follow)
+                                 (catch Exception ex
+                                   (err! :unclassifiable-entry e
+                                         (str (.getSimpleName (class ex)) ": " (.getMessage ex)))
+                                   nil))]
+                      (when a
                         (cond
-                          (.isDirectory e) (walk e)
-                          (.isFile e) (swap! files conj (rel e))))))))]
-      (walk root))
-    {:files (into #{} @files) :dirs-found @dirs-found :dirs-entered @dirs-entered :pruned @pruned}))
+                          ;; symlink FIRST: it is a leaf to git and to us, whatever it points at
+                          (.isSymbolicLink a) (swap! symlinks conj [(rel e) (link-target-kind e)])
+                          (.isDirectory a) (walk e)
+                          (.isRegularFile a) (swap! files conj (rel e))
+                          :else (err! :unclassifiable-entry e
+                                      "not a regular file, a directory or a symlink (isOther)"))))))))]
+      (walk (.toPath (io/file wt "src"))))
+    (let [fs (into #{} @files) sl (into {} @symlinks)]
+      {:files fs :symlinks sl
+       :entries (into fs (keys sl))
+       :dirs-found @dirs-found :dirs-entered @dirs-entered :entries-seen @entries-seen
+       :errors @errors})))
+
+(defn probe-walk
+  "`fan_check.clj --probe-walk <worktree>` -- print the walk's inventory, one greppable
+   line per entry, so a self-test can assert on the CLASSIFICATION and not merely on a
+   downstream verdict.  A probe: it reports, it does not judge."
+  [wt]
+  (let [w (walk-src wt)]
+    (println (format "WALK-PROBE dirs-found=%d dirs-entered=%d entries-seen=%d files=%d symlinks=%d errors=%d"
+                      (:dirs-found w) (:dirs-entered w) (:entries-seen w)
+                      (count (:files w)) (count (:symlinks w)) (count (:errors w))))
+    (doseq [f (sort (:files w))] (println "WALK-PROBE file" f))
+    (doseq [[p k] (sort (:symlinks w))] (println (format "WALK-PROBE symlink %s -> %s" p k)))
+    (doseq [e (:errors w)] (println (format "WALK-PROBE error %s %s %s" (:kind e) (:path e) (:detail e))))
+    (System/exit 0)))
 
 (defn -main [wt manifest-path canon base]
   (let [m (try (read-string (slurp manifest-path))
@@ -313,9 +381,14 @@
         ;; vanished/unreadable file (pruning) or a real untracked file the git
         ;; listing above failed to report.
         walk (walk-src wt)
-        _ (when (seq (:pruned walk))
-            (println (format "CHECK 1 file-set: ERROR listing-incomplete pruned dirs-found=%d dirs-entered=%d %s"
-                              (:dirs-found walk) (:dirs-entered walk) (pr-str (:pruned walk))))
+        ;; Every entry the walk could not turn into exactly one classified inventory
+        ;; row is a typed, named refusal (Sol round-3 review, findings 3 and 4).
+        ;; Counting directories was never a completeness proof.
+        _ (when (seq (:errors walk))
+            (println (format "CHECK 1 file-set: ERROR listing-incomplete walk-entries errors=%d dirs-found=%d dirs-entered=%d entries-seen=%d %s"
+                              (count (:errors walk)) (:dirs-found walk) (:dirs-entered walk)
+                              (:entries-seen walk)
+                              (pr-str (vec (take 4 (map (juxt :kind :path :detail) (:errors walk)))))))
             (System/exit 1))
         base-tree (g wt "ls-tree" "-r" "--name-only" "-z" base "--" "src")
         _ (when-not (zero? (:exit base-tree))
@@ -342,7 +415,10 @@
                               (pr-str (vec (take 4 only-lstree)))
                               (pr-str (vec (take 4 only-store)))))
             (System/exit 1))
-        walked-src (:files walk)
+        ;; git lists a symlink as ONE leaf path and never looks through it, so the
+        ;; set reconciled against git's view is files + symlink leaves, not files
+        ;; alone (Sol round-3 review, finding 3).
+        walked-src (:entries walk)
         vanished (sort (set/difference baseline-src walked-src))
         _ (when (seq vanished)
             (println (format "CHECK 1 file-set: ERROR listing-incomplete vanished=%d %s (present at base, absent from the independent filesystem walk)"
@@ -399,8 +475,13 @@
 
     ;; ---- CHECK 6: residue, and no introduced alias shadows a binding ------------
     ;; Reuses the SAME `walk` this file already validated fail-closed for CHECK 1
-    ;; (pruning checked, exit before this code is ever reached) instead of a
-    ;; second, unchecked `file-seq` call over src/ (Sol round-2 review, finding 4).
+    ;; (every entry classified or named, exit before this code is ever reached)
+    ;; instead of a second, unchecked `file-seq` call over src/ (Sol round-2 review,
+    ;; finding 4).  It reads `:files` -- REGULAR files -- and not `:entries`, because
+    ;; slurping a symlink means reading through it, which is the thing the walk
+    ;; refuses to do.  That costs nothing: gen-fanout plants no links, so any symlink
+    ;; under src/ is a path the manifest does not own and CHECK 1 has already failed
+    ;; on it as an extra (or refused the run outright) before CHECK 6 is reached.
     (let [all-src (map #(io/file wt %)
                         (filter #(re-find #"\.cljc?$" %) (:files walk)))
           lib-re (re-pattern (str (str/replace (:lib (:old m)) "." "\\.") "(?![0-9A-Za-z_-])"))
@@ -443,4 +524,7 @@
       (do (println (str "fan_check: FAILED " (str/join ", " @failures))) (System/exit 1))
       (do (println "fan_check: 4/4 structural checks passed") (System/exit 0)))))
 
-(apply -main *command-line-args*)
+(let [args *command-line-args*]
+  (if (= "--probe-walk" (first args))
+    (probe-walk (second args))
+    (apply -main args)))
