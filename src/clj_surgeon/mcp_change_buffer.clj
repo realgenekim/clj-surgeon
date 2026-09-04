@@ -1457,6 +1457,10 @@
       {:ok (every? :ok checks)
        :profile profile
        :checks checks
+       ;; @spec MCP-OP-ALIAS-059
+       ;; forwarded-refusal-kind: the failing check's OWN kind travels verbatim
+       ;; — :invalid-diagnostic-output and :verification-unverified, both minted
+       ;; and scanned in this file — rather than being renamed to a constant
        :error-type (some :error-type (remove :ok checks))
        :elapsed_ms (reduce + 0.0 (map :elapsed_ms checks))})
     {:ok false
@@ -1531,6 +1535,9 @@
        {:ok (and command-ok? hot-ok? (or (nil? cold) (:ok cold)))
         :profile profile
         :checks checks
+        ;; @spec MCP-OP-ALIAS-059
+        ;; forwarded-refusal-kind: the failing check's own kind, minted and
+        ;; scanned in this file, travels verbatim
         :error-type (some :error-type (remove :ok checks))
         :hot-verification hot
         :cold-verification cold

@@ -2421,6 +2421,9 @@
     ;; the retire could not honour refuses with nothing yet mutated
     (and retire-source (not (:ok retire-source)))
     {:error (:error retire-source)
+     ;; @spec MCP-OP-ALIAS-059
+     ;; forwarded-refusal-kind: the retire resolution's own kind, minted and
+     ;; scanned in this namespace, travels verbatim rather than being renamed
      :error-type (:error-type retire-source)
      :source-unchanged true}
 

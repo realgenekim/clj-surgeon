@@ -1107,10 +1107,220 @@
       seen)))
 
 ;; @spec MCP-OP-ALIAS-059
-(defn- reachable-entrance-source-text
+(defn- node-seq
+  "Every node of a parsed source, tolerant of nodes with no children."
+  [node]
+  (tree-seq #(try (seq (n/children %)) (catch Exception _ nil))
+            #(try (n/children %) (catch Exception _ nil))
+            node))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- node-value
+  [node]
+  (try (n/sexpr node) (catch Exception _ nil)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- significant-children
+  [node]
+  (remove n/whitespace-or-comment? (n/children node)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- top-level-def-forms
+  "Every top-level `def…` form of one source, by the name it defines."
+  [text]
+  (->> (n/children (parser/parse-string-all text))
+       (filter #(= :list (n/tag %)))
+       (keep (fn [node]
+               (let [kids (significant-children node)
+                     head (node-value (first kids))
+                     named (when (and (symbol? head)
+                                      (str/starts-with? (str head) "def"))
+                             (node-value (second kids)))]
+                 (when (symbol? named)
+                   [(str named) (try (n/string node) (catch Exception _ ""))]))))
+       (into {})))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- router-entrance-slice
+  "The part of the shared router the alias_migration ENTRANCE can reach.
+
+  Round-thirteen review finding 3: `mcp_tool` was held OUT of the closed
+  require graph, which is exactly the future-regression hole the requirement
+  says is closed — the reviewer added a `defmulti`/`defmethod` to `mcp_tool`,
+  routed it from `handle-alias-migration`, and composed the kind at runtime;
+  all four enumeration witnesses stayed green while the live entrance returned
+  a kind absent from the set.
+
+  A file is the wrong unit. The right one is a code path: the top-level forms
+  of `mcp_tool.clj` transitively referenced by `handle-alias-migration`. That
+  is reachability BY CONSTRUCTION — in the require graph AND on a path the
+  entrance can take — and it is a strict subset, so the router's other verbs'
+  kinds stay out of the set on their own merits rather than by a hold-out."
   []
-  (apply str (map (comp slurp namespace-source-path)
-                  (sort (reachable-entrance-namespaces)))))
+  (let [forms (top-level-def-forms (slurp "src/clj_surgeon/mcp_tool.clj"))]
+    (loop [pending ["handle-alias-migration"] seen #{}]
+      (if-let [candidate (first pending)]
+        (if (or (contains? seen candidate) (not (contains? forms candidate)))
+          (recur (vec (rest pending)) seen)
+          (recur (into (vec (rest pending))
+                       (filter forms
+                               (map second
+                                    (re-seq #"[^\w!?*<>=+/.-]([a-zA-Z][\w!?*<>=+.-]*)"
+                                            (forms candidate)))))
+                 (conj seen candidate)))
+        (apply str (map forms (sort seen)))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- head-position-keywords
+  "Keywords used as functions — `(:ok checks)` — which name a FIELD, not a kind."
+  [node]
+  (set (for [candidate (node-seq node)
+             :when (= :list (n/tag candidate))
+             :let [head (node-value (first (significant-children candidate)))]
+             :when (keyword? head)]
+         (name head))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- literal-kind
+  [node]
+  (let [value (node-value node)]
+    (cond (keyword? value) (name value)
+          (string? value) value)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- minted-kinds-in
+  "The kinds a non-literal `:error-type` value can still MINT.
+
+  Only KEYWORD literals, and only outside function position. A keyword is a
+  whole kind — `(if … :no-match :ambiguous-match)` mints two — while a string
+  inside a composition is a FRAGMENT: the reviewer's `(str \"heldout-\"
+  \"protocol-kind\")` mints one kind that appears nowhere in the source, and
+  reading its pieces as kinds would enumerate two names that do not exist and
+  miss the one that does. A site that mints no keyword spells its kind
+  entirely at runtime and must declare that it is forwarding."
+  [node]
+  (let [heads (head-position-keywords node)
+        composed (set (for [candidate (node-seq node)
+                            :when (= :list (n/tag candidate))
+                            :let [head (node-value
+                                         (first (significant-children candidate)))]
+                            :when (contains? '#{str format name subs} head)
+                            piece (node-seq candidate)]
+                        piece))]
+    (->> (node-seq node)
+         (remove composed)
+         (keep (fn [candidate]
+                 (let [value (node-value candidate)]
+                   (cond (keyword? value) (name value)
+                         (string? value) value))))
+         (remove heads)
+         (filter #(re-matches #"[a-z][a-z0-9-]*" %))
+         set)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- error-type-value-sites
+  "Every `:error-type`/`:error_type` map entry of a source, with its value node."
+  [text]
+  (for [candidate (node-seq (parser/parse-string-all text))
+        :when (= :map (n/tag candidate))
+        [key-node value-node] (partition 2 (significant-children candidate))
+        :let [key-value (node-value key-node)]
+        :when (contains? #{:error-type :error_type} key-value)]
+    {:value value-node
+     :literal (literal-kind value-node)
+     :text (try (n/string value-node) (catch Exception _ "<unprintable>"))}))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- forwarding-marked?
+  "Whether the twelve lines above the site declare it forwards another's kind."
+  [text site-text]
+  (let [lines (vec (str/split-lines text))
+        first-line (first (str/split-lines site-text))]
+    (boolean
+      (some (fn [index]
+              (and (str/includes? (nth lines index) first-line)
+                   (some #(str/includes? % "forwarded-refusal-kind")
+                         (subvec lines (max 0 (- index 12)) (inc index)))))
+            (range (count lines))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- reachable-entrance-source-text
+  "Every source the entrance can refuse THROUGH, the router's slice included.
+
+  Round-thirteen review finding 3: the shared router was held OUT, and a
+  hold-out is not a construction. It is read as the slice
+  `router-entrance-slice` builds — the top-level forms of `mcp_tool.clj`
+  transitively referenced by `handle-alias-migration` — so membership is
+  decided by a code path rather than by a file name, and the router's other
+  verbs' kinds stay out on their own merits."
+  []
+  (str (apply str (map (comp slurp namespace-source-path)
+                       (sort (reachable-entrance-namespaces))))
+       (router-entrance-slice)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- structural-error-type-kinds
+  "Kinds spelled in `:error-type`/`:error_type` VALUES, literal or minted.
+
+  Read with the reader rather than with a regex anchored on the key: a
+  non-literal value can still mint whole kinds, and a scan that requires a
+  keyword immediately after the key sees none of them."
+  [text]
+  (into (sorted-set)
+        (for [site (error-type-value-sites text)
+              kind (if-let [literal (:literal site)]
+                     [literal]
+                     (when-not (forwarding-marked? text (:text site))
+                       (minted-kinds-in (:value site))))
+              ;; a value that spells the FIELD's own name is a key rename —
+              ;; `(set/rename-keys {:error_type :error-type})` — and not a kind
+              :when (and (re-matches #"[a-z][a-z0-9-]*" kind)
+                         (not (contains? #{"error-type" "error_type"} kind)))]
+          kind)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- runtime-spelled-kind-sites
+  "`:error-type` values that mint no readable kind and declare no forwarding.
+
+  The complement of `structural-error-type-kinds`: where that reads what a
+  site can mint, this reports the sites that mint nothing a source scan can
+  read — the reviewer's `(str \"heldout-\" \"protocol-kind\")` among them —
+  so a kind composed at runtime fails the gate rather than disappearing from
+  the enumeration. The `refusal` constructor itself is exempt: its value IS
+  its argument, and its callers are scanned at their own call sites."
+  [label text]
+  (let [forms (top-level-def-forms text)
+        parameters-of (fn [form-text]
+                        ;; the first vector in the form IS its parameter list,
+                        ;; read with the reader so a docstring holding a
+                        ;; bracket cannot be mistaken for one
+                        (let [form (first (n/children
+                                            (parser/parse-string-all form-text)))
+                              arglist (first (filter #(= :vector (n/tag %))
+                                                     (significant-children form)))]
+                          (set (for [parameter (some-> arglist node-seq)
+                                     :let [value (node-value parameter)]
+                                     :when (symbol? value)]
+                                 (str value)))))
+        constructor-site? (fn [site-text]
+                            ;; the kind is the enclosing function's ARGUMENT:
+                            ;; this site mints nothing, and its callers are
+                            ;; scanned where they spell the kind
+                            (some (fn [[_ form-text]]
+                                    (and (str/includes? form-text site-text)
+                                         (seq (clojure.set/intersection
+                                                (parameters-of form-text)
+                                                (set (map second
+                                                          (re-seq #"([a-z][a-z0-9-]*)"
+                                                                  site-text)))))))
+                                  forms))]
+    (vec
+      (for [site (error-type-value-sites text)
+            :when (and (nil? (:literal site))
+                       (empty? (minted-kinds-in (:value site)))
+                       (not (forwarding-marked? text (:text site)))
+                       (not (constructor-site? (:text site))))]
+        (str label " · " (:text site))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- dynamic-refusal-kind-sites
@@ -1140,6 +1350,31 @@
           :when (not (some #(str/includes? % "forwarded-refusal-kind")
                            (subvec lines (max 0 (- index 12)) (inc index))))]
       (str path ":" (inc index)))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- unscannable-refusal-kind-sites
+  "Every site in the reachable set whose kind no source scan can read.
+
+  The union of two shapes: a `(refusal <non-literal>` call, and an
+  `:error-type`/`:error_type` value that mints no keyword literal. The second
+  is the shape the reviewer used — a `defmulti` in the shared router, routed
+  from `handle-alias-migration`, spelling `(str \"heldout-\"
+  \"protocol-kind\")` — and it was invisible to a guard that only read
+  `(refusal` call sites, in a file that was held out besides.
+
+  The router is read as the entrance's SLICE, the same one the enumeration
+  reads, so the guard and the enumeration can never disagree about their
+  subject."
+  []
+  (into (dynamic-refusal-kind-sites)
+        cat
+        (conj (mapv (fn [namespace-name]
+                      (let [path (namespace-source-path namespace-name)]
+                        (runtime-spelled-kind-sites path (slurp path))))
+                    (sort (reachable-entrance-namespaces)))
+              (runtime-spelled-kind-sites
+                "src/clj_surgeon/mcp_tool.clj · entrance slice"
+                (router-entrance-slice)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
@@ -1187,7 +1422,12 @@
                                (str verb-text router-text)))
            (map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" verb-text))
            (map second (re-seq #":error-type :([a-z][a-z0-9-]*)" verb-text))
-           (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))])))
+           (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))
+           ;; @spec MCP-OP-ALIAS-059
+           ;; a kind minted inside a NON-LITERAL value, which no regex anchored
+           ;; on the key can read: `:error-type (if … :no-match
+           ;; :ambiguous-match)` mints two, and a 125-kind set held neither
+           (structural-error-type-kinds verb-text)])))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- assert-refusal-text!
@@ -4301,7 +4541,7 @@
   ;; scanned source minted. Every such site carries the marker
   ;; `forwarded-refusal-kind`; a new dynamic constructor anywhere reachable
   ;; carries no marker and fails here.
-  (let [sites (dynamic-refusal-kind-sites)]
+  (let [sites (unscannable-refusal-kind-sites)]
     (is (empty? sites)
         (str "refusal kinds spelled dynamically with no forwarding marker, "
              "which no source scan can ever enumerate: " (pr-str sites)))))
@@ -4795,134 +5035,6 @@
             (str "the renderer took " elapsed-ms
                  " ms to publish " ceiling " characters, so it read the whole "
                  "of a ten-megabyte value before bounding it"))))))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- node-seq
-  "Every node of a parsed source, tolerant of nodes with no children."
-  [node]
-  (tree-seq #(try (seq (n/children %)) (catch Exception _ nil))
-            #(try (n/children %) (catch Exception _ nil))
-            node))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- node-value
-  [node]
-  (try (n/sexpr node) (catch Exception _ nil)))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- significant-children
-  [node]
-  (remove n/whitespace-or-comment? (n/children node)))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- top-level-def-forms
-  "Every top-level `def…` form of one source, by the name it defines."
-  [text]
-  (->> (n/children (parser/parse-string-all text))
-       (filter #(= :list (n/tag %)))
-       (keep (fn [node]
-               (let [kids (significant-children node)
-                     head (node-value (first kids))
-                     named (when (and (symbol? head)
-                                      (str/starts-with? (str head) "def"))
-                             (node-value (second kids)))]
-                 (when (symbol? named)
-                   [(str named) (try (n/string node) (catch Exception _ ""))]))))
-       (into {})))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- router-entrance-slice
-  "The part of the shared router the alias_migration ENTRANCE can reach.
-
-  Round-thirteen review finding 3: `mcp_tool` was held OUT of the closed
-  require graph, which is exactly the future-regression hole the requirement
-  says is closed — the reviewer added a `defmulti`/`defmethod` to `mcp_tool`,
-  routed it from `handle-alias-migration`, and composed the kind at runtime;
-  all four enumeration witnesses stayed green while the live entrance returned
-  a kind absent from the set.
-
-  A file is the wrong unit. The right one is a code path: the top-level forms
-  of `mcp_tool.clj` transitively referenced by `handle-alias-migration`. That
-  is reachability BY CONSTRUCTION — in the require graph AND on a path the
-  entrance can take — and it is a strict subset, so the router's other verbs'
-  kinds stay out of the set on their own merits rather than by a hold-out."
-  []
-  (let [forms (top-level-def-forms (slurp "src/clj_surgeon/mcp_tool.clj"))]
-    (loop [pending ["handle-alias-migration"] seen #{}]
-      (if-let [candidate (first pending)]
-        (if (or (contains? seen candidate) (not (contains? forms candidate)))
-          (recur (vec (rest pending)) seen)
-          (recur (into (vec (rest pending))
-                       (filter forms
-                               (map second
-                                    (re-seq #"[^\w!?*<>=+/.-]([a-zA-Z][\w!?*<>=+.-]*)"
-                                            (forms candidate)))))
-                 (conj seen candidate)))
-        (apply str (map forms (sort seen)))))))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- head-position-keywords
-  "Keywords used as functions — `(:ok checks)` — which name a FIELD, not a kind."
-  [node]
-  (set (for [candidate (node-seq node)
-             :when (= :list (n/tag candidate))
-             :let [head (node-value (first (significant-children candidate)))]
-             :when (keyword? head)]
-         (name head))))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- literal-kind
-  [node]
-  (let [value (node-value node)]
-    (cond (keyword? value) (name value)
-          (string? value) value)))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- minted-kinds-in
-  "The kinds a non-literal `:error-type` value can still MINT.
-
-  Only KEYWORD literals, and only outside function position. A keyword is a
-  whole kind — `(if … :no-match :ambiguous-match)` mints two — while a string
-  inside a composition is a FRAGMENT: the reviewer's `(str \"heldout-\"
-  \"protocol-kind\")` mints one kind that appears nowhere in the source, and
-  reading its pieces as kinds would enumerate two names that do not exist and
-  miss the one that does. A site that mints no keyword spells its kind
-  entirely at runtime and must declare that it is forwarding."
-  [node]
-  (let [heads (head-position-keywords node)]
-    (->> (node-seq node)
-         (keep (fn [candidate]
-                 (let [value (node-value candidate)]
-                   (when (keyword? value) (name value)))))
-         (remove heads)
-         (filter #(re-matches #"[a-z][a-z0-9-]*" %))
-         set)))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- error-type-value-sites
-  "Every `:error-type`/`:error_type` map entry of a source, with its value node."
-  [text]
-  (for [candidate (node-seq (parser/parse-string-all text))
-        :when (= :map (n/tag candidate))
-        [key-node value-node] (partition 2 (significant-children candidate))
-        :let [key-value (node-value key-node)]
-        :when (contains? #{:error-type :error_type} key-value)]
-    {:value value-node
-     :literal (literal-kind value-node)
-     :text (try (n/string value-node) (catch Exception _ "<unprintable>"))}))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- forwarding-marked?
-  "Whether the twelve lines above the site declare it forwards another's kind."
-  [text site-text]
-  (let [lines (vec (str/split-lines text))
-        first-line (first (str/split-lines site-text))]
-    (boolean
-      (some (fn [index]
-              (and (str/includes? (nth lines index) first-line)
-                   (some #(str/includes? % "forwarded-refusal-kind")
-                         (subvec lines (max 0 (- index 12)) (inc index)))))
-            (range (count lines))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-enumeration-reaches-the-routers-entrance-slice-and-every-spelling
