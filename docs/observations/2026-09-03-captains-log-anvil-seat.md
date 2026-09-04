@@ -1625,3 +1625,10 @@ Both blockers are the same lesson as round seven, one rung up: the string rule n
 literal but still lets the SPELLING (`subject(`) outrank the CONTEXT; and a refusal that names the resolved target
 publishes exactly the path the containment exists to hide. Plus a stale floor constant. Under the wall-clock rule this
 lane gets one more round scoped to landing blockers, lands on GO, and freezes; the wall levers are elsewhere.
+
+## 17:13Z admit gate r13 built (1bb136d0): a receipt file executed code inside the gate; Sol r14 review launched
+
+The read-eval item was rated non-blocking in round eleven ("printed a string"). At the RED commit the builder's witness
+`#=(java.lang.System/exit 3)` killed the JVM running the suite. A gate that reads its own receipts with the core reader is
+a gate any writer of the receipt file can drive. clojure.edn from here, and the r14 brief asks Sol to reproduce the kill
+at the RED sha on a real clone and to try tagged literals. feature_thread r10 (last round, blockers only) building.
