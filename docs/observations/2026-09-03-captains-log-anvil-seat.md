@@ -1636,3 +1636,12 @@ at the RED sha on a real clone and to try tagged literals. feature_thread r10 (l
 ## 17:23Z admit gate r14: Sol refused after provenance (read-eval attack in the brief); Opus fallback launched
 
 ## 17:33Z suite spike filed (docs/observations/2026-09-04-suite-spike-spec.md); round 1 launched on bridge/suite-spike
+
+## 17:34Z MEM-003 r8 (Opus): NO-GO on one finding; the same lesson, one rung up, for the fifth round
+
+Round six: a derivation over names cannot see a call that names nothing. Round eight: a derivation over names must also
+enumerate the GRAMMAR the names can appear in — `(. obj (member))` is Clojure's own reference spelling, and `..` and
+`memfn` expand to it. The reviewer's own note on why it holds a hole no live site exercises: "a ratchet's job is the
+commit not yet written." Also on the record: the reviewer withdrew its round-six "there is no intent-audit runner" claim.
+Round eight builds the one-commit fix plus the trunk re-merge (txn_journal carries eleven :control clock entries) with
+counts and the 145 pin re-derived on the merged result. Suite spike round 1 launched in parallel on bridge/suite-spike.
