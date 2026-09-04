@@ -3029,3 +3029,163 @@
     (is (= [[["k"] "menu"]] (ft/leaf-paths {:k :menu} []))
         "a keyword leaf is invisible to leaf-paths, so ensure-superset cannot
          backstop it -- the exact hole finding 6 walked through")))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-NINE REVIEW, finding 3 (BLOCKING): `literal-mask` correctly marked the
+;; occurrence as inside a string, but `string-shape` declared EVERY match
+;; immediately followed by `(` to be a call and every match beginning with `/`
+;; to be a route. So `(def note "call formatDraft() later")` — prose — returned
+;; five FOUND use legs, all anchored `after:L3`, and a route-shaped subject in
+;; prose read `COMPLETE (5 of 5)`.
+;;
+;; The RULE, not the case: inside a literal only the WHOLE-LITERAL spellings are
+;; strong — the caller shape whose entire string IS the call expression
+;; (`{:onclick "formatDraft()"}`) and the route literal whose entire string IS
+;; the path. A literal that carries the subject PLUS other prose is a MENTION:
+;; CANDIDATE, no anchor. Template interpolation is NOT a literal at all —
+;; `${formatDraft()}` is code (`literal-mask` never masks it) and stays FOUND.
+;; ---------------------------------------------------------------------------
+
+(defn- tmp-root!
+  [^String prefix]
+  (io/file (str (java.nio.file.Files/createTempDirectory
+                  prefix
+                  (into-array java.nio.file.attribute.FileAttribute [])))))
+
+(defn- prose-string-fixture!
+  "Every file here spells the subject INSIDE a literal. Only `whole.clj`,
+  `menu.clj` and `tpl.js` spell it as code."
+  []
+  (let [root (tmp-root! "feature-thread-prose-string")]
+    ;; the reviewer's first fixture, verbatim
+    (write-file! root "src/call.clj"
+                 (str "(ns call)\n"
+                      "\n"
+                      "(def note \"call formatDraft() later\")\n"))
+    ;; the reviewer's multiline prose repeat
+    (write-file! root "src/multiline.clj"
+                 (str "(ns multiline)\n"
+                      "\n"
+                      "(def doc \"a paragraph of prose\n"
+                      "  that mentions formatDraft() halfway through\n"
+                      "  and then keeps going for another line\")\n"))
+    ;; the reviewer's explicit blocking form: a route-SHAPED subject in prose
+    (write-file! root "src/routecall.clj"
+                 (str "(ns routecall)\n"
+                      "\n"
+                      "(def note \"call /fake() later; this is prose,"
+                      " not a route table\")\n"))
+    ;; whole-literal call: the entire string IS the call expression
+    (write-file! root "src/whole.clj"
+                 (str "(ns whole)\n"
+                      "\n"
+                      "(def command \"formatDraft()\")\n"))
+    ;; the named case's own menu-caller shape
+    (write-file! root "src/menu.clj"
+                 (str "(ns menu)\n"
+                      "\n"
+                      "(defn menu-item []\n"
+                      "  [:button {:onclick \"formatDraft()\"} \"Format\"])\n"))
+    ;; a JS template interpolation: `${…}` is CODE, not a literal
+    (write-file! root "js/tpl.js"
+                 (str "export function render(draft) {\n"
+                      "  return `<span>${formatDraft(draft)}</span>`;\n"
+                      "}\n"))
+    root))
+
+(defn- five-use-legs
+  [label glob]
+  {:repo-label label
+   :legs (mapv (fn [i] {:id (str "leg-" i) :kind :use :globs [glob]})
+               (range 5))})
+
+;; @spec MCP-OP-THREAD-050
+(deftest a-prose-string-that-merely-looks-like-a-call-is-never-found
+  (let [root (prose-string-fixture!)]
+    (try
+      (testing "the reviewer's fixture: `\"call formatDraft() later\"` is prose"
+        (let [{:keys [structured]}
+              (call! {:subject "formatDraft"
+                      :config (five-use-legs "ft9-string-attack" "src/call.clj")
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (:legs structured) :when (not= "implementation" (:id l))]
+            (is (not= "FOUND" (:status l))
+                (str "leg " (:id l) " was promoted to FOUND by prose inside a"
+                     " string literal"))
+            (is (nil? (:anchor l))
+                (str "leg " (:id l) " published an insertion anchor for prose:"
+                     " " (pr-str (:anchor l)))))))
+
+      (testing "a multiline prose string repeats it and is refused the same way"
+        (let [{:keys [structured]}
+              (call! {:subject "formatDraft"
+                      :config (five-use-legs "ft9-multiline" "src/multiline.clj")
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (:legs structured) :when (not= "implementation" (:id l))]
+            (is (not= "FOUND" (:status l))
+                (str "leg " (:id l) " was promoted to FOUND by a multiline"
+                     " prose string"))
+            (is (nil? (:anchor l))))))
+
+      (testing "the blocking form: a route-shaped subject present only in prose"
+        (let [{:keys [structured]}
+              (call! {:subject "/fake"
+                      :config (five-use-legs "ft9-route-shaped-prose"
+                                             "src/routecall.clj")
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (is (false? (:complete structured))
+              (str "a route-shaped subject present only in prose read "
+                   (:status structured)))
+          (doseq [l (:legs structured) :when (not= "implementation" (:id l))]
+            (is (not= "FOUND" (:status l))
+                (str "leg " (:id l) " read prose as a route entry"))
+            (is (nil? (:anchor l))))))
+
+      (testing "a literal whose WHOLE content is the call expression is code"
+        (let [{:keys [structured]}
+              (call! {:subject "formatDraft"
+                      :config (five-use-legs "ft10-whole-literal-call"
+                                             "src/whole.clj")
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (:legs structured) :when (not= "implementation" (:id l))]
+            (is (= "FOUND" (:status l))
+                (str "leg " (:id l) " refused `\"formatDraft()\"`, a whole-"
+                     "literal call: " (pr-str (:weak_reason l)))))))
+
+      (testing "and so is the named case's own menu-caller attribute value"
+        (let [{:keys [structured]}
+              (call! {:subject "formatDraft"
+                      :config (five-use-legs "ft10-menu-caller" "src/menu.clj")
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (:legs structured) :when (not= "implementation" (:id l))]
+            (is (= "FOUND" (:status l))
+                (str "leg " (:id l) " refused `{:onclick \"formatDraft()\"}`: "
+                     (pr-str (:weak_reason l)))))))
+
+      ;; The DECISION, documented: `${…}` is an interpolation, so the
+      ;; characters inside it are CODE and `literal-mask` never masks them.
+      ;; A template interpolation is therefore never weakened by the literal
+      ;; rule. (Whether the surrounding JS gives it a CLOSED brace window is a
+      ;; separate question, answered by `boundary`, and not this rule's.)
+      (testing "a JS template interpolation is CODE, never a literal mention"
+        (let [{:keys [structured]}
+              (call! {:subject "formatDraft"
+                      :config (five-use-legs "ft10-template-literal" "js/tpl.js")
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (doseq [l (:legs structured) :when (not= "implementation" (:id l))]
+            (is (not (str/includes? (str (:weak_reason l)) "string literal"))
+                (str "leg " (:id l) " read `${formatDraft(draft)}` as a string"
+                     " mention: " (pr-str (:weak_reason l)))))))
+      (finally (delete-tree! root))))
+
+  (testing "the named receipt is unmoved: menu-caller and route stay FOUND"
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (is (= "FOUND" (:status (leg structured "menu-caller"))))
+      (is (= "FOUND" (:status (leg structured "route"))))
+      (is (= 2148 (:from (leg structured "route")))))))
