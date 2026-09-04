@@ -62,8 +62,9 @@
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {
 
-   ;; ---- :fast (35) ----
+   ;; ---- :fast (36) ----
    'clj-surgeon.census-pool-test                        :fast
+   'clj-surgeon.fast-lane-isolation-test                :fast
    'clj-surgeon.lane-manifest-test                      :fast
    'clj-surgeon.mcp-change-buffer-test                  :fast
    'clj-surgeon.mcp-combinable-transaction-test         :fast

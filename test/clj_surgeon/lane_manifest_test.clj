@@ -231,8 +231,8 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 35 (count (lm/namespaces-for :fast))))
+    (is (= 36 (count (lm/namespaces-for :fast))))
     (is (= 4 (count (lm/namespaces-for :integration))))
     (is (= 11 (count (lm/namespaces-for :battery))))
-    (is (= 50 (count lm/manifest))
-        "round one's 49 measured namespaces plus this witness")))
+    (is (= 51 (count lm/manifest))
+        "round one's 49 measured namespaces plus the two round-two witnesses")))
