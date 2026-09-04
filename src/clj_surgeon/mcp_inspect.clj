@@ -10,7 +10,9 @@
    [clj-surgeon.outline :as outline]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.study :as study]
    [clojure.string :as str]
+   [clojure.walk :as walk]
    [rewrite-clj.node :as node]
    [rewrite-clj.parser :as parser]))
 
@@ -30,12 +32,20 @@
   {"forms" (into common-request-fields ["forms" "expect" "include_source"])
    "outline" (conj common-request-fields "include_string_symbols")
    "match" (into common-request-fields ["match" "inside" "expect"])
-   "xray" (conj common-request-fields "expression")})
+   "xray" (conj common-request-fields "expression")
+   "deps" (into common-request-fields ["form" "limit"])
+   "topo" (conj common-request-fields "limit")
+   "ls-deps" (into common-request-fields ["form" "limit"])
+   "ls-extract" (into common-request-fields ["form" "limit"])})
 (def ^:private operation-required
   {"forms" (into common-request-fields ["forms" "expect"])
    "outline" common-request-fields
    "match" (conj common-request-fields "match")
-   "xray" (get operation-fields "xray")})
+   "xray" (get operation-fields "xray")
+   "deps" common-request-fields
+   "topo" common-request-fields
+   "ls-deps" (conj common-request-fields "form")
+   "ls-extract" (conj common-request-fields "form")})
 
 (defn- field-name
   [key]
@@ -145,6 +155,13 @@
   [value path]
   (when-not (and (integer? value) (not (neg? value)))
     (refuse! :non-negative-integer path "Expected a non-negative integer"))
+  value)
+
+(defn- study-limit!
+  [value path]
+  (when-not (and (integer? value) (pos? value) (<= value 16384))
+    (refuse! :invalid-study-limit path
+             "Expected a study limit between 1 and 16384 JSON characters"))
   value)
 
 (defn- boolean!
@@ -284,7 +301,16 @@
           "xray"
           {:id id :operation operation :file file
            :expression (nonblank-string! (field request "expression")
-                                         (conj path "expression"))})))))
+                                         (conj path "expression"))}
+
+          ("deps" "topo" "ls-deps" "ls-extract")
+          (cond-> {:id id :operation operation :file file}
+            (present? request "form")
+            (assoc :form (nonblank-string! (field request "form")
+                                           (conj path "form")))
+            (present? request "limit")
+            (assoc :limit (study-limit! (field request "limit")
+                                        (conj path "limit")))))))))
 
 (def ^:private operationless-forms-fields
   #{"id" "file" "forms" "expect" "include_source"})
@@ -506,7 +532,21 @@
       (contains? result :candidate-limit)
       (assoc :candidate_limit (:candidate-limit result))
       (contains? result :candidates-truncated)
-      (assoc :candidates_truncated (:candidates-truncated result)))))
+      (assoc :candidates_truncated (:candidates-truncated result))
+      (contains? result :form)
+      (assoc :form (str (:form result)))
+      (contains? result :required)
+      (assoc :required (:required result))
+      (contains? result :limit)
+      (assoc :limit (:limit result))
+      ;; A refusal that knows a better next action than "correct the request"
+      ;; says so; the base value stays the default for everything else.
+      (contains? result :next-action)
+      (assoc :next_action (:next-action result))
+      (contains? result :remedy)
+      (assoc :remedy (:remedy result))
+      (contains? result :next-call)
+      (assoc :next_call (json-data (:next-call result))))))
 
 ;; @spec MCP-OP-READ-DIAG-001
 ;; @spec MCP-OP-READ-DIAG-003
@@ -558,7 +598,7 @@
    :operation "outline"
    :file (:file request)
    :file_hash (:hash snapshot)
-   :source_character_count 0
+   :source_character_count (count (:source snapshot))
    :outline (json-data
               (outline/outline-source
                 (:file request) (:source snapshot) {}
@@ -647,6 +687,244 @@
                        :file_hash (:hash snapshot)
                        :source_character_count (reduce + 0 (map count sources))))))))))
 
+;; ============================================================
+;; Study operations — bounded receipts over the clj-surgeon.study kernel
+;; ============================================================
+;; The CLI and this entrance call the same kernel functions on the same bytes.
+;; Only read-only study operations are exposed here; the write operations
+;; (:mv, :rename-ns!, :fix-declares!) stay CLI/gate-only by design.
+
+(def study-default-limit 4096)
+(def study-max-limit 16384)
+
+(defn- study-request-arguments
+  "Rebuild one single-request batch for an executable continuation."
+  [request overrides]
+  {:requests [(merge (cond-> {:id (:id request)
+                              :operation (:operation request)
+                              :file (:file request)}
+                       (:form request) (assoc :form (:form request)))
+                     overrides)]
+   :expect {:requests 1 :files 1}})
+
+(defn- study-next-call
+  [request overrides]
+  {:tool "inspect_clojure"
+   :arguments (study-request-arguments request overrides)})
+
+;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-018
+(defn bound-rows
+  "Bound an already JSON-normalized row vector by total JSON characters.
+
+  Returns [kept omitted truncated?]. A first row larger than the limit keeps
+  nothing rather than silently exceeding the receipt budget.
+
+  `used` starts at 1, not 0. The serialized array costs
+  `sum(rows) + (n-1) separators + 2 brackets`; charging each row `len + 1`
+  pays for n of those n+1 punctuation characters, leaving exactly one bracket
+  unpaid, so a kept payload could be `limit + 1` characters. The seed pays for
+  it. The one floor no bound can go below is the empty array's two
+  characters."
+  [rows limit]
+  (loop [remaining (seq rows)
+         kept []
+         used 1]
+    (if-let [row (first remaining)]
+      (let [cost (inc (json-character-count row))]
+        (if (> (+ used cost) limit)
+          [kept (count remaining) true]
+          (recur (next remaining) (conj kept row) (+ used cost))))
+      [kept 0 false])))
+
+(defn- study-limit
+  [request]
+  (or (:limit request) study-default-limit))
+
+;; @spec MCP-OP-STUDY-016
+(defn- study-base
+  [request snapshot limit]
+  {:id (:id request)
+   :operation (:operation request)
+   :file (:file request)
+   :file_hash (:hash snapshot)
+   ;; The bytes actually read, not a hardcoded zero. `forms`, `match`, and
+   ;; `xray` always reported this; the study operations reported 0, which also
+   ;; meant they were invisible to the per-request source budget.
+   :source_character_count (count (:source snapshot))
+   :limit limit})
+
+(defn- study-truncation
+  "A continuation is emitted only when raising the limit can still advance.
+
+  At the maximum limit the narrower scope is a caller judgment, not a
+  deterministic projection of proved facts, so no executable call is served."
+  [result request truncated? omitted]
+  (let [limit (study-limit request)
+        raisable? (< limit study-max-limit)]
+    (cond-> (assoc result :truncated truncated? :omitted omitted)
+      truncated?
+      (assoc :next_action (if raisable?
+                            "raise_limit_or_narrow_scope"
+                            "narrow_scope")
+             :remedy (if raisable?
+                       "Replay next_call to widen the receipt, or narrow the request."
+                       "The receipt is already at the maximum limit; request one exact form instead."))
+      (and truncated? raisable?)
+      (assoc :next_call (study-next-call request {:limit study-max-limit})))))
+
+;; @spec MCP-OP-STUDY-010
+(defn- study-missing-form
+  [request source]
+  (let [owners (study/owner-names source)
+        total (count owners)
+        returned (min 50 total)]
+    {:error (str "No top-level form named " (:form request)
+                 " in " (:file request))
+     :error-type :study-form-not-found
+     :failed-stage :study-select
+     :form (:form request)
+     :available-owners (vec (take returned owners))
+     :available-owners-returned returned
+     :available-owners-omitted (- total returned)
+     :available-owners-truncated (> total returned)
+     :available-owner-count total
+     :next-call (study-next-call request
+                                 {:form "REPLACE-WITH-ONE-EXACT-OWNER"})}))
+
+;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-027
+(defn- study-oversized
+  "One atomic result that cannot be split refuses rather than half-serialized.
+
+  A continuation is served only while raising `limit` can still advance.
+  `(min study-max-limit (max required limit))` EQUALS `limit` at the ceiling,
+  so the old unconditional next_call handed back the exact call just made —
+  the loop MCP-OP-STUDY-007 forbids. Mirrors `study-truncation`: at the
+  ceiling, a narrower scope is a caller judgment, so the receipt names it
+  instead of serving an executable call.
+
+  Raising has to be able to SUCCEED, not merely to change the number. An
+  atomic result needing 22,141 characters cannot be returned at any limit,
+  because the ceiling is 16,384: proposing `limit 16384` to a caller at 4,096
+  is a call that is known, here, to fail exactly as this one did. So
+  `required` must also fit under the ceiling."
+  [request required limit]
+  (let [raised (min study-max-limit (max required limit))
+        raisable? (and (> raised limit) (<= required study-max-limit))]
+    (cond-> {:error "One atomic study result exceeds the receipt limit"
+             :error-type :study-output-limit
+             :required required
+             :limit limit
+             :next-action (if raisable?
+                            "raise_limit_or_narrow_scope"
+                            "narrow_scope")
+             :remedy (if raisable?
+                       "Replay next_call to widen the receipt, or narrow the request."
+                       "The receipt is already at the maximum limit; request one exact form instead.")}
+      raisable? (assoc :next-call (study-next-call request {:limit raised})))))
+
+;; @spec MCP-OP-STUDY-016
+(defn- deps-result
+  [request snapshot]
+  (let [limit (study-limit request)
+        source (:source snapshot)]
+    (if (:form request)
+      (if-let [row (study/deps source {:form (:form request)})]
+        ;; One adjacency row is atomic: it cannot be truncated at row
+        ;; granularity, so it refuses like every other atomic result rather
+        ;; than being returned over the caller's budget.
+        (let [normalized (json-data row)
+              required (json-character-count normalized)]
+          (if (> required limit)
+            (study-oversized request required limit)
+            (study-truncation
+              (assoc (study-base request snapshot limit)
+                     :returned 1
+                     :deps normalized)
+              request false 0)))
+        (study-missing-form request source))
+      (let [rows (mapv json-data (study/deps source {}))
+            [kept omitted truncated?] (bound-rows rows limit)]
+        (study-truncation
+          (assoc (study-base request snapshot limit)
+                 :returned (count kept)
+                 :form_count (count rows)
+                 :deps kept)
+          request truncated? omitted)))))
+
+;; @spec MCP-OP-STUDY-016
+(defn- topo-result
+  "Topological ordering, with EVERY row it returns charged to the budget.
+
+  `:cycles` was unbounded — an all-cycle file returned every cycle member
+  whatever the limit — and `form_count` counted only `:sorted`, so the same
+  file reported `form_count 0` while listing its forms."
+  [request snapshot]
+  (let [limit (study-limit request)
+        kernel (json-data (study/topo (:source snapshot)))
+        envelope-cost (json-character-count (assoc kernel :sorted [] :cycles []))]
+    (if (> envelope-cost limit)
+      (study-oversized request envelope-cost limit)
+      (let [row-budget (- limit envelope-cost)
+            [sorted-kept sorted-omitted sorted-truncated?]
+            (bound-rows (:sorted kernel) row-budget)
+            [cycles-kept cycles-omitted cycles-truncated?]
+            (bound-rows (:cycles kernel)
+                        (max 0 (- row-budget
+                                  (json-character-count sorted-kept))))]
+        (study-truncation
+          (assoc (study-base request snapshot limit)
+                 :returned (+ (count sorted-kept) (count cycles-kept))
+                 :form_count (+ (count (:sorted kernel))
+                                (count (:cycles kernel)))
+                 :topo (assoc kernel
+                              :sorted sorted-kept
+                              :cycles cycles-kept))
+          request
+          (or sorted-truncated? cycles-truncated?)
+          (+ sorted-omitted cycles-omitted))))))
+
+(defn- ls-deps-result
+  [request snapshot]
+  (let [limit (study-limit request)
+        source (:source snapshot)]
+    (if-let [tree (study/ls-deps source {:form (:form request)})]
+      (let [normalized (json-data tree)
+            required (json-character-count normalized)]
+        (if (> required limit)
+          (study-oversized request required limit)
+          (study-truncation
+            (assoc (study-base request snapshot limit)
+                   :returned 1
+                   :dep_tree normalized)
+            request false 0)))
+      (study-missing-form request source))))
+
+;; @spec MCP-OP-STUDY-016
+(defn- ls-extract-result
+  "Minimal extractable closure, with the closure's own non-`:forms` keys —
+  target, required requires, and the rest of the envelope — charged to the
+  same budget the forms are. Only `:forms` was bounded before, so the receipt
+  could exceed `limit` by the size of everything around them."
+  [request snapshot]
+  (let [limit (study-limit request)
+        source (:source snapshot)
+        kernel (json-data (study/ls-extract source {:form (:form request)}))]
+    (if (empty? (:forms kernel))
+      (study-missing-form request source)
+      (let [envelope-cost (json-character-count (assoc kernel :forms []))]
+        (if (> envelope-cost limit)
+          (study-oversized request envelope-cost limit)
+          (let [[kept omitted truncated?]
+                (bound-rows (:forms kernel) (- limit envelope-cost))]
+            (study-truncation
+              (assoc (study-base request snapshot limit)
+                     :returned (count kept)
+                     :form_count (count (:forms kernel))
+                     :closure (assoc kernel :forms kept))
+              request truncated? omitted)))))))
+
 (defn- evaluate-request
   [request snapshot]
   (try
@@ -654,13 +932,57 @@
       "forms" (forms-result request snapshot)
       "outline" (outline-result request snapshot)
       "match" (match-result request snapshot)
-      "xray" (xray-result request snapshot))
+      "xray" (xray-result request snapshot)
+      "deps" (deps-result request snapshot)
+      "topo" (topo-result request snapshot)
+      "ls-deps" (ls-deps-result request snapshot)
+      "ls-extract" (ls-extract-result request snapshot))
     (catch Exception error
       {:error (.getMessage error)
        :error-type (or (:error-type (ex-data error)) :invalid-source)})))
 
+;; @spec MCP-OP-STUDY-020
+;; @spec MCP-OP-STUDY-034
+(defn returned-source-character-count
+  "How many characters of file SOURCE one result actually hands back.
+
+  This is NOT `:source_character_count`, which MCP-OP-STUDY-016 defines as the
+  characters the request READ. Charging the read count to the per-request
+  SOURCE budget conflated the two: `outline` and every study operation return
+  a derived structure and no source at all, yet a 126,596-character file made
+  them refuse with `inspect-output-limit` / `request_less_evidence` — a remedy
+  no caller can act on, because the request was already the smallest one that
+  answers the question. The budget exists to bound what crosses the wire, so
+  it counts what crosses the wire: every string of file source anywhere in the
+  result.
+
+  The keys are enumerated, in both their keyword and their JSON-normalized
+  spellings, because a walk keyed on `:source` alone measured the wrong thing:
+  `outline` returns no `:source` at all — it returns each form's `:args`,
+  lifted verbatim out of the file and normalized to a string key by
+  `json-data` — so 2,696 characters of `intent_transaction.clj` crossed the
+  wire scored as zero. Coverage here is a naming convention, so it is written
+  down rather than assumed: a NEW key that carries verbatim source belongs in
+  this set the day it is added."
+  [result]
+  (let [source-keys #{:source "source" :args "args"}
+        total (volatile! 0)]
+    (walk/postwalk
+      (fn [node]
+        (when (and (map-entry? node)
+                   (contains? source-keys (key node))
+                   (string? (val node)))
+          (vswap! total + (count (val node))))
+        node)
+      result)
+    @total))
+
+;; @spec MCP-OP-STUDY-020
 (defn enforce-output-budget
   "Apply inclusive per-request source/result and aggregate result limits.
+
+  The source limit is charged against the source a result RETURNS, not the
+  source it read; see `returned-source-character-count`.
 
   Returns the original result vector on success and never truncates data."
   ([results]
@@ -670,7 +992,7 @@
          (merge default-output-limits limits)
          failure
          (some (fn [[index result]]
-                 (let [source-count (or (:source_character_count result) 0)
+                 (let [source-count (returned-source-character-count result)
                        result-count (json-character-count result)]
                    (cond
                      (> source-count per-request-source)
@@ -808,18 +1130,22 @@
                                    (map (fn [file]
                                           [file (:hash (get snapshots file))]))
                                    files)
-                 source-count (reduce + 0 (map :source_character_count results))]
+                 source-count (reduce + 0 (map :source_character_count results))
+                 truncated? (boolean (some :truncated results))]
              (cond->
                {:ok true
                 :operation "inspect_clojure"
-                :read_complete true
+                :read_complete (not truncated?)
                 :request_count (:requests expect)
                 :file_count (:files expect)
                 :results results
                 :file_hashes file-hashes
                 :source_character_count source-count
                 :result_character_count (:result_character_count budget)
-                :next_action "none"}
+                :next_action (if truncated?
+                               "raise_limit_or_narrow_scope"
+                               "none")}
+               truncated? (assoc :truncated true)
                snapshot-guards (assoc :snapshot_guards snapshot-guards)))))))))
 
 (defn- plural
@@ -828,58 +1154,258 @@
        (when (not= 1 count)
          (if (= "match" singular) "es" "s"))))
 
-(defn- compact-json
-  [value limit]
-  (let [rendered (json/generate-string (json-data value))]
-    (when (<= (count rendered) limit) rendered)))
+;; @spec MCP-OP-STUDY-041
+(def max-evidence-characters
+  "How many characters of ROW EVIDENCE one `inspect_clojure` text block
+  renders when nothing narrower is imposed.
 
-(defn- concise-result-line
+  The text block is not a summary of the receipt; it is the only copy of the
+  receipt a text-only client ever sees. It is bounded because it travels
+  inside a public MCP result whose complete size is bounded (MCP-OP-STUDY-040)
+  — never because rows are optional."
+  8192)
+
+;; @spec MCP-OP-STUDY-041
+(def ^:private min-evidence-characters
+  "The floor one result keeps when a batch divides the allowance."
+  512)
+
+;; @spec MCP-OP-STUDY-041
+(def ^:private max-continuation-characters
+  "How large a `next_call` may be before the text names where it lives
+  instead of spelling it. A continuation too long to retype is not a
+  continuation, and a truncated one is worse than none."
+  2048)
+
+(defn- compact-json
+  [value]
+  (json/generate-string (json-data value)))
+
+(defn- dependency-row
+  [{:keys [name type line depends_on]}]
+  (str name " " type "@" line
+       (if (seq depends_on)
+         (str " → " (str/join ", " depends_on))
+         " → (none)")))
+
+(defn- dep-tree-rows
+  "One row per node of an `ls-deps` tree, depth-first in receipt order."
+  [node depth]
+  (let [indent (apply str (repeat depth "  "))]
+    (if (:circular? node)
+      [(str indent (:name node) " (circular)")]
+      (into [(str indent (:name node) " " (:type node) "@" (:line node)
+                  (when (:leaf? node) " (leaf)"))]
+            (mapcat #(dep-tree-rows % (inc depth)))
+            (:deps node)))))
+
+;; @spec MCP-OP-STUDY-041
+(defn result-evidence
+  "The evidence one result's receipt carries, in RECEIPT ORDER.
+
+  Each entry is `{:row <one line> :body <verbatim source or nil>}`. This is
+  the single place a mode says what its rows are: the text renderer prints
+  these and nothing else, so the rendered rows and the receipt rows cannot
+  disagree by construction, and a witness can compare the two directly.
+
+  Field evidence (O2 re-review, 2026-09-03): every mode below rendered a row
+  COUNT — `request-1: deps · 27 of 27 rows` — while the rows sat in
+  `structuredContent`. A text-only client was handed the shape of an answer
+  and none of it, which is the same defect MCP-OP-STUDY-036 closed on
+  `ls-tree` alone."
   [result]
   (case (:operation result)
     "forms"
-    (when (seq (:forms result))
-      (str "  " (:id result) ": "
-           (str/join ", "
-                     (map #(str (:name %) "@" (:line %) "-" (:end_line %))
-                          (:forms result)))
-           " · " (:source_character_count result) " source characters"))
+    (mapv (fn [form]
+            {:row (str (:name form) "@" (:line form) "-" (:end_line form)
+                       " " (:form_type form))
+             :body (:source form)})
+          (:forms result))
 
     "outline"
-    (when-let [outline (:outline result)]
-      (let [forms (:forms outline)]
-        (str "  " (:id result) ": " (:lines outline) " lines · "
-             (:form_count outline) " forms · first " (:name (first forms))
-             " · last " (:name (last forms))
-             (when (some #(contains? % :string_symbols) forms)
-               (str " · "
-                    (plural (reduce + 0 (map #(count (:string_symbols %)) forms))
-                            "string symbol"))))))
+    (mapv (fn [form]
+            {:row (str (:line form) "-" (:end_line form) " "
+                       (:type form) " " (:name form)
+                       (when (:args form) (str " " (:args form)))
+                       (when-let [symbols (:string_symbols form)]
+                         (when (seq symbols)
+                           (str " · string symbols "
+                                (str/join ", " symbols)))))})
+          (get-in result [:outline :forms]))
 
     "match"
-    (when (:id result)
-      (let [matches (:matches result)
-            compact (compact-json
-                      (mapv #(select-keys % [:inside :source]) matches) 1024)]
-        (when compact
-          (str "  " (:id result) ": "
-               (plural (:match_count result) "match") " · " compact
-               ;; @spec MCP-OP-FIELD-003
-               (when (:note result)
-                 (str "\n    note: " (:note result)))))))
+    (mapv (fn [match]
+            {:row (str (or (:inside match) "(top level)")
+                       "@" (:line match) "-" (:end_line match))
+             :body (:source match)})
+          (:matches result))
 
     "xray"
-    (when (contains? result :value)
-      (when-let [compact (compact-json (:value result) 1024)]
-        (str "  " (:id result) ": value " compact)))
+    (if (contains? result :value)
+      [{:row (str "value " (compact-json (:value result)))}]
+      [])
 
-    nil))
+    "deps"
+    (mapv #(hash-map :row (dependency-row %)) (:deps result))
 
-(defn concise-summary
-  "Render the ordinary source-free MCP text companion to structuredContent."
+    "topo"
+    (let [topo (:topo result)]
+      (into (into []
+                  (map-indexed (fn [index name]
+                                 {:row (str "sorted " (inc index) ". " name)}))
+                  (:sorted topo))
+            (map (fn [name] {:row (str "cycle " name)}))
+            (:cycles topo)))
+
+    "ls-deps"
+    (mapv #(hash-map :row %) (dep-tree-rows (:dep_tree result) 0))
+
+    "ls-extract"
+    (mapv #(hash-map :row (dependency-row %))
+          (get-in result [:closure :forms]))
+
+    []))
+
+;; @spec MCP-OP-STUDY-041
+(defn result-rows
+  "The rows one result's receipt carries, in receipt order."
   [result]
-  (let [forms (reduce + 0 (map #(or (:form_count %) 0) (:results result)))
-        matches (reduce + 0 (map #(or (:match_count %) 0) (:results result)))
-        evidence-lines (keep concise-result-line (:results result))
+  (mapv :row (result-evidence result)))
+
+(defn- result-headline
+  [result]
+  (case (:operation result)
+    "forms"
+    (str (plural (count (:forms result)) "form") " · "
+         (:source_character_count result) " source characters read")
+
+    "outline"
+    (let [outline (:outline result)
+          forms (:forms outline)
+          symbols (reduce + 0 (map #(count (:string_symbols %)) forms))]
+      (str (:lines outline) " lines · "
+           (plural (:form_count outline) "form")
+           (when (some #(contains? % :string_symbols) forms)
+             (str " · " (plural symbols "string symbol")))))
+
+    "match"
+    (str (plural (:match_count result) "match")
+         (when (:inside result) (str " inside " (:inside result))))
+
+    "xray" "xray"
+
+    ("deps" "topo" "ls-deps" "ls-extract")
+    (str (:operation result) " · " (:returned result) " of "
+         (or (:form_count result) (:returned result)) " rows"
+         (when (:truncated result)
+           (str " · truncated, " (:omitted result) " omitted")))
+
+    (:operation result)))
+
+;; @spec MCP-OP-STUDY-041
+(defn- continuation-line
+  "The `next_call` spelled where a text-only client can read it."
+  [result]
+  (when-let [call (:next_call result)]
+    (let [rendered (compact-json (:arguments call))]
+      (if (<= (count rendered) max-continuation-characters)
+        (str "    → next call: " (:tool call) " " rendered)
+        (str "    → next call: " (:tool call)
+             " · " (count rendered) " characters · see structuredContent"
+             ".results[" (:id result) "].next_call")))))
+
+;; @spec MCP-OP-STUDY-041
+;; @spec MCP-OP-STUDY-040
+(defn- render-evidence
+  "Render one result's rows into `allowance` characters of text.
+
+  Rows are dropped WHOLE and only from the tail, and a dropped tail is always
+  declared. Nothing here may drop evidence silently: a caller told the read is
+  terminal and handed none of the answer is worse off than one told it was
+  truncated."
+  [result allowance]
+  (let [items (result-evidence result)
+        total (count items)]
+    (loop [remaining items lines [] shown 0 used 0]
+      (if-let [{:keys [row body]} (first remaining)]
+        (let [row-line (str "    · " row)
+              body-lines (when (seq body)
+                           (mapv #(str "      " %) (str/split-lines body)))
+              unit (+ (count row-line) 1
+                      (reduce + 0 (map #(inc (count %)) body-lines)))]
+          (cond
+            ;; Always render the first row: a result whose single row is
+            ;; larger than the whole allowance still has to say its name.
+            (zero? shown)
+            (let [with-body? (<= unit allowance)]
+              (recur (next remaining)
+                     (into [row-line] (when with-body? body-lines))
+                     1
+                     (if with-body? unit (inc (count row-line)))))
+
+            (> (+ used unit) allowance)
+            {:lines lines :shown shown :total total :abridged true}
+
+            :else
+            (recur (next remaining)
+                   (into lines (cons row-line body-lines))
+                   (inc shown)
+                   (+ used unit))))
+        {:lines lines :shown shown :total total
+         :abridged (< shown total)}))))
+
+;; @spec MCP-OP-STUDY-041
+(defn- concise-result-block
+  "The text one result contributes: its headline, its rows, and — whenever the
+  rows do not all fit or the receipt itself is truncated — what to send next."
+  [result allowance]
+  (let [rendered (render-evidence result allowance)
+        headline (str "  " (:id result) ": " (result-headline result))]
+    {:abridged (:abridged rendered)
+     :text
+     (str/join
+       "\n"
+       (remove nil?
+               (concat
+                 [headline]
+                 (:lines rendered)
+                 [(when (:abridged rendered)
+                    (format (str "    ! text abridged · %d of %d row%s "
+                                 "rendered · the complete receipt is in "
+                                 "structuredContent.results[%s]")
+                            (:shown rendered) (:total rendered)
+                            (if (= 1 (:total rendered)) "" "s")
+                            (:id result)))
+                  (when (and (:abridged rendered) (not (:truncated result)))
+                    (str "    → narrow the request so the whole answer fits "
+                         "the text block, or read structuredContent"))
+                  (when (:truncated result)
+                    (continuation-line result))
+                  (when (and (:truncated result) (:remedy result))
+                    (str "    → " (:remedy result)))])))}))
+
+;; @spec MCP-OP-STUDY-041
+(defn concise-summary
+  "Render the MCP text companion — every row the receipt carries, bounded.
+
+  Bounded is not the same as elided. Above the allowance the block says how
+  many of how many rows it rendered and what to send next; it never claims
+  terminal evidence over evidence it dropped."
+  [result]
+  (let [results (:results result)
+        forms (reduce + 0 (map #(or (:form_count %) 0) results))
+        matches (reduce + 0 (map #(or (:match_count %) 0) results))
+        allowance (max min-evidence-characters
+                       (quot (or (:text_evidence_limit result)
+                                 max-evidence-characters)
+                             (max 1 (count results))))
+        ;; A result with no rows contributes no block: `match` with zero
+        ;; matches has nothing to render, and a headline over nothing is the
+        ;; count-shaped noise this change exists to remove.
+        blocks (into [] (keep #(when (seq (result-evidence %))
+                                 (concise-result-block % allowance)))
+                     results)
+        abridged? (boolean (some :abridged blocks))
         facts (cond-> [(plural (:request_count result) "request")
                        (plural (:file_count result) "file")]
                 (pos? forms) (conj (plural forms "form"))
@@ -890,9 +1416,22 @@
          "✓ all requests resolved\n"
          "✓ ordered snapshot\n"
          "✓ hashes attached\n"
-         "✓ terminal evidence · read_complete=true · next action none\n"
-         (when (seq evidence-lines)
-           (str "\n" (str/join "\n" evidence-lines) "\n"))
+         (cond
+           (:truncated result)
+           (str "! bounded receipt · read_complete=false · next action "
+                (:next_action result) "\n")
+
+           ;; @spec MCP-OP-STUDY-041
+           ;; Never "terminal evidence · next action none" over evidence the
+           ;; text dropped: the receipt is complete, this rendering is not.
+           abridged?
+           (str "! text abridged · read_complete=true · next action "
+                "read_structured_content_or_narrow_request\n")
+
+           :else
+           "✓ terminal evidence · read_complete=true · next action none\n")
+         (when (seq blocks)
+           (str "\n" (str/join "\n" (map :text blocks)) "\n"))
          "  " (format "%,d" (long (:source_character_count result)))
          " source characters · "
          (mcp-operation/format-elapsed-ms elapsed))))

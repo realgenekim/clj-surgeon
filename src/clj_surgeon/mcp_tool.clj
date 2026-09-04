@@ -471,6 +471,20 @@
         result (f)]
     [result (elapsed-ms started)]))
 
+;; @spec MCP-OP-STUDY-039
+(defn- record-session!
+  "Announce the workspace this call was served from, once per client session.
+
+  ;; @spec MCP-OP-STUDY-043
+  The identity is the pair (root, client run), never the root alone: one
+  server serves several arms of a cohort, and arms that share a worktree share
+  a root."
+  [telemetry-state project-root client-run-id]
+  (telemetry/record-session-start!
+    telemetry-state {:workspace-root project-root
+                     :client-run-id client-run-id})
+  telemetry-state)
+
 (defn- record-result!
   [telemetry-state request response total-start timings]
   (when telemetry-state
@@ -752,6 +766,7 @@
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params
    public-operation]
+  (record-session! telemetry project-root (:client-run-id config))
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
                               [:edits :programs :delete_owners :create_files
@@ -926,8 +941,14 @@
             routed (workspace/resolve-request workspace-router normalized)]
         (if-not (:ok routed)
           routed
+          ;; @spec MCP-OP-STUDY-043
+          ;; The client run travels with the ROUTE; a router-built config
+          ;; would otherwise drop the identity of the calling session.
           (assoc (execute-request-in-context!
-                   (:config routed) (:params routed) public-operation)
+                   (cond-> (:config routed)
+                     (:client-run-id config)
+                     (assoc :client-run-id (:client-run-id config)))
+                   (:params routed) public-operation)
                  :workspace_root (:workspace-root routed)))))))
 
 (defn concise-summary
@@ -1187,10 +1208,12 @@
                                   (if-not (:ok consumed)
                                     consumed
                                     (execute-request!
-                                      (-> config
-                                          (dissoc :telemetry-state)
-                                          (assoc :public-operation
-                                                 "edit_clojure"))
+                                      (cond-> (-> config
+                                                  (dissoc :telemetry-state)
+                                                  (assoc :public-operation
+                                                         "edit_clojure"))
+                                        session-key
+                                        (assoc :client-run-id session-key))
                                       arguments)))))))))))))))))))
 
 (defn request-operation
@@ -1260,8 +1283,17 @@
                                  "to apply_clojure_changes instead.")}
 
                    @runtime-config
+                   ;; @spec MCP-OP-STUDY-043
+                   ;; The MCP request shape cannot carry a run id, and a
+                   ;; caller-supplied one could name another arm. The
+                   ;; transport's session is the id.
                    (execute-request!
-                     (assoc @runtime-config :public-operation operation)
+                     (cond-> (assoc @runtime-config
+                                    :public-operation operation)
+                       (prepared-confirmation/exchange-session-key exchange)
+                       (assoc :client-run-id
+                              (prepared-confirmation/exchange-session-key
+                                exchange)))
                      params)
 
                    :else

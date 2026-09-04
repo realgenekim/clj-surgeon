@@ -246,7 +246,7 @@
         (is (= ["src/sample/caller.clj"]
                (get-in result [:plan :callers-to-review])))
         (is (false? (.exists target-file)))
-        (is (= #{"prepare-change" "plan-extraction"}
+        (is (= #{"prepare-change" "plan-extraction" "ls-tree"}
                (set (get-in inspect-tool/inspect-schema
                             [:properties "mode" :enum])))))
       (finally

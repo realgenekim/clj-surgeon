@@ -13,6 +13,8 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]])
   (:import
+   (io.modelcontextprotocol.server McpAsyncServerExchange)
+   (io.modelcontextprotocol.common McpTransportContext)
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute)))
 
@@ -301,8 +303,14 @@
       (is (str/includes?
             (first (:content (first @calls)))
             (format "%.2f ms" (get-in @calls [0 :structured :elapsed_ms]))))
-      (is (not (str/includes? (first (:content (first @calls)))
-                              "(def answer")))
+      ;; @spec MCP-OP-STUDY-041
+      ;; Reversed by O2 round 2: the text block is not a source-free companion
+      ;; to the receipt, it is the only copy of the receipt a text-only client
+      ;; sees. `forms` returns source by default, so the text carries it —
+      ;; bounded, and declared when it does not all fit.
+      (is (str/includes? (first (:content (first @calls)))
+                         "(def answer 42)")
+          "the source the receipt returns travels in the text a client renders")
       (is (= "(def answer 42)"
              (get-in @calls [0 :structured :results 0 :forms 0 :source])))
       (finally
@@ -1379,3 +1387,48 @@
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))
+
+;; @spec MCP-OP-STUDY-043
+(deftest the-inspect-entrance-names-the-client-session-it-was-called-from
+  ;; Reviewer finding 3 (2026-09-03): `client_run_id` had NO production caller.
+  ;; Both entrances passed `{:workspace-root project-root}` and nothing else,
+  ;; and every `client_run_id` in the repository was a test literal. The MCP
+  ;; request shape cannot supply one — `inspect-schema` is
+  ;; `additionalProperties false` and declares no such property — so the id
+  ;; comes from the transport: the SDK session the exchange names.
+  (let [project (temp-dir)
+        directory (temp-dir)
+        _source (write-source! project "src/demo.clj" "(ns demo)\n(def a 1)\n")
+        state (telemetry/start! {:mode :metrics :directory (.getPath directory)
+                                 :run-id "server-run"})
+        params {"requests" [{"id" "a" "operation" "outline"
+                             "file" "src/demo.clj"}]
+                "expect" {"requests" 1 "files" 1}}
+        exchange (fn [id]
+                   (McpAsyncServerExchange.
+                     id nil nil nil McpTransportContext/EMPTY))]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project) :telemetry state})
+      (inspect-tool/handle-inspect (exchange "sdk-session-A") params
+                                   (fn [& _]))
+      (inspect-tool/handle-inspect (exchange "sdk-session-A") params
+                                   (fn [& _]))
+      (inspect-tool/handle-inspect (exchange "sdk-session-B") params
+                                   (fn [& _]))
+      (let [events (->> (str/split-lines (slurp (:file state)))
+                        (remove str/blank?)
+                        (mapv #(json/parse-string % true)))
+            started (filterv #(= "session.start" (:event %)) events)]
+        (is (= 3 (count (filterv #(= "tool.call" (:event %)) events)))
+            "three calls were recorded")
+        (is (= 2 (count started))
+            "two client sessions on ONE root are two sessions, not one")
+        (is (= #{"sdk-session-A" "sdk-session-B"}
+               (set (map :client_run_id started)))
+            "and the entrance names the transport session it was called from")
+        (is (= 1 (count (distinct (map :workspace_key started))))
+            "both name the same workspace root"))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)
+        (delete-tree! directory)))))

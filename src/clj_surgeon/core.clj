@@ -30,6 +30,7 @@
    [clj-surgeon.result-budget :as budget]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.study :as study]
    [clojure.edn :as edn]
    [clojure.pprint :as pp]
    [clojure.string :as str])
@@ -113,33 +114,30 @@
                                            (contains? fwd (str (:name %))))
                                       declares))}}))))
 
+;; The four file-scoped study ops are CLI entrances over one kernel; the MCP
+;; read entrance calls the same clj-surgeon.study functions on the same bytes.
+
+;; @spec MCP-OP-MEM-005
+;; Each delegation stays wrapped in `named-plan-refusal`. Gating
+;; `clj-surgeon.analyze` swapped an uncatchable StackOverflowError for a typed
+;; ExceptionInfo, and these four CLI entrances are where a caller sees it: the
+;; kernel is pure-in/data-out and deliberately throws, so the entrance is what
+;; turns the throw into a refusal a human can read instead of a stack trace.
+;; Composing study-ops onto MEM-005 dropped this wrapper and
+;; `the-analyze-constructor-is-gated` went from a named refusal to an
+;; uncaught exception.
+
 (defn run-deps [{:keys [file form]}]
-  (named-plan-refusal
-    (fn []
-      (let [zloc (analyze/file->zloc file)
-            deps (analyze/intra-ns-deps zloc)]
-        (if form
-          (first (filter #(= form (:name %)) deps))
-          deps)))))
+  (named-plan-refusal #(study/deps (slurp file) {:form form})))
 
 (defn run-topo [{:keys [file]}]
-  (named-plan-refusal
-    (fn []
-      (let [zloc (analyze/file->zloc file)]
-        (analyze/topological-sort zloc)))))
+  (named-plan-refusal #(study/topo (slurp file))))
 
 (defn run-closure [{:keys [file form]}]
-  (named-plan-refusal
-    (fn []
-      (let [zloc (analyze/file->zloc file)]
-        (analyze/extraction-closure zloc form)))))
+  (named-plan-refusal #(study/ls-extract (slurp file) {:form form})))
 
 (defn run-ls-deps [{:keys [file form]}]
-  (named-plan-refusal
-    (fn []
-      (let [zloc (analyze/file->zloc file)
-            deps (analyze/intra-ns-deps zloc)]
-        (analyze/dep-tree deps form)))))
+  (named-plan-refusal #(study/ls-deps (slurp file) {:form form})))
 
 ;; ============================================================
 ;; CLJC operations: merge, split, add-require
@@ -184,7 +182,7 @@
       updated)))
 
 ;; ============================================================
-;; :ls-tree — directory-wide namespace map
+;; :ls-tree — directory-wide namespace map (kernel in clj-surgeon.study)
 ;; ============================================================
 
 (def ^:private skip-dirs
@@ -1055,9 +1053,13 @@
    opts map, shadowing `clojure.core/format`, and an empty scan threw an NPE
    instead of saying what it found."
   ;; @spec MCP-OP-MEM-003
-  [abs grep]
+  ;; @spec MCP-OP-STUDY-026
+  ;; `named` is what the CALLER asked for, never the canonical realpath. A
+  ;; refusal that prints the host-absolute scan root publishes where the
+  ;; workspace lives and makes the frozen golden machine-specific.
+  [named grep]
   (format "No Clojure files found under %s%s"
-          abs (if grep (str " matching '" grep "'") "")))
+          named (if grep (str " matching '" grep "'") "")))
 
 (defn- page-cursor
   "The cursor token for `offset` in one pinned snapshot: the snapshot's id, the
@@ -1123,7 +1125,7 @@
                    (discover-projects-grep (grep-tree grep abs) abs)
                    (discover-projects abs))]
     (if (empty? projects)
-      (do (println (no-clojure-files-message abs grep))
+      (do (println (no-clojure-files-message dir grep))
           (System/exit 1))
       (let [total (candidate-total projects)]
         (if-not (> total ceiling)
@@ -1927,6 +1929,7 @@
       result)
     result))
 
+;; @spec MCP-OP-STUDY-029
 (defn- with-match-form-pattern-remedy
   [result {:keys [file inside pattern] :as opts}]
   (if (and file
@@ -1935,7 +1938,12 @@
            (not (str/blank? pattern))
            (not (contains? opts :match)))
     (if (str/includes? pattern "|")
-      (let [args ["rg" "-n" "--max-count" "20" pattern (str file)]]
+      ;; "--" ends option parsing, exactly as `study/grep-tree` does for the
+      ;; pattern it runs itself. This command is RENDERED for the caller to
+      ;; paste, so a pattern like "--pre=/bin/sh|x" would otherwise be handed
+      ;; to them spelled as a ripgrep flag — the same argv confusion, moved
+      ;; from our subprocess into theirs.
+      (let [args ["rg" "-n" "--max-count" "20" "--" pattern (str file)]]
         (assoc-in result [:remedies :text-search]
                   {:operation :text-search
                    :reason (str ":match-form :match accepts one EDN form pattern, not a regular expression. "

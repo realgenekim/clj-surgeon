@@ -1,0 +1,254 @@
+[{:ns myapp.ui.dashboard,
+  :file "dashboard.cljc",
+  :lines 38,
+  :form-count 5,
+  :forms
+  [{:type defn,
+    :platforms [:clj :cljs],
+    :line 12,
+    :end-line 13,
+    :name format-title,
+    :args "[title]"}
+   {:type defn-,
+    :platforms [:clj :cljs],
+    :line 15,
+    :end-line 16,
+    :name render-header,
+    :args "[title]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 21,
+    :end-line 24,
+    :name render-modal,
+    :args "[title content]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 27,
+    :end-line 30,
+    :name render-dashboard,
+    :args "[this props]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 35,
+    :end-line 38,
+    :name render-page,
+    :args "[title body]"}],
+  :requires
+  ["[clojure.string :as str]"
+   "[fulcro.dom :as dom]"
+   "[fulcro.dom-server :as dom]"
+   "[semantic-ui.modal :refer [ui-modal]]"
+   "[semantic-ui.modal-header :refer [ui-modal-header]]"]}
+ {:ns myapp.ui.io,
+  :file "io.cljc",
+  :lines 32,
+  :form-count 5,
+  :forms
+  [{:type defn,
+    :platforms [:clj :cljs],
+    :line 11,
+    :end-line 14,
+    :name sanitize-filename,
+    :args "[name]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 19,
+    :end-line 20,
+    :name read-file,
+    :args "[path]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 23,
+    :end-line 24,
+    :name write-file,
+    :args "[path content]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 27,
+    :end-line 28,
+    :name get-element,
+    :args "[id]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 31,
+    :end-line 32,
+    :name format-number,
+    :args "[n decimals]"}],
+  :requires
+  ["[clojure.string :as str]"
+   "[clojure.java.io :as jio]"
+   "[goog.string :as gstr]"]}
+ {:ns myapp.lib.logging,
+  :file "logging.cljc",
+  :lines 40,
+  :form-count 5,
+  :forms
+  [{:type defn,
+    :platforms [:clj :cljs],
+    :line 9,
+    :end-line 10,
+    :name format-level,
+    :args "[level]"}
+   {:type defn-,
+    :platforms [:clj :cljs],
+    :line 12,
+    :end-line 13,
+    :name truncate-ns,
+    :args "[ns-str]"}
+   {:type defmacro, :platforms [:clj], :line 18, :end-line 21, :name p}
+   {:type defn,
+    :platforms [:clj],
+    :line 24,
+    :end-line 33,
+    :name custom-output-fn}
+   {:type defn,
+    :platforms [:clj],
+    :line 36,
+    :end-line 40,
+    :name configure-logging!,
+    :args "[config]"}],
+  :requires
+  ["[clojure.string :as str]" "[clojure.pprint :refer [pprint]]"]}
+ {:ns myapp.ui.mutations,
+  :file "mutations.cljc",
+  :lines 55,
+  :form-count 3,
+  :forms
+  [{:type defn,
+    :platforms [:clj :cljs],
+    :line 13,
+    :end-line 15,
+    :name validate-post-id,
+    :args "[post-id]"}
+   {:type defn-,
+    :platforms [:clj :cljs],
+    :line 17,
+    :end-line 18,
+    :name format-result,
+    :args "[ok? message]"}
+   {:type m/defmutation, :platforms [:cljs], :line 23, :end-line 36}
+   {:type do, :platforms [:clj], :line 38, :end-line 46}
+   {:type def,
+    :platforms [:clj],
+    :line 51,
+    :end-line 51,
+    :name resolvers}
+   {:type comment, :platforms [:clj :cljs], :line 53, :end-line 55}],
+  :requires
+  ["[clojure.string :as str]"
+   "[fulcro.mutations :as m]"
+   "[pathom.connect :as pco]"
+   "[myapp.ui.toast :as toast]"
+   "[myapp.db.queries :as db]"]}
+ {:ns myapp.lib.platform,
+  :file "platform.clj",
+  :lines 14,
+  :form-count 3,
+  :forms
+  [{:type defn,
+    :platforms [:clj],
+    :line 7,
+    :end-line 8,
+    :name timestamp,
+    :args "[]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 10,
+    :end-line 11,
+    :name temp-dir,
+    :args "[]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 13,
+    :end-line 14,
+    :name hostname,
+    :args "[]"}],
+  :requires ["[clojure.string :as str]" "[clojure.java.io :as io]"]}
+ {:ns myapp.lib.platform,
+  :file "platform.cljs",
+  :lines 14,
+  :form-count 3,
+  :forms
+  [{:type defn,
+    :platforms [:cljs],
+    :line 7,
+    :end-line 8,
+    :name timestamp,
+    :args "[]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 10,
+    :end-line 11,
+    :name temp-dir,
+    :args "[]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 13,
+    :end-line 14,
+    :name hostname,
+    :args "[]"}],
+  :requires ["[clojure.string :as str]" "[goog.string :as gstr]"]}
+ {:ns myapp.model.posts,
+  :file "posts.cljc",
+  :lines 62,
+  :form-count 9,
+  :forms
+  [{:type defn,
+    :platforms [:clj :cljs],
+    :line 11,
+    :end-line 12,
+    :name normalize-title,
+    :args "[title]"}
+   {:type declare,
+    :platforms [:clj :cljs],
+    :line 14,
+    :end-line 14,
+    :name enrich-post}
+   {:type defn,
+    :platforms [:clj :cljs],
+    :line 16,
+    :end-line 19,
+    :name format-post,
+    :args "[post]"}
+   {:type defn-,
+    :platforms [:clj :cljs],
+    :line 21,
+    :end-line 25,
+    :name add-slug,
+    :args "[post]"}
+   {:type defn,
+    :platforms [:clj :cljs],
+    :line 27,
+    :end-line 30,
+    :name enrich-post,
+    :args "[post]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 35,
+    :end-line 39,
+    :name resolve-posts,
+    :args "[env query-params]"}
+   {:type defn,
+    :platforms [:clj],
+    :line 42,
+    :end-line 46,
+    :name resolve-post-detail,
+    :args "[env post-id]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 51,
+    :end-line 55,
+    :name client-format-post,
+    :args "[post]"}
+   {:type defn,
+    :platforms [:cljs],
+    :line 58,
+    :end-line 62,
+    :name post-summary,
+    :args "[post]"}],
+  :requires
+  ["[clojure.string :as str]"
+   "[myapp.db.queries :as queries]"
+   "[myapp.lib.jsutils :as jsu]"]}
+ {:receipt
+  {:resources {:bytes_scanned 6783, :measured {:scan_ms 0.0}}}}]

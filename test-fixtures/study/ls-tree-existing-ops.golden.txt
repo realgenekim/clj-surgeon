@@ -1,0 +1,63 @@
+dashboard.cljc  38 lines, 5 forms
+  ns: myapp.ui.dashboard
+  requires: [clojure.string :as str] [fulcro.dom :as dom] [fulcro.dom-server :as dom] [semantic-ui.modal :refer [ui-modal]] [semantic-ui.modal-header :refer [ui-modal-header]]
+  12-13: defn format-title [title]
+  15-16: defn- render-header [title]
+  21-24: defn render-modal [title content]
+  27-30: defn render-dashboard [this props]
+  35-38: defn render-page [title body]
+
+io.cljc  32 lines, 5 forms
+  ns: myapp.ui.io
+  requires: [clojure.string :as str] [clojure.java.io :as jio] [goog.string :as gstr]
+  11-14: defn sanitize-filename [name]
+  19-20: defn read-file [path]
+  23-24: defn write-file [path content]
+  27-28: defn get-element [id]
+  31-32: defn format-number [n decimals]
+
+logging.cljc  40 lines, 5 forms
+  ns: myapp.lib.logging
+  requires: [clojure.string :as str] [clojure.pprint :refer [pprint]]
+  9-10: defn format-level [level]
+  12-13: defn- truncate-ns [ns-str]
+  18-21: defmacro p
+  24-33: defn custom-output-fn
+  36-40: defn configure-logging! [config]
+
+mutations.cljc  55 lines, 3 forms
+  ns: myapp.ui.mutations
+  requires: [clojure.string :as str] [fulcro.mutations :as m] [pathom.connect :as pco] [myapp.ui.toast :as toast] [myapp.db.queries :as db]
+  13-15: defn validate-post-id [post-id]
+  17-18: defn- format-result [ok? message]
+  51: def resolvers
+
+platform.clj  14 lines, 3 forms
+  ns: myapp.lib.platform
+  requires: [clojure.string :as str] [clojure.java.io :as io]
+  7-8: defn timestamp []
+  10-11: defn temp-dir []
+  13-14: defn hostname []
+
+platform.cljs  14 lines, 3 forms
+  ns: myapp.lib.platform
+  requires: [clojure.string :as str] [goog.string :as gstr]
+  7-8: defn timestamp []
+  10-11: defn temp-dir []
+  13-14: defn hostname []
+
+posts.cljc  62 lines, 9 forms
+  ns: myapp.model.posts
+  requires: [clojure.string :as str] [myapp.db.queries :as queries] [myapp.lib.jsutils :as jsu]
+  11-12: defn normalize-title [title]
+  14: declare enrich-post
+  16-19: defn format-post [post]
+  21-25: defn- add-slug [post]
+  27-30: defn enrich-post [post]
+  35-39: defn resolve-posts [env query-params]
+  42-46: defn resolve-post-detail [env post-id]
+  51-55: defn client-format-post [post]
+  58-62: defn post-summary [post]
+
+── total: 7 files, 33 forms
+

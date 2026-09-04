@@ -1,0 +1,503 @@
+(ns clj-surgeon.study-test
+  "Kernel witnesses for the read-only study operations.
+
+   @spec MCP-OP-STUDY-002 MCP-OP-STUDY-003 MCP-OP-STUDY-004
+   @spec MCP-OP-STUDY-005 MCP-OP-STUDY-008 MCP-OP-STUDY-009"
+  (:require
+   [babashka.fs :as fs]
+   [babashka.process :as process]
+   [clj-surgeon.core :as core]
+   [clj-surgeon.measured :as measured]
+   [clj-surgeon.study :as study]
+   [clojure.edn :as edn]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
+
+(def ^:private real-file "src/clj_surgeon/analyze.clj")
+(def ^:private fixture-dir "test-fixtures/cljc/existing-ops")
+(def ^:private golden-file "test-fixtures/study/ls-tree-existing-ops.golden.txt")
+(def ^:private edn-golden-file
+  "test-fixtures/study/ls-tree-existing-ops-edn.golden.txt")
+(def ^:private refusal-golden-file
+  "test-fixtures/study/ls-tree-no-clojure-files.golden.txt")
+
+;; ============================================================
+;; The kernel takes data and returns data
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-002
+(deftest deps-kernel-returns-the-call-graph-and-one-owner-row
+  (let [source (slurp real-file)
+        rows (study/deps source {})]
+    (is (vector? rows))
+    (is (seq rows))
+    (is (every? #(and (string? (:name %)) (set? (:depends-on %))) rows))
+    (testing "one owner"
+      (let [row (study/deps source {:form "dep-tree"})]
+        (is (= "dep-tree" (:name row)))
+        (is (= "defn" (:type row)))))
+    (testing "an absent owner is nil, never an invented row"
+      (is (nil? (study/deps source {:form "no-such-form"}))))))
+
+;; @spec MCP-OP-STUDY-003
+(deftest topo-kernel-reports-order-and-cycles
+  (let [result (study/topo (slurp real-file))]
+    (is (vector? (:sorted result)))
+    (is (vector? (:cycles result)))
+    (is (contains? result :has-cycles?))))
+
+;; @spec MCP-OP-STUDY-004
+(deftest ls-deps-kernel-returns-a-tree-or-nil
+  (let [source (slurp real-file)]
+    (is (= "extraction-closure"
+           (:name (study/ls-deps source {:form "extraction-closure"}))))
+    (is (nil? (study/ls-deps source {:form "no-such-form"})))))
+
+;; @spec MCP-OP-STUDY-005
+(deftest ls-extract-kernel-returns-the-minimal-closure
+  (let [result (study/ls-extract (slurp real-file)
+                                 {:form "extraction-closure"})]
+    (is (= "extraction-closure" (:target result)))
+    (is (= ["extraction-closure"] (mapv :name (:forms result))))))
+
+;; @spec MCP-OP-STUDY-001
+(deftest ls-tree-kernel-returns-typed-refusals-without-printing
+  (testing "a missing dir is data, not a println"
+    (let [result (study/ls-tree {})]
+      (is (false? (:ok result)))
+      (is (= :missing-dir (:error-type result)))
+      (is (= "Error: :dir is required for :ls-tree" (:error result)))))
+  (testing "a directory with no Clojure sources refuses with its message"
+    (let [result (study/ls-tree {:dir "docs/intent/study-ops"})]
+      (is (false? (:ok result)))
+      (is (= :no-clojure-files (:error-type result)))
+      (is (str/starts-with? (:error result) "No Clojure files found under "))))
+  (testing "a real tree discovers files without parsing any of them"
+    (let [result (study/ls-tree {:dir fixture-dir})]
+      (is (true? (:ok result)))
+      (is (= 7 (:file-count result)))
+      (is (= 7 (study/total-file-count (:projects result))))
+      (is (every? #(nil? (:outlines %)) (:projects result))
+          "discovery lists names; outlining is the separate bounded step")
+      (is (= 7 (reduce + 0 (map #(count (:outlines %))
+                                (study/outline-all (:projects result)))))))))
+
+;; @spec MCP-OP-STUDY-001
+(deftest ls-tree-refuses-a-flag-shaped-grep-or-ns-grep-pattern
+  ;; A pattern beginning with '-' would otherwise reach rg/grep looking like
+  ;; a flag (e.g. "--pre=/bin/sh" runs an arbitrary preprocessor command).
+  ;; Refused before any subprocess runs, never silently reinterpreted.
+  (testing "grep"
+    (let [result (study/ls-tree {:dir fixture-dir :grep "--pre=/bin/sh"})]
+      (is (false? (:ok result)))
+      (is (= :invalid-grep-pattern (:error-type result)))
+      (is (str/includes? (:error result) "must not start with"))))
+  (testing "ns-grep"
+    (let [result (study/ls-tree {:dir fixture-dir :ns-grep "-x"})]
+      (is (false? (:ok result)))
+      (is (= :invalid-ns-grep-pattern (:error-type result)))
+      (is (str/includes? (:error result) "must not start with")))))
+
+;; @spec MCP-OP-STUDY-001
+(deftest grep-tree-argv-always-separates-the-pattern-with-double-dash
+  ;; Defense in depth alongside the leading-dash refusal above: even a
+  ;; pattern that is not flag-shaped must never be adjacent to an
+  ;; unseparated argv, so a caller cannot smuggle an rg/grep flag by any
+  ;; other means. Captures the real subprocess argv via with-redefs rather
+  ;; than asserting on live rg/grep output.
+  (let [captured (atom nil)
+        probes (atom 0)
+        grep-tree #'study/grep-tree]
+    (with-redefs [babashka.process/shell
+                  (fn [_opts & args]
+                    (if (= ["rg" "--version"] (vec args))
+                      (do (swap! probes inc)
+                          {:exit 0 :out "ripgrep 14.0.0" :err ""})
+                      (do (reset! captured (vec args))
+                          {:exit 1 :out "" :err ""})))]
+      (grep-tree "some-pattern" "/tmp/somewhere"))
+    (is (some? @captured) "the real rg invocation must have been captured")
+    (let [args @captured
+          dash-dash-idx (.indexOf ^java.util.List args "--")
+          pattern-idx (.indexOf ^java.util.List args "some-pattern")]
+      (is (not= -1 dash-dash-idx))
+      (is (= (inc dash-dash-idx) pattern-idx)
+          "the pattern must immediately follow the -- argv separator"))
+    ;; The availability probe was called twice — once to decide whether to
+    ;; warn, once to build the argv — so every scan spawned `rg --version`
+    ;; twice before doing any work.
+    (is (= 1 @probes)
+        "ripgrep availability must be probed once per scan, not once per use")))
+
+;; ============================================================
+;; Reading a build file is a read, never an evaluation
+;; ============================================================
+
+(defn- with-temp-dir
+  [f]
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-study-test"})]
+    (try (f dir) (finally (fs/delete-tree dir)))))
+
+;; @spec MCP-OP-STUDY-013
+(deftest reading-a-build-file-never-evaluates-it
+  ;; Executed against the branch bytes before this fix: discovery read every
+  ;; deps.edn/bb.edn/project.clj in the scanned tree with
+  ;; `clojure.core/read-string` and `*read-eval*` at its ambient true, so a
+  ;; `#=(clojure.core/spit …)` form anywhere in any of those files RAN as the
+  ;; scanning process — and the silent `(catch Exception _e ["src"])` hid it.
+  (with-temp-dir
+    (fn [dir]
+      (let [extract #'study/extract-source-paths
+            marker (str (fs/path dir "PWNED"))
+            evil (str "#=(clojure.core/spit \"" marker "\" \"x\")")]
+        (doseq [[filename source]
+                [["deps.edn" (str "{:paths [\"src\"]\n :evil " evil "}")]
+                 ["bb.edn" (str "{:paths [\"src\"]\n :evil " evil "}")]
+                 ["project.clj" (str "(defproject demo \"0.1.0\"\n"
+                                     "  :source-paths [\"src\"]\n"
+                                     "  :evil " evil ")")]]]
+          (testing filename
+            (let [build-file (fs/path dir filename)]
+              (spit (str build-file) source)
+              (is (= ["src"] (extract build-file))
+                  "an unreadable build file falls back to the documented default")
+              (is (not (fs/exists? marker))
+                  "reading a build file must never write one")
+              (fs/delete-if-exists build-file))))))))
+
+;; @spec MCP-OP-STUDY-013
+(deftest the-safe-reader-still-answers-the-source-paths-question
+  ;; The eval-free reader must still parse the declarations the unsafe one
+  ;; parsed, or the fix would have bought safety with a silent scan regression.
+  (with-temp-dir
+    (fn [dir]
+      (let [extract #'study/extract-source-paths]
+        (doseq [[filename source expected]
+                [["deps.edn" "{:paths [\"lib\" \"src\"] :deps {}}" ["lib" "src"]]
+                 ["bb.edn" "{:paths [\"scripts\"]}" ["scripts"]]
+                 ["deps.edn" "{:deps {}}" ["src"]]
+                 ["project.clj"
+                  "(defproject demo \"0.1.0\" :source-paths [\"s1\" \"s2\"])"
+                  ["s1" "s2"]]]]
+          (testing (str filename " " source)
+            (let [build-file (fs/path dir filename)]
+              (spit (str build-file) source)
+              (is (= expected (extract build-file)))
+              (fs/delete-if-exists build-file))))))))
+
+;; ============================================================
+;; Discovery is confined to the canonical scan root
+;; ============================================================
+
+(defn- build-confinement-fixture!
+  "A scan root holding exactly one real source file, plus the two escapes the
+   red team executed: a .clj SYMLINK whose target is outside the root, and a
+   sibling project whose deps.edn declares an unnormalized parent-traversal
+   source path. `<tmp>/a/b` is the scan root, so the traversal escape lands on
+   `<tmp>` — small and bounded — rather than on `/` or `/tmp`."
+  [tmp]
+  (let [scan-root (str (fs/path tmp "a" "b"))]
+    (fs/create-dirs (str (fs/path scan-root "proj" "src")))
+    (fs/create-dirs (str (fs/path scan-root "escape")))
+    (spit (str (fs/path scan-root "proj" "deps.edn")) "{:paths [\"src\"]}")
+    (spit (str (fs/path scan-root "proj" "src" "real.clj"))
+          "(ns real)\n(defn only-file [] :ok)")
+    (fs/create-sym-link (str (fs/path scan-root "proj" "src" "leak.clj"))
+                        "/etc/passwd")
+    ;; `<scan-root>/escape/../../..` normalizes to <tmp>
+    (spit (str (fs/path scan-root "escape" "deps.edn")) "{:paths [\"../../..\"]}")
+    (spit (str (fs/path tmp "decoy.clj")) "(ns decoy)\n(defn decoy-fn [] :no)")
+    scan-root))
+
+;; @spec MCP-OP-STUDY-014
+(deftest ls-tree-kernel-drops-paths-that-resolve-outside-the-scan-root
+  ;; Both escapes executed against the branch bytes: `find` reports a symlink
+  ;; by the LINK's own name, so `src/leak.clj -> /etc/passwd` matched
+  ;; `-name '*.clj'` and was outlined (slurped); and `(fs/path root "../../..")`
+  ;; was NOT normalized, so a scanned deps.edn could move discovery outside the
+  ;; root entirely.
+  (with-temp-dir
+    (fn [tmp]
+      (let [scan-root (build-confinement-fixture! tmp)
+            result (study/ls-tree {:dir scan-root})
+            files (mapcat :files (:projects result))]
+        (is (true? (:ok result)))
+        (is (= 1 (count files))
+            "exactly the one real source file inside the scan root")
+        (is (str/ends-with? (first files) "/proj/src/real.clj"))
+        (is (not-any? #(str/includes? % "leak") files)
+            "a .clj symlink whose realpath is outside the root must be dropped")
+        (is (not-any? #(str/includes? % "decoy") files)
+            "an unnormalized :paths traversal must not move the scan out")))))
+
+;; ============================================================
+;; One kernel: the CLI handler adds print, never a second answer
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-008
+(deftest cli-handlers-are-the-kernel-plus-nothing
+  (let [source (slurp real-file)]
+    (is (= (study/deps source {}) (core/run-deps {:file real-file})))
+    (is (= (study/deps source {:form "dep-tree"})
+           (core/run-deps {:file real-file :form "dep-tree"})))
+    (is (= (study/topo source) (core/run-topo {:file real-file})))
+    (is (= (study/ls-deps source {:form "extraction-closure"})
+           (core/run-ls-deps {:file real-file :form "extraction-closure"})))
+    (is (= (study/ls-extract source {:form "extraction-closure"})
+           (core/run-closure {:file real-file :form "extraction-closure"})))))
+
+;; @spec MCP-OP-STUDY-008
+(deftest cli-ls-tree-bytes-match-the-frozen-golden
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree" ":dir" fixture-dir)]
+    (is (zero? (:exit result)))
+    (is (= (slurp golden-file) (:out result)))))
+
+;; @spec MCP-OP-STUDY-008
+(deftest cli-ls-tree-edn-bytes-match-the-frozen-golden
+  ;; The golden covered only the default text path, so `run-ls-tree`'s :edn
+  ;; branch and its refusal branch — the two places its `format` destructuring
+  ;; actually mattered — were unfrozen.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree" ":dir" fixture-dir
+                              ":format" ":edn")]
+    (is (zero? (:exit result)))
+    ;; @spec MCP-OP-MEM-005
+    ;; @spec MCP-OP-MEM-003
+    ;; The golden freezes the HASHED CHANNEL, not the bytes: MEM-005 publishes
+    ;; the scan's own wall clock in this receipt unconditionally, and a
+    ;; wall-clock reading can never live inside a byte-identity comparison.
+    ;; `bytes_scanned` — a count, and the denominator a regression would move —
+    ;; IS inside it. The golden's own `:scan_ms` is 0.0 for that reason.
+    (let [parsed (edn/read-string (:out result))
+          golden (edn/read-string (slurp edn-golden-file))]
+      (is (= (measured/hashed-channel golden)
+             (measured/hashed-channel parsed)))
+      ;; And the meter cannot be DELETED to make the golden pass: the same
+      ;; receipt must still publish a positive reading.
+      (is (pos? (get-in (:receipt (last parsed))
+                        [:resources :measured :scan_ms]))
+          "MEM-005's meter is unconditional; a receipt without it is a regression")
+      (is (= 6783 (get-in (:receipt (last parsed)) [:resources :bytes_scanned]))))))
+
+;; @spec MCP-OP-STUDY-008
+;; @spec MCP-OP-STUDY-026
+(deftest cli-ls-tree-refusal-bytes-match-the-frozen-golden
+  ;; The refusal used to name the canonical scanned directory — a
+  ;; machine-specific absolute path — so the golden had to normalize the
+  ;; workspace root away. It now names the directory the CALLER asked for, so
+  ;; the bytes are the same on every machine and the golden is frozen whole.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree" ":dir" "docs/intent/study-ops")]
+    (is (= 1 (:exit result)))
+    (is (= (slurp refusal-golden-file) (:out result)))
+    (is (not (str/includes? (:out result) (System/getProperty "user.dir")))
+        "a refusal message must not publish where the workspace lives")))
+
+;; @spec MCP-OP-STUDY-008
+;; @spec MCP-OP-STUDY-030
+(deftest cli-ls-tree-prunes-every-directory-named-target-including-a-source-one
+  ;; `-prune` matches `target` by NAME at any depth. `target/foo.clj` is
+  ;; compiled output and correctly absent; `src/app/target/bar.clj` is a real
+  ;; source namespace and is absent too — a known limitation that had no
+  ;; witness at all. The golden freezes BOTH, so the day the rule becomes
+  ;; path-anchored this test changes and the note in `skip-dirs` is read.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree"
+                              ":dir" "test-fixtures/study/prune-target")]
+    (is (zero? (:exit result)))
+    (is (= (slurp "test-fixtures/study/ls-tree-prune-target.golden.txt")
+           (:out result)))
+    (is (str/includes? (:out result) "src/app/core.clj"))
+    (is (not (str/includes? (:out result) "target/foo.clj"))
+        "compiled output must never be walked")
+    (is (not (str/includes? (:out result) "src/app/target/bar.clj"))
+        "and the same rule hides a source namespace: the documented limitation")))
+
+;; ============================================================
+;; The format shadow that made a documented refusal unreachable
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-001
+(deftest ls-tree-refusal-message-is-reachable
+  ;; Regression: run-ls-tree destructured `format` as a local, shadowing
+  ;; clojure.core/format, so the "No Clojure files found" branch threw a
+  ;; NullPointerException and the CLI reported {:error nil}.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree" ":dir" "docs/intent/study-ops")]
+    (is (= 1 (:exit result)))
+    (is (str/starts-with? (:out result) "No Clojure files found under "))
+    (is (not (str/includes? (:out result) ":error nil")))))
+
+;; ============================================================
+;; No write authority
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-009
+(deftest the-study-kernel-exposes-no-write-operation
+  (let [public-names (set (map name (keys (ns-publics 'clj-surgeon.study))))]
+    (is (empty? (filter #(str/ends-with? % "!") public-names))
+        "a bang-suffixed public in the study kernel would be a write reachable from the read entrance")
+    (is (empty? (filter #{"mv" "rename-ns" "fix-declares"} public-names)))))
+
+;; ============================================================
+;; The ns-grep per-file budget scales with path length
+;; (round-4 re-review fix 1)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-per-file-ns-grep-budget-scales-with-the-longest-path-in-the-pass
+  ;; A flat 20,000-character-per-file allowance, calibrated on this
+  ;; repository's own ~36-character paths, refused a completely honest
+  ;; `.*handler.*internal.*` over one 106-character monorepo-shaped relative
+  ;; path: `ns-grep-hit?` reads 33,566 characters testing it, well over the
+  ;; flat floor, even though the pattern is ordinary and the path contains no
+  ;; adversarial repetition. The per-file term has to scale with the longest
+  ;; path the pass will actually test, not with the length of the paths this
+  ;; repository happens to have.
+  (let [long-path (str "packages/backend/services/order-ingest/src/main/"
+                       "clojure/com/example/platform/"
+                       "dispatcher_router_service.clj")
+        dir "monorepo"
+        project {:root dir :files [(str dir "/" long-path)]}]
+    (testing "the formula: a floor for short paths, quadratic beyond it"
+      (is (= 20000 (study/ns-grep-match-steps-per-file 10))
+          "short paths keep exactly the old floor")
+      (is (= (max 20000 (* 64 (count long-path) (count long-path)))
+             (study/ns-grep-match-steps-per-file (count long-path)))))
+    (testing "an honest pattern over a long, honest path is no longer refused"
+      (is (nil? (try
+                  (study/filter-projects-by-ns-grep
+                    [project] dir ".*handler.*internal.*")
+                  nil
+                  (catch clojure.lang.ExceptionInfo e e)))
+          "the flat floor threw ns-grep-match-budget-exceeded here before this fix"))))
+
+;; ============================================================
+;; The ns_grep budget refusal names the actual cost class
+;; (round-4 re-review fix 2)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-ns-grep-budget-refusal-does-not-blame-a-nesting-the-pattern-lacks
+  ;; The remedy said "without nested unbounded repetition", but the pattern
+  ;; that trips this in practice — `.*handler.*internal.*` — has no nesting
+  ;; at all: several unbounded `.*` in SEQUENCE is what costs O(len^2), not
+  ;; nesting. An agent reading the old remedy would hunt for a nesting that
+  ;; is not there.
+  (let [response (study/ls-tree {:dir "src" :ns-grep "(.*.*.*.*.*.*)*x"})]
+    (is (false? (:ok response)))
+    (is (= :ns-grep-match-budget-exceeded (:error-type response)))
+    (is (not (str/includes? (:remedy response) "nested unbounded repetition"))
+        "the old remedy named a class the offending pattern is not even in")
+    (is (str/includes? (:remedy response) "path length")
+        "the remedy should say what actually drives the cost")
+    (is (str/includes? (str/lower-case (:remedy response)) "anchor")
+        "and suggest a concrete fix: anchoring or a literal/alternation")))
+
+;; ============================================================
+;; The per-file budget's docstring states its actual calibration
+;; (round-4 re-review fix 3)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-per-file-budget-docstring-states-the-measured-ratio-not-a-guess
+  ;; The old docstring claimed "20,000 per file is roughly sixty times the
+  ;; worst honest cost measured here" — true only of the 36-character paths
+  ;; it was measured on, and false (2.07x OVER, not 60x under) once a
+  ;; monorepo's ~106-character paths are in the pass. The replacement must
+  ;; state the actual basis (a length, a term, a ratio) rather than a claim
+  ;; that only holds for one tree's path width.
+  (let [doc (:doc (meta #'study/ns-grep-match-steps-per-file))]
+    (is (not (str/includes? doc "roughly sixty times"))
+        "the falsified absolute claim must be gone")
+    (is (not (str/includes? doc "order of magnitude below the cheapest"))
+        "so must its now-untrue companion claim")
+    (is (str/includes? doc "106")
+        "the docstring names the length it measured")
+    (is (str/includes? doc "33,566")
+        "and the honest cost measured at that length")
+    (is (str/includes? doc "719,104")
+        "and the term the new formula produces there")
+    (is (re-find #"21(\.\d+)?x" doc)
+        "and the margin between them, as a ratio — not a guess")))
+
+;; ============================================================
+;; budgeted-subject's subSequence and toString are counted too
+;; (round-4 re-review fix 4)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest budgeted-subject-subsequence-reads-stay-counted
+  ;; subSequence used to delegate straight to the underlying String,
+  ;; returning an UNCOUNTED CharSequence: reading through it bypassed the
+  ;; pool entirely, contradicting the docstring's "exactly budget reads
+  ;; succeed; the next one throws." Not reachable via ns-grep-hit? today
+  ;; (java.util.regex reads the subject only through charAt), but the
+  ;; invariant on the object itself should be total, not conditional on
+  ;; today's one caller.
+  (let [budgeted #'study/budgeted-subject
+        pool (study/ns-grep-pool 3)
+        view (budgeted "abcdef" pool)
+        sub (.subSequence view 1 4)] ;; "bcd"
+    (is (= \b (.charAt sub 0)))
+    (is (= \c (.charAt sub 1)))
+    (is (= \d (.charAt sub 2)))
+    (is (thrown? clojure.lang.ExceptionInfo (.charAt sub 0))
+        "the subsequence shares the same pool, and it is now exhausted")))
+
+;; @spec MCP-OP-STUDY-031
+(deftest budgeted-subject-tostring-charges-the-whole-length
+  (let [budgeted #'study/budgeted-subject]
+    (testing "a budget covering the whole string succeeds and is spent"
+      (let [pool (study/ns-grep-pool 6)
+            view (budgeted "abcdef" pool)]
+        (is (= "abcdef" (.toString view)))
+        (is (zero? (aget ^longs pool 0)) "toString charges the whole length")
+        (is (thrown? clojure.lang.ExceptionInfo (.charAt view 0))
+            "the pool is now exhausted")))
+    (testing "a budget too small for the whole string refuses, not silently reads"
+      (let [pool (study/ns-grep-pool 3)
+            view (budgeted "abcdef" pool)]
+        (is (thrown? clojure.lang.ExceptionInfo (.toString view)))))))
+
+;; @spec MCP-OP-STUDY-031
+;; @spec MCP-OP-STUDY-012
+(deftest a-grouped-ns-grep-pattern-still-matches-through-the-real-entrance
+  ;; Matcher.group() calls subSequence internally during capture-group
+  ;; extraction. This must keep working exactly as before once subSequence
+  ;; returns a counted view instead of a raw String.
+  (is (true? (study/ns-grep-hit?
+              (study/compile-pattern "(mcp)_(inspect)")
+              "clj_surgeon/mcp_inspect_tool.clj"
+              (study/ns-grep-pool 1000000)))))
+
+;; ============================================================
+;; The cap-stops-the-walk comment names what it actually bounds
+;; (round-4 re-review fix 5)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-033
+(deftest the-discover-projects-comment-names-canonicalisation-not-syscalls
+  ;; "keeps the syscalls proportional to the cap instead of to the tree" is
+  ;; true of toRealPath canonicalisation only. `find` itself still enumerates
+  ;; the WHOLE tree and `:out :string` materialises all of its stdout into
+  ;; one JVM string before the cap+1 transducer ever runs — measured:
+  ;; 1,130,000 bytes of find stdout entering the heap at max_files 10 over a
+  ;; 10,000-file corpus, with wall time still tracking tree size. The comment
+  ;; must say what it actually bounds.
+  (let [source (slurp "src/clj_surgeon/study.clj")]
+    (is (not (str/includes? source
+                            (str "stopping there is what keeps the "
+                                "syscalls\n        ;; proportional to the "
+                                "cap instead of to the tree.")))
+        "the old claim named the wrong bounded quantity")
+    (is (str/includes? source "canonicalisation")
+        "the comment must name toRealPath canonicalisation specifically")
+    (is (str/includes? source "find still enumerates")
+        "and say plainly that the walk itself is not bounded by the cap")))

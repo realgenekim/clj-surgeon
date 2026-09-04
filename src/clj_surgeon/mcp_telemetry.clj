@@ -4,8 +4,10 @@
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
+   (java.nio.charset StandardCharsets)
    (java.nio.file Files)
    (java.nio.file.attribute PosixFilePermissions)
+   (java.security MessageDigest)
    (java.time Instant)
    (java.util UUID)))
 
@@ -65,7 +67,8 @@
   (let [mode (normalize-mode mode)
         session-id (str (or session-id (UUID/randomUUID)))]
     (if (= :off mode)
-      {:mode :off :session-id session-id :run-id run-id :file nil :lock (Object.)}
+      {:mode :off :session-id session-id :run-id run-id :file nil
+       :lock (Object.) :sessions (atom #{})}
       (let [directory (str (or directory (default-directory)))
             directory-file (io/file directory)
             _ (.mkdirs directory-file)
@@ -85,7 +88,12 @@
          :session-id session-id
          :run-id run-id
          :file (.getCanonicalPath file)
-         :lock (Object.)}))))
+         :lock (Object.)
+         ;; Which workspace roots this server has already announced. A
+         ;; `session.start` is emitted the first time each is served and
+         ;; never again, so the count of them is the count of client
+         ;; sessions rather than the count of calls.
+         :sessions (atom #{})}))))
 
 (defn emit!
   "Append one structured event. Never writes to stdout."
@@ -104,6 +112,54 @@
       (locking (:lock state)
         (spit (:file state) line :append true))
       record)))
+
+;; @spec MCP-OP-STUDY-039
+(defn workspace-key
+  "A stable, content-free identifier for one workspace root.
+
+  The first sixteen hex characters of the root's SHA-256. A cohort recomputes
+  it from the worktree path it launched an arm in and binds that arm to the
+  telemetry line; the telemetry itself never carries the path in `:metrics`
+  mode, where no path may appear."
+  [workspace-root]
+  (let [root (str workspace-root)]
+    (when (seq root)
+      (let [digest (.digest (MessageDigest/getInstance "SHA-256")
+                            (.getBytes root StandardCharsets/UTF_8))]
+        (subs (apply str (map #(format "%02x" %) digest)) 0 16)))))
+
+;; @spec MCP-OP-STUDY-039
+(defn session-start-event
+  "Build the `session.start` payload without performing I/O."
+  [mode {:keys [workspace-root client-run-id]}]
+  (cond-> {:workspace_key (workspace-key workspace-root)}
+    client-run-id (assoc :client_run_id client-run-id)
+    (= :full (normalize-mode mode)) (assoc :workspace_root (str workspace-root))))
+
+;; @spec MCP-OP-STUDY-039
+(defn record-session-start!
+  "Emit `session.start` the FIRST time this server serves a workspace root.
+
+  `server.start` says a PROCESS started; `tool.call` says SOME caller called.
+  When one server serves several client sessions — the shape every free-choice
+  cohort runs — neither distinguishes them, so a silent connection failure and
+  a deliberate decline leave the same record. This is the event that tells
+  them apart, and it is emitted once per root so its count is a count of
+  sessions rather than of calls."
+  [state info]
+  (when (and state (not= :off (:mode state)) (:sessions state))
+    (when-let [key (workspace-key (:workspace-root info))]
+      ;; @spec MCP-OP-STUDY-043
+      ;; The identity of a SESSION is the pair (root, client run), never the
+      ;; root alone. Keyed on the root alone the event distinguished arms only
+      ;; when every arm happened to get its own worktree path; two arms in one
+      ;; root, or one client reconnecting, left identical bytes — the failure
+      ;; this event exists to end.
+      (let [identity [key (:client-run-id info)]
+            [seen _] (swap-vals! (:sessions state) conj identity)]
+        (when-not (contains? seen identity)
+          (emit! state :session.start
+                 (session-start-event (:mode state) info)))))))
 
 (defn- value
   [m key]

@@ -43,6 +43,7 @@
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
+   [clj-surgeon.study-test]
    [clj-surgeon.syntax-var-refs-test]
    [clj-surgeon.workspace-onboarding-test]
    [clj-surgeon.worktree-lifecycle-cli-test]
@@ -81,6 +82,7 @@
                    'clj-surgeon.edit-dsl-test
                    'clj-surgeon.cljc-existing-ops-test
                    'clj-surgeon.ls-tree-budget-test
+                   'clj-surgeon.study-test
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
                    'clj-surgeon.owner-hypotheses-test

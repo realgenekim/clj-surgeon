@@ -1001,8 +1001,11 @@
           (is (nil? (get-in result [:remedies :grep-form])))
           (is (= :text-search (:operation remedy)))
           (is (str/includes? (:reason remedy) "not a regular expression"))
-          (is (= ["rg" "-n" "--max-count" "20" "target|missing" (str file)]
+          ;; @spec MCP-OP-STUDY-029
+          (is (= ["rg" "-n" "--max-count" "20" "--" "target|missing" (str file)]
                  (:command-args remedy)))
+          (is (str/includes? (:command remedy) "-- 'target|missing'")
+              "the rendered command must end option parsing before the pattern")
           (is (str/blank? err))))
       (finally
         (fs/delete-tree tmp-dir)))))

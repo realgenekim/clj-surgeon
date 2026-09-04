@@ -1,0 +1,10 @@
+core.clj  3 lines, 1 forms
+  ns: core
+  3: defn root-fn []
+
+src/app/core.clj  3 lines, 1 forms
+  ns: app.core
+  3: defn app-fn []
+
+── total: 2 files, 2 forms
+

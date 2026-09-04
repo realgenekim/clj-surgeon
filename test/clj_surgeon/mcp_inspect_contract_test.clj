@@ -254,12 +254,18 @@
            (get-in result [:results 1 :matches 0 :source])))
     (is (= "dispatch" (get-in result [:results 1 :matches 0 :inside])))
     (is (= 2 (get-in result [:results 2 :value])))
+    ;; @spec MCP-OP-STUDY-041
+    ;; The text block carries the ROWS, not a description of them: O2 round 2
+    ;; reversed the "source-free companion" rule for every mode, because a
+    ;; text-only client that is handed a count has been handed nothing.
     (let [summary (inspect/concise-summary (assoc result :elapsed_ms 1.0))]
-      (is (str/includes? summary
-                         "outline: 5 lines · 2 forms · first settings · last dispatch"))
-      (is (str/includes? summary
-                         "match: 1 match · [{\"inside\":\"dispatch\",\"source\":\"(send! :real)\"}]"))
-      (is (str/includes? summary "xray: value 2")))))
+      (is (str/includes? summary "outline: 5 lines · 2 forms"))
+      (is (str/includes? summary "· 2-2 def settings"))
+      (is (str/includes? summary "· 3-5 defn dispatch []"))
+      (is (str/includes? summary "match: 1 match"))
+      (is (str/includes? summary "· dispatch@5-5"))
+      (is (str/includes? summary "(send! :real)"))
+      (is (str/includes? summary "· value 2")))))
 
 (deftest refuses-the-complete-batch-on-form-or-match-failure
   (let [source "(ns example)\n(defn duplicate [] 1)\n(defn duplicate [] 2)\n"
@@ -448,6 +454,10 @@
            (count (:available_owners result))))))
 
 (deftest output-budget-boundaries-are-inclusive-and-fail-closed
+  ;; @spec MCP-OP-STUDY-020
+  ;; The source bound is charged against the source the result RETURNS, so the
+  ;; boundary fixture carries real returned source rather than a declared
+  ;; `source_character_count` (which reports what was READ and is not a budget).
   (doseq [[label size limit ok?]
           [[:below 9 10 true]
            [:equal 10 10 true]
@@ -456,7 +466,7 @@
       (let [result (inspect/enforce-output-budget
                      [{:id "x" :operation "forms"
                        :source_character_count size
-                       :payload (apply str (repeat size "x"))}]
+                       :forms [{:source (apply str (repeat size "x"))}]}]
                      {:per-request-source limit
                       :per-request-result 1000
                       :aggregate-result 1000})]
@@ -489,7 +499,10 @@
                       :per-request-result 1000
                       :aggregate-result (dec encoded-size)}))))))
 
-(deftest summaries-are-stable-concise-and-source-free
+(deftest summaries-are-stable-and-concise-for-a-result-carrying-no-rows
+  ;; @spec MCP-OP-STUDY-041
+  ;; Renamed by O2 round 2: "source-free" was the old contract. A result that
+  ;; carries no rows still renders exactly this envelope and nothing else.
   (let [result {:ok true :operation "inspect_clojure"
                 :request_count 2 :file_count 1
                 :results [{:operation "forms" :form_count 3}

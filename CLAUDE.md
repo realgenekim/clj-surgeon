@@ -198,7 +198,12 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
 - `forms.clj` — single source of truth for form classification (what is a defn, what is private, etc.)
 - `outline.clj` — parse a file into structured form data (line boundaries, names, arglists, requires)
 - `analyze.clj` — dependency analysis, topo sort, extraction closures (all pure, takes zippers)
-- `core.clj` — CLI dispatch, ls-tree pipeline, formatting
+- `study.clj` — the ONE kernel for the read-only study operations (`ls-tree`,
+  `ls-deps`, `deps`, `topo`, `ls-extract`) plus the ls-tree discovery and
+  formatting pipeline. Pure data in, data out. The CLI is kernel plus print;
+  the MCP read entrance is kernel plus receipt; neither owns a second
+  implementation. Write operations are deliberately absent from it.
+- `core.clj` — CLI dispatch, formatting
 
 ## Benchmark harness architecture
 
@@ -238,6 +243,16 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
+- The study operations are reachable from `inspect_clojure`, not only from the
+  CLI. Use `requests` items `deps`, `topo`, `ls-deps`, and `ls-extract` for
+  file-scoped questions (`ls-deps` and `ls-extract` require an exact `form`),
+  and top-level `mode="ls-tree"` with an optional project-relative `dir`,
+  `grep`, and `format` for the directory-wide namespace map. Every study
+  receipt is bounded to 4096 payload characters by default; a larger result
+  returns `truncated=true`, `read_complete=false`, and an executable
+  `next_call`, so raise `limit` (max 16384) or narrow the scope rather than
+  re-reading. The write operations `:mv`, `:rename-ns!`, and `:fix-declares!`
+  are NOT exposed there and stay CLI- and gate-only.
 - When only names, ranges, counts, hashes, or source anchors are needed, set
   `include_source=false`. Omit it when source is needed for judgment or an edit;
   a metadata-only read must not cause a second call for source.

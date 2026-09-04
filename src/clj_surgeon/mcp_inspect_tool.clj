@@ -14,9 +14,12 @@
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.parallel :as parallel]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.study :as study]
    [clojure.string :as str]))
 
 (def tool-description
@@ -48,7 +51,24 @@
     "results and SHA-256 guards for every original file. Copy "
     "continuation.retry_template.arguments, replace every declared null selector "
     "hole with one exact owner, and submit that complete guarded request. Do not "
-    "reconstruct aggregate expect or reread completed siblings. Every guarded file is verified before evaluation; "
+    "reconstruct aggregate expect or reread completed siblings. "
+    "For structure questions grep answers wrong, use the study operations: "
+    "requests items deps, topo, ls-deps, and ls-extract answer call-graph, "
+    "ordering, transitive-dependency, and minimal-extractable-closure "
+    "questions for one file (ls-deps and ls-extract need an exact form), and "
+    "top-level mode=ls-tree returns the directory-wide namespace map for an "
+    "optional project-relative dir. format=names (default when grep is "
+    "absent) is a compact {file, ns, form_count, line_count} table of "
+    "contents sized to fit a whole tree in one receipt; format=text "
+    "(default when grep is present) or format=edn give the fuller per-form "
+    "view. grep filters by file CONTENTS (ripgrep, can match comments and "
+    "strings); ns_grep filters by each file's PATH/namespace instead and "
+    "answers 'table of contents filtered to namespaces matching X'. "
+    "Every study receipt is bounded to `limit` payload characters — 8192 by "
+    "default for mode=ls-tree, 4096 for an atomic study operation; a "
+    "larger result sets truncated=true and read_complete=false and returns an "
+    "executable next_call, so raise limit up to 16384 or narrow the scope "
+    "instead of re-reading. Every guarded file is verified before evaluation; "
     "a changed guard refuses without source or write authority. Hypotheses are "
     "never selection authority, and continuation is never write authority. "
     "read_complete=true is "
@@ -159,6 +179,20 @@
 ;; Outline rows for defmethod owners always carry `dispatch`, the exact source
 ;; spelling of that arm's dispatch value. @spec MCP-OP-DISPATCH-001
 
+(def ^:private study-limit-properties
+  {"limit" {:type "integer" :minimum 1 :maximum 16384 :default 4096
+            :description (str "Maximum receipt payload characters for this study "
+                              "request. A larger result returns truncated=true "
+                              "with an executable next_call.")}})
+
+(def ^:private study-form-properties
+  (assoc study-limit-properties
+         "form"
+         {:type "string" :minLength 1
+          :description (str "One exact top-level form name. Required for ls-deps "
+                            "and ls-extract; optional for deps, where it narrows "
+                            "the call graph to one owner.")}))
+
 (defn- operationless-forms-request
   []
   {:type "object"
@@ -211,7 +245,11 @@
                                        "Example: (-> (form 'numeric-fields) initializer "
                                        "(expect-count 1) (analyze (fn [[fields]] "
                                        "(count fields))))")}}
-         ["expression"])]}}
+         ["expression"])
+       (request-base "deps" study-form-properties [])
+       (request-base "topo" study-limit-properties [])
+       (request-base "ls-deps" study-form-properties ["form"])
+       (request-base "ls-extract" study-form-properties ["form"])]}}
     "expect"
     {:type "object"
      :additionalProperties false
@@ -315,14 +353,763 @@
     "require_policy" {:type "string" :enum ["minimal" "copy-all"]}}
    :required ["mode" "file" "to" "forms" "require_policy"]})
 
+;; ============================================================
+;; ls-tree mode — the one directory-scoped study operation
+;; ============================================================
+;; Directory-scoped, so it cannot be a `requests` item: every request item is
+;; keyed by one project-relative FILE and participates in expect.files and
+;; snapshot_guards. It therefore takes the shape the contract already reserves
+;; for whole-project reads, a top-level `mode`, exactly like plan-extraction.
+
+;; @spec MCP-OP-STUDY-037
+(def ls-tree-default-limit
+  "How many payload characters one `ls-tree` receipt carries when the caller
+  names no limit.
+
+  Raised from 4096 after the E6-Lb measurement: `format=text` is the default
+  once `grep` is present, and at 4096 a real ten-file `src` came back as 2 of
+  10 files with `read_complete=false` — the caller's first call answered
+  almost nothing, and a table of contents that needs a second call is not a
+  table of contents. 8192 admits a whole small tree (a ten-file, thirty-form
+  tree renders in 2,064 characters; twenty-five files in 5,279) while keeping
+  the text a text-only client renders inside the 8 KB one-call budget. The
+  ceiling is unchanged: a genuinely large tree still truncates and says so."
+  8192)
+
+;; @spec MCP-OP-STUDY-038
+(def ls-tree-max-limit
+  "The highest `limit` a study receipt may ask for.
+
+  A boundary, not a target: a tree whose complete rendering fits comes back
+  complete, and the next file over comes back truncated with a remedy naming
+  what to do instead. Measured on the toy fixture the witnesses use: 77 files
+  render in 16,370 characters and fit; the seventy-eighth does not."
+  16384)
+
+(def ls-tree-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "mode" {:type "string" :const "ls-tree"}
+    "dir" {:type "string" :minLength 1
+           :description "Project-relative directory to scan. Omit or use \".\" for the workspace root. Absolute paths and parent traversal refuse."}
+    "grep" {:type "string" :minLength 1
+            :description "Optional ripgrep pattern matched against file CONTENTS; only projects and files with a matching line are outlined. Can match comments, strings, and unrelated substrings — for a namespace/path filter use ns_grep instead."}
+    "ns_grep" {:type "string" :minLength 1
+               :description "Optional pattern matched against each file's PATH, which the Clojure require convention keeps in lockstep with its declared namespace ('_' and '-' are treated as equivalent). Narrower than grep: answers 'table of contents filtered to namespaces matching X' without matching mentions in comments or strings. Composes with grep, narrowing further."}
+    "format" {:type "string" :enum ["names" "text" "edn"]
+              :description "names (the default when grep is absent) is a compact table of contents — one {file, ns, form_count, line_count} row per file, sized to fit a whole tree in one bounded receipt. text (the default when grep is present) is the fuller compact per-form scanning view. edn is one fully detailed row per file. All three share the same bound/truncation contract."}
+    "limit" {:type "integer" :minimum 1 :maximum 16384 :default 8192
+             :description "Maximum receipt payload characters. A larger tree returns truncated=true with an executable next_call."}
+    "max_files" {:type "integer" :minimum 1 :maximum 20000 :default 2000
+                 :description "Maximum number of source files DISCOVERY may find before refusing with study-tree-too-large. Independent of limit, which bounds the receipt: this bounds the work done before any receipt exists. Raise it only for a tree you actually intend to scan whole."}}
+   :required ["mode"]})
+
+(def ^:private ls-tree-outline-chunk
+  "How many additional files one bounded-parallel outlining batch parses.
+
+  The receipt grows a file at a time, but the files it needs are parsed in
+  batches so the loop pays for one worker pool per batch rather than one per
+  file. It is an upper bound on the overshoot: at most this many files beyond
+  the last that fit are ever parsed."
+  16)
+
+(defn- ls-tree-render
+  [projects dir output-format total]
+  (case output-format
+    ;; @spec MCP-OP-MEM-005 — rows only. The CLI's encoder ends in a
+    ;; `:receipt` map; appended to `files` it arrives as one more file with a
+    ;; null name. The MCP publishes the same numbers as `resources`.
+    "edn"   (inspect/json-data (study/ls-tree-edn-rows projects dir))
+    "names" (inspect/json-data (study/format-ls-tree-names projects dir))
+    ;; The true discovered count travels with the text rendering so its total
+    ;; line cannot contradict the receipt's own file_count.
+    (study/format-ls-tree-text projects dir {:file-count total})))
+
+;; @spec MCP-OP-STUDY-035
+(defn- ls-tree-unresolved-paths
+  "Declared source directories the scan could not walk, shaped for the wire.
+
+  The kernel's reason is a keyword; a receipt carries the name. An empty list
+  is omitted entirely rather than sent as `[]`, so the key's presence is
+  itself the signal that something was skipped."
+  [scan]
+  (mapv (fn [{:keys [project path reason]}]
+          {:project project :path path :reason (name reason)})
+        (:paths-unresolved scan)))
+
+(defn- ls-tree-payload-size
+  [payload output-format]
+  (if (contains? #{"edn" "names"} output-format)
+    (inspect/json-character-count payload)
+    (count payload)))
+
+;; @spec MCP-OP-STUDY-015
+;; @spec MCP-OP-STUDY-030
+;; @spec MCP-OP-STUDY-032
+(defn- ls-tree-bounded
+  "Grow the receipt one file at a time and stop at the first overflow, parsing
+  only the files the receipt can actually carry.
+
+  Discovery returns names; outlining opens and PARSES. Before this the kernel
+  outlined the whole tree before any bound applied — 1072 files and 618 MB of
+  heap to return three. Files are parsed here in bounded-parallel batches of
+  `ls-tree-outline-chunk`, so the number ever parsed is at most one chunk
+  beyond the number returned."
+  [projects dir output-format limit total]
+  (let [cache (atom {})
+        attempt (fn [n map-fn]
+                  (let [kept (study/outline-take projects n cache map-fn)
+                        payload (ls-tree-render kept dir output-format total)]
+                    {:returned n
+                     :omitted (- total n)
+                     :truncated (< n total)
+                     :payload payload
+                     ;; @spec MCP-OP-MEM-005 — the meter belongs to the CACHE,
+                     ;; so this is the cost of the WHOLE growth, not of the
+                     ;; last attempt.
+                     :resources (study/scan-resources kept)
+                     :fits? (<= (ls-tree-payload-size payload output-format)
+                                limit)}))
+        ;; The floor. Below it no bound can go: `names`/`edn` bottom out at
+        ;; the empty array's two characters (MCP-OP-STUDY-018), and `text`
+        ;; bottoms out at its trailing total line plus, when discovery found
+        ;; more than one project, one `0 shown` header per project. That total
+        ;; line is `36 + 2 x digits(file_count)` characters — 38 for a
+        ;; one-digit tree, 40 for two digits, 42 for three, 46 at the 20,000
+        ;; ceiling — because `shown` is 0 and `omitted` equals `file_count`,
+        ;; so the count is spelled twice. (The number here read "38 characters
+        ;; for a two-digit tree", which is a one-digit tree's floor attached
+        ;; to the wrong width.) At `limit 1` the text payload is therefore
+        ;; LARGER than the limit, by
+        ;; construction and not by accident: the alternative is a receipt that
+        ;; reports nothing about what it left out, or one whose body
+        ;; contradicts its own `project_count`.
+        ;;
+        ;; The projects are carried through `outline-take` at n = 0 rather
+        ;; than rendered from an empty vector. Rendering `[]` here was the one
+        ;; file below MCP-OP-STUDY-024's fix: every `n >= 1` attempt kept all
+        ;; projects and only `returned = 0` dropped them, so the smallest
+        ;; receipt was the one that contradicted itself.
+        empty-receipt (let [kept (study/outline-take projects 0 cache)]
+                        {:returned 0
+                         :omitted total
+                         :truncated (pos? total)
+                         :resources (study/scan-resources kept)
+                         :payload (ls-tree-render kept dir output-format
+                                                  total)})]
+    (loop [best empty-receipt
+           fitting 0]
+      (let [batch-end (min total (+ fitting ls-tree-outline-chunk))]
+        (if (= fitting batch-end)
+          best
+          ;; One bounded-parallel batch, then the exact answer inside it.
+          (let [batch (attempt batch-end parallel/bounded-map)]
+            (if (:fits? batch)
+              (recur (dissoc batch :fits?) batch-end)
+              ;; Every file in this batch is cached now, so walking it costs
+              ;; renders, not parses.
+              (loop [n (inc fitting)
+                     best best]
+                (if (> n batch-end)
+                  best
+                  (let [candidate (attempt n map)]
+                    (if (:fits? candidate)
+                      (recur (inc n) (dissoc candidate :fits?))
+                      best)))))))))))
+
+;; @spec MCP-OP-STUDY-023
+(defn- ls-tree-next-call
+  "One continuation, carrying EVERY field the request carried unless an
+  override replaces it.
+
+  `:limit` was the one field left out, so a caller who spelled the default
+  (`limit 4096`) made the self-returning continuation reappear: the identical-
+  call check compared a request that named its limit against a continuation
+  that did not, saw two different calls, and served back the call that had
+  just failed. A field a request supplies is part of that request's identity
+  whether or not it happens to equal a default."
+  [params overrides]
+  {:tool "inspect_clojure"
+   :arguments (merge (cond-> {:mode "ls-tree"}
+                       (:dir params) (assoc :dir (:dir params))
+                       (:grep params) (assoc :grep (:grep params))
+                       (:ns_grep params) (assoc :ns_grep (:ns_grep params))
+                       (:format params) (assoc :format (:format params))
+                       (:limit params) (assoc :limit (:limit params))
+                       (:max_files params) (assoc :max_files (:max_files params)))
+                     overrides)})
+
+;; @spec MCP-OP-STUDY-019
+(def ^:private ls-tree-formats
+  "The complete `format` vocabulary. The ls-tree branch skips
+  `validate-inspect-params`, so this is checked here or nowhere."
+  #{"names" "text" "edn"})
+
+;; @spec MCP-OP-STUDY-019
+(def ^:private ls-tree-fields
+  "The complete ls-tree parameter vocabulary, checked server-side. The JSON
+  schema declares `additionalProperties false`, but a schema is a contract
+  with a well-behaved client, not a server-side check."
+  #{:mode :dir :grep :ns_grep :format :limit :max_files :workspace_root})
+
+;; @spec MCP-OP-STUDY-022
+(def ^:private ls-tree-parameter-types
+  "The JSON type each ls-tree parameter must carry, checked server-side.
+
+  The published schema's `type` is a contract with a well-behaved client, not
+  a check: `grep: 5` sailed past the `^-` guard — `str/starts-with?`
+  stringifies its argument — reached ripgrep as the pattern \"5\", and came
+  back in a receipt whose `grep` was an integer. That violates this tool's own
+  OUTPUT schema, so the caller saw `isError` and no `error_type` at all.
+  `limit: \"x\"` did the same through `invalid-study-limit`, which echoed the
+  string back into an integer-typed field."
+  {:mode {:pred string? :expected "string"}
+   :dir {:pred string? :expected "string"}
+   :grep {:pred string? :expected "string"}
+   :ns_grep {:pred string? :expected "string"}
+   :format {:pred string? :expected "string"}
+   :limit {:pred integer? :expected "integer"}
+   :max_files {:pred integer? :expected "integer"}
+   :workspace_root {:pred string? :expected "string"}})
+
+(defn- json-type-name
+  [value]
+  (cond
+    (nil? value) "null"
+    (boolean? value) "boolean"
+    (string? value) "string"
+    (integer? value) "integer"
+    (number? value) "number"
+    (sequential? value) "array"
+    (map? value) "object"
+    :else "unknown"))
+
+;; @spec MCP-OP-STUDY-022
+(defn- ls-tree-type-errors
+  "Every supplied ls-tree parameter whose JSON type is wrong, named with what
+  was expected and what arrived. Values are never echoed: the whole failure
+  mode being fixed is a wrongly typed value reaching the receipt."
+  [params]
+  (vec (for [[key {:keys [pred expected]}] (sort-by key ls-tree-parameter-types)
+             :let [value (get params key)]
+             :when (and (contains? params key)
+                        (some? value)
+                        (not (pred value)))]
+         {:parameter (name key)
+          :expected expected
+          :actual (json-type-name value)})))
+
+(defn- ls-tree-request-arguments
+  "The arguments of the call just made, shaped as a continuation is.
+
+  EVERY supplied field counts — an unknown or rejected key makes a request
+  genuinely different from a continuation that drops it — except
+  `workspace_root`, which a continuation never carries, and counting it would
+  make every routed request differ from its own continuation."
+  [params]
+  (merge {:mode "ls-tree" :dir "."} (dissoc params :workspace_root)))
+
+;; @spec MCP-OP-STUDY-007
+(defn- ls-tree-refusal
+  "A typed ls-tree refusal, with a continuation only when replaying it could
+  differ from the call that just failed.
+
+  The `{:dir \".\"}` continuation was unconditional, so `grep` at the root
+  handed back the exact request just made — `no-clojure-files` at `\".\"`
+  proposing `no-clojure-files` at `\".\"`. Narrowing is a caller judgment
+  there, exactly as at the receipt ceiling.
+
+  A caller may supply the continuation when the corrective move is known —
+  a rejected `format` is dropped rather than echoed back."
+  ([params error-type message extra]
+   (ls-tree-refusal params error-type message extra
+                    (ls-tree-next-call params {:dir "."})))
+  ([params error-type message extra continuation]
+   (let [repeats? (= (:arguments continuation)
+                     (ls-tree-request-arguments params))]
+    (merge
+      (cond-> {:ok false
+               :operation "inspect_clojure"
+               :mode "ls-tree"
+               :error_type (name error-type)
+               :error message
+               :read_complete false
+               :source_unchanged true
+               :next_action (if repeats? "narrow_scope" "correct_request")}
+        (not repeats?) (assoc :next_call continuation))
+      extra))))
+
+;; @spec MCP-OP-STUDY-001
+;; @spec MCP-OP-STUDY-006
+;; @spec MCP-OP-STUDY-007
+;; @spec MCP-OP-STUDY-022
+;; @spec MCP-OP-STUDY-025
+;; @spec MCP-OP-STUDY-026
+(defn execute-ls-tree
+  "Run the one study kernel over a workspace-confined directory."
+  [{:keys [project-root]} params]
+  (let [dir (or (:dir params) ".")
+        ;; names is the default when the caller has not already narrowed the
+        ;; scan with grep; grep already trims the file set, so text (the
+        ;; fuller per-form view) stays the default once grep is present.
+        output-format (or (:format params) (if (:grep params) "text" "names"))
+        limit (or (:limit params) ls-tree-default-limit)
+        max-files (or (:max_files params) study/default-max-scan-files)
+        root (mcp-paths/real-root project-root)
+        unknown-fields (vec (sort (map name (remove ls-tree-fields (keys params)))))
+        type-errors (ls-tree-type-errors params)
+        resolved (when (string? dir) (mcp-paths/resolve-directory-path root dir))]
+    (cond
+      ;; The ls-tree branch never reaches `validate-inspect-params`, so its own
+      ;; vocabulary is checked here or nowhere. Before this, an unknown key was
+      ;; silently ignored and an unknown `format` fell through the render
+      ;; `case` to text while the receipt echoed the raw string back.
+      (seq unknown-fields)
+      (ls-tree-refusal
+        params :unknown-parameter
+        "inspect_clojure ls-tree received an unknown parameter"
+        ;; `:dir` only when it IS a string: this branch runs before the type
+        ;; check, and an integer `dir` in the receipt is the very defect the
+        ;; type check exists to stop.
+        (cond-> {:unknown unknown-fields
+                 :supported (vec (sort (map name ls-tree-fields)))
+                 :remedy "Remove the unknown parameter; the ls-tree vocabulary is fixed."}
+          (string? dir) (assoc :dir dir))
+        (ls-tree-next-call params {}))
+
+      ;; Beside the format enum, and before anything interprets a parameter:
+      ;; a wrongly typed value cannot be scanned with, and must never reach the
+      ;; receipt, where it breaks the tool's own output schema.
+      (seq type-errors)
+      (ls-tree-refusal
+        params :invalid-parameter-type
+        "inspect_clojure ls-tree received a parameter of the wrong type"
+        (cond-> {:invalid type-errors
+                 :remedy (str "Send each parameter with its declared JSON "
+                              "type; grep and ns_grep are strings, limit and "
+                              "max_files are integers.")}
+          (string? dir) (assoc :dir dir))
+        ;; The corrective move is known, so the continuation drops the
+        ;; rejected values instead of handing them straight back.
+        (ls-tree-next-call
+          (apply dissoc params (map (comp keyword :parameter) type-errors))
+          {}))
+
+      (and (contains? params :format)
+           (not (contains? ls-tree-formats (:format params))))
+      (ls-tree-refusal
+        params :invalid-format
+        "Expected format to be one of names, text, or edn"
+        {:dir dir
+         :format (:format params)
+         :supported (vec (sort ls-tree-formats))
+         :remedy "Use format=names, format=text, or format=edn."}
+        ;; The corrective move is known, so the continuation drops the
+        ;; rejected value instead of handing it straight back.
+        (ls-tree-next-call (dissoc params :format) {}))
+
+      (not (:ok resolved))
+      (ls-tree-refusal
+        params
+        (keyword (:error_type resolved))
+        (:error resolved)
+        {:dir dir
+         :remedy (str "Use an existing directory inside the configured project "
+                      "root, or \".\" for the root itself.")})
+
+      (not (and (integer? limit) (pos? limit) (<= limit ls-tree-max-limit)))
+      (ls-tree-refusal params :invalid-study-limit
+                       "Expected a study limit between 1 and 16384 characters"
+                       {:dir dir :limit limit})
+
+      (not (and (integer? max-files) (pos? max-files)
+                (<= max-files study/max-scan-files-ceiling)))
+      (ls-tree-refusal params :invalid-max-files
+                       (format (str "Expected a discovery cap between 1 and %d "
+                                    "files")
+                               study/max-scan-files-ceiling)
+                       {:dir dir :max_files max-files})
+
+      :else
+      (let [scan (study/ls-tree (cond-> {:dir (:path resolved)
+                                         ;; What the CALLER named. The kernel
+                                         ;; scans the canonical realpath, which
+                                         ;; must never appear in a message.
+                                         :dir-label dir
+                                         :max-files max-files}
+                                  (:grep params) (assoc :grep (:grep params))
+                                  (:ns_grep params) (assoc :ns-grep (:ns_grep params))))]
+        (if-not (:ok scan)
+          (ls-tree-refusal params
+                           (:error-type scan)
+                           (:error scan)
+                           (cond-> {:dir dir
+                                    :remedy (or (:remedy scan)
+                                                (if (or (:grep params) (:ns_grep params))
+                                                  "Widen or drop grep/ns_grep, or scan a parent directory."
+                                                  "Scan a directory that contains Clojure sources."))}
+                             (:file-count scan) (assoc :file_count (:file-count scan))
+                             (:max-files scan) (assoc :max_files (:max-files scan))
+                             (contains? scan :observed-at-least)
+                             (assoc :observed_at_least
+                                    (:observed-at-least scan))
+                             (seq (:paths-unresolved scan))
+                             (assoc :paths_unresolved
+                                    (ls-tree-unresolved-paths scan))
+                             (:match-budget scan) (assoc :match_budget
+                                                         (:match-budget scan))
+                             (:grep params) (assoc :grep (:grep params))
+                             (:ns_grep params) (assoc :ns_grep (:ns_grep params)))
+                           ;; A rejected PATTERN gets the treatment a rejected
+                           ;; `format` already got: the corrective move is
+                           ;; known, so the continuation drops the value the
+                           ;; refusal just named instead of handing it back to
+                           ;; be sent again. Everything else keeps the
+                           ;; scan-a-parent-directory continuation.
+                           (case (:error-type scan)
+                             :invalid-grep-pattern
+                             (ls-tree-next-call (dissoc params :grep) {})
+                             :invalid-ns-grep-pattern
+                             (ls-tree-next-call (dissoc params :ns_grep) {})
+                             ;; A pattern refused for what it COSTS is as
+                             ;; unsendable as one refused for not compiling.
+                             :ns-grep-match-budget-exceeded
+                             (ls-tree-next-call (dissoc params :ns_grep) {})
+                             (ls-tree-next-call params {:dir "."})))
+          (let [projects (:projects scan)
+                total (:file-count scan)
+                bounded (ls-tree-bounded projects (:path resolved)
+                                         output-format limit total)]
+            (cond->
+              {:ok true
+               :operation "inspect_clojure"
+               :mode "ls-tree"
+               :read_complete (not (:truncated bounded))
+               :dir dir
+               :grep (:grep params)
+               :ns_grep (:ns_grep params)
+               :format output-format
+               :limit limit
+               :project_count (count projects)
+               :file_count total
+               :returned (:returned bounded)
+               :omitted (:omitted bounded)
+               :truncated (:truncated bounded)
+               ;; @spec MCP-OP-MEM-005 — the scan's own cost, published
+               ;; UNCONDITIONALLY on every ls-tree receipt, in every format.
+               ;; @spec MCP-OP-MEM-003 — and PARTITIONED: `bytes_scanned` is a
+               ;; count and stays on the hashed channel, where a parity row
+               ;; can see a moved denominator; the wall-clock `scan_ms` rides
+               ;; under `:measured`, which no determinism row may read.
+               :resources (:resources bounded)
+               :next_action (cond
+                              (not (:truncated bounded)) "none"
+                              (< limit ls-tree-max-limit)
+                              "raise_limit_or_narrow_scope"
+                              :else "narrow_scope")}
+              (contains? #{"edn" "names"} output-format) (assoc :files (:payload bounded))
+              (= "text" output-format) (assoc :tree (:payload bounded))
+              ;; A successful receipt still says what it could not reach: a
+              ;; project with one real source directory and one symlinked one
+              ;; answers, and the symlinked declaration is invisible unless
+              ;; the receipt names it.
+              (seq (:paths-unresolved scan))
+              (assoc :paths_unresolved (ls-tree-unresolved-paths scan))
+              ;; An executable continuation only while raising the limit can
+              ;; still advance; a narrower dir or grep is a caller judgment.
+              (and (:truncated bounded) (< limit ls-tree-max-limit))
+              (assoc :next_call
+                     (ls-tree-next-call params {:limit ls-tree-max-limit}))
+              (and (:truncated bounded) (>= limit ls-tree-max-limit))
+              (assoc :remedy
+                     (str "The receipt is already at the maximum limit; scan a "
+                          "subdirectory or add a grep pattern.")))))))))
+
+;; @spec MCP-OP-STUDY-042
+(def ^:private max-owner-list-characters
+  "How much of an `available_owners` list the text prints before it says how
+  much it printed. The list is evidence, so it is bounded rather than dropped."
+  2048)
+
+;; @spec MCP-OP-STUDY-042
+(defn- owner-list-line
+  "The owners a refusal's receipt lists, printed where a text-only client
+  reads them.
+
+  Field evidence (O2 re-review, 2026-09-03): this line was nested inside a
+  `diagnostic?` guard that a study refusal never satisfies, while the sentence
+  explaining how to USE the list was guarded only by the list being non-empty.
+  A refusal therefore told a caller how to choose among owners it never
+  showed. The two are one decision and now share one condition."
+  [result]
+  (when-let [owners (seq (:available_owners result))]
+    (let [returned (or (:available_owners_returned result) (count owners))
+          total (or (:available_owner_count result) returned)
+          joined (str/join ", " owners)
+          shown (if (<= (count joined) max-owner-list-characters)
+                  joined
+                  (str (subs joined 0 max-owner-list-characters) " …"))]
+      (format "  available owners (%d/%d%s): %s"
+              returned total
+              (if (:available_owners_truncated result) "; truncated" "")
+              shown))))
+
+;; @spec MCP-OP-STUDY-042
+(def refusal-structural-keys
+  "Refusal keys the text already renders as STRUCTURE — the header, the cause,
+  the owner evidence, the continuation coaching, the payload echo, and the
+  transport fields no caller acts on.
+
+  Everything else a refusal carries is rendered as a `key: value` detail line.
+  The set is written down here, and the default is to RENDER: a new refusal
+  field is carried into the text the day it is added, and only a deliberate
+  entry in this set can keep it out. Field evidence (O2 re-review): the
+  opposite default — an allow-list of fields to print — is how seven of nine
+  modes came to refuse with a category name and an arrow."
+  #{:ok :operation :mode :error :error_type :error-type :reason
+    :next_action :next-action :next_call :remedy :remedies
+    :read_complete :source_unchanged :source-unchanged :basis-retained
+    :elapsed_ms :inspection_elapsed_ms :workspace_root :file_read_count
+    :available_owners :available_owner_count :available_owners_returned
+    :available_owners_truncated :available_owners_omitted
+    :failed_request :failures :selection_failures :form_candidates
+    :candidates_truncated :hypotheses_truncated :continuation
+    :file_hashes :results :dir :grep :ns_grep :format :limit})
+
+(def ^:private refusal-detail-order
+  "The order the most-used detail lines print in. Keys outside it follow, in
+  name order, so the block is stable across runs and readable across kinds."
+  [:path :failed_stage :request_id :request_index :form :missing :unknown
+   :supported :expected :actual :scope :required :limits :maximum :minimum])
+
+(def ^:private max-refusal-detail-characters 512)
+
+;; @spec MCP-OP-STUDY-042
+(defn- refusal-detail-lines
+  [result]
+  (let [keys-present (remove refusal-structural-keys (keys result))
+        ordered (concat (filter (set keys-present) refusal-detail-order)
+                        (sort (remove (set refusal-detail-order) keys-present)))]
+    (into []
+          (map (fn [key]
+                 (let [value (get result key)
+                       rendered (if (string? value)
+                                  value
+                                  (json/generate-string value))
+                       bounded (if (<= (count rendered)
+                                       max-refusal-detail-characters)
+                                 rendered
+                                 (str (subs rendered 0
+                                            max-refusal-detail-characters)
+                                      " … (" (count rendered) " characters)"))]
+                   (str "  " (name key) ": " bounded))))
+          ordered)))
+
+;; @spec MCP-OP-STUDY-042
+(defn refusal-text
+  "The complete text block for one refusal: the type, the CAUSE, the evidence
+  the receipt lists, the remedy, and the next action.
+
+  The `ls-tree` refusal branch already had this shape and the generic branch
+  did not, so seven of nine modes refused with an error type and an arrow. A
+  caller cannot act on a category name."
+  [result extra-lines]
+  (let [error-type (let [value (or (:error_type result) (:error-type result))]
+                     (when value
+                       (if (keyword? value) (name value) value)))
+        reason (let [value (:reason result)]
+                 (when value (if (keyword? value) (name value) value)))
+        labels (distinct (remove nil? [error-type reason]))]
+  (str/join
+    "\n"
+    (remove
+      nil?
+      (concat
+        [(format "inspect_clojure%s\n  refused · %s · %s"
+                 (if (:mode result) (str " · " (:mode result)) "")
+                 (if (seq labels)
+                   (str/join " · " labels)
+                   "unknown-error")
+                 (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+         (when (:error result) "")
+         (when (:error result) (str "  " (:error result)))]
+        (refusal-detail-lines result)
+        extra-lines
+        [(when (:remedy result) "")
+         (when (:remedy result) (str "→ " (:remedy result)))
+         (when (:next_call result)
+           (str "\n→ next call: " (:tool (:next_call result)) " "
+                (json/generate-string (:arguments (:next_call result)))))
+         (format "\n→ %s" (or (:next_action result) "correct_request"))])))))
+
+;; @spec MCP-OP-STUDY-036
+(def ^:private ls-tree-continuation-argument-order
+  "The order a continuation's arguments are spelled in the text block. A map's
+  iteration order is not a contract, and a caller retyping a continuation
+  needs the same line every time."
+  [:mode :dir :grep :ns_grep :format :limit :max_files])
+
+;; @spec MCP-OP-STUDY-036
+(defn- ls-tree-continuation-line
+  "The continuation spelled for a client that reads only text.
+
+  `next_call` is structured data. A text-only client sees `structuredContent`
+  never, so a receipt that carries its continuation only there tells such a
+  caller that it was truncated and nothing about what to send instead."
+  [result]
+  (when-let [call (:next_call result)]
+    (let [arguments (:arguments call)]
+      (str "→ next call: " (:tool call) " "
+           (str/join " "
+                     (keep (fn [key]
+                             (when (contains? arguments key)
+                               (str (name key) "=" (get arguments key))))
+                           ls-tree-continuation-argument-order))))))
+
+;; @spec MCP-OP-STUDY-036
+(defn- ls-tree-payload-text
+  "The rows the bounded receipt carries, rendered for the text block.
+
+  `text` travels as the already-rendered tree; `names` and `edn` travel as
+  data and are rendered as the compact JSON a caller would otherwise have had
+  to read out of `structuredContent`."
+  [result]
+  (cond
+    (string? (:tree result)) (str/trim (:tree result))
+    (contains? result :files) (json/generate-string (:files result))
+    :else nil))
+
+;; @spec MCP-OP-STUDY-040
+(defn- abridged-tree-text
+  "The longest whole-line prefix of a rendered tree inside `limit`."
+  [tree limit]
+  (let [lines (str/split-lines tree)]
+    (loop [remaining lines kept [] used 0]
+      (if-let [line (first remaining)]
+        (let [next-used (+ used (count line) 1)]
+          (if (and (seq kept) (> next-used limit))
+            {:text (str/join "\n" kept) :shown (count kept)
+             :total (count lines) :abridged true}
+            (recur (next remaining) (conj kept line) next-used)))
+        {:text (str/join "\n" kept) :shown (count kept)
+         :total (count lines) :abridged false}))))
+
+;; @spec MCP-OP-STUDY-040
+(defn- abridged-files-text
+  "The longest whole-entry prefix of a `names`/`edn` payload inside `limit`.
+
+  Entries are dropped whole rather than cut mid-object: a caller must be able
+  to parse what it is handed, and half a JSON object is not evidence."
+  [files limit]
+  (loop [n (count files)]
+    (let [rendered (json/generate-string (subvec (vec files) 0 n))]
+      (if (or (<= (count rendered) limit) (<= n 1))
+        {:text rendered :shown n :total (count files) :abridged (< n (count files))}
+        (recur (dec n))))))
+
+;; @spec MCP-OP-STUDY-040
+(defn- ls-tree-payload-block
+  "The bounded payload the text block renders, and whether it was abridged.
+
+  `:text_evidence_limit` is set by `fit-public-result` when the complete
+  public result — text AND structured content together — would cross
+  `max-public-result-bytes`. Without it the payload travels whole."
+  [result]
+  (let [limit (:text_evidence_limit result)]
+    (cond
+      (nil? limit)
+      (when-let [payload (ls-tree-payload-text result)]
+        {:text payload :abridged false})
+
+      (string? (:tree result))
+      (abridged-tree-text (str/trim (:tree result)) limit)
+
+      (contains? result :files)
+      (abridged-files-text (:files result) limit)
+
+      :else nil)))
+
+;; @spec MCP-OP-STUDY-036
+(defn ls-tree-summary
+  "The text block a client renders for one `ls-tree` result.
+
+  Field evidence (E6-Lb, PF-4): this returned a 146-character header with
+  zero rows while the whole table of contents sat in `structuredContent.tree`
+  — so an agent on a text-only client was handed the shape of an answer and
+  none of it, and had no way to know what to send next. The rows travel here
+  now, bounded by exactly the same `limit` that bounds the payload, and a
+  truncated receipt spells its continuation or its remedy in the text."
+  [result]
+  (if-not (:ok result)
+    ;; @spec MCP-OP-STUDY-042
+    (refusal-text (assoc result :mode "ls-tree") nil)
+    (let [block (ls-tree-payload-block result)
+          payload (:text block)]
+      (str/join
+        "\n"
+        (remove
+          nil?
+          [(format "inspect_clojure · ls-tree\n  %s · %d project%s · %d of %d file%s · %s"
+                   (:dir result)
+                   (:project_count result)
+                   (if (= 1 (:project_count result)) "" "s")
+                   (:returned result)
+                   (:file_count result)
+                   (if (= 1 (:file_count result)) "" "s")
+                   (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+           (when (seq payload) "")
+           (when (seq payload) payload)
+           ""
+           ;; @spec MCP-OP-STUDY-040
+           (when (:abridged block)
+             (format (str "! text abridged · %d of %d row%s rendered · the "
+                          "complete receipt is in structuredContent")
+                     (:shown block) (:total block)
+                     (if (= 1 (:total block)) "" "s")))
+           (when (:abridged block)
+             (str "→ lower limit, narrow dir, or add a grep pattern so the "
+                  "complete result fits the public output budget"))
+           (if (:truncated result)
+             (format "! bounded receipt · %d file%s omitted · read_complete=false"
+                     (:omitted result)
+                     (if (= 1 (:omitted result)) "" "s"))
+             "✓ complete tree · read_complete=true")
+           ;; @spec MCP-OP-MEM-005
+           ;; @spec MCP-OP-MEM-003
+           ;; text ⊇ structured, applied to the meter. A text-only client
+           ;; cannot read `structuredContent.resources`, and MEM-005's gauge
+           ;; exists to be SEEN move. The deterministic denominator and the
+           ;; wall-clock reading go on separate lines, the second behind
+           ;; `measured/text-measured-prefix`, because text has no keys and
+           ;; the hashed/measured partition has to be visible in the bytes.
+           (when-let [res (:resources result)]
+             (format "── resources: bytes_scanned %s" (:bytes_scanned res)))
+           (when-let [res (:resources result)]
+             (format "%sscan_ms %s"
+                     measured/text-measured-prefix
+                     (:scan_ms (get res measured/measured-key))))
+           (ls-tree-continuation-line result)
+           (when (and (:truncated result) (:remedy result))
+             (str "→ " (:remedy result)))
+           (format "→ %s" (:next_action result))])))))
+
 (def inspect-schema
   {:type "object"
    :additionalProperties false
-   :properties (merge (:properties typed-inspect-schema)
-                      (:properties prepare-change-schema)
-                      (:properties basis-view-schema)
-                      (:properties verification-job-schema)
-                      (:properties extraction-plan-schema))
+   :properties (assoc (merge (:properties typed-inspect-schema)
+                             (:properties prepare-change-schema)
+                             (:properties basis-view-schema)
+                             (:properties verification-job-schema)
+                             (:properties extraction-plan-schema)
+                             (:properties ls-tree-schema))
+                      ;; One merged mode vocabulary; each oneOf branch below
+                      ;; pins its own const.
+                      "mode"
+                      {:type "string"
+                       :enum ["prepare-change" "plan-extraction" "ls-tree"]})
    :oneOf [{:required ["requests" "expect"]}
            {:properties {"mode" {:const "prepare-change"}}
             :required ["mode" "subject" "intent"]}
@@ -332,6 +1119,8 @@
             :required ["mode" "file" "form" "intent"]}
            {:properties {"mode" {:const "plan-extraction"}}
             :required ["mode" "file" "to" "forms" "require_policy"]}
+           {:properties {"mode" {:const "ls-tree"}}
+            :required ["mode"]}
            {:required ["basis" "view" "open"]}
            {:required ["verification_job" "view"]}]})
 
@@ -350,6 +1139,21 @@
     "write_authority" {:type "boolean" :enum [false]}}
    :required ["descriptor_sha256" "expires_in_ms" "session_bound"
               "commit_single_use" "executable" "write_authority"]})
+
+;; @spec MCP-OP-STUDY-035
+(def ^:private paths-unresolved-item-schema
+  "One `paths_unresolved` entry: a declared source directory `ls-tree`
+   discovery could not walk. `unresolved-source-dir` (study.clj) names only
+   `:symlink` today; the enum is deliberately narrow rather than an open
+   string so a caller can distinguish a documented skip class from a typo
+   the way `error_type` already lets it."
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"project" {:type "string"}
+    "path" {:type "string"}
+    "reason" {:type "string" :enum ["symlink"]}}
+   :required ["project" "path" "reason"]})
 
 (def inspect-output-schema
   {:type "object"
@@ -394,6 +1198,23 @@
     "inspection_elapsed_ms" {:type "number" :minimum 0}
     "job_elapsed_ms" {:type "number" :minimum 0}
     "next_call" {:type "object"}
+    "mode" {:type "string"}
+    "dir" {:type "string"}
+    "grep" {:type ["string" "null"]}
+    "ns_grep" {:type ["string" "null"]}
+    "max_files" {:type "integer"}
+    "match_budget" {:type "integer"}
+    "observed_at_least" {:type "boolean"}
+    "paths_unresolved" {:type "array" :items paths-unresolved-item-schema}
+    "remedy" {:type "string"}
+    "format" {:type "string"}
+    "limit" {:type "integer"}
+    "project_count" {:type "integer"}
+    "returned" {:type "integer"}
+    "omitted" {:type "integer"}
+    "truncated" {:type "boolean"}
+    "tree" {:type "string"}
+    "files" {:type "array"}
     "prepared_request" prepared-request/prepared-request-schema
     "prepared_confirmation" prepared-confirmation-output-schema}
    :required ["ok" "operation" "elapsed_ms"]
@@ -800,17 +1621,26 @@
           :next_action "correct_request"}
          snapshot-guards (assoc :failed_stage "snapshot"))))))
 
+;; @spec MCP-OP-STUDY-039
 (defn- execute-inspect-in-context!
   "Validate, confine, snapshot once, and evaluate one typed inspect request."
   [{:keys [project-root telemetry read-source output-limits semantic-resolver] :as config}
    params]
+  ;; The first call routed to a workspace root announces that session. One
+  ;; server serves several arms of a cohort; without this the record cannot
+  ;; tell a silent connection failure from a deliberate decline.
+  (telemetry/record-session-start!
+    telemetry {:workspace-root project-root
+               :client-run-id (:client-run-id config)})
   (let [started (System/nanoTime)
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
         extraction-plan? (= "plan-extraction" (:mode normalized-params))
+        ls-tree? (= "ls-tree" (:mode normalized-params))
         basis-view? (= "sites" (:view normalized-params))
         verification-job? (= "verification" (:view normalized-params))
-        validated (when-not (or prepare? extraction-plan? basis-view? verification-job?)
+        validated (when-not (or prepare? extraction-plan? ls-tree?
+                                basis-view? verification-job?)
                     (inspect/validate-inspect-params params))
         result
         (assoc
@@ -827,6 +1657,9 @@
 
             extraction-plan?
             (extraction-plan/plan! config normalized-params)
+
+            ls-tree?
+            (execute-ls-tree config normalized-params)
 
             prepare?
             (change-buffer/prepare-change!
@@ -893,7 +1726,15 @@
         (if-not (:ok routed)
           routed
           (attach-workspace-root
-            (execute-inspect-in-context! (:config routed) (:params routed))
+            ;; @spec MCP-OP-STUDY-043
+            ;; The client run travels with the ROUTE: a request routed to
+            ;; another workspace is still the same client session, and a
+            ;; router-built config would otherwise drop the identity.
+            (execute-inspect-in-context!
+              (cond-> (:config routed)
+                (:client-run-id config)
+                (assoc :client-run-id (:client-run-id config)))
+              (:params routed))
             (:workspace-root routed)))))))
 
 ;; @spec MCP-OP-FIELD-001
@@ -959,16 +1800,24 @@
 ;; @spec MCP-OP-READ-DIAG-002
 ;; @spec MCP-OP-DISPATCH-003
 ;; @spec MCP-OP-PREP-REQ-005
-(defn- inspect-summary
+
+(defn inspect-summary
+  "The exact `content[0].text` a client renders for one inspect_clojure result.
+
+  Public because the public MCP result is text AND structured content
+  together: nothing can bound the pair, and no witness can assert that the
+  text carries what the receipt carries, while the renderer is private."
   [result]
   (cond
     (and (= "verification-job" (:mode result)) (:status result))
     (verification-job-summary result)
 
+    (= "ls-tree" (:mode result))
+    (ls-tree-summary result)
+
+    ;; @spec MCP-OP-STUDY-042
     (not (:ok result))
-    (let [reason (or (:reason result) (:error-type result)
-                     (:error_type result) "unknown-error")
-          failed-request (:failed_request result)
+    (let [failed-request (:failed_request result)
           failure (first (:failures result))
           selection-failure (first (:selection_failures result))
           hypothesis (first (:hypotheses selection-failure))
@@ -976,79 +1825,73 @@
           hypotheses-truncated (or (:hypotheses_truncated selection-failure)
                                    (:candidates_truncated result))
           defmethod-owner (:defmethod_owner selection-failure)
-          available-owners (:available_owners result)
-          available-returned (or (:available_owners_returned result)
-                                 (count available-owners))
           available-count (or (:available_owner_count result)
-                              available-returned)
+                              (count (:available_owners result)))
           continuation (:continuation result)
           completed-count (:completed_request_count continuation)
           pending-ids (:pending_request_ids continuation)
           failure-label (if (= "ambiguous-form" (:error_type failure))
                           "ambiguous form"
                           "missing form")
-          diagnostic? (and failed-request failure)]
-      (str
-        (format (str "inspect_clojure\n"
-                     "  refused · %s · %s\n")
-                (if (keyword? reason) (name reason) reason)
-                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
-        (when diagnostic?
-          (str
-            (format "  request %s · %s\n"
-                    (:id failed-request) (:file failed-request))
-            (when failure
-              (format "  %s %s\n" failure-label (:form failure)))
-            (when candidate
-              (format "  I think you may have meant %s? (hypothesis only)\n"
-                      candidate))
-            (when hypotheses-truncated
-              (format "  hypotheses truncated · showing %d of %d owners\n"
-                      (:hypotheses_returned selection-failure)
-                      available-count))
-            (when (seq available-owners)
-              (format "  available owners (%d/%d%s): %s\n"
-                      available-returned
-                      available-count
-                      (if (:available_owners_truncated result)
-                        "; truncated"
-                        "")
-                      (str/join ", " available-owners)))
-            (defmethod-owner-lines defmethod-owner)))
-        (missing-field-lines result)
-        (named-field-lines result)
-        ;; @spec MCP-OP-FIELD-003
-        (when (:note result)
-          (format "  note: %s\n" (:note result)))
-        (str (when (seq available-owners)
-               (str "\n  All listed owners are real snapshot evidence; "
-                    "ranking is non-authoritative. Semantic selection "
-                    "among them is allowed; the exact retry verifies "
-                    "the selection.\n"))
-             (when continuation
-               (format (str "  preserved %d completed request%s from the frozen snapshot\n"
-                            "  retry only %s; do not reread before the guarded retry\n")
-                       completed-count
-                       (if (= 1 completed-count) "" "s")
-                       (str/join ", " pending-ids)))
-             (cond
-               continuation "\n→ copy continuation.retry_template.arguments, fill only its null selector holes, and submit it"
-               (and diagnostic? defmethod-owner)
-               "\n→ send the exact defmethod owner form above, or choose one exact owner and retry"
-               diagnostic? "\n→ choose one exact owner and retry"
-               ;; @spec MCP-OP-FIELD-001
-               (= "missing-fields" (some-> (:reason result) name))
-               "\n→ add the named field(s) in the minimal valid shape above and call inspect_clojure once"
-               :else (format "\n→ %s"
-                             (or (:remedy result)
-                                 (:next_action result)
-                                 "correct_request"))))))
+          diagnostic? (and failed-request failure)
+          owners (owner-list-line result)]
+      (refusal-text
+        result
+        [(when diagnostic? "")
+         (when diagnostic?
+           (format "  request %s · %s"
+                   (:id failed-request) (:file failed-request)))
+         (when (and diagnostic? failure)
+           (format "  %s %s" failure-label (:form failure)))
+         (when (and diagnostic? candidate)
+           (format "  I think you may have meant %s? (hypothesis only)"
+                   candidate))
+         (when (and diagnostic? hypotheses-truncated)
+           (format "  hypotheses truncated · showing %d of %d owners"
+                   (:hypotheses_returned selection-failure)
+                   available-count))
+         ;; @spec MCP-OP-DISPATCH-003
+         (some-> (defmethod-owner-lines defmethod-owner) str/trimr not-empty)
+         ;; @spec MCP-OP-FIELD-001
+         (some-> (missing-field-lines result) str/trimr not-empty)
+         ;; @spec MCP-OP-FIELD-002
+         (some-> (named-field-lines result) str/trimr not-empty)
+         (when (and owners (not diagnostic?)) "")
+         owners
+         ;; The sentence and the list share one condition: a sentence about a
+         ;; list that was not printed is worse than silence.
+         (when owners
+           (str "\n  All listed owners are real snapshot evidence; "
+                "ranking is non-authoritative. Semantic selection "
+                "among them is allowed; the exact retry verifies "
+                "the selection."))
+         (when continuation
+           (format (str "\n  preserved %d completed request%s from the frozen snapshot\n"
+                        "  retry only %s; do not reread before the guarded retry")
+                   completed-count
+                   (if (= 1 completed-count) "" "s")
+                   (str/join ", " pending-ids)))
+         (cond
+           continuation
+           (str "\n\u2192 copy continuation.retry_template.arguments, fill only "
+                "its null selector holes, and submit it")
+           (and diagnostic? defmethod-owner)
+           (str "\n\u2192 send the exact defmethod owner form above, or choose "
+                "one exact owner and retry")
+           diagnostic? "\n\u2192 choose one exact owner and retry"
+           ;; @spec MCP-OP-FIELD-001
+           (= "missing-fields" (some-> (:reason result) name))
+           (str "\n\u2192 add the named field(s) in the minimal valid shape "
+                "above and call inspect_clojure once"))]))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
 
     (= "plan-extraction" (:mode result))
     (extraction-plan-summary result)
+
+    (= "ls-tree" (:mode result))
+    (ls-tree-summary result)
 
     (= "basis-view" (:mode result))
     (basis-view-summary result)
@@ -1062,7 +1905,78 @@
 ;; @spec MCP-OP-READ-CONT-002
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-006
-(defn- enforce-result-budget
+
+;; @spec MCP-OP-STUDY-040
+(def ^:private text-budget-reserve
+  "Bytes held back from the text allowance for the JSON envelope, the
+  abridgement notice, and the difference between characters and UTF-8 bytes."
+  1024)
+
+;; @spec MCP-OP-STUDY-040
+(defn- public-budget-refusal
+  "The typed refusal for a receipt that cannot fit even with no evidence text.
+
+  Reached only when `structuredContent` ALONE crosses the declared budget: at
+  that point no rendering choice can help, and a caller that is handed the
+  result anyway has been told a bound the tool does not keep."
+  [result required-bytes]
+  (cond-> {:ok false
+           :operation "inspect_clojure"
+           :error_type "inspect-output-limit"
+           :scope "public_result"
+           :error (format (str "The complete inspect_clojure result is %d bytes; "
+                               "the public MCP output budget is %d")
+                          required-bytes max-public-result-bytes)
+           :required {:public_result_bytes required-bytes}
+           :limits {:public_result_bytes max-public-result-bytes}
+           :read_complete false
+           :source_unchanged true
+           :remedy (str "Lower limit, narrow dir/grep/ns_grep, or request "
+                        "fewer forms so the complete result fits the public "
+                        "output budget.")
+           :next_action "narrow_scope"}
+    (:mode result) (assoc :mode (:mode result))))
+
+;; @spec MCP-OP-STUDY-040
+(defn fit-public-result
+  "Bound the complete public MCP result — TEXT BLOCK INCLUDED — by the budget.
+
+  Field evidence (O2 re-review, 2026-09-03): rendering a receipt's rows into
+  `content[0].text` is the fix for a text-only caller and it roughly DOUBLES
+  the result on the wire. `ls-tree dir=src grep=defn limit=16384` measured
+  34,042 bytes against a declared 32,768, and the enforcement covered three
+  modes, so the overshoot was silent. A budget only three modes obey is a
+  number in a docstring.
+
+  The text is bounded FIRST, because the rows are a rendering of evidence the
+  caller already has in `structuredContent`, and a typed truncation keeps an
+  answer where a refusal returns none. A receipt whose structured content
+  alone crosses the budget is a typed refusal, because nothing about the text
+  can save it."
+  [raw-result]
+  (let [measure (fn [result]
+                  (mcp-result-byte-count
+                    (inspect-summary (assoc result :elapsed_ms 0.0))
+                    result))
+        required (measure raw-result)]
+    (if (<= required max-public-result-bytes)
+      raw-result
+      (let [structured-bytes (mcp-result-byte-count "" raw-result)
+            headroom (- max-public-result-bytes structured-bytes
+                        text-budget-reserve)]
+        (loop [limit headroom attempts 4]
+          (cond
+            (or (not (pos? limit)) (zero? attempts))
+            (public-budget-refusal raw-result required)
+
+            :else
+            (let [candidate (assoc raw-result :text_evidence_limit limit)]
+              (if (<= (measure candidate) max-public-result-bytes)
+                candidate
+                (recur (quot limit 2) (dec attempts))))))))))
+
+(defn enforce-result-budget
+  "Bound the complete public MCP result — its text block included."
   [ordinary-result raw-result]
   (cond
     (:prepared_request raw-result)
@@ -1097,7 +2011,10 @@
          :source_unchanged true
          :next_action "narrow_request"}))
 
-    :else raw-result))
+    ;; @spec MCP-OP-STUDY-040
+    ;; Every other mode — `ls-tree` and every typed study read — used to fall
+    ;; through unenforced.
+    :else (fit-public-result raw-result)))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001
@@ -1126,7 +2043,16 @@
     {:execute
      #(let [ordinary-result
             (if-let [config @runtime-config]
-              (execute-inspect! config params)
+              ;; @spec MCP-OP-STUDY-043
+              ;; The MCP request shape cannot carry a run id — `inspect-schema`
+              ;; is `additionalProperties false` — and a caller-supplied one
+              ;; could name another arm. The transport's session is the id.
+              (execute-inspect!
+                (cond-> config
+                  (prepared-confirmation/exchange-session-key exchange)
+                  (assoc :client-run-id
+                         (prepared-confirmation/exchange-session-key exchange)))
+                params)
               {:ok false
                :operation "inspect_clojure"
                :error_type "server-not-initialized"
