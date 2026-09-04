@@ -2,6 +2,7 @@
   "One bounded reset button for the shared structural tool stack."
   (:require
    [clj-surgeon.mcp-recovery :as mcp-recovery]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.mcp-workspace :as mcp-workspace]
    [clj-surgeon.workspace-onboarding :as onboarding]
    [clojure.java.io :as io]
@@ -54,9 +55,12 @@
                    :codex-config (:codex-config-changed up-result)
                    :server-restarted (:cclsp-server-restarted up-result)}
          :proof probe-result
-         :elapsed-ms {:up up-elapsed
-                      :probe probe-elapsed
-                      :total (elapsed-ms started)}
+         ;; @spec MCP-OP-TIME-005
+         ;; A recovery receipt is written to disk and fingerprinted; its three
+         ;; clock readings ride the partition like every other measured field.
+         measured/measured-key {:elapsed-ms {:up up-elapsed
+                                 :probe probe-elapsed
+                                 :total (elapsed-ms started)}}
          :next-action :none})
       (catch Exception error
         (let [error-data (ex-data error)
@@ -74,7 +78,7 @@
                                          :recovery-failed)
                          :error (.getMessage error)
                          :agent-session-restart-required restart-required?
-                         :elapsed-ms {:total (elapsed-ms started)}
+                         measured/measured-key {:elapsed-ms {:total (elapsed-ms started)}}
                          :next-action (if restart-required?
                                         :restart-agent-session-once
                                         :report-failure-and-use-cli-fallback)}

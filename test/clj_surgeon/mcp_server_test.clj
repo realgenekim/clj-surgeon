@@ -47,8 +47,10 @@
            (mapv :name tools)))
     (doseq [{:keys [output-schema]} tools]
       (is (= {:type "number" :minimum 0}
-             (get-in output-schema [:properties "elapsed_ms"])))
-      (is (some #{"elapsed_ms"} (:required output-schema))))
+             (get-in output-schema
+                     [:properties "measured" :properties "elapsed_ms"]))
+          "the request clock is published inside the measured partition")
+      (is (some #{"measured"} (:required output-schema))))
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
     (is (= #'tool/handle-apply-clojure-changes
            (:tool-fn (second tools))))

@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-prepared-request :as prepared-request]
    [clj-surgeon.mcp-schema :as schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -337,7 +338,15 @@
             {:keys [content error? structured] :as projected}
             (invoke-inspect root "src/demo.clj"
                             "(ns demo)\n(def alpha :old)\n" request)
-            fix-clock #(assoc % :elapsed_ms 0.0 :inspection_elapsed_ms 0.0)
+            ;; @spec MCP-OP-TIME-005
+            ;; Neutralize the clock through the PARTITION, not by overwriting
+            ;; two field names. This line used to assoc zeros at the top level;
+            ;; once the finalizer publishes measured fields inside `measured`,
+            ;; a name-by-name zeroing silently stops neutralizing anything —
+            ;; which is the whole argument for one projection everybody uses.
+            fix-clock #(measured/attach (measured/hashed-channel %)
+                                        {:elapsed_ms 0.0
+                                         :inspection_elapsed_ms 0.0})
             baseline-fixed (fix-clock (:structured baseline))
             projected-fixed (fix-clock structured)
             summary (private-var 'clj-surgeon.mcp-inspect-tool 'inspect-summary)]

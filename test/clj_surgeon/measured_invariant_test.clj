@@ -49,16 +49,20 @@
   "Every line of `file` matching `pattern`, named by the top-level form it sits
    in. Line numbers are deliberately NOT part of the identity: an inventory
    pinned to line numbers has to be re-blessed on every unrelated edit, and one
-   that is re-blessed reflexively stops being a ratchet."
+   that is re-blessed reflexively stops being a ratchet.
+
+   `;;` comments are cut before matching: a comment EXPLAINING why a call was
+   removed must not read as the call."
   [^java.io.File file pattern]
   (:hits
    (reduce (fn [{:keys [form hits]} line]
-             (let [form' (if (str/starts-with? line "(def")
+             (let [code (or (first (str/split line #";;")) "")
+                   form' (if (str/starts-with? line "(def")
                            (second (str/split (str/trim line) #"[\s\[]+"))
                            form)]
                {:form form'
                 :hits (cond-> hits
-                        (re-find pattern line) (conj [(.getPath file) form']))}))
+                        (re-find pattern code) (conj [(.getPath file) form']))}))
            {:form nil :hits []}
            (str/split-lines (slurp file)))))
 

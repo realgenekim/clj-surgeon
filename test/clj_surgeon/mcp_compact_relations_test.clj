@@ -847,7 +847,7 @@
                 (is (= 0
                        (get-in structured [:verification :output-bytes])))
                 (is (number?
-                      (get-in structured [:verification :elapsed_ms])))
+                      (get-in structured [:verification :measured :elapsed_ms])))
                 (is (and
                       (string? (get-in structured
                                        [:verification :profile-sha256]))

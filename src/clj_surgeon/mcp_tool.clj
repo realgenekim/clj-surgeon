@@ -103,9 +103,9 @@
 (def clj-change-output-schema
   {:type "object"
    :properties {"ok" {:type "boolean"}
-                "elapsed_ms" {:type "number" :minimum 0}
+                "measured" mcp-operation/measured-output-schema
                 "terminal_response" {:type "string"}}
-   :required ["ok" "elapsed_ms"]})
+   :required ["ok" "measured"]})
 
 (def exact-terminal-response-text
   "Done — changes committed and exact verification completed.")
@@ -150,8 +150,8 @@
              (vector? (:argv verification))
              (seq (:argv verification))
              (every? nonblank-string? (:argv verification))
-             (number? (:elapsed_ms verification))
-             (<= 0 (:elapsed_ms verification))
+             (number? (mcp-operation/measured-field verification :elapsed_ms))
+             (<= 0 (mcp-operation/measured-field verification :elapsed_ms))
              (integer? (:output-bytes verification))
              (<= 0 (:output-bytes verification))
              (sha256? (:output-sha256 verification))
@@ -989,7 +989,7 @@
                      "✓ lifecycle preview · next action none")
                 (:changed_files result)
                 (:changed_characters result)
-                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+                (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result)))
         (if (:verification_complete result)
           (format (str operation "\n"
                        "  %s edits · %s files · %s\n\n"
@@ -1000,7 +1000,7 @@
                        terminal-response-line)
                   (or (:edits result) (:match-count result) 0)
                   (or (:files result) (:changed-file-count result) 0)
-                  (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+                  (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result)))
           (format (str operation "\n"
                        "  %s edits · %s files · %s\n\n"
                        "✓ atomic commit complete\n"
@@ -1010,7 +1010,7 @@
                        "→ copy next_call to inspect_clojure after doing other useful work")
                   (or (:edits result) (:match-count result) 0)
                   (or (:files result) (:changed-file-count result) 0)
-                  (mcp-operation/format-elapsed-ms (:elapsed_ms result))))))
+                  (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))))))
     (let [operation (or (:operation result) "apply_clojure_changes")
           reason (or (:reason result) (:error-type result)
                      (:error_type result) "unknown-error")
@@ -1043,7 +1043,7 @@
                    "→ %s")
               reason
               (if path (str " at " (pr-str path)) "")
-              (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+              (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
               (or change-line "")
               (or named-field-line "")
               (if source-safe?
@@ -1346,7 +1346,7 @@
 (def alias-migration-refusal-envelope-keys
   "Receipt keys the refusal text renders structurally rather than as facts."
   #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
-    :write_authority :next_action :next_call :remedy :elapsed_ms
+    :write_authority :next_action :next_call :remedy :measured
     :workspace_root :expect_files_unchanged_reason :receipt_hash
     :undo_receipt :details_path :details_retained :details_retention})
 
@@ -1445,7 +1445,7 @@
             (:files result) (:sites result)
             (pr-str (:alias_histogram result))
             (:collisions_resolved result)
-            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
             (:details_path result)
             (or (:details_retention result) "best-effort"))
     (str/join
@@ -1456,7 +1456,7 @@
                       "  refused · %s · %s\n\n"
                       "%s")
                  (or (:error_type result) (:reason result) "unknown-error")
-                 (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+                 (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"
                    "\u26a0 source state requires structured receipt review"))

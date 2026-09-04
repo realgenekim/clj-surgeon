@@ -884,7 +884,7 @@
                        (plural (:file_count result) "file")]
                 (pos? forms) (conj (plural forms "form"))
                 (pos? matches) (conj (plural matches "match")))
-        elapsed (:elapsed_ms result)]
+        elapsed (mcp-operation/elapsed-ms result)]
     (str "inspect_clojure\n"
          "  " (str/join " · " facts) "\n\n"
          "✓ all requests resolved\n"

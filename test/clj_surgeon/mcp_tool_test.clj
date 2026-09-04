@@ -1267,7 +1267,7 @@
       (is (= 1 (count (re-seq (re-pattern
                                 (java.util.regex.Pattern/quote response))
                               (get-in @calls [0 :content])))))
-      (is (number? (get-in @calls [0 :payload :elapsed_ms])))
+      (is (number? (get-in @calls [0 :payload :measured :elapsed_ms])))
       (is (re-find #"When terminal_response is present"
                    mcp-tool/tool-description))
       (finally
@@ -1883,7 +1883,7 @@
                      mcp-tool/tool-description)))
       (is (= false (:error? (first @calls))))
       (is (= true (get-in @calls [0 :payload :verification_complete])))
-      (let [elapsed (get-in @calls [0 :payload :elapsed_ms])]
+      (let [elapsed (get-in @calls [0 :payload :measured :elapsed_ms])]
         (is (number? elapsed))
         (when (number? elapsed)
           (is (<= 0 elapsed))
@@ -1899,8 +1899,8 @@
       (is (= true (:error? (second @calls))))
       (is (= "invalid-mcp-request"
              (get-in @calls [1 :payload :error_type])))
-      (is (number? (get-in @calls [1 :payload :elapsed_ms])))
-      (when-let [elapsed (get-in @calls [1 :payload :elapsed_ms])]
+      (is (number? (get-in @calls [1 :payload :measured :elapsed_ms])))
+      (when-let [elapsed (get-in @calls [1 :payload :measured :elapsed_ms])]
         (is (str/includes?
               (get-in @calls [1 :content])
               (format "%.2f ms" elapsed))))

@@ -45,8 +45,8 @@
     (is (false? (:error? call)))
     (is (= :running (get-in call [:structured :status])))
     (is (false? (get-in call [:structured :verification_complete])))
-    (is (number? (get-in call [:structured :elapsed_ms])))
-    (is (not (contains? (:structured call) :job_elapsed_ms)))))
+    (is (number? (get-in call [:structured :measured :elapsed_ms])))
+    (is (not (contains? (get-in call [:structured :measured]) :job_elapsed_ms)))))
 
 ;; @spec MCP-OP-ASYNC-002
 ;; @spec MCP-OP-ASYNC-003
@@ -65,10 +65,11 @@
       (let [{:keys [content error? structured]}
             (invoke-verification-view (fn [_ _] observed))]
         (is (= (not (:ok observed)) error?))
-        (is (number? (:elapsed_ms structured)))
-        (is (= 12.25 (:job_elapsed_ms structured)))
+        (is (number? (get-in structured [:measured :elapsed_ms])))
+        (is (= 12.25 (get-in structured [:measured :job_elapsed_ms])))
         (is (str/includes?
-              content (format "request %.2f ms" (:elapsed_ms structured))))
+              content (format "request %.2f ms"
+                              (get-in structured [:measured :elapsed_ms]))))
         (is (str/includes? content "job 12.25 ms"))))))
 
 ;; @spec MCP-OP-ASYNC-004
@@ -84,5 +85,5 @@
       (let [{:keys [error? structured]}
             (invoke-verification-view (fn [_ _] refusal))]
         (is (true? error?))
-        (is (number? (:elapsed_ms structured)))
-        (is (not (contains? structured :job_elapsed_ms)))))))
+        (is (number? (get-in structured [:measured :elapsed_ms])))
+        (is (not (contains? (:measured structured) :job_elapsed_ms)))))))

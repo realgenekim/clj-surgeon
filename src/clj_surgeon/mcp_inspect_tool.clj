@@ -390,13 +390,11 @@
     "buffers" {:type "array"}
     "verification_job" {:type "string"}
     "verification_complete" {:type "boolean"}
-    "elapsed_ms" {:type "number" :minimum 0}
-    "inspection_elapsed_ms" {:type "number" :minimum 0}
-    "job_elapsed_ms" {:type "number" :minimum 0}
+    "measured" mcp-operation/measured-output-schema
     "next_call" {:type "object"}
     "prepared_request" prepared-request/prepared-request-schema
     "prepared_confirmation" prepared-confirmation-output-schema}
-   :required ["ok" "operation" "elapsed_ms"]
+   :required ["ok" "operation" "measured"]
    :anyOf [{:required ["read_complete"]}
            {:required ["basis" "surface" "decision-site-ids"
                        "decision-sites" "next_call"]}
@@ -566,7 +564,7 @@
       (:site-count result)
       (:file-count result)
       (:basis result)
-      (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+      (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
       surface-lines
       (if exact-source?
         "✓ exact named owner · no semantic index required"
@@ -590,7 +588,7 @@
            "→ decide, or open another retained site")
       (:buffer-count result)
       (:source-character-count result)
-      (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+      (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
       buffer-lines)))
 
 (defn extraction-plan-summary
@@ -605,7 +603,7 @@
     (get-in result [:evidence_counts :caller_candidates :returned])
     (get-in result [:evidence_counts :quoted_var_references :returned])
     (count (get-in result [:plan :required-public-forms]))
-    (mcp-operation/format-elapsed-ms (:elapsed_ms result))))
+    (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))))
 
 (defn verification-job-summary
   "Render one bounded cold-verification job without repeating its full output."
@@ -614,13 +612,13 @@
         terminal? (true? (:verification_complete result))
         passed? (true? (:passed result))
         clock-summary
-        (if-let [job-elapsed-ms (:job_elapsed_ms result)]
+        (if-let [job-elapsed-ms (mcp-operation/measured-field result :job_elapsed_ms)]
           (str "request "
-               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+               (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
                " · job "
                (mcp-operation/format-elapsed-ms job-elapsed-ms))
           (str "request "
-               (mcp-operation/format-elapsed-ms (:elapsed_ms result))))]
+               (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))))]
     (format
       (str "inspect_clojure · cold verification\n"
            "  %s · %s · %s\n\n"
@@ -992,7 +990,7 @@
         (format (str "inspect_clojure\n"
                      "  refused · %s · %s\n")
                 (if (keyword? reason) (name reason) reason)
-                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+                (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result)))
         (when diagnostic?
           (str
             (format "  request %s · %s\n"

@@ -53,8 +53,8 @@
 (def transform-output-schema
   {:type "object"
    :properties {"ok" {:type "boolean"}
-                "elapsed_ms" {:type "number" :minimum 0}}
-   :required ["ok" "elapsed_ms"]})
+                "measured" mcp-operation/measured-output-schema}
+   :required ["ok" "measured"]})
 
 (def ^:private runtime-config runtime/tool-config)
 
@@ -391,10 +391,10 @@
   (if (:ok result)
     (str "transform_clojure\n  " (name (:operation result))
          " · " (:match-count result) " guarded edit(s) · "
-         (mcp-operation/format-elapsed-ms (:elapsed_ms result)) "\n\n"
+         (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result)) "\n\n"
          (:diff result))
     (str "transform_clojure refused · " (name (:error-type result))
-         " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+         " · " (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
          "\n" (:error result) "\nsource unchanged")))
 
 (defn handle-transform-clojure

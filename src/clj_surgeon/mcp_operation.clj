@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-operation
   (:require
-   [cheshire.core :as json])
+   [cheshire.core :as json]
+   [clj-surgeon.measured :as measured])
   (:import
    (java.util Locale)))
 
@@ -36,7 +37,46 @@
                        :started-ns started-ns
                        :finished-ns finished-ns
                        :elapsed-ms elapsed-ms})))
-    (assoc domain-result :elapsed_ms elapsed-ms)))
+    ;; @spec MCP-OP-TIME-005
+    ;; THE publication boundary for the measured partition. Every public MCP
+    ;; result passes through here, so this is the one place that can make "a
+    ;; measured field enters a receipt only through the partition" true by
+    ;; CONSTRUCTION rather than by every producer remembering. Code inside an
+    ;; operation may carry a clock reading in whatever shape suits it; what it
+    ;; may not do is publish one beside the partition instead of inside it.
+    (-> domain-result
+        measured/partition-measured
+        (measured/attach {:elapsed_ms elapsed-ms}))))
+
+(def measured-output-schema
+  "The public JSON shape of the measured partition.
+
+  Every clock-derived field a public MCP result publishes lives here, so a
+  caller reading the wire sees the same partition the receipts do: what is
+  under `measured` was read from a clock, and nothing under it belongs in a
+  hash, a byte-identity comparison, or a parity reference."
+  {:type "object"
+   :properties {"elapsed_ms" {:type "number" :minimum 0}
+                "job_elapsed_ms" {:type "number" :minimum 0}
+                "inspection_elapsed_ms" {:type "number" :minimum 0}
+                "scan_ms" {:type "number" :minimum 0}}
+   :required ["elapsed_ms"]})
+
+(defn measured-field
+  "One measured field of a public MCP result.
+
+  Reads the partition. Tolerates a bare top-level value because several budget
+  and byte-count checks build a throwaway result with a zeroed clock BEFORE
+  publication, and those maps never reach a caller. Producing an unpartitioned
+  measured field is what `clj-surgeon.measured-invariant-test` forbids; reading
+  one tolerantly costs nothing and keeps the pre-publication checks honest."
+  [result k]
+  (or (measured/field result k) (get result k)))
+
+(defn elapsed-ms
+  "The request clock of one public MCP result."
+  [result]
+  (measured-field result :elapsed_ms))
 
 ;; @spec MCP-OP-RESULT-001
 ;; @spec MCP-OP-RESULT-002

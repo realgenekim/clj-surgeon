@@ -561,13 +561,13 @@
                      "(constantly (fn [_ _ callback] "
                      "(callback [\"HOT_RELOAD_OK\"] false "
                      "{:ok true :operation \"apply_clojure_changes\" "
-                     ":elapsed_ms 0.0 :hot true})))) "
+                     ":measured {:elapsed_ms 0.0} :hot true})))) "
                      "(alter-var-root "
                      "#'clj-surgeon.mcp-inspect-tool/handle-inspect "
                      "(constantly (fn [_ _ callback] "
                      "(callback [\"HOT_INSPECT_OK\"] false "
                      "{:ok true :operation \"inspect_clojure\" "
-                     ":elapsed_ms 0.0 :read_complete true :hot true})))))")
+                     ":measured {:elapsed_ms 0.0} :read_complete true :hot true})))))")
                 replies (doall (nrepl/message client {:op "eval" :code code}))]
             (is (some #(contains? (set (:status %)) "done") replies))
             (is (not-any? :err replies))))
@@ -697,7 +697,7 @@
           (is (string? (:details_path receipt)))
           (is (string? (:undo_receipt receipt)))
           (is (re-matches #"[0-9a-f]{64}" (:receipt_hash receipt)))
-          (is (number? (:elapsed_ms receipt)))
+          (is (number? (get-in receipt [:measured :elapsed_ms])))
           (is (= (.getCanonicalPath workspace) (:workspace_root receipt))))
 
         (testing "the receipt directory was derived from the ROUTED workspace"

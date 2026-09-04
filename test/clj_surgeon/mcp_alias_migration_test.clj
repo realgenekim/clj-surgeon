@@ -148,7 +148,7 @@
           (is (= 0 (:string_mentions result))
               "the synthetic corpus names the old lib in no string literal")
           (is (string? (:details_path result)))
-          (is (number? (:elapsed_ms result))))
+          (is (number? (get-in result [:measured :elapsed_ms]))))
 
         (testing "the receipt is constant in N: it carries no per-file list"
           (let [encoded (json/generate-string result)]
@@ -299,7 +299,7 @@
         (is (= 80 (:expected_files result)))
         (is (true? (:source_unchanged result)))
         (is (false? (:write_authority result)))
-        (is (number? (:elapsed_ms result)))
+        (is (number? (get-in result [:measured :elapsed_ms])))
         (is (str/includes? (first content) "source unchanged"))
         (testing "no byte was written by the refused call"
           (doseq [[relative expected] (:pre corpus)]
@@ -450,7 +450,7 @@
 (def ^:private refusal-envelope-keys
   "Receipt keys the refusal text renders structurally rather than as facts."
   #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
-    :write_authority :next_action :next_call :remedy :elapsed_ms
+    :write_authority :next_action :next_call :remedy :measured
     :workspace_root :expect_files_unchanged_reason :receipt_hash
     :undo_receipt :details_path :details_retained :details_retention})
 

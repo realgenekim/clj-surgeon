@@ -1,4 +1,6 @@
-(ns clj-surgeon.mcp-schema)
+(ns clj-surgeon.mcp-schema
+  (:require
+   [clj-surgeon.mcp-operation :as mcp-operation]))
 
 (def verification-schema
   {:type "string" :enum ["fast" "full" "exact"]
@@ -635,7 +637,7 @@
 (def alias-migration-output-schema
   {:type "object"
    :properties {"ok" {:type "boolean"}
-                "elapsed_ms" {:type "number" :minimum 0}
+                "measured" mcp-operation/measured-output-schema
                 "files" {:type "integer" :minimum 0}
                 "sites" {:type "integer" :minimum 0}
                 "alias_histogram" {:type "object"}
@@ -645,4 +647,4 @@
                 "details_path" {:type "string"}
                 "details_retention" {:type "string"}
                 "details_retained" {:type "integer" :minimum 0}}
-   :required ["ok" "elapsed_ms"]})
+   :required ["ok" "measured"]})

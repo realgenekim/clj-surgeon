@@ -27,26 +27,42 @@
 ;; @spec MCP-OP-RESULT-003
 ;; @spec MCP-OP-RESULT-004
 (deftest finalization-adds-only-authoritative-time-and-preserves-classification
-  (doseq [[domain-result expected-error?]
+  ;; @spec MCP-OP-TIME-005
+  ;; The finalizer publishes every clock-derived field inside the `measured`
+  ;; partition and nothing beside it, so a domain result that carried its own
+  ;; measured fields is RELOCATED, and the request clock overrides a stale
+  ;; `elapsed_ms` rather than sitting next to it.
+  (doseq [[domain-result expected-error? expected-finalized]
           [[{:ok true
              :operation "example"
              :nested {:kept false}
              :optional nil
              :elapsed_ms 999.0
              :inspection_elapsed_ms 1.25}
-            false]
+            false
+            {:ok true
+             :operation "example"
+             :nested {:kept false}
+             :optional nil
+             :measured {:elapsed_ms 3.5 :inspection_elapsed_ms 1.25}}]
            [{:ok false
              :operation "example"
              :error_type "stale-source"
              :source_unchanged true}
-            true]]]
+            true
+            {:ok false
+             :operation "example"
+             :error_type "stale-source"
+             :source_unchanged true
+             :measured {:elapsed_ms 3.5}}]]]
     (let [calls (atom [])
           body (invoke!
                  {:clock-nanos (scripted-clock [1000000 4500000])
                   :execute (constantly domain-result)
                   :summarize (fn [result]
                                (str (:operation result) " · "
-                                    (format-elapsed-ms (:elapsed_ms result))))
+                                    (format-elapsed-ms
+                                      (get-in result [:measured :elapsed_ms]))))
                   :serialize json/generate-string
                   :callback (fn [content error? structured]
                               (swap! calls conj
@@ -56,8 +72,10 @@
           finalized (get-in @calls [0 :structured])]
       (is (= 1 (count @calls)))
       (is (= expected-error? (get-in @calls [0 :error?])))
-      (is (= 3.5 (:elapsed_ms finalized)))
-      (is (= (assoc domain-result :elapsed_ms 3.5) finalized))
+      (is (= 3.5 (get-in finalized [:measured :elapsed_ms])))
+      (is (false? (contains? finalized :elapsed_ms))
+          "the request clock is published beside the partition, not inside it")
+      (is (= expected-finalized finalized))
       (is (= finalized (json/parse-string body true)))
       (is (= [(str "example · " (format-elapsed-ms 3.5))]
              (get-in @calls [0 :content]))))))

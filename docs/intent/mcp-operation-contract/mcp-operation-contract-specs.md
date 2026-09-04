@@ -11,9 +11,9 @@ tests witness the requirement.
 
 # #Finalized Results
 
-- [x] **MCP-OP-RESULT-001**: When a public MCP handler produces a successful domain result, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that result.
-- [x] **MCP-OP-RESULT-002**: When a public MCP handler produces a typed refusal, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that refusal.
-- [x] **MCP-OP-RESULT-003**: When clj-surgeon finalizes a domain result, the finalized domain fields shall equal the produced domain fields except for the authoritative top-level `elapsed_ms`.
+- [x] **MCP-OP-RESULT-001**: When a public MCP handler produces a successful domain result, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that result's `measured` partition.
+- [x] **MCP-OP-RESULT-002**: When a public MCP handler produces a typed refusal, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that refusal's `measured` partition.
+- [x] **MCP-OP-RESULT-003**: When clj-surgeon finalizes a domain result, the finalized domain fields shall equal the produced domain fields except that every measured field is relocated into the `measured` partition at its own level and the authoritative request `elapsed_ms` is added to the top-level partition.
 - [x] **MCP-OP-RESULT-004**: When timing evidence is added to an MCP domain result, clj-surgeon shall preserve the domain outcome's existing MCP success or error classification.
 - [x] **MCP-OP-RESULT-005**: If MCP result finalization receives a non-map result or an invalid elapsed interval, then clj-surgeon shall fail the MCP invocation as an unexpected MCP error without publishing a malformed domain result.
 - [x] **MCP-OP-RESULT-006**: If MCP summary rendering or result serialization fails, then clj-surgeon shall fail the MCP invocation as an unexpected MCP error without publishing a partial domain result.
@@ -22,16 +22,18 @@ tests witness the requirement.
 
 - [x] **MCP-OP-TIME-001**: When a public MCP handler is invoked, clj-surgeon shall start its request clock before handler validation and domain execution.
 - [x] **MCP-OP-TIME-002**: When public MCP domain execution returns, clj-surgeon shall stop its request clock before summary rendering, serialization, callback scheduling, and transport.
-- [x] **MCP-OP-TIME-003**: When a public MCP result is summarized, clj-surgeon shall render its structured `elapsed_ms` with a locale-independent decimal point, exactly two decimal places, and the `ms` suffix.
-- [x] **MCP-OP-TIME-004**: Where an existing top-level MCP timer measures a narrower internal phase, clj-surgeon shall preserve that value under a phase-specific field instead of using it as public `elapsed_ms`.
-- [x] **MCP-OP-SCHEMA-001**: For every tool in the canonical public MCP registry, clj-surgeon shall require `elapsed_ms` as a non-negative number in that tool's output schema.
+- [x] **MCP-OP-TIME-003**: When a public MCP result is summarized, clj-surgeon shall render the `elapsed_ms` of its `measured` partition with a locale-independent decimal point, exactly two decimal places, and the `ms` suffix.
+- [x] **MCP-OP-TIME-004**: Where an existing MCP timer measures a narrower internal phase, clj-surgeon shall preserve that value under a phase-specific field of the `measured` partition instead of using it as the public request `elapsed_ms`.
+- [x] **MCP-OP-SCHEMA-001**: For every tool in the canonical public MCP registry, clj-surgeon shall require a `measured` object carrying `elapsed_ms` as a non-negative number in that tool's output schema.
+- [x] **MCP-OP-TIME-005**: When clj-surgeon publishes any public MCP result, every field in that result whose value a clock produced shall appear only inside a `measured` block, at any depth, and never beside one.
+- [x] **MCP-OP-EXIT-001**: `System/exit` shall appear in `src/` only inside a `-main` entrypoint, so that no library call can terminate the process of a caller that is an MCP server, a test runner, or another tool's JVM.
 
 # #Asynchronous Verification
 
-- [x] **MCP-OP-ASYNC-001**: While a cold verification job is pending, an MCP launch or inspection result shall omit `job_elapsed_ms`.
-- [x] **MCP-OP-ASYNC-002**: When inspection observes a cold verification job that completed after execution began, the MCP result shall contain finite, non-negative `elapsed_ms` and `job_elapsed_ms` values.
+- [x] **MCP-OP-ASYNC-001**: While a cold verification job is pending, an MCP launch or inspection result shall omit `job_elapsed_ms` from its `measured` partition.
+- [x] **MCP-OP-ASYNC-002**: When inspection observes a cold verification job that completed after execution began, the MCP result's `measured` partition shall contain finite, non-negative `elapsed_ms` and `job_elapsed_ms` values.
 - [x] **MCP-OP-ASYNC-003**: When a cold verification result contains `elapsed_ms` and `job_elapsed_ms`, its human summary shall label the corresponding formatted values as `request` and `job`.
-- [x] **MCP-OP-ASYNC-004**: If cold verification inspection cannot identify an owned job that began execution, then the typed refusal shall omit `job_elapsed_ms`.
+- [x] **MCP-OP-ASYNC-004**: If cold verification inspection cannot identify an owned job that began execution, then the typed refusal shall omit `job_elapsed_ms` from its `measured` partition.
 - [x] **MCP-OP-ASYNC-005**: When cold verification inspection reads a job state, clj-surgeon shall publish evidence from exactly that observed state even if the job transitions afterward.
 
 # #Registration and Traceability Gates

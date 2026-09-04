@@ -200,7 +200,7 @@
       (program/init! {:project-root (.getPath root)})
       (program/handle-transform-clojure nil transform-request callback)
       (let [{:keys [content error? structured]} (first @calls)
-            elapsed (:elapsed_ms structured)]
+            elapsed (get-in structured [:measured :elapsed_ms])]
         (is (false? error?))
         (is (number? elapsed))
         (when (number? elapsed)
@@ -210,7 +210,7 @@
       (program/init! nil)
       (program/handle-transform-clojure nil transform-request callback)
       (let [{:keys [content error? structured]} (second @calls)
-            elapsed (:elapsed_ms structured)]
+            elapsed (get-in structured [:measured :elapsed_ms])]
         (is (true? error?))
         (is (number? elapsed))
         (when (number? elapsed)

@@ -1123,8 +1123,18 @@
                    (discover-projects-grep (grep-tree grep abs) abs)
                    (discover-projects abs))]
     (if (empty? projects)
-      (do (println (no-clojure-files-message abs grep))
-          (System/exit 1))
+      ;; @spec MCP-OP-EXIT-001
+      ;; A TYPED REFUSAL, not an exit. This branch used to call
+      ;; `(System/exit 1)` from inside a library function: every caller that
+      ;; was not a CLI — the MCP server, a test runner, another tool's JVM —
+      ;; died on an empty scan, and the discovery suite had to shell out to a
+      ;; subprocess to test the op at all. The CLI still exits 1, because
+      ;; `-main` exits 1 on any result carrying `:error`.
+      {:error (no-clojure-files-message abs grep)
+       :error-type :no-clojure-files
+       :dir (str dir)
+       :grep grep
+       :next-action "widen_the_scan_root_or_relax_the_grep"}
       (let [total (candidate-total projects)]
         (if-not (> total ceiling)
           (encode-page abs projects (candidate-seq projects) output-format
@@ -1326,9 +1336,6 @@
   ;; @spec MCP-OP-MEM-003
   ;; @spec MCP-OP-SHELL-ARGV-002
   [{:keys [dir grep max-results cursor complete] :as opts}]
-  (when-not dir
-    (println "Error: :dir is required for :ls-tree")
-    (System/exit 1))
   (let [output-format (:format opts)
         ;; `absolutize` itself can throw on a hostile :dir, and a root that is
         ;; not a directory must never reach discovery: an empty result is
@@ -1347,7 +1354,19 @@
              :complete complete :output-format output-format
              :base base :render render}]
     (cond
-      ;; FIRST, and returned as it is rather than through `render`: this is
+      ;; @spec MCP-OP-EXIT-001
+      ;; A missing :dir used to print and `(System/exit 1)` from inside this
+      ;; library function. It is a typed refusal now, checked ahead of the root
+      ;; refusal so the caller is told which argument is missing rather than
+      ;; that "" is not a directory.
+      (nil? dir)
+      {:error ":ls-tree :dir is required"
+       :error-type :missing-required-argument
+       :argument :dir
+       :next-action "pass_a_directory_path"}
+
+      ;; FIRST among the root checks, and returned as it is rather than through
+      ;; `render`: this is
       ;; the andon lane's typed refusal, its shape is its contract
       ;; (`:error-type :workspace-root-not-a-directory`), and it is checked
       ;; ahead of the ceiling because a bad root is a fact about the request
