@@ -473,3 +473,6 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - Outage ~09:30Z (session limit) → all lanes relaunched 10:03Z from local commits; rules now in every brief: builders push per item, reviewers write verdicts incrementally.
 - Lanes: feature_thread r4 building (ft3 NO-GO folded + round-three spec + after_context); q5z r19 fix round (r18 Sol NO-GO on one: kind in the second parameter); tmp-leak r4 Sonnet fix (r3 Opus GO-WITH-FIX: $(filter) subpaths) → then LAND with the one-line .PHONY composition; census r23 Opus review (r22 built; Sol refused); gate r6 building (r5 NO-GO: caller field echoed verbatim); MEM-003 r6 building (r5 NO-GO: ._launder interop + ns-resolve); study-ops r6 building (r5 Sol NO-GO). Trunk MCP/main last landing 804febcb (scorer).
 - Replay complete (11 arms verified; standing sentence in the 10:5xZ delta). Gene reports: 0815z, 1015z; captain's log entry "the night of the tweezer" at a96a665e.
+
+## RESUME DELTA 11:30Z
+- tmp-leak ratchet LANDED: MCP/main = d0b4e1ca (merge --no-ff of 5a6e7c81; gate + bb green on the merged tree; trailing mcp-test log /var/tmp/forge/land-tmpleak-mcp-test.log). Landings tonight: integration, scorer, tmp-leak. Row TMP closed; inb-9483a4 completed.
