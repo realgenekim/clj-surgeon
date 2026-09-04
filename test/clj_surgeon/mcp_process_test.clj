@@ -122,6 +122,34 @@
 ;;   the SIGNAL is widened rather than the tolerance narrowed.
 ;; ---------------------------------------------------------------------------
 
+(def ^:private owner-hold-ms
+  "How long a test's LOCK OWNER holds admission while another party observes
+   the lock or is refused by it.
+
+   This is the one number a generous CEILING cannot rescue, and the third
+   contention run is what showed it. `direct-shell-shim-uses-the-same-host-admission`
+   started an owner that held for ONE SECOND and then waited (patiently, on a
+   15 s ceiling) to observe the lock file. At load 27 the owner's sleep
+   finished before the observation ever happened, the waiter was admitted
+   instead of refused, and the test reported `expected 75, got 0` -- calling a
+   working refusal broken. Waiting LONGER makes that worse, not better.
+
+   A rendezvous has to be WINNABLE: the window in which the other party is
+   observable must outlast the observation latency. So the owner's hold is
+   widened, and the owner is killed as soon as the observation is done rather
+   than being slept out. `CLJ_SURGEON_TEST_OWNER_HOLD_MS` widens it further."
+  (or (some-> (System/getenv "CLJ_SURGEON_TEST_OWNER_HOLD_MS") parse-long) 10000))
+
+(defn- kill-tree!
+  "Destroys `process` and everything it spawned. The owners here are shell
+   shims whose real work is a `/bin/sleep` CHILD: destroying only the shim
+   leaves that sleep running for the rest of its hold, holding nothing but
+   still costing the box."
+  [^Process process]
+  (doseq [^java.lang.ProcessHandle d (reverse (vec (.toList (.descendants (.toHandle process)))))]
+    (.destroyForcibly d))
+  (.destroyForcibly process))
+
 (def ^:private rendezvous-timeout-ms
   "How long any wait in this namespace gives the other party to show up. One
    second of wall is not one second of scheduling at load 27; this is 15, and
@@ -220,8 +248,8 @@
         owner (future
                 (binding [process/*clj-kondo-lock-path* lock-path
                           process/*clj-kondo-admission-path* admission-script]
-                  (run-admitted [analyzer "1.00"]
-                                owner-root rendezvous-timeout-ms)))]
+                  (run-admitted [analyzer (str (/ owner-hold-ms 1000.0))]
+                                owner-root (* 4 owner-hold-ms))))]
     (is (wait-until rendezvous-timeout-ms
                     #(and (.isFile (io/file lock-path))
                           (str/includes? (slurp lock-path)
@@ -310,16 +338,21 @@
                      "CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD" "1000000"
                      "CLJ_SURGEON_CLJ_KONDO_EVENTS" test-events-path
                      "PATH" (System/getenv "PATH")}
-        owner (start-process "/tmp" [(str shim) "1"] environment)]
-    (is (wait-until rendezvous-timeout-ms
-                    #(and (.isFile (io/file lock-path))
-                          (str/includes? (slurp lock-path) "agent-shell"))))
-    (let [waiter (start-process "/tmp" [(str shim) "0"] environment)]
-      ;; The CONTRACT is that the waiter is REFUSED (exit 75) because the owner
-      ;; holds the lock -- not that the refusal arrives inside one second.
-      (is (.waitFor waiter rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))
-      (is (= 75 (.exitValue waiter))))
-    (is (.waitFor owner rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))))
+        owner (start-process "/tmp" [(str shim) (str (/ owner-hold-ms 1000.0))]
+                             environment)]
+    (try
+      (is (wait-until rendezvous-timeout-ms
+                      #(and (.isFile (io/file lock-path))
+                            (str/includes? (slurp lock-path) "agent-shell"))))
+      (let [waiter (start-process "/tmp" [(str shim) "0"] environment)]
+        ;; The CONTRACT is that the waiter is REFUSED (exit 75) because the
+        ;; owner holds the lock -- not that the refusal arrives inside one
+        ;; second, and not that the owner is still holding by luck.
+        (is (.waitFor waiter rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))
+        (is (= 75 (.exitValue waiter))))
+      (finally
+        (kill-tree! owner)
+        (is (.waitFor owner rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))))))
 
 (deftest explicit-admission-skips-a-path-shadowing-shell-shim
   ;; @spec MCP-OP-ANALYZER-001
