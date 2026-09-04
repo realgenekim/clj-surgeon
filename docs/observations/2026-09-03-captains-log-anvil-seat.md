@@ -1695,3 +1695,5 @@ per Gene's "B. Go": partition + lane declaration + JVM isolation + the two races
 Docs on bridge/suite-spike: 2026-09-04-suite-spike-round1{,-timing,-classification}.md (commits 34e0e82a, e97a1979, c4f69081).
 
 ## 18:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 18:53Z — usage watch (untimed run started 18:50Z at load 20.6): tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; full JSON /var/tmp/forge/usage-untimed.log)
