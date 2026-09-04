@@ -65,7 +65,9 @@
    ;; Round twenty — the witnesses that close round nineteen's two blocking
    ;; findings: the bound is over the value AS PRINTED, and the containment
    ;; fence fails CLOSED.
-   ['clj-surgeon.mcp-relation-census-launcher-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]])
+   ['clj-surgeon.mcp-relation-census-launcher-test/no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value :r20]
+   ['clj-surgeon.mcp-relation-census-launcher-test/no-census-reads-a-source-when-its-workspace-does-not-resolve :r20]
+   ['clj-surgeon.mcp-relation-census-round20-test/the-two-entrances-refuse-an-unresolvable-workspace-alike :r20]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]

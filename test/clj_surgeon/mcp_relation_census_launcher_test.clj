@@ -16,10 +16,15 @@
    PRINTS, and whether it is bounded."
   (:require
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [babashka.process :as proc]
-   [clj-surgeon.relation-census :as census]))
+   [clj-surgeon.core :as core]
+   [clj-surgeon.relation-census :as census])
+  (:import
+   (java.nio.file Files)
+   (java.nio.file.attribute FileAttribute)))
 
 (def ^:private repo-root (.getCanonicalPath (java.io.File. ".")))
 
@@ -269,3 +274,108 @@
               (str runtime " " label " published "
                    (alength (.getBytes (str out) "UTF-8")) " bytes")))))))
 
+
+;; ---------------------------------------------------------------------------
+;; ROUND TWENTY, item 2 — Opus's round-nineteen BLOCKING finding.
+;;
+;; The containment fence FAILED OPEN. `core/census-workspace` swallowed every
+;; exception to nil and `core/escaping-source` opened with `(when workspace …)`,
+;; so a nil workspace answered "not escaping" for EVERY path — not merely
+;; absent, but affirmatively reporting a containment it never tested. An
+;; unresolvable `:dir` is enough to reach it, and an unresolvable `:dir` is an
+;; ordinary operator typo:
+;;
+;;   :dir <nonexistent> :file <symlink leaving the workspace>
+;;     {:ok true, :files-scanned 1, :read-complete true, :arms 1}
+;;   :dir <nonexistent> :file /…/outside/secret.clj
+;;     {:ok true, :files-scanned 1, :read-complete true, :arms 1}
+;;
+;; both reproduced at this branch's tip through the real JVM launcher, while
+;; the MCP entrance refuses the identical request `invalid-workspace-root`.
+;; A completeness claim over a tree the request never named, published as a
+;; GREEN receipt — the failure class that terminates investigation.
+;;
+;; THE RULE: A WORKSPACE THAT DOES NOT RESOLVE IS A TYPED REFUSAL, NEVER A
+;; LICENCE TO READ. `escaping-source` returning nil must mean "I tested it and
+;; it is inside", never "I could not test"; the nil workspace is made
+;; unrepresentable rather than handled.
+;;
+;; Driven through the PRODUCTION path — both real launchers as subprocesses —
+;; because the round-nineteen containment witness drove the op as a function
+;; and the fail-open lives at the entrance that resolves the workspace.
+;; ---------------------------------------------------------------------------
+
+(defn- unresolvable-workspace-fixture!
+  "A workspace with an escaping link, an arm inside, and a secret outside."
+  [^java.io.File parent]
+  (let [ws (io/file parent "ws")
+        outside (io/file parent "outside")
+        arm "(ns app.arm)\n(defmethod fold-event :arm [state event] state)\n"]
+    (.mkdirs (io/file ws "src/app"))
+    (.mkdirs outside)
+    (spit (io/file ws "src/app/arm.clj") arm)
+    (spit (io/file outside "secret.clj") arm)
+    (Files/createSymbolicLink
+      (.toPath (io/file ws "src/app/escape.clj"))
+      (.toPath (io/file "../../../outside/secret.clj"))
+      (make-array FileAttribute 0))
+    {:ws ws :outside outside}))
+
+;; @spec MCP-OP-CENSUS-018
+(deftest no-census-reads-a-source-when-its-workspace-does-not-resolve
+  (let [parent (.toFile (Files/createTempDirectory "census20-fence"
+                                                   (make-array FileAttribute 0)))]
+    (try
+      (let [{:keys [ws outside]} (unresolvable-workspace-fixture! parent)
+            named (.getCanonicalPath ^java.io.File ws)
+            missing (str (.getCanonicalPath parent) "/does-not-exist")
+            rows [{:label :escaping-symlink
+                   :file (str named "/src/app/escape.clj")}
+                  {:label :absolute-outside
+                   :file (str (.getCanonicalPath ^java.io.File outside)
+                              "/secret.clj")}]]
+
+        (doseq [runtime [:jvm :bb]
+                {:keys [label file]} rows]
+          (let [{:keys [out exit parsed]}
+                (raw-launcher runtime [":op" ":relation-census"
+                                       ":dir" missing ":file" file])]
+            (testing (str runtime " " label " refuses, typed, before any read")
+              (is (= 1 exit)
+                  (str runtime " " label " exited " exit ": " (pr-str out)))
+              (is (map? parsed)
+                  (str runtime " " label " printed no readable receipt: "
+                       (pr-str out)))
+              (is (false? (:ok parsed))
+                  (str runtime " " label
+                       " censused a source outside every tree the request "
+                       "named: " (pr-str (select-keys parsed
+                                                      [:ok :files-scanned
+                                                       :read-complete :arms]))))
+              (is (= :invalid-workspace-root (:error-type parsed))
+                  (str runtime " " label " refused "
+                       (pr-str (:error-type parsed))
+                       ", not the name the MCP entrance publishes for the "
+                       "identical request"))
+              (is (contains? census/cli-refusal-types (:error-type parsed))
+                  (str runtime " " label " published "
+                       (pr-str (:error-type parsed))
+                       ", which `cli-refusal-types` does not declare"))
+              (is (zero? (:files-scanned parsed 0))
+                  (str runtime " " label " scanned "
+                       (:files-scanned parsed) " file(s) before refusing"))
+              (is (not (str/includes? (str out) "fold-event"))
+                  (str runtime " " label
+                       " published the contents of a source it should never "
+                       "have opened")))))
+
+        (testing "the fence cannot be HANDED an unresolved workspace at all"
+          ;; The nil state is made unrepresentable rather than handled: a
+          ;; `(when workspace …)` that answers "contained" for a workspace it
+          ;; never had is the defect, and a guard that returns nil in the same
+          ;; place would reproduce it.
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (core/escaping-source nil (str named "/src/app/escape.clj")))
+              "escaping-source answered a containment question with no workspace")))
+      (finally
+        (doseq [f (reverse (file-seq parent))] (.delete ^java.io.File f))))))
