@@ -57,7 +57,9 @@
    ;; eighteen's rule authorised a read outside the censused tree, and round
    ;; nineteen replaced the rule rather than adding a witness beside it.
    ['clj-surgeon.mcp-relation-census-test/no-census-reads-a-source-whose-real-path-leaves-the-workspace :r19]
-   ['clj-surgeon.mcp-relation-census-test/every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit :r19]])
+   ['clj-surgeon.mcp-relation-census-test/every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit :r19]
+   ['clj-surgeon.mcp-relation-census-test/no-refusal-names-the-workspace-root-in-its-prose :r19]
+   ['clj-surgeon.mcp-relation-census-test/no-refusal-SITE-renders-a-raw-workspace-root-into-prose :r19]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]
