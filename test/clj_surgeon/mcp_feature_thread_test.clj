@@ -1628,3 +1628,65 @@
     (let [{:keys [structured]} (thread! fixture-root)]
       (is (nil? (:export (leg structured "handler")))
           "`export` is a JavaScript question and belongs only to script legs"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR / addendum -- after_context: the lines the anchor points AT
+;; ---------------------------------------------------------------------------
+
+(defn- sed-lines
+  "`sed -n '<from>,<to>p' <file>` computed in process, so the witness compares
+  the receipt against the file rather than against the code that made it."
+  [root file from to]
+  (let [lines (str/split (slurp (io/file root file)) #"\n" -1)]
+    (vec (take (inc (- to from)) (drop (dec from) lines)))))
+
+;; @spec MCP-OP-THREAD-036
+(deftest an-anchor-carries-the-source-lines-it-points-at
+  (let [{:keys [text structured]} (thread! fixture-root)]
+    (testing "every FOUND leg with an anchor carries after_context"
+      (doseq [l (:legs structured)
+              :when (= "FOUND" (:status l))]
+        (is (seq (:after_context l))
+            (str "leg " (:id l) " names an insertion point and not one line"
+                 " of what is there"))
+        (is (<= 3 (count (:after_context l)) 6)
+            (str "leg " (:id l) " carried " (count (:after_context l))
+                 " lines; the addendum asks for 3-6"))))
+
+    (testing "and those lines are VERBATIM the file's own"
+      (doseq [l (:legs structured)
+              :when (and (= "FOUND" (:status l)) (seq (:after_context l)))]
+        (let [from (inc (:to l))
+              to (+ (:to l) (count (:after_context l)))]
+          (is (= (sed-lines fixture-root (:file l) from to)
+                 (vec (:after_context l)))
+              (str "leg " (:id l) ": after_context is not sed -n '"
+                   from "," to "p' " (:file l))))))
+
+    (testing "the range is named so the reader can check it"
+      (let [h (leg structured "handler")]
+        (is (= (inc (:to h)) (:after_context_from h)))
+        (is (= (+ (:to h) (count (:after_context h))) (:after_context_to h)))))
+
+    (testing "and the text face carries them too"
+      (is (str/includes? text "AFTER<<")))
+
+    (testing "a CANDIDATE has no anchor and therefore no after_context"
+      (let [scratch (scratch-copy! fixture-root "feature-thread-aftercand")]
+        (try
+          (spit (io/file scratch "src/writer/handlers/transform.clj")
+                "\n\n(comment\n  (widgetize {:draft \"x\"}))\n" :append true)
+          (let [{:keys [structured]}
+                (call! {:subject "widgetize"
+                        :config smw-conventions
+                        :scope {:workspace_root (.getPath scratch)}})]
+            (is (nil? (:after_context (leg structured "handler")))))
+          (finally (delete-tree! scratch)))))
+
+    (testing "and it is elided with the body under budget pressure"
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 10240})]
+        (doseq [l (:legs structured)
+                :when (:elided_reason l)]
+          (is (nil? (:after_context l))
+              (str "leg " (:id l) " kept its after_context after its body was"
+                   " elided for budget")))))))
