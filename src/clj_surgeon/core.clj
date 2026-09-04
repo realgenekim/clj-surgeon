@@ -1996,7 +1996,22 @@
         shape-refusal (when-let [shape (:shape (get ops-registry canonical))]
                         (shape opts))]
     (if shape-refusal
-      (do (pp/pprint shape-refusal) shape-refusal)
+      ;; Opus's round-seventeen item 1, blocking, the CLI half. This branch
+      ;; RETURNS the op's pure shape refusal without ever entering the op, so
+      ;; the bound `run-relation-census` applies at its own last step never saw
+      ;; it: `:threads <10,001 a's>` printed a 10,514-byte refusal with a
+      ;; 10,054-character field and no truncation marker, and so did an
+      ;; unknown argument whose NAME was that long, and a `:dir` that did not
+      ;; decode.
+      ;;
+      ;; The same one function the op's exit uses, at THIS exit, because this
+      ;; is an exit — that is the whole content of the rule. `:relation-census`
+      ;; is the only op that declares a `:shape` pass, so nothing else changes
+      ;; shape here; an op that declares one later inherits the bound rather
+      ;; than rediscovering this defect.
+      (let [bounded (relation-census/bound-refusal shape-refusal)]
+        (pp/pprint bounded)
+        bounded)
       (run-op canonical opts))))
 
 (defn parse-val

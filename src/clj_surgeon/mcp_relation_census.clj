@@ -115,22 +115,49 @@
    not a smaller promise than a real one, it is a field the caller must
    interpret; the refusal says what it can offer instead, in `remedy`."
   [error-type message next-call & [data]]
-  ;; Opus's round-sixteen item 7. Bounded HERE, at the one place every refusal
-  ;; this tool emits is assembled, rather than at the sites that build the
-  ;; strings — the same argument the continuation constructor is built on. The
-  ;; `next_call` is exempt and stays exact: it is an EXECUTABLE promise, it
-  ;; carries its own byte ceiling, and a truncated path in an argument position
-  ;; does not fail, it names a DIFFERENT file.
-  (census/bound-refusal
-    (merge (cond-> {:ok false
-                    :operation "relation-census"
-                    :census_version census/census-version
-                    :error_type (name error-type)
-                    :error message
-                    :source_unchanged true
-                    :read_complete false}
-             (some? next-call) (assoc :next_call next-call))
-           data)))
+  ;; Opus's round-seventeen item 1, blocking. Round sixteen bounded HERE, at
+  ;; "the one place every refusal this tool emits is assembled" — and that
+  ;; claim was false the day it shipped: the workspace router's refusal is
+  ;; `assoc`ed onto the router's own map and never passes through this
+  ;; function, so a 10,001-character `workspace_root` came back as a
+  ;; 10,540-byte refusal with a 10,007-character field and no marker.
+  ;;
+  ;; A constructor is a SITE. `bound-refusal`'s own docstring says the bound
+  ;; belongs at each entrance's LAST step "rather than at the sites that build
+  ;; the strings, for the reason MCP-OP-CENSUS-014 gives about the continuation
+  ;; constructor: a bound enforced at some of a namespace's construction sites
+  ;; is not a bound, it is those sites' habit, and the habit does not travel to
+  ;; the site added next round." So the bound is GONE from here and lives at
+  ;; `entrance-bounded`, which every exit from this entrance passes through.
+  (merge (cond-> {:ok false
+                  :operation "relation-census"
+                  :census_version census/census-version
+                  :error_type (name error-type)
+                  :error message
+                  :source_unchanged true
+                  :read_complete false}
+           (some? next-call) (assoc :next_call next-call))
+         data))
+
+;; @spec MCP-OP-CENSUS-014
+(defn- entrance-bounded
+  "THE ONE PLACE this entrance's refusals are length-bounded.
+
+   The sibling of `run-relation-census`'s last step at the CLI, and the same
+   rule: a refusal is what a caller reads when something has already gone
+   wrong, and it is the last place that should be able to hand back ten
+   kilobytes of the caller's own bad input at the moment they are least able
+   to read it. A RECEIPT is untouched — it carries its own 4,096-byte cap and
+   its own trimming rules — so this fires on `(false? (:ok result))` alone.
+
+   Applied at the exits rather than at `refusal`, because `refusal` is a
+   construction SITE and two of this entrance's refusals are not built by it:
+   the workspace router's, which is `assoc`ed onto the router's own map, and
+   the shape pass's, which comes back from the shared validator."
+  [result]
+  (if (false? (:ok result))
+    (census/bound-refusal result)
+    result))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn- overflow-measurement
@@ -1274,8 +1301,12 @@
                    " sources with files, or point workspace_root at a "
                    "directory you know is smaller, and retry.")})))
 
-(defn execute-request!
-  "Route and execute one relation_census request."
+(defn- execute-request!*
+  "Route and execute one relation_census request, before the entrance bound.
+
+   Separate from `execute-request!` so that the bound is applied ONCE, at the
+   exit, on every branch below alike — including the two that do not go
+   through `refusal`."
   [config params]
   (let [normalized (json/parse-string (json/generate-string params) true)
         shaped (validate-request-shape normalized)]
@@ -1305,6 +1336,12 @@
                      (exhaustion-refusal error)))
                  :workspace_root (:workspace-root routed)))))))
 
+;; @spec MCP-OP-CENSUS-014
+(defn execute-request!
+  "Route and execute one relation_census request, bounded at the exit."
+  [config params]
+  (entrance-bounded (execute-request!* config params)))
+
 (defn- summary
   [result]
   (if (:ok result)
@@ -1325,11 +1362,16 @@
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(if-let [config @runtime-config]
-                 (execute-request! config params)
-                 (refusal :server-not-initialized
-                          "relation_census server is not initialized"
-                          (:next-call (continuation {}))))
+    ;; The handler's own exit, bounded by the SAME function, so the
+    ;; uninitialised-server refusal — which is raised here, before
+    ;; `execute-request!*` is ever called — is not the next shape outside the
+    ;; bound.
+    {:execute #(entrance-bounded
+                  (if-let [config @runtime-config]
+                    (execute-request!* config params)
+                    (refusal :server-not-initialized
+                             "relation_census server is not initialized"
+                             (:next-call (continuation {})))))
      :summarize summary
      :callback callback}))
 
