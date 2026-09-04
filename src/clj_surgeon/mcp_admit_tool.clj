@@ -232,6 +232,25 @@
   "The analyzer invocation, before the file list is expanded into it."
   ["clj-kondo" "--lint" "{files}"])
 
+;; @spec MCP-OP-ADMIT-122
+(def analyzer-findings-visible-bytes
+  "How many bytes of analyzer findings this gate will read back, at most.
+
+  This is NOT the receipt budget and must never be set from it. The receipt
+  budget answers `how much may we publish to the caller?` and its job is to
+  bound noise. This answers `how much of the analyzer's answer may the
+  detector see before it decides?` and a cap there is a cap on truth: the
+  parse is all-or-nothing, so one byte over the line does not degrade the
+  delta, it deletes it.
+
+  The number exists only to bound this process's heap against a runaway
+  analyzer. It is deliberately three orders of magnitude above anything a
+  real patch provokes -- the largest findings payload measured over the 14
+  frozen field patches was 21,883 bytes, and `max-patch-bytes` caps a patch
+  at 262,144 bytes of diff -- so that reaching it is a genuine anomaly, and
+  by MCP-OP-ADMIT-121 a named one rather than a silent one."
+  (* 16 1024 1024))
+
 ;; @spec MCP-OP-ADMIT-121
 (defn analyzer-read-ceiling
   "How many bytes of analyzer output this gate will read back.
@@ -242,7 +261,7 @@
   (let [declared (:admit-analyzer-visible-bytes config)]
     (if (and (number? declared) (pos? declared))
       (long declared)
-      (long change-buffer/exact-verification-visible-bytes))))
+      (long analyzer-findings-visible-bytes))))
 
 ;; @spec MCP-OP-ADMIT-121
 (defn- kondo-findings
