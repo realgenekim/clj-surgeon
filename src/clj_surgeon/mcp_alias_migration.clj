@@ -213,6 +213,75 @@
       text
       (str/replace text separator "/"))))
 
+
+;; @spec MCP-OP-ALIAS-061
+(def refused-code-point-types
+  "Unicode general categories no `scope.paths` entry may carry.
+
+  C0 and C1 controls and DEL (CONTROL), the format and bidirectional-override
+  characters (FORMAT — U+200B, U+FEFF, U+202E), unpaired surrogates
+  (SURROGATE), private-use and unassigned code points. SPACE_SEPARATOR is NOT
+  here: a directory named `root with spaces` is ordinary, and this gate exists
+  for the spellings a caller cannot SEE, not for the ones they can."
+  #{(int Character/CONTROL) (int Character/FORMAT) (int Character/SURROGATE)
+    (int Character/PRIVATE_USE) (int Character/UNASSIGNED)
+    (int Character/LINE_SEPARATOR) (int Character/PARAGRAPH_SEPARATOR)})
+
+;; @spec MCP-OP-ALIAS-061
+(def replacement-character
+  "U+FFFD, the only trace a malformed byte sequence can leave in a JVM string.
+
+  Overlong UTF-8 cannot survive decoding: the `C0 AF` encoding of `/` is
+  normalised to `/` by the JSON layer before this verb sees it, so there is
+  nothing left to type. A decoder that does NOT normalise emits U+FFFD, and
+  that is the observable form of the same malformation."
+  \ufffd)
+
+;; @spec MCP-OP-ALIAS-061
+(defn refused-code-point
+  "The first non-printable or malformed code point in one scope entry.
+
+  Returns `{:code-point n :index i}` or nil. Only U+0000 was ever typed, and
+  NUL is not special: it is one member of a class whose whole point is that
+  the caller cannot see it. Every other member compiled as a glob, matched
+  nothing, and was published as `scope-matches-nothing` — an assertion about
+  the TREE that the walk never made.
+
+  A surrogate is refused only when it is UNPAIRED: a valid pair is one
+  ordinary supplementary character and names a path like any other."
+  [entry]
+  (let [text (str entry)
+        length (count text)]
+    (loop [index 0]
+      (when (< index length)
+        (let [ch (.charAt text index)
+              paired? (and (Character/isHighSurrogate ch)
+                           (< (inc index) length)
+                           (Character/isLowSurrogate (.charAt text (inc index))))
+              code-point (if paired?
+                           (Character/toCodePoint ch (.charAt text (inc index)))
+                           (int ch))]
+          (cond
+            (and (not paired?)
+                 (or (= replacement-character ch)
+                     (contains? refused-code-point-types
+                                (int (Character/getType (int ch))))))
+            {:code-point code-point :index index}
+
+            paired?
+            (if (contains? refused-code-point-types
+                           (int (Character/getType code-point)))
+              {:code-point code-point :index index}
+              (recur (+ index 2)))
+
+            :else (recur (inc index))))))))
+
+;; @spec MCP-OP-ALIAS-061
+(defn code-point-label
+  "One code point, spelled the way a caller can search for it."
+  [code-point]
+  (format "U+%04X" code-point))
+
 ;; @spec MCP-OP-ALIAS-057
 (defn scope-glob-patterns
   "The glob patterns one `scope.paths` entry selects under `root`.
@@ -519,12 +588,13 @@
   read failures included. A ceiling that counts an entry class it will not stop
   on is not a ceiling for that class."
   [^Path root {:keys [paths exclude]}]
-  (let [nul (first (keep (fn [entry]
-                           (let [index (.indexOf (str entry) "\u0000")]
-                             (when-not (neg? index)
-                               {:entry entry :index index})))
-                         paths))
-        expanded (when-not nul
+  (let [;; @spec MCP-OP-ALIAS-061
+        refused (first (keep (fn [entry]
+                               (when-let [found (refused-code-point entry)]
+                                 (assoc found :entry entry)))
+                             paths))
+        nul (when (and refused (zero? (:code-point refused))) refused)
+        expanded (when-not refused
                    (mapv (fn [entry]
                            {:entry entry
                             :patterns (scope-glob-patterns root entry)})
@@ -555,6 +625,23 @@
                    (:index nul)
                    ", which no filesystem path can hold, so the entry names no"
                    " path this walk could visit")}
+
+      ;; @spec MCP-OP-ALIAS-061
+      ;; every OTHER invisible or malformed spelling, refused for the same
+      ;; reason NUL is and named the same way: the caller cannot see it in
+      ;; their own request, so the refusal has to say which code point it is
+      ;; and where
+      refused
+      {:ok false
+       :error-type :alias-migration-scope-path-refused
+       :refusal-reason :refused-code-point
+       :path (:entry refused)
+       :pattern (:entry refused)
+       :cause (str "the entry carries the non-printable or malformed code "
+                   "point " (code-point-label (:code-point refused))
+                   " at index " (:index refused)
+                   ", which renders as nothing a caller can see, so the entry"
+                   " names no path this walk could visit")}
 
       ;; @spec MCP-OP-ALIAS-051
       unparseable
@@ -957,10 +1044,12 @@
       ;; summarised, and no next_call is computable — a malformed pattern has
       ;; no mechanical correction, only the one the caller meant.
       (= :alias-migration-scope-path-refused (:error-type scan))
-      (let [nul? (= :nul-byte (:refusal-reason scan))]
+      (let [nul? (= :nul-byte (:refusal-reason scan))
+            invisible? (or nul?
+                           (= :refused-code-point (:refusal-reason scan)))]
         (refusal :alias-migration-scope-path-refused
                  (str "scope.paths entry " (pr-str (elide (:path scan)))
-                      (if nul?
+                      (if invisible?
                         " cannot name a path"
                         (str " is not a parseable glob"
                              (when-not (= (:path scan) (:pattern scan))
@@ -976,8 +1065,9 @@
                   :cause (elide (:cause scan))
                   :next_call nil
                   :remedy
-                  (if nul?
-                    (str "Remove the NUL byte and resend. It renders as "
+                  (if invisible?
+                    (str "Remove the code point the cause names and resend. "
+                         "It renders as "
                          "nothing in a console, a log and a diff, so an entry "
                          "that looks exactly right can still carry one — the "
                          "cause above names its index. No next_call is "
