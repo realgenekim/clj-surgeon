@@ -1450,23 +1450,36 @@
    (found-leg base cache ranked searches unreadable nil))
   ([base cache ranked searches unreadable co-primaries]
    (let [primary (first ranked)
-         co (mapv (fn [m] (-> m
-                              (merge (leg-strength m))
-                              (dissoc :rank :in-comment?)
-                              (assoc :anchor (anchor-for cache m))))
+         ;; @spec MCP-OP-THREAD-034
+         ;; An `anchor` names where to WRITE. A CANDIDATE is a LEAD: the receipt
+         ;; has already said it does not vouch for this range, and offering an
+         ;; insertion point next to that refusal is the same false green in a
+         ;; quieter field. A lead may name where to read; only a FOUND leg may
+         ;; name where to write (round-three review, B2').
+         anchor-if-found (fn [m strength]
+                           (when (= "FOUND" (:status strength))
+                             (anchor-for cache m)))
+         co (mapv (fn [m] (let [strength (leg-strength m)]
+                            (cond-> (-> m
+                                        (merge strength)
+                                        (dissoc :rank :in-comment?))
+                              (= "FOUND" (:status strength))
+                              (assoc :anchor (anchor-for cache m)))))
                   co-primaries)
-         co-keys (set (map (juxt :file :from :to) co))]
+         co-keys (set (map (juxt :file :from :to) co))
+         strength (leg-strength primary)]
      (merge (dissoc base :globs)
             (dissoc primary :rank :in-comment?)
-            (leg-strength primary)
-            {:searches [(last searches)]
-             :unreadable unreadable
-             :anchor (anchor-for cache primary)
-             :co_primaries co
-             :also (->> (rest ranked)
-                        (remove #(contains? co-keys ((juxt :file :from :to) %)))
-                        (take 4)
-                        (mapv secondary-row))}))))
+            strength
+            (cond-> {:searches [(last searches)]
+                     :unreadable unreadable
+                     :co_primaries co
+                     :also (->> (rest ranked)
+                                (remove #(contains? co-keys ((juxt :file :from :to) %)))
+                                (take 4)
+                                (mapv secondary-row))}
+              (= "FOUND" (:status strength))
+              (assoc :anchor (anchor-if-found primary strength)))))))
 
 ;; @spec MCP-OP-THREAD-004
 ;; @spec MCP-OP-THREAD-008
@@ -2135,7 +2148,7 @@
        " evid=" (:evidence member)
        " boundary=" (:boundary member)
        " bytes=" (:bytes member)
-       " anchor=" (:anchor member)
+       (when (:anchor member) (str " anchor=" (:anchor member)))
        " refetch=" (:refetch member)
        (when (= "CANDIDATE" (:status member))
          (str " CANDIDATE weak=" (:weak_reason member)))
@@ -2164,7 +2177,7 @@
          " evid=" (:evidence leg)
          " boundary=" (:boundary leg)
          " bytes=" (:bytes leg)
-         " anchor=" (:anchor leg)
+         (when (:anchor leg) (str " anchor=" (:anchor leg)))
          (when (:form_name leg) (str " form=" (:form_name leg)))
          "\n  found by: " (str/join "\n  found by: " (:searches leg))
          (if (:body leg)

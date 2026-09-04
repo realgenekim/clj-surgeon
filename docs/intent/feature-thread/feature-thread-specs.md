@@ -224,3 +224,9 @@ run as a test inside `make mcp-test`) enforces both halves.
   extends the root's is outside it, and the candidate list shall be
   de-duplicated so a symlink to a directory inside the tree cannot make one
   file be read and searched more than once.
+
+- [x] **MCP-OP-THREAD-034**: Only a FOUND leg names where to write. When
+  `feature_thread` reports a leg or co-primary whose status is `CANDIDATE`, it
+  shall omit the insertion `anchor` from both the structured row and the text
+  line, because an anchor is a claim about where a new sibling goes and the
+  receipt has already said it does not vouch for that range.
