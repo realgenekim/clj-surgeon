@@ -364,7 +364,7 @@
                 :status :synchronized
                 :removed []
                 :upserted ["inspect_clojure" "temporary_probe"]
-                :tool-count 6
+                :tool-count 7
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -389,7 +389,7 @@
                 :status :synchronized
                 :removed ["temporary_probe"]
                 :upserted ["inspect_clojure"]
-                :tool-count 5
+                :tool-count 6
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
