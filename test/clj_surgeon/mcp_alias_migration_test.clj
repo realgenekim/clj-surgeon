@@ -499,6 +499,69 @@
                                                             "(def q \"acid.fanout.store\")\n")}])))
         "two sites in one file were collapsed to one")))
 
+;; @spec MCP-OP-ALIAS-034
+(defn- mention-source
+  "One namespace whose lines 2..(inc n) are each a string literal of `needle`."
+  [ns-name needle n]
+  (str "(ns " ns-name ")\n"
+       (str/join "\n" (repeat n (str "(def q \"" needle "\")")))
+       "\n"))
+
+;; @spec MCP-OP-ALIAS-034
+(deftest string-mention-sites-are-ordered-by-file-then-numeric-line
+  ;; Round-11 re-review finding 4: the sites were sorted as `file:line`
+  ;; STRINGS, so `src/z.clj:10` sorted before `src/z.clj:2` and a bound of 20
+  ;; over 26 mentions kept lines 2, 3 and 10-27 and dropped 4-9. This is
+  ;; round-10 finding 1 — a bound applied to the wrong ranking — reintroduced
+  ;; inside round 11's own fix commit, and the docstring is what makes the
+  ;; ordering load-bearing: "a file is where the caller must go, a line is
+  ;; where they must look."
+  ;;
+  ;;   string_mentions (total) = 26
+  ;;   lines actually named   = (2 3 10 11 ... 27)
+  ;;   lines DROPPED          = (4 5 6 7 8 9)
+  (let [needle (str fixture/from-lib "/" fixture/from-var)
+        sources [{:file "src/b.clj" :source (mention-source "b" needle 13)}
+                 {:file "src/a.clj" :source (mention-source "a" needle 13)}]
+        sites (planner/string-mentions needle sources)
+        expected (concat (map #(str "src/a.clj:" %) (range 2 15))
+                         (map #(str "src/b.clj:" %) (range 2 9)))]
+    (is (= 26 (count sites)) (pr-str sites))
+    (is (= (vec expected)
+           (vec (take alias-migration/max-string-mention-sites sites)))
+        "the bounded list is not the first 20 sites in (file, numeric line) order")))
+
+;; @spec MCP-OP-ALIAS-034
+(deftest the-receipt-states-how-many-mention-sites-it-shows
+  ;; The caller could only infer the truncation by comparing `string_mentions`
+  ;; against `(count string_mention_sites)`. A bound that does not say it
+  ;; fired is the silent-truncation class this branch has now paid for three
+  ;; times.
+  (let [workspace (workspace!)
+        needle (str fixture/from-lib "/" fixture/from-var)]
+    (try
+      (write-tree! workspace
+                   {"src/mention_a.clj"
+                    (mention-source "mention-a" needle 13)
+                    "src/mention_b.clj"
+                    (mention-source "mention-b" needle 13)})
+      (let [result (execute! workspace)]
+        (is (:ok result) (pr-str result))
+        (is (= 26 (:string_mentions result))
+            "the total count is not exact")
+        (is (= alias-migration/max-string-mention-sites
+               (:string_mention_sites_shown result))
+            "the receipt does not say how many of the sites it named")
+        (is (= (count (:string_mention_sites result))
+               (:string_mention_sites_shown result))
+            "the shown count does not match the list it describes")
+        (is (= (concat (map #(str "src/mention_a.clj:" %) (range 2 15))
+                       (map #(str "src/mention_b.clj:" %) (range 2 9)))
+               (:string_mention_sites result))
+            "the receipt names sites the caller cannot walk in order"))
+      (finally
+        (delete-tree! workspace)))))
+
 
 ;; @spec MCP-OP-ALIAS-057
 (deftest a-directory-entry-selects-the-same-subtree-under-every-spelling
