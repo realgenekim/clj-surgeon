@@ -169,7 +169,7 @@ untouched (`core/text-encoder` and `core/edn-encoder` both append
 | encoder family | site | witness (green) |
 |---|---|---|
 | batch, shared kernel | `study/format-ls-tree-edn`, `study/format-ls-tree-text` | `test-format-ls-tree-edn` (ls_tree_test.clj:313) |
-| streaming, CLI | `core/text-encoder`, `core/edn-encoder` | `clj-surgeon.measured-channel-test` (3 deftests), `clj-surgeon.ls-tree-budget-test` |
+| streaming, CLI | `core/text-encoder`, `core/edn-encoder` | `clj-surgeon.measured-channel-test` (3 deftests), `clj-surgeon.ls-tree-budget-test` (88 `:max-results` drives through the paginated encoder) |
 | MCP receipt | `ls-tree-bounded` -> `:resources` | `ls-tree-receipt-publishes-the-scan-cost-on-the-partitioned-channel` (new) |
 
 **Sabotage check — the witness is bound to the meter, not to itself.** With the
@@ -226,8 +226,14 @@ The andon requirement is narrower and IS met: study's kernel must not
 `System/exit` on a bad root — it returns a typed `:workspace-root-not-a-directory`
 refusal, and the exit code is the CLI's own contract, asserted by
 `cli-ls-tree-refusal-bytes-match-the-frozen-golden` (`(is (= 1 (:exit result)))`).
-**The merge added no `System/exit` site**: the merged set is exactly the base's
-12, same files, same forms, line numbers shifted only.
+**The merge added no `System/exit` site**, proven by set equality rather than
+by counting:
+
+```
+$ diff <(git grep -h 'System/exit' HEAD~2 -- src | sed 's/^ *//' | sort) \
+       <(git grep -h 'System/exit' HEAD   -- src | sed 's/^ *//' | sort)
+(identical)
+```
 
 ### 4. O2's 32 KB budget and evidence rows apply to the ls-tree output
 
@@ -237,7 +243,18 @@ over-budget path is a **typed** text abridgement that names `structuredContent`
 (`! text abridged · %d of %d rows rendered · the complete receipt is in
 structuredContent`, MCP-OP-STUDY-040), never a silent cut; the over-tree path
 is `! bounded receipt · N files omitted · read_complete=false` with an
-executable continuation. Both are exercised by the E6 drive below.
+executable continuation.
+
+`fit-public-result` measures through `inspect-summary`, so the budget is
+enforced over the FINAL rendered text — the two new resources lines included,
+not a pre-render estimate. Named green witness:
+`ls-tree-public-result-is-bounded-by-the-declared-output-budget`
+(mcp_study_test.clj:2023), which first asserts its own fixture actually
+overshoots ("or the witness proves nothing") and then asserts the fitted
+result is under budget, that the overshoot is `(or (false? (:ok fitted))
+(pos-int? (:text_evidence_limit fitted)))`, and that the text contains both
+`text abridged` and `structuredContent`. The E6 drive below exercises the
+bounded-tree path at 32,383 of 32,768 bytes.
 
 ### 5. The intent registry
 
@@ -304,7 +321,7 @@ side and `scan_ms` under `:measured`, in both channels. Pinned as
 | `make txn-kernel-warning-check` | `kernel warning check: 2 namespace(s), 0 warning(s)` |
 | `make memory-battery-self-test` | `generate_tree verification self-test: ok` / `generate_tree root-marker self-test: ok` / `generate_tree self-test: ok` / `Ran 32 tests containing 171 assertions. 0 failures, 0 errors.` |
 | `make memory-red PARSER_RED_EXPECT=green` | `memory-red: 6/6 assertions held (expect=green)` — **flaky, read on** |
-| `make memory-red-kernel` (flock) | see below |
+| `make memory-red-kernel` (flock) | `Ran 4 tests containing 25 assertions.` / `0 failures, 0 errors.` — `FLATNESS 60 {:xmx-mb 256.0, :heap-retained-peak-mb 14.44, :wall-ms 18617}`, `FLATNESS 600 {:xmx-mb 256.0, :heap-retained-peak-mb 14.84, :wall-ms 170712}` |
 | CLI goldens `git diff 4480e3d..HEAD -- test-fixtures/` | 2 files; see below |
 | `bash bench/anvil-arms/self-test.sh` | `anvil-arms self-test: 389 passed, 0 failed` |
 
