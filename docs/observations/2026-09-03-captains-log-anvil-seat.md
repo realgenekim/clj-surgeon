@@ -1647,3 +1647,13 @@ Round eight builds the one-commit fix plus the trunk re-merge (txn_journal carri
 counts and the 145 pin re-derived on the merged result. Suite spike round 1 launched in parallel on bridge/suite-spike.
 
 ## 17:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 17:53Z study-ops r11 (Sol): NO-GO on the declared residual; landing needs Gene's product acceptance
+
+The residual the builder declared honest (a keyword key and its string twin collapse to one JSON key on the wire, so
+the text face gave them one pointer) fails exactly when both occur in one map: two identical pointers, declared and
+audited disagree. A declared residual is still a claim about safety, and it was not witnessed with both keys present.
+The reviewer also put on the record what only Gene can grant: the read-side text growth (STUDY-051, the ls-tree
+doubling) is a product change, and no reviewer's GO covers it. Round 12 builds the fix and the trunk re-merge; the
+acceptance question goes to Gene with the morning report. Killed one orphaned JVM in a deleted gate5 fixture dir
+(load 16.9 with the spike's two concurrent clones running as designed).
