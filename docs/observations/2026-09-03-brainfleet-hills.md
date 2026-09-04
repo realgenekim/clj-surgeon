@@ -1096,3 +1096,19 @@ Predictions scored: Opus "0/3 at 70%" RIGHT (and the mechanism: "a name and pres
 † wall void (load > 8). Predictions: Opus N 4/6 WRONG (6/6), M 6/6 right, M−N clears WRONG, F 0/3 at 80% WRONG (1/3); Sol F 3/3 exact right, N ≤ 1/3 WRONG. "Both seats modelled the native arm as grep-shaped; both were wrong the same way." Opus's own waste clause is now the finding: "if native scores 6/6, square 3 is empty" — on FIVE SMALL FILES. First non-zero free-choice adoption: 1/16. Apparatus ratchet proven: required=true + dead-port negative control (codex refuses to create the session).
 
 **Fable's call:** run the runner's recommended decisive variant NOW — E6-Q2, the same six probe shapes against reducer/core.clj (3,720 lines) and channel.clj (3,694 lines), N vs M vs F, correctness primary; if native is still 6/6, withdraw square 3 on the evidence. Runs on 7909 concurrently with E-REG (both primaries are load-insensitive; walls void above 8 and not claimed).
+
+## 19. Fifth result: E6-Q2 (00:1xZ, 2026-09-04) — square 3 on the big files: the pre-registered decision fires, SQUARE 3 WITHDRAWN
+
+| arm | run | wall s | tool calls | inspect calls | refused | exact | load |
+|---|---|---|---|---|---|---|---|
+| N | 1/2/3 | 64† / 62† / 64† | 3 / 3 / 3 | 0 | — | 6/6 ×3 | 9.3 / 14.4 / 11.3 |
+| M | 1/2/3 | 158† / 160† / 215† | 10 / 13 / 18 | 8 / 11 / 15 | 3 / 5 / 8 | 6/6 ×3 | 9.4 / 9.0 / 9.1 |
+| F | 1/2/3 | 101† / 78 / 143† | 6 / 5 / 8 | 3 / 1 / 4 | 2 / 1 / 3 | 6/6 ×3 | 11.4 / 6.9 / 18.2 |
+
+† wall void (load > 8); 8 of 9 void, no wall claim. 54/54 probes correct. Primary FAIL on clause 2 (M−N = [0,0,0]). Pre-registration (sha 08509014c48d…, before the first arm): N 6/6 in ≥ 2/3 → withdraw. N 6/6 in 3/3.
+
+**The learning that closes the square (runner, verbatim):** "The scale hypothesis was wrong about the *strategy*, not the size. Native never reads the big file … ten numbered windows on exactly the ranges the search named, both files in one call … ~300 of 7,516 lines read. File size never enters native's cost function." §18's Fable call predicted the big-file variant would be decisive; it was — in the direction of withdrawal. Fable's implicit model (native must read more of a big file) was wrong for the same reason Opus's "N 4/6" was wrong in §18: both modelled native as a file reader; it is a windowed reader over search hits.
+
+Secondaries worth carrying: (1) F adoption 3/3 — the first cohort where free choice reached for the tool, and it broke at exactly the variable this cohort changed (file size), for READS only (outline, match), never for a change; F-2's only call was a refused prepare-change and it still scored 6/6, so adoption ≠ dependence. (2) 22/42 inspect calls refused (52%) at zero correctness cost: invalid-mcp-request ×12 (missing `expect`, wrong nesting — the runner hit both by hand), semantic-provider-unavailable ×5 (every prepare-change), no-clojure-files ×4, invalid-change-intent ×2. The refusal PRICE is paid in actions (M's 3.3–6×) while correctness is unmoved — square 3's cost is the mandate, not the tool.
+
+**Standing squares after five results:** 1 gate (E3-P pass line still failing on first-call refusals; O2 r2 / q5z r11 building), 2 fan-out (E-REG running; E-SLOPE80 after), 4 proof before write (unmeasured). Withdrawn: single edit at a known site; square 3 (this caller). **Fleet poll deferred to E-REG's landing** — the next-wave question ("where, if anywhere, does the tool beat a windowed reader over rg hits?") is the same for both results and one poll on the pair costs half.

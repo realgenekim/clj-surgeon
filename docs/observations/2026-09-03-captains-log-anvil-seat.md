@@ -799,3 +799,29 @@ Gates, verbatim: `1135 tests, 13898 assertions, 0 failures.` (full unit, data/ p
 **13 errors:** did not reproduce in either data/ state. Deftest population identical to the mayor's (their 1133 = 1135 − 2 ratchet deftests). Hypothesis handed to the mayor: unfixed, the durable-duplicate path opens a real Hikari pool (DATABASE_URL > secrets/db.edn > localhost:5432/cfp_dev); on a box where that resolves, `load!` resets the store atom mid-test and every later test reads a projection that is not its fixture — errors in bulk. A unit test reaching for a live DB against `reset-for-test!`'s own guarantee. Caveat carried forward: any other test that reaches store-pg unstubbed has the same latent split between a box with a database and one without.
 
 Pushed; never merged from here. Handed to the mayor for the Sol review (Gene: "Tell mayor to review CC merge with sol, and merge into main"). Seat fresh-clone gate pass launched.
+
+## 00:11Z — E6-Q2 (square 3 on the big files) CLOSED: pre-registered decision fires, SQUARE 3 WITHDRAWN for this caller
+
+Doc d33d96d (docs/observations/2026-09-04-e6q2-bigfile-cohort.md). Table (wall † = VOID, load above 8; 8 of 9 walls void, no wall claim):
+
+| arm | run | wall s | tool calls | inspect calls | refused | exact |
+|---|---|---|---|---|---|---|
+| N | 1 | 64 † | 3 | 0 | — | 6/6 |
+| N | 2 | 62 † | 3 | 0 | — | 6/6 |
+| N | 3 | 64 † | 3 | 0 | — | 6/6 |
+| M | 1 | 158 † | 10 | 8 | 3 | 6/6 |
+| M | 2 | 160 † | 13 | 11 | 5 | 6/6 |
+| M | 3 | 215 † | 18 | 15 | 8 | 6/6 |
+| F | 1 | 101 † | 6 | 3 | 2 | 6/6 |
+| F | 2 | 78 | 5 | 1 | 1 | 6/6 |
+| F | 3 | 143 † | 8 | 4 | 3 | 6/6 |
+
+54/54 probes correct. PRIMARY FAIL: clause 2 (M−N exact) = [0,0,0]. Pre-registered decision (sha 08509014c48d…, written before the first arm): N 6/6 in ≥2/3 → square 3 withdrawn. It scored 6/6 in 3/3.
+
+**Learning (runner, verbatim):** "The scale hypothesis was wrong about the *strategy*, not the size. Native never reads the big file: N-1's three calls were one rg for the symbol family, then `nl -ba <file> | sed -n '1,102p;235,252p;…'` — ten numbered windows on exactly the ranges the search named, both files in one call — then apply_patch. ~300 of 7,516 lines read. File size never enters native's cost function."
+
+Secondaries: F adoption 3/3 (program record 1/16 → 4/19), reads only, never a change — F-2's only call was a refused prepare-change and it still scored 6/6. 22/42 inspect_clojure calls refused (52%): invalid-mcp-request ×12 (missing expect, wrong nesting — the runner hit both by hand in pre-flight), semantic-provider-unavailable ×5 (every prepare-change; cclsp on 7890 not running), no-clojure-files ×4, invalid-change-intent ×2; zero correctness cost. M−N tool-action gap 7/10/15 is outside the 6.1 floor: the mandate costs 3.3–6× the actions for nothing.
+
+Deviations recorded in the doc (9): reducer/core.clj → core.cljc (Clojure refuses `#?` in .clj); a first planting pass discarded (anchors one line late, caught by LOADING the files, not by reading them — base reset to ab267f9, no arm saw it); P4/P5 scoped to the planted pulse- family; prepare-change refused identically across all six MCP arms; server 7909 only.
+
+Consequence for the hill program: squares 1 (gate), 2 (fan-out), 4 (proof before write) remain; square 3 joins "single edit at a known site" as withdrawn. Fleet poll on E6-Q2 + E-REG together when E-REG lands (they share the next-wave question).
