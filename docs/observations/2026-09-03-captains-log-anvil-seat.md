@@ -1707,3 +1707,14 @@ ratchet landed after the census did. Not a defect in either lane; a composition 
 published inside the block, per TIME-004; CENSUS-013 still satisfied. Reason it is not Gene's: it moves no product
 behaviour, only the partition of an existing field on an unreleased trunk; reversal is one commit. Round nine on the
 MEM-003 branch; the 8 reader_eval_fence failures (changed launcher refusal prose) get a separate look in the same round.
+
+## 19:23Z Gene: "You are in charge… generate wins"; two decisions taken; the seat's four one-shots built
+
+Decisions under delegated authority (reversible, no external users of the trunk): STUDY-051 ACCEPTED with the 12 KB
+growth ratchet as the cap (study-ops lands on its next GO); the SMW landing-contract branch cut LOCALLY
+(/home/forge/tmp/replay/smw-contract@f004359c: .beads/.local_version untracked, the vendor bd block replaced by a
+five-line chain at the top of CLAUDE.md, 671 → 634 lines) — Gene's repo untouched; the push is his call. Arms NC
+(control plate) and NS (slim plate) launched together at load 24–27 so the comparison shares its noise.
+Per make-our-tools-perfect: ~/bin/sol-finished, replay-arm, usage-watch, land — each verified on a real case; two edges
+found by the real cases (binary bytes in a log; an arm log with no wrapper line) fixed in the same turn. Memory
+anvil-seat-one-shots. A kill I did not need: I killed NC/NS on a false reading of my own prompt check; relaunched 1 min later.
