@@ -35,12 +35,52 @@ for need in "$MANIFEST" "$CANON"; do
   [ -e "$need" ] || { echo "rescore-FAN: FAIL fixture missing: $need" >&2; exit 2; }
 done
 
-# --- the base the diff is taken against -------------------------------------------
-if [ -n "${FAN_BASE:-}" ]; then BASE=$FAN_BASE
-elif [ -f "$WT/../base.sha" ]; then BASE=$(tr -d '[:space:]' < "$WT/../base.sha")
-else BASE=$(git -C "$WT" rev-list --max-parents=0 HEAD 2>/dev/null); fi
-[ -n "$BASE" ] || { echo "rescore-FAN: FAIL cannot determine the base sha" >&2; exit 2; }
-echo "rescore-FAN: worktree=$WT n=$N base=$BASE fixtures=$FIX"
+# --- git binary resolution for the base-sha fallback below, mirroring -------------
+# fan_check.clj's resolve-git: FAN_GIT if it names an executable file, else the
+# first executable file from a fixed absolute candidate list -- NEVER PATH (round-4
+# review, fanout4-opus-review.md finding 1: a PATH-shimmed `rev-list` reached a false
+# 6/6 through this exact fallback).  Only invoked when neither FAN_BASE nor
+# ../base.sha already supplied a base.
+FAN_GIT_CANDIDATES=(/usr/bin/git /bin/git /usr/local/bin/git /opt/homebrew/bin/git)
+resolve_fan_git() {
+  local -a cands
+  if [ -n "${FAN_GIT:-}" ]; then cands=("$FAN_GIT"); else cands=("${FAN_GIT_CANDIDATES[@]}"); fi
+  local c
+  for c in "${cands[@]}"; do
+    if [ -f "$c" ] && [ -x "$c" ]; then printf '%s\n' "$c"; return 0; fi
+  done
+  return 1
+}
+
+# --- the base the diff is taken against, VALIDATED as 40 hex on EVERY branch ------
+# (finding 1a-c: a 7-char sha, the literal HEAD, and a non-zero rev-list all used to
+# flow through unvalidated -- one shared check below now covers all three sources.)
+BASE_FROM=""
+if [ -n "${FAN_BASE:-}" ]; then
+  BASE=$FAN_BASE; BASE_FROM="FAN_BASE"
+elif [ -f "$WT/../base.sha" ]; then
+  BASE=$(tr -d '[:space:]' < "$WT/../base.sha"); BASE_FROM="base.sha"
+else
+  BASE_FROM="rev-list"
+  if FANGIT=$(resolve_fan_git); then
+    REVLIST_ERR=$(mktemp)
+    BASE=$("$FANGIT" -C "$WT" rev-list --max-parents=0 HEAD 2>"$REVLIST_ERR")
+    revlist_rc=$?
+    REVLIST_STDERR=$(cat "$REVLIST_ERR" 2>/dev/null); rm -f "$REVLIST_ERR"
+    if [ $revlist_rc -ne 0 ]; then
+      echo "rescore-FAN: FAIL base must be a 40-hex sha (got <rev-list exit=$revlist_rc stderr=${REVLIST_STDERR:-<empty>}>)" >&2
+      exit 2
+    fi
+  else
+    echo "rescore-FAN: FAIL base must be a 40-hex sha (got <no base supplied, and no git binary to fall back to -- FAN_GIT unset/not-executable, none of ${FAN_GIT_CANDIDATES[*]} is an executable file>)" >&2
+    exit 2
+  fi
+fi
+if ! [[ $BASE =~ ^[0-9a-f]{40}$ ]]; then
+  echo "rescore-FAN: FAIL base must be a 40-hex sha (got ${BASE:-<empty>})" >&2
+  exit 2
+fi
+echo "rescore-FAN: worktree=$WT n=$N base=$BASE base-from=$BASE_FROM fixtures=$FIX"
 
 FAILED=()
 
