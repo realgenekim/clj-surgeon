@@ -1509,7 +1509,10 @@
           (let [result (scan cache paths globs regex)
                 hits (:hits result)
                 ran' (conj ran (render-search globs [label regex] scope-paths))
-                unreadable' (into unreadable (:unreadable result))]
+                ;; @spec MCP-OP-THREAD-013
+                ;; One entry per file per LEG: the same unreadable file is a
+                ;; candidate of every search this leg runs (round-three, 3.4).
+                unreadable' (vec (distinct (into unreadable (:unreadable result))))]
             (cond
               (and (= kind :def) (seq hits))
               (let [{hop-hits :hits hop-evidence :evidence extra :extra-search}
@@ -1738,6 +1741,22 @@
   #"clojure\s+-[MX]\S*:\S*test")
 
 ;; @spec MCP-OP-THREAD-019
+(defn- recipe-line
+  "One Makefile recipe line as a RUNNABLE command plus the prefix that was
+  stripped.
+
+  `@`, `-` and `+` at the head of a recipe are Make directives -- silence, ignore
+  errors, always-run -- and not part of the shell command. Printing them inside
+  `command` handed the caller `@node --test ...`, which no shell will run
+  (round-three review, 3.3). Nothing is erased: what was stripped is named."
+  [line-no ^String line]
+  (let [trimmed (str/trim line)
+        prefix (re-find #"^[@+-]+" trimmed)
+        command (str/trim (subs trimmed (count (or prefix ""))))]
+    (cond-> {:line line-no :command command}
+      prefix (assoc :make_prefix prefix))))
+
+;; @spec MCP-OP-THREAD-019
 (defn makefile-targets
   "Every `target:` declaration in a Makefile with its recipe lines.
 
@@ -1753,7 +1772,7 @@
               (and current (str/starts-with? line "\t"))
               {:acc acc
                :current (update current :recipe conj
-                                {:line (inc idx) :command (str/trim line)})}
+                                (recipe-line (inc idx) line))}
 
               (re-find make-target-pattern line)
               {:acc (cond-> acc current (conj current))
@@ -1772,8 +1791,12 @@
   (vec (for [t targets
              r (:recipe t)
              :when (pred (:command r))]
-         {:target (:target t) :line (:line t) :command (:command r)
-          :for file :evidence evidence})))
+         ;; @spec MCP-OP-THREAD-019
+         ;; `make_prefix` rides along: the row is runnable as printed, and the
+         ;; Make directive that was stripped is still named.
+         (cond-> {:target (:target t) :line (:line t) :command (:command r)
+                  :for file :evidence evidence}
+           (:make_prefix r) (assoc :make_prefix (:make_prefix r))))))
 
 ;; @spec MCP-OP-THREAD-019
 (defn verify-rows-for

@@ -864,7 +864,8 @@
         verify (get-in structured [:rules :verify])]
     (testing "the Makefile target whose recipe NAMES the JavaScript test file"
       (is (some #(= {:target "test-js" :line 233
-                     :command "@node --test test/js/browser_runtime_classic_script_test.js"
+                     :command "node --test test/js/browser_runtime_classic_script_test.js"
+                     :make_prefix "@"
                      :for js-test-owner
                      :evidence "names-the-file"}
                     %)
