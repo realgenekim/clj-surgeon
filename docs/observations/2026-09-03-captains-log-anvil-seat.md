@@ -1791,3 +1791,5 @@ independent machine is for. One escalation for Gene: the nightly is dormant unti
 ## 21:24Z CORRECTION: G2's failure was my mandate contradicting the gate's correct remedy (apply JS natively); the gate's defect is a looping next_call — sent to the r17 Opus review; G3/GN3 relaunched with the gate's own prescription
 
 ## 21:27Z default-branch flip: seat identity lacks admin (404 on PATCH); request filed for the mayor in the merge queue doc; Gene can also flip it in Settings → Branches
+
+## 21:29Z SMW landing contract MERGED into realgenekim/social-media-writer main (d5b1ba53; Gene "a: go"): .beads/.local_version untracked, bd as a five-line chain at the top of CLAUDE.md; branch deleted; new replay base smw-base2 @ d5b1ba53 (smw-base @ 2df99c98 kept for comparability; T5 runs on base2)

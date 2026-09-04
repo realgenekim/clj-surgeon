@@ -296,3 +296,5 @@ prescribes: JS natively, clj/edn through the gate with inline verify.
 G3/GN3 pre-registration (21:24Z): same task, same clones, same server (8173); mandate = JS natively, clj/edn via the gate with
 inline verify. G3 raw ≤ 14, wall ≤ 6.5 min (native control), ≥ 1 admit call ADMITTED, 0 agent-run suite invocations;
 withdrawal: G3 raw > 18 or wall > 6.5, or the same refusal twice.
+
+**SMW plate landed ($NOW):** realgenekim/social-media-writer main = d5b1ba53 (landing contract merged on Gene's "a: go"). Replay bases: smw-base @ 2df99c98 (all arms so far), smw-base2 @ d5b1ba53 (T5 and later). Cross-base comparisons name the base.
