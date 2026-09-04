@@ -1945,3 +1945,29 @@
           (str "an unnamed route is counted as missing, deliberately: the verb"
                " cannot tell an unnamed route from an absent one, and the safe"
                " direction is INCOMPLETE")))))
+
+;; @spec MCP-OP-THREAD-042
+(deftest a-route-entry-may-name-its-handler-var-unqualified
+  (testing "`#'handle-x` joins to the handler exactly like `#'ns/handle-x`"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-bareVar")]
+      (try
+        (let [f (io/file scratch "src/writer/routes.clj")]
+          (spit f (str/replace (slurp f)
+                               "#'transform/handle-format"
+                               "#'handle-format")))
+        (let [{:keys [structured]} (thread! (.getPath scratch))
+              h (leg structured "handler")]
+          (is (= "FOUND" (:status h))
+              (str "the route names `#'handle-format` with no namespace and the"
+                   " handler leg came back " (:status h) "; on"
+                   " social-media-writer @2df99c98 that is how `/api/save` is"
+                   " written and it cost saveDraft its handler leg"))
+          (is (= "src/writer/handlers/transform.clj" (:file h)))
+          (is (= "handler-join" (:evidence h)))
+          (is (= "COMPLETE (6 of 6)" (:status structured))))
+        (finally (delete-tree! scratch)))))
+
+  (testing "and the qualified form still works"
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (is (= "handler-join" (:evidence (leg structured "handler"))))
+      (is (= "transform/handle-format" (:route_handler structured))))))
