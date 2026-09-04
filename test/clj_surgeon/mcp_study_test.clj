@@ -4521,3 +4521,47 @@
                    (inspect-tool/fit-public-result impostor))
           "and the gate must refuse to measure it"))))
 
+;; @spec MCP-OP-STUDY-050
+(defn- many-fact-receipt
+  "One ordinary receipt carrying `n` tiny numeric facts. Numeric leaves are
+   COLLIDABLE, so every one of them needs a line of its own — which is the
+   shape that makes the fit's rendering search do the most work."
+  [n]
+  (mcp-operation/stamp-envelope
+    (merge {:ok true
+            :operation "inspect_clojure"
+            :read_complete true
+            :next_action "none"
+            :source_character_count 0
+            :request_count 1
+            :file_count 1
+            :results []}
+           (into {} (map (fn [i] [(keyword (str "f" i)) i])) (range n)))
+    {:elapsed_ms 0.0}))
+
+;; @spec MCP-OP-STUDY-050
+(deftest the-fit-stays-affordable-at-ten-thousand-facts
+  ;; A read-path latency finding is a correctness finding once it is large
+  ;; enough: a caller waiting 69 seconds for a bounded receipt has been given
+  ;; a different tool than the one documented.
+  (let [warm (many-fact-receipt 1000)]
+    ;; One warm pass, so the number below is the algorithm rather than the
+    ;; first JIT compilation of it.
+    (inspect-tool/fit-public-result warm))
+  (let [raw (many-fact-receipt 10000)
+        started (System/nanoTime)
+        fitted (inspect-tool/fit-public-result raw)
+        elapsed-ms (/ (- (System/nanoTime) started) 1000000.0)
+        text (inspect-tool/inspect-summary fitted)
+        bytes (inspect-tool/mcp-result-byte-count text fitted)
+        counts (declared-fact-counts text)
+        audited (inspect/uncarried-leaves text fitted)]
+    (is (< elapsed-ms 2000.0)
+        (format "the fit took %.2f ms over 10,000 receipt facts" elapsed-ms))
+    (is (<= bytes inspect-tool/max-public-result-bytes)
+        (format "and published %d bytes against a %d-byte budget"
+                bytes inspect-tool/max-public-result-bytes))
+    (is (some? counts)
+        "the rendering still declares what it dropped")
+    (is (= (- (:total counts) (:shown counts)) (count audited))
+        "and the declared count is still the audited count")))
