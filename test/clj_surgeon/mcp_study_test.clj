@@ -4344,3 +4344,89 @@
       (is (some? section) "the declaration is never dropped for want of room")
       (is (= (- (:total narrow) (count (:dropped-labels narrow)))
              (- (:total narrow) (count (:dropped-labels narrow))))))))
+
+;; ============================================================
+;; O2 ROUND 6 — the declaration is the FLOOR, on every rung
+;; (Sol O2 round-5 review, §3)
+;; ============================================================
+;; `fact-block` stopped its descent at zero before establishing that its own
+;; header and `dropped:` line fit, and then returned `section=nil`; the
+;; reachable `notice` rung published a generic pointer to `structuredContent`
+;; over eleven uncarried leaves and zero fact pointers. Both are undeclared
+;; omissions at exactly the budget where MCP-OP-STUDY-044's guarantee matters.
+
+(defn- two-fact-receipt
+  "A finalized receipt with two leaves the structural text cannot carry."
+  []
+  (clocked {:ok true
+            :operation "inspect_clojure"
+            :alpha "a-distinctive-alpha-value-nobody-else-spells"
+            :beta "a-distinctive-beta-value-nobody-else-spells"}))
+
+;; @spec MCP-OP-STUDY-048
+(deftest the-declaration-survives-an-allowance-that-cannot-pay-for-it
+  (let [result (two-fact-receipt)]
+    (doseq [allowance [0 1 32]]
+      (testing (str "allowance " allowance)
+        (let [block (inspect/fact-block "structural" result allowance)
+              section (inspect/fact-section block)]
+          (is (some? section)
+              (format (str "allowance %d rendered NO declaration over %d "
+                           "dropped leaves: a silent omission is the one "
+                           "outcome MCP-OP-STUDY-044 forbids")
+                      allowance (count (:dropped-labels block))))
+          (is (str/includes? (or section "") "receipt facts ·")
+              "the count line names how many leaves are omitted")
+          (is (str/includes? (or section "") "  dropped: ")
+              "and the pointer line names the first of them")
+          (is (= (count (:dropped-labels block))
+                 (count (inspect/uncarried-leaves
+                          (str "structural\n" section) result)))
+              "the declared count is the audited count on this rung too"))))))
+
+;; @spec MCP-OP-STUDY-048
+(deftest the-notice-rung-names-every-leaf-it-omits
+  ;; A receipt whose structuredContent alone leaves no room for any rendering:
+  ;; the fit falls through the allowance band to the notice rung. That rung
+  ;; must still say how many structured leaves it omits and point at them.
+  (let [filler (apply str (repeat (- inspect-tool/max-public-result-bytes 450)
+                                  "x"))
+        raw (clocked {:ok true
+                      :operation "inspect_clojure"
+                      :read_complete true
+                      :next_action "none"
+                      :source_character_count 0
+                      :request_count 1
+                      :file_count 1
+                      :results []
+                      :filler filler})
+        published (clocked (inspect-tool/fit-public-result raw))
+        text (inspect-tool/inspect-summary published)
+        audited (inspect/uncarried-leaves text published)
+        counts (declared-fact-counts text)]
+    (is (= "notice" (:text_omitted published))
+        (format "PRECONDITION: this fixture must reach the notice rung, not %s"
+                (pr-str (:text_omitted published))))
+    (is (some? counts)
+        (format (str "the notice rung published %d characters over %d "
+                     "uncarried leaves and declared none of them; text: %s")
+                (count text) (count audited) (pr-str text)))
+    (is (str/includes? text "  dropped: ")
+        "and it names the first of the leaves it omits")
+    (is (= (- (:total counts) (:shown counts)) (count audited))
+        "the declared count is the audited count on the notice rung too")))
+
+;; @spec MCP-OP-STUDY-048
+(deftest the-name-rung-names-every-leaf-it-omits
+  ;; The last rung above a refusal. It is the shortest honest text there is,
+  ;; and "honest" now includes saying what it does not carry.
+  (let [result (two-fact-receipt)
+        text (inspect/minimum-text-block result)
+        audited (inspect/uncarried-leaves text result)
+        counts (declared-fact-counts text)]
+    (is (str/includes? text "inspect_clojure")
+        "it still names the tool")
+    (is (some? counts)
+        (format "the name rung declared nothing over %d uncarried leaves: %s"
+                (count audited) (pr-str text)))
+    (is (= (- (:total counts) (:shown counts)) (count audited)))))
