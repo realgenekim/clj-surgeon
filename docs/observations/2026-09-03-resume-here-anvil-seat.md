@@ -453,3 +453,6 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## RESUME DELTA 06:32Z — FOREGROUND PROGRAM (Gene): the 10x tweezer on feature_thread
 - Mission: prove tool-calls-to-a-green-edit 10x on the Dequote/Format replay; foreground tweezer, background orchestration. Baseline 17 calls to first patch (21 + patch to done). nREPL 43791 on ~/src/clj-surgeon-thread (bridge/feature-thread-verb @ ad49908c + round-two builder running on that worktree: implementation leg, governance anchors, co-primary tests, verify row, budget 24 KB + edit-aware elision). Receipt dump /var/tmp/forge/tweezer/r3-receipt.txt; watcher ~/bin/call-watcher. Next: naive-reader probe (Sol+Opus), then the measured replay: an agent given ONLY the receipt writes the patch; count calls with the watcher; then the cohort.
+
+## RESUME DELTA 07:17Z
+- Lanes: feature_thread r2 building (Opus, on ~/src/clj-surgeon-thread; r1 NO-GO folded in); q5z r17 building; tmp-leak r2 building; gate r5 building; MEM-003 r5 building; census r21 Sol review; O2 r5 Sol review. All reviews except O2/census are on Opus after Sol filter refusals (14 tonight). Trunk MCP/main last landing: the FAN scorer (804febcb). Foreground: the tweezer waits on feature_thread r2 for the measured replay (baseline 17 calls; target zero reads before the write).
