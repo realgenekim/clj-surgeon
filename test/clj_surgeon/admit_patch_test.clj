@@ -5567,6 +5567,43 @@
     "transaction-write-exception"})
 
 ;; @spec MCP-OP-ADMIT-133
+(deftest a-three-hundred-character-basename-behaves-as-the-excuse-says-it-does
+  ;; Round four's advisory 5c. The `invalid-target-path` excuse above claims a
+  ;; creation target with a 300-character basename "returns
+  ;; `admit-tool-failure` from an escaped ENAMETOOLONG IOException". The
+  ;; reviewer drove it in both modes and got neither. An excuse is evidence,
+  ;; and an excuse whose evidence does not reproduce is worse than no excuse:
+  ;; it terminates the investigation it should start. So the claim is pinned
+  ;; here, in both modes, through the entrance.
+  (let [root (temp-dir)
+        basename (apply str (repeat 300 "n"))
+        patch (str "--- /dev/null\n"
+                   "+++ b/src/app/" basename ".clj\n"
+                   "@@ -0,0 +1,1 @@\n"
+                   "+(ns app.long)\n")
+        drive (fn [mode verify]
+                (write-sources! root base-sources)
+                (admit/execute-request!
+                  (stub-config root)
+                  (cond-> {:patch patch :mode mode}
+                    verify (assoc :verify verify))))]
+    (try
+      (let [preview (drive "preview" nil)
+            commit (drive "commit" "focused")]
+        (is (true? (:ok preview))
+            (str "preview writes nothing, so the long name is never opened: "
+                 (pr-str (:error-type preview)) " " (pr-str (:error preview))))
+        (is (nil? (:error-type preview)))
+        (is (false? (:ok commit)))
+        (is (= :verification-incomplete (:error-type commit))
+            (str "commit refuses before it writes, under an ENUMERATED kind: "
+                 (pr-str (:error-type commit))))
+        (is (contains? admit/admit-refusal-kinds (:error-type commit))
+            "whatever the kind is, the entrance may only publish an enumerated one")
+        (is (true? (:source-unchanged commit))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
 (deftest the-source-scan-survives-only-as-a-complement
   ;; It is no longer the enumeration; it is a tripwire on the enumeration. A
   ;; kind constructed in one of the files the gate calls must be either
