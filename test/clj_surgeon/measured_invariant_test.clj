@@ -347,6 +347,7 @@
    ;; actually runs in. `the-babashka-clock-floor-is-the-complete-jvm-difference`
    ;; below is the ratchet; this is the entry it was missing.
    "(. Calendar getInstance" "the dot special form of the java.util.Calendar factory — the third spelling babashka cannot derive, and the one the floor did not carry"
+   "\"getTimeInMillis\"" "the FOURTH spelling babashka underives — Calendar's epoch accessor as a STRING, found by the manifest witness on its first run, one commit after the floor was corrected by hand"
    ;; Round-six review findings 2 and 3: neither the class nor the method is a
    ;; source token in `(.getMethod (Class/forName "java.lang.System") "nanoTime" ...)`,
    ;; and the dot special form's alternative was anchored so that a
@@ -1283,7 +1284,8 @@
     (let [derived (set (derived-clock-expressions))
           reflection-thin (set (when-not @jdk-reflection-is-complete?
                                  ["Calendar/getInstance" ".getTimeInMillis"
-                                  "(. Calendar getInstance"]))
+                                  "(. Calendar getInstance"
+                                  "\"getTimeInMillis\""]))
           ;; A spelling the derivation CANNOT produce by construction, and must
           ;; not: the derivation emits the SIMPLE class name, and the
           ;; fully-qualified dot form is a property of the ALTERNATIVE -- the
