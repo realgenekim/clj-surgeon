@@ -2645,3 +2645,92 @@
                ft/trunk-public-byte-budget "B"))
       (is (< 20000 (:text_bytes structured))
           "the text face still carries the edit basis"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND-EIGHT REVIEW, finding 3 (BLOCKING): a subject that exists only inside a
+;; Clojure STRING was promoted to FOUND with insertion anchors, and five such
+;; legs made a custom convention read `COMPLETE (5 of 5)`.
+;;
+;; The distinction this witness pins is NOT "strings are never code": the named
+;; case's own menu-caller leg is `{:onclick "formatDraft()"}`, a call spelled
+;; inside a string, and a route entry is a string literal by construction. What
+;; is not code is a string that merely MENTIONS the name in prose.
+;; ---------------------------------------------------------------------------
+
+(def ^:private string-only-conventions
+  {:repo-label "string-only-false-green"
+   :legs (mapv (fn [i] {:id (str "leg-" i) :kind :use :globs ["src/*.clj"]})
+               (range 5))})
+
+(defn- string-only-fixture!
+  "A workspace whose ONLY occurrences of `stringOnly` are inside string
+  literals — one at top level, one nested three forms deep."
+  []
+  (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                             "feature-thread-string-only"
+                             (into-array java.nio.file.attribute.FileAttribute []))))]
+    (write-file! root "src/own.clj"
+                 (str "(ns own)\n"
+                      "\n"
+                      "(def note \"stringOnly appears only in this string\")\n"
+                      "\n"
+                      "(defn helper [x]\n"
+                      "  (when x\n"
+                      "    (log/info {:msg \"nested stringOnly mention\"})))\n"))
+    root))
+
+(deftest a-subject-only-inside-a-clojure-string-is-never-found
+  (testing "the reviewer's fixture: five use legs, one string, no completion"
+    (let [root (string-only-fixture!)]
+      (try
+        (let [{:keys [structured text]}
+              (call! {:subject "stringOnly"
+                      :config string-only-conventions
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (is (false? (:complete structured))
+              (str "a subject that exists only inside string literals made the"
+                   " thread " (:status structured)))
+          (is (str/starts-with? (:status structured) "INCOMPLETE")
+              (str "got " (:status structured)))
+          (doseq [l (:legs structured)]
+            (is (not= "FOUND" (:status l))
+                (str "leg " (:id l) " was promoted to FOUND by a string mention:"
+                     " evidence=" (:evidence l) " boundary=" (:boundary l)))
+            (is (nil? (:anchor l))
+                (str "leg " (:id l) " offers an insertion anchor for a string"
+                     " mention: " (pr-str (:anchor l)))))
+          (testing "and each candidate says the string is why"
+            (doseq [l (:legs structured)
+                    :when (= "CANDIDATE" (:status l))]
+              (is (str/includes? (str (:weak_reason l)) "string")
+                  (str "leg " (:id l) " weak_reason=" (pr-str (:weak_reason l))))
+              (is (str/includes? text (:weak_reason l))))))
+        (finally (delete-tree! root)))))
+
+  (testing "a nested string mention is refused on the same rule"
+    (let [root (string-only-fixture!)]
+      (try
+        (let [{:keys [structured]}
+              (call! {:subject "nested"
+                      :config string-only-conventions
+                      :budget_bytes 32768
+                      :scope {:workspace_root (.getPath root)}})]
+          (is (false? (:complete structured)))
+          (doseq [l (:legs structured)]
+            (is (not= "FOUND" (:status l))
+                (str "leg " (:id l) " found `nested` inside a nested string"))))
+        (finally (delete-tree! root)))))
+
+  (testing "a CALL spelled inside a string is still the leg — the named case"
+    (let [{:keys [structured]} (thread! fixture-root)
+          menu (leg structured "menu-caller")]
+      (is (= "FOUND" (:status menu))
+          "`{:onclick \"formatDraft()\"}` is the menu leg and must stay FOUND")
+      (is (= "src/writer/views/components.clj" (:file menu)))))
+
+  (testing "a ROUTE literal inside a string is still the route leg"
+    (let [{:keys [structured]} (thread! fixture-root)
+          route (leg structured "route")]
+      (is (= "FOUND" (:status route)))
+      (is (= 2148 (:from route))))))
