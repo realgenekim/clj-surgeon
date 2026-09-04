@@ -30,7 +30,7 @@
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
-   (java.nio.file CopyOption Files LinkOption Path)
+   (java.nio.file CopyOption Files LinkOption Path StandardCopyOption)
    (java.nio.file.attribute FileAttribute)))
 
 (def max-patch-bytes
@@ -1146,6 +1146,7 @@
 
 ;; @spec MCP-OP-ADMIT-153
 ;; @spec MCP-OP-ADMIT-158
+;; @spec MCP-OP-ADMIT-159
 (defn overlay-snapshot!
   "The workspace as this patch would leave it, in a directory of its own.
 
@@ -1157,10 +1158,13 @@
   the gate is not about to write, which is the failure mode this whole gate
   exists to prevent.
 
-  The copy is a `Files/copy` carrying NOFOLLOW_LINKS rather than an `io/copy`:
-  a stream copy dereferences a link, which is how this loop opened a file
-  outside the workspace for read and write at once and truncated it
-  (MCP-OP-ADMIT-158).
+  The copy is a `Files/copy` carrying COPY_ATTRIBUTES and NOFOLLOW_LINKS
+  rather than an `io/copy`: a stream copy dereferences a link, which is how
+  this loop opened a file outside the workspace for read and write at once and
+  truncated it (MCP-OP-ADMIT-158), and it carries no attributes, so a
+  repository's own 0755 `./bin/check` landed at the process umask and the
+  verify ran -- and failed with `Permission denied` -- against a tree that
+  existed nowhere (MCP-OP-ADMIT-159).
 
   Returns `{:ok true :root <File>}` or a typed refusal map."
   [project-root images]
@@ -1220,9 +1224,11 @@
                                              (.resolve root-path inside))]
                 (Files/createSymbolicLink target-path link-target
                                           (make-array FileAttribute 0)))
+              ;; @spec MCP-OP-ADMIT-159
               (Files/copy (.toPath file) target-path
                           (into-array CopyOption
-                                      [LinkOption/NOFOLLOW_LINKS])))))
+                                      [StandardCopyOption/COPY_ATTRIBUTES
+                                       LinkOption/NOFOLLOW_LINKS])))))
         (doseq [{:keys [file operation post]} images]
           (let [target (io/file root file)]
             (if (= :delete operation)
@@ -1257,16 +1263,24 @@
 
         :else
         (let [argv (nth argvs index)
-              {:keys [finished? exit output elapsed_ms]}
+              {:keys [finished? exit output elapsed_ms launch-error]}
               (change-buffer/run-process! (.getPath venue) argv
                                           (long (or timeout-ms
                                                     inline-default-timeout-ms)))
-              ok? (and (boolean finished?) (zero? (long (or exit 0))))
+              launched? (not (true? launch-error))
+              ok? (and launched? (boolean finished?) (zero? (long (or exit 0))))
               row {:command (nth commands index)
                    :argv argv
                    :exit exit
                    :finished (boolean finished?)
+                   ;; @spec MCP-OP-ADMIT-159
+                   ;; A command that never started gets its own word. It used
+                   ;; to publish `did-not-finish` with `exit nil` and
+                   ;; `finished false` -- a TIMEOUT's exact shape -- so a
+                   ;; reader who met a `Permission denied` on the repository's
+                   ;; own `./bin/check` concluded the suite had hung.
                    :status (cond ok? "passed"
+                                 (not launched?) "did-not-start"
                                  (not finished?) "did-not-finish"
                                  :else "failed")
                    :elapsed_ms elapsed_ms
@@ -1281,6 +1295,8 @@
                     :command (nth commands index)
                     :argv argv
                     :exit exit
+                    ;; @spec MCP-OP-ADMIT-159
+                    :launch-error (true? launch-error)
                     :finished (boolean finished?)})))))))
 
 ;; @spec MCP-OP-ADMIT-153
@@ -1306,8 +1322,13 @@
                :exit (:exit failed)
                :exit-ok (nil? failed)
                :namespaces []}
-        failed (merge {:reason (if (:finished failed)
+        failed (merge {;; @spec MCP-OP-ADMIT-159
+                       :reason (cond
+                                 (:launch-error failed)
+                                 :inline-verify-command-did-not-start
+                                 (:finished failed)
                                  :inline-verify-command-failed
+                                 :else
                                  :inline-verify-command-did-not-finish)
                        :failed_command (:command failed)
                        :failed_command_argv (:argv failed)
@@ -1575,6 +1596,8 @@
    ;; would let a reader believe a suite was attributed when none was.
    (let [inline? (= "inline" (:verify_mode evidence))
          failed-kinds #{:tests-failed :inline-verify-command-failed
+                        ;; @spec MCP-OP-ADMIT-159
+                        :inline-verify-command-did-not-start
                         :inline-verify-command-did-not-finish}]
      {:detector (if inline? "inline-commands" "focused-tests")
       :reading? (or (true? (:ok evidence))
@@ -1737,7 +1760,11 @@
          ::blocking (cond
                       lint-blocking :blocking-lint-findings
                       tests-blocking (if inline?
-                                       :inline-verify-command-failed
+                                       ;; @spec MCP-OP-ADMIT-159
+                                       (if (= :inline-verify-command-did-not-start
+                                              (:reason tests))
+                                         :inline-verify-command-did-not-start
+                                         :inline-verify-command-failed)
                                        :focused-tests-failed)
                       :else nil)})
       (finally
@@ -2239,7 +2266,14 @@
          (when (some? failing_command_exit)
            (str "; the command exited " failing_command_exit))
          (when failing_command_output_tail
-           (str "; its last lines were:\n" failing_command_output_tail)))))
+           ;; @spec MCP-OP-ADMIT-159
+           ;; A command that never started has no exit code and no output of
+           ;; its own; what the receipt carries is the LAUNCHER's sentence,
+           ;; and calling that "its last lines" would misattribute it.
+           (str (if (= :inline-verify-command-did-not-start blocked)
+                  "; the command could not be launched: "
+                  "; its last lines were:\n")
+                failing_command_output_tail)))))
 
 (defn- execute-in-context!
   [config {:keys [patch mode verify expect_pre_sha256 allow_partial]}
