@@ -187,7 +187,7 @@
     (is (= 1 (count vs)))
     (is (= "var root" (:resource (first vs))))
     (is (str/includes? (iso/message (first vs)) "#'clj-surgeon.edit/apply-change"))
-    (is (str/includes? (iso/message (first vs)) "with-redefs or alter-var-root leaked"))))
+    (is (str/includes? (iso/message (first vs)) "with-redefs, an alter-var-root or a :reload leaked"))))
 
 ;; @spec TEST-ISO-005
 (deftest a-mutated-global-atom-fails-unless-it-is-declared-mutable-with-a-reason
@@ -202,6 +202,40 @@
       (is (empty? (of-intent (iso/violations subject before after
                                              {:allowlist '#{clj-surgeon.cache/entries}})
                              "TEST-ISO-005"))))))
+
+(def ^:private reload-declaration
+  '{clj-surgeon.reloader-test {clj-surgeon.handler "the reload IS the behaviour under test"}})
+
+;; @spec TEST-ISO-005
+(deftest a-declared-reload-is-exempt-for-that-namespace-and-nobody-else
+  ;; Reloading a production namespace replaces every var root in it, so the
+  ;; ONE namespace in this tree whose subject is the hot-reload path would
+  ;; otherwise fail with ~45 refusals every run -- and a witness that is red on
+  ;; correct behaviour every run is a witness somebody turns off. The
+  ;; exemption is therefore scoped to a NAMED production namespace for a NAMED
+  ;; test namespace, and the three ways it must NOT widen are asserted here.
+  (let [before (assoc (empty-snapshot) :var-roots '{clj-surgeon.handler/handle 1
+                                                    clj-surgeon.other/f 1})
+        after (assoc (empty-snapshot) :var-roots '{clj-surgeon.handler/handle 2
+                                                   clj-surgeon.other/f 2})
+        for-ns (fn [n] (of-intent (iso/violations n before after {:reloads reload-declaration})
+                                  "TEST-ISO-005"))]
+    (testing "the declaring namespace is exempt for the namespace it named -- and ONLY that one"
+      (let [vs (for-ns 'clj-surgeon.reloader-test)]
+        (is (= 1 (count vs)))
+        (is (str/includes? (iso/message (first vs)) "clj-surgeon.other/f")
+            "a reload declaration must not cover a leak in a DIFFERENT namespace")))
+    (testing "a namespace that declared nothing is exempt from nothing"
+      (is (= 2 (count (for-ns 'clj-surgeon.someone-else-test)))))
+    (testing "the declaration in the tree is narrow and every entry carries a reason"
+      (doseq [[test-ns reloaded] iso/declared-namespace-reloads]
+        (is (symbol? test-ns))
+        (doseq [[prod reason] reloaded]
+          (is (symbol? prod))
+          (is (and (string? reason) (> (count reason) 30))
+              (str test-ns " declares a reload of " prod
+                   " with no real reason -- an exemption with no reason is how a "
+                   "witness stops being one")))))))
 
 ;; @spec TEST-ISO-005
 (deftest the-allowlist-cannot-exempt-a-leaked-var-root

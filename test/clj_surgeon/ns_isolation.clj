@@ -34,6 +34,7 @@
    reads `/proc`, because a witness that spawns a child to prove no child was
    spawned is the verifier being blind to its own subject."
   (:require
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str])
@@ -81,7 +82,22 @@
   '#{;; the port-0 allocator's own ledger (TEST-ISO-004). It is append-only
      ;; within a run BY DESIGN -- recording an allocation is the mechanism, so
      ;; the namespace that allocates a port necessarily moves it.
-     clj-surgeon.ns-isolation/allocated-ports})
+     clj-surgeon.ns-isolation/allocated-ports
+
+     ;; the prepared-change basis store: a CACHE keyed by request, populated
+     ;; by any namespace that prepares a change and read back by the one that
+     ;; confirms it. Its growth across a namespace is the mechanism working.
+     clj-surgeon.mcp-change-buffer/basis-store
+
+     ;; the semantic client's runtime handle: a memoised connection holder.
+     ;; A namespace that asks a semantic question populates it; the value is a
+     ;; handle, not test state, and it is never read as an assertion.
+     clj-surgeon.mcp-semantic-client/runtime
+
+     ;; the cclsp config lock registry: an interning table of per-path lock
+     ;; objects. It only ever GROWS, by design -- two callers naming the same
+     ;; path must get the same lock, which is what an interning table is for.
+     clj-surgeon.workspace-onboarding/cclsp-config-locks})
 
 (def enforced-intents-by-lane
   "WHICH of the six intents each lane is HELD TO, and why the answer differs.
@@ -113,6 +129,37 @@
   [lane vs]
   (let [ids (get enforced-intents-by-lane lane #{})]
     (vec (filter (comp ids :intent) vs))))
+
+(def structural-tmp-entries
+  "@spec TEST-ISO-003 -- top-level names under the run's temp root that the RUN
+   itself owns, and which therefore belong to no namespace. Today that is the
+   throwaway `user.home` TEST-ISO-006 launches the JVM on: it is created by the
+   same act that creates the root and destroyed by the same sweep, and a test
+   that writes into it is writing into a directory that will not outlive the
+   run -- which is the whole point of isolating the home.
+
+   Read from `tmp-leak-support` rather than spelled here, because a witness
+   built on a spelling of another mechanism's name breaks silently when that
+   mechanism is renamed and reports the rename as a purity violation."
+  #{tmp-leak/isolated-home-name})
+
+(def declared-namespace-reloads
+  "@spec TEST-ISO-005 -- test namespace -> {production namespace -> reason}.
+
+   Reloading a production namespace replaces EVERY var root in it, which is
+   the loudest possible TEST-ISO-005 signal and, for one namespace in this
+   tree, is the behaviour under test: `mcp-inspect-tool-test` exercises the
+   hot-reload path the MCP server actually uses. Exempting it wholesale would
+   turn the rule off for that namespace; exempting a NAMED production
+   namespace for a NAMED test namespace keeps every other leak in it -- and
+   every leak of any other namespace -- still failing.
+
+   This is deliberately narrow and deliberately noisy to add to. A second
+   entry here should provoke the question `why is a fast-lane test reloading
+   production code?` rather than being routine paperwork."
+  '{clj-surgeon.mcp-inspect-tool-test
+    {clj-surgeon.mcp-inspect-tool
+     "handler-namespace-reload-preserves-the-live-runtime deliberately calls (require ... :reload) -- reloading the handler IS the behaviour under test"}})
 
 (def ^:private worktree-skip-dirs
   "Directories excluded from the working-tree walk. `.git` because its
@@ -215,6 +262,20 @@
                     (catch Exception _ nil))))
           (or (.listFiles d) []))))
 
+(defn- read-proc-file
+  "Reads a /proc file. NOT `slurp`: measured on this box, `slurp` on
+   /proc/net/tcp throws `IOException: Invalid argument` out of
+   `FileInputStream.available0` -- a procfs entry reports a zero length and
+   does not answer `available()`. `Files/readAllBytes` reads it correctly.
+   Returns nil when the file is absent, so a non-Linux box degrades to `no
+   listeners observed` rather than to an exception inside every namespace."
+  [path]
+  (try
+    (let [f (io/file path)]
+      (when (.exists f)
+        (String. (Files/readAllBytes (.toPath f)))))
+    (catch Exception _ nil)))
+
 (defn- listening-inode->port
   "Parses /proc/net/tcp and /proc/net/tcp6 for sockets in state 0A (LISTEN),
    returning inode -> port. Pure file reads; no `ss`, no `netstat`, no child."
@@ -222,9 +283,8 @@
   (into {}
         (comp
          (mapcat (fn [p]
-                   (let [f (io/file p)]
-                     (when (.isFile f)
-                       (rest (str/split-lines (slurp f)))))))
+                   (when-let [text (read-proc-file p)]
+                     (rest (str/split-lines text)))))
          (keep (fn [line]
                  (let [cols (str/split (str/trim line) #"\s+")]
                    (when (and (>= (count cols) 10) (= "0A" (nth cols 3)))
@@ -365,7 +425,7 @@
     (vec
      (concat
       (for [n (entry-diff (:tmp-entries before) (:tmp-entries after))
-            :when (not= n own)]
+            :when (and (not= n own) (not (structural-tmp-entries n)))]
         (violation "TEST-ISO-003" ns-sym "temp root"
                    (format "%s appeared or changed directly under java.io.tmpdir (%s); a fast-lane namespace may write only inside its own subdir %s"
                            n (System/getProperty "java.io.tmpdir") own)))
@@ -404,12 +464,14 @@
           (sort new-inodes))))
 
 (defn- root-identity-violations
-  [ns-sym before after]
-  (for [[sym h] (:var-roots after)
-        :let [b (get (:var-roots before) sym ::absent)]
-        :when (and (not= b ::absent) (not= b h))]
-    (violation "TEST-ISO-005" ns-sym "var root"
-               (format "#'%s has a different root object than before this namespace ran -- a with-redefs or alter-var-root leaked out of its scope" sym))))
+  [ns-sym before after reloads]
+  (let [declared (set (keys (get reloads ns-sym)))]
+    (for [[sym h] (:var-roots after)
+          :let [b (get (:var-roots before) sym ::absent)]
+          :when (and (not= b ::absent) (not= b h)
+                     (not (declared (symbol (namespace sym)))))]
+      (violation "TEST-ISO-005" ns-sym "var root"
+                 (format "#'%s has a different root object than before this namespace ran -- a with-redefs, an alter-var-root or a :reload leaked out of its scope" sym)))))
 
 (defn global-violations
   "@spec TEST-ISO-005 -- two kinds, and only ONE of them is exemptible.
@@ -419,10 +481,10 @@
    survive a namespace. A VALUE inside an atom the var holds may legitimately
    move (a cache, a registry), so that class alone consults the allowlist --
    and each entry there carries its reason."
-  [ns-sym before after allowlist]
+  [ns-sym before after allowlist reloads]
   (vec
    (concat
-    (root-identity-violations ns-sym before after)
+    (root-identity-violations ns-sym before after reloads)
     (for [[sym h] (:globals after)
           :let [b (get (:globals before) sym ::absent)]
           :when (and (not= b ::absent) (not= b h) (not (contains? allowlist sym)))]
@@ -455,15 +517,16 @@
   "The whole fold: every violation the six witnesses find, in intent order.
    Pure -- (namespace, before, after, opts) in, verdicts out."
   ([ns-sym before after] (violations ns-sym before after {}))
-  ([ns-sym before after {:keys [ledger allowlist overrides default-budget-ms]
+  ([ns-sym before after {:keys [ledger allowlist overrides default-budget-ms reloads]
                          :or {ledger {}
                               allowlist mutable-global-allowlist
                               overrides namespace-budget-overrides
+                              reloads declared-namespace-reloads
                               default-budget-ms default-namespace-budget-ms}}]
    (vec (concat (process-violations ns-sym before after)
                 (write-violations ns-sym before after)
                 (listener-violations ns-sym before after ledger)
-                (global-violations ns-sym before after allowlist)
+                (global-violations ns-sym before after allowlist reloads)
                 (budget-violations ns-sym before after overrides default-budget-ms)
                 (thread-violations ns-sym before after)))))
 

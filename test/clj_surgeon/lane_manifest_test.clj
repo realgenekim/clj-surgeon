@@ -290,14 +290,15 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 38 (count (lm/namespaces-for :fast))))
+    (is (= 39 (count (lm/namespaces-for :fast))))
     (is (= 4 (count (lm/namespaces-for :integration))))
     (is (= 11 (count (lm/namespaces-for :battery))))
-    (is (= 53 (count lm/manifest))
+    (is (= 54 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
-             "battery-ledger witness"))))
+             "battery-ledger witness, plus round four's six runtime purity "
+             "witnesses in ns-isolation-test"))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -318,7 +319,7 @@
     clj-surgeon.fast-lane-isolation-test 3   ; TEST-ISO-006's witness (round two)
     clj-surgeon.lane-manifest-test       18  ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins
     clj-surgeon.mcp-formatter-test       3   ; the adopted orphan (round three)
-    clj-surgeon.ns-isolation-test        15}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four)
+    clj-surgeon.ns-isolation-test        16}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four)
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -331,9 +332,9 @@
   ;;   round one's 49 namespaces, today ........... 921 deftests  (>= 865: the
   ;;                                                trunk ADDED tests to them;
   ;;                                                it never removed any)
-  ;;   adopted since round one ..................... 51 deftests  (12 + 3 + 18 + 3 + 15)
+  ;;   adopted since round one ..................... 52 deftests  (12 + 3 + 18 + 3 + 16)
   ;;                                                --------------
-  ;;   total declared by the manifest .............. 972 deftests
+  ;;   total declared by the manifest .............. 973 deftests
   ;;
   ;; A namespace leaving a lane fails `the-partition-drops-nothing-...` by
   ;; name; a namespace's tests being deleted fails the >= below; anything
@@ -358,9 +359,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 51 adopted) (str "adopted tests: " adopted)))
+      (is (= 52 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 972 total) (str "manifest declares " total " tests"))
+      (is (= 973 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
