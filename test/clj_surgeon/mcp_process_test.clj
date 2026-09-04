@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-process :as process]
+   [clj-surgeon.measured :as measured]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str]
@@ -313,7 +314,7 @@
                       :timeout-ms 350})]
         (is (false? (:finished? result)))
         (is (:termination-confirmed result))
-        (is (< (:elapsed_ms result) 650.0))))
+        (is (< (measured/value (:elapsed_ms result)) 650.0))))
     @owner))
 
 (deftest admission-wrapper-accepts-cold-profile-deadlines

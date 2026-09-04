@@ -58,10 +58,139 @@
   sees what it costs; a byte-identity witness drops these lines by prefix."
   "── measured (not hashed): ")
 
+;; ============================================================
+;; PROVENANCE: the tag rides the VALUE, not the name
+;; ============================================================
+;;
+;; The first repair of this invariant bound it to a NAME VOCABULARY — a set of
+;; field names a projector relocated. Sol's round-two review broke it in one
+;; move (2026-09-04 §1): bind an existing clock read once, publish the same
+;; number under the declared `:elapsed_ms` AND an undeclared
+;; `:verification_wall_ms`, and the second name sails into the parity hash
+;; while every witness stays green, because no clock-read COUNT changed and the
+;; new name was in nobody's vocabulary.
+;;
+;; A vocabulary can only ever describe the names somebody already thought of.
+;; So the tag is attached where the CLOCK IS READ: `elapsed-ms` and
+;; `elapsed-nanos` return a READING — the number wrapped in a one-key map that
+;; says a clock produced it — and the publication boundary relocates every
+;; reading it finds, whatever key it is sitting under. An undeclared measured
+;; field cannot be CONSTRUCTED from a sanctioned clock read, and the source
+;; scan in `clj-surgeon.measured-invariant-test` makes the unsanctioned reads
+;; (raw `System/nanoTime`, `System/currentTimeMillis`, `Instant/now`,
+;; `.getTime`) unavailable outside this namespace except at named, reasoned
+;; allow-list entries that are all on the `:control` channel.
+;;
+;; `value` is the one verb that strips a tag, and its call sites in `src/` are
+;; allow-listed by the same witness: laundering a reading back into a bare
+;; number is legitimate (a sum, a comparison, a telemetry row) and must be a
+;; deliberate, greppable act rather than a side effect.
+
+(def reading-key
+  "The key of a TAGGED CLOCK READING: `{reading-key 12.5}`.
+
+  Provenance that travels with the value. A reading is relocated into the
+  measured partition wherever it is found, under whatever key it was published
+  under — including a key nobody declared."
+  ::reading)
+
+(def started-key
+  "The key of an opaque START TICK, as `start` returns it.
+
+  Opaque on purpose: `(- (raw-nanos) (start))` does not typecheck, so the only
+  way to turn a start tick into a duration is `elapsed-ms` / `elapsed-nanos`,
+  and those return tagged readings."
+  ::started)
+
+(defn raw-nanos
+  "The monotonic clock, untagged. Allow-listed call sites only."
+  []
+  (System/nanoTime))
+
+(defn raw-ms
+  "The wall clock in epoch milliseconds, untagged. Allow-listed call sites only."
+  []
+  (System/currentTimeMillis))
+
+(defn start
+  "An opaque start tick for `elapsed-ms` / `elapsed-nanos`."
+  []
+  {started-key (raw-nanos)})
+
+(defn- start-nanos
+  [started]
+  (cond
+    (and (map? started) (contains? started started-key)) (long (get started started-key))
+    (number? started) (long started)
+    :else (throw (ex-info "A measured interval needs a start tick"
+                          {:error-type :invalid-measured-start
+                           :started-type (some-> started class .getName)}))))
+
+(defn reading
+  "Tag `n` as a number a clock produced."
+  [n]
+  {reading-key n})
+
+(defn reading?
+  "Is `x` a tagged clock reading?
+
+  Deliberately NOT `(contains? x reading-key)`. This predicate runs over every
+  value of every published result, and a result legitimately holds SORTED maps
+  keyed by file-name strings (the formatter's staged sources, for one). A
+  keyword lookup in a `PersistentTreeMap` of strings goes through `compareTo`
+  and throws `ClassCastException` — so the safe test is the shape a reading
+  actually has: exactly one entry, and that entry's key is the tag."
+  [x]
+  (and (map? x)
+       (== 1 (count x))
+       (= reading-key (key (first x)))))
+
+(defn value
+  "The bare number inside a reading; `x` unchanged when it is not one.
+
+  THE ONE LAUNDERING VERB. Every call site in `src/` is named in the invariant
+  witness's allow-list with the reason it needs a bare number."
+  [x]
+  (if (reading? x) (get x reading-key) x))
+
+(defn elapsed-nanos
+  "Nanoseconds since `started`, as a tagged reading."
+  [started]
+  (reading (- (raw-nanos) (start-nanos started))))
+
+(defn elapsed-ms
+  "Milliseconds since `started`, as a tagged reading."
+  [started]
+  (reading (/ (double (- (raw-nanos) (start-nanos started))) 1000000.0)))
+
+(defn unwrap-readings
+  "`x` with every tagged reading, at any depth, replaced by its bare number.
+
+  What a measured BLOCK holds: once a value is inside the partition its
+  provenance is stated by the block it lives in, and the wire carries a plain
+  JSON number rather than a nested object."
+  [x]
+  (cond
+    (reading? x) (value x)
+    (map? x) (reduce-kv (fn [acc k v]
+                          (let [v' (unwrap-readings v)]
+                            (if (identical? v' v) acc (assoc acc k v'))))
+                        x x)
+    (vector? x) (reduce-kv (fn [acc i v]
+                             (let [v' (unwrap-readings v)]
+                               (if (identical? v' v) acc (assoc acc i v'))))
+                           x x)
+    (set? x) (let [ys (map unwrap-readings x)]
+               (if (every? true? (map identical? ys x)) x (set ys)))
+    (seq? x) (map unwrap-readings x)
+    :else x))
+
 (defn measured
-  "A measured block: `m` is a map of fields a clock produced."
+  "A measured block: `m` is a map of fields a clock produced.
+
+  Readings in `m` are unwrapped — inside the block the provenance is the block."
   [m]
-  {measured-key m})
+  {measured-key (unwrap-readings m)})
 
 (defn hashed-channel
   "Project `x` onto its hashed channel — `x` with every `:measured` block
@@ -130,9 +259,11 @@
     :scan_ms :window-ns :max-ns :wall-ms})
 
 (defn attach
-  "Add measured `fields` to `x`'s measured block, keeping what is already there."
+  "Add measured `fields` to `x`'s measured block, keeping what is already there.
+
+  Readings in `fields` are unwrapped: the block states the provenance."
   [x fields]
-  (update x measured-key merge fields))
+  (update x measured-key merge (unwrap-readings fields)))
 
 (defn field
   "Read one measured field from `x`'s measured block."
@@ -140,8 +271,17 @@
   (get-in x [measured-key k]))
 
 (defn partition-measured
-  "Relocate every `measured-field-names` entry in `x` into the `:measured`
-  block at its OWN level, at any depth.
+  "Relocate every measured value in `x` into the `:measured` block at its OWN
+  level, at any depth.
+
+  A value is measured when EITHER holds:
+
+  - it is a TAGGED READING (`reading?`) — provenance carried by the value, so
+    the key it sits under is irrelevant and an undeclared name cannot smuggle
+    it past; or
+  - its key is in `measured-field-names` — the name vocabulary, kept for the
+    fields a caller or an adapter constructs from data rather than from a
+    sanctioned clock read.
 
   This is the publication boundary's half of the invariant. Code inside an
   operation may compute and pass a clock reading in whatever shape suits it;
@@ -151,21 +291,30 @@
 
   STRUCTURE-SHARING, like `hashed-channel`: a sub-value carrying no measured
   field comes back `identical?`, so partitioning a large result allocates the
-  changed spine and nothing else. A `:measured` block is never descended into —
-  its contents are already measured, and relocating them again would nest one
-  partition inside another."
+  changed spine and nothing else. A `:measured` block is never relocated into
+  another one — its contents are already measured — but readings inside it ARE
+  unwrapped, so the block always holds bare numbers."
   [x]
   (cond
+    (reading? x) x
+
     (map? x)
     (let [found (reduce-kv (fn [acc k v]
-                             (if (contains? measured-field-names k)
-                               (assoc acc k v)
+                             (if (and (not= k measured-key)
+                                      (or (reading? v)
+                                          (contains? measured-field-names k)))
+                               (assoc acc k (unwrap-readings v))
                                acc))
                            nil x)
           base (reduce-kv (fn [acc k v]
                             (cond
-                              (contains? measured-field-names k) (dissoc acc k)
-                              (= k measured-key) acc
+                              (= k measured-key)
+                              (let [v' (unwrap-readings v)]
+                                (if (identical? v' v) acc (assoc acc k v')))
+
+                              (or (reading? v) (contains? measured-field-names k))
+                              (dissoc acc k)
+
                               :else
                               (let [v' (partition-measured v)]
                                 (if (identical? v' v) acc (assoc acc k v')))))
@@ -188,23 +337,46 @@
     :else x))
 
 (defn unpartitioned-measured-paths
-  "Every path in `x` at which a `measured-field-names` entry sits OUTSIDE a
-  `:measured` block — empty when the invariant holds.
+  "Every path in `x` at which a measured value sits where a public result may
+  not carry it — empty when the invariant holds.
 
-  The witness's subject, and a diagnostic a reader can run on any result."
+  Two families, and both are defects of the same class:
+
+  - a `measured-field-names` key OUTSIDE a `:measured` block (the name route
+    the first repair covered);
+  - a TAGGED READING anywhere at all, including inside a `:measured` block —
+    outside the block it is measured data beside the hash subject, and inside
+    it, it is a wrapper that would reach the wire as a nested JSON object
+    instead of a number.
+
+  LAZY, so the boundary's refusal can short-circuit on the first offender
+  rather than walking a ten-thousand-record result to build a vector nobody
+  reads."
   [x]
-  (letfn [(walk [node path]
+  (letfn [(walk [node path in-measured?]
             (cond
+              (reading? node) [path]
+
               (map? node)
               (mapcat (fn [[k v]]
                         (cond
-                          (= k measured-key) nil
-                          (contains? measured-field-names k) [(conj path k)]
-                          :else (walk v (conj path k))))
+                          (= k measured-key) (walk v (conj path k) true)
+                          (and (not in-measured?)
+                               (contains? measured-field-names k)
+                               (not (reading? v)))
+                          [(conj path k)]
+                          :else (walk v (conj path k) in-measured?)))
                       node)
 
               (or (vector? node) (seq? node) (set? node))
-              (mapcat #(walk %1 (conj path %2)) node (range))
+              (mapcat #(walk %1 (conj path %2) in-measured?) node (range))
 
               :else nil))]
-    (vec (walk x []))))
+    (walk x [] false)))
+
+(defn first-unpartitioned-measured-path
+  "The first path `unpartitioned-measured-paths` would report, or nil.
+
+  The boundary's refusal predicate: short-circuits on the first offender."
+  [x]
+  (first (unpartitioned-measured-paths x)))

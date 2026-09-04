@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-hot-verify
   "Reload namespaces and run exact focused test Vars in one configured app JVM."
   (:require
+   [clj-surgeon.measured :as measured]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -52,7 +53,7 @@
 (defn verify!
   "Run one closed hot profile against the configured application nREPL."
   [project-root profile]
-  (let [started (System/nanoTime)]
+  (let [started (measured/start)]
     (if-not (valid-profile? profile)
       {:ok false :status :refused
        :error-type :invalid-hot-verification-profile
@@ -94,8 +95,7 @@
                    :reload-count (count (:reload profile))
                    :law-count (count (:tests profile))
                    :summary summary
-                   :elapsed_ms (/ (double (- (System/nanoTime) started))
-                                  1000000.0)
+                   :elapsed_ms (measured/elapsed-ms started)
                    :error-type (when-not ok :hot-verification-failed)
                    :output (when-not ok
                              (subs (str/join "" (keep #(or (:err %) (:out %))
@@ -111,5 +111,4 @@
                :error-type (or (:error-type (ex-data error))
                                :hot-verification-connection-failed)
                :error (.getMessage error)
-               :elapsed_ms (/ (double (- (System/nanoTime) started))
-                              1000000.0)})))))))
+               :elapsed_ms (measured/elapsed-ms started)})))))))

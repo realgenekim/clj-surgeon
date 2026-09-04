@@ -15,6 +15,7 @@
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str]))
@@ -528,8 +529,8 @@
     (reset! runtime-config configured)))
 
 (defn- elapsed-ms
-  [started-ns]
-  (/ (double (- (System/nanoTime) started-ns)) 1000000.0))
+  [started]
+  (measured/elapsed-ms started))
 
 (defn mcp-result-byte-count
   "Measure the complete public MCP result shape, including its text summary."
@@ -802,7 +803,7 @@
   "Validate, confine, snapshot once, and evaluate one typed inspect request."
   [{:keys [project-root telemetry read-source output-limits semantic-resolver] :as config}
    params]
-  (let [started (System/nanoTime)
+  (let [started (measured/start)
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
         extraction-plan? (= "plan-extraction" (:mode normalized-params))
@@ -865,7 +866,8 @@
           :inspection_elapsed_ms (elapsed-ms started))]
     (when telemetry
       (telemetry/record-inspect-call!
-        telemetry params result {:total_ms (:inspection_elapsed_ms result)}))
+        telemetry params result
+        {:total_ms (measured/value (:inspection_elapsed_ms result))}))
     result))
 
 (defn- attach-workspace-root

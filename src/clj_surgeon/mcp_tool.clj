@@ -24,6 +24,7 @@
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]
    [clj-surgeon.mcp-write-refusal :as write-refusal]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str])
@@ -150,8 +151,10 @@
              (vector? (:argv verification))
              (seq (:argv verification))
              (every? nonblank-string? (:argv verification))
-             (number? (mcp-operation/measured-field verification :elapsed_ms))
-             (<= 0 (mcp-operation/measured-field verification :elapsed_ms))
+             (number? (measured/value
+                        (mcp-operation/measured-field verification :elapsed_ms)))
+             (<= 0 (measured/value
+                     (mcp-operation/measured-field verification :elapsed_ms)))
              (integer? (:output-bytes verification))
              (<= 0 (:output-bytes verification))
              (sha256? (:output-sha256 verification))
@@ -462,12 +465,12 @@
       (catch Exception _ nil))))
 
 (defn- elapsed-ms
-  [started-ns]
-  (/ (double (- (System/nanoTime) started-ns)) 1000000.0))
+  [started]
+  (measured/elapsed-ms started))
 
 (defn- timed
   [f]
-  (let [started (System/nanoTime)
+  (let [started (measured/start)
         result (f)]
     [result (elapsed-ms started)]))
 
@@ -476,7 +479,7 @@
   (when telemetry-state
     (telemetry/record-call!
       telemetry-state request response
-      (assoc timings :total_ms (elapsed-ms total-start))))
+      (assoc timings :total_ms (measured/value (elapsed-ms total-start)))))
   response)
 
 (defn- resolve-program-paths
@@ -799,11 +802,14 @@
                  config)
         basis? (string? (:basis normalized-params))
         extraction? (map? (:extraction normalized-params))
-        total-start (System/nanoTime)
-        [validated validation-ms]
+        total-start (measured/start)
+        [validated validation-reading]
         (timed #(if basis?
                   (change-buffer/validate-basis-request normalized-params)
-                  (contract/validate-tool-params params)))]
+                  (contract/validate-tool-params params)))
+        ;; Telemetry rows are a diagnostic channel, never a public result, so
+        ;; the reading is laundered ONCE here rather than at five call sites.
+        validation-ms (measured/value validation-reading)]
     (if basis?
       (record-result!
         telemetry params

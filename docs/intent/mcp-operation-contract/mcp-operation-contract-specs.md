@@ -32,7 +32,7 @@ tests witness the requirement.
 
 - [x] **MCP-OP-ASYNC-001**: While a cold verification job is pending, an MCP launch or inspection result shall omit `job_elapsed_ms` from its `measured` partition.
 - [x] **MCP-OP-ASYNC-002**: When inspection observes a cold verification job that completed after execution began, the MCP result's `measured` partition shall contain finite, non-negative `elapsed_ms` and `job_elapsed_ms` values.
-- [x] **MCP-OP-ASYNC-003**: When a cold verification result contains `elapsed_ms` and `job_elapsed_ms`, its human summary shall label the corresponding formatted values as `request` and `job`.
+- [x] **MCP-OP-ASYNC-003**: When a cold verification result's `measured` partition contains `elapsed_ms` and `job_elapsed_ms`, its human summary shall label the corresponding formatted values as `request` and `job`.
 - [x] **MCP-OP-ASYNC-004**: If cold verification inspection cannot identify an owned job that began execution, then the typed refusal shall omit `job_elapsed_ms` from its `measured` partition.
 - [x] **MCP-OP-ASYNC-005**: When cold verification inspection reads a job state, clj-surgeon shall publish evidence from exactly that observed state even if the job transitions afterward.
 
@@ -222,7 +222,7 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-ASYNC-001` | Report elapsed job time so far for a pending job. | Launch-pending ; inspect-pending; job finishes immediately after the state snapshot. |
 | `MCP-OP-ASYNC-002` | Replace request time with job time after completion, or report only one unlabeled duration. | Completed success ; verification failure; background exception after execution begins. |
 | `MCP-OP-ASYNC-003` | Positional order distinguishes the two clocks without labels. | Equal rounded values ; reordered summary details; localized surrounding prose. |
-| `MCP-OP-ASYNC-004` | Fabricate `job_elapsed_ms: 0` when no owned execution was observed. | Unknown ID ; expired record; wrong workspace; refusal before execution. |
+| `MCP-OP-ASYNC-004` | Fabricate `measured.job_elapsed_ms: 0` when no owned execution was observed. | Unknown ID ; expired record; wrong workspace; refusal before execution. |
 | `MCP-OP-ASYNC-005` | Merge fields from two job reads to return the newest possible answer. | Pending-to-complete race ; completion-to-expiration race; retry during lookup. |
 | `MCP-OP-COVERAGE-001` | A hand-written list of today's four tools is equivalent to the live registry. | Added tool ; renamed tool; deleted tool; alternate registration path. |
 | `MCP-OP-COVERAGE-002` | One happy path and one refusal prove every public mode, or tests may declare the same incomplete mode list they witness. | Inspect read, prepared basis, pending/completed verification ; transform preview/commit; edit verification modes. |

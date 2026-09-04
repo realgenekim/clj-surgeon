@@ -998,8 +998,9 @@ counterexample that the native contract tests missed.
 - A closed worktree can be reconstructed from its sealed receipt and durable
   refs or archives; negative-experiment results remain discoverable even after
   their execution rooms are gone.
-- Every public MCP operation returns a finite, non-negative `elapsed_ms` on
-  success and refusal and renders the same value in its human summary.
+- Every public MCP operation returns a finite, non-negative `measured.elapsed_ms`
+  on success and refusal, renders the same value in its human summary, and
+  publishes no clock-derived field outside that `measured` partition.
 - A newly registered public MCP operation cannot pass the ordinary test suite
   without satisfying the shared envelope contract.
 - Asynchronous verification reports request and job elapsed times without

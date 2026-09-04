@@ -2,10 +2,12 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-contract :as contract]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.measured :as measured]
    [clojure-mcp.core :as mcp-core]
    [clojure-mcp.logging :as mcp-logging]
    [clojure.java.io :as io]
@@ -139,23 +141,36 @@
             (Mono/create
               (reify java.util.function.Consumer
                 (accept [_ sink]
-                  (try
-                    (tool-fn
-                      exchange (contract/json-containers->clj arguments)
-                      (fn [content error? structured]
-                        (.success sink
-                                  (structured-call-result
-                                    json-mapper content error? structured))))
-                    (catch Exception error
-                      (let [failure {:ok false
-                                     :operation name
-                                     :error_type "mcp-adapter-failure"
-                                     :error (.getMessage error)}]
-                        (.success sink
-                                  (structured-call-result
-                                    json-mapper
-                                    [(json/generate-string failure)]
-                                    true failure))))))))))]
+                  ;; @spec MCP-OP-RESULT-002
+                  ;; @spec MCP-OP-TIME-005
+                  ;; The adapter's own clock. The ordinary path is finalized by
+                  ;; the tool-fn's `mcp-operation/invoke!`; a throw from
+                  ;; execution, finalization, summary rendering or
+                  ;; serialization never reaches that finalizer, and before
+                  ;; this the catch built its own result with no `measured`
+                  ;; block at all — invalid against every canonical output
+                  ;; schema, which requires one (Sol review 2026-09-04 §2).
+                  ;; ONE boundary means one boundary.
+                  (let [started (measured/start)]
+                    (try
+                      (tool-fn
+                        exchange (contract/json-containers->clj arguments)
+                        (fn [content error? structured]
+                          (.success sink
+                                    (structured-call-result
+                                      json-mapper content error? structured))))
+                      (catch Exception error
+                        (let [failure (mcp-operation/finalize-failure
+                                        {:ok false
+                                         :operation name
+                                         :error_type "mcp-adapter-failure"
+                                         :error (.getMessage error)}
+                                        started)]
+                          (.success sink
+                                    (structured-call-result
+                                      json-mapper
+                                      [(json/generate-string failure)]
+                                      true failure)))))))))))]
     (McpServerFeatures$AsyncToolSpecification. mcp-tool handler)))
 
 (defn- create-async-tool

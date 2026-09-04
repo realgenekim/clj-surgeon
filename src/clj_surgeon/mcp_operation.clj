@@ -23,30 +23,54 @@
                  "%.2f ms"
                  (object-array [(double elapsed-ms)])))
 
-(defn- finalize-result
-  [domain-result started-ns finished-ns]
+(defn finalize-result
+  "THE publication boundary for the measured partition.
+
+  Every public MCP result passes through here, so this is the one place that
+  can make \"a measured field enters a receipt only through the partition\" true
+  by CONSTRUCTION rather than by every producer remembering. Code inside an
+  operation may carry a clock reading in whatever shape suits it; what it may
+  not do is publish one beside the partition instead of inside it.
+
+  `elapsed` is the authoritative request clock: a `measured` reading or a bare
+  number. PUBLIC, because it is the boundary — a failure raised outside
+  `invoke!` (the SDK adapter's own catch, Sol review 2026-09-04 §2) publishes
+  through this function rather than building a result of its own."
+  [domain-result elapsed]
   (when-not (map? domain-result)
     (throw (ex-info "MCP domain execution must return a map"
                     {:error-type :invalid-mcp-operation-result
                      :result-type (some-> domain-result class .getName)})))
-  (let [elapsed-ms (/ (- (double finished-ns) (double started-ns))
-                      1000000.0)]
+  (let [elapsed-ms (measured/value elapsed)]
     (when-not (finite-non-negative? elapsed-ms)
       (throw (ex-info "MCP request clock produced an invalid interval"
                       {:error-type :invalid-mcp-elapsed-time
-                       :started-ns started-ns
-                       :finished-ns finished-ns
                        :elapsed-ms elapsed-ms})))
     ;; @spec MCP-OP-TIME-005
-    ;; THE publication boundary for the measured partition. Every public MCP
-    ;; result passes through here, so this is the one place that can make "a
-    ;; measured field enters a receipt only through the partition" true by
-    ;; CONSTRUCTION rather than by every producer remembering. Code inside an
-    ;; operation may carry a clock reading in whatever shape suits it; what it
-    ;; may not do is publish one beside the partition instead of inside it.
-    (-> domain-result
-        measured/partition-measured
-        (measured/attach {:elapsed_ms elapsed-ms}))))
+    (let [result (-> domain-result
+                     measured/partition-measured
+                     (measured/attach {:elapsed_ms elapsed-ms}))]
+      ;; A TYPED REFUSAL, not a diagnostic. A reading with no key to relocate
+      ;; (one sitting directly in a vector, say) would reach the wire as a
+      ;; nested JSON object and reach a parity hash as measured data. There is
+      ;; no honest way to publish it, so the boundary refuses instead of
+      ;; guessing — the bad state is unrepresentable downstream.
+      (when-let [path (measured/first-unpartitioned-measured-path result)]
+        (throw (ex-info "A measured value cannot be published outside the partition"
+                        {:error-type :unpartitioned-measured-field
+                         :path path})))
+      result)))
+
+(defn finalize-failure
+  "Publish a failure raised OUTSIDE `invoke!` through `invoke!`'s own finalizer.
+
+  The SDK adapter catches anything the handler, the finalizer, the summary or
+  the serializer throws. Before this existed it built its own result map, and
+  that map had no `measured` block — invalid against every canonical output
+  schema, which requires one (Sol review 2026-09-04 §2). One boundary means
+  one boundary."
+  [failure started]
+  (finalize-result failure (measured/elapsed-ms started)))
 
 (def measured-output-schema
   "The public JSON shape of the measured partition.
@@ -93,12 +117,14 @@
   serialization both complete before callback publication, so failures cannot
   expose a partial public result."
   [{:keys [clock-nanos execute summarize serialize callback]
-    :or {clock-nanos #(System/nanoTime)
+    :or {clock-nanos measured/raw-nanos
          serialize json/generate-string}}]
   (let [started-ns (clock-nanos)
         domain-result (execute)
         finished-ns (clock-nanos)
-        result (finalize-result domain-result started-ns finished-ns)
+        result (finalize-result domain-result
+                                (/ (- (double finished-ns) (double started-ns))
+                                   1000000.0))
         summary (summarize result)
         body (serialize result)]
     (callback [summary] (not (:ok result)) result)

@@ -44,9 +44,9 @@ public handler entry
 |       +-- success result
 |       `-- typed refusal result
 |
-+-- shared finalizer records elapsed_ms
++-- shared finalizer partitions the result and records measured.elapsed_ms
 |
-+-- operation-owned summary renders that same elapsed_ms
++-- operation-owned summary renders that same measured.elapsed_ms
 |
 `-- MCP adapter publishes text content + structured content
 ```
@@ -75,7 +75,11 @@ The finalizer:
 1. Requires the domain result to be a map.
 2. Computes elapsed time once from the two monotonic timestamps.
 3. Requires elapsed time to be finite and non-negative.
-4. Associates authoritative `elapsed_ms` with the result.
+4. Relocates every measured field of the result into the `measured` partition
+   at its own level, and associates the authoritative request clock with the
+   result's top-level `measured.elapsed_ms`.
+5. Refuses, typed, any measured value it cannot relocate rather than publishing
+   it beside the partition.
 5. Calls the operation-owned summary function with that finalized result.
 6. Serializes the same finalized result as structured evidence.
 
@@ -84,13 +88,21 @@ actions, run verification, or convert programmer errors into typed refusals.
 A non-map result, invalid clock delta, or summary failure is an unexpected MCP
 error and publishes no malformed domain result.
 
-Before routing a handler through the finalizer, existing top-level
-`elapsed_ms` producers and consumers are inventoried. A value with the same
-public-request meaning is replaced by the finalizer's measurement. A value with
-a narrower meaning is preserved under a distinct, phase-specific name such as
-`execution_elapsed_ms` or `job_elapsed_ms`. There is only one authoritative
-top-level public request clock, and it is never silently overwritten without
-this classification.
+Before routing a handler through the finalizer, existing request-clock
+(`measured.elapsed_ms`) producers and consumers are inventoried. A value with the same public-request
+meaning is replaced by the finalizer's measurement. A value with a narrower
+meaning is preserved under a distinct, phase-specific name such as
+`execution_elapsed_ms` or `job_elapsed_ms` inside the same `measured`
+partition. There is only one authoritative public request clock —
+`measured.elapsed_ms` — and it is never silently overwritten without this
+classification.
+
+PROVENANCE, not vocabulary. A clock reading is tagged where the clock is READ:
+`clj-surgeon.measured` owns every raw clock read in `src/`, `elapsed-ms` and
+`elapsed-nanos` return a tagged reading, and the finalizer relocates every
+reading it finds under any key at all. A field name nobody declared therefore
+cannot carry a clock value past the boundary, which a name vocabulary alone
+could not prevent.
 
 # #Timing Boundary
 
@@ -111,8 +123,10 @@ do not sleep.
 
 # #Structured and Human Evidence
 
-Every public output schema declares `elapsed_ms` as a required number with a
-minimum value of zero. Every success and typed refusal result contains it.
+Every public output schema declares `measured.elapsed_ms` as a required number
+with a minimum value of zero, inside a required `measured` object. Every
+success and typed refusal result contains it, and nothing under `measured` is a
+subject of any determinism, parity, or byte-identity requirement.
 
 Every concise summary renders the same finalized value. Operation-specific
 content remains free to differ:
@@ -244,14 +258,16 @@ meet the two-call and no-native-discovery gate.
 
 Cold verification preserves two separate clocks:
 
-- `elapsed_ms` is the bounded MCP request that launched or inspected the job.
-- `job_elapsed_ms` is the background verification work reported by the job.
+- `measured.elapsed_ms` is the bounded MCP request that launched or inspected
+  the job.
+- `measured.job_elapsed_ms` is the background verification work reported by the
+  job.
 
 The human summary canonically labels both values as `request` and `job` ; their
 position or coincident rounded values cannot make them ambiguous. Each display
 value is formatted from its corresponding structured field.
 
-| Observed job state | `elapsed_ms` | `job_elapsed_ms` | Result class |
+| Observed job state | `measured.elapsed_ms` | `measured.job_elapsed_ms` | Result class |
 |---|---:|---:|---|
 | Launch accepted, job pending | required | omitted | success, verification pending |
 | Inspection finds job pending | required | omitted | success, verification pending |
@@ -276,7 +292,7 @@ registration cannot silently bypass the contract.
 
 For every registered tool and outcome class it checks:
 
-- the output schema requires a non-negative numeric `elapsed_ms` ;
+- the output schema requires a non-negative numeric `measured.elapsed_ms` ;
 - the outcome reaches the single publication choke point and finalizer ;
 - the summary contains the same formatted value as structured content.
 
@@ -502,7 +518,7 @@ a generic transport feature:
 kernel result
 -> normalize commit, read-back, receipt, and verification evidence
 -> apply-owned terminal-response projector
--> shared finalizer adds elapsed_ms only
+-> shared finalizer partitions and adds measured.elapsed_ms only
 -> apply summary and structured serialization
 -> one callback
 ```

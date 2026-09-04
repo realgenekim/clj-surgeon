@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.measured :as measured]
    [clojure.java.io :as io])
   (:import
    (java.util UUID)))
@@ -101,7 +102,7 @@
 
 (defn- run-job!
   [id project-root command timeout-ms]
-  (let [started (System/nanoTime)]
+  (let [started (measured/start)]
     (try
       (let [process (process-env/run-bounded!
                       {:command command
@@ -159,7 +160,7 @@
                            :cold-verification-exception)
              :error (or (.getMessage error) (.getName (class error)))
              :admission (:admission data)
-             :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+             :elapsed_ms (measured/elapsed-ms started)
              :verification_complete true
              :next_action (if authority-unverified?
                             "restore_analyzer_authority_before_retry"

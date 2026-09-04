@@ -485,9 +485,13 @@
   ([file source] (refusal file source *ceilings*))
   ([file source ceilings]
    (let [{:keys [max-parse-nodes max-parse-depth]} ceilings
-         t0 (System/nanoTime)
+         t0 (measured/start)
          {:keys [parse-nodes parse-depth]} (scan-shape source)
-         _ (record-scan! (- (System/nanoTime) t0) (.length ^String source))
+         ;; The meter ACCUMULATES bare nanos across every file of a scan, so
+         ;; it takes the number rather than the reading; what it publishes,
+         ;; `meter-resources` puts inside the partition by construction.
+         _ (record-scan! (measured/value (measured/elapsed-nanos t0))
+                         (.length ^String source))
          ;; @spec MCP-OP-TIME-005
          ;; `:shape`, NOT `:measured`. These two figures are deterministic
          ;; counts of the source's structure — the same file yields the same

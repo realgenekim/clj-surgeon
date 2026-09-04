@@ -10,7 +10,7 @@
 
 (defn- elapsed-ms
   [started]
-  (/ (double (- (System/nanoTime) started)) 1000000.0))
+  (measured/elapsed-ms started))
 
 (defn- failure-receipt-path
   [workspace]
@@ -25,14 +25,14 @@
 (defn recover!
   "Run one repair attempt and prove the first structural transaction."
   [{:keys [workspace up-fn probe-fn failure-receipt] :as options}]
-  (let [started (System/nanoTime)
+  (let [started (measured/start)
         phase (atom :onboarding)
         workspace (.getCanonicalPath
                     (io/file (or workspace (System/getProperty "user.dir"))))
         up-fn (or up-fn onboarding/up!)
         probe-fn (or probe-fn mcp-recovery/probe!)]
     (try
-      (let [up-started (System/nanoTime)
+      (let [up-started (measured/start)
             up-result (up-fn (assoc (select-keys options
                                                  [:tool-root :state-dir :lsp-command
                                                   :runner :readiness-probe
@@ -40,7 +40,7 @@
                                     :workspace workspace))
             up-elapsed (elapsed-ms up-started)
             _ (reset! phase :proof)
-            probe-started (System/nanoTime)
+            probe-started (measured/start)
             probe-result (probe-fn {:workspace workspace
                                     :surgeon-url (get-in up-result
                                                          [:servers :clj-surgeon])

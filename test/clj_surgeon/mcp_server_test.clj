@@ -5,6 +5,7 @@
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
+   [clj-surgeon.measured :as measured]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
@@ -286,3 +287,47 @@
       (is (nil? @runtime/live-tool-state))
       (finally
         (reset! runtime/live-tool-state original)))))
+
+;; @spec MCP-OP-RESULT-002
+;; @spec MCP-OP-SCHEMA-001
+;; @spec MCP-OP-TIME-005
+(deftest an-adapter-failure-is-published-through-the-shared-finalizer
+  (testing "a throw the tool-fn never catches still carries the measured partition"
+    ;; Sol review 2026-09-04 §2. `recovery/recover!` was not the only bypass of
+    ;; `mcp-operation/invoke!`: the SDK adapter's own catch built its result
+    ;; directly, so any throw from execution, finalization, summary rendering
+    ;; or serialization published
+    ;;
+    ;;   {"error_type" "mcp-adapter-failure", "ok" false,
+    ;;    "error" "boom", "operation" "boom"}
+    ;;
+    ;; with no `measured` block — invalid against every canonical output
+    ;; schema, all of which require one.
+    (let [spec (server/create-structured-async-tool
+                 {:name "boom"
+                  :description "boom"
+                  :schema {:type "object"}
+                  :output-schema {:type "object"
+                                  :properties {"measured" {:type "object"}}
+                                  :required ["measured"]}
+                  :annotations {:title "Boom" :read-only true :destructive false
+                                :idempotent true :open-world false
+                                :return-direct false}
+                  :tool-fn (fn [_ _ _] (throw (ex-info "boom" {})))})
+          result (.block (.apply (.call spec) nil {}))
+          structured (.structuredContent result)
+          measured-block (get structured "measured")]
+      (is (true? (.isError result))
+          "an adapter failure is still an error result")
+      (is (instance? java.util.Map measured-block)
+          (str "the adapter failure carries no measured partition: "
+               (pr-str structured)))
+      (is (number? (get measured-block "elapsed_ms"))
+          (str "the adapter failure carries no request clock: "
+               (pr-str measured-block)))
+      (is (<= 0.0 (double (get measured-block "elapsed_ms")))
+          "the adapter clock is negative")
+      (is (false? (contains? structured "elapsed_ms"))
+          "the adapter failure published a top-level request clock")
+      (is (= "mcp-adapter-failure" (get structured "error_type"))
+          "the adapter failure lost its typed error"))))

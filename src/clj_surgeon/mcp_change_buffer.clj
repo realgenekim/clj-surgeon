@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
@@ -1261,7 +1262,7 @@
   ([project-root command]
    (run-process! project-root command 120000))
   ([project-root command timeout-ms]
-   (let [started (System/nanoTime)]
+   (let [started (measured/start)]
      (try
        (process-env/run-bounded!
          {:command command
@@ -1273,7 +1274,7 @@
          {:finished? false
           :launch-error true
           :exit nil
-          :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+          :elapsed_ms (measured/elapsed-ms started)
           :output (or (.getMessage error) (.getName (class error)))
           :output-bytes 0
           :output-sha256 (sha256-text "")
@@ -1458,7 +1459,11 @@
        :profile profile
        :checks checks
        :error-type (some :error-type (remove :ok checks))
-       :elapsed_ms (reduce + 0.0 (map :elapsed_ms checks))})
+       ;; One derived reading, tagged: the per-check clocks are summed as
+       ;; bare numbers and the sum re-enters the partition as clock-derived.
+       :elapsed_ms (measured/reading
+                     (reduce + 0.0 (map (comp measured/value :elapsed_ms)
+                                        checks)))})
     {:ok false
      :profile profile
      :error-type :unknown-verification-profile
@@ -1535,8 +1540,10 @@
         :hot-verification hot
         :cold-verification cold
         :verification_complete (not= :running (:status cold))
-        :elapsed_ms (+ (reduce + 0.0 (map :elapsed_ms checks))
-                       (double (or (:elapsed_ms hot) 0.0)))})
+        :elapsed_ms (measured/reading
+                      (+ (reduce + 0.0 (map (comp measured/value :elapsed_ms)
+                                            checks))
+                         (double (or (measured/value (:elapsed_ms hot)) 0.0))))})
      {:ok false
       :profile profile
       :error-type :unknown-verification-profile

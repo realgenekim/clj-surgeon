@@ -29,6 +29,7 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.measured :as measured]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -2243,7 +2244,7 @@
           (when before-recheck (before-recheck path))
           (file-ops/with-publish-lock* (:transactions-dir txn)
             (fn []
-              (let [opened (System/nanoTime)
+              (let [opened (measured/start)
                     stat-now (path-stat path)
                     reread? (not (and pre-stable? (= stat-now stat-after)))
                     current (if reread? (sha256-file path) pre-digest)
@@ -2267,7 +2268,7 @@
                     (try
                       (publish-fn path tmp)
                       {:ok true
-                       :window-ns (- (System/nanoTime) opened)
+                       :window-ns (measured/elapsed-nanos opened)
                        :reread? reread?}
                       (catch Exception cause {:failed cause})))))))
           (finally
@@ -2353,7 +2354,8 @@
                       :txid (:txid txn)
                       :files-written written
                       :read-set-files (:read-set-count @state)
-                      :commit-window (assoc commit-window :max-ns window-ns)
+                      :commit-window (assoc commit-window
+                                            :max-ns (measured/reading window-ns))
                       :digest-rereads rereads
                       :reserved {:journal-bytes (:journal-bytes @state)
                                  :journal-bytes-peak (:journal-bytes-peak @state 0)
@@ -2408,7 +2410,9 @@
                        (let [actual (sha256-file path)]
                          (if (= actual result-hash)
                            (recur (rest remaining) (inc written)
-                                  (max window-ns (long (:window-ns outcome 0)))
+                                  (max window-ns
+                                       (long (measured/value
+                                               (:window-ns outcome 0))))
                                   (if (:reread? outcome) (inc rereads) rereads))
                            (let [restored (rollback-written! txn)]
                              (finish! txn :rolled-back restored)

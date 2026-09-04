@@ -9,6 +9,7 @@
   (:require
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.memory.child :as child]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.scope-stream :as scope]
    [clj-surgeon.txn-journal :as journal]
    [clojure.java.io :as io]
@@ -296,7 +297,7 @@
           (is (false? (get-in receipt [:commit-window :staging-copy-inside]))
               "the staged bytes are copied into the target directory BEFORE the
                window opens, so no byte copying happens inside it")
-          (is (pos? (get-in receipt [:commit-window :max-ns]))
+          (is (pos? (measured/value (get-in receipt [:commit-window :max-ns])))
               "the widest observed window is measured, not asserted")
           (is (some #(str/includes? % "recheck")
                     (:does-not-promise (journal/contract)))
@@ -335,7 +336,7 @@
           (is (= 0 (:digest-rereads receipt))
               "an uncontended commit re-reads nothing inside the lock, whatever
                the target's size - which is the whole claim")
-          (is (pos? (:max-ns window))))
+          (is (pos? (measured/value (:max-ns window)))))
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-007

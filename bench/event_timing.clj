@@ -130,10 +130,31 @@
         "item.updated" (str (or item-type "unknown-item") "-updated")
         "unknown-event"))))
 
-(defn- server-elapsed-ms [event]
-  (or (get-in event [:item :result :structured_content :elapsed_ms])
-      (get-in event [:item :result :structuredContent :elapsed_ms])
-      (get-in event [:item :result :elapsed_ms])))
+(defn- server-elapsed-ms
+  "The server's authoritative request clock, from the `measured` partition.
+
+   MCP-OP-TIME-005 moved every clock-derived field of a public MCP result into
+   a `measured` block; a top-level `elapsed_ms` is the OLD wire. A reader that
+   still looks for the old name on a current receipt finds nothing and reports
+   no server clock at all — a silent zero, and a false absence is worse than an
+   error because it terminates investigation rather than starting one. So the
+   old shape is REFUSED, loudly, and only a genuinely clock-free result reports
+   nothing."
+  [event]
+  (let [structured (or (get-in event [:item :result :structured_content])
+                       (get-in event [:item :result :structuredContent]))
+        partitioned (get-in structured [:measured :elapsed_ms])
+        legacy (or (:elapsed_ms structured)
+                   (get-in event [:item :result :elapsed_ms]))]
+    (cond
+      (number? partitioned) partitioned
+      (number? legacy)
+      (fail! (str "MCP result carries a top-level elapsed_ms; the server clock "
+                  "lives in measured.elapsed_ms (MCP-OP-TIME-005)")
+             {:item-id (get-in event [:item :id])
+              :tool (get-in event [:item :tool])
+              :legacy-elapsed-ms legacy})
+      :else nil)))
 
 (defn- allowlisted-observation [clock event]
   (let [item (:item event)]

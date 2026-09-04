@@ -2,6 +2,7 @@
   "Shared process environment for repository-owned formatter and verification commands."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.measured :as measured]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -369,7 +370,7 @@
            on-start]
     :or {merge-error? false visible-byte-limit 65536}}]
   ;; @spec MCP-OP-ANALYZER-002
-  (let [started (System/nanoTime)
+  (let [started (measured/start)
         stdout-file (java.io.File/createTempFile "clj-surgeon-process-out-" ".log")
         stderr-file (java.io.File/createTempFile "clj-surgeon-process-err-" ".log")
         stdin-file (when (some? stdin-text)
@@ -403,8 +404,7 @@
                     base {:finished? finished?
                           :exit exit
                           :termination-confirmed termination-confirmed?
-                          :elapsed_ms (/ (double (- (System/nanoTime) started))
-                                         1000000.0)
+                          :elapsed_ms (measured/elapsed-ms started)
                           :admission admission}]
                 (if merge-error?
                   (merge base
