@@ -126,6 +126,45 @@
          data))
 
 ;; @spec MCP-OP-CENSUS-014
+(defn- overflow-measurement
+  "WHICH part of an over-long continuation is the length that does not fit.
+
+   Opus's round-sixteen item 5. The remedy this feeds used to state one cause
+   unconditionally — \"the length of the workspace path in it is\" — and it
+   stated it about a 24-character root carrying 500 named sources, where the
+   workspace path was 24 of the 9,603 bytes measured. A caller who follows a
+   remedy like that shortens the one thing that is not the problem and receives
+   the identical refusal: the loop-with-a-receipt MCP-OP-CENSUS-014 forbids a
+   continuation, arriving in a remedy instead.
+
+   So the cause is MEASURED. The candidate's two variable parts are the
+   workspace path and the `files` list; whichever carries more bytes is what
+   the caller must change, and when it is the list, one very long entry and
+   five hundred short ones are different problems with different remedies.
+
+   Returns `{:bytes :cause :measured :entries}` where `:measured` is the byte
+   figure the named cause accounts for."
+  [candidate bytes]
+  (let [root-bytes (census/utf8-byte-count (str (:workspace_root candidate)))
+        entries (when (sequential? (:files candidate)) (vec (:files candidate)))
+        entry-sizes (mapv #(census/utf8-byte-count (str %)) entries)
+        entry-bytes (reduce + 0 entry-sizes)
+        longest (reduce max 0 entry-sizes)]
+    (merge {:bytes bytes :entries (count entries)}
+           (cond
+             (>= root-bytes entry-bytes)
+             {:cause :workspace-root-length :measured root-bytes}
+
+             ;; One entry carrying more than half of what the list weighs is
+             ;; the entry, not the count: telling that caller to name fewer
+             ;; sources is the same unmeasured advice in a different sentence.
+             (> (* 2 longest) entry-bytes)
+             {:cause :entry-length :measured longest}
+
+             :else
+             {:cause :entry-count :measured entry-bytes}))))
+
+;; @spec MCP-OP-CENSUS-014
 (defn continuation
   "THE ONE PLACE this tool turns a candidate request into a `next_call`.
 
@@ -177,11 +216,20 @@
                             (or (not (contains? stamped :files))
                                 (publishable-files? (:files stamped))))
                    stamped)
-        rendered (when faithful (json/generate-string faithful))]
+        rendered (when faithful (json/generate-string faithful))
+        bytes (when rendered (census/utf8-byte-count rendered))
+        fits? (boolean (and rendered
+                            (census/within-next-call-bytes? rendered)))]
     {:candidate faithful
-     :bytes (when rendered (census/utf8-byte-count rendered))
-     :next-call (when (and rendered (census/within-next-call-bytes? rendered))
-                  faithful)}))
+     :bytes bytes
+     ;; Opus's round-sixteen item 5. A candidate dropped for LENGTH carries
+     ;; WHAT was measured and WHICH part of it dominates, so the remedy can
+     ;; state a cause it observed instead of the one this code happened to be
+     ;; written for. `nil` when the candidate fitted or was dropped for shape:
+     ;; those are different facts and a caller must be able to tell them apart.
+     :overflow (when (and bytes (not fits?))
+                 (overflow-measurement faithful bytes))
+     :next-call (when fits? faithful)}))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn- continuation-overflow-remedy
@@ -189,17 +237,35 @@
 
    The sibling of `narrowing-overflow-remedy`, for the refusals whose
    continuation is built out of the caller's own request rather than out of
-   the walk's aggregates. It says the same true thing that one does: the
-   narrowing is known, and it is the LENGTH of the path in it that does not
-   fit. A refusal that names a bound without naming the value it compared
-   against leaves the caller to guess how much shorter is short enough."
-  [bytes]
+   the walk's aggregates. A refusal that names a bound without naming the
+   value it compared against leaves the caller to guess how much shorter is
+   short enough — and a refusal that names a CAUSE it never measured is worse
+   than silence, because the caller shortens the wrong thing and receives the
+   identical refusal (Opus's round-sixteen item 5).
+
+   Every sentence below is a figure `overflow-measurement` actually observed."
+  [{:keys [bytes cause measured entries]}]
   (str "The narrowest continuation this refusal can compute renders as "
        bytes " UTF-8 bytes, over the " census/max-next-call-bytes
-       "-byte ceiling a continuation must fit, so none is offered. The "
-       "REQUEST is not the problem, the length of the workspace path in it "
-       "is: retry with workspace_root reaching the same tree by a shorter "
-       "path, and fix what this refusal named."))
+       "-byte ceiling a continuation must fit, so none is offered. "
+       (case cause
+         :workspace-root-length
+         (str "The REQUEST is not the problem, the length of the workspace "
+              "path in it is: workspace_root alone measures " measured
+              " of those bytes — retry with workspace_root reaching the same "
+              "tree by a shorter path, and fix what this refusal named.")
+
+         :entry-length
+         (str "The workspace path is not the problem, the length of a source "
+              "path in it is: the longest of the " entries
+              " sources this call would name measures " measured
+              " of those bytes — name shorter sources with files, and fix "
+              "what this refusal named.")
+
+         (str "The workspace path is not the problem, the NUMBER of sources "
+              "in it is: the " entries " sources this call would name measure "
+              measured " of those bytes together — name fewer sources with "
+              "files, and fix what this refusal named."))))
 
 ;; @spec MCP-OP-CENSUS-014
 (defn- continuation-refused-remedy
@@ -211,9 +277,9 @@
    says retry from a shorter path, the other says there was no call to make.
    Reading the first wording over the second prints the measurement of
    something that was never measurable."
-  [bytes]
-  (if (some? bytes)
-    (continuation-overflow-remedy bytes)
+  [overflow]
+  (if (some? overflow)
+    (continuation-overflow-remedy overflow)
     (str "The narrowest continuation this refusal can compute is not a call "
          "the schema this tool publishes would accept — it names no source "
          "this tool could carry — so none is offered: name the sources to "
@@ -340,7 +406,7 @@
                                             carriable?
                                             (nil? next-call))
                                    {:remedy (continuation-refused-remedy
-                                              (:bytes computed))})
+                                              (:overflow computed))})
                                  data)))
         ;; The shape questions AND THEIR ORDER are the shared table's, not
         ;; this function's. Sol's round-eleven item 3: this validator read the
@@ -837,7 +903,7 @@
 (defn- door-refusal
   [invalid canonical facts]
   (let [known (vec (sort (map str census/default-doors)))
-        {:keys [next-call bytes]}
+        {:keys [next-call overflow]}
         (continuation {:workspace_root canonical :doors known})]
     (refusal :unknown-door-symbol
              (str "Unknown identity door " (:invalid invalid) ": "
@@ -846,7 +912,7 @@
              (cond-> (merge {:door (:invalid invalid) :known_doors known}
                             facts)
                (nil? next-call)
-               (assoc :remedy (continuation-refused-remedy bytes))))))
+               (assoc :remedy (continuation-refused-remedy overflow))))))
 
 ;; @spec MCP-OP-CENSUS-023
 ;; @spec MCP-OP-CENSUS-031
@@ -953,7 +1019,7 @@
             removed (set unreadable)
             remaining (when requested
                         (vec (remove removed (distinct requested))))
-            {:keys [next-call bytes]}
+            {:keys [next-call overflow]}
             (continuation (when (seq remaining)
                             (assoc (dissoc params :files)
                                    :workspace_root canonical
@@ -970,7 +1036,7 @@
                    (assoc :cause (:cause (:refusal loaded)))
 
                    (and (seq remaining) (nil? next-call))
-                   (assoc :remedy (continuation-refused-remedy bytes))
+                   (assoc :remedy (continuation-refused-remedy overflow))
 
                    (seq unreadable)
                    (merge {:files_removed (vec (take max-listed-files
@@ -1010,7 +1076,7 @@
             removed (set over)
             remaining (when requested
                         (vec (remove removed (distinct requested))))
-            {:keys [next-call] over-bytes :bytes}
+            {:keys [next-call] over-overflow :overflow}
             (continuation (when (seq remaining)
                             (assoc (dissoc params :files)
                                    :workspace_root canonical
@@ -1027,7 +1093,7 @@
                                  (max 0 (- (count over) max-listed-files))}
                                 facts)
                    (and (seq remaining) (nil? next-call))
-                   (assoc :remedy (continuation-refused-remedy over-bytes))
+                   (assoc :remedy (continuation-refused-remedy over-overflow))
 
                    (empty? remaining)
                    (assoc :remedy
@@ -1054,7 +1120,7 @@
                 ;; with `files` is a real narrower call than re-walking the
                 ;; same root.
                 explicit? (boolean requested)
-                {:keys [next-call bytes]}
+                {:keys [next-call overflow]}
                 (continuation (when (and (seq named) (not explicit?))
                                 {:workspace_root canonical :files named}))]
             (refusal :no-fold-arms-found
@@ -1071,7 +1137,7 @@
                      next-call
                      (cond-> (merge {:scanned named} facts)
                        (and (seq named) (not explicit?) (nil? next-call))
-                       (assoc :remedy (continuation-refused-remedy bytes))
+                       (assoc :remedy (continuation-refused-remedy overflow))
 
                        (or (empty? named) explicit?)
                        (assoc :remedy
@@ -1120,7 +1186,7 @@
                   ;; nothing to narrow to when nothing was named, so nothing is
                   ;; offered, and the null `:file` is omitted rather than
                   ;; published as a fact about the failure.
-                  (let [{:keys [next-call bytes]}
+                  (let [{:keys [next-call overflow]}
                         (continuation (when (:file planned)
                                         {:workspace_root canonical
                                          :files [(:file planned)]}))]
@@ -1133,7 +1199,8 @@
 
                                (nil? next-call)
                                (assoc :remedy
-                                      (continuation-refused-remedy bytes)))))
+                                      (continuation-refused-remedy
+                                        overflow)))))
 
                   (map? confirmed)
                   (door-refusal confirmed canonical facts)
