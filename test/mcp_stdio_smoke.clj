@@ -93,9 +93,10 @@
                    "MCP must not advertise resources" {:capabilities capabilities})
           (assert! (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
                        "transform_clojure" "alias_migration"
-                       "admit_clojure_patch"]
+                       "admit_clojure_patch" "feature_thread"]
                       (mapv :name tools))
-                   "MCP must expose exactly six structural tools" {:tools tools})
+                   "MCP must expose exactly seven structural tools"
+                   {:tools tools})
           (assert! (= false (get-in tools [0 :inputSchema :additionalProperties]))
                    "inspect_clojure schema must refuse unknown fields" {:tools tools})
           (assert! (= true (get-in tools [0 :annotations :readOnlyHint]))
@@ -121,7 +122,7 @@
                :server "clj-surgeon"
                :tools ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
                        "transform_clojure" "alias_migration"
-                       "admit_clojure_patch"]
+                       "admit_clojure_patch" "feature_thread"]
                :response-count 3
                :wall-ms (/ (double (- (System/nanoTime) started)) 1000000.0)}))))
       (finally

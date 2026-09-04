@@ -47,7 +47,12 @@
     :committed
     'clj-surgeon.admit-patch-test/a-clean-commit-writes-atomically-and-proves-read-back
     :typed-refusal
-    'clj-surgeon.admit-patch-test/a-refusal-class-hazard-blocks-the-commit-and-returns-a-full-receipt}})
+    'clj-surgeon.admit-patch-test/a-refusal-class-hazard-blocks-the-commit-and-returns-a-full-receipt}
+   "feature_thread"
+   {:receipt
+    'clj-surgeon.mcp-feature-thread-test/t1-smw-thread-returns-five-legs-with-bodies
+    :typed-refusal
+    'clj-surgeon.mcp-feature-thread-test/unreadable-js-leg-is-a-typed-absence}})
 
 (defn- public-tool-registry
   []

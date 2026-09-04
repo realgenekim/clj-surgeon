@@ -1,0 +1,14 @@
+{:repo-label "social-media-writer"
+ :exclude-dirs ["OLD" "drafts" "compiles" "vendor"]
+ :legs [{:id "menu-caller" :kind :use
+         :globs ["src/**/views/*.clj" "src/**/views/**/*.clj" "src/**/components.clj"]}
+        {:id "js-function" :kind :def
+         :globs ["resources/public/js/*.js"]}
+        {:id "route" :kind :route
+         :globs ["src/**/routes.clj" "src/**/routes/**/*.clj" "src/**/api_paths.clj"]}
+        {:id "handler" :kind :handler
+         :globs ["src/**/handlers/*.clj" "src/**/handlers.clj"]}
+        {:id "tests" :kind :test
+         :globs ["test/**/*.clj" "test/*.clj" "test/**/*.js" "test/*.js" "test/**/*.mjs"]}]
+ :sibling {:rule :adjacent-route-entry}
+ :governance {:globs ["docs/intent/registry.edn" "test/**/intent_contract_test.clj" "Makefile"]}}

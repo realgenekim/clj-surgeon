@@ -32,6 +32,9 @@ required_outcome(admit_clojure_patch, preview).
 required_outcome(admit_clojure_patch, committed).
 required_outcome(admit_clojure_patch, typed_refusal).
 
+required_outcome(feature_thread, receipt).
+required_outcome(feature_thread, typed_refusal).
+
 declared(Tool, Outcome) :- required_outcome(Tool, Outcome).
 witnessed(Tool, Outcome) :- required_outcome(Tool, Outcome).
 
@@ -44,6 +47,7 @@ forbids_job_clock(verification_pending).
 forbids_job_clock(typed_refusal).
 forbids_job_clock(committed).
 forbids_job_clock(preview).
+forbids_job_clock(receipt).
 
 requires_clock_labels(verification_complete).
 requires_clock_labels(verification_failed).
