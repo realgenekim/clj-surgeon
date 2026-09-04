@@ -5,9 +5,17 @@
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]))
+
+;; RATCHET (2026-09-04, inb-9483a4): `temp-project` below is called by ~27
+;; deftests and none deleted its directory -- 56 of the historical 82,210
+;; leaked Anvil /tmp entries were `clj-surgeon-change-buffer-*` from this
+;; namespace. Track every root it creates and sweep them after each test.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
 
 (def core-source
   (str "(ns sample.core)\n"
@@ -23,9 +31,11 @@
 
 (defn- temp-project
   []
-  (let [root (.toFile (java.nio.file.Files/createTempDirectory
-                        "clj-surgeon-change-buffer-"
-                        (make-array java.nio.file.attribute.FileAttribute 0)))
+  (let [root (tmp-leak/track!
+               temp-roots
+               (.toFile (java.nio.file.Files/createTempDirectory
+                          "clj-surgeon-change-buffer-"
+                          (make-array java.nio.file.attribute.FileAttribute 0))))
         source (io/file root "src/sample/core.clj")
         test-file (io/file root "test/sample/core_test.clj")]
     (.mkdirs (.getParentFile source))

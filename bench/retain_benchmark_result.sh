@@ -113,7 +113,7 @@ retain_result() {
 
 self_test() (
   local root result archive archive_file listing
-  root=$(mktemp -d /tmp/clj-surgeon-retention-self-test.XXXXXX)
+  root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-retention-self-test.XXXXXX")
   result="$repo_root/bench/results/retention-self-test-$$"
   archive="$root/archive"
   archive_file="$archive/$(date +%F)/retention-self-test-$$.tar.gz"

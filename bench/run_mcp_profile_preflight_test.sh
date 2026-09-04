@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
-test_root=$(mktemp -d /tmp/clj-surgeon-mcp-profile-preflight.XXXXXX)
+test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-mcp-profile-preflight.XXXXXX")
 
 cleanup() {
   local status=$?

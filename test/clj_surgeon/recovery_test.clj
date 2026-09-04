@@ -3,15 +3,21 @@
    [clj-surgeon.mcp-workspace :as mcp-workspace]
    [clj-surgeon.measured :as measured]
    [clj-surgeon.recovery :as recovery]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
-   [clojure.test :refer [deftest is]]))
+   [clojure.test :refer [deftest is use-fixtures]]))
+
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
 
 (deftest recover-publishes-one-terminal-success-receipt
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-recover-success"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-recover-success"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         result (recovery/recover!
                  {:workspace (.getPath root)
                   :up-fn (fn [_]
@@ -33,9 +39,11 @@
 
 (deftest recover-fails-once-and-publishes-an-executable-report-command
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-recover-failure"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-recover-failure"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         receipt-file (io/file (mcp-workspace/receipt-dir (.getPath root))
                               "last-failure.edn")
         result (recovery/recover!
@@ -87,9 +95,11 @@
 
 (deftest recover-creates-the-failure-receipt-directory
   (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-recover-missing-receipts"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
+               (tmp-leak/track!
+                 temp-roots
+                 (java.nio.file.Files/createTempDirectory
+                   "clj-surgeon-recover-missing-receipts"
+                   (make-array java.nio.file.attribute.FileAttribute 0))))
         receipt-dir (io/file (mcp-workspace/receipt-dir (.getPath root)))
         receipt-file (io/file receipt-dir "last-failure.edn")]
     (is (false? (.exists receipt-dir)))

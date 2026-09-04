@@ -1,3 +1,5 @@
+> **ON FIRST ACTION AFTER COMPACTION (the Memento rule): `git pull --ff-only` on branch `MCP/main` and read `docs/observations/2026-09-03-resume-here-anvil-seat.md` (the last RESUME DELTA is the state), then `docs/observations/2026-09-03-merge-queue-for-mayor.md`. Nothing else first. Written 2026-09-04 05:4xZ at the mayor's URGENT: a resume note is durable; the instruction to read it is what compaction eats.**
+
 ## TEMP FILES GO TO /var/tmp — never /tmp (Gene, 2026-09-04)
 
 Gene, verbatim: *"You must use /var/tmp — tmp is tmpfs, which uses ram."* and *"Make it impossible to make this
