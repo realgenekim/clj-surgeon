@@ -1718,3 +1718,5 @@ five-line chain at the top of CLAUDE.md, 671 → 634 lines) — Gene's repo unto
 Per make-our-tools-perfect: ~/bin/sol-finished, replay-arm, usage-watch, land — each verified on a real case; two edges
 found by the real cases (binary bytes in a log; an arm log with no wrapper line) fixed in the same turn. Memory
 anvil-seat-one-shots. A kill I did not need: I killed NC/NS on a false reading of my own prompt check; relaunched 1 min later.
+
+## 19:30Z Gene ratified investing in the suite/CI ("massively increase option value"); GitHub Action + receipt ledger added to spike round three. ls-tree: inside MCP on bridge/study-ops-mcp (r12 building), lands on its GO with STUDY-051 accepted.

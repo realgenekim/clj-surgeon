@@ -65,3 +65,15 @@ home and tmpdir), and TEST-ISO-009 (the concurrency battery: N clones of the fas
 on the partition round one proposes. The per-namespace witnesses (002–005, 007) are round three, each built RED-first
 against the round-two green with round one's collision list as the RED cases. Fallback if the battery fails at N=4:
 round three becomes the full family.
+
+## Round three additions (Gene, 19:30Z: "Make judicious decisions; investing here will massively increase option value and ability to climb frontier")
+- **GitHub Action on the public repo** (seat decision, Gene ratified the direction): `.github/workflows/mcp-main.yml` on MCP/main —
+  (1) on push to MCP/main and every bridge/* branch: the fast + integration lanes (~2 min on a runner; every builder gets an
+  independent green before the reviewer); (2) on push to MCP/main and nightly: the battery lane as a MATRIX over the spawning
+  namespaces read from the lane manifest, plus the bb lane (~5 min wall in parallel); (3) `~/bin/land` checks the run for the
+  tip before merging and prints the run URL as the receipt; local gates on the MERGED tree stay (composition), and the post-push
+  run on the merge commit closes the loop; (4) stays local, named: the memory battery and anything needing the seat's absolute
+  roots or the suite lock. Why: K expands off the box (no shared load, no phantom flakes), t stays the local fast lane, and the
+  green comes from a machine the seat does not control — the one receipt that cannot be written by the thing making the claim.
+- The battery receipt ledger + freshness tripwire in `land` (a stale nightly is a refusal, not a silence).
+- The six runtime witnesses (TEST-ISO-002…005, 007, 010) on the per-namespace snapshot fixture, RED-first against round two's green.
