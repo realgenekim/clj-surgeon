@@ -152,8 +152,15 @@
        :request-workspace-root (.toString (mcp-paths/real-root project-root))
        :source-unchanged true
        :remedy "Copy workspace_root from the prepared result and retry once."}
-      (assoc (select-basis-buffers basis site-ids context)
-             :workspace-root (:workspace-root basis)))
+      ;; @spec MCP-OP-STUDY-054 — the internal KEBAB key does NOT travel into
+      ;; a published receipt. `json-key` normalizes `-` to `_` on the way to
+      ;; the wire, so a receipt carrying `:workspace-root` beside the
+      ;; `:workspace_root` the inspect tool attaches published a JSON object
+      ;; with the member `workspace_root` TWICE — one of the two values lost
+      ;; to whichever rule the decoder happens to apply, on every ordinary
+      ;; `basis-view` call. Found by the round-twelve collision gate, which
+      ;; refused this receipt at the boundary; nothing reads this key.
+      (select-basis-buffers basis site-ids context))
     {:ok false
      :operation "inspect_clojure"
      :mode "basis-view"

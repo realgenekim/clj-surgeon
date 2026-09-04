@@ -5391,3 +5391,26 @@
           (pr-str (inspect/colliding-receipt-keys ordinary)))
       (is (identical? ordinary
                       (inspect-tool/guard-receipt-key-collisions ordinary))))))
+
+;; @spec MCP-OP-STUDY-054
+;; The gate's first field catch, pinned by name. `basis-view` published a
+;; receipt carrying BOTH the internal `:workspace-root` and the wire
+;; `:workspace_root`; `json-key` normalizes `-` to `_`, so `structuredContent`
+;; carried the member `workspace_root` TWICE and one of the two values was
+;; lost to whichever rule the decoder applied — on every ordinary call, not
+;; on an attack. The claim that the collision class is "unreachable in
+;; ordinary operation" was false when it was written, which is the argument
+;; for a gate rather than for a convention.
+(deftest the-internal-kebab-spelling-never-travels-beside-its-wire-twin
+  (testing "the pair that was actually shipped"
+    (let [shipped {:ok true :mode "basis-view"
+                   :workspace-root "/w" :workspace_root "/w"}]
+      (is (= {:path [] :member "workspace_root"
+              :keys [:workspace-root :workspace_root]}
+             (inspect/colliding-receipt-keys shipped))
+          (pr-str (inspect/colliding-receipt-keys shipped)))))
+  (testing "and no published receipt of any mode carries such a pair"
+    ;; Every mode's real receipt, walked by the production predicate.
+    (doseq [raw [(outline-batch review-batch-files)]]
+      (is (nil? (inspect/colliding-receipt-keys raw))
+          (pr-str (inspect/colliding-receipt-keys raw))))))
