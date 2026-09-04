@@ -18,6 +18,7 @@
    [clj-surgeon.measured :as measured]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
+   [clj-surgeon.timing-sample :as timing]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as lens]
    [clojure.java.io :as io]
@@ -764,3 +765,46 @@
             "the meter is dark on exactly the scans it exists to watch")
         (is (= (count "(ns fixture.ok)\n(defn hello [x] (inc x))\n")
                (get-in (last edn) [:receipt :resources :bytes_scanned])))))))
+
+;; ============================================================
+;; MCP-OP-MEM-021 — reading a wall clock on a shared build host
+;; ============================================================
+
+;; @spec MCP-OP-MEM-021
+(deftest a-wall-clock-cell-asserts-on-the-best-of-at-least-three-probes
+  (testing "a single sample lets the scheduler decide the verdict"
+    ;; 2026-09-04: two of `make memory-red`'s six assertions read a wall clock
+    ;; ONCE on a sixteen-core box shared with other JVM lanes. A reviewer
+    ;; measured 52 ms against a 50 ms bound and refused; the builder measured
+    ;; 13 ms on the same commit and passed. Both readings were honest.
+    (is (= 13 (timing/best [{:scan-ms 47} {:scan-ms 13} {:scan-ms 57}] :scan-ms))
+        "the asserted reading is not the lower envelope")
+    (is (= :insufficient-timing-probes
+           (:error-type (try (timing/best [{:scan-ms 13} {:scan-ms 47}] :scan-ms)
+                             (catch Exception e (ex-data e)))))
+        "two probes were accepted; one stall still decides half the evidence")
+    (is (= :missing-timing-reading
+           (:error-type (try (timing/best [{:scan-ms 13} {:scan-ms 47} {}] :scan-ms)
+                             (catch Exception e (ex-data e)))))
+        "a probe that reported nothing was counted as a fast one")))
+
+;; @spec MCP-OP-MEM-021
+(deftest a-wall-clock-receipt-carries-every-reading-behind-the-verdict
+  (testing "one slow rep is contention; every rep slow is a regression"
+    (let [probes [{:wall-ms 104 :scan-ms 47}
+                  {:wall-ms 102 :scan-ms 13}
+                  {:wall-ms 105 :scan-ms 57}]]
+      (is (= {:best-scan-ms 13
+              :scan-ms [47 13 57]
+              :wall-ms [104 102 105]}
+             (timing/detail probes :scan-ms :wall-ms))
+          "the receipt hides the readings the verdict was chosen from"))))
+
+;; @spec MCP-OP-MEM-021
+(deftest a-wall-clock-receipt-names-the-host-it-was-taken-on
+  (testing "the box's own state is part of every reading taken on it"
+    (let [{:keys [cores load]} (timing/host)]
+      (is (pos-int? cores) "the receipt does not name the host's processor count")
+      (is (string? load) "the receipt does not name the host's load")
+      (is (re-find #"^host — \d+ cores, load " (timing/host-line))
+          (str "the host receipt line changed shape: " (timing/host-line))))))

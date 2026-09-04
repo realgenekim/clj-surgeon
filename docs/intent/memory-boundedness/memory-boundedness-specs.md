@@ -77,7 +77,34 @@ In the requirements below:
   UNMEASURED line terminates INCOMPLETE with a nonzero exit distinct from both
   PASS and FAIL.
 
+- [x] **MCP-OP-MEM-021**: While a memory gate asserts a wall-clock threshold on
+  a shared build host, clj-surgeon shall take at least three independent probes
+  of each timing cell, assert the threshold against the fastest probe, publish
+  every probe's reading beside the asserted one, and record the host's
+  processor count and load averages in the same receipt; and it shall refuse,
+  typed, to assert on fewer than three probes or on a probe that reported no
+  reading.
+
 ## Misreadings
+
+MCP-OP-MEM-021:
+
+- "Three probes make the gate a latency guarantee." It does the opposite.
+  Minimum-of-N estimates the UNCONTENDED cost and is deliberately silent about
+  tail latency and about reliability: it says the work CAN be done inside the
+  bound on this host, never that it always is. Nobody may cite this gate as a
+  tail-latency guarantee.
+- "The line went red on a shared box, so relax the threshold." A gate that went
+  red on somebody else's run is not one to soften in the same round. The
+  measurement is repeated; the bound is untouched.
+- "Publish the best reading; the rest is noise." One slow rep is contention and
+  every rep slow is a regression, and only the full vector tells them apart. A
+  receipt carrying just the minimum hides exactly the difference the rule
+  exists to preserve.
+- "Record the host load somewhere in the run log." It belongs in the SAME
+  receipt as the verdict. On 2026-09-04 a reviewer and a builder reported
+  opposite honest verdicts on identical code and the disagreement could not be
+  settled, because neither receipt said what else the machine was doing.
 
 MCP-OP-MEM-001:
 

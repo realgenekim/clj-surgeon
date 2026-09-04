@@ -24,6 +24,12 @@
             [clojure.string :as str]))
 
 (load-file "bench/memory_battery/generate_tree.clj")
+;; @spec MCP-OP-MEM-021
+;; The sampling rule and the host receipt are OWNED by
+;; `clj-surgeon.timing-sample`, not re-implemented here: a rule a gate
+;; re-implements is not a rule, and `best` refuses fewer than three probes
+;; rather than trusting this script to pass enough of them.
+(load-file "src/clj_surgeon/timing_sample.clj")
 
 (def source-for (resolve 'generate-tree/source-for))
 
@@ -130,7 +136,9 @@
         warm (first warm-reps)
         big (first big-reps)
         big-512 (probe cp giant battery-xmx 0)
-        best (fn [rs k] (apply min (map #(long (or (get % k) 99999)) rs)))]
+        best (resolve 'clj-surgeon.timing-sample/best)
+        detail (resolve 'clj-surgeon.timing-sample/detail)
+        host-line (resolve 'clj-surgeon.timing-sample/host-line)]
     (println)
     (println (format "MEM-005 red witness — expect=%s budget=%.1f MB" expect budget-mb))
     ;; The two "under 50 ms" lines are WALL-CLOCK assertions on a shared box,
@@ -141,20 +149,7 @@
     ;; be settled from the receipts. It can now. The VERDICT is deliberately
     ;; unchanged — a gate that went red on somebody else's run is not one to
     ;; soften in the same round — this only makes the number available.
-    (println (format "host — %d cores, load %s"
-                     (.availableProcessors (Runtime/getRuntime))
-                     (str/trim
-                       (or (try
-                             ;; NOT `slurp`: babashka reads a procfs file of
-                             ;; declared length zero as an IOException, which
-                             ;; is how this line first reported "unavailable"
-                             ;; on a host that had the number all along.
-                             (String.
-                               (java.nio.file.Files/readAllBytes
-                                 (java.nio.file.Paths/get
-                                   "/proc/loadavg" (into-array String []))))
-                             (catch Exception _ nil))
-                           "unavailable"))))
+    (println (host-line))
     (println "----------------------------------------------------------------------")
     (doseq [[label r] [["nested cold" cold] ["nested warm" warm]
                        [(str "giant  " giant-oom-xmx) big]
@@ -183,18 +178,14 @@
                     (select-keys cold [:outcome :reason :limit :observed]))
              (check "nested cold: refuses in under 50 ms"
                     (< (best cold-reps :wall-ms) 50)
-                    {:best-wall-ms (best cold-reps :wall-ms)
-                     :wall-ms (mapv :wall-ms cold-reps)
-                     :scan-ms (mapv :scan-ms cold-reps)})
+                    (detail cold-reps :wall-ms :scan-ms))
              (check "nested warm: typed refusal, well under budget"
                     (and (= :parser-admission-refused (:outcome warm))
                          (< (:peak-mb warm) budget-mb))
                     (select-keys warm [:outcome :peak-mb]))
              (check "nested warm: refuses in under 50 ms"
                     (< (best warm-reps :wall-ms) 50)
-                    {:best-wall-ms (best warm-reps :wall-ms)
-                     :wall-ms (mapv :wall-ms warm-reps)
-                     :scan-ms (mapv :scan-ms warm-reps)})
+                    (detail warm-reps :wall-ms :scan-ms))
              (check (str "giant " giant-oom-xmx ": typed refusal, no OOM")
                     (= :parser-admission-refused (:outcome big))
                     (select-keys big [:outcome :reason :peak-mb]))
@@ -203,9 +194,7 @@
              ;; that is the figure the 50 ms line is about.
              (check (str "giant " giant-oom-xmx ": admission scan under 50 ms")
                     (< (best big-reps :scan-ms) 50)
-                    {:best-scan-ms (best big-reps :scan-ms)
-                     :scan-ms (mapv :scan-ms big-reps)
-                     :wall-ms (mapv :wall-ms big-reps)})])]
+                    (detail big-reps :scan-ms :wall-ms))])]
       (println)
       (if (every? true? results)
         (do (println (format "memory-red: %d/%d assertions held (expect=%s)"

@@ -922,6 +922,7 @@ test-fast:
 PARSER_RED_ROOT ?= /home/forge/tmp/admit/parser-red
 PARSER_RED_EXPECT ?= red
 
+# @spec MCP-OP-MEM-021
 memory-red:
 	@flock /home/forge/tmp/suite.lock \
 	  bb bench/parser_admission/red_witness.clj --root "$(PARSER_RED_ROOT)" \
