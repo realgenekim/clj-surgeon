@@ -706,6 +706,91 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-051
+(def ^:private malformed-scope-globs
+  "Glob spellings `FileSystems/getDefault().getPathMatcher` refuses to parse.
+
+  Every one of them is a shape a model reaches for and mis-closes; `src/{**` is
+  one keystroke from `src/{clj,cljs}/**`."
+  ["[" "{a,b" "**/{" "src/{**" "src/[a-" "src/**\\" "\\" "a{b"])
+
+;; @spec MCP-OP-ALIAS-051
+(def ^:private well-formed-scope-globs
+  "The control arm: legal globs that must keep reaching the walk."
+  ["src/**" "**" "src/*.clj" "src/{acid,other}/**"])
+
+;; @spec MCP-OP-ALIAS-051
+(deftest a-malformed-scope-glob-is-a-typed-refusal-not-an-adapter-failure
+  ;; Round-10 review finding 3: `glob-matcher` calls `getPathMatcher` on caller
+  ;; text with no `try`; `execute!` catches only `OutOfMemoryError`, and
+  ;; `mcp-operation/invoke!` has no catch at all, so the throw reached
+  ;; `mcp_server.clj` and was published as `mcp-adapter-failure` — a receipt
+  ;; with no source_unchanged, no mutation_attempted, no remedy, no next_call,
+  ;; and a raw-JSON text block that never passes through the summary. The whole
+  ;; ALIAS-059 contract is bypassed for this class.
+  (let [workspace (workspace!)]
+    (try
+      (doseq [pattern malformed-scope-globs]
+        (let [result (try
+                       (assoc (execute! workspace {:scope {:paths [pattern]}
+                                                   :expect {:files 12}})
+                              :elapsed_ms 1.0)
+                       (catch Throwable error
+                         {:threw (.getName (class error))
+                          :message (.getMessage error)}))
+              label (str "malformed glob " (pr-str pattern))]
+          (is (nil? (:threw result))
+              (str label " escaped as an untyped throw: " (pr-str result)))
+          (is (= "alias-migration-scope-path-refused" (:error_type result))
+              (str label " · " (pr-str result)))
+          (is (not= "mcp-adapter-failure" (:error_type result)) label)
+          (is (true? (:source_unchanged result)) label)
+          (is (false? (:mutation_attempted result)) label)
+          (is (str/includes? (str (:error result)) pattern)
+              (str label " · the refusal does not name the pattern"))
+          (is (and (string? (:cause result)) (seq (:cause result)))
+              (str label " · the refusal does not carry the parser's message"))
+          (is (str/includes? (str (:error result)) (str (:cause result)))
+              (str label " · the sentence drops the parser's own message"))
+          (is (string? (:remedy result)) label)
+          ;; @spec MCP-OP-ALIAS-059
+          ;; the text face is only renderable once the throw is a receipt
+          (when-not (:threw result)
+            (assert-refusal-text! result label))))
+      (testing "a legal glob still reaches the walk"
+        (doseq [pattern well-formed-scope-globs]
+          (let [result (execute! workspace {:scope {:paths [pattern]}
+                                            :expect {:files 12}})]
+            (is (not= "alias-migration-scope-path-refused" (:error_type result))
+                (str "the well-formed glob " (pr-str pattern)
+                     " was refused as malformed")))))
+      (testing "the tool entrance publishes the same typed refusal"
+        (let [captured (atom nil)
+              _ (mcp-tool/init! (config workspace (io/file workspace "receipts")))
+              thrown (try
+                       (mcp-tool/handle-alias-migration
+                         nil
+                         (json/parse-string
+                           (json/generate-string
+                             (request workspace {:scope {:paths ["src/{**"]}
+                                                 :expect {:files 12}}))
+                           true)
+                         (fn [content error? structured]
+                           (reset! captured {:content content :error? error?
+                                             :result structured})))
+                       nil
+                       (catch Throwable error (.getName (class error))))]
+          (is (nil? thrown)
+              (str "the tool entrance threw " thrown
+                   " instead of publishing a receipt"))
+          (is (some? @captured) "no receipt was published at all")
+          (is (= "alias-migration-scope-path-refused"
+                 (:error_type (:result @captured)))
+              (pr-str (:result @captured)))))
+      (finally
+        (delete-tree! workspace)))))
+
+
 ;; @spec MCP-OP-ALIAS-013
 (deftest an-indirect-reference-refuses-closed-and-names-the-file
   (let [workspace (workspace!)]
