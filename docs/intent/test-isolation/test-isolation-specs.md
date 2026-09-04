@@ -49,7 +49,9 @@ listed here with `[ ]` so the family is one document rather than a memory.
   impossible.
   *Witness:* `.../the-partition-drops-nothing-round-one-measured`.
 
-- [x] **TEST-ISO-006**: The fast lane's JVM shall be launched with both
+- [x] **TEST-ISO-006**: Any run that contains no BATTERY namespace -- the
+  fast lane, the integration lane, and the merge gate that is both -- shall
+  have its JVM launched with both
   `java.io.tmpdir` and `user.home` on throwaway directories created for that
   run and deleted when it ends, so that a fast-lane test cannot read the
   seat's real home state or leave anything in it. Both shall be set as
@@ -57,7 +59,9 @@ listed here with `[ ]` so the family is one document rather than a memory.
   for real file creation), `HOME` shall be set in the child's environment to
   the same directory so descendants agree, and a run that asked for an
   isolated home and is not running on one shall refuse, typed, rather than
-  proceed.
+  proceed. The decision shall be a property of the RESOLVED NAMESPACE SET and
+  not of how the invocation was spelled, so that the merge gate cannot run
+  uninsulated while a fast-lane witness asserts that it did not.
   *Witness:* `clj-surgeon.fast-lane-isolation-test` (all three deftests),
   plus the planted-sabotage receipt in
   `docs/observations/2026-09-04-suite-spike-round2.md`.

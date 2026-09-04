@@ -84,18 +84,6 @@
 (defn -main
   [& args]
   (let [{:keys [lanes explicit]} (parse-args args)
-        ;; @spec TEST-ISO-006 -- ONLY the fast lane is launched on a throwaway
-        ;; user.home. Integration drives in-process servers and battery
-        ;; launches cold `clojure`/`bb` children that legitimately need the
-        ;; seat's ~/.m2 and ~/.gitlibs; giving those a throwaway home would
-        ;; not isolate them, it would make them re-download the world. The
-        ;; fast lane needs none of it, which is exactly why it can have this.
-        isolate-home? (= #{:fast} (set lanes))
-        {:keys [refused root]}
-        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"
-                                  :isolate-home? isolate-home?}
-                                 args)
-        _ (when refused (System/exit 97))
         _ (when (and (empty? lanes) (empty? explicit))
             (binding [*out* *err*]
               (println (str "lane-refused: no lane named. Usage: -m "
@@ -103,13 +91,39 @@
                             (str/join ", " (map name lm/lanes))
                             " -- or --ns <namespace>...")))
             (System/exit 96))
+        ;; Resolve the namespace set FIRST. The home decision below is a
+        ;; property of WHAT IS ABOUT TO RUN, not of how the caller spelled the
+        ;; invocation. `lane-namespaces` is pure -- it reads the manifest and
+        ;; loads nothing -- so this is safe before the re-exec.
         {:keys [refusal message namespaces]} (lane-namespaces lanes explicit)
         _ (when refusal
             (binding [*out* *err*] (println message))
             (System/exit 96))
-        _ (println (format "lanes: %s -- %d namespace(s)"
+        ;; @spec TEST-ISO-006 -- a run is launched on a throwaway user.home
+        ;; unless a BATTERY namespace is in it. Battery namespaces launch cold
+        ;; `clojure`/`bb`/`git` children that legitimately need the seat's
+        ;; ~/.m2 and ~/.gitlibs; a throwaway home would not isolate those, it
+        ;; would make them re-download the world. Nothing in the fast or
+        ;; integration lanes needs any of it.
+        ;;
+        ;; Deliberately a property of the RESOLVED SET rather than of the lane
+        ;; names. The first cut keyed on `(= #{:fast} (set lanes))`, so
+        ;; `make mcp-test` -- fast + integration, THE MERGE GATE -- ran without
+        ;; isolation while a fast-lane witness asserted it had it, and all four
+        ;; clones of the concurrency battery failed identically. A rule that
+        ;; holds under one spelling of an invocation and not another is the
+        ;; same class as doctrine that disagrees with the prompt: true where it
+        ;; is written, false where it takes effect.
+        isolate-home? (and (seq namespaces)
+                           (not-any? #(= :battery (lm/lane-of %)) namespaces))
+        {:keys [refused root]}
+        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"
+                                  :isolate-home? isolate-home?}
+                                 args)
+        _ (when refused (System/exit 97))
+        _ (println (format "lanes: %s -- %d namespace(s), home-isolated %s"
                            (if (seq lanes) (str/join "+" (map name lanes)) "--ns")
-                           (count namespaces)))
+                           (count namespaces) isolate-home?))
         _ (doseq [n namespaces] (require n))
         _ (when-let [{:keys [message]} (lane-metadata-refusal namespaces)]
             (binding [*out* *err*] (println message))
