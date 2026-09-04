@@ -2587,3 +2587,35 @@
           (is (empty? unrendered)
               (str "a refusal carries facts the text never renders: "
                    (pr-str (vec unrendered)))))))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest a-receipt-that-cannot-fit-even-text-free-is-a-typed-refusal
+  ;; The other side of the bound. Real reads reach an earlier gate first —
+  ;; `batch-source-limit-exceeded` for `forms`, the per-request result budget
+  ;; for the study operations — so this branch is witnessed directly rather
+  ;; than left to a fixture that may never reach it. A receipt whose
+  ;; structured content ALONE crosses the budget cannot be rescued by any
+  ;; rendering choice, and must say so in the vocabulary the tool already uses.
+  (let [oversized {:ok true
+                   :operation "inspect_clojure"
+                   :mode "ls-tree"
+                   :request_count 1 :file_count 1
+                   :source_character_count 0
+                   :results []
+                   :tree (apply str (repeat 40000 "x"))}
+        refusal (inspect-tool/fit-public-result oversized)
+        text (inspect-tool/inspect-summary (assoc refusal :elapsed_ms 0.0))]
+    (is (false? (:ok refusal)))
+    (is (= "inspect-output-limit" (:error_type refusal)))
+    (is (= "public_result" (:scope refusal)))
+    (is (= inspect-tool/max-public-result-bytes
+           (get-in refusal [:limits :public_result_bytes])))
+    (is (< inspect-tool/max-public-result-bytes
+           (get-in refusal [:required :public_result_bytes])))
+    (is (>= inspect-tool/max-public-result-bytes
+            (public-bytes refusal))
+        "and the refusal itself fits")
+    (testing "the text names the measured bytes, the budget, and the remedy"
+      (is (str/includes? text (:error refusal)))
+      (is (str/includes? text (:remedy refusal)))
+      (is (str/includes? text "narrow_scope")))))
