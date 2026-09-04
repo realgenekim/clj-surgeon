@@ -1076,7 +1076,12 @@
       ;; it earns the same type, and its own cause because what must change is
       ;; a bit on a DIRECTORY. No continuation: the path came from the walk.
       (:unreadable-directory @scan)
-      (let [directory (:unreadable-directory @scan)
+      ;; Opus's round-seventeen item 5, the CLI half of the identical defect:
+      ;; a root the walk cannot enter is recorded walk-relative as `""` and
+      ;; interpolated into three sentences. Same function as the tool, so the
+      ;; two entrances cannot drift apart on what they call the root.
+      (let [directory (relation-census/shown-directory
+                        (:unreadable-directory @scan))
             root (census-root dir)]
         (merge
           {:ok false

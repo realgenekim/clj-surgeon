@@ -1076,7 +1076,13 @@
       ;; one unreadable FILE refused the whole census. The CLI answers the same
       ;; tree with the same cause and the same directory name.
       (seq (:unreadable-directories discovered))
-      (let [directory (first (:unreadable-directories discovered))]
+      ;; Opus's round-seventeen item 5. `census-discovery` records the
+      ;; walk-relative path, which for the ROOT is `""`, and three sentences
+      ;; below interpolate it: "the directory  may not be read", "make
+      ;; readable under the workspace root". The root gets its name, from the
+      ;; one function the CLI calls for the same sentences.
+      (let [directory (census/shown-directory
+                        (first (:unreadable-directories discovered)))]
         (refusal :unreadable-source-path
                  (str "the directory " directory " may not be read or "
                       "traversed by this process, so this census cannot claim "

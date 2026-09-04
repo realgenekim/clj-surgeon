@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-paths
   "Shared project-root confinement for MCP source tools."
   (:require
+   [clj-surgeon.relation-census :as census]
    [clojure.string :as str])
   (:import
    (java.nio.file Files LinkOption Path Paths)))
@@ -135,8 +136,12 @@
           nil
 
           (not (and (Files/isReadable dir) (Files/isExecutable dir)))
-          (let [shown (.toString (.relativize root dir))]
-            (if (str/blank? shown) (.toString dir) shown))
+          ;; Opus's round-seventeen item 4. When the unreadable ancestor IS the
+          ;; root, `relativize` yields `""` and this used to fall back to
+          ;; `(.toString dir)` — the server's ABSOLUTE path, published from the
+          ;; namespace whose own docstring forbids it. The root has a NAME now,
+          ;; the one both entrances use.
+          (census/shown-directory (.toString (.relativize root dir)))
 
           :else nil)))
     (catch Exception _ nil)))
