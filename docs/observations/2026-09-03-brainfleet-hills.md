@@ -1465,3 +1465,15 @@ I concede that E-EXTRACT is the strongest next write-side capability test, thoug
 **Committed recommendation for the next 60 minutes of arm time:** run the nine-arm, same-wave k=1 E-AFFORD cohort now—three interleaved `N-default`, three `N-salient` using the exact line above, and three `T`—with emitted write characters and content-based strategy class primary, byte identity as the gate, and no wall claim.
 
 **Accepted into the running E-AFFORD before arm 1 (amendment 1):** Sol's fairness wording (names apply_patch as an equal option, "none is required or preferred"), the cell labelled N-salient and never pooled with N-default, cell C (k=6) dropped for a contemporaneous T k=1 ×3 cell so the ratio has a live comparator, cells interleaved. Also accepted: Opus's "8 of 8 hand-transcribed" is false (k1-N-2 generated its patch programmatically, 1,929 chars) — the report row already carries both k=1 figures; Sol's replacement sentence for Gene is the more exact one and goes in the next Gene report.
+
+## 25. Riff for Gene ("Excite me with possibilities of future involvements", 00:5xZ 2026-09-04) — chronicle material
+
+Grounded in the night's one hard fact: the agent's cost is typing the patch, and it types even when it could script.
+
+Riding tonight's batch: E-AFFORD decides the headline (agents do not reach for the tool they are not handed, or the win narrows to irregular/large fan-out); E-PREWRITE turns "faster" into "the agent never leaves your tree broken" (proof in a warm JVM before mutation, worktree byte-pristine at refusal); E-CEILING80 turns the win into a boundary (at ~33,000 emitted chars native splits or scripts) and makes a monorepo-wide migration the flagship demo; the first-call refusal fix removes a tax every real user pays on call one.
+
+Newly cheap: every fan-out is the same product (keyword renames across maps, deprecation sweeps, arity changes, require reordering, spec/malli schema sweeps — one intent across N owners, each measurable in an evening); the apparatus itself is a product (pre-registration, load-immune meters, two seats polled blind then cross-attacked, withdrawal conditions before the data — what anyone shipping an MCP tool needs to make an undodgeable claim; LIVE → TEACH in one box); the affordance result is a Pandora scene ("affordance" is Gibson/Norman's term, not ours) — a multi-caller sweep (Sonnet/Opus/Haiku/Sol as the native arm) gives a which-models-reach-for-which-tools table nobody else has.
+
+Further out, filed: fan-out where native cannot follow (cross-repo; semantic collision resolution — 30 collisions in one call tonight); the linked-intent ratchet as the merge gate (no change lands without a named intent and a witness the verb alone can produce); voice on top of the remote ("migrate store-2 to es across the app", one verified commit, receipt read back).
+
+Cherry-pick: tonight = E-AFFORD, E-PREWRITE, E-CEILING80, the first-call fix. Next session = multi-caller sweep; one more fan-out verb chosen for a real migration in one of Gene's repos; the apparatus write-up as a workshop unit.
