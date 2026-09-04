@@ -1562,3 +1562,36 @@
           "the refusal must still say how big the receipt would have been")
       (is (str/includes? text "would_be_text_bytes=")
           "and the facts line must use the same name"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- 3.2: next_call must be executable for the NORMAL edit
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-025
+(deftest next-call-hands-back-a-selectable-per-leg-pre-image
+  (let [{:keys [structured text]} (thread! fixture-root)
+        n (:next_call structured)
+        by-leg (:by_leg n)]
+    (testing "admit_clojure_patch requires EXACTLY the files the patch touches"
+      (is (map? by-leg)
+          (str "next_call offers no per-leg selection, so the caller whose"
+               " patch touches the handler and its test must hand back all six"
+               " digests and be refused: " (pr-str (keys n)))))
+
+    (testing "every leg that has a file is selectable by leg id"
+      (doseq [l (:legs structured)
+              :when (and (:file l) (not= "N/A" (:status l)))]
+        (is (contains? by-leg (keyword (:id l)))
+            (str "leg " (:id l) " is not selectable in by_leg")))
+      (is (= (set (keys (:expect_pre_sha256 n)))
+             (set (mapcat (comp keys val) by-leg)))
+          "the union of the per-leg maps is the whole-file map"))
+
+    (testing "the wording tells the caller to pass a SUBSET"
+      (is (str/includes? (str (:note n)) "subset")
+          (str "note was " (pr-str (:note n))))
+      (is (str/includes? (get-in structured [:rules :assert]) "subset")
+          "the assert line still tells the caller to pass the whole map"))
+
+    (testing "and the text reader can see the same selection"
+      (is (str/includes? text "by_leg")))))
