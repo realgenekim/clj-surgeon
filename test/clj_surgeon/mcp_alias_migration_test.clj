@@ -5848,6 +5848,64 @@
     (doubleValue [] 0.0)))
 
 ;; @spec MCP-OP-ALIAS-059
+;; @spec MCP-OP-ALIAS-059
+(defn- benign-number
+  "A `java.lang.Number` whose `toString` is HARMLESS and OBSERVABLE.
+
+  It neither throws nor loops, so neither `write-safe-leaf`'s try/catch nor
+  `bounded-pr-str`'s time budget can fire on it. The only thing that keeps its
+  `toString` out of the receipt is the exact-class allowlist — which is
+  exactly why the witness needs it."
+  []
+  (proxy [Number] []
+    (toString [] "SABOTAGE-VISIBLE-42")
+    (intValue [] 42)
+    (longValue [] 42)
+    (floatValue [] (float 42.0))
+    (doubleValue [] 42.0)))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-scalar-allowlist-refuses-a-benign-subclass-of-an-admitted-class
+  ;; Round-sixteen review finding 3: the exact-class allowlist shipped with NO
+  ;; witness of its own. The reviewer reverted ONLY `print-safe-leaf?` to the
+  ;; pre-fix `instance?`-based predicate, leaving `write-safe-leaf`'s guard and
+  ;; the time budget in place, and the advertised witness stayed 22/22 GREEN
+  ;; while a caller-controlled `toString` provably reached the receipt again.
+  ;;
+  ;; The lesson, which is the general form: DEFENCE IN DEPTH HIDES A MISSING
+  ;; WITNESS. Three layers each guarantee the OUTCOME the old assertions
+  ;; asserted — bounded, identity marker rendered — so removing any one of them
+  ;; changes nothing those assertions can see. Each layer must therefore assert
+  ;; its OWN contract, on a subject only that layer can bound. A benign
+  ;; `Number` subclass is that subject: it does not throw, so the leaf guard
+  ;; cannot fire; it does not loop, so the time budget cannot fire; and its
+  ;; `toString` returns a marker string a reader can look for. Only the
+  ;; allowlist keeps it out.
+  (let [ceiling mcp-tool/max-refusal-fact-characters
+        benign (benign-number)]
+    (is (number? benign)
+        "the witness's own subject is not a Number, so it proves nothing")
+    (is (= "SABOTAGE-VISIBLE-42" (str benign))
+        "the subject's toString is not observable, so the assertion is blind")
+    (doseq [[label value] [["on its own" benign]
+                           ["inside a map value" {:a benign}]
+                           ["inside a vector" [benign]]]]
+      (testing label
+        (let [rendered (mcp-tool/bounded-pr-str value ceiling)]
+          (is (not (str/includes? rendered "SABOTAGE-VISIBLE-42"))
+              (str "a Number SUBCLASS reached print-method and its own "
+                   "toString was published in the receipt · " label " · "
+                   rendered))
+          (is (str/includes? rendered "#object[")
+              (str "a Number the allowlist does not admit rendered no "
+                   "identity marker · " label " · " rendered)))))
+    (testing "the exact classes the allowlist admits still render as values"
+      (doseq [value [42 (int 7) (long 9) 1.5 (float 2.5) 3/4 42N 1.25M
+                     "text" true :kw 'sym]]
+        (is (not (str/includes? (mcp-tool/bounded-pr-str value ceiling)
+                                "#object["))
+            (str "an admitted scalar lost its rendering: " (pr-str value)))))))
+
 (deftest the-fact-renderer-admits-only-the-exact-numeric-classes-it-prints
   (let [ceiling mcp-tool/max-refusal-fact-characters]
     (testing "a Number whose toString throws does not escape the renderer"

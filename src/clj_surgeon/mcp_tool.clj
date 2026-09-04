@@ -1352,11 +1352,16 @@
   "True when `value` is a scalar `print-method` can render without ever
   reaching an arbitrary object's `toString`.
 
-  Decided on the value's EXACT class, never on `instance?`: see
-  `print-safe-scalar-classes`."
+  Strings, numbers, keywords, symbols and booleans all print through core
+  implementations that write their own known characters; nothing here can
+  invoke a caller-supplied `toString`."
   [value]
   (or (nil? value)
-      (contains? print-safe-scalar-classes (class value))))
+      (string? value)
+      (number? value)
+      (keyword? value)
+      (symbol? value)
+      (boolean? value)))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- opaque-object-marker
