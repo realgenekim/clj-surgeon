@@ -276,7 +276,7 @@
   (let [names (mapv :name (tool/tools-for-profile :full))]
     (is (= 1 (count (filter #{"admit_clojure_patch"} names))))
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-            "transform_clojure" "admit_clojure_patch"]
+            "transform_clojure" "alias_migration" "admit_clojure_patch"]
            names)))
   (let [registered (into {} (map (juxt :name identity))
                          (server/public-tool-registry))]
