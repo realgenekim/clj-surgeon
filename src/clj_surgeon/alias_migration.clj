@@ -1090,6 +1090,30 @@
               (children root))))))
 
 ;; @spec MCP-OP-ALIAS-034
+(defn- string-literal-lines
+  "Every line of `source` carrying a STRING LITERAL whose value is `needle`.
+
+  Read rather than grepped: a comment and a regex literal spell a name exactly
+  as a string does, and only the reader can tell the three apart. A file the
+  reader cannot parse cannot be migrated either, so the fallback below is
+  unreachable through `execute!` — it is there because a silent zero is the
+  one answer this requirement forbids, and a parse failure must not become
+  one."
+  [needle source]
+  (try
+    (->> (tree-seq n/inner? n/children (parser/parse-string-all source))
+         (filter #(contains? #{:token :multi-line} (n/tag %)))
+         (keep (fn [node]
+                 (let [value (try (n/sexpr node) (catch Exception _ nil))]
+                   (when (= needle value)
+                     (:row (meta node)))))))
+    (catch Exception _
+      (let [quoted (str "\"" needle "\"")]
+        (keep-indexed (fn [index line]
+                        (when (str/includes? line quoted) (inc index)))
+                      (str/split-lines source))))))
+
+;; @spec MCP-OP-ALIAS-034
 (defn string-mentions
   "`file:line` of every STRING literal naming what this migration retires.
 
@@ -1113,18 +1137,20 @@
   caller would walk to. Sorting the rendered `file:line` strings instead put
   `src/z.clj:10` ahead of `src/z.clj:2`, and over 26 mentions the bound of 20
   kept lines 2, 3 and 10-27 and dropped 4-9: a bound is only as honest as the
-  ranking underneath it."
+  ranking underneath it.
+
+  A STRING LITERAL is what the READER says one is, matched on the literal's
+  VALUE. The scan used to be `str/includes?` of the quoted needle over raw
+  lines, so `; a comment mentioning \"lib/var\"` and `#\"lib/var\"` both counted:
+  a go-look-here list can afford a false positive, but this count is published
+  as exact and must be exactly what the requirement names."
   [needle sources]
-  (let [quoted (str "\"" needle "\"")]
-    (->> sources
-         (mapcat (fn [{:keys [file source]}]
-                   (keep-indexed
-                     (fn [index line]
-                       (when (str/includes? line quoted)
-                         [file (inc index)]))
-                     (str/split-lines source))))
-         (sort-by (fn [[file line]] [file line]))
-         (mapv (fn [[file line]] (str file ":" line))))))
+  (->> sources
+       (mapcat (fn [{:keys [file source]}]
+                 (map (fn [line] [file line])
+                      (string-literal-lines needle source))))
+       (sort-by (fn [[file line]] [file line]))
+       (mapv (fn [[file line]] (str file ":" line)))))
 
 ;; @spec MCP-OP-ALIAS-022
 ;; @spec MCP-OP-ALIAS-023
