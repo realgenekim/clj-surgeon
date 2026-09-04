@@ -149,7 +149,7 @@ jobs:
   # bb-lane -- the babashka suite (`make test-bb`)
   # --------------------------------------------------------------------
   bb-lane:
-    name: bb-lane (bb test/run_all.clj)
+    name: bb-lane (make test-bb)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -158,13 +158,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/clj-env
 
+      # `make test-bb`, not a bare `bb test/run_all.clj`. Suite-spike round two
+      # RENAMED this lane: `test-fast` used to mean the bb suite and now means
+      # the JVM fast lane. Calling the Make target means a future rename of what
+      # the bb lane RUNS reaches CI by `git pull`, not by someone remembering
+      # this file exists.
       - id: bb
-        name: bb test/run_all.clj
+        name: make test-bb
         run: |
           log="${RUNNER_TEMP}/bb-lane.log"
           t0=$(date +%s)
           set +e
-          bb test/run_all.clj 2>&1 | tee "$log"
+          make test-bb 2>&1 | tee "$log"
           rc=${PIPESTATUS[0]}
           set -e
           t1=$(date +%s)
