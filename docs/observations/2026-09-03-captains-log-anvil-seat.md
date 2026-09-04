@@ -1785,3 +1785,5 @@ independent machine is for. One escalation for Gene: the nightly is dormant unti
 ## 21:02Z MEM-003 r9 built (a9963bd3): composition green — the census read elapsed at top level after the partition moved it; the eight fence failures were this branch's own streaming encoders; Opus r10 landing review launched
 
 ## 21:08Z admit gate r16 built (2ac33278: inline verify in an overlay, harness-native patches with derived binding, failing output, propose mode); Sol r17 review + arms G2/GN2 on 8173 launched
+
+## 21:24Z G2 withdrawn AND a functional failure: the r16 gate refused the task's JavaScript files (Clojure-only scope); two admit calls, both refused, no feature landed; product ask = opaque non-Clojure files in the same snapshot (gate r18). Sol r17 review refused by the filter → Opus fallback running.

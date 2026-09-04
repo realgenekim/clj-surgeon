@@ -264,3 +264,23 @@ Same task, same clones (smw-base@2df99c98), same-hour control = NC (30 turns / 6
 Pre-registration: G2 raw ≤ 12, wall ≤ 5 min, ≥ 1 MCP admit call, ≤ 1 refusal, 0 agent-run suite invocations; GN2 ≤ 18 raw and ≥ 1 MCP call (the mandate becomes a path).
 WITHDRAWAL: G2 raw > 18 or G2 wall > 6.5 min (native control) → the r16 contract did not make the gate a wall lever on this harness;
 the finding becomes the refusal texts and the next_call (naive-reader probe). Any refusal repeated twice for the same reason = a gate contract finding, reported verbatim.
+
+## G2 result (21:24Z) — WITHDRAWN, and a functional failure: the gate refuses the task's JavaScript files
+
+| arm | wall | turns | admit calls | feature landed | gates |
+|---|---:|---:|---:|---|---|
+| G2 (receipt + r16 gate, mandated) | 7.0 min | 15 | 2 (both refused) | NO — diff is only .beads/.local_version | unit 227/712/0 (unchanged tree) |
+
+The agent did what the mandate said: it built the patch in apply_patch format, called the gate with inline verify, was
+refused because the patch set contains JavaScript files (the gate admits Clojure files only), did not bypass with
+apply_patch, and stopped with "Implementation is blocked because the mandated gate rejects JavaScript files". Two admit
+calls, both refused, tests.ran=false on both. Pre-registration: raw 15 (> 12), wall 7.0 (> 6.5 control) → withdrawn;
+correctness: the feature was not implemented at all.
+
+**The finding is the gate's scope, not its contract this time.** A real feature change on a real repo is mixed-language
+(this one: 2 clj, 1 js, 1 js test, 1 edn, 1 tests.edn); a gate that admits only .clj cannot be THE write path for a
+feature. Product ask for the gate lane's next round (r18): admit non-Clojure files in the same patch set as OPAQUE
+files — no analysis, whole-file derived pre-image binding, written atomically with the Clojure files in one snapshot,
+verified by the same inline commands — with the receipt naming which files were analysed and which were opaque. Until
+then any gate-mandated arm on this task is a functional failure by construction, and the mandate text was wrong to
+forbid apply_patch for files the gate cannot take.
