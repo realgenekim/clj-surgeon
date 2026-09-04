@@ -1680,3 +1680,66 @@ format): round two of the suite spike = (a) full TEST-ISO family, (b) mechanism 
 recommended b, silence → b.
 
 ## 18:10Z Gene ruled the suite-spike round two: "B. Go" — mechanism first (001, 006, 009 on the round-one partition); witnesses round three
+
+## 18:20Z suite spike round one: 11 spawning namespaces are 94% of the lane; the "interference" is two timing races
+
+Per-namespace wall on mcp-test (716.7 s, 49 ns): reader-eval-fence-test 465 s (65%), census launcher 64 s, alias
+migration 60 s, census 36 s, prepared-wire 19 s … the 36 non-spawning namespaces total 20.9 s. No fixed port anywhere
+(every real bind is :port 0); nothing touches the repo's target/; the spec's "battery receipt in target/" named the wrong
+path — the real shared roots are the absolute seat paths MEMBAT_ROOT, PARSER_RED_ROOT and suite.lock, unreachable from
+mcp-test. Two concurrent suites: one member failed in both pairs, both timing races (stop-child!'s stderr future
+rethrowing through a finally, leaking the workspace into the tmp-leak ratchet; mcp-process-test's 50 ms margin). The
+JVM lane reaches the NETWORK: prepared-wire spawns `clojure -X:clj-surgeon/mcp` which git-clones clojure-mcp from GitHub
+and writes ~/.gitlibs. Partition proposed: fast 36 (~31 s cold), integration 2, battery 11 (674 s). Round two launched
+per Gene's "B. Go": partition + lane declaration + JVM isolation + the two races fixed under contention + the 4-wide battery.
+Docs on bridge/suite-spike: 2026-09-04-suite-spike-round1{,-timing,-classification}.md (commits 34e0e82a, e97a1979, c4f69081).
+
+## 18:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 18:53Z — usage watch (untimed run started 18:50Z at load 20.6): tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; full JSON /var/tmp/forge/usage-untimed.log)
+
+## 19:15Z MEM-003 r8 built (cb14686c); the composition with the landed census is red; decided option (i)
+
+Both parents green, the merge 11 failures 3 errors, identical twice: two lanes that never disagreed on text disagree
+on an invariant — the census publishes a clock-derived field outside the measured block, and the measured-clock
+ratchet landed after the census did. Not a defect in either lane; a composition the queue did not model. Decided here
+(consequential, reversible, no external users of the trunk): the census adapts — phases read through `measured`,
+published inside the block, per TIME-004; CENSUS-013 still satisfied. Reason it is not Gene's: it moves no product
+behaviour, only the partition of an existing field on an unreleased trunk; reversal is one commit. Round nine on the
+MEM-003 branch; the 8 reader_eval_fence failures (changed launcher refusal prose) get a separate look in the same round.
+
+## 19:23Z Gene: "You are in charge… generate wins"; two decisions taken; the seat's four one-shots built
+
+Decisions under delegated authority (reversible, no external users of the trunk): STUDY-051 ACCEPTED with the 12 KB
+growth ratchet as the cap (study-ops lands on its next GO); the SMW landing-contract branch cut LOCALLY
+(/home/forge/tmp/replay/smw-contract@f004359c: .beads/.local_version untracked, the vendor bd block replaced by a
+five-line chain at the top of CLAUDE.md, 671 → 634 lines) — Gene's repo untouched; the push is his call. Arms NC
+(control plate) and NS (slim plate) launched together at load 24–27 so the comparison shares its noise.
+Per make-our-tools-perfect: ~/bin/sol-finished, replay-arm, usage-watch, land — each verified on a real case; two edges
+found by the real cases (binary bytes in a log; an arm log with no wrapper line) fixed in the same turn. Memory
+anvil-seat-one-shots. A kill I did not need: I killed NC/NS on a false reading of my own prompt check; relaunched 1 min later.
+
+## 19:30Z Gene ratified investing in the suite/CI ("massively increase option value"); GitHub Action + receipt ledger added to spike round three. ls-tree: inside MCP on bridge/study-ops-mcp (r12 building), lands on its GO with STUDY-051 accepted.
+
+## 19:35Z GitHub Actions for MCP/main: seat token has the workflow scope (no mayor request needed); Curtain Call basis fetched (build-and-deploy.yml: setup-java@v4, setup-clojure@12.5, cache@v4; no matrix — ours adds one); builder launched on bridge/gha based on bridge/suite-spike (fast+integration gate, battery MATRIX from the lane manifest, nightly, receipt job for ~/bin/land)
+
+## 19:36Z NC/NS scored: slim plate a MISS as a native-side lever (30/6.5 min vs 54/11.2 min; reads 7 vs 16 dominate); churn removed as designed; T5 is where the contract is measured
+
+## 19:5xZ Process defect, mine: the admit-gate merge reached origin before its gates finished
+
+`land` merged 97157953 onto MCP/main in the seat checkout at 19:29Z and ran the gates there; at 19:35Z, 19:38Z and 19:44Z I
+committed records in the same checkout and pushed — each push carried the merge (8d32d619) beneath it. The JVM suite on
+the merged tree was already green and the branch's fresh-clone bb/oracle/hygiene/audit were green, so nothing unverified
+by anyone reached the trunk, but the landing command's promise ("push only if every gate is green") was broken by its
+neighbour. Fix: `land` now runs in its own worktree (/home/forge/src/clj-surgeon-land), swapped in after this run; memory
+landing-runs-in-its-own-worktree. Had a gate gone red the remedy would have been a revert commit, never a force push.
+
+## 19:51Z — usage watch: tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim, untimed run === rc 0 end 19:51Z; window since 2026-08-30T15:00Z)
+
+## 19:51Z ADMIT GATE LANDED on MCP/main (merge 8d32d619; gates on the merged tree: mcp-test 919/15214/0, bb, oracle, hygiene, audit ok)
+
+Sixth landing of the night, fifteen rounds. The gate is the untested ≥2× wall lever: arm G runs next — the SMW edit written
+through admit_clojure_patch as one call (patches + the named verify), receipt injected; the control is native with the
+same gate mandated and no receipt. Pre-registration: G raw ≤ 12, agent-run suite invocations 0 (the gate runs them), wall
+< 4 min; withdrawal if G raw > 18 or the gate refuses the agent's patch twice on the same reason (then the finding is the
+gate's contract, not the claim).

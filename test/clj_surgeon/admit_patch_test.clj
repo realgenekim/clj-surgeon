@@ -5,23 +5,321 @@
   those pairs with `diff -u`, so every hunk header in this file is arithmetic
   a patch producer actually emitted rather than a hand-counted guess."
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.mcp-admit-tool :as admit]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-process :as process]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
    [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.patch-apply :as patch-apply]
    [clj-surgeon.workspace-lock :as workspace-lock]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.set :as set]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.test :as t :refer [deftest is testing use-fixtures]])
   (:import
    (java.nio.file Files)
-   (java.nio.file.attribute FileAttribute)))
+   (java.nio.file.attribute FileAttribute PosixFilePermissions)))
+
+;; ---------------------------------------------------------------------------
+;; The precondition skip bucket
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-147
+;; @spec MCP-OP-ADMIT-150
+(def precondition-skips
+  "Every precondition this run could not check, recorded as it happens.
+
+  Round seven's reviewer ruled the previous shape blocking: an absent battery
+  receipt was three ordinary FAILURES, so `clojure -M:clj-surgeon/mcp-test`
+  on a fresh clone was red for a reason unrelated to the gate, and the merge
+  gate a GO rests on could not be reproduced from the tip alone. A gate owns
+  its fixtures or names a precondition that never reads as red.
+
+  This suite does not own the recovery battery's receipt -- the battery is a
+  timing bound with a busy-spinning watcher, deliberately outside the fast
+  lane -- so the absence is recorded HERE, in a named bucket the summary
+  line prints, and the lane that DOES own it (`make test`) runs the battery
+  before this suite so the bucket is zero there."
+  (atom []))
+
+;; @spec MCP-OP-ADMIT-147
+;; @spec MCP-OP-ADMIT-150
+(defn skip-precondition!
+  "Record one unmet precondition: counted, named, never a failure.
+
+  `t/inc-report-counter` puts the count inside `run-tests`' own summary map,
+  so the number travels with the run rather than in a `println` inside a
+  suite that prints thousands of lines."
+  [message]
+  (swap! precondition-skips conj message)
+  (t/inc-report-counter :precondition-skipped)
+  message)
+
+;; @spec MCP-OP-ADMIT-152
+(def precondition-failures
+  "Every precondition this run found PRESENT but NOT SATISFIED.
+
+  Round nine's reviewer forced one arm of the recovery battery red. The battery
+  exited nonzero and still wrote a receipt; the fast witness read the union of
+  kinds it published, saw the kind it wanted, and reported ZERO preconditions
+  skipped. A failed battery must not be able to buy a green fast lane, and it
+  must not be able to buy the honest SKIP either: a receipt that is present and
+  incomplete is a third state -- FAILED -- and it is red."
+  (atom []))
+
+;; @spec MCP-OP-ADMIT-152
+(defn fail-precondition!
+  "Record one precondition that was checkable and did NOT hold: counted, named,
+  and -- unlike a skip -- accompanied by a real failing assertion at the call
+  site, so the lane exits nonzero."
+  [message]
+  (swap! precondition-failures conj message)
+  (t/inc-report-counter :precondition-failed)
+  message)
+
+;; @spec MCP-OP-ADMIT-152
+(defn- classify-battery-receipt*
+  "Classify a battery receipt into ABSENT, SATISFIED or FAILED.
+
+  A receipt names its SUBJECT, its EVIDENCE and its VERDICT, and only a receipt
+  that carries all three -- the arm list the battery script declares, a verdict
+  for every one of those arms, and an overall verdict that agrees with them --
+  can satisfy the precondition. Everything else that EXISTS is FAILED: the
+  round-nine shape with no per-arm verdicts, a receipt whose arm list is shorter
+  than the script's, a receipt whose `:arms-passed` or `:verdict` contradicts
+  its own per-arm verdicts, and a receipt that will not read at all. Fail
+  CLOSED, and never fall back to the absent state's skip: a receipt that is
+  present and incomplete is evidence that the battery ran and did not finish,
+  which is strictly worse news than no battery at all.
+
+  Deliberately does NOT trust the battery to report its own failure. The
+  round-nine receipt was written by a battery that exited nonzero; a rule that
+  asked it to say FAILED would be asking the failing party for the verdict.
+
+  Sorts any arm keys it prints with `sort-by pr-str` rather than bare `sort`:
+  `sort`'s pairwise `compare` throws `ClassCastException` the moment a
+  malformed receipt mixes key types (round eleven's `{\"8\" true, 32 true}`
+  attack), and `pr-str` is total over every value this function ever sees.
+  The public `classify-battery-receipt` below also wraps this in `try`, so
+  this is belt-and-suspenders, not the only guard -- but a classifier this
+  central should not need its safety net for an ordinary case.
+
+  `exists?` is the file's own existence, not a fact about `record`. Round
+  thirteen: the old test was `(nil? record)`, BY VALUE -- so a present file
+  whose content reads as `nil` (the three bytes `nil`, or an empty/blank
+  file) took the ABSENT skip and printed \"no battery receipt at ...\" about
+  a file sitting right there on disk. Existence and readable-content are
+  different questions; only the first decides ABSENT. A present file that
+  reads as nil is `(not (map? record))` and falls through to the ordinary
+  FAILED \"not a map\" reason below, same as any other non-map content."
+  [exists? record declared-arms]
+  (let [failed (fn [reason] {:state :failed :reason reason})
+        verdicts (:arm-verdicts record)
+        failing (when (map? verdicts)
+                  (vec (sort-by pr-str
+                                (keep (fn [[arm ok]] (when-not (true? ok) arm))
+                                      verdicts))))]
+    (cond
+      (not exists?)
+      {:state :absent}
+
+      (not (map? record))
+      (failed (str "the receipt is not a map: " (pr-str record)))
+
+      (contains? record ::unreadable)
+      (failed (str "the receipt could not be read: "
+                   (pr-str (::unreadable record))))
+
+      (empty? declared-arms)
+      (failed "the battery script declares no arms to check the receipt against")
+
+      ;; :arms is compared as a VECTOR -- order-sensitive -- while the
+      ;; verdict key set below is compared as a SET. That asymmetry is
+      ;; deliberate and stricter than the spec's word "equal": a receipt
+      ;; whose :arms permutes the battery script's declared order is
+      ;; rejected even though it names the same arms, which is fail-closed
+      ;; in the right direction (round eleven, Opus finding 7). The cost is
+      ;; that a future reordering of the script's own `(def arms [...])`
+      ;; literal would red every existing receipt until the battery is
+      ;; re-run -- an accepted trade, not an oversight.
+      (not= (vec declared-arms) (vec (:arms record)))
+      (failed (str "the receipt declares arms " (pr-str (:arms record))
+                   " but the battery script declares "
+                   (pr-str (vec declared-arms))
+                   " · a receipt may not shrink its own subject"))
+
+      (not (map? verdicts))
+      (failed (str "the receipt records no per-arm verdict (`:arm-verdicts`),"
+                   " so it cannot show that every arm passed · it reports"
+                   " :arms-passed " (pr-str (:arms-passed record)) " of "
+                   (count declared-arms)))
+
+      (not= (set (keys verdicts)) (set declared-arms))
+      (failed (str "the receipt records verdicts for "
+                   (pr-str (vec (sort-by pr-str (keys verdicts))))
+                   " but the battery declares " (pr-str (vec declared-arms))))
+
+      (seq failing)
+      (assoc (failed (str "the battery did NOT pass every arm: "
+                          (count (remove (comp true? val) verdicts)) " of "
+                          (count declared-arms) " failed"))
+             :failed-arms failing)
+
+      (not= (:arms-passed record) (count declared-arms))
+      (failed (str "the receipt says :arms-passed "
+                   (pr-str (:arms-passed record)) " but declares "
+                   (count declared-arms) " arms"))
+
+      (not= :passed (:verdict record))
+      (failed (str "the receipt's verdict is " (pr-str (:verdict record))
+                   ", not :passed"))
+
+      ;; Round eleven's finding-3 site :174: `check-battery-precondition!`'s
+      ;; `:satisfied` branch reads `(set (:kinds-published record))` AFTER
+      ;; this function has already returned `:satisfied` -- so a malformed
+      ;; `:kinds-published` (a number, say) let the classification stand and
+      ;; threw one layer up, outside every catch. Coerce it HERE, before
+      ;; classifying, so `:satisfied` is never returned for a record whose
+      ;; caller cannot safely read it: coerce first, classify after.
+      (not (try (set (:kinds-published record)) true (catch Throwable _ false)))
+      (failed (str "the receipt's :kinds-published cannot be read as a set"
+                   " of published kinds: " (pr-str (:kinds-published record))))
+
+      :else
+      {:state :satisfied})))
+
+;; @spec MCP-OP-ADMIT-152
+(defn classify-battery-receipt
+  "The TOTAL public entry point: `classify-battery-receipt*` plus a `try`
+  that no malformed receipt can escape.
+
+  Round eleven's finding (Sol): a mixed-type arm-key receipt failed closed by
+  every cond branch's own logic, but the branch that BUILT its reason threw
+  before `fail-precondition!` ever ran -- the failure escaped the promised
+  counted bucket and the printed clearing command as an uncaught exception
+  instead. A checker that can throw is not a checker; it is a checker that
+  sometimes forgets to check. Any throw while classifying -- from this
+  function's own sorts, from a future cond branch, from anything -- is
+  itself a :failed classification, never a crash, so the caller
+  (`check-battery-precondition!`) can always route it through
+  `fail-precondition!` and the counted bucket."
+  [exists? record declared-arms]
+  (try
+    (classify-battery-receipt* exists? record declared-arms)
+    (catch Throwable e
+      {:state :failed
+       :reason (str "the receipt could not be classified without the"
+                    " classifier itself throwing -- " (.getName (class e))
+                    ": " (.getMessage e) " · receipt " (pr-str record)
+                    " · the classifier must be TOTAL; this is a bug in"
+                    " classify-battery-receipt*, not in the receipt")})))
+
+;; @spec MCP-OP-ADMIT-152
+(defn check-battery-precondition!
+  "The fast lane's three-state check of one battery receipt.
+
+  Takes the receipt FILE so a witness can drive all three states through this
+  exact function rather than around it. Spends the same number of assertions in
+  every state (MCP-OP-ADMIT-147) and returns the state it took."
+  [^java.io.File receipt kind target declared-arms]
+  (let [exists? (.exists receipt)
+        record (when exists?
+                 ;; Round eleven's finding-3 site :166: a 60,000-deep nested
+                 ;; receipt threw StackOverflowError, an Error rather than an
+                 ;; Exception, straight past `(catch Exception e ...)` and
+                 ;; out of the run uncaught. `catch Throwable` closes every
+                 ;; shape the reader can throw, not only the checked ones.
+                 ;;
+                 ;; Round eleven's finding 5 (hardening): `clojure.core/
+                 ;; read-string` leaves `*read-eval*` ON, so a receipt
+                 ;; beginning `#=(...)` is EVALUATED by the reader -- proved
+                 ;; the hard way while building this fix, when a receipt of
+                 ;; `#=(java.lang.System/exit 3)` killed the JVM running this
+                 ;; very suite instead of merely misclassifying. `clojure.edn/
+                 ;; read-string` never evaluates: `#=` is not an EDN dispatch
+                 ;; macro, so it is a parse failure, same shape as any other
+                 ;; unreadable receipt, and the classifier below reports it
+                 ;; as :failed via the existing ::unreadable branch.
+                 (try (edn/read-string (slurp receipt))
+                      (catch Throwable e
+                        {::unreadable (.getMessage e)})))
+        {:keys [state reason failed-arms]}
+        (classify-battery-receipt exists? record declared-arms)]
+    (case state
+      :satisfied
+      (do
+        (is (contains? (set (:kinds-published record)) kind)
+            (str "the battery ran and did NOT publish the kind its"
+                 " exemption claims: " kind " · receipt " (pr-str record)))
+        (is (= target (:target record))
+            "the receipt names the target that wrote it")
+        (is (string? (:at record))
+            (str "the receipt does not say when it was written: "
+                 (pr-str record))))
+
+      :failed
+      (let [message (fail-precondition!
+                      (str "battery receipt at " (.getPath receipt)
+                           " is PRESENT but does NOT record a complete run · "
+                           reason
+                           (when (seq failed-arms)
+                             (str " · failing arms " (pr-str (vec failed-arms))))
+                           " · re-run `" target "` and make it pass before"
+                           " trusting this lane"))]
+        ;; The failing assertion IS the point: a receipt from a red battery
+        ;; must never read as the skip a fresh clone prints, and must never
+        ;; read as a satisfied precondition. It is RED.
+        (is (= :satisfied state) message)
+        (is (= 1 (count (filter #{message} @precondition-failures)))
+            "the failed precondition was recorded once in its own bucket")
+        (is (str/includes? message target)
+            (str "the failure must name the command that clears it: "
+                 message)))
+
+      :absent
+      (let [message (skip-precondition!
+                      (str "no battery receipt at " (.getPath receipt)
+                           " · run `" target "` to prove " kind
+                           " by execution rather than by the structural"
+                           " checks alone"))]
+        (is (= 1 (count (filter #{message} @precondition-skips)))
+            "the absent receipt was recorded once in the counted bucket")
+        (is (pos? (count @precondition-skips))
+            "the counted bucket must be visibly non-zero, never silent")
+        (is (str/includes? message target)
+            (str "the skip must name the command that clears it: " message))))
+    state))
+
+;; @spec MCP-OP-ADMIT-147
+;; @spec MCP-OP-ADMIT-150
+(defmethod t/report :summary
+  [m]
+  (t/with-test-out
+    (println "\nRan" (:test m) "tests containing"
+             (+ (:pass m) (:fail m) (:error m)) "assertions.")
+    (println (:fail m) "failures," (:error m) "errors.")
+    ;; The bucket is part of the SUMMARY, printed in both states, so a
+    ;; non-zero count is visible at the same place a reader already looks for
+    ;; the failure count -- and each skip names the exact command that clears
+    ;; it.
+    (let [skipped (or (:precondition-skipped m) 0)
+          failed (or (:precondition-failed m) 0)]
+      (println skipped "preconditions skipped.")
+      (doseq [message @precondition-skips]
+        (println "  SKIPPED ·" message))
+      ;; @spec MCP-OP-ADMIT-152
+      ;; A precondition that was CHECKABLE and did not hold is neither a skip
+      ;; nor an ordinary failure lost among thousands: it is printed here, on
+      ;; the line a reader already reads, next to the failure count it caused.
+      (println failed "preconditions failed.")
+      (doseq [message @precondition-failures]
+        (println "  FAILED ·" message)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixtures
@@ -208,6 +506,12 @@
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-134
+;; Round four's superset assertion is used by witnesses both above and below
+;; its definition; it is declared here so the file reads in narrative order
+;; rather than in dependency order.
+(declare ^:private assert-text-names-every-structured-leaf!)
 
 (defn- temp-dir
   []
@@ -3750,7 +4054,16 @@
                              {:patch patch :mode "preview" :verify "focused"})
                     lint (:lint_delta result)]
                 (is (:ok result) (str "the gate refused this: " (:error result)))
-                (is (= 21 (count (:files result))))
+                ;; @spec MCP-OP-ADMIT-136
+                ;; The receipt accounts for all 21 files, but it no longer
+                ;; necessarily CARRIES all 21: since the text block must name
+                ;; every leaf the structure spells, and both faces are charged
+                ;; the same one budget, the structure gives ground on a wide
+                ;; patch and says so. What must not change is the accounting.
+                (is (= 21 (+ (count (:files result))
+                             (get-in result [:payload_omitted :files] 0)))
+                    (str "files carried " (count (:files result))
+                         " omitted " (pr-str (:payload_omitted result))))
                 (is (true? (:ran lint))
                     (str "the analyzer half never ran in the field: "
                          (pr-str (select-keys lint [:error-type :cap
@@ -3814,12 +4127,37 @@
           (is (str/includes? text "verification_status=unverified")
               "the text block carries the word, not only the boolean")
           (is (str/includes? text "did not run"))
-          (testing "the text block is a superset of the structured receipt"
+          ;; @spec MCP-OP-ADMIT-123
+          (testing "the text block names every detector and reason detectors_not_run carries"
+            ;; Renamed 2026-09-04 (inb-cbca17, admit gate round 3): this
+            ;; block only ever walked :detectors_not_run, which detector-note
+            ;; alone already makes true -- it is not evidence that the WHOLE
+            ;; text block is a superset of the structured receipt. The real
+            ;; claim is asserted separately below.
             (doseq [{:keys [detector reason]} (:detectors_not_run result)]
               (is (str/includes? text detector)
                   (str "the text block never names the detector " detector))
               (is (str/includes? text (name reason))
                   (str "the text block never names the reason " (name reason)))))
+          ;; @spec MCP-OP-ADMIT-132
+          ;; @spec MCP-OP-ADMIT-134
+          (testing "this ok=true receipt's next_call and every other leaf"
+            ;; Renamed again, round four (Sol blocker 3). Round three called
+            ;; this block "really is a superset of the structured receipt"
+            ;; while asserting only that next_call appeared -- an overclaim
+            ;; corrected by relabelling the one above it and then repeated
+            ;; here. The superset claim for the ok branch is now carried by
+            ;; assert-text-names-every-structured-leaf!, which walks the
+            ;; receipt as JSON with no exclusions; what this block still
+            ;; earns is the narrower fact that a SUCCESSFUL receipt renders
+            ;; its next_call at all, which nothing did before round three.
+            (is (some? (:next_call result))
+                "the fixture must actually carry a next_call, or this proves nothing")
+            (is (str/includes? text (json/generate-string (:next_call result)))
+                (str "the text block drops next_call entirely on a successful "
+                     "receipt; a caller reading only the text has no follow-up "
+                     "call at all"))
+            (assert-text-names-every-structured-leaf! result "detectors-not-run-preview"))
           (testing "and no field in it reads as clean"
             (is (empty? (:hazards result)))
             (is (str/includes? text "not a clean bill of health")
@@ -4210,3 +4548,3113 @@
         (is (str/includes? source "heap-peak-MiB=%d budget-MiB=%d"))
         (is (str/includes? source "(System/exit (if (every? true? results) 0 1))")
             "a self-test that cannot fail the shell is a log line")))))
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-ADMIT-131 / MCP-OP-ADMIT-132: the refusal text is a superset of
+;; structuredContent, and next_call renders verbatim.
+;;
+;; Landing review round 3 (inb-cbca17): admit_clojure_patch, the catalog's
+;; only write tool, sat outside the trunk's text superset ratchet
+;; (MCP-OP-ALIAS-059). Every refusal's `remedy` and `next_call` were absent
+;; from `content[0].text`, including the two named cases: the number that
+;; would lift an `analyzer-memory-exhausted` refusal, and the follow-up call
+;; a `verification-incomplete` refusal itself proposes.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private known-non-kind-regex-artifacts
+  "Two matches the enumeration regexes below produce that are demonstrably
+  not error-type kind literals -- verified by reading the exact source line
+  each comes from, not guessed:
+
+  \"error\" -- mcp_admit_tool.clj's `stale-snapshot-refusal` builds
+  `(select-keys (refusal ...) [:ok :operation :committed :source-unchanged
+  :error-type :error :next_call :drifted])`; `:error-type\\s+:error` there is
+  two adjacent KEYS of a key vector, not a kind assignment.
+
+  \"else\" -- the `:else` branch keyword of the `cond` inside
+  `edge-throwable-refusal`, picked up by the same keyword-token scan that
+  finds that cond's three real kinds."
+  #{"error" "else"})
+
+;; @spec MCP-OP-ADMIT-131
+(defn- kind-pairs
+  "Literal `:error-type :kind` key/value pairs anywhere in `text`."
+  [text]
+  (into (sorted-set)
+        (remove known-non-kind-regex-artifacts)
+        (map second (re-seq #":error-type\s+:([a-z][a-z][a-z-]*)" text))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- refusal-call-kinds
+  "Kinds passed as the literal first (or second, after `context`) argument
+  to a `(refusal ...)` call."
+  [text]
+  (into (sorted-set) (map second)
+        (re-seq #"\(refusal\s*(?:context\s*)?\n?\s*:([a-z][a-z][a-z-]*)" text)))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- path-refusal-kinds
+  "Kinds passed to `mcp-paths/path-refusal`, which `freeze-sources` widens
+  into the admit gate's own `:error-type` via `(keyword (:error_type ...))`."
+  [text]
+  (into (sorted-set) (map second)
+        (re-seq #"(?s)path-refusal\s*\n?\s*:([a-z][a-z][a-z-]*)" text)))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- edge-throwable-kinds
+  "The literal keywords `edge-throwable-refusal`'s own `cond` can return."
+  [text]
+  (let [start (str/index-of text "(defn- edge-throwable-refusal")
+        end (str/index-of text "(defn handle-admit-clojure-patch")
+        body (subs text start end)
+        cond-at (str/index-of body "cond")
+        window (subs body cond-at (min (count body) (+ cond-at 400)))]
+    (into (sorted-set)
+          (remove known-non-kind-regex-artifacts)
+          (map second (re-seq #":([a-z][a-z][a-z-]*)" window)))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- hazard-refusal-kinds
+  "Hazard `:type` values built with class `:refusal` in `form_identity.clj`
+  -- these become the admit gate's own `:error-type` via
+  `(:type (first blocking))` when `refusal-hazards` finds one blocking.
+  A hazard built class `:note` or `:informational` never blocks, so its
+  type never reaches the top-level receipt and is excluded here."
+  [text]
+  (letfn [(refusal-class? [tail]
+            (= (re-find #":refusal|:note|:informational" tail) ":refusal"))]
+    (into (sorted-set)
+          (concat
+            (keep (fn [[_ typ tail]] (when (refusal-class? tail) typ))
+                  (re-seq #"\(hazard\s+:([a-z][a-z-]*)((?:.|\n){0,220})" text))
+            (keep (fn [[_ typ tail]] (when (refusal-class? tail) typ))
+                  (re-seq #":type\s+:([a-z][a-z-]*)((?:.|\n){0,220})" text))))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- commit-compiled-kinds
+  "Kinds `intent-transaction/commit-compiled!` itself can return, scoped to
+  that one function's body so an unrelated `:error-type` elsewhere in
+  intent_transaction.clj -- reachable from other verbs, not from the admit
+  gate's commit path -- is not swept in."
+  [text]
+  (let [start (str/index-of text "(defn commit-compiled!")
+        end (str/index-of text "(defn- reverse-edit")
+        body (subs text start end)]
+    (into (sorted-set)
+          (concat
+            (kind-pairs body)
+            (map second (re-seq #"refuse!\s*\n?\s*:([a-z][a-z][a-z-]*)" body))
+            ;; `:error-type (if rolled-back? :a :b)` -- both branches
+            (mapcat (fn [[_ a b]] [a b])
+                    (re-seq (re-pattern
+                              (str "\\:error-type\\s*\\(if\\s+\\S+\\s*\\n?\\s*"
+                                   ":([a-z][a-z-]*)\\s*\\n?\\s*:([a-z][a-z-]*)\\)"))
+                            body))))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- admit-refusal-kinds-in-source
+  "Every `:error-type` value the admit gate's top-level receipt can carry,
+  read from the source rather than from a maintained list.
+
+  Closed over the exact set of namespaces whose values reach that field: the
+  gate's own literal refusals and edge-of-handler classification; the two
+  namespaces it calls directly and widens their `:error-type`
+  (`patch-apply/parse-patch` and `patch-apply/apply-parsed`,
+  `mcp-paths/resolve-source-path` and `resolve-new-source-path` via the
+  gate's own `freeze-sources`); the one namespace whose hazard `:type` it
+  widens when a hazard blocks (`form-identity/refusal-hazards`); and the one
+  function whose `:error-type` it widens on commit
+  (`intent-transaction/commit-compiled!`). A kind constructed anywhere else
+  in those files, outside the functions the admit gate actually calls, is
+  not reachable from `execute-request!` and is deliberately not swept in
+  (commit-compiled-kinds' function-body scoping is the concrete guard)."
+  []
+  (let [admit (slurp "src/clj_surgeon/mcp_admit_tool.clj")
+        patch-apply (slurp "src/clj_surgeon/patch_apply.clj")
+        mcp-paths (slurp "src/clj_surgeon/mcp_paths.clj")
+        form-identity (slurp "src/clj_surgeon/form_identity.clj")
+        intent-tx (slurp "src/clj_surgeon/intent_transaction.clj")]
+    (into (sorted-set)
+          (concat (kind-pairs admit)
+                  (refusal-call-kinds admit)
+                  (edge-throwable-kinds admit)
+                  (refusal-call-kinds patch-apply)
+                  (path-refusal-kinds mcp-paths)
+                  (hazard-refusal-kinds form-identity)
+                  (commit-compiled-kinds intent-tx)))))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest the-derived-refusal-kind-enumeration-is-not-empty-and-is-stable
+  ;; A regression here (an empty set, or a set that lost a real kind to a
+  ;; regex miss) would silently turn the sweep below into a no-op that still
+  ;; reports green. Pinning the count is a tripwire on the derivation itself,
+  ;; not a claim that this exact number is meaningful.
+  (let [kinds (admit-refusal-kinds-in-source)]
+    (is (>= (count kinds) 30)
+        (str "expected at least 30 derived kinds, got " (count kinds) ": "
+             (pr-str kinds)))
+    (is (contains? kinds "analyzer-memory-exhausted"))
+    (is (contains? kinds "verification-incomplete"))
+    (is (contains? kinds "invalid-relative-source-path")
+        "a kind the manual enumeration in this round's review missed, and the derivation caught")
+    (is (not (contains? kinds "error")))
+    (is (not (contains? kinds "else")))))
+
+;; @spec MCP-OP-ADMIT-131
+(defn- leaves-of
+  "Independent recursive leaf walk over `v`, as [path value] pairs.
+
+  Deliberately reimplemented rather than calling
+  `clj-surgeon.mcp-admit-tool/admit-leaf-entries`: a bug shared by both sides
+  of an equality check proves nothing."
+  [path v]
+  (cond
+    (map? v)
+    (mapcat (fn [[k cv]] (leaves-of (str path (when (seq path) ".") (name k)) cv))
+            v)
+
+    (sequential? v)
+    (apply concat
+           (map-indexed (fn [i cv] (leaves-of (str path "[" i "]") cv)) v))
+
+    (nil? v) []
+
+    :else [[path v]]))
+
+;; @spec MCP-OP-ADMIT-131
+(def ^:private admit-envelope-keys-for-witness
+  "The same envelope this round's renderer excludes -- reimplemented here,
+  not required from the tool namespace, so this witness does not depend on
+  the implementation agreeing with itself about what its own envelope is.
+
+  `:files` and `:hashes` are excluded for the same reason the renderer
+  excludes them: per-file hunk spans and pre/post digests are diff
+  metadata the caller already sent, not the cause of the refusal, and the
+  digest a caller actually needs back is next_call's own
+  expect_pre_sha256, checked separately below via the next_call assertion."
+  #{:ok :operation :error-type :error :next_call :remedy :elapsed_ms
+    :workspace-root :detectors_not_run :source-unchanged :mode
+    :files :hashes})
+
+;; @spec MCP-OP-ADMIT-131
+;; @spec MCP-OP-ADMIT-132
+(defn- assert-refusal-text-superset!
+  "Every leaf of `structured` (a refusal receipt: :ok false) that differs
+  from the closed empty-receipt baseline for its mode appears in the text
+  block, `remedy` renders as its own line, and `next_call` renders verbatim
+  (or a stated, bounded pointer to it)."
+  [structured label]
+  (let [text (#'admit/summary structured)
+        baseline (#'admit/empty-receipt (or (:mode structured) "preview"))
+        leaves (->> (apply dissoc structured admit-envelope-keys-for-witness)
+                    (remove (fn [[k v]] (= v (get baseline k))))
+                    (mapcat (fn [[k v]] (leaves-of (name k) v)))
+                    (filter (fn [[_ v]] (or (string? v) (number? v)
+                                            (boolean? v) (keyword? v)
+                                            (symbol? v)))))]
+    (is (false? (:ok structured)) (str label " · fixture is not a refusal"))
+    (is (str/includes? text (let [kind (:error-type structured)]
+                              (if (keyword? kind) (name kind) (str kind))))
+        (str label " · the text does not name the error type"))
+    (when-let [error (:error structured)]
+      (is (str/includes? text error)
+          (str label " · the text drops the error sentence")))
+    (when-let [remedy (:remedy structured)]
+      (is (str/includes? text remedy)
+          (str label " · the text drops the remedy")))
+    (doseq [[path v] leaves]
+      (let [rendered (if (or (keyword? v) (symbol? v)) (name v) (str v))
+            prefix (subs rendered 0 (min (count rendered) 40))]
+        (is (or (str/includes? text rendered) (str/includes? text prefix))
+            (str label " · the text drops leaf " path "=" rendered))))
+    (if-let [call (:next_call structured)]
+      (let [encoded (json/generate-string call)]
+        (is (or (str/includes? text encoded)
+                (and (str/includes? text "next_call")
+                     (str/includes? text (str (count encoded)))))
+            (str label " · the text drops the next_call the caller must send")))
+      (is (str/includes? text "next_call")
+          (str label " · an absent next_call is omitted rather than stated")))
+    text))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest every-admit-refusal-kind-renders-every-structured-leaf-in-its-text-block
+  ;; Synthetic receipts, one per derived kind, exactly as
+  ;; MCP-OP-ALIAS-059's every-refusal-kind test drives alias_migration:
+  ;; cheap enough to cover the whole enumeration, and the two named live
+  ;; reproductions below (analyzer-memory-exhausted, verification-incomplete)
+  ;; carry the real production path for the two kinds the review named.
+  (doseq [kind (map name admit/admit-refusal-kinds)]
+    (testing kind
+      (assert-refusal-text-superset!
+        {:ok false
+         :operation :admit-patch-refused
+         :mode "commit"
+         :error-type kind
+         :error (str "one sentence stating the " kind " cause")
+         :remedy (str "Resend the next_call; it corrects " kind ".")
+         :elapsed_ms 1.25
+         :source-unchanged true
+         :committed false
+         :mutation_attempted false
+         ;; a nested map, to prove the walk actually recurses -- the review
+         ;; named exactly this shape (lint_delta's cap/observed-bytes)
+         :lint_delta {:ran false :ok false :cap 999 :observed-bytes 1234
+                      :detector "clj-kondo"}
+         :files [(str kind "-file.clj")]
+         :next_call {:tool "admit_clojure_patch"
+                     :arguments {:mode "preview" :verify "focused"}
+                     :patch_field "patch"
+                     :patch_sha256 "deadbeef"
+                     :blocked_by kind}}
+        kind))))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest a-refusal-with-no-next-call-states-its-absence
+  (assert-refusal-text-superset!
+    {:ok false
+     :operation :admit-patch-refused
+     :mode "preview"
+     :error-type "patch-too-large"
+     :error "patch is 999999 UTF-8 bytes; the admission limit is 262144"
+     :elapsed_ms 0.5
+     :source-unchanged true
+     :patch_bytes 999999
+     :next_call nil}
+    "patch-too-large-no-next-call"))
+
+;; ---------------------------------------------------------------------------
+;; Live reproductions of the two kinds the review named directly
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-131
+(deftest a-verification-incomplete-refusal-carries-the-analyzer-diagnostic-and-next-call
+  ;; The review, verbatim: "verification-incomplete (the dropped next_call
+  ;; is MCP-OP-ADMIT-120's own affordance)". Reproduced through the real
+  ;; production path: a lint runner that reports a genuine truncation (the
+  ;; E-GATE-R field shape), verify=focused, mode=commit, no allow_partial.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [truncated-lint
+            (fn [_ _]
+              {:ran false :ok false :status :unverified
+               :detector "clj-kondo" :error-type :analyzer-output-truncated
+               :cap 2000 :observed-bytes 5000
+               :remedy (str "clj-kondo answered with 5000 bytes of findings "
+                            "and this gate reads at most 2000; raise the "
+                            "analyzer read ceiling "
+                            "(:admit-analyzer-visible-bytes) or narrow the "
+                            "patch to fewer files")
+               :error (str "clj-kondo findings were cut at 2000 bytes of "
+                           "5000; the analyzer ran and the gate could not "
+                           "read its answer")})
+            result (admit/execute-request!
+                     (stub-config root {:admit-lint-runner truncated-lint})
+                     {:patch clean-multi-file-patch :mode "commit"
+                      :verify "focused"})
+            text (#'admit/summary (assoc result :elapsed_ms 1.0))]
+        (is (false? (:ok result)))
+        (is (= :verification-incomplete (:error-type result)))
+        (is (false? (:committed result)))
+        (is (= 2000 (get-in result [:lint_delta :cap])))
+        (is (= 5000 (get-in result [:lint_delta :observed-bytes])))
+        (is (some? (:next_call result))
+            "MCP-OP-ADMIT-120: the refusal proposes the verify that could lift it")
+        (is (= "focused" (get-in result [:next_call :arguments :verify])))
+        (testing "every leaf, including the nested analyzer diagnostic, is in the text"
+          (assert-refusal-text-superset! (assoc result :elapsed_ms 1.0)
+                                          "verification-incomplete-live")))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-131
+(deftest an-analyzer-memory-exhausted-refusal-carries-its-remedy-and-heap-number-in-text
+  ;; The review, verbatim: "analyzer-memory-exhausted (the dropped remedy is
+  ;; the number that lifts it)". Reproduced through the real
+  ;; edge-throwable-refusal classifier, same construction as
+  ;; MCP-OP-ADMIT-129's own witness -- an OutOfMemoryError is constructed,
+  ;; never provoked.
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (reset! config-atom
+              {:project-root (.getPath root)
+               :admit-lint-runner (fn [_ _] (throw (OutOfMemoryError. "Java heap space")))})
+      (let [captured (atom nil)
+            _ (admit/handle-admit-clojure-patch
+                nil
+                {"patch" clean-multi-file-patch "verify" "focused"}
+                (fn [content error? result]
+                  (reset! captured {:text (first content) :result result})))
+            {:keys [text result]} @captured]
+        (is (= :analyzer-memory-exhausted (:error-type result)))
+        (is (pos? (long (:max_heap_mib result))))
+        (is (string? (:remedy result)))
+        (is (str/includes? (str text) (str (:remedy result)))
+            "the text drops the remedy -- the exact route that lifts this refusal")
+        (is (str/includes? (str text) (str (:max_heap_mib result)))
+            "the text drops the heap number the remedy itself refers to")
+        (testing "every leaf of the OOM receipt is in the text"
+          (assert-refusal-text-superset! (assoc result :elapsed_ms 1.0)
+                                          "analyzer-memory-exhausted-live")))
+      (finally
+        (reset! config-atom previous)
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-ADMIT-132: expect_pre_sha256 is copyable from the text alone
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-132
+(deftest a-preview-of-an-existing-file-carries-expect-pre-sha256-in-its-text
+  ;; The tool description: "Copy expect_pre_sha256 from a preview's
+  ;; next_call to bind the [commit] transaction." Before this round nothing
+  ;; rendered next_call on the :ok true branch at all, so that instruction
+  ;; was not satisfiable from content[0].text.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch clean-multi-file-patch :mode "preview"
+                      :verify "focused"})
+            text (#'admit/summary (assoc result :elapsed_ms 1.0))
+            expect-pre (get-in result [:next_call :arguments :expect_pre_sha256])]
+        (is (:ok result))
+        (is (map? expect-pre)
+            "fixture must actually touch existing files, or expect_pre_sha256 is never populated")
+        (is (str/includes? text "expect_pre_sha256")
+            "the field the description tells the caller to copy is absent from the text")
+        (is (str/includes? text (json/generate-string (:next_call result)))
+            "expect_pre_sha256 is not readable from the text alone")
+        (doseq [[file sha] expect-pre]
+          (is (str/includes? text sha)
+              (str "the text drops the pre-image hash for " file))))
+      (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 2 (MCP-OP-ADMIT-134): "every leaf" was false by
+;; explicit exclusion and by shape, and the witness copied the policy
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-134
+(defn- json-leaves
+  "A second, independent leaf walk -- over the receipt AS JSON.
+
+  Deliberately not `clj-surgeon.mcp-admit-tool/admit-leaf-entries`, and
+  deliberately not a Clojure walk at all. The claim under test is `the text
+  names everything structuredContent spells`, and the only authority on what
+  structuredContent spells is the JSON encoder that produces it. Round
+  three's witness walked the Clojure map holding its OWN copy of the
+  renderer's eleven-key exclusion list, so the two sides agreed about what
+  may be missing by construction -- the reviewer's word was `tautological`.
+  This side shares no function and no constant with the renderer: it encodes
+  the receipt, parses it back, and reports every leaf the JSON actually has,
+  value-less shapes included."
+  [path v]
+  (cond
+    (and (map? v) (seq v))
+    (mapcat (fn [[k cv]] (json-leaves (str path (when (seq path) ".") k) cv)) v)
+
+    (map? v) [[path "{}"]]
+
+    (and (sequential? v) (seq v))
+    (apply concat
+           (map-indexed (fn [i cv] (json-leaves (str path "[" i "]") cv)) v))
+
+    (sequential? v) [[path "[]"]]
+
+    (nil? v) [[path "null"]]
+
+    (= v "") [[path "\"\""]]
+
+    :else [[path (str v)]]))
+
+;; @spec MCP-OP-ADMIT-134
+(defn- structured-leaves
+  [receipt]
+  (json-leaves "" (json/parse-string (json/generate-string receipt))))
+
+;; @spec MCP-OP-ADMIT-134
+(defn- assert-text-names-every-structured-leaf!
+  "Every leaf structuredContent spells appears in the text block as
+  `path=value`.
+
+  No exclusion list on this side, because the implementation is not allowed
+  one either: a receipt has two faces and the text face must not say less.
+  Leaves longer than the renderer's per-leaf ceiling are checked by their own
+  witness rather than here, so this assertion needs no constant from the
+  implementation at all."
+  [receipt label]
+  (let [receipt (assoc receipt :elapsed_ms (or (:elapsed_ms receipt) 1.0))
+        text (#'admit/summary receipt)]
+    (is (not-any? set? (tree-seq coll? seq receipt))
+        (str label " · a receipt leaf is a Clojure set; JSON has no sets, so "
+             "structuredContent's ordering of it is undefined and this "
+             "witness cannot bind the text to it"))
+    (doseq [[path value] (structured-leaves receipt)
+            :when (<= (count value) 200)]
+      (is (str/includes? text (str path "=" value))
+          (str label " · the text block never names " path "=" value)))
+    text))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-refusal-text-names-the-files-and-hashes-its-structure-carries
+  ;; Sol's round-three receipt, verbatim: `{:probe :shape-exclusions,
+  ;; :contains-files false, :contains-pre-hash false, ...}`. The renderer
+  ;; excluded :files and :hashes by name, on the reasoning that they are
+  ;; "diff metadata the caller already sent". The caller who reads only the
+  ;; text is exactly the caller who cannot go and look them up.
+  (assert-text-names-every-structured-leaf!
+    {:ok false
+     :operation :admit-patch-refused
+     :mode "preview"
+     :error-type :source-hash-mismatch
+     :error "the workspace changed while this admission was being verified"
+     :elapsed_ms 1.25
+     :source-unchanged true
+     :files ["src/app/core.clj" "src/app/util.clj"]
+     :hashes {"src/app/core.clj" {:pre "PRE-CORE-DIGEST" :post "POST-CORE-DIGEST"}
+              "src/app/util.clj" {:pre "PRE-UTIL-DIGEST" :post "POST-UTIL-DIGEST"}}
+     :next_call {:tool "admit_clojure_patch" :blocked_by "source-hash-mismatch"}}
+    "files-and-hashes"))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-value-less-shape-renders-the-characters-structured-content-spells
+  ;; The second half of Sol's receipt: :contains-empty false, :contains-map
+  ;; false, :contains-nil false. structuredContent spells `[]`, `{}`, `null`
+  ;; and `""`; a text that spells none of them is a strict subset of it.
+  (assert-text-names-every-structured-leaf!
+    {:ok false
+     :operation :admit-patch-refused
+     :mode "preview"
+     :error-type :verification-incomplete
+     :error "the analyzer ran and the gate could not read its answer"
+     :elapsed_ms 1.0
+     :source-unchanged true
+     :detectors_not_run []
+     :protected_node_drift {}
+     :verification_reasons []
+     :lock_scope nil
+     :focused_report_path ""
+     :next_call {:tool "admit_clojure_patch" :blocked_by "verification-incomplete"}}
+    "value-less-shapes"))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-live-refusal-text-names-every-leaf-of-its-own-receipt
+  ;; The same claim through the production path rather than a fixture: a real
+  ;; commit refusal, whose receipt carries whatever the gate actually put in
+  ;; it -- not whatever this test remembered to write down.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [truncated-lint
+            (fn [_ _]
+              {:ran false :ok false :status :unverified
+               :detector "clj-kondo" :error-type :analyzer-output-truncated
+               :cap 2000 :observed-bytes 5000
+               :error "the analyzer ran and the gate could not read its answer"})
+            result (admit/execute-request!
+                     (stub-config root {:admit-lint-runner truncated-lint})
+                     {:patch clean-multi-file-patch :mode "commit"
+                      :verify "focused"})]
+        (is (false? (:ok result)))
+        (assert-text-names-every-structured-leaf! result "live-commit-refusal"))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- generated-source
+  [index value]
+  (str "(ns app.gen" index ")\n"
+       "\n"
+       "(defn value\n"
+       "  []\n"
+       "  " value ")\n"))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- generated-sources
+  "`n` ordinary one-owner files, the shape a wide but unremarkable patch
+  touches."
+  [n]
+  (into {}
+        (map (fn [i] [(str "src/app/gen" i ".clj") (generated-source i 1)]))
+        (range n)))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- generated-patch
+  [n]
+  (apply str
+         (map (fn [i]
+                (str "--- a/src/app/gen" i ".clj\n"
+                     "+++ b/src/app/gen" i ".clj\n"
+                     "@@ -1,5 +1,5 @@\n"
+                     " (ns app.gen" i ")\n"
+                     " \n"
+                     " (defn value\n"
+                     "   []\n"
+                     "-  1)\n"
+                     "+  2)\n"))
+              (range n))))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- wide-preview-receipt
+  "One `:ok true` preview of `n` one-line changes, through the entrance."
+  [n]
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root (generated-sources n))
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch (generated-patch n) :mode "preview"})]
+        (is (true? (:ok result))
+            (str n "-file preview must succeed: " (:error result)))
+        result)
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-136
+(deftest a-twenty-file-preview-text-names-every-leaf-of-its-own-receipt
+  ;; Round four's blocking finding, as a fixture. The reviewer called
+  ;; `assert-text-names-every-structured-leaf!` -- this file's own witness,
+  ;; unmodified -- on a live twenty-file preview and it failed 68 assertions:
+  ;; structuredContent was 15,086 bytes, well under the 32,640-byte public
+  ;; budget and not truncated, and the text dropped 68 leaves including
+  ;; `source-unchanged`, `pre_image_binding`, `lock_scope` and
+  ;; `mutation_attempted` -- stranded at the tail of a path-alphabetical sort
+  ;; by a fact-section budget of half the public one. The suite was green only
+  ;; because every fixture in it sat under that bound. This one does not.
+  (assert-text-names-every-structured-leaf!
+    (wide-preview-receipt 20) "twenty-file-preview"))
+
+;; @spec MCP-OP-ADMIT-136
+(deftest a-forty-file-preview-text-names-every-leaf-of-its-own-receipt
+  ;; Twice as wide: the reviewer measured 396 of 796 leaves absent from the
+  ;; text while the receipt still read `ok`. Here the structured face is the
+  ;; one that must give ground -- 40 files of facts cannot be spelled inside
+  ;; the public budget -- and whatever survives into structuredContent must be
+  ;; named, leaf for leaf, in the text.
+  (assert-text-names-every-structured-leaf!
+    (wide-preview-receipt 40) "forty-file-preview"))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest the-fact-walk-has-no-exclusion-list-to-get-wrong
+  ;; The structural half of blocker 2. Round three's exclusion set had eleven
+  ;; members and its witness had eleven copies of them. The repair is not a
+  ;; better-maintained list; it is no list. This assertion fails the day one
+  ;; is reintroduced, which is the day the EARS text has to justify it.
+  (is (= #{} @#'admit/admit-receipt-fact-exclusions)
+      (str "a key was excluded from the fact walk; name it and its reason in "
+           "MCP-OP-ADMIT-134's EARS text, and give it a witness, before "
+           "relaxing this")))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-leaf-past-the-per-fact-ceiling-is-cut-with-the-cut-stated
+  ;; At the ceiling and one past it, read from the implementation rather than
+  ;; retyped: the assertion is about behaviour AT the bound, never about the
+  ;; number.
+  (let [ceiling @#'admit/max-admit-receipt-fact-characters
+        text-of (fn [value]
+                  (#'admit/summary
+                    {:ok false :operation :admit-patch-refused :mode "preview"
+                     :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                     :source-unchanged true :long_leaf value :next_call nil}))]
+    (testing "exactly at the ceiling, the value renders whole"
+      (let [value (apply str (repeat ceiling "x"))]
+        (is (str/includes? (text-of value) (str "long_leaf=" value)))
+        (is (not (str/includes? (text-of value) "characters in structuredContent")))))
+    (testing "one character past it, the value is cut and the cut is counted"
+      (let [value (apply str (repeat (inc ceiling) "x"))
+            text (text-of value)]
+        (is (not (str/includes? text (str "long_leaf=" value)))
+            "the whole value cannot have rendered")
+        (is (str/includes? text (str "long_leaf=" (subs value 0 ceiling)
+                                     "…[+1 characters in structuredContent]"))
+            "the text names the field, what it printed, and exactly what it cut")))))
+
+;; @spec MCP-OP-ADMIT-134
+;; @spec MCP-OP-ADMIT-136
+(deftest a-receipt-past-the-fact-section-budget-names-what-it-dropped
+  ;; The last-resort elision, at the bound -- and the bound is the ONE public
+  ;; budget minus the rest of the text, computed here from the published text
+  ;; itself rather than read from a constant in the implementation.
+  ;;
+  ;; Round four asserted this against `admit-fact-section-byte-budget`, half
+  ;; of the public budget and an invented second one. There is no such var to
+  ;; read now, which is the point.
+  (let [wide (into {} (for [i (range 4000)]
+                        [(keyword (format "leaf%04d" i))
+                         (apply str (repeat 40 "y"))]))
+        result (merge {:ok false :operation :admit-patch-refused :mode "preview"
+                       :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                       :source-unchanged true :next_call nil}
+                      wide)
+        text (#'admit/summary result)
+        lines (str/split-lines text)
+        fact-line (first (filter #(str/starts-with? % "facts · ") lines))
+        elided-line (first (filter #(str/starts-with? % "facts_elided · ") lines))
+        marker (re-find #"facts_elided · (\d+) leaf\(s\)" text)
+        printed (->> (str/split (subs fact-line (count "facts · ")) #" · ")
+                     count)
+        total (count (structured-leaves result))]
+    (is (some? fact-line))
+    (is (some? elided-line)
+        (str "a receipt whose leaves cannot fit the remainder of the one "
+             "budget must say so, not stop"))
+    (is (< printed total) "some leaves were in fact elided")
+    (is (<= (count text) write-refusal/public-byte-budget)
+        (str "the WHOLE text block -- the elision note included -- stays "
+             "inside the one public budget: " (count text)))
+    (is (= (- total printed) (Integer/parseInt (second marker)))
+        (str "the stated elided count must equal this witness's own count of "
+             "leaves minus the facts actually printed: " total " - " printed))
+    (testing "and the elided leaves are NAMED, not merely counted"
+      (let [named (-> elided-line
+                      (str/split #"not above: ")
+                      second
+                      (str/split #" · "))
+            named (remove #(str/starts-with? % "[+") named)]
+        (is (seq named) "the note names at least one elided path")
+        (doseq [path (take 5 named)]
+          (is (not (str/includes? fact-line (str path "=")))
+              (str "a path named as elided is in fact rendered: " path)))))
+    (testing "and the head fields elision never reaches are all present"
+      (doseq [key @#'admit/admit-receipt-fact-head
+              :let [leaf (str (name key) "=")]
+              :when (contains? result key)]
+        (is (str/includes? fact-line leaf)
+            (str "a head field was elided: " leaf))))))
+
+;; @spec MCP-OP-ADMIT-136
+(deftest the-fact-section-is-charged-the-remainder-of-the-one-budget
+  ;; The arithmetic, stated as a behaviour: the fact walk's budget is what is
+  ;; LEFT of the public budget after the head and the verbatim next_call, and
+  ;; nothing else. Measured off the published text, with no constant shared
+  ;; with the renderer.
+  (let [result {:ok false :operation :admit-patch-refused :mode "preview"
+                :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                :source-unchanged true
+                :leaf (apply str (repeat 40 "z"))
+                :next_call {:tool "admit_clojure_patch" :blocked_by "invalid-patch"}}
+        text (#'admit/summary result)
+        lines (str/split-lines text)
+        facts (count (first (filter #(str/starts-with? % "facts · ") lines)))
+        rest-of-text (- (count text) facts 1)]
+    (is (pos? facts))
+    (is (= (- write-refusal/public-byte-budget rest-of-text)
+           (- write-refusal/public-byte-budget (- (count text) facts 1)))
+        "arithmetic identity, stated so the next line reads as a claim")
+    (is (<= facts (- write-refusal/public-byte-budget rest-of-text))
+        (str "the fact section may spend only the remainder: " facts
+             " of " (- write-refusal/public-byte-budget rest-of-text)))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 3 (MCP-OP-ADMIT-134): the SUCCESS branch was never a
+;; superset either, and the relabelled witness only checked next_call
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-successful-preview-and-commit-text-names-every-leaf-of-its-receipt
+  ;; Sol's round-three receipt, verbatim: a real two-file COMMIT carried file
+  ;; records, pre/post hashes, focused test namespaces and detectors_not_run
+  ;; [], and its text was
+  ;;
+  ;;   "admit_clojure_patch\n  admit-patch! · 2 file(s) · owners +0 ~2 -0 ·
+  ;;    drift 0 bytes · hazards 0 · 1.00 ms\nverification_complete=true
+  ;;    verification_status=complete\nnext_call · none — this receipt has no
+  ;;    follow-up call"
+  ;;
+  ;; -- :text-has-first-file false, :text-has-first-pre false,
+  ;;    :text-has-first-test false.
+  ;;
+  ;; The ok branch rendered COUNTS, not the receipt's leaves: two file(s), not
+  ;; which two; hashes 0 drift, not the digests. The round-three witness that
+  ;; called itself "really ... a superset" asserted only that next_call
+  ;; appeared. This drives the same preview and the same commit through
+  ;; execute-request! and holds the ok branch to the identical rule the
+  ;; refusal branch already obeys.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"
+                                  "test/app/util_test.clj" "(ns app.util-test)\n"))
+      (let [config (stub-config root)
+            preview (admit/execute-request!
+                      config {:patch clean-multi-file-patch :verify "focused"})]
+        (is (true? (:ok preview)))
+        (is (seq (:files preview)) "the fixture must carry file records")
+        (is (seq (:hashes preview)) "the fixture must carry pre-image digests")
+        (assert-text-names-every-structured-leaf! preview "ok-preview")
+
+        (let [commit (admit/execute-request!
+                       config {:patch clean-multi-file-patch :mode "commit"
+                               :verify "focused"
+                               :expect_pre_sha256 (get-in preview
+                                                          [:next_call :arguments
+                                                           :expect_pre_sha256])})]
+          (is (true? (:ok commit)) (str "commit refused: " (:error commit)))
+          (is (true? (:committed commit)))
+          (is (= [] (:detectors_not_run commit))
+              "the fixture must carry the empty-list shape the review named")
+          (is (seq (get-in commit [:tests :namespaces]))
+              "the fixture must carry focused test namespaces")
+          (assert-text-names-every-structured-leaf! commit "ok-commit")))
+      (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 4 (MCP-OP-ADMIT-135): a reachable next_call became
+;; non-copyable text while the description told the caller to copy it
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-135
+(defn- next-call-text
+  [call]
+  (#'admit/summary {:ok false :operation :admit-patch-refused :mode "preview"
+                    :error-type :invalid-patch :error "an error sentence"
+                    :elapsed_ms 1.0 :source-unchanged true :next_call call}))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest a-next-call-renders-verbatim-at-any-size
+  ;; Sol's round-three receipt, verbatim:
+  ;;   {:probe :next-call-bound, :padding-length 968, :encoded-length 1025,
+  ;;    :verbatim false, :pointer true}
+  ;; The tool description (mcp_admit_tool.clj:66) tells a caller to copy
+  ;; expect_pre_sha256 out of next_call. Above 1,024 characters the text
+  ;; replaced it with a pointer at structuredContent -- which a text-only
+  ;; caller, the only caller this ratchet exists for, cannot read.
+  (doseq [padding [1 2048 8192]]
+    (testing (str "padding " padding)
+      (let [call {:tool "admit_clojure_patch"
+                  :arguments {:mode "commit" :verify "focused"
+                              :expect_pre_sha256
+                              {"src/app/core.clj" (apply str (repeat padding "a"))}}}
+            encoded (json/generate-string call)
+            text (next-call-text call)]
+        (is (str/includes? text (str "next_call · " encoded))
+            (str "a " (count encoded) "-character next_call must render "
+                 "verbatim; the caller is told to copy it"))
+        (is (not (str/includes? text "in structuredContent.next_call"))
+            "no pointer may stand where the call itself belongs")))))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest an-ordinary-wide-preview-can-be-copied-out-of-its-own-text
+  ;; Sol, verbatim: "A routine 14-file preview produced 1,554 characters, so a
+  ;; text-only caller cannot perform the instructed copy/send operation. This
+  ;; is not merely a synthetic boundary case." Driven through the real
+  ;; entrance, then the JSON is parsed BACK OUT of the text and used, so the
+  ;; assertion is that the text is sendable rather than that it is long.
+  (let [root (temp-dir)
+        n 14
+        sources (into {} (for [i (range n)]
+                           [(str "src/app/m" i ".clj")
+                            (str "(ns app.m" i ")\n\n(defn f\n  [x]\n  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/src/app/m" i ".clj\n"
+                            "+++ b/src/app/m" i ".clj\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns app.m" i ")\n"
+                            " \n"
+                            " (defn f\n"
+                            "   [x]\n"
+                            "-  (inc x))\n"
+                            "+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [preview (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})
+            encoded (json/generate-string (:next_call preview))
+            text (#'admit/summary (assoc preview :elapsed_ms 1.0))]
+        (is (true? (:ok preview)) (str "preview refused: " (:error preview)))
+        (is (= n (count (:files preview))))
+        (is (> (count encoded) 1024)
+            (str "the fixture must actually exceed round three's ceiling, or "
+                 "this proves nothing; it is " (count encoded) " characters"))
+        (is (str/includes? text (str "next_call · " encoded))
+            "a routine 14-file preview's next_call must be copyable from text")
+        (testing "and what is copied out of the text is what the gate meant"
+          (let [line (->> (str/split-lines text)
+                          (filter #(str/starts-with? % "next_call · "))
+                          first)
+                ;; parsed WITHOUT keywordising: the expect_pre_sha256 keys are
+                ;; file paths, and turning "src/app/m11.clj" into a keyword is
+                ;; the witness corrupting the thing it is checking
+                recovered (json/parse-string (subs line (count "next_call · ")))]
+            (is (= (json/parse-string encoded) recovered)
+                "the JSON parsed back out of the text is the receipt's own call")
+            (is (= n (count (get-in recovered ["arguments" "expect_pre_sha256"])))
+                "every pre-image digest the commit needs survived the render"))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-139
+(deftest a-published-receipt-never-exceeds-the-number-it-calls-a-budget
+  ;; Round four's advisory 5d. At `next_call` = 32,640 characters -- exactly
+  ;; the number the refusal text calls "the public payload budget" -- the
+  ;; receipt the gate actually published was 32,911 bytes. The 271 bytes are
+  ;; the envelope: the keys, the quotes and the braces that carry the call.
+  ;; A budget a payload is allowed to exceed is not a budget, and this is the
+  ;; one field that never gives ground, so the envelope has to be counted at
+  ;; the point the refusal decides.
+  (let [budget write-refusal/public-byte-budget
+        skeleton (fn [pad] {:tool "admit_clojure_patch"
+                            :arguments {:mode "commit"
+                                        :expect_pre_sha256
+                                        {"src/app/core.clj" pad}}})
+        overhead (count (json/generate-string (skeleton "")))
+        call (fn [chars] (skeleton (apply str (repeat (- chars overhead) "a"))))
+        publish (fn [chars]
+                  (#'admit/bound-receipt
+                    {:ok true :operation :admit-patch-preview :mode "preview"
+                     :files [] :next_call (call chars)}))]
+    (is (= budget (count (json/generate-string (call budget))))
+        "the fixture builds a next_call of exactly the budget's length")
+    (testing "well under the budget, the call is published and the receipt fits"
+      (let [published (publish (- budget 2000))]
+        (is (true? (:ok published)) (str "refused: " (:error published)))
+        (is (<= (write-refusal/json-bytes published) budget))))
+    (testing "at and past the budget, nothing the gate publishes exceeds it"
+      (doseq [chars [budget (inc budget)]]
+        (let [published (publish chars)]
+          (is (<= (write-refusal/json-bytes published) budget)
+              (str "a receipt published for a " chars "-character next_call is "
+                   (write-refusal/json-bytes published) " bytes, past the "
+                   budget "-byte number the gate calls a budget"))
+          (is (false? (:ok published))
+              "a call that cannot be carried inside the budget must refuse")
+          (is (= :next-call-exceeds-public-budget (:error-type published))
+              (str "and it refuses under the oversize kind: "
+                   (pr-str (:error-type published))))
+          (is (contains? admit/admit-refusal-kinds (:error-type published))))))
+    (testing "AT the budget the call fits and the ENVELOPE is what does not"
+      ;; the exact class the review measured: the call itself is exactly the
+      ;; budget's length, and the receipt carrying it is over -- and since
+      ;; there is nothing left to reduce, the next_call is what does not fit
+      (let [published (publish budget)]
+        (is (= :next-call-exceeds-public-budget (:error-type published)))
+        (is (> (:receipt_bytes published) budget)
+            "the refusal names the size of the receipt it could not publish")
+        (is (= budget (:public_byte_budget published)))))))
+
+;; @spec MCP-OP-ADMIT-139
+(deftest a-preview-whose-receipt-cannot-fit-is-reduced-and-says-so
+  ;; The same rule through the real entrance, on the field that has no
+  ;; trimmer. `hashes` carries one entry per path and is a MAP, so the
+  ;; bounded-payload machinery -- which shortens vectors -- cannot touch it.
+  ;; Round four published this receipt whole and over the budget. It is now
+  ;; REDUCED: the bulk goes, the identity stays, and the receipt names what
+  ;; it dropped.
+  (let [root (temp-dir)
+        n 30
+        dir-a (apply str (repeat 200 "a"))
+        path (fn [i] (str "src/" dir-a "/" (apply str (repeat 200 "c")) i ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns n" i ")\n\n(defn f\n  [x]\n  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns n" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [receipt (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})]
+        (is (<= (write-refusal/json-bytes receipt)
+                write-refusal/public-byte-budget)
+            (str "the published receipt is "
+                 (write-refusal/json-bytes receipt) " bytes, past the "
+                 write-refusal/public-byte-budget "-byte budget"))
+        (is (<= (count (#'admit/summary (assoc receipt :elapsed_ms 1.0)))
+                write-refusal/public-byte-budget)
+            "and so is the text that spells it")
+        (is (true? (:receipt_reduced receipt))
+            (str "a reduced receipt must say so: " (pr-str (:error-type receipt))))
+        (is (seq (:receipt_omitted_fields receipt))
+            "and must name the fields it dropped")
+        (is (> (:receipt_bytes_before receipt)
+               write-refusal/public-byte-budget)
+            "and the size it could not have published")
+        (assert-text-names-every-structured-leaf! receipt "reduced-preview"))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-139
+(deftest a-reduced-receipt-never-loses-its-kind-or-its-safety-claim
+  ;; The regression the battery caught. A 64-file rolled-back transaction is
+  ;; the most safety-critical receipt this gate produces -- a third party
+  ;; changed the files and the recovery could not put them back -- and the
+  ;; first draft of this bound replaced it with a size complaint whose remedy
+  ;; was "use fewer files". Reduction keeps the identity; only bulk goes.
+  (let [huge (into {} (for [i (range 400)]
+                        [(str "src/very/long/path/segment/" i "/file" i ".clj")
+                         {:pre (apply str (repeat 64 "a"))
+                          :post (apply str (repeat 64 "b"))}]))
+        receipt (#'admit/bound-receipt
+                  {:ok false
+                   :operation :admit-patch-refused
+                   :mode "commit"
+                   :error-type :transaction-recovery-required
+                   :error "the rollback could not restore src/a/f000.clj"
+                   :remedy "restore src/a/f000.clj from version control"
+                   :source-unchanged false
+                   :mutation_attempted true
+                   :hashes huge})]
+    (is (= :transaction-recovery-required (:error-type receipt))
+        (str "a size bound must never relabel a refusal: "
+             (pr-str (:error-type receipt))))
+    (is (false? (:source-unchanged receipt))
+        "nor lose the claim that the workspace WAS changed")
+    (is (true? (:mutation_attempted receipt)))
+    (is (str/includes? (str (:remedy receipt)) "version control")
+        "nor replace the remedy with one about payload size")
+    (is (true? (:receipt_reduced receipt)))
+    (is (some #{"hashes"} (:receipt_omitted_fields receipt))
+        (str "the bulk is what goes: "
+             (pr-str (:receipt_omitted_fields receipt))))
+    (is (<= (write-refusal/json-bytes receipt)
+            write-refusal/public-byte-budget))))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest a-next-call-that-alone-exceeds-the-public-budget-is-a-typed-refusal
+  ;; The other end of the rule. If the call genuinely cannot be published,
+  ;; the honest answer is a refusal naming the size and the budget -- never a
+  ;; pointer, which is the same failure one level down: a text-only client has
+  ;; no structuredContent to be pointed at.
+  (let [budget write-refusal/public-byte-budget
+        huge {:tool "admit_clojure_patch"
+              :arguments {:mode "commit"
+                          :expect_pre_sha256
+                          {"src/app/core.clj" (apply str (repeat (inc budget) "a"))}}}
+        published (#'admit/bound-receipt
+                    {:ok true :operation :admit-patch-preview :mode "preview"
+                     :files [] :next_call huge})]
+    (is (false? (:ok published))
+        "a next_call the budget cannot carry must refuse, not publish")
+    (is (= :next-call-exceeds-public-budget (:error-type published)))
+    (is (str/includes? (str (:error published)) (str (count (json/generate-string huge))))
+        "the refusal names the exact size")
+    (is (str/includes? (str (:error published)) (str budget))
+        "and the budget that would have to change")
+    (is (some? (:remedy published)) "and what the caller can do about it")))
+
+;; @spec MCP-OP-ADMIT-135
+(deftest the-next-call-is-the-last-thing-a-crowded-receipt-gives-up
+  ;; The stated elision order. Other leaves elide first; the next_call is
+  ;; rendered after them and never elided.
+  (let [call {:tool "admit_clojure_patch"
+              :arguments {:mode "commit" :verify "focused"
+                          :expect_pre_sha256
+                          {"src/app/core.clj" (apply str (repeat 2000 "a"))}}}
+        encoded (json/generate-string call)
+        crowded (merge {:ok false :operation :admit-patch-refused :mode "preview"
+                        :error-type :invalid-patch :error "e" :elapsed_ms 1.0
+                        :source-unchanged true :next_call call}
+                       (into {} (for [i (range 4000)]
+                                  [(keyword (format "leaf%04d" i))
+                                   (apply str (repeat 40 "y"))])))
+        text (#'admit/summary crowded)]
+    (is (str/includes? text "facts_elided · ")
+        "the fixture must actually be over the fact section's remainder")
+    (is (str/includes? text (str "next_call · " encoded))
+        (str "the next_call is rendered last and never elided; everything "
+             "else gives ground before it does"))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 1 (MCP-OP-ADMIT-133): the refusal enumeration was
+;; derived by SCANNING SOURCE, and a kind built dynamically left it green
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private observed-refusal-kinds
+  "Every `:error-type` the admit entrance actually published during this
+  namespace's run.
+
+  Round three enumerated the gate's refusal kinds by reading five source
+  files for literal shapes. That derivation was already wrong -- it missed
+  `:workspace-lock-unavailable`, which this suite drives live -- and it was
+  wrong in a way no witness could detect, because a kind built dynamically
+  has no literal to scan for. The reviewer planted exactly such a kind and
+  both enumeration witnesses stayed green.
+
+  So the enumeration is derived from EXECUTION instead. The recording point
+  is the gate's own refusal constructor, which every published receipt passes
+  through, and the driver is this whole suite: every kind any of its tests
+  provokes is seen, including the ones no fixture was written for on
+  purpose."
+  (atom #{}))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private ^:dynamic *inside-the-entrance* false)
+
+;; @spec MCP-OP-ADMIT-138
+(def ^:private battery-only-refusal-kinds
+  "Kinds proved by a battery target rather than by this suite, each mapped to
+  the target that proves it.
+
+  The exemption names its own evidence. An enumerated kind no fixture drives
+  is normally a failure -- nothing proves it exists or that its text is a
+  superset -- and the answer to a kind whose only fixture is a TIMING bound is
+  not to excuse it but to move the proof somewhere a timing bound belongs.
+  `transaction-recovery-required` needs a third party to change a file inside
+  the window between a transaction's write and its rollback, which a single
+  thread cannot do; the fixture widens that window with a busy-spinning
+  watcher against a 64-file write. That is a battery, not a merge gate, and
+  while it lived here a flake in it would have reported `the enumeration
+  claims kinds no fixture drives` and taken the enumeration proof down for an
+  unrelated reason."
+  {:transaction-recovery-required "make admit-transaction-recovery-battery"})
+
+;; @spec MCP-OP-ADMIT-138
+(deftest a-battery-only-kind-names-a-target-that-exists-and-drives-it
+  ;; The exemption is only as good as the evidence it points at.
+  (doseq [[kind target] battery-only-refusal-kinds]
+    (is (contains? admit/admit-refusal-kinds kind)
+        (str "a battery-only kind must still be enumerated: " kind))
+    (let [script (io/file "test/admit_transaction_recovery_battery.clj")
+          makefile (io/file "Makefile")
+          target-name (str/replace target #"^make " "")]
+      (is (.exists script)
+          (str "the battery target's script is missing: " (.getPath script)))
+      (is (str/includes? (slurp script) (name kind))
+          (str "the battery script never names the kind it is excused for: "
+               kind))
+      ;; @spec MCP-OP-ADMIT-138
+      ;; The line above proves the FILE MENTIONS the kind, which a comment
+      ;; satisfies. Execution is what the exemption actually claims, so the
+      ;; battery writes a receipt naming the kinds it published and this
+      ;; reads it. An ABSENT receipt is a named precondition rather than a
+      ;; silent pass or an ambient red: this suite does not own that fixture
+      ;; and must not redden on a fresh clone for a reason unrelated to the
+      ;; gate. A receipt that is PRESENT and contradicts the exemption is a
+      ;; loud failure.
+      ;; @spec MCP-OP-ADMIT-147
+      ;; @spec MCP-OP-ADMIT-150
+      ;; The precondition is COUNTED, not a println and not a failure. Round
+      ;; six measured what stdout costs: `clj-surgeon.admit-patch-test` ran
+      ;; 4,141 assertions on a clone with no battery receipt and 4,143 on a
+      ;; machine that had run the battery, so the exemption silently rested
+      ;; on the structural checks alone and the only notice was one line
+      ;; inside a suite that prints thousands. Round seven made it three
+      ;; failing assertions, and the reviewer ruled THAT blocking for the
+      ;; opposite reason: this suite does not OWN the receipt, so a fresh
+      ;; clone went red on `clojure -M:clj-surgeon/mcp-test` for a reason
+      ;; unrelated to the gate and the claimed merge gate could not be
+      ;; reproduced from the tip. Both readings are satisfied by a named,
+      ;; counted, visibly non-zero SKIP -- printed by the summary line, never
+      ;; by this test -- spending the SAME number of assertions in both
+      ;; states, with `make test` owning the battery so the bucket is zero on
+      ;; the lane that claims the proof.
+      ;; @spec MCP-OP-ADMIT-152
+      ;; THREE states, not two. The declared arm list comes from the battery
+      ;; SCRIPT, so a receipt cannot shrink its own subject: a receipt is
+      ;; satisfied only when it records that every arm the script declares
+      ;; passed. Absent is the counted skip; present-and-incomplete is a
+      ;; counted FAILURE.
+      (let [declared-arms (let [m (re-find #"\(def arms \[([^\]]*)\]\)"
+                                           (slurp script))]
+                            (when m
+                              (mapv #(Long/parseLong %)
+                                    (re-seq #"\d+" (second m)))))]
+        (is (seq declared-arms)
+            (str "the battery script does not declare its arms, so no receipt"
+                 " can be checked against them: " (.getPath script)))
+        (check-battery-precondition!
+          (io/file "target/admit-transaction-recovery-battery-receipt.edn")
+          kind target declared-arms))
+      (is (str/includes? (slurp makefile) (str "\n" target-name ":"))
+          (str "the Makefile has no such target: " target))
+      (is (not (str/includes? (slurp makefile)
+                              (str "mcp-test: " target-name)))
+          "a battery target must not be wired into the fast gate")
+      ;; @spec MCP-OP-ADMIT-150
+      ;; A skip bucket is only honest if SOME lane drives it to zero. The
+      ;; battery stays out of the fast gate (the assertion above), so the
+      ;; merge lane that claims the whole proof must run it: the exemption
+      ;; names its evidence, and this names the lane that produces it.
+      (let [recipe (second (re-find #"(?m)^test:\n((?:\t.*\n)+)"
+                                    (slurp makefile)))]
+        (is (some? recipe)
+            "the Makefile has no `test:` recipe to own the battery")
+        (is (str/includes? (str recipe) target-name)
+            (str "`make test` does not run " target
+                 " · nothing in the repository drives the skip bucket"
+                 " to zero, so the exemption rests on a fixture no lane owns"
+                 " · recipe: " (pr-str recipe)))))))
+
+;; @spec MCP-OP-ADMIT-152
+(defn- drive-precondition-state!
+  "Run `check-battery-precondition!` on `content` in complete isolation.
+
+  Isolated deliberately: the reports it emits are CAPTURED rather than reported
+  (a witness of a red state must not redden the run that witnesses it), its
+  report counters are bound to a throwaway ref, and both buckets are restored
+  afterwards. Returns the state, the captured reports and the bucket entries
+  the call added -- so this drives the exact function the fast lane runs, not a
+  re-implementation of its decision."
+  [content]
+  (let [root (temp-dir)
+        receipt (io/file root "admit-transaction-recovery-battery-receipt.edn")
+        skips-before @precondition-skips
+        failures-before @precondition-failures]
+    (try
+      (when (some? content)
+        (io/make-parents receipt)
+        (spit receipt (if (string? content) content (pr-str content))))
+      (let [reports (atom [])
+            state (binding [t/*report-counters* (ref t/*initial-report-counters*)]
+                    (with-redefs [t/do-report (fn [m] (swap! reports conj m))]
+                      (check-battery-precondition!
+                        receipt
+                        :transaction-recovery-required
+                        "make admit-transaction-recovery-battery"
+                        [8 32 64])))]
+        {:state state
+         :reports @reports
+         :failures (vec (drop (count failures-before) @precondition-failures))
+         :skips (vec (drop (count skips-before) @precondition-skips))})
+      (finally
+        (reset! precondition-skips skips-before)
+        (reset! precondition-failures failures-before)
+        (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-152
+(deftest a-receipt-from-a-failed-battery-is-a-failed-precondition-not-a-green
+  ;; Round nine's reviewer forced ONLY the n=8 arm red. The battery exited 2,
+  ;; wrote this receipt anyway, and the complete fast lane then ran
+  ;; 762/10553/0 and printed `0 preconditions skipped`, exit 0. The red
+  ;; battery's archive suppressed the very skip a fresh clone prints.
+  (let [round-nine-red {:target "make admit-transaction-recovery-battery"
+                        :script "test/admit_transaction_recovery_battery.clj"
+                        :at "2026-09-04T14:50:20.257007318Z"
+                        :arms [8 32 64]
+                        :arms-passed 2
+                        :kinds-published #{:transaction-recovery-required}}
+        complete {:target "make admit-transaction-recovery-battery"
+                  :script "test/admit_transaction_recovery_battery.clj"
+                  :at "2026-09-04T15:00:00.000000000Z"
+                  :arms [8 32 64]
+                  :arms-passed 3
+                  :arm-verdicts {8 true 32 true 64 true}
+                  :failed-arms []
+                  :verdict :passed
+                  :kinds-published #{:transaction-recovery-required}}
+        failed-shape (assoc complete
+                            :arms-passed 2
+                            :arm-verdicts {8 false 32 true 64 true}
+                            :failed-arms [8]
+                            :verdict :failed)
+        fail-count (fn [reports] (count (filter #(= :fail (:type %)) reports)))
+        pass-count (fn [reports] (count (filter #(= :pass (:type %)) reports)))]
+
+    (testing "absent · the counted skip, never red"
+      (let [{:keys [state reports skips failures]} (drive-precondition-state! nil)]
+        (is (= :absent state))
+        (is (zero? (fail-count reports))
+            "an absent receipt is a skip, not a failure")
+        (is (= 1 (count skips)) "exactly one skip was recorded")
+        (is (empty? failures))))
+
+    (testing "complete · satisfied, no skip and no failure"
+      (let [{:keys [state reports skips failures]} (drive-precondition-state! complete)]
+        (is (= :satisfied state))
+        (is (zero? (fail-count reports)))
+        (is (empty? skips) "a complete receipt clears the bucket")
+        (is (empty? failures))))
+
+    (testing "round nine's red receipt · FAILED, red, and NOT a skip"
+      (let [{:keys [state reports skips failures]}
+            (drive-precondition-state! round-nine-red)]
+        (is (= :failed state)
+            (str "a receipt from a battery that failed 2/3 arms must not"
+                 " satisfy the precondition: " (pr-str round-nine-red)))
+        (is (pos? (fail-count reports))
+            "a present-but-incomplete receipt must make the lane RED")
+        (is (empty? skips)
+            "a failed precondition must never be reported as a skip")
+        (is (= 1 (count failures))
+            "the failure is recorded once in its own counted bucket")
+        (is (str/includes? (str (first failures)) "make admit-transaction-recovery-battery")
+            (str "the failure must name the command that clears it: "
+                 (pr-str failures)))))
+
+    (testing "the fixed battery's FAILED receipt names its failing arm"
+      (let [{:keys [state failures]} (drive-precondition-state! failed-shape)]
+        (is (= :failed state))
+        (is (str/includes? (str (first failures)) "[8]")
+            (str "the failure must name the arm that failed: "
+                 (pr-str failures)))))
+
+    (testing "a receipt cannot shrink its own subject"
+      (doseq [[label record]
+              [["fewer arms than the script declares"
+                (assoc complete :arms [8] :arm-verdicts {8 true} :arms-passed 1)]
+               ["no per-arm verdicts at all"
+                (dissoc complete :arm-verdicts)]
+               ["an empty arm list"
+                (assoc complete :arms [] :arm-verdicts {} :arms-passed 0)]
+               ["a verdict that contradicts its own arms"
+                (assoc complete :arm-verdicts {8 false 32 true 64 true})]
+               ["arms-passed that contradicts its own arms"
+                (assoc complete :arms-passed 2)]]]
+        (testing label
+          (let [{:keys [state failures]} (drive-precondition-state! record)]
+            (is (= :failed state)
+                (str "a receipt with " label " must not satisfy the"
+                     " precondition: " (pr-str record)))
+            (is (= 1 (count failures)))))))
+
+    (testing "an unreadable receipt is FAILED, never satisfied and never absent"
+      (let [{:keys [state failures]} (drive-precondition-state! "{:arms [8 32")]
+        (is (= :failed state))
+        (is (= 1 (count failures)))))
+
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Sol, round eleven: a mixed-type arm-key attack fails closed but ESCAPES
+    ;; the promised bucket. `{"8" true, 32 true, 64 true}` differs from the
+    ;; script's declared `[8 32 64]`, so `classify-battery-receipt` correctly
+    ;; takes the "receipt cannot shrink its own subject" branch -- and that
+    ;; branch built its reason with `(sort (keys verdicts))`. Clojure's `sort`
+    ;; calls `compare` pairwise, and `compare` throws `ClassCastException` on
+    ;; a `String` against a `Long`, so the classifier itself threw BEFORE
+    ;; `fail-precondition!` ever ran: no entry in `precondition-failures`, no
+    ;; printed clearing command, and the exception propagates out of
+    ;; `check-battery-precondition!` as an ordinary test ERROR rather than the
+    ;; promised typed :failed state. The classifier must be TOTAL: every
+    ;; shape that reaches it, however malformed, is either :satisfied or
+    ;; :failed, and never throws.
+    (testing "mixed-type arm keys fail closed WITHOUT escaping the failed bucket"
+      (doseq [[label record]
+              [["the exact mixed-key attack: a string key beside long keys"
+                (assoc complete :arm-verdicts {"8" true 32 true 64 true})]
+               ["a nil key beside long keys"
+                (assoc complete :arm-verdicts {nil true 32 true 64 true})]
+               ["a keyword key beside long keys"
+                (assoc complete :arm-verdicts {:8 true 32 true 64 true})]
+               ["a string arm list instead of the declared longs"
+                (assoc complete
+                       :arms ["8" "32" "64"]
+                       :arm-verdicts {"8" true "32" true "64" true})]
+               ["arm-verdicts as a vector instead of a map"
+                (assoc complete :arm-verdicts [true true true])]
+               ["arms as a set instead of a vector"
+                (assoc complete
+                       :arms #{8 32 64 99}
+                       :arm-verdicts {8 true 32 true 64 true 99 true})]]]
+        (testing label
+          (let [{:keys [state failures]} (drive-precondition-state! record)]
+            (is (= :failed state)
+                (str "a receipt with " label " must classify as :failed,"
+                     " never throw: " (pr-str record)))
+            (is (= 1 (count failures))
+                (str "the failure must land in the counted bucket, not"
+                     " escape as an uncaught exception: " (pr-str record)))))))
+
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Round thirteen (hardening): the receipt was read with
+    ;; `clojure.core/read-string`, which leaves `*read-eval*` ON -- a receipt
+    ;; beginning `#=(...)` is EVALUATED by the reader during classification,
+    ;; inside the gate. `clojure.edn/read-string` never evaluates; an
+    ;; unsupported dispatch macro is a parse failure, same shape as any other
+    ;; unreadable receipt.
+    ;; Round fourteen's finding 2, closed by ORDER. This case must run
+    ;; BEFORE the 60,000-deep nesting case below it: at the RED commit
+    ;; 98c2eb55 the nesting case throws a `StackOverflowError` past
+    ;; `(catch Exception e)`, which `clojure.test` records as one `:error`
+    ;; and which ABORTS the rest of the `deftest` -- so the read-eval case
+    ;; never executed there, and the RED commit exited 1 for two unrelated
+    ;; sites rather than 3 for this one. A witness that a later case can
+    ;; prevent from running is not a witness for the hazard it names.
+    (testing "a #= form in a receipt must not execute, and must classify :failed"
+      (let [{:keys [state failures]}
+            (drive-precondition-state! "#=(java.lang.System/exit 3)")]
+        ;; Reaching this assertion at all is part of the proof: if the form
+        ;; had been evaluated, System/exit would have ended the JVM and no
+        ;; assertion below it would ever run.
+        (is (= :failed state))
+        (is (= 1 (count failures)))
+        (is (str/includes? (str (first failures)) "could not be read")
+            (str "the reason must name the parse failure, not silently drop"
+                 " the form: " (pr-str failures)))))
+
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Round eleven (Opus, finding 3): the classifier has FIVE ways to exit
+    ;; that are none of its three states -- ABSENT, SATISFIED or FAILED.
+    ;; Round twelve wrapped `classify-battery-receipt*` in `(catch Throwable
+    ;; e ...)` and replaced both bare `sort` sites with `sort-by pr-str`.
+    ;; Re-verified here against the exact production function, case by case:
+    ;; the mixed-key sorts and a non-seqable `:arms` are already closed by
+    ;; that wrap; a malformed `:kinds-published` and a reader overflow are
+    ;; NOT, because both happen outside `classify-battery-receipt*` itself
+    ;; -- the first in `check-battery-precondition!`'s `:satisfied` branch,
+    ;; after the state has already been decided, and the second in the
+    ;; `read-string`/`slurp` step that builds `record` before classification
+    ;; is even called.
+    (testing "round eleven's five escape sites, re-verified at the round-twelve tip"
+      (testing "sites :106/:136 -- mixed-type arm keys -- CLOSED by sort-by pr-str"
+        (let [{:keys [state failures]}
+              (drive-precondition-state!
+               (assoc complete :arm-verdicts {"8" true 32 true 64 true}))]
+          (is (= :failed state)
+              "a mixed-type-key receipt must classify :failed, never throw")
+          (is (= 1 (count failures)))))
+
+      (testing "site :122 -- a keyword :arms is not seqable -- CLOSED by the outer catch Throwable"
+        (let [{:keys [state failures]}
+              (drive-precondition-state! (assoc complete :arms :bogus))]
+          (is (= :failed state)
+              "a non-seqable :arms must classify :failed, never throw")
+          (is (= 1 (count failures)))))
+
+      (testing "site :122 -- a string :arms is seqable but still a shrunken subject -- fails closed"
+        (let [{:keys [state failures]}
+              (drive-precondition-state! (assoc complete :arms "8-32-64"))]
+          (is (= :failed state))
+          (is (= 1 (count failures)))))
+
+      (testing "site :174 -- a number as :kinds-published must not classify :satisfied and then throw"
+        ;; Every OTHER field the record must carry to reach :satisfied is
+        ;; intact; only :kinds-published is malformed. Pre-fix, the
+        ;; classifier itself returns {:state :satisfied} (nothing here
+        ;; validates :kinds-published), and the throw happens one layer up
+        ;; when check-battery-precondition!'s :satisfied branch calls
+        ;; `(set (:kinds-published record))` -- outside every catch.
+        (let [{:keys [state failures]}
+              (drive-precondition-state! (assoc complete :kinds-published 7))]
+          (is (= :failed state)
+              "a receipt that cannot name the kinds it published must not satisfy the precondition")
+          (is (= 1 (count failures))
+              "the failure must land in the counted bucket, not escape as an uncaught exception")))
+
+      (testing "site :166 -- a deeply nested receipt overflows the reader -- must classify :failed, not crash the run"
+        (let [deep (str (apply str (repeat 60000 "[")) (apply str (repeat 60000 "]")))
+              {:keys [state failures]} (drive-precondition-state! deep)]
+          (is (= :failed state))
+          (is (= 1 (count failures))))))
+
+    ;; @spec MCP-OP-ADMIT-152
+    ;; Round thirteen: the ABSENT test was BY VALUE (`(nil? record)`), not by
+    ;; EXISTENCE. A file that exists but reads as `nil` took the fresh-clone
+    ;; skip and printed "no battery receipt at ..." about a file that is
+    ;; right there on disk -- the only shape in round eleven's review that
+    ;; ended exit 0. Absent must mean the file does not exist; a present file
+    ;; that reads as nil falls through to the ordinary "not a map" FAILED
+    ;; reason, same as any other non-map content.
+    (testing "a receipt that EXISTS but reads as nil is FAILED, never the absent skip"
+      (let [{:keys [state failures skips]} (drive-precondition-state! "nil")]
+        (is (= :failed state)
+            "a present file reading as nil must not take the absent skip")
+        (is (empty? skips)
+            "a present file must never be counted in the skip bucket")
+        (is (= 1 (count failures)))
+        (is (str/includes? (str (first failures)) "not a map")
+            (str "the reason must say the receipt is not a map, not that it"
+                 " is absent: " (pr-str failures)))))
+
+    (testing "every state spends the same number of assertions"
+      (let [counts (mapv (fn [content]
+                           (let [{:keys [reports]} (drive-precondition-state! content)]
+                             (+ (fail-count reports) (pass-count reports))))
+                         [nil complete round-nine-red])]
+        (is (apply = counts)
+            (str "the assertion count must not reveal which machine ran the"
+                 " battery (MCP-OP-ADMIT-147): " (pr-str counts)))))))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- posix-permissions!
+  [^java.io.File file spec]
+  (Files/setPosixFilePermissions (.toPath file)
+                                 (PosixFilePermissions/fromString spec)))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private a-file-can-be-made-unreadable-here
+  "Whether THIS process can be denied read on a file it owns.
+
+  Round fifteen added `:source-not-readable` to the enumeration at the merge
+  with the census landing, and the enumeration's rule is that a member
+  nothing DRIVES is a claim no fixture supports. The driver is `chmod 000`,
+  and `chmod 000` does not deny ROOT: under uid 0 `Files/isReadable` stays
+  true and the entrance resolves the file normally, so the fixture would
+  quietly fail to provoke the kind and the completeness proof would redden
+  for a reason that has nothing to do with the gate.
+
+  So the capability is MEASURED, once, by doing the thing -- not inferred
+  from `user.name`, which a container can make say anything. When it does not
+  hold, the kind is excused exactly the way a battery-only kind is: named,
+  counted in the summary's skipped bucket, and subtracted from the set
+  equality rather than silently tolerated inside it."
+  (delay
+    (let [root (temp-dir)
+          probe (io/file root "probe.clj")]
+      (try
+        (spit probe "(ns probe)\n")
+        (posix-permissions! probe "---------")
+        (not (Files/isReadable (.toPath probe)))
+        (catch Throwable _ false)
+        (finally
+          (try (posix-permissions! probe "rw-------") (catch Throwable _ nil))
+          (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private permission-driven-refusal-kinds
+  "Kinds whose only driver is a denied read."
+  #{:source-not-readable})
+
+;; @spec MCP-OP-ADMIT-133
+(defn- kinds-excused-from-the-enumeration
+  "Battery-only kinds, plus any kind this machine cannot be denied."
+  []
+  (into (set (keys battery-only-refusal-kinds))
+        (when-not @a-file-can-be-made-unreadable-here
+          (skip-precondition!
+            (str "this process cannot be denied read on a file it owns"
+                 " (running as root?), so " (pr-str permission-driven-refusal-kinds)
+                 " has no driver here · re-run this suite as an unprivileged"
+                 " user to prove those kinds by execution"))
+          permission-driven-refusal-kinds)))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- record-and-check-refusal-kinds
+  "Record at the gate's own refusal constructor, which is the one point every
+  published refusal passes -- `bound-receipt` for everything
+  `execute-request!` returns, and the handler's edge for the three kinds only
+  the MCP surface can produce."
+  [run-tests!]
+  (reset! observed-refusal-kinds #{})
+  (let [guard admit/checked-refusal-kind!
+        execute admit/execute-request!
+        handle admit/handle-admit-clojure-patch]
+    (with-redefs [;; recorded only while a call is genuinely inside one of
+                  ;; the two public entrances -- a witness that calls the
+                  ;; guard directly to prove it rejects a planted kind must
+                  ;; not thereby report that kind as something the gate
+                  ;; produces
+                  admit/checked-refusal-kind!
+                  (fn [receipt]
+                    ;; @spec MCP-OP-ADMIT-137
+                    ;; the same predicate the guard uses, so the recorder
+                    ;; cannot see a narrower set of refusals than the guard
+                    ;; checks
+                    (when (and *inside-the-entrance*
+                               (map? receipt) (not (true? (:ok receipt))))
+                      (swap! observed-refusal-kinds conj (:error-type receipt)))
+                    (guard receipt))
+                  admit/execute-request!
+                  (fn [& args]
+                    (binding [*inside-the-entrance* true] (apply execute args)))
+                  admit/handle-admit-clojure-patch
+                  (fn [& args]
+                    (binding [*inside-the-entrance* true] (apply handle args)))]
+      (run-tests!)))
+  (testing "MCP-OP-ADMIT-133: the enumeration is the set the entrance produces"
+    (let [observed @observed-refusal-kinds
+          enumerated admit/admit-refusal-kinds
+          ;; @spec MCP-OP-ADMIT-138
+          ;; The battery-only excuses, plus a kind this machine is incapable
+          ;; of driving -- computed by execution, recorded in the skipped
+          ;; bucket, never assumed.
+          excused (kinds-excused-from-the-enumeration)]
+      (is (seq observed) "the suite drove no refusal at all; the driver is broken")
+      (is (empty? (set/difference observed enumerated))
+          (str "the entrance published kinds the enumeration has never heard "
+               "of: " (pr-str (set/difference observed enumerated))))
+      ;; @spec MCP-OP-ADMIT-138
+      (is (empty? (set/difference enumerated observed excused))
+          (str "the enumeration claims kinds no fixture drives and no battery "
+               "target proves, so nothing shows they exist or that their text "
+               "is a superset: "
+               (pr-str (set/difference enumerated observed excused))))
+      (is (empty? (set/intersection observed excused))
+          (str "a kind this suite DOES drive is excused to a battery or to a "
+               "missing capability; delete the excuse rather than carrying "
+               "it: " (pr-str (set/intersection observed excused))))
+      (is (= enumerated (into observed excused))
+          (str "enumerated " (count enumerated) ", observed " (count observed)
+               ", battery-only " (count battery-only-refusal-kinds)
+               ", excused " (count excused))))))
+
+(use-fixtures :once record-and-check-refusal-kinds)
+
+;; ---------------------------------------------------------------------------
+;; MCP-OP-ADMIT-133: one live fixture per enumerated kind the rest of this
+;; suite does not already provoke. Each drives the real entrance; the :once
+;; fixture above records what it produced and holds the enumeration to it.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-133
+(defn- refusal-kind-of
+  [root sources params & [overrides]]
+  (write-sources! root sources)
+  (let [receipt (admit/execute-request! (stub-config root overrides) params)]
+    (is (false? (:ok receipt))
+        (str "fixture did not refuse; it returned " (pr-str (:error-type receipt))))
+    (:error-type receipt)))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-invalid-workspace-root-refuses-at-the-router
+  (let [root (temp-dir)]
+    (try
+      (is (= :invalid-workspace-root
+             (refusal-kind-of root base-sources
+                              {:patch clean-multi-file-patch :verify "focused"
+                               :workspace_root "relative/not/canonical"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-binary-patch-is-refused-as-unsupported
+  (let [root (temp-dir)]
+    (try
+      (is (= :binary-patch-unsupported
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "diff --git a/src/app/core.clj b/src/app/core.clj\n"
+                            "index 0000000..1111111 100644\n"
+                            "Binary files a/src/app/core.clj and "
+                            "b/src/app/core.clj differ\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest two-hunks-that-overlap-refuse-before-anything-is-applied
+  ;; Out-of-order unified hunks: the second declares a :pre-start behind the
+  ;; cursor the first left, which is the shape locate-hunk refuses.
+  (let [root (temp-dir)]
+    (try
+      (is (= :overlapping-hunks
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "--- a/src/app/core.clj\n"
+                            "+++ b/src/app/core.clj\n"
+                            "@@ -9,2 +9,2 @@\n"
+                            " (defn label\n"
+                            "-  [state]\n"
+                            "+  [state ]\n"
+                            "@@ -5,2 +5,2 @@\n"
+                            " (defn handle-tick\n"
+                            "-  [state]\n"
+                            "+  [state  ]\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-source-path-that-is-a-directory-is-not-a-regular-file
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (.mkdirs (io/file root "src/app/dir.clj"))
+      (is (= :source-not-regular-file
+             (refusal-kind-of
+               root {}
+               {:patch (str "--- a/src/app/dir.clj\n"
+                            "+++ b/src/app/dir.clj\n"
+                            "@@ -1,1 +1,1 @@\n"
+                            "-(ns app.dir)\n"
+                            "+(ns app.dir2)\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-creation-whose-parent-is-a-regular-file-refuses
+  (let [root (temp-dir)]
+    (try
+      (is (= :target-parent-not-directory
+             (refusal-kind-of
+               root base-sources
+               {:patch (str "--- /dev/null\n"
+                            "+++ b/src/app/core.clj/child.clj\n"
+                            "@@ -0,0 +1,1 @@\n"
+                            "+(ns app.child)\n")
+                :verify "none"})))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-source-path-under-a-regular-file-is-a-source-file-not-found
+  ;; Round fifteen, AT THE MERGE with the census landing. Until then this was
+  ;; `a-source-path-under-a-regular-file-is-an-invalid-source-path`, and it
+  ;; was the only fixture in the suite that drove `:invalid-source-path`:
+  ;; ENOTDIR from `.toRealPath` is a `FileSystemException` and not the
+  ;; `NoSuchFileException` the not-found catch used to take, so it fell
+  ;; through to the `:else` arm.
+  ;;
+  ;; The trunk's containment work asks the whole `FileSystemException`
+  ;; HIERARCHY now and publishes `:source-file-not-found` for every member of
+  ;; it -- "a path that does not resolve to a file" -- which is the same fact
+  ;; the CLI entrance already reported about this shape, and the point of the
+  ;; change was that the two entrances had disagreed. The witness follows the
+  ;; entrance rather than pinning the answer it used to give; what it still
+  ;; refuses to accept is an UNENUMERATED kind.
+  (let [root (temp-dir)]
+    (try
+      (let [kind (refusal-kind-of
+                   root base-sources
+                   {:patch (str "--- a/src/app/core.clj/child.clj\n"
+                                "+++ b/src/app/core.clj/child.clj\n"
+                                "@@ -1,1 +1,1 @@\n"
+                                "-(ns app.child)\n"
+                                "+(ns app.child2)\n")
+                    :verify "none"})]
+        (is (= :source-file-not-found kind))
+        (is (contains? admit/admit-refusal-kinds kind)))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest no-filesystem-shape-reaches-invalid-source-path
+  ;; The witness the excuse rests on. `:invalid-source-path` left the
+  ;; enumeration at round fifteen's merge because nothing drives it any
+  ;; more, and "nothing drives it" is a claim that has to be DRIVEN rather
+  ;; than argued: an excuse nobody tests is how a kind rots into the set in
+  ;; the first place.
+  ;;
+  ;; `resolve-source-path` reaches its `:else` arm only for a throw out of
+  ;; `.toRealPath` that is neither `NoSuchFileException`,
+  ;; `AccessDeniedException` nor any other `FileSystemException`. Every
+  ;; filesystem shape that can make that call throw is driven below, through
+  ;; the real entrance, and each is claimed by a typed arm ABOVE the
+  ;; `:else`. The one remaining class, `InvalidPathException` for a NUL, is
+  ;; refused lexically before any I/O.
+  (let [root (temp-dir)
+        edit (fn [relative]
+               (str "--- a/" relative "\n"
+                    "+++ b/" relative "\n"
+                    "@@ -1,1 +1,1 @@\n"
+                    "-(ns app.child)\n"
+                    "+(ns app.child2)\n"))
+        drive (fn [relative]
+                (refusal-kind-of root {} {:patch (edit relative)
+                                          :verify "none"}))]
+    (try
+      (write-sources! root base-sources)
+      ;; a symlink loop and a name past NAME_MAX: both are
+      ;; `FileSystemException`, neither is `NoSuchFileException`, and before
+      ;; the trunk's change both fell to the `:else` arm this test exists for
+      (let [a (io/file root "src/app/loopa.clj")
+            b (io/file root "src/app/loopb.clj")]
+        (Files/createSymbolicLink (.toPath a) (.toPath b)
+                                  (make-array FileAttribute 0))
+        (Files/createSymbolicLink (.toPath b) (.toPath a)
+                                  (make-array FileAttribute 0)))
+      (doseq [[label relative]
+              [["a source path under a regular file (ENOTDIR)"
+                "src/app/core.clj/child.clj"]
+               ["a symlink loop (ELOOP)" "src/app/loopa.clj"]
+               ["a name past NAME_MAX (ENAMETOOLONG)"
+                (str "src/app/" (apply str (repeat 300 "x")) ".clj")]
+               ["a source that is simply absent" "src/app/nope.clj"]]]
+        (let [kind (drive relative)]
+          (is (not= :invalid-source-path kind)
+              (str label " reached the :else arm: " (pr-str kind)))
+          (is (contains? admit/admit-refusal-kinds kind)
+              (str label " published an unenumerated kind: " (pr-str kind)))))
+      ;; the only class that could still reach the `:else` arm never gets
+      ;; near the filesystem: it is refused by the lexical half of
+      ;; confinement, which performs no I/O at all
+      (is (not (mcp-paths/relative-source-path?
+                 (str "src/app/co" (char 0) "re.clj")))
+          (str "a NUL path must be refused lexically, before .toRealPath"
+               " can throw InvalidPathException"))
+      (is (not (contains? admit/admit-refusal-kinds :invalid-source-path))
+          "the kind is excused as unreachable; it must not also be enumerated")
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-unreadable-source-refuses-as-source-not-readable
+  ;; Round fifteen, at the merge. The census landing added
+  ;; `:source-not-readable` at two sites of `resolve-source-path`: the file's
+  ;; own bits deny read (`Files/isReadable` false, asked after regularity so
+  ;; a directory is still reported as a directory), and a DIRECTORY above it
+  ;; denies read, which makes `.toRealPath` throw `AccessDeniedException` on
+  ;; the way through the parent.
+  ;;
+  ;; Both are driven here, through the real entrance, with `chmod 000` --
+  ;; enumerated because it is provoked, not because the trunk constructs it.
+  ;; A machine that cannot deny itself a read records a named precondition
+  ;; instead (see `a-file-can-be-made-unreadable-here`); it never passes
+  ;; quietly.
+  (if-not @a-file-can-be-made-unreadable-here
+    (is (seq @precondition-skips)
+        "an undrivable kind must be recorded in the skipped bucket")
+    (let [edit (fn [relative]
+                 (str "--- a/" relative "\n"
+                      "+++ b/" relative "\n"
+                      "@@ -1,1 +1,1 @@\n"
+                      "-(ns app.locked)\n"
+                      "+(ns app.locked2)\n"))]
+      (testing "the source file's own bits deny read"
+        (let [root (temp-dir)
+              locked (io/file root "src/app/locked.clj")]
+          (try
+            (write-sources! root (assoc base-sources
+                                        "src/app/locked.clj"
+                                        "(ns app.locked)\n"))
+            (posix-permissions! locked "---------")
+            (is (= :source-not-readable
+                   (refusal-kind-of root {} {:patch (edit "src/app/locked.clj")
+                                             :verify "none"})))
+            (finally
+              (try (posix-permissions! locked "rw-------")
+                   (catch Throwable _ nil))
+              (delete-tree! root)))))
+      (testing "a directory above the source denies read"
+        (let [root (temp-dir)
+              dir (io/file root "src/app/locked")]
+          (try
+            (write-sources! root (assoc base-sources
+                                        "src/app/locked/inner.clj"
+                                        "(ns app.locked)\n"))
+            (posix-permissions! dir "---------")
+            (is (= :source-not-readable
+                   (refusal-kind-of
+                     root {} {:patch (edit "src/app/locked/inner.clj")
+                              :verify "none"})))
+            (finally
+              (try (posix-permissions! dir "rwx------")
+                   (catch Throwable _ nil))
+              (delete-tree! root))))))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-uninitialised-server-refuses-at-the-handlers-edge
+  ;; server-not-initialized is one of three kinds only the MCP surface can
+  ;; produce; execute-request! has no path to it.
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        received (promise)]
+    (try
+      (reset! config-atom nil)
+      (admit/handle-admit-clojure-patch
+        nil {"patch" clean-multi-file-patch "verify" "focused"}
+        (fn [result & _] (deliver received result)))
+      (is (some? (deref received 5000 nil))
+          "the handler must answer even with no server configured")
+      (finally (reset! config-atom previous)))))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- slurp-safe
+  [file]
+  (try (slurp file) (catch Exception _ nil)))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- transaction-fixture-sources
+  "Files across two directories; the second is made unwritable so its write
+  fails after the first directory's writes have already landed."
+  [n]
+  (into {"src/b/util.clj" util-source
+         ;; the focused-test files the gate derives by path convention;
+         ;; commit mode refuses verify=none outright (MCP-OP-ADMIT-120), so
+         ;; this fixture has to reach the transaction through a real
+         ;; verification that passes
+         "test/b/util_test.clj" "(ns app.util-test)\n"}
+        (mapcat (fn [i]
+                  [[(format "src/a/f%03d.clj" i)
+                    (format "(ns app.f%03d)\n\n(defn f\n  [x]\n  (inc x))\n" i)]
+                   [(format "test/a/f%03d_test.clj" i)
+                    (format "(ns app.f%03d-test)\n" i)]])
+                (range n))))
+
+;; @spec MCP-OP-ADMIT-133
+(defn- transaction-fixture-patch
+  [n]
+  (str (apply str
+              (for [i (range n)]
+                (format (str "--- a/src/a/f%03d.clj\n+++ b/src/a/f%03d.clj\n"
+                             "@@ -1,5 +1,5 @@\n (ns app.f%03d)\n \n (defn f\n"
+                             "   [x]\n-  (inc x))\n+  (inc (inc x)))\n")
+                        i i i)))
+       "--- a/src/b/util.clj\n"
+       "+++ b/src/b/util.clj\n"
+       "@@ -2,4 +2,4 @@\n"
+       " \n"
+       " (defn clamp\n"
+       "   [value low high]\n"
+       "-  (max low (min high value)))\n"
+       "+  (long (max low (min high value))))\n"))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-write-that-fails-mid-transaction-rolls-back-and-says-so
+  ;; src/b is unwritable, so the last file's write fails after every file in
+  ;; src/a has landed. Nothing else touches the tree, so every rollback
+  ;; succeeds and the receipt is the rolled-back kind.
+  (let [root (temp-dir)
+        n 8]
+    (try
+      (write-sources! root (transaction-fixture-sources n))
+      (shell/sh "chmod" "555" (.getPath (io/file root "src/b")))
+      (let [receipt (admit/execute-request!
+                      (stub-config root)
+                      {:patch (transaction-fixture-patch n) :mode "commit"
+                       :verify "focused"})]
+        (is (false? (:ok receipt)))
+        (is (= :transaction-write-failed (:error-type receipt))
+            (str "reasons=" (pr-str (:verification_reasons receipt))
+                 " dnr=" (pr-str (:detectors_not_run receipt))
+                 " status=" (pr-str (:verification_status receipt))
+                 " err=" (pr-str (:error receipt))))
+        (is (true? (:source-unchanged receipt))
+            "a rolled-back transaction leaves the workspace as it found it"))
+      (finally
+        (shell/sh "chmod" "755" (.getPath (io/file root "src/b")))
+        (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-138
+;; `a-rollback-that-cannot-restore-a-file-demands-manual-recovery` used to
+;; live here. It raced a busy-spinning watcher thread against a 64-file write
+;; to widen a window, which is a TIMING bound, and a timing bound is a battery
+;; target and not a fast-suite witness. Worse, it was load-bearing for the
+;; `:once` set-equality assertion above: had it flaked, the enumeration proof
+;; would have gone red naming an unrelated cause. It now lives in
+;; `test/admit_transaction_recovery_battery.clj`, reachable as
+;; `make admit-transaction-recovery-battery`.
+
+;; @spec MCP-OP-ADMIT-133
+(deftest an-unenumerated-refusal-kind-cannot-be-published
+  ;; The reviewer's own sabotage, kept as a standing witness. A kind built
+  ;; dynamically has no literal for a source scan to find, so the guard is
+  ;; placed where the receipt is published rather than where it is written.
+  (let [planted (keyword (str "planted" "-runtime-kind"))]
+    (is (not (contains? admit/admit-refusal-kinds planted)))
+    (is (thrown-with-msg?
+          IllegalArgumentException #"refusal kind is not enumerated"
+          (#'admit/bound-receipt
+            {:ok false :operation :admit-patch-refused :mode "preview"
+             :error-type planted :error "a kind nothing enumerated"}))
+        "bound-receipt is outside every catch on the entrance's path")
+    (is (thrown-with-msg?
+          IllegalArgumentException #"refusal kind is not enumerated"
+          (admit/checked-refusal-kind! {:ok false :error-type nil}))
+        "a refusal with no kind at all is unenumerated too"))
+  (testing "and it is an IllegalArgumentException, not an ex-info"
+    ;; an ex-info carrying an :error-type is exactly what this namespace's
+    ;; catch clauses turn back into a receipt; the violation would launder
+    ;; itself into the surface the guard protects
+    (let [thrown (try (admit/checked-refusal-kind!
+                        {:ok false :error-type :nope})
+                      (catch Throwable t t))]
+      (is (instance? IllegalArgumentException thrown))
+      (is (nil? (ex-data thrown)))))
+  (testing "every enumerated kind passes, and no success is ever blocked"
+    (doseq [kind admit/admit-refusal-kinds]
+      (is (map? (admit/checked-refusal-kind! {:ok false :error-type kind}))
+          (str "the guard rejected its own enumerated kind " kind)))
+    (is (map? (admit/checked-refusal-kind! {:ok true :error-type nil})))))
+
+;; @spec MCP-OP-ADMIT-137
+(deftest every-receipt-the-renderer-calls-a-refusal-is-checked-as-one
+  ;; Round four's guard fired on `(false? (:ok receipt))`; `summary` branches
+  ;; on truthiness, `(if (:ok result) ...)`. So a receipt whose `:ok` was
+  ;; anything falsey-but-not-false -- `nil`, most obviously -- was RENDERED to
+  ;; the caller as a refusal, under a kind nothing had enumerated, and the
+  ;; guard never looked at it. `refusal` merges its caller's data map last, so
+  ;; the override is one keyword away, and this guard exists precisely because
+  ;; "nobody would write that" was wrong the round before.
+  ;;
+  ;; The claim is a relation between the two predicates, not a list of values:
+  ;; whatever the RENDERER calls a refusal, the GUARD must check. Neither side
+  ;; is copied here.
+  (let [planted (keyword (str "planted" "-nil-ok-kind"))]
+    (is (not (contains? admit/admit-refusal-kinds planted)))
+    (doseq [ok [true false nil 0 "" "false" :no]]
+      (let [receipt {:ok ok :operation :admit-patch-refused :mode "preview"
+                     :error-type planted :error "e" :elapsed_ms 1.0
+                     :source-unchanged true :next_call nil}
+            refusal-text? (str/starts-with? (#'admit/summary receipt)
+                                            "admit_clojure_patch refused")
+            checked? (try (admit/checked-refusal-kind! receipt) false
+                          (catch IllegalArgumentException _ true))]
+        (is (or (not refusal-text?) checked?)
+            (str ":ok " (pr-str ok) " renders to the caller as a refusal and "
+                 "the guard never checked its kind"))))
+    (testing "and :ok nil in particular, at the bound"
+      (is (thrown-with-msg?
+            IllegalArgumentException #"refusal kind is not enumerated"
+            (admit/checked-refusal-kind!
+              {:ok nil :operation :admit-patch-refused :error-type planted}))))))
+
+;; @spec MCP-OP-ADMIT-133
+(def ^:private admit-refusal-kinds-not-reachable-from-the-entrance
+  "Kinds the source scan finds in the files the gate calls that the entrance
+  cannot publish, each with the reason it cannot.
+
+  This list is the complement, not the enumeration. It exists so the source
+  scan stays useful -- a NEW kind constructed in one of those files is caught
+  by the test below -- without letting the scan pretend to be the authority
+  it demonstrably is not. Every member was driven to ground before it was
+  written here:
+
+  `clj-kondo-unavailable` and `analyzer-output-truncated` are lint-RESULT
+  error types. Measured: they surface as a `detectors_not_run` reason and a
+  `verification_reasons` entry, while the top-level kind is
+  `verification-incomplete`. They are already correctly enumerated by
+  `unverifiable-lint-error-types`.
+
+  `patch-source-missing`, `invalid-compiled-transaction` and
+  `transaction-write-exception` are defensive guards on invariants the gate
+  itself establishes: `freeze-sources` supplies an entry for every parsed
+  file under the same key `apply-parsed` looks up; `compiled-transaction`
+  hardcodes `:ok true`; and the outer transaction catch can only see throws
+  from code whose every path is already taken by an earlier `catch
+  ExceptionInfo`, plus `*on-write-boundary*`, which this gate never binds.
+  Each is reachable only by calling those functions directly.
+
+  `invalid-source-path` joined this list at round fifteen's merge with the
+  census landing, having been an ENUMERATED kind until then. It is the
+  `:else` arm of `resolve-source-path`'s catch -- \"not the filesystem
+  answering\" -- and its one driver, a source path under a REGULAR FILE, now
+  publishes `source-file-not-found`: the catch asks the whole
+  `FileSystemException` HIERARCHY, and ENOTDIR, ELOOP and ENAMETOOLONG are
+  all members of it. `no-filesystem-shape-reaches-invalid-source-path` drives
+  all four remaining shapes through the entrance and shows each is claimed by
+  a typed arm above the `:else`; the only class that could still reach it,
+  an `InvalidPathException` for a NUL, is refused by `relative-source-path?`
+  before any I/O, exactly as for `invalid-target-path` below. Moved rather
+  than kept because the enumeration's own rule is that a member nothing
+  drives is a claim no fixture supports.
+
+  Stated precisely, because the arm is NOT dead code: it fires for a throw
+  that is not the filesystem's, and `docs/observations/census-round18-rereview-sol.md`
+  records the CENSUS entrance publishing it for an injected
+  `IllegalStateException`. The claim here is narrower and is the only one
+  this suite may make -- no input the ADMIT entrance accepts reaches it --
+  and it is the claim `no-filesystem-shape-reaches-invalid-source-path`
+  drives.
+
+  `invalid-target-path` has both branches dead on this platform: the `nil?
+  parent` branch cannot fire because the lexical path is always root-anchored
+  and absolute, and the catch-all needs an `InvalidPathException` for a
+  string that already passed `relative-source-path?`, which rejects absolute,
+  `.`, `..` and NUL. A related gap was found while proving this and is filed
+  rather than papered over: a creation target whose file NAME exceeds the
+  filesystem's NAME_MAX -- 255 characters here, counted over the whole name
+  and not the stem, so `n * 252 + \".clj\"` is the first one that fails --
+  returns `admit-tool-failure` from an escaped ENAMETOOLONG IOException in
+  BOTH modes, where a typed path refusal is what should fire.
+  `a-target-file-name-past-name-max-refuses-under-an-enumerated-kind` drives
+  both sides of that bound. Round four's review measured `preview ok` for
+  \"a 300-character basename\" and was reading a name of 300 characters rather
+  than a stem of 300; at 255 the file is created and at 256 it is not, which
+  is what both readings were seeing."
+  #{"analyzer-output-truncated"
+    "clj-kondo-unavailable"
+    "invalid-compiled-transaction"
+    "invalid-source-path"
+    "invalid-target-path"
+    "patch-source-missing"
+    "transaction-write-exception"})
+
+;; @spec MCP-OP-ADMIT-133
+(deftest a-target-file-name-past-name-max-refuses-under-an-enumerated-kind
+  ;; Round four's advisory 5c, resolved by finding the bound rather than by
+  ;; picking a side. The `invalid-target-path` excuse claims a creation target
+  ;; with a 300-character basename "returns `admit-tool-failure` from an
+  ;; escaped ENAMETOOLONG IOException"; the reviewer drove it and measured
+  ;; `preview ok`. Both are right about different inputs, and the difference
+  ;; is NAME_MAX, which the filesystem applies to the whole file NAME and not
+  ;; to the stem: `n * 251 + ".clj"` is 255 characters and is created; one
+  ;; character more is 256 and is not. A 300-character STEM is 304 characters
+  ;; and refuses; a name whose 300 characters include the extension does not.
+  ;;
+  ;; The gate's answer at the bound is the only thing this leaf is about: the
+  ;; entrance publishes an ENUMERATED kind on both sides of it. That the kind
+  ;; is `admit-tool-failure` where a typed path refusal belongs stays filed as
+  ;; the separate defect it is, rather than papered over here.
+  (let [drive (fn [stem mode]
+                (let [root (temp-dir)]
+                  (try
+                    (write-sources! root base-sources)
+                    (admit/execute-request!
+                      (stub-config root)
+                      (cond-> {:patch (str "--- /dev/null\n"
+                                           "+++ b/src/app/"
+                                           (apply str (repeat stem "n"))
+                                           ".clj\n"
+                                           "@@ -0,0 +1,1 @@\n"
+                                           "+(ns app.long)\n")
+                               :mode mode}
+                        (= mode "commit") (assoc :verify "focused")))
+                    (finally (delete-tree! root)))))
+        ;; @spec MCP-OP-ADMIT-133
+        ;; NAME_MAX read from the filesystem this suite is running on, not
+        ;; hardcoded: it is 255 here and 143 on eCryptfs, and a witness that
+        ;; pins the number reddens on another filesystem for a reason that
+        ;; has nothing to do with the gate.
+        name-max (let [{:keys [exit out]}
+                       (shell/sh "getconf" "NAME_MAX" ".")
+                       parsed (when (zero? (long exit))
+                                (try (Long/parseLong (str/trim out))
+                                     (catch Exception _ nil)))]
+                   (or parsed
+                       ;; declared platform: POSIX's own minimum maximum is
+                       ;; 14, so a failure to read it is stated, not guessed
+                       (do (println (str "PRECONDITION · getconf NAME_MAX"
+                                         " unavailable; assuming 255"))
+                           255)))
+        at (- name-max (count ".clj"))]
+    (testing "at NAME_MAX the name is ordinary and preview succeeds"
+      (let [preview (drive at "preview")]
+        (is (true? (:ok preview))
+            (str "a " name-max "-character file name is not too long: "
+                 (pr-str (:error-type preview)) " " (pr-str (:error preview))))
+        (is (nil? (:error-type preview)))))
+    (testing "one character past it, both modes refuse under an enumerated kind"
+      (doseq [mode ["preview" "commit"]]
+        (let [receipt (drive (inc at) mode)]
+          (is (false? (:ok receipt))
+              (str mode " must refuse a " (inc name-max) "-character name"))
+          (is (contains? admit/admit-refusal-kinds (:error-type receipt))
+              (str "the entrance published an unenumerated kind in " mode ": "
+                   (pr-str (:error-type receipt))))
+          (is (= :admit-tool-failure (:error-type receipt))
+              (str "the excuse's own claim, reproduced: an escaped "
+                   "ENAMETOOLONG IOException, in " mode)))))
+    (testing "and a 300-character STEM, the excuse's own example"
+      (is (= :admit-tool-failure (:error-type (drive 300 "preview")))))))
+
+;; @spec MCP-OP-ADMIT-133
+(deftest the-source-scan-survives-only-as-a-complement
+  ;; It is no longer the enumeration; it is a tripwire on the enumeration. A
+  ;; kind constructed in one of the files the gate calls must be either
+  ;; enumerated or named unreachable with a reason -- never merely absent.
+  (let [scanned (admit-refusal-kinds-in-source)
+        enumerated (into (sorted-set) (map name) admit/admit-refusal-kinds)]
+    (is (empty? (set/difference scanned enumerated
+                                admit-refusal-kinds-not-reachable-from-the-entrance))
+        (str "a kind is constructed in the files the admit gate calls and is "
+             "neither enumerated nor justified as unreachable: "
+             (pr-str (set/difference
+                       scanned enumerated
+                       admit-refusal-kinds-not-reachable-from-the-entrance))))
+    (is (empty? (set/intersection
+                  enumerated admit-refusal-kinds-not-reachable-from-the-entrance))
+        "a kind cannot be both enumerated and declared unreachable")
+    (is (empty? (set/difference
+                  admit-refusal-kinds-not-reachable-from-the-entrance scanned))
+        (str "a kind is excused as unreachable that the scan no longer even "
+             "finds; delete the excuse rather than carrying it"))))
+
+;; @spec MCP-OP-ADMIT-133
+;; @spec MCP-OP-ADMIT-135
+(deftest a-preview-whose-next-call-cannot-fit-refuses-through-the-entrance
+  ;; The oversize refusal, driven through execute-request! rather than
+  ;; constructed. expect_pre_sha256 carries one path and one digest per file,
+  ;; so sixty files under deep paths put the follow-up call past the public
+  ;; budget on an otherwise clean preview -- a receipt the gate would
+  ;; happily have published, with a call the caller could not have sent.
+  (let [root (temp-dir)
+        n 60
+        dir-a (apply str (repeat 200 "a"))
+        dir-b (apply str (repeat 200 "b"))
+        path (fn [i] (str "src/" dir-a "/" dir-b "/"
+                          (apply str (repeat 200 "c")) i ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns n" i ")\n\n(defn f\n  [x]\n  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns n" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [receipt (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})]
+        (is (false? (:ok receipt)))
+        (is (= :next-call-exceeds-public-budget (:error-type receipt)))
+        (is (> (:next_call_characters receipt) write-refusal/public-byte-budget))
+        (is (= write-refusal/public-byte-budget (:public_byte_budget receipt))
+            "the refusal names the one budget, not a second one of its own")
+        (is (str/includes? (:remedy receipt) "fewer files")
+            "and the lever that would change the answer"))
+      (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: no caller-supplied field is echoed verbatim into a receipt
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-140
+(defn- published-at-handler-edge
+  "Drive `handle-admit-clojure-patch` and return what the CALLBACK receives.
+
+  `mcp-operation/invoke!` hands the callback the receipt as its third
+  argument, so this is the structuredContent a client is given -- not the
+  receipt some inner function returned. The oversize `mode` finding was
+  reachable only here, which is why the witness lives at this edge."
+  [root params & [config-overrides]]
+  (let [config-atom (deref #'admit/runtime-config)
+        previous @config-atom
+        captured (atom nil)]
+    (try
+      (reset! config-atom (merge (stub-config root) config-overrides))
+      (admit/handle-admit-clojure-patch
+        nil params
+        (fn [content error? result]
+          (reset! captured {:text (first content)
+                            :error? error?
+                            :result result})))
+      @captured
+      (finally (reset! config-atom previous)))))
+
+;; @spec MCP-OP-ADMIT-140
+(deftest a-caller-supplied-mode-is-never-echoed-verbatim-into-a-receipt
+  ;; Round five's blocking finding. `execute-in-context!` took the caller's
+  ;; `mode` into `context` and `refusal` merged
+  ;; `(empty-receipt (or (:mode context) "preview"))`, so a 60,000-character
+  ;; mode landed in `:mode` -- an identity key reduction may never drop and
+  ;; `cut` never shortens. The published structuredContent was 61,214 bytes,
+  ;; 28,574 past the 32,640 its own sentence called the budget, with
+  ;; `receipt_reduced`, `receipt_omitted_fields` and `payload_truncated` all
+  ;; absent, blaming a 389-character `next_call`.
+  (let [root (temp-dir)
+        huge (apply str (repeat 60000 "m"))]
+    (try
+      (write-sources! root base-sources)
+      (let [{:keys [result text]}
+            (published-at-handler-edge
+              root {"patch" clean-multi-file-patch "verify" "focused"
+                    "mode" huge})]
+        (is (false? (:ok result))
+            "a mode outside the enum is a refusal")
+        (is (= :invalid-admit-request (:error-type result))
+            (str "and a typed one: " (pr-str (:error-type result))))
+        (is (<= (write-refusal/json-bytes result)
+                write-refusal/public-byte-budget)
+            (str "the published receipt is " (write-refusal/json-bytes result)
+                 " bytes, past the " write-refusal/public-byte-budget
+                 "-byte number the gate calls a budget"))
+        (is (<= (count (str text)) write-refusal/public-byte-budget)
+            "and so is the text face a text-only client reads")
+        (is (not= huge (:mode result))
+            "the caller's 60,000 characters must not be the receipt's mode")
+        (is (contains? #{"preview" "commit"} (:mode result))
+            (str "an unusable mode leaves the receipt carrying the default,"
+                 " not the caller's string: " (pr-str (:mode result))))
+        (is (str/includes? (str (:error result)) "mode")
+            "the refusal names the field it refused")
+        (is (str/includes? (str (:error result)) "mmm")
+            "and quotes enough of the value for the caller to recognise it")
+        (is (< (count (str (:error result))) 2000)
+            (str "with the value CUT, not echoed: the sentence is "
+                 (count (str (:error result))) " characters")))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-140
+(deftest no-identity-key-can-be-the-reason-a-receipt-exceeds-the-budget
+  ;; The class, not the instance. `mode` was the caller-reachable one; the
+  ;; hole is the identity-key set as a whole, because reduction may not drop
+  ;; any of them and `cut` shortens only `error` and `remedy`.
+  (let [bulk (apply str (repeat 60000 "z"))
+        budget write-refusal/public-byte-budget]
+    (doseq [key [:mode :error :remedy :source-unchanged
+                 :mutation_attempted :pre_image_binding :lock_scope
+                 :verification_complete :verification_status :elapsed_ms
+                 :operation]]
+      (let [published (#'admit/bound-receipt
+                        (assoc {:ok false
+                                :operation :admit-patch-refused
+                                :mode "preview"
+                                :error-type :invalid-patch
+                                :error "e"
+                                :files []}
+                               key bulk))]
+        (is (<= (write-refusal/json-bytes published) budget)
+            (str "bulk in the identity key " key " published "
+                 (write-refusal/json-bytes published) " bytes, past " budget))
+        (is (<= (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
+                budget)
+            (str "and its text face for " key " is "
+                 (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
+                 " characters, past " budget))))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: a reduction that cannot reach the budget has an ANSWER
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-141
+(deftest a-reduction-that-cannot-reach-the-budget-says-so-in-a-typed-way
+  ;; Round five's second finding. The tail of `reduce-receipt-to-budget` was
+  ;;
+  ;;   (if (or (:error_truncated current) (public-faces-fit? final))
+  ;;     final
+  ;;     final)
+  ;;
+  ;; -- both arms identical, the predicate computed and thrown away. So
+  ;; "nothing left to drop" had no answer: a 60,563-byte receipt came back
+  ;; carrying `receipt_reduced true`, which a reader can only read as a
+  ;; reduction that worked.
+  (let [bulk (apply str (repeat 60000 "z"))
+        reduced (#'admit/reduce-receipt-to-budget
+                  {:ok false
+                   :operation :admit-patch-refused
+                   ;; an identity key: reduction may not drop it, and `cut`
+                   ;; shortens only the two sentences
+                   :mode bulk
+                   :error-type :invalid-patch
+                   :error "the patch does not parse"
+                   :remedy "resend a unified diff"
+                   :files [] :hashes {}})]
+    (is (true? (:receipt_reduced reduced))
+        "reduction ran")
+    (is (true? (:receipt_over_budget reduced))
+        (str "and could not reach the budget, which the receipt must SAY: "
+             (pr-str (select-keys reduced [:receipt_reduced
+                                           :receipt_over_budget]))))
+    (is (> (:receipt_residual_bytes reduced) write-refusal/public-byte-budget)
+        (str "naming the size it could not bring inside: "
+             (pr-str (:receipt_residual_bytes reduced))))
+    (is (pos? (long (:receipt_residual_text_characters reduced)))
+        "and the same for the text face")
+    (is (= "mode" (first (:receipt_unreducible_fields reduced)))
+        (str "and what could not be dropped, largest first: "
+             (pr-str (:receipt_unreducible_fields reduced))))
+    (testing "the text face carries the same statement, where elision cannot reach"
+      (let [text (#'admit/summary (assoc reduced :elapsed_ms 1.0))]
+        (is (<= (count text) write-refusal/public-byte-budget))
+        (is (str/includes? text "receipt_over_budget=true")
+            "a text-only reader must not be told a green-shaped receipt")
+        (is (str/includes? text (str "receipt_residual_bytes="
+                                     (:receipt_residual_bytes reduced))))))))
+
+;; @spec MCP-OP-ADMIT-141
+(deftest reduction-never-drops-the-notice-that-says-the-payload-was-cut
+  ;; Round five's advisory 4a. `payload_truncated`, `payload_truncation`,
+  ;; `payload_omitted` and `payload_omitted_bytes` were in neither the
+  ;; identity nor the reduction key set, so they sorted into the droppable
+  ;; pile like bulk and were measured being dropped -- a receipt jettisoning
+  ;; the only annotation that makes its own cut honest.
+  ;; The bulk sits in an IDENTITY key, exactly as the review measured it, so
+  ;; reduction exhausts every droppable field -- which is the only condition
+  ;; under which the four annotations were reached at all.
+  (let [bulk (apply str (repeat 40000 "y"))
+        reduced (#'admit/reduce-receipt-to-budget
+                  {:ok false
+                   :operation :admit-patch-refused
+                   :mode bulk
+                   :error-type :invalid-patch
+                   :error "e" :remedy "r"
+                   :payload_truncated true
+                   :payload_truncation "public-byte-budget"
+                   :payload_omitted {:files 25}
+                   :payload_omitted_bytes 41234
+                   :hashes {:a "small"}})]
+    (is (true? (:receipt_reduced reduced)))
+    (is (some #{"hashes"} (:receipt_omitted_fields reduced))
+        (str "the bulk is what goes: "
+             (pr-str (:receipt_omitted_fields reduced))))
+    (doseq [key [:payload_truncated :payload_truncation :payload_omitted
+                 :payload_omitted_bytes]]
+      (is (contains? reduced key)
+          (str "reduction dropped the receipt's own truncation notice: " key
+               " -- omitted " (pr-str (:receipt_omitted_fields reduced)))))))
+
+;; @spec MCP-OP-ADMIT-141
+(deftest the-elision-note-never-renders-longer-than-the-budget-it-was-handed
+  ;; Round five's advisory 4g. Below roughly 191 characters of remainder the
+  ;; note that ANNOUNCES the elision was itself longer than the remainder, so
+  ;; the section exceeded the budget in order to say that it had to -- a bound
+  ;; announced by a thing not charged against it, the same shape as this
+  ;; round's blocker.
+  (let [receipt (into {:ok false :operation :admit-patch-refused
+                       :mode "preview" :error-type :invalid-patch
+                       :error "e" :elapsed_ms 1.0 :source-unchanged true}
+                      (for [i (range 64)]
+                        [(keyword (format "leaf%02d" i))
+                         (apply str (repeat 40 "y"))]))]
+    (doseq [budget [1200 600 300 191 150 80 20]]
+      (let [rendered (#'admit/admit-receipt-facts receipt budget)]
+        (is (<= (count (str rendered)) budget)
+            (str "the fact section rendered " (count (str rendered))
+                 " characters against a budget of " budget))))))
+
+;; @spec MCP-OP-ADMIT-144
+(def ^:private sentence-cut-ceiling
+  "The number of characters `reduce-receipt-to-budget`'s `cut` keeps.
+
+  A sentence shorter than this was never cut, whatever a receipt says about
+  it."
+  200)
+
+;; @spec MCP-OP-ADMIT-144
+(def ^:private cut-marker
+  "The words `cut` appends to a sentence it shortened."
+  "[cut to fit the public payload")
+
+;; @spec MCP-OP-ADMIT-143
+(defn- receipt-self-description-holds?
+  "Does this receipt's own account of itself match what it published?
+
+  Not a size check: a receipt can be inside the budget and still be lying
+  about how it got there. `receipt_reduced` without `receipt_omitted_fields`
+  is a claim with no content; `payload_truncated` without `payload_omitted`
+  is the same; a receipt that names a budget names THE budget; and a receipt
+  reduction could not bring inside the budget says so."
+  [receipt]
+  (let [budget write-refusal/public-byte-budget
+        problems
+        (cond-> []
+          (and (:receipt_reduced receipt)
+               (empty? (:receipt_omitted_fields receipt))
+               (not (:error_truncated receipt))
+               (not (:receipt_identity_bounded receipt)))
+          (conj "receipt_reduced with nothing named as dropped")
+
+          ;; @spec MCP-OP-ADMIT-145
+          ;; `empty?`, not `nil?` -- `{}` is the value the branch actually
+          ;; produced, and testing `nil?` is what let MCP-OP-ADMIT-143's own
+          ;; EARS sentence, `payload_truncated names what it omitted`, be
+          ;; falsified by the predicate written to test it. Four lines above,
+          ;; the receipt-level case already uses `empty?`.
+          (and (:payload_truncated receipt)
+               (empty? (:payload_omitted receipt)))
+          (conj (str "payload_truncated naming nothing omitted: "
+                     (pr-str (:payload_omitted receipt)) " / "
+                     (pr-str (:payload_omitted_bytes receipt)) " bytes"))
+
+          (and (:public_byte_budget receipt)
+               (not= budget (:public_byte_budget receipt)))
+          (conj "the receipt names a budget that is not the budget")
+
+          (and (> (write-refusal/json-bytes receipt) budget)
+               (not (:receipt_over_budget receipt)))
+          (conj "over budget without saying so")
+
+          ;; @spec MCP-OP-ADMIT-144
+          ;; The converse, which round six had no clause for and which round
+          ;; six's own replacement path produced on the ordinary wide-fan-out
+          ;; refusal: a 1,672-byte receipt -- 5% of the budget -- publishing
+          ;; `receipt_over_budget true` and a residual of 30,179 bytes it is
+          ;; not, because the annotation was computed on a candidate whose
+          ;; `next_call` was then dropped and never re-derived.
+          (and (:receipt_over_budget receipt)
+               (<= (write-refusal/json-bytes receipt) budget))
+          (conj (str "says it is over budget while inside it: "
+                     (write-refusal/json-bytes receipt) " bytes of "
+                     budget))
+
+          ;; @spec MCP-OP-ADMIT-144
+          ;; And the same for the sentences. `error_truncated` tells a reader
+          ;; the words in front of them are incomplete and the rest is in a
+          ;; server log they cannot open. Round six published a 49-character
+          ;; manual-recovery remedy -- `restore src/a/f000.clj from version
+          ;; control by hand` -- wearing that label.
+          (let [sentences (->> [:error :remedy]
+                               (filter #(some? (get receipt %)))
+                               (map #(str (get receipt %))))]
+            (and (:error_truncated receipt)
+                 (seq sentences)
+                 (every? (fn [text]
+                           (and (< (count text) sentence-cut-ceiling)
+                                (not (str/includes? text cut-marker))))
+                         sentences)))
+          (conj (str "error_truncated on sentences shorter than the "
+                     sentence-cut-ceiling "-character cut ceiling and"
+                     " carrying no cut marker"))
+
+          (and (:receipt_identity_bounded receipt)
+               (empty? (:receipt_identity_bounded receipt)))
+          (conj "an empty identity-bounding record"))]
+    (if (seq problems) problems true)))
+
+;; ---------------------------------------------------------------------------
+;; Round six: the kind and the safety claim are untouchable at every rung
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-142
+(deftest a-safety-critical-refusal-keeps-its-kind-at-every-reduction-rung
+  ;; Round five's finding 1d. The reduction arm was fixed for this in round
+  ;; five and the next_call arm was not -- and the next_call arm is the one
+  ;; that fires. A `transaction-recovery-required` refusal carrying an
+  ;; oversize next_call was published as `:next-call-exceeds-public-budget`
+  ;; with `mutation_attempted false` (a write WAS attempted and rolled back
+  ;; badly) and a remedy of "fewer files in one patch is the lever". The kind
+  ;; survived only in `:blocked_next_call_for`, which no `error-type` consumer
+  ;; reads.
+  (let [budget write-refusal/public-byte-budget
+        base {:ok false
+              :operation :admit-patch-refused
+              :mode "commit"
+              :error-type :transaction-recovery-required
+              :error "the rollback could not restore src/a/f000.clj"
+              :remedy "restore src/a/f000.clj from version control by hand"
+              :source-unchanged false
+              :mutation_attempted true}
+        huge-map (into {} (for [i (range 400)]
+                            [(str "src/very/long/path/segment/" i "/f" i ".clj")
+                             {:pre (apply str (repeat 64 "a"))
+                              :post (apply str (repeat 64 "b"))}]))
+        huge-call {:tool "admit_clojure_patch"
+                   :arguments {:mode "commit"
+                               :expect_pre_sha256
+                               {"src/app/core.clj"
+                                (apply str (repeat 40000 "a"))}}}
+        rungs {"fits, nothing reduced" base
+               "bulk dropped" (assoc base :hashes huge-map)
+               "sentences cut" (assoc base
+                                      :error (apply str (repeat 40000 "e"))
+                                      :hashes huge-map)
+               "next_call oversize" (assoc base :next_call huge-call)
+               "next_call oversize AND bulk"
+               (assoc base :next_call huge-call :hashes huge-map)}]
+    (doseq [[rung receipt] rungs]
+      (testing rung
+        (let [published (#'admit/bound-receipt receipt)]
+          (is (= :transaction-recovery-required (:error-type published))
+              (str "a size bound relabelled a safety-critical refusal at the "
+                   "rung `" rung "`: " (pr-str (:error-type published))))
+          (is (true? (:mutation_attempted published))
+              (str "and dropped the claim that a write WAS attempted at `"
+                   rung "`: " (pr-str (:mutation_attempted published))))
+          (is (false? (:source-unchanged published))
+              (str "and the claim that the workspace WAS changed at `"
+                   rung "`"))
+          (is (not (str/includes? (str (:remedy published)) "fewer files"))
+              (str "and replaced a manual-recovery remedy with a size one at `"
+                   rung "`: " (pr-str (:remedy published))))
+          (is (<= (write-refusal/json-bytes published) budget)
+              (str "the published receipt at `" rung "` is "
+                   (write-refusal/json-bytes published) " bytes, past "
+                   budget))
+          (is (<= (count (#'admit/summary (assoc published :elapsed_ms 1.0)))
+                  budget)
+              (str "and so is its text face at `" rung "`"))
+          ;; @spec MCP-OP-ADMIT-144
+          ;; Round six kept the kind at every rung and never asked whether the
+          ;; receipt it had just measured at 1,414 bytes was telling the truth
+          ;; about how it got there. It was not: `receipt_over_budget true`,
+          ;; a residual of 36,315 bytes, `receipt_unreducible_fields` naming a
+          ;; `next_call` it did drop, and a 49-character manual-recovery
+          ;; remedy labelled as cut.
+          (is (true? (receipt-self-description-holds? published))
+              (str "the receipt's own account of itself at `" rung "`: "
+                   (pr-str (receipt-self-description-holds? published))
+                   " -- published " (write-refusal/json-bytes published)
+                   " bytes, remedy " (pr-str (:remedy published)))))))
+    (testing "the oversize call is NAMED as omitted rather than silently gone"
+      (let [published (#'admit/bound-receipt (assoc base :next_call huge-call))]
+        (is (nil? (:next_call published))
+            "a next_call that cannot be sent back byte for byte is not carried")
+        (is (true? (:next_call_omitted published)))
+        (is (= :transaction-recovery-required
+               (:blocked_next_call_for published)))
+        (is (> (:next_call_characters published) budget)
+            "the receipt names the size of the call it could not carry")
+        (is (= budget (:public_byte_budget published)))
+        (is (str/includes? (str (:next_call_omission published)) (str budget))
+            "and the budget that would have to change")
+        (let [text (#'admit/summary (assoc published :elapsed_ms 1.0))]
+          (is (str/includes? text "next_call_omitted=true")
+              "and the text-only reader is told the same"))
+        ;; @spec MCP-OP-ADMIT-144
+        (is (true? (receipt-self-description-holds? published))
+            (str "and it does not describe itself falsely: "
+                 (pr-str (receipt-self-description-holds? published))))
+        (is (not (some #{"next_call"} (:receipt_unreducible_fields published)))
+            (str "a next_call that WAS dropped is not listed among the fields"
+                 " reduction says it could not drop: "
+                 (pr-str (:receipt_unreducible_fields published))))))
+    (testing "a receipt that was NOT otherwise a refusal still becomes one"
+      ;; the enumerated `:next-call-exceeds-public-budget` kind keeps a
+      ;; fixture that drives it, and it carries its own safety claims forward
+      (let [published (#'admit/bound-receipt
+                        {:ok true :operation :admit-patch-commit
+                         :mode "commit" :files []
+                         :mutation_attempted true :source-unchanged false
+                         :next_call huge-call})]
+        (is (= :next-call-exceeds-public-budget (:error-type published)))
+        (is (true? (:mutation_attempted published))
+            "a committed write's own claim is not reset by a size rule")
+        (is (false? (:source-unchanged published)))
+        (is (<= (write-refusal/json-bytes published) budget))))))
+
+
+;; ---------------------------------------------------------------------------
+;; Round seven: a receipt that fits never says it does not
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-141
+;; @spec MCP-OP-ADMIT-144
+(deftest a-receipt-that-fits-never-says-it-is-over-budget
+  ;; Round six's finding 1. The most common wide-fan-out refusal this gate
+  ;; publishes -- a many-file patch with one blocking clj-kondo finding --
+  ;; came back at 1,672 bytes, 5% of the budget, saying `receipt_over_budget
+  ;; true` with a residual of 30,179 bytes, and carrying a 52-character error
+  ;; sentence marked as cut to fit a budget it is 0.16% of, pointing an MCP
+  ;; client at a server log it cannot read. The mechanism: `bound-receipt`
+  ;; ran the whole reduction ladder BEFORE considering an oversize
+  ;; `next_call` that reduction is not allowed to touch, so the ladder cut
+  ;; sentences and stamped the terminal annotations to make room for a call
+  ;; that was about to be dropped -- and nothing re-derived them afterwards.
+  (let [budget write-refusal/public-byte-budget
+        root (temp-dir)
+        n 60
+        deep (apply str (repeat 200 "d"))
+        path (fn [i] (str "src/" deep "/f" (format "%03d" i) ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns n" i ")\n\n(defn f\n  [x]\n"
+                                 "  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns n" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))
+        blocking-lint (fn [_ _]
+                        {:ran true :ok false
+                         :introduced-count 1 :removed-count 0
+                         :blocking-introduced
+                         [{:file (path 0) :row 5 :level "error"
+                           :type "unused-binding" :message "unused binding x"}]})]
+    (try
+      (write-sources! root (merge base-sources sources))
+      (let [{:keys [result text]}
+            (published-at-handler-edge root {"patch" patch "verify" "focused"}
+                                       {:admit-lint-runner blocking-lint})
+            bytes (write-refusal/json-bytes result)
+            chars (count (str text))]
+        (is (= :verification-failed (:error-type result))
+            (str "fixture must refuse on the lint finding: "
+                 (pr-str (:error-type result))))
+        (is (<= bytes budget)
+            (str "the published receipt is " bytes " bytes, past " budget))
+        (is (<= chars budget)
+            (str "and its text face is " chars " characters"))
+        (is (true? (receipt-self-description-holds? result))
+            (str "a " bytes "-byte receipt describing itself: "
+                 (pr-str (receipt-self-description-holds? result))))
+        (is (not (:receipt_over_budget result))
+            (str "a " bytes "-byte receipt says it is over a " budget
+                 "-byte budget, with a residual of "
+                 (pr-str (:receipt_residual_bytes result))))
+        (is (not (:error_truncated result))
+            (str "and calls its "
+                 (count (str (:error result)))
+                 "-character error sentence truncated: "
+                 (pr-str (:error result))))
+        (is (not (str/includes? (str (:error result)) cut-marker))
+            "the sentence a caller reads carries a cut marker it did not earn")
+        (is (not (str/includes? (str text) "receipt_over_budget=true"))
+            "and the text-only reader is told the same falsehood"))
+      (finally (delete-tree! root))))
+  (testing "the safety-critical recovery remedy reaches the caller whole"
+    ;; Round six published `restore src/a/f000.clj from version control by
+    ;; hand` -- 49 characters, the one instruction a human needs after a
+    ;; failed rollback -- with a marker saying it was incomplete.
+    (let [remedy "restore src/a/f000.clj from version control by hand"
+          published (#'admit/bound-receipt
+                      {:ok false :operation :admit-patch-refused
+                       :mode "commit"
+                       :error-type :transaction-recovery-required
+                       :error "the rollback could not restore src/a/f000.clj"
+                       :remedy remedy
+                       :source-unchanged false :mutation_attempted true
+                       :next_call
+                       {:tool "admit_clojure_patch"
+                        :arguments {:mode "commit"
+                                    :expect_pre_sha256
+                                    {"src/app/core.clj"
+                                     (apply str (repeat 40000 "a"))}}}})]
+      (is (= remedy (:remedy published))
+          (str "the recovery instruction was altered: "
+               (pr-str (:remedy published))))
+      (is (not (:error_truncated published)))
+      (is (not (:receipt_over_budget published)))
+      (is (true? (receipt-self-description-holds? published))
+          (pr-str (receipt-self-description-holds? published)))))
+  (testing "bound-receipt cannot return a genuinely over-budget receipt"
+    ;; Round six's advisory 10c. Every identity value is separately bounded,
+    ;; both sentences are cuttable, everything else is droppable, and the
+    ;; next_call has its own typed answer -- so MCP-OP-ADMIT-141's terminal
+    ;; annotation has no live surface at the entrance. That is the claim
+    ;; worth asserting, rather than witnessing the annotation on a function
+    ;; the entrance never publishes from.
+    (let [budget write-refusal/public-byte-budget
+          bulk (apply str (repeat 60000 "z"))
+          huge-call {:tool "admit_clojure_patch"
+                     :arguments {:expect_pre_sha256
+                                 {"src/app/core.clj"
+                                  (apply str (repeat 40000 "a"))}}}
+          shapes {"bulk in every identity key"
+                  (into {:ok false :operation :admit-patch-refused
+                         :error-type :invalid-patch}
+                        (for [k [:mode :error :remedy :source-unchanged
+                                 :mutation_attempted :pre_image_binding
+                                 :lock_scope :verification_status
+                                 :verification_complete]]
+                          [k bulk]))
+                  "bulk in every identity key AND an oversize next_call"
+                  (into {:ok false :operation :admit-patch-refused
+                         :error-type :invalid-patch :next_call huge-call}
+                        (for [k [:mode :error :remedy :pre_image_binding
+                                 :lock_scope :verification_status]]
+                          [k bulk]))
+                  "bulk in droppable fields too"
+                  (into {:ok false :operation :admit-patch-refused
+                         :error-type :invalid-patch :next_call huge-call
+                         :hazards (vec (repeat 200 bulk))
+                         :files (vec (repeat 200 bulk))}
+                        (for [k [:mode :error :remedy :lock_scope]]
+                          [k bulk]))}]
+      (doseq [[label receipt] shapes]
+        (testing label
+          (let [published (#'admit/bound-receipt receipt)]
+            (is (<= (write-refusal/json-bytes published) budget)
+                (str label " published "
+                     (write-refusal/json-bytes published) " bytes"))
+            (is (not (:receipt_over_budget published))
+                (str label " reached the terminal annotation through the"
+                     " entrance: " (pr-str (:receipt_residual_bytes
+                                            published))))
+            (is (true? (receipt-self-description-holds? published))
+                (str label ": "
+                     (pr-str (receipt-self-description-holds?
+                               published))))))))))
+
+
+;; @spec MCP-OP-ADMIT-145
+(deftest a-trim-that-trimmed-nothing-is-not-recorded-as-a-truncation
+  ;; Round six's finding 2. `bound-public-payload` stamped the full
+  ;; truncation annotation whenever the receipt did not fit and NOTHING in
+  ;; the trimmable collections had content -- which is every refusal raised
+  ;; before the patch is applied, since the trimmable keys are `hazards` and
+  ;; `files`. A caller who pasted the wrong `expect_pre_sha256` digest was
+  ;; told content had been withheld when none had; the real omission was
+  ;; recorded, correctly, one field over in `receipt_omitted_fields`.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [{:keys [result]}
+            (published-at-handler-edge
+              root {"patch" clean-multi-file-patch
+                    "verify" "focused"
+                    "expect_pre_sha256"
+                    {"src/app/core.clj" (apply str (repeat 60000 "a"))
+                     "src/app/util.clj" (apply str (repeat 64 "b"))}})]
+        (is (= :source-hash-mismatch (:error-type result))
+            (str "fixture must refuse on the digest: "
+                 (pr-str (:error-type result))))
+        (is (not (:payload_truncated result))
+            (str "a trim that removed nothing is recorded as a truncation: "
+                 (pr-str (select-keys result [:payload_truncated
+                                              :payload_omitted
+                                              :payload_omitted_bytes
+                                              :payload_binding_face]))))
+        (is (nil? (:payload_binding_face result))
+            "and carries a face attribution for a trim that never ran")
+        (is (true? (receipt-self-description-holds? result))
+            (pr-str (receipt-self-description-holds? result))))
+      (finally (delete-tree! root))))
+  (testing "the same on a receipt with no trimmable collection at all"
+    (let [published (#'admit/bound-receipt
+                      {:ok false :operation :admit-patch-refused
+                       :mode "commit"
+                       :error-type :transaction-recovery-required
+                       :error "the rollback could not restore src/a/f000.clj"
+                       :remedy "restore src/a/f000.clj by hand"
+                       :source-unchanged false :mutation_attempted true
+                       :next_call
+                       {:tool "admit_clojure_patch"
+                        :arguments {:expect_pre_sha256
+                                    {"src/app/core.clj"
+                                     (apply str (repeat 40000 "a"))}}}})]
+      (is (not (:payload_truncated published))
+          (str "payload_truncated on a receipt with no hazards and no files: "
+               (pr-str (select-keys published [:payload_truncated
+                                               :payload_omitted
+                                               :payload_omitted_bytes]))))
+      (is (true? (receipt-self-description-holds? published))
+          (pr-str (receipt-self-description-holds? published)))))
+  (testing "a trim that DID remove content still names what it omitted"
+    (let [root (temp-dir)
+          n 40
+          path (fn [i] (str "src/app/m" i ".clj"))
+          sources (into {} (for [i (range n)]
+                             [(path i)
+                              (str "(ns app.m" i ")\n\n(defn f\n  [x]\n"
+                                   "  (inc x))\n")]))
+          patch (apply str
+                       (for [i (range n)]
+                         (str "--- a/" (path i) "\n"
+                              "+++ b/" (path i) "\n"
+                              "@@ -1,5 +1,5 @@\n"
+                              " (ns app.m" i ")\n \n (defn f\n   [x]\n"
+                              "-  (inc x))\n+  (inc (inc x)))\n")))]
+      (try
+        (write-sources! root sources)
+        (let [receipt (admit/execute-request!
+                        (stub-config root) {:patch patch :verify "none"})]
+          (is (true? (:payload_truncated receipt)))
+          (is (seq (:payload_omitted receipt))
+              (str "a real trim names what it dropped: "
+                   (pr-str (:payload_omitted receipt))))
+          (is (pos? (long (:payload_omitted_bytes receipt))))
+          (is (true? (receipt-self-description-holds? receipt))
+              (pr-str (receipt-self-description-holds? receipt))))
+        (finally (delete-tree! root))))))
+
+
+;; @spec MCP-OP-ADMIT-146
+(deftest every-catch-arm-at-the-handler-publishes-through-the-bound
+  ;; Round six's finding 3. `handle-admit-clojure-patch` wraps its two catch
+  ;; arms in `checked-refusal-kind!` alone -- neither passes through
+  ;; `bound-receipt` -- and both take the throwable's message verbatim. A
+  ;; 60,000-character message published 60,617 bytes of structuredContent and
+  ;; 60,159 characters of text, 27,977 past the budget, with
+  ;; `receipt_over_budget` and `receipt_identity_bounded` both absent: round
+  ;; five's blocking shape on the one arm round six did not touch.
+  ;;
+  ;; THE HONEST CAVEAT, recorded because a universal claim resting on an
+  ;; undemonstrated path is still a hole: the round-six reviewer drove four
+  ;; caller candidates at this arm -- a 400,000-paren nested patch, a
+  ;; 60,000-character create-file basename, a 60,000-character line inside a
+  ;; hunk, and a `workspace_root` naming a regular file -- and every one
+  ;; produced a typed, bounded refusal instead. No caller input is known to
+  ;; reach it with a large message. This witness therefore INJECTS the
+  ;; throwable at the verification seam. The seam is a fixture; the bound it
+  ;; proves is not.
+  (let [budget write-refusal/public-byte-budget
+        bulk (apply str (repeat 60000 "t"))
+        root (temp-dir)
+        arms {"an Error at the seam (the Throwable arm)"
+              (fn [_ _] (throw (Error. bulk)))
+              "an Exception at the seam"
+              (fn [_ _] (throw (RuntimeException. bulk)))}]
+    (try
+      (write-sources! root base-sources)
+      (doseq [[label thrower] arms]
+        (testing label
+          (let [{:keys [result text]}
+                (published-at-handler-edge
+                  root {"patch" clean-multi-file-patch "verify" "focused"}
+                  {:admit-lint-runner thrower})
+                bytes (write-refusal/json-bytes result)
+                chars (count (str text))]
+            (is (false? (:ok result))
+                (str label " did not refuse: " (pr-str (:ok result))))
+            (is (contains? admit/admit-refusal-kinds (:error-type result))
+                (str label " published an unenumerated kind: "
+                     (pr-str (:error-type result))))
+            (is (<= bytes budget)
+                (str label " published " bytes " bytes, past the " budget
+                     "-byte number the gate calls a budget"))
+            (is (<= chars budget)
+                (str label " published a " chars "-character text face, past "
+                     budget))
+            (is (not-any? #(and (string? %) (>= (count %) 60000))
+                          (vals result))
+                (str label " echoed the throwable message VERBATIM"))
+            (is (true? (receipt-self-description-holds? result))
+                (str label ": "
+                     (pr-str (receipt-self-description-holds? result)))))))
+      (finally (delete-tree! root)))))
+
+
+;; @spec MCP-OP-ADMIT-148
+(deftest a-decoder-limit-is-not-reported-as-the-patch-being-too-large
+  ;; Round six's advisory 10a. Jackson's
+  ;; `StreamReadConstraints.getMaxNameLength()` is 50,000, so a
+  ;; 60,000-character KEY NAME throws before the request is destructured, and
+  ;; every `StreamConstraints` failure was mapped to `:patch-too-large`. A
+  ;; 230-byte patch published `error-type :patch-too-large` with
+  ;; `next_call.blocked_by` saying the same, no `patch_bytes` and no
+  ;; `remedy`. The sentence was honest and the machine-readable field was
+  ;; not, and an agent branches on the field: it splits a patch that was
+  ;; never too large, gets the same refusal, and splits again.
+  (let [root (temp-dir)
+        huge-key (apply str (repeat 60000 "k"))]
+    (try
+      (write-sources! root base-sources)
+      (let [{:keys [result text]}
+            (published-at-handler-edge
+              root {"patch" clean-multi-file-patch "verify" "focused"
+                    huge-key "x"})]
+        (is (false? (:ok result)))
+        (is (contains? admit/admit-refusal-kinds (:error-type result))
+            (str "an unenumerated kind: " (pr-str (:error-type result))))
+        (is (not= :patch-too-large (:error-type result))
+            (str "a " (count clean-multi-file-patch)
+                 "-byte patch was refused as too large because a KEY in the"
+                 " request tripped a decoder limit"))
+        (is (not= :patch-too-large
+                  (some-> result :next_call :blocked_by keyword))
+            (str "and the next_call says the same: "
+                 (pr-str (:next_call result))))
+        (is (some? (:remedy result))
+            "a decoder-limit refusal with no remedy leaves the caller nothing")
+        (is (str/includes? (str (:remedy result)) "decoder")
+            (str "the remedy must name the constraint, not the patch: "
+                 (pr-str (:remedy result))))
+        (is (<= (write-refusal/json-bytes result)
+                write-refusal/public-byte-budget))
+        (is (<= (count (str text)) write-refusal/public-byte-budget))
+        (is (true? (receipt-self-description-holds? result))
+            (pr-str (receipt-self-description-holds? result))))
+      (finally (delete-tree! root)))))
+
+
+;; @spec MCP-OP-ADMIT-149
+(deftest the-error-type-exemption-holds-only-where-its-reason-holds
+  ;; Round six's advisory 10b. `bound-identity-values` exempts `:error-type`
+  ;; "because `checked-refusal-kind!` already bounds it to an enumerated
+  ;; keyword" -- but that guard fires only on `(not (true? (:ok …)))`. On a
+  ;; receipt whose `:ok` is true the exemption's own reason is false, and the
+  ;; value goes out unbounded: 60,751 bytes through `bound-receipt`.
+  ;;
+  ;; The gate does not construct an `:ok true` receipt carrying an
+  ;; `error-type`, so this is bound-by-construction rather than
+  ;; caller-reachable today. An exemption whose justification does not hold
+  ;; is still a bound that holds by accident.
+  (let [budget write-refusal/public-byte-budget
+        bulk (apply str (repeat 60000 "e"))
+        published (#'admit/bound-receipt
+                    {:ok true :operation :admit-patch-commit
+                     :mode "commit" :files []
+                     :error-type bulk})]
+    (is (<= (write-refusal/json-bytes published) budget)
+        (str "an :ok true receipt carrying error-type bulk published "
+             (write-refusal/json-bytes published) " bytes, past " budget))
+    (is (not-any? #(and (string? %) (>= (count %) 60000)) (vals published))
+        "and echoed the value verbatim")
+    (is (some #{"error-type"} (:receipt_identity_bounded published))
+        (str "a bounded value must be NAMED as bounded: "
+             (pr-str (:receipt_identity_bounded published))))
+    (is (true? (receipt-self-description-holds? published))
+        (pr-str (receipt-self-description-holds? published))))
+  (testing "and a refusal's enumerated kind is still passed through whole"
+    (let [published (#'admit/bound-receipt
+                      {:ok false :operation :admit-patch-refused
+                       :mode "preview" :error-type :invalid-patch
+                       :error "e"})]
+      (is (= :invalid-patch (:error-type published))
+          (str "the exemption's real case was broken: "
+               (pr-str (:error-type published))))
+      (is (nil? (:receipt_identity_bounded published))
+          "an enumerated keyword is never bounded, and never named as such"))))
+
+
+;; @spec MCP-OP-ADMIT-144
+;; @spec MCP-OP-ADMIT-151
+(deftest the-cheap-correct-move-is-taken-before-the-reduction-ladder
+  ;; Round seven's finding 3. MCP-OP-ADMIT-144 promises a `bound-receipt`
+  ;; that takes the CHEAP CORRECT MOVE FIRST: when a receipt is over budget
+  ;; only because of its `next_call`, dropping the call is what makes it fit,
+  ;; so the reduction ladder -- which cannot drop the call, because it is an
+  ;; identity key -- must not run at all. Every focused assertion the round
+  ;; shipped was about the PUBLISHED VALUE's self-description, and the
+  ;; reviewer's seventh negative control proved that blind: replacing the
+  ;; whole outer branch with `(reduce-receipt-to-budget faced)` dropped
+  ;; `hashes` and the honest `payload_trim_unavailable` notice on the way to
+  ;; making room for a call `oversize-next-call-refusal` was about to drop
+  ;; anyway, and the entire suite stayed green at 164/4220/0.
+  ;;
+  ;; So this witness observes the ORDER, which is visible in exactly one
+  ;; place: WHAT ELSE the receipt lost. The cheap move costs the caller
+  ;; nothing but the call; the ladder-first order bills the caller for the
+  ;; call's bytes in facts it could have kept.
+  (let [budget write-refusal/public-byte-budget
+        error-sentence (str "patch is in neither accepted grammar; its first"
+                            " line is \"(ns x)\"")
+        remedy-sentence (str "resend the patch with a `*** Begin Patch`"
+                             " header or a unified-diff `--- a/` header")
+        hashes (into {} (for [i (range 60)]
+                          [(str "src/app/" (apply str (repeat 100 "p"))
+                                i ".clj")
+                           (apply str (repeat 64 "a"))]))
+        call {:tool "admit_clojure_patch"
+              :arguments {:mode "preview" :verify "none"}
+              :note (apply str (repeat 24000 "n"))}
+        faced {:ok false :operation :admit-patch-refused :mode "preview"
+               :error-type :invalid-patch
+               :error error-sentence :remedy remedy-sentence
+               :source-unchanged true :mutation_attempted false
+               :hashes hashes
+               :next_call call}
+        kept (dissoc faced :next_call)]
+    ;; The fixture is only the fixture this witness is named for if the
+    ;; next_call is the SOLE reason it does not fit. Stated as assertions, so
+    ;; a future edit that makes the probe fit outright cannot make this test
+    ;; pass by ceasing to exercise anything.
+    (is (> (write-refusal/json-bytes faced) budget)
+        (str "the probe already fits, so nothing is being tested: "
+             (write-refusal/json-bytes faced)))
+    (is (<= (write-refusal/json-bytes kept) budget)
+        (str "the probe is over budget for MORE than its next_call: "
+             (write-refusal/json-bytes kept)))
+    (let [published (#'admit/bound-receipt faced)]
+      (is (nil? (:next_call published))
+          "the call is what gives ground")
+      (is (true? (:next_call_omitted published))
+          (str "and the receipt says so: " (pr-str published)))
+      ;; The order, observed. Every key the receipt carried other than the
+      ;; call survives VERBATIM: the ladder never ran, so nothing was spent
+      ;; making room for a call that was dropped one line later.
+      (is (= kept (select-keys published (keys kept)))
+          (str "the ladder ran before the cheap move and billed the caller"
+               " for the call's bytes in facts it could have kept \u00b7 lost: "
+               (pr-str (remove #(contains? published %) (keys kept)))
+               " \u00b7 changed: "
+               (pr-str (remove #(= (get faced %) (get published %))
+                               (keys kept)))))
+      (is (nil? (:receipt_omitted_fields published))
+          (str "a field other than the next_call was dropped: "
+               (pr-str (:receipt_omitted_fields published))))
+      (is (nil? (:receipt_reduced published))
+          "a receipt the cheap move fitted was not reduced")
+      ;; The two sentences reach the caller whole. A cut error sentence and a
+      ;; cut manual-recovery remedy, both pointing at a server log an MCP
+      ;; client cannot read, is round six's exact published defect.
+      (is (= error-sentence (:error published))
+          (str "the error sentence was cut: " (pr-str (:error published))))
+      (is (= remedy-sentence (:remedy published))
+          (str "the remedy sentence was cut: " (pr-str (:remedy published))))
+      (is (nil? (:error_truncated published))
+          "a sentence that reached the caller whole is not labelled truncated")
+      (is (some? (:payload_trim_unavailable published))
+          (str "the honest `this bound removed nothing` notice was dropped to"
+               " make room for a call that was dropped anyway: "
+               (pr-str published)))
+      (is (<= (write-refusal/json-bytes published) budget))
+      (is (true? (receipt-self-description-holds? published))
+          (pr-str (receipt-self-description-holds? published)))))
+  (testing "and the ladder still runs when the next_call is NOT the reason"
+    ;; The converse. A cheap move applied where it does not apply would
+    ;; publish an oversize receipt, so the skip is conditional on the
+    ;; condition, not on the presence of a next_call.
+    (let [budget write-refusal/public-byte-budget
+          hashes (into {} (for [i (range 400)]
+                            [(str "src/app/" (apply str (repeat 100 "q"))
+                                  i ".clj")
+                             (apply str (repeat 64 "b"))]))
+          faced {:ok false :operation :admit-patch-refused :mode "preview"
+                 :error-type :invalid-patch
+                 :error "e" :remedy "r"
+                 :source-unchanged true :mutation_attempted false
+                 :hashes hashes
+                 :next_call {:tool "admit_clojure_patch"
+                             :arguments {:mode "preview"}}}]
+      (is (> (write-refusal/json-bytes (dissoc faced :next_call)) budget)
+          "the converse fixture must NOT fit once its call is removed")
+      (let [published (#'admit/bound-receipt faced)]
+        (is (<= (write-refusal/json-bytes published) budget)
+            (str "an oversize receipt was published: "
+                 (write-refusal/json-bytes published)))
+        (is (some #{"hashes"} (:receipt_omitted_fields published))
+            (str "the ladder did not run where it is the only answer: "
+                 (pr-str (:receipt_omitted_fields published))))
+        (is (true? (receipt-self-description-holds? published))
+            (pr-str (receipt-self-description-holds? published)))))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: every field a caller can influence, driven with bulk
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-143
+(deftest every-field-a-caller-can-influence-is-driven-with-bulk
+  ;; Round five's finding 1f, for the third round running: the universal
+  ;; claim `a published receipt never exceeds the number it calls a budget`
+  ;; stood on ONE skeleton -- `:mode "preview"`, `:files []`, all the bulk in
+  ;; `next_call`. Change `"preview"` to a long string, which is what a caller
+  ;; does by sending one, and the assertion the witness is named for was
+  ;; false. So the witness ENUMERATES the fields a caller can influence and
+  ;; drives bulk through each of them at the MCP handler's own callback.
+  (let [budget write-refusal/public-byte-budget
+        bulk (apply str (repeat 60000 "b"))
+        root (temp-dir)
+        wide-n 30
+        deep (apply str (repeat 200 "d"))
+        wide-path (fn [i] (str "src/" deep "/" (apply str (repeat 200 "e"))
+                               i ".clj"))
+        wide-sources (into {} (for [i (range wide-n)]
+                                [(wide-path i)
+                                 (str "(ns n" i ")\n\n(defn f\n  [x]\n"
+                                      "  (inc x))\n")]))
+        wide-patch (apply str
+                          (for [i (range wide-n)]
+                            (str "--- a/" (wide-path i) "\n"
+                                 "+++ b/" (wide-path i) "\n"
+                                 "@@ -1,5 +1,5 @@\n"
+                                 " (ns n" i ")\n \n (defn f\n   [x]\n"
+                                 "-  (inc x))\n+  (inc (inc x)))\n")))
+        cases
+        [["mode" {"patch" clean-multi-file-patch "verify" "focused"
+                  "mode" bulk}]
+         ["verify" {"patch" clean-multi-file-patch "verify" bulk}]
+         ["workspace_root" {"patch" clean-multi-file-patch "verify" "focused"
+                            "workspace_root" bulk}]
+         ["patch" {"patch" bulk "verify" "focused"}]
+         ["patch (parseable, 30 deep-path files)"
+          {"patch" wide-patch "verify" "none"}]
+         ["expect_pre_sha256"
+          {"patch" clean-multi-file-patch "verify" "focused"
+           "expect_pre_sha256"
+           (into {} (for [i (range 300)]
+                      [(str "src/" deep "/file" i ".clj")
+                       (apply str (repeat 64 "a"))]))}]
+         ["note (an unknown caller key)"
+          {"patch" clean-multi-file-patch "verify" "focused" "note" bulk}]
+         ["allow_partial (a wrong-typed caller key)"
+          {"patch" clean-multi-file-patch "verify" "focused"
+           "allow_partial" bulk}]]]
+    (try
+      (write-sources! root (merge base-sources wide-sources))
+      (doseq [[field params] cases]
+        (testing (str "bulk in " field)
+          (let [{:keys [result text]} (published-at-handler-edge root params)
+                bytes (write-refusal/json-bytes result)
+                chars (count (str text))]
+            (is (some? result)
+                (str "no receipt at all for bulk in " field))
+            (is (<= bytes budget)
+                (str "bulk in " field " published " bytes
+                     " bytes, past the " budget "-byte number the gate calls"
+                     " a budget"))
+            (is (<= chars budget)
+                (str "bulk in " field " published a " chars
+                     "-character text face, past " budget))
+            (is (true? (receipt-self-description-holds? result))
+                (str "bulk in " field ": "
+                     (pr-str (receipt-self-description-holds? result))))
+            (is (not-any? #(and (string? %) (>= (count %) 60000))
+                          (vals result))
+                (str "bulk in " field " was echoed VERBATIM into the receipt"))
+            (when (:error-type result)
+              (is (contains? admit/admit-refusal-kinds (:error-type result))
+                  (str "bulk in " field " published an unenumerated kind: "
+                       (pr-str (:error-type result))))))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-143
+(deftest a-trimmed-payload-names-the-face-that-forced-the-trim
+  ;; Round five's advisory 4b. `payload_omitted_bytes` counts JSON, while the
+  ;; trimming loop's exit test is `public-faces-fit?` -- which for this gate
+  ;; can be the TEXT face. A payload trimmed because its text face did not fit
+  ;; reported a byte figure that was never the binding constraint.
+  (let [root (temp-dir)
+        n 40
+        path (fn [i] (str "src/app/m" i ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns app.m" i ")\n\n(defn f\n  [x]\n"
+                                 "  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns app.m" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [receipt (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})]
+        (is (true? (:payload_truncated receipt))
+            (str "this fixture must actually trim: "
+                 (pr-str (select-keys receipt [:payload_omitted
+                                               :payload_truncated]))))
+        (is (contains? #{"text" "structured" "both"}
+                       (:payload_binding_face receipt))
+            (str "a trimmed payload names which face forced it: "
+                 (pr-str (:payload_binding_face receipt))))
+        (is (some? (:payload_omitted_bytes receipt))
+            "and still reports the JSON figure beside it"))
+      (finally (delete-tree! root)))))

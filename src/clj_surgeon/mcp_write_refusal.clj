@@ -245,13 +245,24 @@
   The omission record is cumulative. Reporting only the last step's loss would
   understate a payload trimmed several times over, and a reader who sees
   `payload_omitted` at all is asking exactly one question: how much am I not
-  being shown?"
-  [result trimmable]
+  being shown?
+
+  The three-argument arity takes the fit test itself, so a caller whose
+  published surface is wider than the JSON -- a receipt that must also render
+  every one of its leaves in a text block -- can shrink the STRUCTURE until
+  both of its faces fit the same one budget, in ONE pass, with one cumulative
+  omission record. Two passes with two predicates would reset that record and
+  understate the loss; a second budget would be a second budget."
+  ([result trimmable]
+   (bound-public-payload result trimmable
+                         (fn [candidate]
+                           (<= (json-bytes candidate) public-byte-budget))))
+  ([result trimmable fits?]
   (let [annotation-keys [:payload_truncated :payload_truncation
                          :payload_omitted :payload_omitted_bytes]
         content (fn [value] (json-bytes (apply dissoc value annotation-keys)))
         original-bytes (content result)]
-    (if (<= original-bytes public-byte-budget)
+    (if (fits? result)
       result
       (loop [current result
              omitted {}]
@@ -260,11 +271,28 @@
                               (filter (fn [[_ n]] (pos? n)))
                               (sort-by second >))]
           (if (empty? candidates)
-            (assoc current
-                   :payload_truncated true
-                   :payload_truncation "public-byte-budget"
-                   :payload_omitted omitted
-                   :payload_omitted_bytes (- original-bytes (content current)))
+            ;; @spec MCP-OP-ADMIT-145
+            ;; A trim that trimmed NOTHING is not a truncation. Round six
+            ;; stamped `payload_truncated true` beside `payload_omitted {}`
+            ;; and `payload_omitted_bytes 0` whenever the result did not fit
+            ;; and none of the trimmable collections had content -- which for
+            ;; the admit gate is every refusal raised before the patch is
+            ;; applied. A reader who sees `payload_truncated` asks exactly one
+            ;; question, how much am I not being shown, and the honest answer
+            ;; here is `nothing, and this bound was not the one that could
+            ;; help`. The receipt's real omission, if it had one, is recorded
+            ;; by reduction in `receipt_omitted_fields`.
+            (if (seq omitted)
+              (assoc current
+                     :payload_truncated true
+                     :payload_truncation "public-byte-budget"
+                     :payload_omitted omitted
+                     :payload_omitted_bytes (- original-bytes
+                                               (content current)))
+              (assoc current
+                     :payload_trim_unavailable
+                     (str "no trimmable collection carried content, so this"
+                          " bound removed nothing")))
             (let [[key n] (first candidates)
                   kept (max 0 (dec (quot (* n 2) 3)))
                   omitted (update omitted key (fnil + 0) (- n kept))
@@ -275,6 +303,6 @@
                                      :payload_omitted omitted
                                      :payload_omitted_bytes
                                      (- original-bytes (content trimmed)))]
-              (if (<= (json-bytes next-result) public-byte-budget)
+              (if (fits? next-result)
                 next-result
-                (recur trimmed omitted)))))))))
+                (recur trimmed omitted))))))))))

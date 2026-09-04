@@ -202,3 +202,18 @@ grows under load. Levers by wall: (1) the SMW landing contract (bd chain, untrac
 native included; (2) the admit gate (write + verify in one call) ≈ −1.5 min quiet, more under load. Projected: 9 → ~3 → ~2 min,
 3–4× on wall from two levers, neither of which is another feature_thread round. Standing meter from here: wall per species
 (this script), not call counts. Refocus ratified in principle by Gene: no fractional gains where the juice is squeezed.
+
+## NC / NS pair (control plate vs slim landing-contract plate, native, same hour, load 8–27) — 2026-09-04 19:2xZ–19:4xZ
+
+| arm | wall | turns | code reads | rules | bd | verify+write | .local_version churn | gates |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| NC (2df99c98, vendor bd block, 671-line CLAUDE.md) | 6.5 min | 30 | 1.0 min (7) | 1.3 | 0.2 | 3.2 | (not exercised) | unit 227/712/0, js green |
+| NS (landing-contract f004359c: .local_version untracked, bd as a 5-line chain at the top, 634 lines) | 11.2 min | 54 | 4.1 min (16) | 1.2 | 0.2 | 3.1 | 0 mentions, clean tree | unit 229/725/0, js green |
+
+Verdict: a MISS for the plate as a native-side lever at n=1. The plate did exactly what it was built to do (zero
+.local_version churn, bd at three calls, clean tree) but the rules cost is unchanged (CLAUDE.md still read in three
+slices — 634 lines is not distilled) and native's code reads (7 vs 16 turns, 1.0 vs 4.1 min) swamp a half-minute of
+ceremony. The pair is same-hour, same-load, so the confound is native's own variance, not the box. Standing sentence
+amended: the landing contract's share is only measurable once the receipt has removed the reads — T5 (receipt +
+contract) as pre-registered, and the contract's rules row must be a DISTILLATION (the dozen binding lines), not a
+shorter file. The local SMW branch stays local; nothing is pushed to Gene's repo.
