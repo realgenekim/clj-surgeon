@@ -990,6 +990,161 @@ SHIMEOF
   exit $?
 fi
 
+# --- self-test: BASE-SHA RESOLUTION in rescore-FAN.sh (round-4 review, finding 1, ---
+# REQUIRED FIX) ---------------------------------------------------------------------
+#   sabotage-FAN.sh --selftest-base-resolution [N] [seed] [scratch-dir]
+#
+# rescore-FAN.sh -- not fan_check.clj -- decides WHICH commit every one of the six
+# checks is measured against.  The round-4 review found its fallback branch resolved
+# `git` through PATH, discarded its exit code, threw away its stderr, and validated
+# nothing about the shape of the result -- so a 7-char sha, the literal string HEAD,
+# a rev-list that exits non-zero, or a PATH-shimmed rev-list answering with an
+# adversary-crafted commit all flowed through to fan_check.clj as the trusted base.
+# The last of those reached a full false `rescore-FAN: 6/6 checks passed` on a
+# worktree that carried a real untracked-then-staged source file the manifest does
+# not own (fanout4-opus-review.md, finding 1, case 1b).
+#
+#   1a       a 7-char FAN_BASE, and the literal FAN_BASE=HEAD, must both be REFUSED
+#   1b       no FAN_BASE, no ../base.sha, a PATH-only shim answering ONLY rev-list
+#            with a crafted commit -- the shim must never run (git is resolved
+#            absolutely, never through PATH) so the honest base is scored and the
+#            planted file is caught, never blessed as belonging to the base
+#   1c       a rev-list that exits non-zero must be refused, even if it also
+#            printed a sha
+#   control  a real 40-hex FAN_BASE, and a real ../base.sha, still score 6/6 and the
+#            `rescore-FAN:` header names which branch supplied the base
+if [ "${1:-}" = "--selftest-base-resolution" ]; then
+  N=${2:-21}; SEED=${3:-7}
+  SCRATCH=${4:-/var/tmp/forge/fanout-r5-fx/selftest-base-resolution}
+  print_selftest_roster
+  rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+  BPASS=0; BFAIL=0
+  ok()  { BPASS=$((BPASS+1)); echo "SELFTEST-BASE-RESOLUTION $1: PASS $2"; }
+  bad() { BFAIL=$((BFAIL+1)); echo "SELFTEST-BASE-RESOLUTION $1: FAIL $2"; }
+  REALGIT=${FAN_REAL_GIT:-/usr/bin/git}
+
+  bb "$HERE/gen-fanout.clj" --n "$N" --seed "$SEED" --k 6 --out "$SCRATCH/gen" \
+    > "$SCRATCH/gen.log" 2>&1
+
+  mk_repo () {   # mk_repo <dir> -> echoes the base sha; a correctly migrated, honest,
+                 # single-commit tree (canonical-N applied on top of repo-N)
+    rm -rf "$1"; mkdir -p "$1"; cp -r "$SCRATCH/gen/repo-$N/." "$1/"
+    ( cd "$1" && "$REALGIT" init -q . \
+        && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil add -A . \
+        && "$REALGIT" -c user.name=fanout -c user.email=fanout@anvil commit -q -m "fanout base repo-$N (pre-migration)" ) >/dev/null
+    cp -r "$SCRATCH/gen/canonical-$N/src/." "$1/src/"
+    "$REALGIT" -C "$1" rev-parse HEAD
+  }
+
+  score () { FAN_FIXTURES="$SCRATCH/gen" bash "$HERE/rescore-FAN.sh" "$1" "$N" 2>&1; }
+
+  # --- control A: an honest 40-hex FAN_BASE still scores 6/6, base-from=FAN_BASE ----
+  BASE=$(mk_repo "$SCRATCH/ctrlA")
+  OUT=$(FAN_BASE="$BASE" score "$SCRATCH/ctrlA"); RC=$?
+  echo "SELFTEST-BASE-RESOLUTION control-FAN_BASE: rc=$RC"; printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -eq 0 ] && printf '%s' "$OUT" | grep -q '6/6 checks passed' \
+     && printf '%s' "$OUT" | grep -q 'base-from=FAN_BASE'; then
+    ok "control-FAN_BASE" "honest 40-hex FAN_BASE still scores 6/6, base-from=FAN_BASE"
+  else
+    bad "control-FAN_BASE" "expected 6/6 and base-from=FAN_BASE, got rc=$RC"
+  fi
+
+  # --- control B: an honest ../base.sha still scores 6/6, base-from=base.sha -------
+  BASE=$(mk_repo "$SCRATCH/ctrlB/worktree")
+  printf '%s' "$BASE" > "$SCRATCH/ctrlB/base.sha"
+  OUT=$(score "$SCRATCH/ctrlB/worktree"); RC=$?
+  echo "SELFTEST-BASE-RESOLUTION control-base.sha: rc=$RC"; printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -eq 0 ] && printf '%s' "$OUT" | grep -q '6/6 checks passed' \
+     && printf '%s' "$OUT" | grep -q 'base-from=base.sha'; then
+    ok "control-base.sha" "honest ../base.sha still scores 6/6, base-from=base.sha"
+  else
+    bad "control-base.sha" "expected 6/6 and base-from=base.sha, got rc=$RC"
+  fi
+
+  # --- 1a: a 7-char FAN_BASE must be refused, never truncate-matched ---------------
+  BASE=$(mk_repo "$SCRATCH/case1a")
+  SHORT=${BASE:0:7}
+  OUT=$(FAN_BASE="$SHORT" score "$SCRATCH/case1a"); RC=$?
+  echo "SELFTEST-BASE-RESOLUTION 1a-short-sha: rc=$RC"; printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] && printf '%s' "$OUT" | grep -qF "FAIL base must be a 40-hex sha (got $SHORT)" \
+     && ! printf '%s' "$OUT" | grep -q '6/6 checks passed'; then
+    ok "1a-short-sha" "a 7-char FAN_BASE is refused by name, exit=$RC"
+  else
+    bad "1a-short-sha" "want the typed 40-hex refusal naming '$SHORT' and no 6/6, got rc=$RC"
+  fi
+
+  # --- 1a: the literal string HEAD must be refused, never resolved as a ref --------
+  OUT=$(FAN_BASE="HEAD" score "$SCRATCH/case1a"); RC=$?
+  echo "SELFTEST-BASE-RESOLUTION 1a-literal-HEAD: rc=$RC"; printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] && printf '%s' "$OUT" | grep -qF "FAIL base must be a 40-hex sha (got HEAD)" \
+     && ! printf '%s' "$OUT" | grep -q '6/6 checks passed'; then
+    ok "1a-literal-HEAD" "the literal HEAD is refused by name, exit=$RC"
+  else
+    bad "1a-literal-HEAD" "want the typed 40-hex refusal naming 'HEAD' and no 6/6, got rc=$RC"
+  fi
+
+  # --- 1c: a rev-list that exits non-zero must be refused, even if it printed a sha
+  BASE=$(mk_repo "$SCRATCH/case1c")
+  mkdir -p "$SCRATCH/bin-revlist-nonzero"
+  cat > "$SCRATCH/bin-revlist-nonzero/git" <<SHIMEOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = rev-list ]; then echo "$BASE"; echo "simulated-rev-list-failure" >&2; exit 7; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-revlist-nonzero/git"
+  OUT=$(FAN_GIT="$SCRATCH/bin-revlist-nonzero/git" score "$SCRATCH/case1c"); RC=$?
+  echo "SELFTEST-BASE-RESOLUTION 1c-revlist-nonzero: rc=$RC"; printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ $RC -ne 0 ] && ! printf '%s' "$OUT" | grep -q '6/6 checks passed' \
+     && printf '%s' "$OUT" | grep -qi 'rev-list'; then
+    ok "1c-revlist-nonzero" "a failing rev-list is refused by name, exit=$RC, no 6/6"
+  else
+    bad "1c-revlist-nonzero" "want a named refusal citing rev-list's failure and no 6/6, got rc=$RC"
+  fi
+
+  # --- 1b: the reviewer's exact attack -- no FAN_BASE, no ../base.sha, a PATH-only
+  # shim answering ONLY rev-list with an adversary-crafted commit that makes a real,
+  # untracked-then-staged planted source file look like it was already part of the
+  # base -----------------------------------------------------------------------------
+  BASE=$(mk_repo "$SCRATCH/case1b")
+  EXTRA='src/acid/fanout/extra.clj'
+  printf '(ns acid.fanout.extra)\n;; untracked, the manifest does not own it\n' \
+    > "$SCRATCH/case1b/$EXTRA"
+  "$REALGIT" -C "$SCRATCH/case1b" add "$EXTRA"
+  TREE=$("$REALGIT" -C "$SCRATCH/case1b" write-tree)
+  CRAFTED=$("$REALGIT" -C "$SCRATCH/case1b" commit-tree "$TREE" -p "$BASE" -m "planted base")
+  mkdir -p "$SCRATCH/bin-revlist-crafted"
+  TOUCHED="$SCRATCH/bin-revlist-crafted.invoked"
+  rm -f "$TOUCHED"
+  cat > "$SCRATCH/bin-revlist-crafted/git" <<SHIMEOF
+#!/usr/bin/env bash
+touch "$TOUCHED"
+for arg in "\$@"; do
+  if [ "\$arg" = rev-list ]; then echo "$CRAFTED"; exit 0; fi
+done
+exec "$REALGIT" "\$@"
+SHIMEOF
+  chmod +x "$SCRATCH/bin-revlist-crafted/git"
+  OUT=$(PATH="$SCRATCH/bin-revlist-crafted:$PATH" score "$SCRATCH/case1b"); RC=$?
+  echo "SELFTEST-BASE-RESOLUTION 1b-path-shim-crafted-base: rc=$RC"; printf '%s\n' "$OUT" | sed 's/^/    /'
+  if [ -e "$TOUCHED" ]; then
+    bad "1b-shim-not-invoked" "the PATH shim ran -- git is still being resolved through PATH"
+  else
+    ok "1b-shim-not-invoked" "the PATH shim never ran -- git was resolved absolutely, never through PATH"
+  fi
+  if [ $RC -ne 0 ] && ! printf '%s' "$OUT" | grep -q '6/6 checks passed' \
+     && printf '%s' "$OUT" | grep -qE '^CHECK 1 .*(FAIL|ERROR)'; then
+    ok "1b-fail-closed" "rc=$RC, no 6/6, the honest base was scored and the planted file was caught"
+  else
+    bad "1b-fail-closed" "want rc!=0, no 6/6, a named CHECK 1 FAIL/ERROR -- got rc=$RC"
+  fi
+
+  echo "sabotage-FAN --selftest-base-resolution: $BPASS passed, $BFAIL failed"
+  [ $BFAIL -eq 0 ]
+  exit $?
+fi
+
 FIX=${1:-/home/forge/tmp/arms/e3/fanout}; N=${2:-21}
 SCRATCH=${3:-/home/forge/tmp/fan-sabotage}
 
