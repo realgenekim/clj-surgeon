@@ -1851,3 +1851,5 @@ banking if codex gates review throughput.
 ## 22:41Z suite spike r3 LANDING review launched (Sol, 105f4b6f) under Astra's ruling: read-only until 23:20Z, focused probes only in the 23:20–23:30 shared window, coverage comparison behind 717→150 s required
 
 ## 22:51Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 154  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:48Z load 6.32 ; === rc 0 end 22:51Z)
+
+## 22:52Z CI-fixes checkpointed (49b92905): the inherited branch was red on the full suite — a typed throw escaped two map-contract callers; fixed by translation at the boundaries; remaining gates deferred. Usage watch 22:51Z: admit 59, inspect 154.
