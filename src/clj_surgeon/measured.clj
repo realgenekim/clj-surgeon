@@ -1,8 +1,11 @@
 (ns clj-surgeon.measured
   "The MEASURED channel: where a reading a clock produced is allowed to live.
 
-  PURE. No I/O, no heavy requires — this namespace loads under babashka so the
-  encoders and the battery can share ONE definition of the partition.
+  No heavy requires — this namespace loads under babashka so the encoders and
+  the battery can share ONE definition of the partition. The one piece of I/O it
+  performs, `file-modified-ms`, is there for the same reason every other raw
+  clock read is: a file's modification stamp is a number a clock produced, and
+  this is the one file allowed to read one raw.
 
   The rule, in one sentence: **a measured field may never live inside a value
   another requirement hashes.**
@@ -226,6 +229,26 @@
   rather than earning an allow-list entry for a raw read."
   []
   (reading (raw-ms)))
+
+(defn file-modified-ms
+  "The modification stamp of `file` in epoch milliseconds, as a TAGGED reading;
+  nil when the file is not there.
+
+  `(.lastModified f)` returns 0 for an absent file, which reads as the epoch
+  rather than as \"no answer\", so the absent case is nil and the caller decides.
+
+  This verb exists because of the round-four review's second blocking finding
+  (2026-09-04 §2): `mcp_admit_tool` published `(.lastModified report)` as
+  `:report_written_at` inside the hashed parity subject, two lines above a wall
+  clock the same scan had just routed, and two runs of one unchanged operation
+  hashed differently. A file mtime is not \"now\", so `wall-clock-ms` is the
+  wrong verb for it; what it shares with `wall-clock-ms` is the only thing that
+  matters at the boundary — the TAG.
+
+  @spec MCP-OP-TIME-007"
+  [^java.io.File file]
+  (let [ms (.lastModified file)]
+    (when (pos? ms) (reading ms))))
 
 (defn elapsed-nanos
   "Nanoseconds since `started`, as a tagged reading."

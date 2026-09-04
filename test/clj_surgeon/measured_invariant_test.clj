@@ -270,7 +270,7 @@
   Adding a control clock read means adding a line here and saying why the value
   is never published. That is the whole cost, and it is the cost on purpose."
   {["src/clj_surgeon/ls_tree_snapshot.clj" "prune!"]
-   {:reads 1 :channel :control :why "snapshot expiry sweep"}
+   {:reads 2 :channel :control :why "snapshot expiry sweep: the cutoff and each candidate file's mtime"}
    ["src/clj_surgeon/ls_tree_snapshot.clj" "touch!"]
    {:reads 1 :channel :control :why "file mtime, not a receipt field"}
    ["src/clj_surgeon/ls_tree_snapshot.clj" "write-snapshot!"]
@@ -291,8 +291,10 @@
    {:reads 1 :channel :control :why "mission lease exit stamp"}
    ["src/clj_surgeon/mcp_telemetry.clj" "emit!"]
    {:reads 1 :channel :control :why "telemetry row timestamp, never a public result"}
+   ["src/clj_surgeon/mcp_alias_migration.clj" "prune-details!"]
+   {:reads 1 :channel :control :why "prune ordering: newest detail files kept, by file mtime"}
    ["src/clj_surgeon/mcp_telemetry.clj" "prune!"]
-   {:reads 1 :channel :control :why "telemetry retention cutoff"}
+   {:reads 2 :channel :control :why "telemetry retention cutoff and each candidate file's mtime"}
    ["src/clj_surgeon/memory_battery_runner.clj" "measure-once"]
    {:reads 2 :channel :control :why "the battery harness's own wall row"}
    ["src/clj_surgeon/memory_battery_runner.clj" "run-battery"]
@@ -301,16 +303,24 @@
    {:reads 1 :channel :control :why "receipt filename stamp"}
    ["src/clj_surgeon/txn_journal.clj" "begin!"]
    {:reads 1 :channel :control :why "transaction started-at stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "evidence-stat"]
+   {:reads 2 :channel :control :why "the mtime/ctime pair that dates a tombstone's evidence on disk"}
    ["src/clj_surgeon/txn_journal.clj" "finish!"]
    {:reads 1 :channel :control :why "transaction finished-at stamp on disk"}
    ["src/clj_surgeon/txn_journal.clj" "legacy-lock-dead?"]
    {:reads 1 :channel :control :why "lock liveness cutoff"}
+   ["src/clj_surgeon/txn_journal.clj" "lock-age-basis-ms"]
+   {:reads 2 :channel :control :why "the newest of a lock file's mtime and ctime, the liveness basis"}
    ["src/clj_surgeon/txn_journal.clj" "lock-broken-line"]
    {:reads 1 :channel :control :why "broken-lock journal line stamp"}
    ["src/clj_surgeon/txn_journal.clj" "mark-break-linked!"]
    {:reads 1 :channel :control :why "break-link stamp on disk"}
    ["src/clj_surgeon/txn_journal.clj" "new-txid"]
    {:reads 1 :channel :control :why "transaction id"}
+   ["src/clj_surgeon/txn_journal.clj" "path-stat"]
+   {:reads 1 :channel :control :why "the on-disk stat identity of a path; :mtime-ns is an identity field, never a receipt"}
+   ["src/clj_surgeon/txn_journal.clj" "process-start-ticks"]
+   {:reads 1 :channel :control :why "a process's start instant, half of the holder identity that makes a lease checkable"}
    ["src/clj_surgeon/txn_journal.clj" "prune-broken-locks!"]
    {:reads 1 :channel :control :why "broken-lock retention cutoff"}
    ["src/clj_surgeon/txn_journal.clj" "recover!"]
@@ -320,9 +330,11 @@
    ["src/clj_surgeon/txn_journal.clj" "retained-transactions"]
    {:reads 1 :channel :control :why "retention cutoff"}
    ["src/clj_surgeon/txn_journal.clj" "stamp-broken-at!"]
-   {:reads 1 :channel :control :why "broken-at stamp on disk"}
+   {:reads 2 :channel :control :why "the broken-at stamp on disk, read once and rendered once"}
    ["src/clj_surgeon/txn_journal.clj" "stamp-tombstone!"]
    {:reads 1 :channel :control :why "tombstone stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "touch-tombstone!"]
+   {:reads 1 :channel :control :why "writes that stamp onto the tombstone file; the value is the caller's, not a new read"}
    ["src/clj_surgeon/txn_journal.clj" "write-lease!"]
    {:reads 1 :channel :control :why "lease acquired-at stamp on disk"}
    ["src/clj_surgeon/txn_journal.clj" "write-lock!"]

@@ -734,7 +734,13 @@
                  :exit-ok (and (boolean finished?) (zero? (long (or exit 0))))
                  :profile-source profile-source
                  :report_written written?
-                 :report_written_at (when written? (.lastModified report))
+                 ;; @spec MCP-OP-TIME-007
+                 ;; A TAGGED reading, so the boundary relocates it into the
+                 ;; measured block instead of hashing it. Round four published
+                 ;; the raw mtime here and the clock scan, which then carried
+                 ;; four hand-written spellings, could not see it.
+                 :report_written_at (when written?
+                                      (measured/file-modified-ms report))
                  :report_started_at started
                  ;; @spec MCP-OP-ADMIT-107
                  ;; The three facts a reader needs to diagnose a runner that
