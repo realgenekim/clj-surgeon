@@ -49,6 +49,39 @@
   (let [seen (atom [])]
     [seen (fn [entry] (swap! seen conj (:relative entry)) :planned)]))
 
+(def ^:private gc-deadline-ms
+  "The budget `await-cleared` will spend before calling a reference LEAKED.
+
+   Deliberately generous, and deliberately a DEADLINE rather than a sleep.
+   The round-two review's finding 8: this witness used to do
+   `(System/gc)` / `(Thread/sleep 100)` twice and then assert, which asserts
+   that the collector finishes inside 200 ms of wall -- a statement about the
+   BOX, not about the reader. On a loaded Anvil that is a coin flip, and a
+   fast-lane test that flakes red under load is the exact tax the lane
+   partition exists to remove.
+
+   What the contract actually says is `the reader holds no source it has
+   finished with`, and that is a REACHABILITY claim with no clock in it. A
+   genuinely leaked source is strongly reachable and will never clear, no
+   matter how long we wait; a released one clears on the first collection. So
+   the loop below returns the instant the condition holds -- typically in one
+   pass, FASTER than the old fixed 200 ms -- and only spends the deadline on
+   its way to failing. The number is a bound on patience, not a measurement."
+  10000)
+
+(defn- await-cleared
+  "Applies collection pressure until every `WeakReference` in `refs` is
+   cleared, or `gc-deadline-ms` elapses. Returns how many are still reachable
+   -- 0 is the contract."
+  [refs]
+  (let [deadline (+ (System/nanoTime) (* gc-deadline-ms 1000000))]
+    (loop []
+      (System/gc)
+      (let [reachable (count (remove #(nil? (.get ^WeakReference %)) refs))]
+        (if (or (zero? reachable) (> (System/nanoTime) deadline))
+          reachable
+          (do (Thread/sleep 10) (recur)))))))
+
 ;; ------------------------------------------------- MCP-OP-MEM-020 retention
 
 ;; @spec MCP-OP-MEM-020
@@ -72,12 +105,12 @@
           ;; invisible: the JVM is free to collect a local after its last use,
           ;; and this witness passed a deliberate whole-scope leak until the
           ;; order was fixed.
-          (System/gc)
-          (Thread/sleep 100)
-          (System/gc)
-          (Thread/sleep 100)
-          (is (every? #(nil? (.get ^WeakReference %)) @refs)
-              "every source the planner saw has been collected")
+          (let [reachable (await-cleared @refs)]
+            (is (zero? reachable)
+                (str reachable " of " (count @refs) " sources the planner saw "
+                     "are still strongly reachable after " gc-deadline-ms
+                     " ms of collection pressure -- the reader is holding "
+                     "sources it has finished with")))
           (is (:ok receipt))
           (is (= 6 (get-in receipt [:work :files-read])))
           (is (= 0 (get-in receipt [:work :receipt-records]))
