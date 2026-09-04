@@ -5186,6 +5186,135 @@
           (delete-tree! root))))))
 
 ;; ---------------------------------------------------------------------------
+;; Opus's round-sixteen NO-GO item 5: `continuation-overflow-remedy` asserts a
+;; cause it never measured. Five hundred named files plus one denied, on a
+;; TWENTY-FOUR character root, returned
+;;
+;;   "The narrowest continuation this refusal can compute renders as 9592 UTF-8
+;;    bytes, over the 512-byte ceiling … The REQUEST is not the problem, the
+;;    length of the workspace path in it is: retry with workspace_root reaching
+;;    the same tree by a shorter path"
+;;
+;; The workspace path was 24 of those 9,592 bytes. A caller who follows that
+;; remedy shortens the one thing that is not the problem and gets the identical
+;; refusal — which is the loop-with-a-receipt this requirement forbids a
+;; continuation, arriving in a remedy instead. A refusal that names a bound must
+;; name the value it compared against; a refusal that names a CAUSE must have
+;; measured it.
+;; ---------------------------------------------------------------------------
+
+(defn- long-relative-path
+  "A project-relative source path of roughly `chars` characters.
+
+   Built out of nested directory segments because a single component over 255
+   bytes is ENAMETOOLONG on every filesystem this runs on — the entry cannot
+   exist, and a continuation is only over the ceiling because of an entry that
+   CAN."
+  [chars]
+  (let [segment (apply str (repeat 24 \d))
+        depth (max 1 (quot chars 25))]
+    (str (str/join "/" (repeat depth segment)) "/folds.clj")))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest a-continuation-over-the-ceiling-names-the-cause-it-measured
+  (let [root (temp-dir)
+        arm "src/app/folds.clj"
+        denied "src/app/denied.clj"
+        denied-file (io/file root denied)
+        many (mapv #(format "src/app/f%03d.clj" %) (range 500))
+        long-path (long-relative-path 600)]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (spit-file! denied-file arm-source)
+      (spit-file! (io/file root long-path) arm-source)
+      (doseq [name many] (spit-file! (io/file root name) arm-source))
+      (deny-reads! denied-file)
+      (let [named (.getCanonicalPath root)
+            here (fn [params]
+                   (census-tool/execute-request! {:project-root named} params))]
+
+        (testing "the fixtures are the ones that make each cause dominant"
+          (is (false? (.canRead denied-file))
+              "this process can still read the chmod-000 fixture")
+          (is (< (census/utf8-byte-count named) 200)
+              (str "the workspace root is not short, so the entry-count drive "
+                   "cannot distinguish the causes: " (count named))))
+
+        (testing "many short entries name the ENTRY COUNT, not the root"
+          (let [result (here {:files (conj many denied)})
+                remedy (str (:remedy result))]
+            (is (not (contains? result :next_call))
+                (str "the candidate fitted, so this drive proves nothing: "
+                     (pr-str (:next_call result))))
+            (is (string? (:remedy result))
+                (str "the refusal offers neither a continuation nor a "
+                     "remedy: " (pr-str result)))
+            (is (not (str/includes? remedy
+                                    "reaching the same tree by a shorter path"))
+                (str "the remedy blames a workspace path it never measured: "
+                     (pr-str remedy)))
+            (is (str/includes? remedy "500")
+                (str "the remedy does not name the number of sources it "
+                     "measured: " (pr-str remedy)))
+            (is (re-find #"\b\d{4,}\b" remedy)
+                (str "the remedy does not name the byte length it measured: "
+                     (pr-str remedy)))))
+
+        (testing "one very long entry names the ENTRY LENGTH, not the count"
+          (let [result (here {:files [long-path denied]})
+                remedy (str (:remedy result))]
+            (is (not (contains? result :next_call))
+                (str "the candidate fitted, so this drive proves nothing: "
+                     (pr-str (:next_call result))))
+            (is (not (str/includes? remedy
+                                    "reaching the same tree by a shorter path"))
+                (str "the remedy blames a workspace path it never measured: "
+                     (pr-str remedy)))
+            (is (str/includes? remedy "longest")
+                (str "the remedy does not name the entry whose length it "
+                     "measured: " (pr-str remedy)))
+            (is (str/includes? remedy
+                               (str (census/utf8-byte-count long-path)))
+                (str "the remedy does not name the byte length of that entry: "
+                     (pr-str remedy))))))
+      (finally
+        (allow-reads! denied-file)
+        (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest a-continuation-over-the-ceiling-on-a-long-root-names-the-root
+  (let [parent (temp-dir)
+        ;; A root long enough that IT is what does not fit, which is the case
+        ;; the round-fifteen wording was written for and the only case in which
+        ;; it was true.
+        long-root (io/file parent (str/join "/" (repeat 24 (apply str (repeat 24 \r)))))
+        arm "src/app/folds.clj"
+        denied "src/app/denied.clj"
+        denied-file (io/file long-root denied)]
+    (try
+      (spit-file! (io/file long-root arm) arm-source)
+      (spit-file! denied-file arm-source)
+      (deny-reads! denied-file)
+      (let [named (.getCanonicalPath long-root)
+            result (census-tool/execute-request!
+                     {:project-root named} {:files [arm denied]})
+            remedy (str (:remedy result))]
+        (is (> (census/utf8-byte-count named) census/max-next-call-bytes)
+            (str "the root is not long enough to dominate: " (count named)))
+        (is (not (contains? result :next_call))
+            (str "the candidate fitted, so this drive proves nothing: "
+                 (pr-str (:next_call result))))
+        (is (str/includes? remedy "reaching the same tree by a shorter path")
+            (str "the remedy does not name the workspace path, which IS what "
+                 "it measured here: " (pr-str remedy)))
+        (is (str/includes? remedy (str (census/utf8-byte-count named)))
+            (str "the remedy does not name the byte length of the root it "
+                 "measured: " (pr-str remedy))))
+      (finally
+        (allow-reads! denied-file)
+        (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
 ;;
 ;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
