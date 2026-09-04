@@ -1196,3 +1196,7 @@ What existed at the hold: the study doc (prose, my position), Sol's independent 
 ## 04:15Z — Gene, verbatim: "It was intended for you. Mayor messgage for you. Go go to. Tell mayor too" — the feature-thread study is GO; mayor told (4e53ecaf); E-THREAD launching
 
 Scope of "go": the study and its experimental method (the repo-local feature-thread script as the S cell, the E-THREAD cohort on social-media-writer), not a Surgeon verb — the verb is earned only by the cohort's number. social-media-writer is Gene's repo: cloned read-only; the script lives under clj-surgeon bench/feature-thread and is parameterised by the repo's conventions; nothing is committed into SMW.
+
+## 04:16Z — Gene, verbatim: "Maybe look into comparable asks we had for Marvin dictation app changes. Might have similarities. Make a change —> requires searching for JS and CLJ and maybe even prolog files" — E-THREAD amended before arm 1: marvin-voice-remote added as a second fixture repo
+
+Why it improves the study: the dictation app is Clojure + Datastar/JS + Prolog, and its git history is a frozen record of real cross-language changes — a commit touching .js and .clj (and .pl) in one change is a feature thread whose truth is already written, no hand construction; Gene's original asks are in its logs/ and become the ethnographic source. Threads T4/T5 mined from commits since June; the script takes per-repo conventions as a config file, not hard-coded paths. Runner told (amendment recorded with the time; no arm had run).
