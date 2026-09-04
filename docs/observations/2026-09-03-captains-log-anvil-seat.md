@@ -1224,3 +1224,5 @@ Three rounds to reach the right rung: r1 stripped one key, r2 relocated declared
 ## 04:48Z — O2 round 4 BUILT (515e8109, pushed); Sol review launched
 
 Two record corrections worth the line: an EARS clause (STUDY-046) had encoded a fixed allowance as a requirement — the rule the same branch forbids — and the test helper measured the two faces of a receipt at different clocks (18 bytes apart), the same class as the publish reserve it was testing. Rung D from r3 is now a red test: an unenumerated refusal reason throws a plain exception the caller cannot mistake for its own refusal.
+
+## 04:50Z — usage watch: mcp_tool_calls 147, outcomes {"ok": 100, "refused": 47}, tools {"inspect_clojure": 147}; error_types (top) no-clojure-files 11, invalid-grep-pattern 7, study-tree-too-large 6, study-output-limit 4, invalid-relative-directory-path 3, inspect-output-limit 3; window until 2026-09-04T04:48:42Z. DELTA since 03:48Z: no change (147/100/47 identical); no new repeated refusal, nothing for the friction ledger. Pushed to MCP/main (main frozen).
