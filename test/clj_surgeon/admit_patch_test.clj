@@ -4177,3 +4177,35 @@
       (finally
         (reset! config-atom previous)
         (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-130
+(deftest the-admit-paths-memory-bound-is-a-target-not-an-argument
+  ;; Reads the repository from the working directory, as the intent audit
+  ;; witnesses in this repo already do; both are run from the repo root.
+  (let [script "test/admit_analyzer_memory_selftest.clj"
+        makefile (slurp "Makefile")]
+    (is (.isFile (io/file script))
+        (str "the memory battery's arms are corpus TREES driven through the "
+             "ops registry; nothing in it drives the admit path, whose "
+             "memory question is findings DIVERSITY with both parsed images "
+             "live at once. The 16 MiB read ceiling bounds what is READ, not "
+             "what parsing it retains, and an argument is not a receipt"))
+    (is (str/includes? makefile "\nadmit-analyzer-memory-self-test:")
+        "an arm nobody can run is not a receipt")
+    (testing "at an explicit heap the JVM was actually given"
+      (is (str/includes? makefile "ADMIT_ANALYZER_MEMORY_XMX ?= 512m"))
+      (is (str/includes? makefile
+                         "-J-Xmx$(ADMIT_ANALYZER_MEMORY_XMX)")
+          "a heap bound the JVM never received is not a bound"))
+    (testing "and never wired into a fast gate by accident"
+      (is (= 2 (count (re-seq #"admit-analyzer-memory-self-test" makefile)))
+          (str "exactly the .PHONY line and the target itself; a third "
+               "mention means a tens-of-seconds JVM entered a gate, which "
+               "is a decision, not a diff")))
+    (testing "the arm reports numerically, per scale"
+      (let [source (slurp script)]
+        (is (str/includes? source "(def scales [100 1000 10000])"))
+        (is (str/includes? source "\"PASS\" \"FAIL\""))
+        (is (str/includes? source "heap-peak-MiB=%d budget-MiB=%d"))
+        (is (str/includes? source "(System/exit (if (every? true? results) 0 1))")
+            "a self-test that cannot fail the shell is a log line")))))
