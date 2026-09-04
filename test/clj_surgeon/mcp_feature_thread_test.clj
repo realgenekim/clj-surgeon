@@ -1457,6 +1457,75 @@
         (finally (delete-tree! root))))))
 
 ;; ---------------------------------------------------------------------------
+;; ROUND SIX -- review finding 3: a route leg is a route-table ENTRY
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-044
+(deftest a-route-leg-is-a-parsed-route-entry-never-a-string-in-another-form
+  (testing "the handler docstring that MENTIONS /api/save is not the route leg"
+    (let [{:keys [structured]}
+          (call! {:subject "saveDraft" :also ["/api/save"]
+                  :config smw-conventions
+                  :scope {:workspace_root fixture-root}})
+          l (leg structured "route")]
+      (is (= "src/writer/routes.clj" (:file l)))
+      (is (not (and (= "FOUND" (:status l)) (= 392 (:from l))))
+          (str "the route leg is the docstring of (defn handle-save …) reported"
+               " as FOUND: " (pr-str (select-keys l [:status :from :to :evidence
+                                                     :boundary]))))
+      (is (or (= 2121 (:from l)) (= "CANDIDATE" (:status l)))
+          (str "a route leg is the real route-table entry at L2121, or an"
+               " honest CANDIDATE — never a string occurrence in another form: "
+               (pr-str (select-keys l [:status :from :to :evidence]))))
+      (when (= "FOUND" (:status l))
+        (is (str/includes? (str (:boundary l)) "member of")
+            "a FOUND route leg is narrowed to its own table entry"))))
+
+  (testing "the docstring hit is still REPORTED, as a candidate lead, not dropped"
+    (let [{:keys [structured]}
+          (call! {:subject "saveDraft" :also ["/api/save"]
+                  :config smw-conventions
+                  :scope {:workspace_root fixture-root}})
+          l (leg structured "route")
+          leads (concat (:also l) (when (= "CANDIDATE" (:status l)) [l]))]
+      (is (some #(= 392 (:from %)) leads)
+          (str "the docstring occurrence is a lead the receipt still names: "
+               (pr-str (mapv #(select-keys % [:from :to :evidence]) leads))))))
+
+  (testing "the route leg of the NAMED case is unchanged: a real entry, FOUND"
+    (let [{:keys [structured]} (thread! fixture-root)
+          l (leg structured "route")]
+      (is (= "FOUND" (:status l)))
+      (is (= "src/writer/routes.clj" (:file l)))
+      (is (= 2148 (:from l)) (str "the route entry line: " (pr-str l)))))
+
+  (testing "a route literal inside a MAP is a route entry too"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-route-map"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/views.clj" "(ns views)\n(def menu {:onclick \"go()\"})\n")
+        (write-file! root "src/routes.clj"
+                     (str "(ns routes)\n"
+                          "(defn handle-go\n  \"POST /api/go — the decoy docstring.\"\n  [r] r)\n"
+                          "(def table\n  [{:path \"/api/go\" :post #'handle-go}])\n"))
+        (write-file! root "src/handlers.clj" "(ns handlers)\n(defn handle-go [r] r)\n")
+        (write-file! root "test/t.clj" "(ns t)\n(deftest x (post \"/api/go\"))\n")
+        (write-file! root "js/commands.js" "function go() { return 1; }\n")
+        (let [{:keys [structured]}
+              (call! {:subject "go" :also ["/api/go"]
+                      :config alias-conventions
+                      :scope {:workspace_root (.getPath root)}})
+              l (leg structured "route")]
+          (is (= "FOUND" (:status l)))
+          (is (str/includes? (:body l) ":path \"/api/go\"")
+              (str "the map entry is the route leg: "
+                   (pr-str (select-keys l [:status :from :to :boundary]))))
+          (is (not (str/includes? (:body l) "decoy docstring"))
+              "the docstring that merely MENTIONS the route is not the leg"))
+        (finally (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
 ;; ROUND SIX -- review finding 2: a conventions file may not reach outside the
 ;; workspace
 ;; ---------------------------------------------------------------------------
