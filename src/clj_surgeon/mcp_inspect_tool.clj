@@ -1566,7 +1566,9 @@
   ;; The first call routed to a workspace root announces that session. One
   ;; server serves several arms of a cohort; without this the record cannot
   ;; tell a silent connection failure from a deliberate decline.
-  (telemetry/record-session-start! telemetry {:workspace-root project-root})
+  (telemetry/record-session-start!
+    telemetry {:workspace-root project-root
+               :client-run-id (:client-run-id config)})
   (let [started (System/nanoTime)
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
@@ -1661,7 +1663,15 @@
         (if-not (:ok routed)
           routed
           (attach-workspace-root
-            (execute-inspect-in-context! (:config routed) (:params routed))
+            ;; @spec MCP-OP-STUDY-043
+            ;; The client run travels with the ROUTE: a request routed to
+            ;; another workspace is still the same client session, and a
+            ;; router-built config would otherwise drop the identity.
+            (execute-inspect-in-context!
+              (cond-> (:config routed)
+                (:client-run-id config)
+                (assoc :client-run-id (:client-run-id config)))
+              (:params routed))
             (:workspace-root routed)))))))
 
 ;; @spec MCP-OP-READ-DIAG-002
@@ -1895,7 +1905,16 @@
     {:execute
      #(let [ordinary-result
             (if-let [config @runtime-config]
-              (execute-inspect! config params)
+              ;; @spec MCP-OP-STUDY-043
+              ;; The MCP request shape cannot carry a run id — `inspect-schema`
+              ;; is `additionalProperties false` — and a caller-supplied one
+              ;; could name another arm. The transport's session is the id.
+              (execute-inspect!
+                (cond-> config
+                  (prepared-confirmation/exchange-session-key exchange)
+                  (assoc :client-run-id
+                         (prepared-confirmation/exchange-session-key exchange)))
+                params)
               {:ok false
                :operation "inspect_clojure"
                :error_type "server-not-initialized"

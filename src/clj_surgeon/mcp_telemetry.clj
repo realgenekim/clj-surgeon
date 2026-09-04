@@ -149,8 +149,15 @@
   [state info]
   (when (and state (not= :off (:mode state)) (:sessions state))
     (when-let [key (workspace-key (:workspace-root info))]
-      (let [[seen _] (swap-vals! (:sessions state) conj key)]
-        (when-not (contains? seen key)
+      ;; @spec MCP-OP-STUDY-043
+      ;; The identity of a SESSION is the pair (root, client run), never the
+      ;; root alone. Keyed on the root alone the event distinguished arms only
+      ;; when every arm happened to get its own worktree path; two arms in one
+      ;; root, or one client reconnecting, left identical bytes — the failure
+      ;; this event exists to end.
+      (let [identity [key (:client-run-id info)]
+            [seen _] (swap-vals! (:sessions state) conj identity)]
+        (when-not (contains? seen identity)
           (emit! state :session.start
                  (session-start-event (:mode state) info)))))))
 
