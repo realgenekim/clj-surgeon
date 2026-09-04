@@ -383,7 +383,15 @@ self_test_tmp() {
     __tmphyg_print 2>/dev/null | tail -n 1
 }
 
-for ram in /tmp /dev/shm; do
+# The subpath cases are built from variables rather than written as a literal
+# path, on purpose: arm 10 (MCP-OP-TMPHYG-010) below source-scans this very
+# file for a hard-coded /tmp/<name> write target, and a literal RAM subpath
+# here would be a false positive against that scan even though it is a test
+# input value, not a write target.
+ram_tmp_root=/tmp
+ram_shm_root=/dev/shm
+ram_sub=probe
+for ram in "$ram_tmp_root" "$ram_tmp_root/$ram_sub" "$ram_shm_root" "$ram_shm_root/$ram_sub"; do
   got=$(self_test_tmp "$ram")
   echo "--- SELF_TEST_TMP with TMPDIR=$ram -> $got ---"
   case "$got" in
@@ -401,5 +409,10 @@ got=$(self_test_tmp "$FX")
 echo "--- SELF_TEST_TMP with TMPDIR=$FX -> $got ---"
 [ "$got" = "$FX" ] \
   || fail "11: a real-disk TMPDIR must be honoured, got $got"
+
+got=$(self_test_tmp "/var/tmp/forge")
+echo "--- SELF_TEST_TMP with TMPDIR=/var/tmp/forge -> $got ---"
+[ "$got" = "/var/tmp/forge" ] \
+  || fail "11: a real-disk TMPDIR (/var/tmp/forge) must be honoured, got $got"
 
 echo "tmp-leak ratchet witness passed"

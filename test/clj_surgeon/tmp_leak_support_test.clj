@@ -111,7 +111,7 @@
                                           "--eval=__tmphyg_print:; @echo $(SELF_TEST_TMP)"
                                           "__tmphyg_print")]
                             (when (zero? exit) (str/trim (or (last (str/split-lines out)) "")))))]
-      (doseq [ram ["/tmp" "/dev/shm"]]
+      (doseq [ram ["/tmp" "/tmp/x" "/dev/shm" "/dev/shm/y"]]
         (let [got (self-test-tmp ram)]
           (is (= "/var/tmp" got)
               (str "a RAM TMPDIR (" ram ") must be redirected, got " (pr-str got)))))
