@@ -1065,6 +1065,8 @@
     :files :owners :protected_node_drift
     :byte_drift_outside_hunks :hazards :lint_delta :tests :hashes
     :pre_image_binding :verification_status :verification_reasons
+    ;; @spec MCP-OP-ADMIT-157
+    :verify_ok
     :verification_complete :next_call :source-unchanged})
 
 ;; @spec MCP-OP-ADMIT-050
