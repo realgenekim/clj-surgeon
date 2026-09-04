@@ -105,6 +105,13 @@ pass). Read the audit as "the intent is declared and annotated," never as
 "the intent is enforced"; the falsifier table below is where enforcement is
 claimed, and every row of it names an executed arm.
 
+**The `[x]` ordering blemish, corrected.** MCP-OP-TMPHYG-012's checkbox landed
+one commit before its RED witness (`c2aaf97e`, before `bf1f7dab`), and
+MCP-OP-TMPHYG-013's checkbox landed in its own RED commit (`030dabbe`) rather
+than after GREEN — round three's review verified both REDs independently red
+at their commits regardless of the checkbox, so nothing here understates
+enforcement, but the earlier disclosure named only the -012 case.
+
 ## Falsifier table
 
 Every witness below is EXECUTED behaviour. Round one's witnesses were a unit
