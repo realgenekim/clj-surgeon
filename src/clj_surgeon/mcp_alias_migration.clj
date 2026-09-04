@@ -434,10 +434,16 @@
   read failures included. A ceiling that counts an entry class it will not stop
   on is not a ceiling for that class."
   [^Path root {:keys [paths exclude]}]
-  (let [expanded (mapv (fn [entry]
-                         {:entry entry
-                          :patterns (scope-glob-patterns root entry)})
-                       paths)
+  (let [nul (first (keep (fn [entry]
+                           (let [index (.indexOf (str entry) "\u0000")]
+                             (when-not (neg? index)
+                               {:entry entry :index index})))
+                         paths))
+        expanded (when-not nul
+                   (mapv (fn [entry]
+                           {:entry entry
+                            :patterns (scope-glob-patterns root entry)})
+                         paths))
         unparseable (first
                       (keep (fn [{:keys [entry patterns]}]
                               (when-let [pattern (first (filter glob-parse-error
@@ -446,13 +452,35 @@
                                  :pattern pattern
                                  :cause (glob-parse-error pattern)}))
                             expanded))]
-    (if unparseable
+    (cond
       ;; @spec MCP-OP-ALIAS-051
+      ;; a NUL cannot appear in any filesystem path, but `getPathMatcher`
+      ;; accepts one, so the entry compiled, matched nothing, and earned
+      ;; `scope-matches-nothing` — a refusal about the TREE for a spelling
+      ;; cause that prints as nothing at all. It is refused here, before the
+      ;; first visited entry, and the byte is named in words because the
+      ;; caller cannot see it in their own request.
+      nul
       {:ok false
        :error-type :alias-migration-scope-path-refused
+       :refusal-reason :nul-byte
+       :path (:entry nul)
+       :pattern (:entry nul)
+       :cause (str "the entry carries a NUL byte (U+0000) at index "
+                   (:index nul)
+                   ", which no filesystem path can hold, so the entry names no"
+                   " path this walk could visit")}
+
+      ;; @spec MCP-OP-ALIAS-051
+      unparseable
+      {:ok false
+       :error-type :alias-migration-scope-path-refused
+       :refusal-reason :unparseable-glob
        :path (:entry unparseable)
        :pattern (:pattern unparseable)
        :cause (:cause unparseable)}
+
+      :else
       (scan-parsed-scope root (mapcat :patterns expanded) exclude))))
 
 ;; @spec MCP-OP-ALIAS-051
@@ -807,27 +835,39 @@
       ;; summarised, and no next_call is computable — a malformed pattern has
       ;; no mechanical correction, only the one the caller meant.
       (= :alias-migration-scope-path-refused (:error-type scan))
-      (refusal :alias-migration-scope-path-refused
-               (str "scope.paths entry " (pr-str (elide (:path scan)))
-                    " is not a parseable glob"
-                    (when-not (= (:path scan) (:pattern scan))
-                      (str " — it names a directory, and the subtree pattern "
-                           (pr-str (elide (:pattern scan)))
-                           " derived from it"))
-                    ": " (elide (:cause scan))
-                    ". No file was visited, so what the scope contains is not"
-                    " known.")
-               {:path (elide (:path scan))
-                :pattern (elide (:pattern scan))
-                :cause (elide (:cause scan))
-                :next_call nil
-                :remedy (str "Correct the glob and resend. The parser reported "
-                             (pr-str (elide (:cause scan)))
-                             "; an unclosed {group}, [class] or trailing \\ is "
-                             "the usual cause — src/{clj,cljs}/** is one "
-                             "keystroke from src/{**. No next_call is composed "
-                             "because only the caller knows which paths the "
-                             "pattern was meant to select.")})
+      (let [nul? (= :nul-byte (:refusal-reason scan))]
+        (refusal :alias-migration-scope-path-refused
+                 (str "scope.paths entry " (pr-str (elide (:path scan)))
+                      (if nul?
+                        " cannot name a path"
+                        (str " is not a parseable glob"
+                             (when-not (= (:path scan) (:pattern scan))
+                               (str " — it names a directory, and the subtree"
+                                    " pattern "
+                                    (pr-str (elide (:pattern scan)))
+                                    " derived from it"))))
+                      ": " (elide (:cause scan))
+                      ". No file was visited, so what the scope contains is not"
+                      " known.")
+                 {:path (elide (:path scan))
+                  :pattern (elide (:pattern scan))
+                  :cause (elide (:cause scan))
+                  :next_call nil
+                  :remedy
+                  (if nul?
+                    (str "Remove the NUL byte and resend. It renders as "
+                         "nothing in a console, a log and a diff, so an entry "
+                         "that looks exactly right can still carry one — the "
+                         "cause above names its index. No next_call is "
+                         "composed because only the caller knows which path "
+                         "the entry was meant to spell.")
+                    (str "Correct the glob and resend. The parser reported "
+                         (pr-str (elide (:cause scan)))
+                         "; an unclosed {group}, [class] or trailing \\ is "
+                         "the usual cause — src/{clj,cljs}/** is one "
+                         "keystroke from src/{**. No next_call is composed "
+                         "because only the caller knows which paths the "
+                         "pattern was meant to select."))}))
 
       ;; @spec MCP-OP-ALIAS-048
       (= :alias-migration-scope-too-deep (:error-type scan))
