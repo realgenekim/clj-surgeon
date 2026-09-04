@@ -46,6 +46,8 @@
    #{:committed :typed-refusal}
    "transform_clojure"
    #{:preview :committed :typed-refusal}
+   "relation_census"
+   #{:read-success :typed-refusal}
    ;; @spec MCP-OP-ALIAS-001
    "alias_migration"
    #{:committed :typed-refusal}

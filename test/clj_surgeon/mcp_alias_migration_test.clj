@@ -5831,7 +5831,7 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def ^:private frozen-refusal-kinds
-  "The 143 kinds the entrance's enumeration holds on the MCP/main landing (139 at 51da9446 + four trunk kinds).
+  "The 145 kinds the entrance's enumeration holds on the MCP/main landing (139 at 51da9446 + four trunk kinds + two census kinds).
 
   A PIN, not a source: `refusal-kinds-in-source` stays derived, and this set
   exists so that a change to the derivation is LOUD. Round sixteen shipped a
@@ -5910,7 +5910,14 @@
     "unsupported-buffer-context" "unsupported-plan-operation"
     "unsupported-plan-version" "verification-baseline-failed"
     "verification-failed" "verification-job-workspace-mismatch"
-    "verification-unverified"})
+    "verification-unverified"
+    ;; re-pinned at the census merge (2026-09-04): the two kinds the
+    ;; relation-census verb publishes that the trunk enumeration never saw —
+    ;; 143 → 145. Both are keyword literals in `relation_census.clj`
+    ;; (`:census-worker-failure` at the pool boundary, `:unparseable-file` at
+    ;; the per-file read), so the derivation reads them; they are pinned here
+    ;; on purpose, one line of diff with a reason.
+    "census-worker-failure" "unparseable-file"})
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
@@ -5919,7 +5926,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 143 (count kinds))
+    (is (= 145 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

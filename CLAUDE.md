@@ -266,6 +266,13 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
   absent from the compact editor, or gates that must participate in rollback.
   Use the process-starting CLI only when MCP is unavailable, the operation is
   not exposed there, or the CLI itself is under test.
+- For a projection's collection writes, use the read-only `relation_census` MCP
+  tool (or `clj-surgeon :op :relation-census`). It classifies every write inside
+  a `defmethod fold-event` arm as `:door`, `:set`, `:guarded`, `:raw`, or
+  `:unknown` with a reason, and names the calls inside arms it cannot see
+  through. It locates review work; it does not prove idempotency and it is not
+  an enforcement gate. It is also the one tool that ENUMERATES the workspace
+  tree, so point it at the workspace you mean.
 - Do not discover, register, or call the semantic backend directly. For
   cross-file definitions, references, implementations, incoming calls, and
   outgoing calls, use Surgeon `inspect_clojure` preparation. Surgeon owns any

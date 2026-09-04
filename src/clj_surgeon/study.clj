@@ -13,6 +13,7 @@
    [babashka.fs :as fs]
    [babashka.process]
    [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.argv-depth :as argv-depth]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
@@ -175,34 +176,52 @@
 
 ;; @spec MCP-OP-STUDY-013
 (defn- read-build-file
-  "Pure: read one build file's content WITHOUT evaluating anything in it.
+  "Pure: read one build file's content AS DATA, with a reader that does not
+   evaluate.
 
-   deps.edn and bb.edn are EDN, so `clojure.edn/read-string` reads them and
-   has no eval reader at all. project.clj is Clojure source and needs the
-   Clojure reader, so it is read with `*read-eval*` bound false, which makes
-   `#=(...)` throw instead of run.
+   @spec MCP-OP-SHELL-ARGV-004 — `clojure.edn/read-string` for EVERY build
+   file, `deps.edn`, `bb.edn` and `project.clj` alike. This used to read
+   `project.clj` with `clojure.core/read-string` inside
+   `(binding [*read-eval* false] …)`, on the ground that a Leiningen project
+   file is Clojure source rather than EDN. MCP-OP-SHELL-ARGV-004 rules that
+   out in as many words: \"as data\" means a reader for which `*read-eval*`
+   is NOT CONSULTED, not a reader called with `*read-eval*` bound false,
+   because a binding is a property of one CALL SITE and the requirement is a
+   property of the READER. The binding was correct today and one refactor away
+   from being somewhere else.
 
-   Before this, every build file under a scanned tree reached
-   `clojure.core/read-string` with `*read-eval*` at its ambient true: a
-   `#=(clojure.core/spit ...)` inside ANY deps.edn/bb.edn/project.clj in the
-   tree executed as the scanning process during discovery, and the silent
-   catch below hid it."
-  [filename source]
-  (if (= "project.clj" filename)
-    (binding [*read-eval* false]
-      (read-string source))
-    (edn/read-string source)))
+   `edn/read-string` reads every shape `source-paths-from-config` was written
+   for — the `deps.edn` and `bb.edn` maps, and the `project.clj` list whose
+   `:source-paths` is looked up positionally. A `project.clj` that genuinely
+   needs code reading now throws and falls back to the default source paths,
+   which is the same answer this already gave for an unreadable build file:
+   a refusal to guess, not a regression.
+
+   @spec MCP-OP-SHELL-ARGV-005 — and it removes this namespace's last call to
+   an evaluating reader, which is what the src-scanning oracle for that spec
+   exists to keep at zero."
+  [_filename source]
+  (edn/read-string source))
 
 ;; @spec MCP-OP-STUDY-013
+;; @spec MCP-OP-SHELL-ARGV-007
 (defn- extract-source-paths
-  "I/O wrapper: read a build file and return its source paths."
+  "I/O wrapper: read a build file and return its source paths.
+
+   @spec MCP-OP-SHELL-ARGV-007 — the nesting ceiling is applied to the file's
+   BYTES, before any reader touches them, and OUTSIDE the `try` below. That
+   placement is the requirement rather than a detail: the default-paths
+   fallback is the right answer for a build file this tool cannot PARSE and
+   the wrong answer for one it is REFUSING, because a caller told nothing
+   cannot tell a build file that was ignored from one that was never read."
   [build-file]
-  (let [filename (str (fs/file-name build-file))]
+  (let [filename (str (fs/file-name build-file))
+        text (try (slurp (str build-file)) (catch Exception _e nil))]
+    (when text (argv-depth/refuse-over-nested-build-file! build-file text))
     (try
-      (source-paths-from-config filename
-                                (read-build-file filename
-                                                 (slurp (str build-file))))
+      (source-paths-from-config filename (read-build-file filename text))
       (catch Exception _e ["src"]))))
+
 
 ;; @spec MCP-OP-STUDY-014
 ;; @spec MCP-OP-STUDY-021
@@ -281,16 +300,51 @@
 ;; @spec MCP-OP-STUDY-014
 (defn- confined-source-dirs
   "Resolve a build file's declared source paths under its project root,
-   keeping only those that stay inside the canonical scan root.
+   keeping only those that stay inside the canonical scan root — and RECORDING
+   each one it drops.
 
    `(fs/path project-root \"../../..\")` is NOT normalized by `fs/path`, so an
    unnormalized escape used to be handed straight to `find` and moved the
-   whole scan outside the root."
-  [root project-root src-paths]
+   whole scan outside the root.
+
+   @spec MCP-OP-SHELL-ARGV-006 — every entry is UNTRUSTED CALLER DATA, and a
+   dropped entry is now a TYPED, COUNTED refusal instead of a silent `keep`.
+   Two checks, in this order:
+
+   - a STRING check, because nothing performed one. A non-string entry —
+     `{:paths [[\"src\"] 42]}` — is refused here and never reaches a path
+     constructor at all.
+
+   - the RESOLVE-then-FENCE check that was already here, applied to the REAL
+     path and never to the spelling, because `..`, an absolute entry and a
+     symlink are three spellings of one escape.
+
+   The refusal names the entry AS THE CALLER SPELLED IT and never the tree it
+   resolved to: the target is a fact about the box, the spelling is the fact
+   about the request, and a refusal that publishes the target hands over the
+   very path it just declined to read. It is recorded rather than swallowed
+   because a build file naming one escaping path and one legitimate one must
+   not be reported as complete — a completeness claim over a walk that was
+   fenced is the defect this fence exists to stop, wearing a green receipt.
+
+   It travels on the SAME channel MCP-OP-STUDY-035 already opened for a
+   `:paths` entry that is itself a symlink (`:paths-unresolved`), with its own
+   `:reason`, rather than on a second one: two refusal channels for one
+   question is how two channels come to disagree."
+  [refused! project-name root project-root src-paths]
   (keep (fn [src-path]
-          (when-let [resolved (mcp-paths/normalized-path-within
+          (if-not (string? src-path)
+            (do (swap! refused! conj {:path (pr-str src-path)
+                                      :reason :not-a-string
+                                      :project project-name})
+                nil)
+            (if-let [resolved (mcp-paths/normalized-path-within
                                 root project-root src-path)]
-            [(str src-path) resolved]))
+              [(str src-path) resolved]
+              (do (swap! refused! conj {:path (str src-path)
+                                        :reason :outside-project-root
+                                        :project project-name})
+                  nil))))
         src-paths))
 
 ;; @spec MCP-OP-STUDY-035
@@ -405,6 +459,7 @@
                                      (walkable-source-dirs
                                        skipped! project-name
                                        (confined-source-dirs
+                                         skipped! project-name
                                          root root-path src-paths))))]
              {:name project-name
               :root (str root-path)
@@ -895,7 +950,7 @@
    project the bound never reached is named rather than silently absent while
    `project_count` still counts it."
   ([projects dir] (format-ls-tree-text projects dir nil))
-  ([projects dir {:keys [file-count]}]
+  ([projects dir {:keys [file-count paths-unresolved]}]
    (let [sb (StringBuilder.)
          multi-project? (> (count projects) 1)
          shown-files (reduce + (map #(count (:outlines %)) projects))
@@ -951,6 +1006,21 @@
          (let [{:keys [scan_ms bytes_scanned]} (scan-resources projects)]
            (.append sb (format "── resources: scan_ms %s, bytes_scanned %s\n"
                                scan_ms bytes_scanned)))))
+     ;; @spec MCP-OP-SHELL-ARGV-006
+     ;; @spec MCP-OP-STUDY-035
+     ;; Named and counted, on the same terms as the admission block above and
+     ;; for the same reason. The ENTRY is printed as the caller SPELLED it and
+     ;; the tree it resolved to is not printed at all: publishing the target
+     ;; would hand over the very path this fence just declined to read. Nothing
+     ;; is appended when nothing was refused, so an ordinary scan's output is
+     ;; byte-identical to before this control existed.
+     (when (seq paths-unresolved)
+       (.append sb (format "── source_paths_unresolved: %d entr%s\n"
+                           (count paths-unresolved)
+                           (if (= 1 (count paths-unresolved)) "y" "ies")))
+       (doseq [{:keys [project path reason]} paths-unresolved]
+         (.append sb (format "   %s  %s  refused: %s\n"
+                             project path (name reason)))))
      (str sb))))
 
 (defn format-ls-tree-edn-entries
@@ -980,14 +1050,23 @@
    the rare refusal branch is one nobody ever sees move — and it names and
    counts `:parser_admission_refused` only when something actually was
    refused. The human TEXT rendering keeps the older, quieter contract."
-  [projects dir]
-  (let [entries (format-ls-tree-edn-entries projects dir)
-        refused (admission-refusals projects dir)
-        receipt (cond-> {:resources (scan-resources projects)}
-                  (seq refused)
-                  (assoc :parser_admission_refused
-                         {:count (count refused) :files refused}))]
-    (conj entries {:receipt receipt})))
+  ([projects dir] (format-ls-tree-edn projects dir nil))
+  ([projects dir {:keys [paths-unresolved]}]
+   (let [entries (format-ls-tree-edn-entries projects dir)
+         refused (admission-refusals projects dir)
+         receipt (cond-> {:resources (scan-resources projects)}
+                   (seq refused)
+                   (assoc :parser_admission_refused
+                          {:count (count refused) :files refused})
+                   ;; @spec MCP-OP-SHELL-ARGV-006
+                   ;; Named and counted here too, and carrying only the
+                   ;; SPELLING. Conditional for the same reason the admission
+                   ;; key is: an ordinary scan's receipt is unchanged.
+                   (seq paths-unresolved)
+                   (assoc :source_paths_unresolved
+                          {:count (count paths-unresolved)
+                           :entries (vec paths-unresolved)}))]
+     (conj entries {:receipt receipt}))))
 
 ;; @spec MCP-OP-STUDY-011
 (defn format-ls-tree-names
@@ -1052,7 +1131,19 @@
                                          nil?
                                          (walkable-source-dirs
                                            skipped! project-name
+                                           ;; @spec MCP-OP-SHELL-ARGV-006
+                                           ;; The grep fast path reads the same
+                                           ;; build files through the same
+                                           ;; extractor, so it inherits the same
+                                           ;; defect and needs the same fence
+                                           ;; AND the same refusal channel. A
+                                           ;; fence reported at one of two call
+                                           ;; sites is not reported, it is that
+                                           ;; call site's habit — and `:grep` is
+                                           ;; one argument away for the caller
+                                           ;; who just planted the file.
                                            (confined-source-dirs
+                                             skipped! project-name
                                              root (fs/path project-root)
                                              (extract-source-paths build-file)))))]
                            {:name project-name
