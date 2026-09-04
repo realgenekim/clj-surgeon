@@ -45,11 +45,25 @@
         ;; path with a literal "\" component never string-matches the manifest's
         ;; raw spelling (inb-9c18e2). -z disables that quoting entirely.
         gd (sh "git" "-C" wt "diff" "-z" "--name-only" base)
-        untracked (sh "git" "-C" wt "ls-files" "-z" "--others" "--exclude-standard")
         _ (when-not (zero? (:exit gd))
             (println "CHECK 1 file-set: FAIL git diff failed:" (str/trim (:err gd)))
             (System/exit 1))
-        split-nul (fn [s] (remove str/blank? (str/split s (re-pattern (str (char 0))))))
+        ;; Every git listing this check consumes is fail-closed: a listing process
+        ;; that cannot be trusted must never read as an empty set (a missing
+        ;; untracked-extra listing would let a real extra file disappear and the
+        ;; gate false-PASS). Check `ls-files`'s own exit exactly as `diff`'s is
+        ;; checked above, before any of its output is parsed.
+        untracked (sh "git" "-C" wt "ls-files" "-z" "--others" "--exclude-standard")
+        _ (when-not (zero? (:exit untracked))
+            (println (format "CHECK 1 file-set: ERROR git ls-files exit=%d %s"
+                              (:exit untracked) (str/trim (:err untracked))))
+            (System/exit 1))
+        ;; NUL framing (-z) only ever produces EMPTY separators between records --
+        ;; never a separator that is nonempty whitespace -- so the right predicate
+        ;; is `empty?`. `str/blank?` is also true for a legal POSIX path that is
+        ;; itself all whitespace (e.g. a file literally named " "), which would
+        ;; silently drop a real record instead of just the framing artifacts.
+        split-nul (fn [s] (remove empty? (str/split s (re-pattern (str (char 0))))))
         changed (into #{} (split-nul (:out gd)))
         extra-untracked (into #{} (split-nul (:out untracked)))
         changed-all (into changed extra-untracked)]
