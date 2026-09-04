@@ -1120,3 +1120,7 @@ The reviewer's sentence for the class: rounds 15/16 were "one entrance proved, b
 ## 02:24Z — Gene: "Do all of these NO GO result in more LID rules. Seems like great ratchet?" — answered; skill/audit ratchet filed as inb-62a674
 
 Yes: every round amends EARS text + falsifier rows under stable ids; registry 253 → 300 tonight; no closed item re-opened. The weak spot, from the night's own table: four of five NO-GOs were a universal rule with an existential witness (one entrance / one shape / one key / a projection). Proposed: the audit lints universal quantifiers and demands an enumerating witness whose set is derived from the code; sabotages become committed red tests; verdicts name fixes that re-break an earlier class.
+
+## 02:28Z — E-NSWEEP CLOSED (doc 40dbfe6 on MCP/main): N* = 23; square 2 restricted to N ≤ 21
+
+Twelve more native arms, 0 stream edits (34/34 native write arms across five cohorts). The boundary the ceiling test could only bound is now located: the caller mostly stops hand-typing by N = 30 and entirely by 55; E-CEILING80's N ≲ 40 was too generous by ~2×. Report and brainfleet §34 carry the restricted sentence. What remains open on square 2 is the write-path flank (E-HARNESS-2 scoring). Apparatus ratchets named: fence digests exclude .git and hash evidence content; a fast gate receipt is re-executed and diffed, not trusted or distrusted.
