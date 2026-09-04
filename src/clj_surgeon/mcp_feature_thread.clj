@@ -2040,6 +2040,37 @@
                             "no seed names a definition")
                   :elide :implementation}))))))
 
+;; @spec MCP-OP-THREAD-035
+(defn export-note
+  "How the browser reaches a script leg's definition -- or the statement that it
+  does not have to.
+
+  A classic script's functions are globals: there is no `export`, no
+  `module.exports`, no `window.X =`, and a reader who is not TOLD that goes and
+  searches for a registration site that does not exist. So say it. When there IS
+  one, name the file, the line and the line's own text, which is the only form
+  of this answer a reader can check."
+  [cache leg identifiers]
+  (let [{:keys [ok source lines]} (read-source cache (:file leg))]
+    (when ok
+      (let [idents (alternation (remove str/blank? (distinct identifiers)))]
+        (if-not idents
+          "none (no identifier seed to look for)"
+          (let [re (re-pattern
+                     (str "^\\s*export\\s+(?:default\\s+)?(?:async\\s+)?"
+                          "(?:function|const|let|var|class)\\s+(?:" idents ")\\b"
+                          "|^\\s*export\\s*\\{[^}]*\\b(?:" idents ")\\b"
+                          "|\\bmodule\\.exports\\b[^\\n]*\\b(?:" idents ")\\b"
+                          "|\\b(?:window|globalThis|self)\\.(?:" idents ")\\s*="))
+                hit (first (keep-indexed
+                             (fn [idx line] (when (re-find re line) [(inc idx) line]))
+                             lines))]
+            (if hit
+              (str (:file leg) ":L" (first hit) "  " (str/trim (second hit)))
+              (if (re-find #"(?m)^\s*(?:export|import)\s" source)
+                "none for this subject (the file is a module: it exports other names)"
+                "none (classic script; functions are globals)"))))))))
+
 (defn resolve-thread
   "The legs of one subject, in the convention set's declared order, plus the
   automatic implementation leg.
@@ -2050,11 +2081,17 @@
   ([cache paths conventions seeds handler]
    (resolve-thread cache paths conventions seeds handler nil nil))
   ([cache paths conventions seeds handler walked-globs scope-paths]
-   (let [declared (mapv (fn [leg]
-                          (assoc (resolve-leg cache paths seeds leg
-                                              {:handler-name (:name handler)
-                                               :scope-paths scope-paths})
-                                 :elide (elision-class leg)))
+   (let [;; @spec MCP-OP-THREAD-035
+         enrich (fn [l]
+                  (cond-> l
+                    (and (located? l) (script-path? (:file l)))
+                    (assoc :export (export-note cache l (:identifiers seeds)))))
+         declared (mapv (fn [leg]
+                          (-> (resolve-leg cache paths seeds leg
+                                           {:handler-name (:name handler)
+                                            :scope-paths scope-paths})
+                              (assoc :elide (elision-class leg))
+                              enrich))
                         (:legs conventions))]
      (if-let [auto-leg (implementation-leg conventions)]
        (conj declared (resolve-implementation
@@ -2210,6 +2247,7 @@
          " bytes=" (:bytes leg)
          (when (:anchor leg) (str " anchor=" (:anchor leg)))
          (when (:form_name leg) (str " form=" (:form_name leg)))
+         (when (:export leg) (str " export=" (:export leg)))
          "\n  found by: " (str/join "\n  found by: " (:searches leg))
          (if (:body leg)
            (str "\n  BODY<<\n" (:body leg) "\n  >>")

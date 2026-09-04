@@ -230,3 +230,11 @@ run as a test inside `make mcp-test`) enforces both halves.
   shall omit the insertion `anchor` from both the structured row and the text
   line, because an anchor is a claim about where a new sibling goes and the
   receipt has already said it does not vouch for that range.
+
+- [x] **MCP-OP-THREAD-035**: A script leg states how the browser reaches it.
+  When `feature_thread` locates a leg in a script file, it shall report
+  `export`: the file, line and text of the `export`, `module.exports` or
+  `window.X =` registration site for one of the identifier seeds, or the
+  statement `none (classic script; functions are globals)` when the file has no
+  module syntax at all, so a reader never searches for a registration site that
+  does not exist.
