@@ -2968,3 +2968,68 @@
             (str (name label) ": " (count misses)
                  " receipt leaves the text does not carry — "
                  (miss-report misses)))))))
+
+;; ============================================================
+;; O2 ROUND 3 — a continuation in the text is the VERBATIM executable
+;; request (Sol O2 round-2 review, section 4)
+;; ============================================================
+;; The typed `deps` continuation replays: the text spells the tool and the
+;; compact JSON argument object, and a caller can paste it. `ls-tree` spelled
+;; `next call: inspect_clojure mode=ls-tree dir=. format=text limit=16384` —
+;; neither a JSON tool-argument object nor a shell command, so it is
+;; retypeable guidance, not an executable continuation. Two renderings of one
+;; concept is how a caller learns not to trust either.
+
+(defn- next-call-line
+  [text]
+  (first (keep #(second (re-find #"next call: (.*)$" %))
+               (str/split-lines text))))
+
+(defn- next-call-arguments
+  "The arguments a text-block continuation actually spells, parsed."
+  [text]
+  (when-let [line (next-call-line text)]
+    (let [[tool arguments] (str/split line #" " 2)]
+      {:tool tool
+       :arguments (try (json/parse-string arguments)
+                       (catch Exception _ ::unparseable))})))
+
+(defn- receipt-arguments
+  [call]
+  (json/parse-string
+    (json/generate-string (inspect/json-data (:arguments call)))))
+
+;; @spec MCP-OP-STUDY-045
+(deftest a-next-call-in-the-text-is-the-request-structured-content-carries
+  (testing "typed mode"
+    (let [response (one "deps" {"limit" 200})
+          result (result-of response)
+          text (summary-of response)
+          spelled (next-call-arguments text)]
+      (is (some? (:next_call result)) "the fixture must actually continue")
+      (is (= "inspect_clojure" (:tool spelled)))
+      (is (= (receipt-arguments (:next_call result)) (:arguments spelled))
+          "the text spells exactly the request structuredContent carries")))
+  (testing "ls-tree mode"
+    (with-tmp-project
+      #(build-toy-project! % 60)
+      (fn [config]
+        (let [result (inspect-tool/execute-ls-tree
+                       config {:mode "ls-tree" :dir "." :format "text"
+                               :limit 4096})
+              text (text-block result)
+              spelled (next-call-arguments text)]
+          (is (some? (:next_call result)) "the fixture must actually continue")
+          (is (= "inspect_clojure" (:tool spelled)))
+          (is (not= ::unparseable (:arguments spelled))
+              (str "the continuation is not an executable request: "
+                   (pr-str (next-call-line text))))
+          (is (= (receipt-arguments (:next_call result)) (:arguments spelled))
+              "the text spells exactly the request structuredContent carries")
+          (testing "and it replays"
+            (let [replayed (inspect-tool/execute-ls-tree
+                             config
+                             (walk/keywordize-keys (:arguments spelled)))]
+              (is (true? (:ok replayed)))
+              (is (< (:returned result) (:returned replayed))
+                  "a continuation that does not advance is a loop"))))))))
