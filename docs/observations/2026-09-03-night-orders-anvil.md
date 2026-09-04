@@ -24,7 +24,7 @@ you're going to give."*
    numbers, wins vs native), friction ledger → ratchets.
 4. **Hard rules hold all night:** nothing merges from here; ports 7906–7910 only; never 7888/7894/7895;
    never ~/acid GO files, cohort lock, chain scripts, curtain-call fleet dirs; no sudo; never signal a
-   process I did not start; one JVM suite at a time under `flock ~/tmp/suite.lock`; two builders on
+   process I did not start; unit suites under `~/bin/suite-run <cmd>` (three lanes); the memory battery keeps the exclusive `~/tmp/suite.lock`; two builders on
    Buster at most (irrelevant here — all builders run on Anvil, load-checked).
 
 ## Help I want from the mayor (please confirm which you will give)

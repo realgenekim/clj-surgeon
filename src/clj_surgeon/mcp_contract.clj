@@ -23,6 +23,10 @@
   (get-in direct-contract [:expect :required]))
 (def ^:private aggregate-expect-fields
   (get-in direct-contract [:aggregate-expect :allowed]))
+(def ^:private expect-matched-fields
+  (get-in direct-contract [:expect-matched :allowed]))
+(def ^:private required-expect-matched-fields
+  (get-in direct-contract [:expect-matched :required]))
 (def ^:private required-aggregate-expect-fields
   (get-in direct-contract [:aggregate-expect :required]))
 (def ^:private owner-fields (get-in direct-contract [:owner :allowed]))
@@ -68,7 +72,10 @@
 (def ^:private supported-source-extensions #{"clj" "cljs" "cljc" "edn"})
 
 (def ^:private prewrite-error-types
-  #{:invalid-mcp-request
+  #{:expect-matched-stale
+    :expect-matched-invalid-pattern
+    :expect-matched-unreadable-source
+    :invalid-mcp-request
     :invalid-transaction-spec
     :invalid-changes
     :unknown-change-arguments
@@ -108,6 +115,7 @@
     :invalid-canonical-effect-input
     :invalid-create-files
     :invalid-created-source
+    :invalid-require-policy
     :duplicate-path
     :unknown-arguments})
 
@@ -495,8 +503,13 @@
       (validate-fields! params #{"workspace_root" "extraction" "verify"}
                         #{"extraction"} [])
       (let [raw (field params "extraction")]
+        ;; @spec MCP-OP-FIELD-002
+        ;; require_policy is deliberately absent from the required set checked
+        ;; here: a generic missing-fields refusal cannot name the field's
+        ;; accepted values, and the kernel's invalid-require-policy branch can.
+        ;; Omission and an unaccepted value therefore reach the same refusal.
         (validate-fields! raw extraction-fields
-                          #{"file" "to" "forms" "require_policy"}
+                          #{"file" "to" "forms"}
                           ["extraction"])
         (let [file (clojure-source-path! (field raw "file") ["extraction" "file"])
               to (clojure-source-path! (field raw "to") ["extraction" "to"])
@@ -516,12 +529,8 @@
                                  (count (distinct public-forms))))
                   (refuse! :duplicate-form ["extraction" "public_forms"]
                            "Public form names must be unique"))
-              require-policy (nonblank-string!
-                               (field raw "require_policy")
-                               ["extraction" "require_policy"])
-              _ (when-not (#{"minimal" "copy-all"} require-policy)
-                  (refuse! :invalid-enum ["extraction" "require_policy"]
-                           "require_policy must be minimal or copy-all"))
+              require-policy (when (present? raw "require_policy")
+                               (field raw "require_policy"))
               raw-callers (or (field raw "caller_changes") [])
               _ (when-not (vector? raw-callers)
                   (refuse! :expected-array ["extraction" "caller_changes"]
@@ -562,7 +571,8 @@
               verify (when (present? params "verify")
                        (nonblank-string! (field params "verify") ["verify"]))
               normalized {:file file :to to :forms forms
-                          :require-policy (keyword require-policy)
+                          :require-policy (when (string? require-policy)
+                                            (keyword require-policy))
                           :caller-changes callers
                           :ignored-caller-files ignored
                           :expect expect}
@@ -572,7 +582,8 @@
                            source-hash (assoc :source-hash source-hash))
               validation (mcp-extraction/validate-request normalized)]
           (when-not (:ok validation)
-            (refuse! (:error-type validation) ["extraction"]
+            (refuse! (:error-type validation)
+                     (or (:path validation) ["extraction"])
                      (:error validation) validation))
           (when (and verify (not (#{"fast" "full" "exact"} verify)))
             (refuse! :invalid-enum ["verify"]
@@ -589,6 +600,22 @@
    :edits (reduce + (map #(get-in % [:expect :matches]) changes))
    :files (count (set (mapcat :files changes)))})
 
+;; @spec MCP-OP-MATCHED-002
+;; @spec MCP-OP-MATCHED-003
+(defn- validate-expect-matched!
+  "Validate the optional prior-match basis. Shape only; the snapshot fence is
+   applied against the transaction's own pre-image by the kernel."
+  [value]
+  (let [path ["expect_matched"]]
+    (validate-fields! value expect-matched-fields
+                      required-expect-matched-fields path)
+    {:file (source-path! (field value "file") (conj path "file"))
+     :file-hash (nonblank-string! (field value "file_hash")
+                                  (conj path "file_hash"))
+     :match (nonblank-string! (field value "match") (conj path "match"))
+     :count (nonnegative-integer! (field value "count")
+                                  (conj path "count"))}))
+
 ;; @spec MCP-OP-EDIT-006
 (defn- validate-direct-tool-params
   [params]
@@ -603,6 +630,9 @@
               aggregate-expect-fields required-aggregate-expect-fields
               ["expect"]))
           derived-expect (derived-aggregate-expect changes)
+          expect-matched
+          (when (present? params "expect_matched")
+            (validate-expect-matched! (field params "expect_matched")))
           verify (when (present? params "verify")
                    (nonblank-string! (field params "verify") ["verify"]))]
       (when (and verify (not (#{"fast" "full" "exact"} verify)))
@@ -620,6 +650,7 @@
                :params
                (cond-> {:changes changes
                         :expect derived-expect}
+                 expect-matched (assoc :expect-matched expect-matched)
                  verify (assoc :verify verify))}
         (and supplied-expect (not= supplied-expect derived-expect))
         (assoc :input-normalization
@@ -1147,7 +1178,23 @@
       (contains? result :path) (assoc :path (:path result))
       (contains? result :unknown) (assoc :unknown (:unknown result))
       (contains? result :allowed) (assoc :allowed (:allowed result))
+      ;; @spec MCP-OP-FIELD-002
+      (contains? result :accepted) (assoc :accepted (:accepted result))
       (contains? result :missing) (assoc :missing (:missing result))
+      ;; @spec MCP-OP-MATCHED-002
+      ;; @spec MCP-OP-MATCHED-003
+      (contains? result :mismatch) (assoc :mismatch (:mismatch result))
+      (contains? result :expected-file-hash)
+      (assoc :expected_file_hash (:expected-file-hash result))
+      (contains? result :actual-file-hash)
+      (assoc :actual_file_hash (:actual-file-hash result))
+      (contains? result :expected-match-count)
+      (assoc :expected_match_count (:expected-match-count result))
+      (contains? result :actual-match-count)
+      (assoc :actual_match_count (:actual-match-count result))
+      (contains? result :transaction-files)
+      (assoc :transaction_files (:transaction-files result))
+      (contains? result :match) (assoc :match (:match result))
       (contains? result :supplied-fields)
       (assoc :supplied_fields (:supplied-fields result))
       (some? change-index) (assoc :change_index change-index)
@@ -1330,6 +1377,22 @@
                     {:reason :invalid-canonical-effect-identity})))
   (select-keys identity [:version :sha256 :files :effects]))
 
+;; @spec MCP-OP-MATCHED-001
+(defn- matched-evidence-fields
+  "Project the kernel's prior-match evidence into bounded public receipt fields."
+  [{:keys [expect-matched matched-count addressed-matches
+           unaddressed-match-count unaddressed-matches
+           unaddressed-matches-truncated]}]
+  {:expect_matched {:file (:file expect-matched)
+                    :match (:match expect-matched)
+                    :file_hash (:file-hash expect-matched)
+                    :count (:count expect-matched)}
+   :matched_count matched-count
+   :addressed_matches addressed-matches
+   :unaddressed_match_count unaddressed-match-count
+   :unaddressed_matches unaddressed-matches
+   :unaddressed_matches_truncated (boolean unaddressed-matches-truncated)})
+
 (defn normalize-success-receipt
   ;; @spec MCP-OP-EDIT-024, MCP-OP-EDIT-030
   "Reduce a complete kernel result to terminal verification evidence. Requires read-back hashes and an inverse receipt."
@@ -1393,6 +1456,9 @@
              (:compact-relation-normalization result))
       canonical-identity
       (assoc :canonical_effect_identity canonical-identity)
+      ;; @spec MCP-OP-MATCHED-001
+      (:matched-evidence result)
+      (merge (matched-evidence-fields (:matched-evidence result)))
       (and cold (not verification-complete?))
       (assoc :next_call (:next_call cold)))))
 

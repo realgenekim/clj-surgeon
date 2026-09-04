@@ -1,10 +1,12 @@
 (ns clj-surgeon.mcp-http-server-test
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.alias-migration-fixture :as fixture]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as tool]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -269,7 +271,8 @@
                (get-in (sse-json initialized)
                        [:result :capabilities :tools :listChanged])))
         (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                "transform_clojure" "relation_census"]
+                "transform_clojure" "relation_census"
+                "alias_migration" "admit_clojure_patch"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
         (is (= false (get-in tools [0 :annotations :destructiveHint])))
@@ -279,7 +282,7 @@
         (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
         (is (= #{:basis :decisions :verify :changes :expect :edits :programs
                  :delete_owners :create_files :extraction :workspace_root
-                 :symbol_migration :require_change}
+                 :symbol_migration :require_change :expect_matched}
                (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (str/includes?
               (get-in tools [1 :inputSchema :properties :verify :description])
@@ -361,7 +364,7 @@
                 :status :synchronized
                 :removed []
                 :upserted ["inspect_clojure" "temporary_probe"]
-                :tool-count 6
+                :tool-count 8
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -377,6 +380,8 @@
                  "edit_clojure"
                  "transform_clojure"
                  "relation_census"
+                 "alias_migration"
+                 "admit_clojure_patch"
                  "temporary_probe"}
                (set (map :name added-tools))))
         (is (= "HOT_SCHEMA_DESCRIPTION"
@@ -385,7 +390,7 @@
                 :status :synchronized
                 :removed ["temporary_probe"]
                 :upserted ["inspect_clojure"]
-                :tool-count 5
+                :tool-count 7
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -397,7 +402,8 @@
         (is (= (:before-contract-hash added)
                (:after-contract-hash restored)))
         (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                 "transform_clojure" "relation_census"}
+                 "transform_clojure" "relation_census"
+                 "alias_migration" "admit_clojure_patch"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
                (get-in restored-by-name ["inspect_clojure" :description]))))
@@ -599,3 +605,230 @@
         (alter-var-root #'inspect-tool/handle-inspect
                         (constantly original-inspect))
         (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; alias_migration across the real HTTP wire
+;;
+;; The unit suites drive the handler directly and pass an explicit
+;; :receipt-dir, so they could not see that the server's adapter derived the
+;; receipt directory with the wrong arity. These two tests start the real
+;; server WITHOUT a :receipt-dir and address a workspace_root that is not the
+;; server's own project directory, which is exactly the shape of the first
+;; hand-driven call against the live server.
+
+(def ^:private alias-fixture-files
+  (into (sorted-map)
+        (filter (fn [[path _]]
+                  (or (not (str/includes? path "/t"))
+                      (some #(str/ends-with? path %)
+                            ["t01.clj" "t02.clj" "t03.clj" "t04.clj" "t05.clj"]))))
+        (:pre (fixture/corpus))))
+
+(defn- alias-workspace!
+  []
+  (let [workspace (temp-dir)]
+    (doseq [[relative source] alias-fixture-files]
+      (let [target (io/file workspace relative)]
+        (.mkdirs (.getParentFile target))
+        (spit target source)))
+    workspace))
+
+(defn- alias-arguments
+  [workspace expected-files]
+  {:op "alias_migration"
+   :workspace_root (.getCanonicalPath workspace)
+   :from {:lib "acid.fanout.store" :var "find-event"}
+   :to {:lib "acid.fanout.store2" :var "fetch-event"
+        :alias_policy ["store2" "st2" "es" "store-2"]}
+   :scope {:paths ["src/**"]}
+   :expect {:files expected-files}})
+
+(defn- alias-session
+  "Start the server on an ephemeral port with no receipt-dir, then initialize."
+  [server-project]
+  (let [running (http-server/start-http-server!
+                  {:project-dir (.getPath server-project)
+                   :port 0
+                   :telemetry :off
+                   :nrepl-port :none})
+        client (HttpClient/newHttpClient)
+        initialized (post-json client (:url running) nil
+                               {:jsonrpc "2.0" :id 1 :method "initialize"
+                                :params {:protocolVersion "2025-03-26"
+                                         :capabilities {}
+                                         :clientInfo {:name "alias-migration-wire-test"
+                                                      :version "1"}}})
+        session-id (-> initialized .headers (.firstValue "Mcp-Session-Id")
+                       (.orElse nil))]
+    (post-json client (:url running) session-id
+               {:jsonrpc "2.0" :method "notifications/initialized"})
+    {:running running :client client :session session-id
+     :initialized initialized}))
+
+;; @spec MCP-OP-ALIAS-001
+;; @spec MCP-OP-ALIAS-019
+;; @spec MCP-OP-ALIAS-027
+(deftest alias-migration-commits-across-the-real-http-wire
+  (let [server-project (temp-dir)
+        workspace (alias-workspace!)
+        {:keys [running client session initialized]} (alias-session server-project)]
+    (try
+      (let [called (post-json client (:url running) session
+                              {:jsonrpc "2.0" :id 2 :method "tools/call"
+                               :params {:name "alias_migration"
+                                        :arguments (alias-arguments workspace 5)}})
+            result (:result (sse-json called))
+            receipt (:structuredContent result)]
+        (is (= 200 (.statusCode initialized)))
+        (is (some? session))
+
+        (testing "the adapter completes; it does not raise mcp-adapter-failure"
+          (is (false? (:isError result)) (pr-str receipt))
+          (is (not= "mcp-adapter-failure" (:error_type receipt)) (pr-str receipt))
+          (is (nil? (:error receipt)) (pr-str receipt)))
+
+        (testing "the receipt arrives whole over the wire"
+          (is (true? (:ok receipt)))
+          (is (true? (:committed receipt)))
+          (is (= "alias_migration" (:operation receipt)))
+          (is (= 5 (:files receipt)))
+          (is (= 15 (:sites receipt)))
+          (is (= {:store2 4 :st2 1} (:alias_histogram receipt)))
+          (is (= 1 (:collisions_resolved receipt)))
+          (is (= 0 (:refer_sites receipt))
+              "t06, the :refer file, is not among the first five")
+          (is (nil? (:lib_renamed receipt)))
+          (is (string? (:details_path receipt)))
+          (is (string? (:undo_receipt receipt)))
+          (is (re-matches #"[0-9a-f]{64}" (:receipt_hash receipt)))
+          (is (number? (:elapsed_ms receipt)))
+          (is (= (.getCanonicalPath workspace) (:workspace_root receipt))))
+
+        (testing "the receipt directory was derived from the ROUTED workspace"
+          (is (str/starts-with?
+                (:undo_receipt receipt)
+                (workspace/receipt-dir (.getCanonicalPath workspace)))
+              "not the server's project dir, and not a zero-arity crash"))
+
+        (testing "the visible summary crosses the wire too"
+          (is (str/includes? (get-in result [:content 0 :text])
+                             "5 files · 15 sites")))
+
+        (testing "the bytes actually changed on disk in the addressed workspace"
+          (doseq [relative ["src/acid/fanout/t01.clj" "src/acid/fanout/t02.clj"
+                            "src/acid/fanout/t03.clj" "src/acid/fanout/t04.clj"
+                            "src/acid/fanout/t05.clj"]]
+            (is (= (get (:post (fixture/corpus)) relative)
+                   (slurp (io/file workspace relative)))
+                relative))
+          (is (= (get alias-fixture-files "src/acid/fanout/store_pg.clj")
+                 (slurp (io/file workspace "src/acid/fanout/store_pg.clj")))
+              "a prefix-sharing sibling is untouched over the wire too")))
+      (finally
+        (http-server/stop-http-server! running)
+        (delete-tree! workspace)
+        (delete-tree! server-project)))))
+
+;; @spec MCP-OP-ALIAS-012
+;; @spec MCP-OP-ALIAS-015
+;; @spec MCP-OP-ALIAS-040
+(deftest alias-migration-refusal-carries-its-next-call-across-the-real-http-wire
+  (let [server-project (temp-dir)
+        workspace (alias-workspace!)
+        {:keys [running client session]} (alias-session server-project)]
+    (try
+      (let [called (post-json client (:url running) session
+                              {:jsonrpc "2.0" :id 2 :method "tools/call"
+                               :params {:name "alias_migration"
+                                        :arguments (alias-arguments workspace 80)}})
+            result (:result (sse-json called))
+            refusal (:structuredContent result)]
+        (testing "the refusal is typed, not an adapter failure"
+          (is (true? (:isError result)))
+          (is (false? (:ok refusal)))
+          (is (= "alias-migration-expect-mismatch" (:error_type refusal)))
+          (is (= 5 (:found_files refusal)))
+          (is (= 80 (:expected_files refusal)))
+          (is (true? (:source_unchanged refusal)))
+          (is (false? (:write_authority refusal))))
+
+        (testing "the next_call arrives intact through the wire"
+          (let [next-call (:next_call refusal)]
+            (is (= "alias_migration" (:op next-call)))
+            (is (= (.getCanonicalPath workspace) (:workspace_root next-call)))
+            (is (= {:lib "acid.fanout.store" :var "find-event"} (:from next-call)))
+            (is (= {:lib "acid.fanout.store2"
+                    :var "fetch-event"
+                    :alias_policy ["store2" "st2" "es" "store-2"]
+                    :refer_policy "preserve-refer"}
+                   (:to next-call)))
+            (is (= {:paths ["src/**"]} (:scope next-call)))
+            (is (= {:files 5} (:expect next-call)))
+
+            (testing "and is executable: sent back verbatim it commits"
+              (let [replayed (post-json client (:url running) session
+                                        {:jsonrpc "2.0" :id 3 :method "tools/call"
+                                         :params {:name "alias_migration"
+                                                  :arguments next-call}})
+                    receipt (:structuredContent (:result (sse-json replayed)))]
+                (is (true? (:ok receipt)) (pr-str receipt))
+                (is (= 5 (:files receipt)))
+                (doseq [relative ["src/acid/fanout/t01.clj" "src/acid/fanout/t05.clj"]]
+                  (is (= (get (:post (fixture/corpus)) relative)
+                         (slurp (io/file workspace relative)))
+                      relative))))))
+
+        (testing "the refused call itself wrote nothing"
+          (is (some? refusal))))
+      (finally
+        (http-server/stop-http-server! running)
+        (delete-tree! workspace)
+        (delete-tree! server-project)))))
+
+;; @spec MCP-OP-ALIAS-027
+;; @spec MCP-OP-ALIAS-028
+(deftest alias-migration-resolves-the-routed-workspaces-own-verification-profiles
+  ;; The server is started with no explicit profiles, so the only way the
+  ;; workspace's own profile can be found is by resolving the routed context's
+  ;; lazy accessors. An entrance that reads :verification-profiles straight off
+  ;; the config sees the SERVER's profiles and refuses this request.
+  (let [server-project (temp-dir)
+        workspace (alias-workspace!)
+        _ (spit (io/file workspace ".clj-surgeon.edn")
+                (pr-str {:verification-profiles
+                         {"workspace-only" {:commands [["true"]]}}}))
+        {:keys [running client session]} (alias-session server-project)]
+    (try
+      (let [called (post-json client (:url running) session
+                              {:jsonrpc "2.0" :id 2 :method "tools/call"
+                               :params {:name "alias_migration"
+                                        :arguments
+                                        (assoc (alias-arguments workspace 5)
+                                               :verify "workspace-only")}})
+            receipt (:structuredContent (:result (sse-json called)))]
+        (is (true? (:ok receipt)) (pr-str receipt))
+        (is (= "pass" (get-in receipt [:focused_test :status])))
+        (is (= "workspace-only" (get-in receipt [:focused_test :profile]))
+            "the profile came from the ROUTED workspace, not the server")
+        (is (= 5 (:files receipt))))
+
+      (testing "a profile the routed workspace does not configure refuses before any work"
+        (let [fresh (alias-workspace!)
+              refused (post-json client (:url running) session
+                                 {:jsonrpc "2.0" :id 3 :method "tools/call"
+                                  :params {:name "alias_migration"
+                                           :arguments
+                                           (assoc (alias-arguments fresh 5)
+                                                  :verify "not-a-profile")}})
+              refusal (:structuredContent (:result (sse-json refused)))]
+          (is (false? (:ok refusal)))
+          (is (= "unknown-verification-profile" (:error_type refusal)))
+          (is (true? (:source_unchanged refusal)))
+          (is (= (get alias-fixture-files "src/acid/fanout/t01.clj")
+                 (slurp (io/file fresh "src/acid/fanout/t01.clj")))
+              "the refusal precedes discovery, so nothing was touched")
+          (delete-tree! fresh)))
+      (finally
+        (http-server/stop-http-server! running)
+        (delete-tree! workspace)
+        (delete-tree! server-project)))))

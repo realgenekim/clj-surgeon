@@ -396,14 +396,21 @@
   (let [compact (tool-by-id base-tools :edit-clojure)
         change (tool-by-id base-tools :clj-change)
         schema (:schema change)
-        [basis-branch explicit-branch compact-branch extraction-branch]
+        [basis-branch _explicit-branch compact-branch extraction-branch]
         (:oneOf schema)
         edit-schema
         (restricted-schema
           schema
-          ["workspace_root" "edits" "programs" "delete_owners"
-           "changes" "expect"]
-          [compact-branch explicit-branch])
+          ;; The `changes`/`expect` explicit-change shape is deliberately
+          ;; excluded: this candidate's bound handler is the unchanged
+          ;; production `handle-edit-clojure`, which MCP-OP-MATCHED-005 guards
+          ;; with `mcp-schema/editor-tool-schema` and refuses those fields
+          ;; with `unexpected_fields=[changes expect]`. Advertising the
+          ;; explicit-change branch here let a schema-valid request reach a
+          ;; handler that refused it — the schema must authorize only the
+          ;; compact shape the handler actually accepts.
+          ["workspace_root" "edits" "programs" "delete_owners"]
+          [compact-branch])
         extraction-schema
         (restricted-schema
           schema

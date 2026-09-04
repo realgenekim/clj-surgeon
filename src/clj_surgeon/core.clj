@@ -24,6 +24,7 @@
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.relation-census :as relation-census]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
@@ -32,12 +33,34 @@
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
+(defn- named-plan-refusal
+  "Run `f`; turn a parser-admission refusal into a NAMED refusal the caller can
+   read, instead of a stack trace.
+
+   Gating `clj-surgeon.analyze` (MCP-OP-MEM-005) swaps an uncatchable
+   StackOverflowError for a typed ExceptionInfo. This is the minimal surface
+   that makes that typed refusal usable at the planning ops, the way
+   `safe-outline` does for the scan. Anything that is not an admission refusal
+   is re-thrown untouched."
+  ;; @spec MCP-OP-MEM-005
+  [f]
+  (try
+    (f)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy :file])
+                 :error (ex-message e))
+          (throw e))))))
+
 (defn run-outline [{:keys [file]}]
-  (let [result (outline/outline file)
-        ns-name (:ns result)
-        forward-refs (when ns-name
-                       (fwd/detect-forward-refs file ns-name))]
-    (assoc result :forward-refs (or forward-refs []))))
+  (named-plan-refusal
+    (fn []
+      (let [result (outline/outline file)
+            ns-name (:ns result)
+            forward-refs (when ns-name
+                           (fwd/detect-forward-refs file ns-name))]
+        (assoc result :forward-refs (or forward-refs []))))))
 
 (defn run-mv [{:as opts}]
   (move/move-form (cond-> opts (#{:mv-with-deps "mv-with-deps" ":mv-with-deps"} (:op opts)) (assoc :with-deps true))))
@@ -55,6 +78,8 @@
       (edit-dsl/evaluate-xray (slurp (:file prepared)) prepared))))
 
 (defn run-declares [{:keys [file]}]
+ (named-plan-refusal
+  (fn []
   (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
         ol (outline/outline file)
         declares (->> (:forms ol)
@@ -83,27 +108,35 @@
                                          declares))
                :needed (count (filter #(or (contains? truly-cyclic (str (:name %)))
                                            (contains? fwd (str (:name %))))
-                                      declares))}}))
+                                      declares))}}))))
 
 (defn run-deps [{:keys [file form]}]
-  (let [zloc (analyze/file->zloc file)
-        deps (analyze/intra-ns-deps zloc)]
-    (if form
-      (first (filter #(= form (:name %)) deps))
-      deps)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)
+            deps (analyze/intra-ns-deps zloc)]
+        (if form
+          (first (filter #(= form (:name %)) deps))
+          deps)))))
 
 (defn run-topo [{:keys [file]}]
-  (let [zloc (analyze/file->zloc file)]
-    (analyze/topological-sort zloc)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)]
+        (analyze/topological-sort zloc)))))
 
 (defn run-closure [{:keys [file form]}]
-  (let [zloc (analyze/file->zloc file)]
-    (analyze/extraction-closure zloc form)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)]
+        (analyze/extraction-closure zloc form)))))
 
 (defn run-ls-deps [{:keys [file form]}]
-  (let [zloc (analyze/file->zloc file)
-        deps (analyze/intra-ns-deps zloc)]
-    (analyze/dep-tree deps form)))
+  (named-plan-refusal
+    (fn []
+      (let [zloc (analyze/file->zloc file)
+            deps (analyze/intra-ns-deps zloc)]
+        (analyze/dep-tree deps form)))))
 
 ;; ============================================================
 ;; CLJC operations: merge, split, add-require
@@ -162,24 +195,80 @@
   (let [rel (str (fs/relativize root path))]
     (boolean (some skip-dirs (str/split rel #"/")))))
 
+(defn- existing-directory?
+  "True only when `path` names an existing directory. Never throws: a string
+   that is not a legal path (an embedded NUL, say) is simply not a directory."
+  [path]
+  (try (boolean (fs/directory? (str path)))
+       (catch Exception _e false)))
+
+(defn- find-start-token
+  "Render a directory as a `find` start-point token. A RELATIVE path beginning
+   with `-` would be parsed by find as an OPTION rather than a path, so prefix
+   it with `./`. Absolute paths are already unambiguous."
+  [path]
+  (let [s (str path)]
+    (if (str/starts-with? s "-") (str "./" s) s)))
+
+(defn- nul-separated-paths
+  "Split NUL-delimited command output into paths, dropping the trailing empty
+   token. Never trims: leading or trailing whitespace, and newlines, are legal
+   inside a path and are data, not framing."
+  [out]
+  (->> (str/split (str out) #"\u0000")
+       (remove #(= "" %))
+       sort
+       vec))
+
+;; @spec MCP-OP-SHELL-ARGV-001
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-build-files
   "Find deps.edn, project.clj, bb.edn under dir, skipping hidden/cache dirs.
-   Uses system find with -prune for speed (~10x faster than fs/glob on large trees)."
+   Uses system find with -prune for speed (~10x faster than fs/glob on large trees).
+
+   The command is an explicit ARGUMENT VECTOR — `dir` is exactly one token and
+   never reaches a shell interpreter. It must stay that way: this function used
+   to `format` dir into a string run through `sh -c`, so any :dir carrying `;`
+   or `$(...)` executed arbitrary commands (Andon pull inb-d27b79, 2026-09-03).
+   Output is NUL-delimited so a path containing a newline survives intact.
+
+   A dir that is not an existing directory yields [] and logs the reason; the
+   typed refusal for that case belongs to the entrance (ls-tree-root-refusal),
+   because this helper's contract is a vector of paths."
   [dir]
-  (try
-    (let [prune-expr (str/join " -o "
-                               (map #(str "-name " %) skip-dirs))
-          cmd (format "find %s \\( %s \\) -prune -o \\( -name deps.edn -o -name project.clj -o -name bb.edn \\) -print"
-                      (str dir) prune-expr)
-          result (babashka.process/shell {:out :string :err :string :continue true}
-                                         "sh" "-c" cmd)]
-      (if (zero? (:exit result))
-        (->> (str/split-lines (str/trim (:out result)))
-             (remove str/blank?)
-             sort
-             vec)
-        []))
-    (catch Exception _e [])))
+  (if-not (existing-directory? dir)
+    (do (binding [*out* *err*]
+          (println (str "clj-surgeon: skipping project discovery; "
+                        "not an existing directory: " (pr-str (str dir)))))
+        [])
+    (try
+      (let [prune-tokens (concat ["("]
+                                 (->> (sort skip-dirs)
+                                      (map (fn [d] ["-name" d]))
+                                      (interpose ["-o"])
+                                      (apply concat))
+                                 [")" "-prune"])
+            ;; -H: follow a symlink given as the START POINT only.
+            ;; `existing-directory?` uses Files.isDirectory, which follows
+            ;; links, so a symlinked root PASSES the entrance gate; find's -P
+            ;; default would then refuse to descend it and discovery would
+            ;; return nothing for a root the gate accepted. -H makes the gate
+            ;; and the executor answer the same question. It does NOT follow
+            ;; links found inside the tree, so the walk stays acyclic.
+            args (concat ["find" "-H" (find-start-token dir)]
+                         prune-tokens
+                         ["-o" "("
+                          "-name" "deps.edn"
+                          "-o" "-name" "project.clj"
+                          "-o" "-name" "bb.edn"
+                          ")" "-print0"])
+            result (apply babashka.process/shell
+                          {:out :string :err :string :continue true}
+                          args)]
+        (if (zero? (:exit result))
+          (nul-separated-paths (:out result))
+          []))
+      (catch Exception _e []))))
 
 (defn source-paths-from-config
   "Pure: given a build filename and its parsed content, return source paths.
@@ -201,18 +290,28 @@
                               (read-string (slurp (str build-file))))
     (catch Exception _e ["src"])))
 
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-clj-files
-  "Find all .clj/.cljs/.cljc files under a directory using system find."
+  "Find all .clj/.cljs/.cljc files under a directory using system find.
+
+   NUL-delimited: a source path may contain a newline, and str/split-lines
+   turned one real path into two fictional ones that then failed to parse and
+   were silently dropped (Andon pull inb-d27b79, 2026-09-03). The -name
+   alternation is parenthesised because -print0 would otherwise bind to the
+   last -name only."
   [dir]
-  (when (fs/directory? dir)
+  (when (existing-directory? dir)
     (try
       (let [result (babashka.process/shell
                      {:out :string :err :string :continue true}
-                     "find" (str dir)
-                     "-name" "*.clj" "-o" "-name" "*.cljs" "-o" "-name" "*.cljc")]
+                     ;; -H for the same reason as find-build-files: a source
+                     ;; path may itself be reached through a symlinked root.
+                     "find" "-H" (find-start-token dir)
+                     "(" "-name" "*.clj"
+                     "-o" "-name" "*.cljs"
+                     "-o" "-name" "*.cljc" ")" "-print0")]
         (when (zero? (:exit result))
-          (->> (str/split-lines (str/trim (:out result)))
-               (remove str/blank?))))
+          (seq (nul-separated-paths (:out result)))))
       (catch Exception _e nil))))
 
 (defn- discover-projects
@@ -260,10 +359,15 @@
       (zero? (:exit r)))
     (catch Exception _e false)))
 
+;; @spec MCP-OP-SHELL-ARGV-003
 (defn- grep-tree
   "Single recursive grep on a directory tree. Returns set of matching absolute paths.
    Uses ripgrep (rg) if available — faster and respects .gitignore.
-   Falls back to system grep (MUCH slower on large trees)."
+   Falls back to system grep (MUCH slower on large trees).
+
+   NUL-delimited (rg --null / grep -Z) for the same reason as find-clj-files: a
+   matching path may contain a newline. The caller's pattern is passed after
+   `-e` and the directory after `--`, so neither can be read as an option."
   [pattern dir]
   (when-not (rg-available?)
     (binding [*out* *err*]
@@ -273,24 +377,24 @@
     (let [args (if (rg-available?)
                  ;; ripgrep: fast, respects .gitignore automatically
                  ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
-                 ["rg" "-li"
+                 ["rg" "-li" "--null"
                   "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
                   "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
-                  pattern (str dir)]
+                  "-e" pattern "--" (str dir)]
                  ;; fallback: system grep
                  (let [exclude-args (mapcat #(vector "--exclude-dir" %)
                                             [".git" ".cpcache" ".gitlibs" "target"
                                              "node_modules" ".clj-kondo" ".lsp" ".shadow-cljs"])]
-                   (concat ["grep" "-rliE"
+                   (concat ["grep" "-rliZE"
                             "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
                             "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
                            exclude-args
-                           [pattern (str dir)])))
+                           ["-e" pattern "--" (str dir)])))
           result (apply babashka.process/shell
                         {:out :string :err :string :continue true}
                         args)]
       (if (zero? (:exit result))
-        (set (str/split-lines (str/trim (:out result))))
+        (set (nul-separated-paths (:out result)))
         #{}))
     (catch Exception _e #{})))
 
@@ -313,32 +417,88 @@
          vec)))
 
 (defn- safe-outline
-  "Run outline on a file, returning error map on parse errors."
+  "Run outline on a file, returning error map on parse errors.
+
+   A parser-admission refusal (MCP-OP-MEM-005) is kept TYPED rather than
+   flattened to a message: the entry carries `:refusal`, `:reason`, `:limit`
+   and `:observed` so the scan's receipt can name and count it. It stays a
+   per-file skip — before this, a file deep enough to exhaust the reader's
+   stack threw a StackOverflowError, which is an `Error` and not an
+   `Exception`, and killed the whole scan."
+  ;; @spec MCP-OP-MEM-005
   [file]
   (try
     (outline/outline file)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+                 :file file
+                 :error (ex-message e))
+          {:file file :error (str (ex-message e))})))
+    (catch StackOverflowError _
+      ;; @spec MCP-OP-MEM-005
+      ;; The estimator is an ESTIMATE, and this catch is what makes the
+      ;; scan-kill class closed WITHOUT depending on it being complete. An
+      ;; Error is not an Exception, so before this one overflowing file killed
+      ;; the whole pmap scan and no file's outline came back at all.
+      (let [r (admission/stack-overflow-refusal file)]
+        (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
+               :file file
+               :error (str "parser admission refused "
+                           (admission/public-ceiling-name (:reason r))
+                           ": " file))))
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
+
+(defn- admission-refusals
+  "Every parser-admission refusal in a scan, as receipt rows in path order."
+  ;; @spec MCP-OP-MEM-005
+  [projects dir]
+  (vec
+    (for [{:keys [outlines]} projects
+          [f result] outlines
+          :when (= :parser_admission_refused (:refusal result))]
+      {:file (str (fs/relativize (fs/path dir) (fs/path f)))
+       :reason (:reason result)
+       :limit (:limit result)
+       :observed (:observed result)
+       :remedy (:remedy result)})))
 
 (defn- outline-all-files
   "Compute outlines for all files across projects, in parallel.
    Returns projects with :outlines — a vec of [file outline] pairs."
   [projects]
-  (let [;; Collect all [project-idx file] pairs
+  ;; @spec MCP-OP-MEM-005 — charge the admission scan against THIS scan only.
+  ;; The meter is made here and closed over lexically, then rebound inside each
+  ;; worker: two concurrent ls-tree calls each charge their own, and the count
+  ;; does not depend on binding conveyance surviving a change of executor.
+  (let [meter (admission/new-meter)
+        ;; Collect all [project-idx file] pairs
         all-files (for [[pidx project] (map-indexed vector projects)
                         f (:files project)]
                     [pidx f])
         ;; Parse all files in parallel
         results (pmap (fn [[pidx f]]
-                        [pidx f (safe-outline f)])
+                        (binding [admission/*scan-meter* meter]
+                          [pidx f (safe-outline f)]))
                       all-files)
         ;; Group back by project index
-        by-project (group-by first results)]
-    (mapv (fn [[pidx project]]
-            (let [file-results (mapv (fn [[_ f outline]] [f outline])
-                                     (get by-project pidx []))]
-              (assoc project :outlines file-results)))
-          (map-indexed vector projects))))
+        by-project (group-by first results)
+        outlined (mapv (fn [[pidx project]]
+                         (let [file-results (mapv (fn [[_ f outline]] [f outline])
+                                                  (get by-project pidx []))]
+                           (assoc project :outlines file-results)))
+                       (map-indexed vector projects))]
+    (with-meta outlined {::scan-resources (admission/meter-resources meter)})))
+
+(defn- scan-resources
+  "The scan's own cost, carried on the projects vector `outline-all-files`
+   returned. Zeroed when a caller assembled the projects some other way."
+  ;; @spec MCP-OP-MEM-005
+  [projects]
+  (or (::scan-resources (meta projects))
+      (admission/meter-resources nil)))
 
 (defn format-file-text
   "Pure: format a single file's outline map as compact text lines."
@@ -389,19 +549,67 @@
         (.append sb (format-file-text result rel-path))
         (.append sb "\n")))
     (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
+    ;; @spec MCP-OP-MEM-005
+    ;; A refused file is a named, counted skip — never a silent one and never a
+    ;; dead scan. Nothing is appended when nothing was refused, so an ordinary
+    ;; scan's output is byte-identical to before this control existed.
+    (let [refused (admission-refusals projects dir)]
+      (when (seq refused)
+        (.append sb (format "── parser_admission_refused: %d file(s)\n"
+                            (count refused)))
+        (doseq [{:keys [file reason limit observed]} refused]
+          ;; A stack-overflow skip measured nothing, so it names no limit.
+          (.append sb (if (and limit observed)
+                        (format "   %s  %s limit %d, observed %d\n"
+                                file
+                                (admission/public-ceiling-name reason)
+                                limit observed)
+                        (format "   %s  %s\n"
+                                file
+                                (admission/public-ceiling-name reason)))))
+        ;; @spec MCP-OP-MEM-005 — charge the control's own cost with its
+        ;; denominator. The TEXT rendering stays inside the refusal block, so an
+        ;; ordinary scan's human output is byte-identical to before this control
+        ;; existed; the EDN receipt carries it unconditionally, because that is
+        ;; the surface a regression check reads.
+        (let [{:keys [scan_ms bytes_scanned]} (scan-resources projects)]
+          (.append sb (format "── resources: scan_ms %s, bytes_scanned %s\n"
+                              scan_ms bytes_scanned)))))
     (str sb)))
 
 (defn format-ls-tree-edn
   "Pure: format ls-tree results as EDN vector.
-   Expects projects with :outlines already computed."
+   Expects projects with :outlines already computed.
+
+   ONE trailing receipt map is always appended. It carries `:resources`
+   unconditionally — the scan's own cost with its `bytes_scanned` denominator,
+   because a scan regression appears on ORDINARY scans and a meter wired to the
+   rare refusal branch is one nobody ever sees move — and it names and counts
+   `:parser_admission_refused` only when something actually was refused. The
+   human TEXT rendering keeps the older, quieter contract: an ordinary scan's
+   text is byte-identical to before this control existed."
+  ;; @spec MCP-OP-MEM-005
   [projects dir]
-  (vec
-    (for [{:keys [outlines]} projects
-          [f result] outlines
-          :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
-      (-> result
-          (assoc :file rel-path)
-          (dissoc :forward-refs)))))
+  (let [entries (vec
+                  (for [{:keys [outlines]} projects
+                        [f result] outlines
+                        :let [rel-path (str (fs/relativize (fs/path dir)
+                                                           (fs/path f)))]]
+                    (-> result
+                        (assoc :file rel-path)
+                        (dissoc :forward-refs))))
+        refused (admission-refusals projects dir)
+        ;; @spec MCP-OP-MEM-005
+        ;; `:resources` is UNCONDITIONAL. The meter exists to catch a scan
+        ;; regression — the first draft was 638x slower and every test passed —
+        ;; and a regression shows up on ORDINARY scans, which are ~100% of
+        ;; production runs and were 0% of the runs that printed the number. A
+        ;; gauge wired to the rare branch is a gauge nobody will see move.
+        receipt (cond-> {:resources (scan-resources projects)}
+                  (seq refused)
+                  (assoc :parser_admission_refused
+                         {:count (count refused) :files refused}))]
+    (conj entries {:receipt receipt})))
 
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
@@ -1398,25 +1606,55 @@
       (relation-census/bound-refusal result)
       result)))
 
-(defn run-ls-tree [{:keys [dir format grep] :as _opts}]
+;; @spec MCP-OP-SHELL-ARGV-002
+(defn ls-tree-root-refusal
+  "Typed refusal when an :ls-tree root is not an existing directory; nil when
+   the root is usable. A root that fails this check must never reach project
+   discovery: an empty result is indistinguishable from an empty tree, and the
+   caller needs to know its root was wrong (Andon pull inb-d27b79)."
+  [dir]
+  (when-not (existing-directory? dir)
+    {:error (str ":ls-tree :dir must be an existing directory: "
+                 (pr-str (str dir)))
+     :error-type :workspace-root-not-a-directory
+     :dir (str dir)
+     :next-action "pass_an_existing_directory_path"}))
+
+(defn run-ls-tree
+  "Outline every Clojure project under :dir.
+
+   The `:format` value is bound as `output-format`, NOT destructured as
+   `format`: a binding named `format` shadows clojure.core/format for the whole
+   body, so the empty-result branch below called the caller's :format VALUE as
+   a function (`ArityException: Wrong number of args (3) passed to: :edn`).
+   Never name a local after a core fn this body calls."
+  [{:keys [dir grep] output-format :format :as _opts}]
   (when-not dir
     (println "Error: :dir is required for :ls-tree")
     (System/exit 1))
-  (let [dir (str (fs/absolutize dir))
-        projects (if grep
-                   ;; Fast path: rg first, skip expensive directory globbing
-                   (let [hits (grep-tree grep dir)]
-                     (discover-projects-grep hits dir))
-                   ;; Full scan: discover all projects
-                   (discover-projects dir))]
-    (if (empty? projects)
-      (do (println (format "No Clojure files found under %s%s"
-                           dir (when grep (str " matching '" grep "'"))))
-          (System/exit 1))
-      (let [projects (outline-all-files projects)]
-        (if (= format :edn)
-          (format-ls-tree-edn projects dir)
-          (format-ls-tree-text projects dir))))))
+  (let [dir (try (str (fs/absolutize dir))
+                 (catch Exception _e (str dir)))]
+    (if-let [refusal (ls-tree-root-refusal dir)]
+      ;; The CLI top level turns a result map carrying :error into exit 1,
+      ;; so the shell contract is unchanged while the refusal stays testable.
+      refusal
+      (let [projects (if grep
+                       ;; Fast path: rg first, skip expensive directory globbing
+                       (let [hits (grep-tree grep dir)]
+                         (discover-projects-grep hits dir))
+                       ;; Full scan: discover all projects
+                       (discover-projects dir))]
+        (if (empty? projects)
+          ;; NOTE (inb-eca3b1): calling System/exit from inside a library
+          ;; operation is owed a separate fix; the exit-1 contract is unchanged
+          ;; here, only the message that precedes it.
+          (do (println (format "No Clojure files found under %s%s"
+                               dir (if grep (str " matching '" grep "'") "")))
+              (System/exit 1))
+          (let [projects (outline-all-files projects)]
+            (if (= output-format :edn)
+              (format-ls-tree-edn projects dir)
+              (format-ls-tree-text projects dir))))))))
 
 ;; ============================================================
 ;; Ops registry — single source of truth for dispatch + help

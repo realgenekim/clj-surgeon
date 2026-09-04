@@ -219,6 +219,7 @@
   "Start one nonblocking, loopback-only, repository-scoped MCP server."
   [{:keys [project-dir receipt-dir telemetry-dir run-id port ready-file
            nrepl-port port-file log-file cclsp-url verification-profiles
+           focused-test
            semantic-resolver verify! read-source write-source!]
     telemetry-mode :telemetry}]
   (let [project-dir (str (or project-dir (System/getProperty "user.dir")))
@@ -239,6 +240,11 @@
         _ (mcp-tool/init! {:project-root project-dir
                            :receipt-dir receipt-dir
                            :telemetry telemetry-state
+                           ;; @spec MCP-OP-ADMIT-081
+                           ;; The admission gate's focused-test profile, from
+                           ;; the -X start map. Absent here, each workspace's
+                           ;; own .clj-surgeon/focused-test.edn is the fallback.
+                           :focused-test focused-test
                            :cclsp-url cclsp-url
                            :semantic-resolver semantic-resolver
                            :verify! verify!

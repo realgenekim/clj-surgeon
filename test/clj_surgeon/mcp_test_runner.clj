@@ -1,6 +1,9 @@
 (ns clj-surgeon.mcp-test-runner
   (:require
+   [clj-surgeon.admit-patch-test]
    [clj-surgeon.census-pool-test]
+   [clj-surgeon.core-discovery-test]
+   [clj-surgeon.mcp-alias-migration-test]
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-combinable-transaction-test]
@@ -36,7 +39,12 @@
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
    [clj-surgeon.mcp-write-refusal-test]
+   [clj-surgeon.outline-differential-test]
+   [clj-surgeon.outline-memory-test]
    [clj-surgeon.quoted-var-refs-test]
+   [clj-surgeon.repository-hygiene-test]
+   [clj-surgeon.scope-stream-test]
+   [clj-surgeon.txn-journal-test]
    [clj-surgeon.workspace-onboarding-test]
    [clojure.test :refer [run-tests]]))
 
@@ -44,7 +52,10 @@
   [& _]
   (let [result
         (run-tests
+          'clj-surgeon.admit-patch-test
           'clj-surgeon.census-pool-test
+          'clj-surgeon.core-discovery-test
+          'clj-surgeon.mcp-alias-migration-test
           'clj-surgeon.mcp-contract-test
           'clj-surgeon.mcp-create-files-test
           'clj-surgeon.mcp-extraction-test
@@ -80,6 +91,11 @@
           'clj-surgeon.mcp-write-refusal-test
           'clj-surgeon.mcp-server-test
           'clj-surgeon.mcp-semantic-client-test
+          'clj-surgeon.outline-differential-test
+          'clj-surgeon.outline-memory-test
           'clj-surgeon.quoted-var-refs-test
+          'clj-surgeon.repository-hygiene-test
+          'clj-surgeon.scope-stream-test
+          'clj-surgeon.txn-journal-test
           'clj-surgeon.workspace-onboarding-test)]
     (System/exit (+ (:fail result) (:error result)))))

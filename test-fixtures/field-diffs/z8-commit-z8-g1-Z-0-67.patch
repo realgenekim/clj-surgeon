@@ -1,0 +1,18 @@
+*** Begin Patch
+*** Add File: /home/tester/acid/wt/z8-g1-Z-0/src/marvin_voice_remote/clock.clj
++(ns marvin-voice-remote.clock)
++
++(def ^:dynamic *now-ms-fn*
++  "The server wall-clock source, exposed for deterministic bindings."
++  (fn [] (System/currentTimeMillis)))
++
++(defn now-ms
++  "Return the current server wall-clock time in epoch milliseconds."
++  ^long []
++  (long (*now-ms-fn*)))
++
++(defn fixed
++  "Return a clock source fixed at the supplied epoch millisecond value."
++  [ms]
++  (fn [] (long ms)))
+*** End Patch

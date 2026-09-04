@@ -29,7 +29,8 @@
 
 (deftest tool-profiles-preserve-full-default-and-isolate-the-editor
   (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-          "transform_clojure" "relation_census"]
+          "transform_clojure" "relation_census" "alias_migration"
+          "admit_clojure_patch"]
          (mapv :name (tool/tools-for-profile :full))))
   (is (= ["edit_clojure"]
          (mapv :name (tool/tools-for-profile :edit))))
@@ -38,11 +39,13 @@
                         (tool/tools-for-profile :unknown))))
 
 ;; @spec MCP-OP-SCHEMA-001
-(deftest exposes-exactly-five-typed-tools
+;; @spec MCP-OP-ALIAS-001
+(deftest exposes-exactly-seven-typed-tools
   (let [tools (server/make-tools nil ".")]
-    (is (= 5 (count tools)))
+    (is (= 7 (count tools)))
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-            "transform_clojure" "relation_census"]
+            "transform_clojure" "relation_census" "alias_migration"
+            "admit_clojure_patch"]
            (mapv :name tools)))
     (doseq [{:keys [output-schema]} tools]
       (is (= {:type "number" :minimum 0}
@@ -96,7 +99,8 @@
     (is (= false (get-in tools [1 :schema :additionalProperties])))
     (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits"
              "programs" "delete_owners" "create_files" "extraction"
-             "workspace_root" "symbol_migration" "require_change"}
+             "workspace_root" "symbol_migration" "require_change"
+             "expect_matched"}
            (set (keys (get-in tools [1 :schema :properties])))))
     (is (= 4 (count (get-in tools [1 :schema :oneOf]))))
     (testing "the direct route accepts the same verify field it publishes"

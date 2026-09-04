@@ -1,5 +1,7 @@
 # Repository Agent Instructions
 
+**MAIN IS FROZEN (Gene, 2026-09-04): nobody merges or pushes to `main`, the mayor included, until Gene names a tested, months-dogfooded winner. Work lands on branches only. See CLAUDE.md, first section.**
+
 Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.

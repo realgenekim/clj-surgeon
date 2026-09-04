@@ -21,9 +21,16 @@ required_outcome(apply_clojure_changes, typed_refusal).
 required_outcome(edit_clojure, committed).
 required_outcome(edit_clojure, typed_refusal).
 
+required_outcome(alias_migration, committed).
+required_outcome(alias_migration, typed_refusal).
+
 required_outcome(transform_clojure, preview).
 required_outcome(transform_clojure, committed).
 required_outcome(transform_clojure, typed_refusal).
+
+required_outcome(admit_clojure_patch, preview).
+required_outcome(admit_clojure_patch, committed).
+required_outcome(admit_clojure_patch, typed_refusal).
 
 declared(Tool, Outcome) :- required_outcome(Tool, Outcome).
 witnessed(Tool, Outcome) :- required_outcome(Tool, Outcome).

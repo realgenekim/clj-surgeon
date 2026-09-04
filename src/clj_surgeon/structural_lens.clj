@@ -5,6 +5,7 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parse-admission :as admission]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
@@ -609,9 +610,17 @@
      (catch Exception e
        (query-error-result source query e)))))
 
-(defn find-subforms [source {:keys [inside match]}]
+(defn find-subforms
+  "Structural subform search.
+
+   The read path's FOURTH tree constructor — reached from the MCP
+   `inspect_clojure` match surface and the CLI `:find-subform` op — so parser
+   admission (MCP-OP-MEM-005) gates it too, BEFORE the match form is parsed."
+  ;; @spec MCP-OP-MEM-005
+  [source {:keys [inside match file]}]
   (try
-    (let [{pattern :sexpr match-source :source}
+    (let [_ (admission/admit! (or file "<source>") source)
+          {pattern :sexpr match-source :source}
           (one-complete-form match :invalid-match "Match")
           root (z/of-string source {:track-position? true})
           top-levels (vec (top-level-locations root))
@@ -638,6 +647,19 @@
           {:inside (when inside (str inside)) :match match-source
            :match-count (count matches) :matches matches
            :source-hash (source-hash source)})))
+    ;; @spec MCP-OP-MEM-005
+    ;; A refusal reaches the caller TYPED. Flattening it to `:error` would leave
+    ;; `:reason`, `:limit`, `:observed` and `:remedy` nil, which is the witness
+    ;; family the spec requires of every refusal, on every entrance.
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)
+            base {:error (ex-message e)
+                  :error-type (or (:error-type data) :invalid-source)
+                  :match-count 0 :matches [] :source-hash (source-hash source)}]
+        (if (= :parser_admission_refused (:refusal data))
+          (merge base (select-keys data [:refusal :reason :limit :observed
+                                         :remedy :file]))
+          base)))
     (catch Exception e
       {:error (.getMessage e)
        :error-type (or (:error-type (ex-data e)) :invalid-source)
