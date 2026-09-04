@@ -1928,3 +1928,20 @@ Cell means N-weak 6,979 · N-salient 5,505 · T 966; ratios 7.22× / 5.70×. P1 
 **Learning (runner, verbatim):** "a 'counterfactual' that varies the salience of a permission the control already had measures the noise floor, not the mechanism." The true zero rung (no licence at all) has never been run and is not worth running: the licensed cells already decline. **Caveat that becomes the next variable:** the HARNESS, not the prompt — an arm whose only write path is Bash with no apply_patch (E-HARNESS, filed for the next poll). Apparatus: the runner overwrote E-REG's 16 payload receipts during validation and restored them within the minute; both scorers now refuse to write outside their own root; E-REG's scorer would have scored an `awk -i` or JS rewrite as ZERO chars — a silent zero in exactly the licensed cell — fixed before arm 1.
 
 **Standing:** square 2's headline stands with the honest pair (7.2×/5.7× cell means; worst pairing 1.9×; strategy bimodal). Next on arm.lock: E-PREWRITE (square 4, running its validations), then E-CEILING80 (N=80, k=1, chars + strategy classifier; launched to queue behind E-PREWRITE).
+
+## 28. Eighth result: E-PREWRITE (01:18Z) — square 4 WITHDRAWN on its own pre-registered terms
+
+| arm | PBW | strict | composite | t_mutation | S1 | chars | non-test | T fallback | wall s | load |
+|---|---|---|---|---|---|---|---|---|---|---|
+| N-1 | TRUE | TRUE | agree_clean | null | PASS | 0 | 1 | 0 | 19 | 4.9→4.6 |
+| T-1 | TRUE | TRUE | agree_clean | null | PASS | 555 | 2 | 0 | 24 | 4.6→5.7 |
+| T-2 | TRUE | TRUE | agree_clean | null | PASS | 1,146 | 2 | 0 | 28 | 5.7→6.5 |
+| N-2 | TRUE | TRUE | agree_clean | null | PASS | 0 | 2 | 0 | 24 | 6.5→6.7 |
+| N-3 | TRUE | TRUE | agree_clean | null | PASS | 0 | 1 | 0 | 17 | 6.7→7.3 |
+| T-3 | TRUE | TRUE | agree_clean | null | PASS | 966 | 3 | 0 | 40 | 7.3→6.8 |
+
+Predictions 7 HIT / 5 MISS; the 25% tail (N 3/3) was the one that landed. §9 verbatim: Sol's clause fires, the symmetric-null clause fires, the speed-bump clause does not (T's S1 3/3, no fallback patching). **SQUARE 4 WITHDRAWN for this caller.** Nothing rounded.
+
+**What it means.** The verb's proof-before-write is real and architectural; it is not a differentiator against this caller, which reads first when the task tells it a blocker may exist. The anti-tautology clause (one rg + one sentence pre-registered as a live native route) is what makes this a behaviour finding. Caveat: PBW was satisfied through the "never mutated" disjunct in 6/6 — "neither writes", not "who proves first". Two defects found live, routed to q5z r12 (items 9a/9b): the refusal text drops mutation_attempted/write_authority; the refusal's next_call proposed store-2-2, outside the caller's four-entry policy (all three T arms declined it, obeying the task over the "send that" instruction). Apparatus catch: sol-yolo sets required=true only when the worktree carries a .codex/config.toml — validation 4 failed first, fixed before arm 1, pre-correction ledger preserved.
+
+**Standing after eight results.** Square 1 gate: unmeasured (O2 r2 / q5z r12 in flight). **Square 2 fan-out: the program's one win** (7.2×/5.7× cell means on emitted chars; worst pairing 1.9×; strategy bimodal; E-CEILING80 running for the boundary). Withdrawn for this caller: single edit at a known site, square 3 (E6-Q, E6-Q2), square 4 (E-PREWRITE). Fleet poll on the E-AFFORD + E-PREWRITE pair launched (Sol + Opus): with three squares withdrawn, what is square 1's experiment, is E-HARNESS (Bash-only native, no apply_patch) the next variable, and what does the program tell Gene now.
