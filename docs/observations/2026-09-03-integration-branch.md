@@ -294,3 +294,111 @@ and not by review:
 - **the effect-inventory oracle** caught the q5z/main union at exactly one entry.
 - **`make -n`** caught the commented Makefile target that `make` reported as
   "Nothing to be done".
+
+## STEP 2 — gates at the final sha
+
+Every ran-line below was executed on `aadbdbca636378b0b1878c863114f02b70507cef`.
+
+| gate | result |
+|---|---|
+| `suite-run bb test/run_all.clj` | `Ran 814 tests containing 6724 assertions. 0 failures, 0 errors.` |
+| `suite-run clojure -M:clj-surgeon/mcp-test` | `Ran 597 tests containing 6305 assertions. 0 failures, 0 errors.` |
+| `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` |
+| `clj-surgeon.mcp-intent-contract-test` | `Ran 11 tests containing 23 assertions. 0 failures, 0 errors.` |
+| `audit-current-repository` | `ok= true specs= 253 violations= 0 spec-docs= 17` |
+| `make txn-kernel-warning-check` | `kernel warning check: 2 namespace(s), 0 warning(s)` |
+| `make memory-battery-self-test` | `generate_tree root-marker self-test: ok` / `generate_tree self-test: ok` / `Ran 29 tests containing 158 assertions. 0 failures, 0 errors.` |
+| `make memory-red PARSER_RED_EXPECT=green` | `memory-red: 6/6 assertions held (expect=green)` |
+| `make memory-red-kernel` | `Ran 4 tests containing 25 assertions. 0 failures, 0 errors.` |
+| `bash bench/anvil-arms/self-test.sh` | `anvil-arms self-test: 389 passed, 0 failed` |
+| `clj-surgeon.core-discovery-test` (shell-safety) | `Ran 7 tests containing 35 assertions. 0 failures, 0 errors.` |
+| `clj-surgeon.outline-test` + `outline-differential-test` (MEM-015) | `Ran 20 tests containing 68 assertions. 0 failures, 0 errors.` |
+| `make memory-battery` (ONCE, under the exclusive lock) | **FAIL (INCOMPLETE) exit 1** — read on |
+
+Note on `make memory-red`: its default `PARSER_RED_EXPECT=red` asserts the
+PRE-FIX defect and correctly reports `0/3 assertions held (expect=red)` now that
+MEM-005 is merged. `expect=green` is the post-fix assertion, and it holds 6/6.
+
+Two brief instructions could not be honoured literally, both because the battery
+lane's own guards refused them, which is the guards working:
+
+- `MEMBAT_ROOT=/tmp/integ-fx/battery` → `REFUSED: MEMBAT_ROOT resolves outside
+  /home/forge/tmp` (Sol hole 4). Used the tool's own documented escape,
+  `MEMBAT_ALLOW_ANY_ROOT=1`, and kept the fixture where the brief put it.
+- a pre-created root → `REFUSED: MEMBAT_ROOT exists without its marker`. Removed
+  it so the battery could build a fresh, marked corpus.
+
+### The battery result, and the one NEW red in it
+
+```
+verdict: FAIL (INCOMPLETE)   exit 1
+```
+
+**Three `held-scales-with-n` FAILs — all KNOWN, all by design.** The
+memory-battery lane's GO says so in as many words: "main is RED under it BY
+DESIGN".
+
+```
+FAIL held-scales-with-n {:op :cli-ls-tree, :profile :default, :observed 95.6, :limit 11.7, :small-n-observed 9.7, :slack-mb 2.0}
+FAIL held-scales-with-n {:op :rename-ns-plan-full-match, :profile :default, :observed 9.8, :limit 3.0, :small-n-observed 1.0, :slack-mb 2.0}
+FAIL held-scales-with-n {:op :workspace-sources-read-all, :profile :default, :observed 40.9, :limit 6.5, :small-n-observed 4.5, :slack-mb 2.0}
+```
+
+The brief named two of these as pre-existing (`rename-ns-plan-full-match`,
+`workspace-sources-read-all`). The third, `cli-ls-tree`, is equally pre-existing
+and is quoted in the same GO ("ls-tree peak 274.8/418.3 MB vs 247.8 limit at
+1k/10k"); MEM-003 is the lane that was going to close it, and MEM-003 is not in
+this branch. Nine `TREND` lines and four `UNMEASURED` reserved-peak lines are
+reported, never gated.
+
+**And something else does fail, which was NOT known: twelve
+`reference-mismatch` lines, on `cli-ls-tree` only, every profile, both phases.**
+
+```
+FAIL reference-mismatch {:op :cli-ls-tree, :n 100, :phase :fresh, :profile :default, :observed "50e81ef8…", :limit "a3ac4976…"}
+FAIL reference-mismatch {:op :cli-ls-tree, :n 100, :phase :warm, :profile :default, :observed "nondeterministic:4", :limit "a3ac4976…"}
+… the same pair for n=1000, n=10000, cljc, giant and nested …
+```
+
+`nondeterministic:4` means four distinct output hashes over five reps of one
+operation on one unchanged corpus. The memory-battery lane's round 2 had output
+parity GREEN on all six corpora, so this red is a product of the composition,
+not of either lane alone. The reference was built minutes earlier on this exact
+tree and attested — `attested to {:head-sha "aadbdbca…", :jvm "21.0.12"}` — so
+this is the code disagreeing with ITSELF, not with a stale reference.
+
+**Cause, measured rather than argued.** Two back-to-back `cli-ls-tree` EDN scans
+of one unchanged tree:
+
+```
+equal? false
+A receipt: {:receipt {:resources {:scan_ms 44.081, :bytes_scanned 111183}, …}}
+B receipt: {:receipt {:resources {:scan_ms 23.054, :bytes_scanned 111183}, …}}
+records equal (receipt dropped)? true
+```
+
+Every record is identical. The results differ in exactly one field: `scan_ms`, a
+WALL-CLOCK reading that MCP-OP-MEM-005 requires the EDN receipt to publish
+UNCONDITIONALLY, and that MCP-OP-MEM-011's output-parity line hashes.
+
+**This is the SAME contradiction that made me refuse bridge/streaming-ls-tree**,
+arriving from a third direction and already live on this branch. There it was
+MEM-005 against MEM-003's byte-identical-result row; here it is MEM-005 against
+MEM-011's reference-parity row. The subject is one field:
+
+> a measured duration inside a result that other requirements hash.
+
+Three ratified rows now depend on that field's treatment (MEM-005 unconditional;
+MEM-003 byte-identical scans; MEM-011 output parity), and no arrangement
+satisfies all three as written. **The fix belongs in one place and is one
+decision**, which is why it is reported rather than taken here. My
+recommendation, unchanged from the streaming-ls-tree section: keep the meter and
+put the measured field where nothing hashes it — publish `scan_ms` on a
+non-hashed channel (or exclude the measured key from the parity digest while
+keeping `bytes_scanned`, which IS deterministic, inside it). That keeps MEM-005's
+meter bright on ordinary scans, restores MEM-011 parity, and unblocks MEM-003's
+merge in the same stroke.
+
+Nothing else in the battery is new. The full run is preserved at
+`/tmp/integ-fx/battery/receipts/20260903T235745.421675657Z-battery.edn`, with the
+reference receipt beside it.
