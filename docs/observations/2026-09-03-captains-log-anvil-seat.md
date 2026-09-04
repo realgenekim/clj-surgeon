@@ -1863,3 +1863,14 @@ banking if codex gates review throughput.
 ## 23:13Z Astra's plan of record through 02:05Z filed (docs/observations/2026-09-04-astra-plan-for-gene-2309z.md, relayed to Gene verbatim). Schedule: my window 23:20–23:40 = suite review (resumed, focused probes, coverage comparison) + landing gates; then r4 purity witnesses (builder launched in prepare mode: no JVM outside verification windows); Astra 23:40–00:20, then alternating. His adversarial probe found a real alias_migration bug (a mixed bare :refer list loses an unrelated binding after a reported successful commit) — repair + executed review before his tool cohort. E-THREAD: 12/12 answers 5/5 by blind source grading; live tool descriptively slower on those discovery tasks.
 
 ## 23:42Z suite spike r4 built (8226355b): six runtime purity witnesses in one snapshot fixture; RED on the real tree first (a /proc slurp that threw; 45 reloaded var roots; per-lane budgets); a planted violating namespace passes clojure.test and the suite refuses with nine typed violations; fast lane 34 s. Needs review after r3 lands; trunk drift conflict to merge.
+
+## 23:43Z CORRECTION of my own claim + suite r3 review NO-GO
+
+Astra, verbatim: "the speedup is real as a shorter gate, but same gate coverage was NOT preserved: 510/957 tests moved off it.
+Same total corpus is different from same pre-merge coverage." He is right and my wording was wrong wherever I said "nothing
+dropped" as if it meant the gate kept its coverage: nothing dropped from the CORPUS; the merge gate now runs 447 of 957 tests
+and the other 510 run in the battery lane at landing-and-nightly cadence. The claim that survives: the gate is faster
+because eleven launcher-driven namespaces moved off it; the discipline that makes that safe (ledger + freshness tripwire
+on the landing path, the nightly) is exactly what the review found not yet on the landing gate. Sol's r3 verdict: NO-GO on
+four blockers (above); the coverage comparison was the required deliverable and it is the finding. GitHub's default
+branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat needs re-verification when the workflow lands.

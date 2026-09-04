@@ -187,6 +187,10 @@ writing, the way parity squares are.**
 3. **A quiet box for arms** — five concurrent JVM lanes quadrupled suite times on 2026-09-04 and
    manufactured two phantom flakes; that multiplier hit both arms and was noise. Arms run serialized.
 
+(Suite correction, 2026-09-04 23:4xZ, from the independent review: the merge gate went 717 s → 150 s by MOVING 510 of 957 tests
+to a battery lane at landing-and-nightly cadence — same corpus, not same gate coverage; the discipline that makes that safe is the
+ledger + freshness tripwire on the landing path and the nightly, and the gate is not "fast AND safe" until those are enforced.)
+
 Projected from the table: 9 min → ~3 (contract) → ~2 (gate). Three to four times on wall, from two
 levers, neither of which is another feature_thread round. Withdrawal is pre-registered in
 `docs/observations/2026-09-04-feature-thread-replay-result.md` (T5): if the contract arm stays above
