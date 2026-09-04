@@ -28,7 +28,8 @@
     ;; @spec TEST-ISO-001 -- a namespace with no lane declaration is a TYPED
     ;; REFUSAL naming its subject and its remedy, never a silent skip. A
     ;; skip is indistinguishable from a green suite with less in it, which is
-    ;; the failure mode `mcp-formatter-test` has been living in unnoticed.
+    ;; the failure mode `mcp-formatter-test` lived in unnoticed until round
+    ;; three adopted it into :fast.
     (let [undeclared (vec (remove lm/manifest explicit))]
       (if (seq undeclared)
         {:refusal :lane-undeclared

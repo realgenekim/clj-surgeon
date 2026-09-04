@@ -7,9 +7,10 @@
    Why all three and not just the manifest: a manifest alone drifts silently.
    A namespace deleted from the manifest simply stops running, and the suite
    goes GREEN with less in it -- the failure mode this repo has already paid
-   for once (round one's `mcp-formatter-test` is required by no runner and no
-   Make target, and nothing noticed). Set equality in both directions is the
-   refusal-kind pattern: absence is as loud as presence."
+   for once (round one's `mcp-formatter-test` was required by no runner and no
+   Make target, and nothing noticed; round three adopted it into :fast and
+   made exclusion-into-orphanhood unrepresentable). Set equality in both
+   directions is the refusal-kind pattern: absence is as loud as presence."
   (:require
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
@@ -127,6 +128,31 @@
         (str "excluded namespace " s " must name WHY it is in no lane"))
     (is (not (contains? lm/manifest s))
         (str s " is both excluded and in the manifest"))))
+
+(deftest every-exclusion-names-a-runner-that-actually-exists
+  (testing "an exclusion is a REDIRECTION, never a declaration of orphanhood"
+    ;; Round two declared `mcp-formatter-test` excluded with the reason
+    ;; "required by no runner and no Make target". That made the omission
+    ;; VISIBLE, which is better than silence -- but visible loss is still
+    ;; loss, and the round-two review called it blocking. The instance fix is
+    ;; to give that namespace a lane. THIS is the class fix: an entry in
+    ;; `excluded` must name the OTHER runner that runs it, and that runner
+    ;; must exist. A namespace no runner runs cannot be declared away; it can
+    ;; only be adopted into a lane or deleted.
+    (let [makefile (slurp (io/file "Makefile"))
+          deps (slurp (io/file "deps.edn"))
+          target? (fn [t] (or (re-find (re-pattern (str "(?m)^" (java.util.regex.Pattern/quote t) ":")) makefile)
+                              (str/includes? makefile (str " " t " "))))
+          alias? (fn [a] (str/includes? deps (str ":clj-surgeon/" a)))]
+      (doseq [[s reason] lm/excluded]
+        (let [targets (map second (re-seq #"`make ([a-z0-9\-]+)`" reason))
+              aliases (map second (re-seq #":clj-surgeon/([a-z0-9\-]+)" reason))
+              named (concat (filter target? targets) (filter alias? aliases))]
+          (is (seq named)
+              (str "excluded namespace " s " names no runner that exists. An "
+                   "exclusion must redirect to a real `make <target>` or "
+                   ":clj-surgeon/<alias> that runs it (TEST-ISO-001); its "
+                   "reason was: " (pr-str reason))))))))
 
 (deftest every-manifest-namespace-declares-its-lane-in-its-own-ns-form
   (testing "source metadata agrees with the manifest, per namespace"
@@ -264,11 +290,77 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 36 (count (lm/namespaces-for :fast))))
+    (is (= 37 (count (lm/namespaces-for :fast))))
     (is (= 4 (count (lm/namespaces-for :integration))))
     (is (= 11 (count (lm/namespaces-for :battery))))
-    (is (= 51 (count lm/manifest))
-        "round one's 49 measured namespaces plus the two round-two witnesses")))
+    (is (= 52 (count lm/manifest))
+        (str "round one's 49 measured namespaces, plus the two round-two "
+             "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
+             "round three's adopted orphan (mcp-formatter-test)"))))
+
+(defn- deftest-count
+  "How many `deftest` forms a namespace's source file declares. A SOURCE
+   census, deliberately: it is the same number for every box and every load,
+   whereas assertion counts are context-sensitive (the round-two review
+   measured 4,319 assertions summing the lanes separately and 4,323 running
+   them together) and a pin that moves with the weather teaches people to
+   re-bless it."
+  [ns-sym]
+  (let [file (:file (get @on-disk ns-sym))]
+    (count (re-seq #"(?m)^\(deftest " (slurp file)))))
+
+(def ^:private adopted-since-round-one
+  "Namespaces in a lane today that round one did NOT measure, each with the
+   number of tests it brings and why it exists. This is the ONLY legal way
+   the corpus grows without the arithmetic below going red."
+  '{clj-surgeon.fast-lane-isolation-test 3   ; TEST-ISO-006's witness (round two)
+    clj-surgeon.lane-manifest-test       17  ; TEST-ISO-001's witness (round two) + round three's exclusion/arithmetic pins
+    clj-surgeon.mcp-formatter-test       3}) ; the adopted orphan (round three)
+
+(deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
+  ;; THE NOTHING-DROPPED PIN, recomputed for round three.
+  ;;
+  ;; Round one MEASURED 865 tests / 13,023 assertions across the 49 namespaces
+  ;; pinned in `round-one-jvm-namespaces`. Partitioning must never turn into
+  ;; dropping, so two things are checked, and the second is the one that
+  ;; actually holds the line:
+  ;;
+  ;;   round one's 49 namespaces, today ........... 921 deftests  (>= 865: the
+  ;;                                                trunk ADDED tests to them;
+  ;;                                                it never removed any)
+  ;;   adopted since round one ..................... 23 deftests  (3 + 17 + 3)
+  ;;                                                --------------
+  ;;   total declared by the manifest .............. 944 deftests
+  ;;
+  ;; A namespace leaving a lane fails `the-partition-drops-nothing-...` by
+  ;; name; a namespace's tests being deleted fails the >= below; anything
+  ;; joining the corpus without a line in `adopted-since-round-one` fails the
+  ;; equality. Moving a test needs a reason AT the pin, which is the point.
+  (let [r1 (reduce + (map deftest-count round-one-jvm-namespaces))
+        adopted (reduce + (map deftest-count (keys adopted-since-round-one)))
+        total (reduce + (map deftest-count (keys lm/manifest)))]
+    (testing "every namespace round one measured still declares at least as much"
+      (is (>= r1 865)
+          (str "round one's 49 namespaces declare " r1 " tests today, fewer "
+               "than the 865 it MEASURED -- tests were deleted, not moved")))
+    (testing "the tests adopted since round one are exactly the declared ones"
+      (doseq [[s n] adopted-since-round-one]
+        (is (= n (deftest-count s))
+            (str s " declares " (deftest-count s) " tests, not the pinned " n
+                 " -- update the pin WITH the reason")))
+      (is (= (set (keys adopted-since-round-one))
+             (set (remove round-one-jvm-namespaces (keys lm/manifest))))
+          (str "a namespace joined or left the corpus without a line at the "
+               "pin: in a lane but unpinned "
+               (pr-str (sort (remove (some-fn round-one-jvm-namespaces
+                                              (set (keys adopted-since-round-one)))
+                                     (keys lm/manifest))))))
+      (is (= 23 adopted) (str "adopted tests: " adopted)))
+    (testing "the arithmetic closes"
+      (is (= 944 total) (str "manifest declares " total " tests"))
+      (is (= total (+ r1 adopted))
+          (str total " != " r1 " + " adopted
+               " -- a namespace is being counted twice or not at all")))))
 
 ;; ---------------------------------------------------------------------------
 ;; The intent audit for this family.

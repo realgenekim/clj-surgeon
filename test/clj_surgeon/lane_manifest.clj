@@ -93,7 +93,7 @@
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {
 
-   ;; ---- :fast (36) ----
+   ;; ---- :fast (37) ----
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
    'clj-surgeon.lane-manifest-test                      :fast
@@ -107,6 +107,7 @@
    'clj-surgeon.mcp-create-files-test                   :fast
    'clj-surgeon.mcp-extraction-plan-test                :fast
    'clj-surgeon.mcp-extraction-test                     :fast
+   'clj-surgeon.mcp-formatter-test                      :fast
    'clj-surgeon.mcp-inspect-contract-test               :fast
    'clj-surgeon.mcp-inspect-tool-test                   :fast
    'clj-surgeon.mcp-intent-contract-test                :fast
@@ -154,7 +155,14 @@
 (def excluded
   "Test namespaces that are on disk and in NO JVM lane, each with the reason
    it is not. An entry here is a DECLARED omission; anything else on disk
-   that is in neither `manifest` nor `test/run_all.clj` fails the witness."
+   that is in neither `manifest` nor `test/run_all.clj` fails the witness.
+
+   An exclusion is a REDIRECTION, not a declaration of orphanhood: its reason
+   must name a `make <target>` or a :clj-surgeon/<alias> that EXISTS and runs
+   the namespace, and `lane-manifest-test/every-exclusion-names-a-runner-that-actually-exists`
+   fails by name if it does not. Round two excluded `mcp-formatter-test` with
+   the reason \"required by no runner\"; round three adopted it into :fast and
+   made that shape unrepresentable."
   {'clj-surgeon.analyzer-contract-test
    "own serialized runner -- `make analyzer-contract-test` (alias :clj-surgeon/analyzer-contract-test)"
 
@@ -169,9 +177,7 @@
 
    'clj-surgeon.worktree-lifecycle-recovery-test
    "own Make target -- `make worktree-lifecycle-recovery-test` (Makefile:834)"
-
-   'clj-surgeon.mcp-formatter-test
-   "ORPHAN as of 2026-09-04: required by no runner and no Make target. Declared here rather than silently adopted; adopting it is a round-three decision with its own measurement."})
+})
 
 (defn cadence-of-lane
   "The declared cadence for `lane`, or nil when the lane declares none."

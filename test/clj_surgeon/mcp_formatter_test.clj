@@ -1,4 +1,21 @@
-(ns clj-surgeon.mcp-formatter-test
+(ns ^{:lane :fast} clj-surgeon.mcp-formatter-test
+  "Boundary witnesses over `clj-surgeon.mcp-formatter`, live in production at
+   `mcp-tool.clj:16,367,778,785,790` and `mcp_http_server.clj:5,40`.
+
+   LANE: :fast (adopted 2026-09-04, round three). It qualifies on the lane's
+   own rules rather than by convenience -- it launches NO child process (the
+   process runner is injected at every call site), binds no socket, touches no
+   network, and stages only through `File/createTempFile`, which resolves to
+   the fast lane's throwaway `java.io.tmpdir` root (TEST-ISO-006). The two
+   `\"/tmp\"` arguments below are project-root STRINGS handed to an injected
+   runner that never touches the filesystem; nothing is written there.
+
+   It was an ORPHAN until round three: required by no runner and no Make
+   target, three green tests over live production paths that nothing ran. The
+   round-two review called that a blocking coverage loss. The class ratchet is
+   `lane-manifest-test/every-exclusion-names-a-runner-that-actually-exists`:
+   an exclusion must now redirect to a runner that exists, so a namespace can
+   no longer be declared into orphanhood."
   (:require
    [clj-surgeon.mcp-formatter :as formatter]
    [clojure.java.io :as io]

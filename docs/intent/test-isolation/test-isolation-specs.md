@@ -39,15 +39,26 @@ listed here with `[ ]` so the family is one document rather than a memory.
   manifest entry with no file, and a test namespace on disk that is in no
   lane, in `test/run_all.clj`, or in a declared-exclusion map carrying a
   reason, shall each fail by name. Absence shall be as loud as presence.
+  Every exclusion shall be a REDIRECTION and never a declaration of
+  orphanhood: its reason shall name a `make <target>` or a
+  `:clj-surgeon/<alias>` that EXISTS in the tree and runs it, so that a
+  namespace no runner runs cannot be declared away -- it can only be adopted
+  into a lane or deleted.
   *Witness:* `.../every-manifest-entry-exists-on-disk`,
   `.../every-test-namespace-on-disk-is-accounted-for`,
-  `.../excluded-entries-are-real-and-carry-a-reason`.
+  `.../excluded-entries-are-real-and-carry-a-reason`,
+  `.../every-exclusion-names-a-runner-that-actually-exists`.
 
 - [x] **TEST-ISO-001b**: Partitioning shall never become dropping: the 49
   namespaces round one measured shall all remain in some lane, checked
   against a pinned set, so that a green suite with less in it is
-  impossible.
-  *Witness:* `.../the-partition-drops-nothing-round-one-measured`.
+  impossible. The corpus shall only ever GROW against round one's measured
+  865 tests, and the growth shall be shown as arithmetic at the pin: the 49
+  measured namespaces declare at least 865 tests today, every namespace in a
+  lane that round one did not measure is enumerated with its exact test
+  count, and the two shall sum to the manifest's total.
+  *Witness:* `.../the-partition-drops-nothing-round-one-measured`,
+  `.../the-corpus-only-ever-grows-and-the-arithmetic-is-shown`.
 
 - [x] **TEST-ISO-001c**: The lane manifest shall declare, in the SAME source
   of truth as the lane, the CADENCE at which each lane runs -- `:fast` every

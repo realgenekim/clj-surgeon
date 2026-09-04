@@ -52,9 +52,20 @@ own ns metadata, and the files on disk -- and the witness asserts set
 equality among them in both directions. A manifest alone drifts silently: a
 namespace deleted from it simply stops running and the suite goes GREEN with
 less in it. This repository has already paid for that failure mode without
-noticing: `mcp-formatter-test` is required by no runner and no Make target.
-It is now a DECLARED exclusion carrying that sentence as its reason, which is
-the difference between a known gap and an accident.
+noticing: `mcp-formatter-test` was required by no runner and no Make target
+-- three green tests over live production formatter paths that nothing ran.
+
+Round two made it a DECLARED exclusion carrying that sentence as its reason,
+which is the difference between a known gap and an accident. The round-two
+review's answer was that a known gap is still a gap: declaring an omission
+makes it visible, it does not make it non-loss. So round three does both
+halves. The INSTANCE: the namespace is adopted into `:fast`, which it
+qualifies for on the lane's own rules -- it injects its process runner, binds
+nothing, and stages through `java.io.tmpdir`. The CLASS: an exclusion is now
+a REDIRECTION, and `every-exclusion-names-a-runner-that-actually-exists`
+requires each reason to name a `make <target>` or a `:clj-surgeon/<alias>`
+that exists in the tree. A namespace can be sent to another runner or
+deleted; it can no longer be declared into orphanhood.
 
 ## Why isolation is unrepresentability, not detection, where it can be
 
