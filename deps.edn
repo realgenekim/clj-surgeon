@@ -39,6 +39,23 @@
   ;; :clj-surgeon/mcp-test is the MERGE GATE: fast + integration. The eleven
   ;; battery namespaces (674 s of round one's 716 s) are deliberately not in
   ;; it; `make test` runs `make test-battery` after.
+  ;; Paths + deps with NO :main-opts, so a caller can name its own entry
+  ;; point: `clojure -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner
+  ;; --ns clj-surgeon.foo-test`. The lane aliases below concatenate their
+  ;; :main-opts with anything on the command line, so they cannot be used for
+  ;; this.
+  :clj-surgeon/test-deps
+  {:extra-paths ["test" "dev/experiments"]
+   :extra-deps
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
+    {:git/tag "v0.2.6"
+     :git/sha "35a660b"}
+    nrepl/nrepl {:mvn/version "1.3.1"}
+    org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
+    org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}}
+
   :clj-surgeon/mcp-test
   {:extra-paths ["test" "dev/experiments"]
    :extra-deps

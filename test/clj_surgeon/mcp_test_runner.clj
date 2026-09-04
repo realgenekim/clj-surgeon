@@ -70,9 +70,20 @@
   [args]
   (mapv (comp keyword str/lower-case str) args))
 
+(defn parse-args
+  "`--ns a.b-test c.d-test` selects namespaces explicitly (still subject to the
+   manifest's refusal -- that is the point of the flag: the refusal has to be
+   reachable from the command line or it is dead code a witness alone keeps
+   alive). Anything else is a list of lane names."
+  [args]
+  (let [args (mapv str args)]
+    (if (= "--ns" (first args))
+      {:explicit (mapv symbol (rest args))}
+      {:lanes (parse-lanes args)})))
+
 (defn -main
   [& args]
-  (let [lanes (parse-lanes args)
+  (let [{:keys [lanes explicit]} (parse-args args)
         ;; @spec TEST-ISO-006 -- ONLY the fast lane is launched on a throwaway
         ;; user.home. Integration drives in-process servers and battery
         ;; launches cold `clojure`/`bb` children that legitimately need the
@@ -85,18 +96,20 @@
                                   :isolate-home? isolate-home?}
                                  args)
         _ (when refused (System/exit 97))
-        _ (when (empty? lanes)
+        _ (when (and (empty? lanes) (empty? explicit))
             (binding [*out* *err*]
               (println (str "lane-refused: no lane named. Usage: -m "
                             "clj-surgeon.mcp-test-runner <lane>... where lane is "
-                            (str/join ", " (map name lm/lanes)) ".")))
+                            (str/join ", " (map name lm/lanes))
+                            " -- or --ns <namespace>...")))
             (System/exit 96))
-        {:keys [refusal message namespaces]} (lane-namespaces lanes nil)
+        {:keys [refusal message namespaces]} (lane-namespaces lanes explicit)
         _ (when refusal
             (binding [*out* *err*] (println message))
             (System/exit 96))
         _ (println (format "lanes: %s -- %d namespace(s)"
-                           (str/join "+" (map name lanes)) (count namespaces)))
+                           (if (seq lanes) (str/join "+" (map name lanes)) "--ns")
+                           (count namespaces)))
         _ (doseq [n namespaces] (require n))
         _ (when-let [{:keys [message]} (lane-metadata-refusal namespaces)]
             (binding [*out* *err*] (println message))

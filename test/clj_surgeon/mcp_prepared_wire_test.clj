@@ -266,3 +266,56 @@
     (is (= true (:ok validated)))
     (is (= {"arguments.edits[0].to" "(def alpha :new)"}
            (:fill validated)))))
+
+;; ---------------------------------------------------------------------------
+;; Round one's teardown race, as a deterministic witness.
+;;
+;; Round one, 2/2 concurrent pairs: `java.io.IOException: Stream closed` out of
+;; `stop-child!` via `FutureTask.report`. The mechanism is that `start-child!`
+;; slurps the child's stderr in a `future`, and `stop-child!` closes the
+;; child's streams and destroys it BEFORE `(deref stderr 5000 "")`. `deref`'s
+;; default value covers a TIMEOUT, not an EXCEPTION: when the destroy wins the
+;; race against the still-running slurp, the future completes exceptionally and
+;; the deref rethrows. On a quiet box the slurp finishes first.
+;;
+;; The second-order failure is the one that cost the run: the throw escaped the
+;; test's `(finally (stop-child! child) (delete-tree! project))` BEFORE
+;; `delete-tree!` ran, the workspace survived, and the tmp-leak ratchet failed
+;; the run a second time. One error plus one leak, from one race. A cleanup
+;; step sequenced after a call that can throw is not cleanup.
+;;
+;; These two witnesses plant the exception directly rather than waiting for the
+;; scheduler, so the MECHANISM is pinned deterministically; the race itself is
+;; re-run under contention by dev/experiments/contention_witness.sh, because an
+;; example test on a quiet box is a measurement of how idle the box was.
+;; ---------------------------------------------------------------------------
+
+(defn- exploding-child
+  []
+  (let [f (future (throw (ex-info "stderr reader died" {})))]
+    (try @f (catch Throwable _ nil))
+    {:process nil :stderr f}))
+
+;; @spec TEST-ISO-RACE-001
+(deftest stop-child-reports-a-stderr-reader-failure-as-a-typed-fact
+  (let [receipt (stop-child! (exploding-child))]
+    (is (map? receipt)
+        "stop-child! must return a receipt, never throw: it runs in a finally")
+    (is (= :stderr-reader-failed (:refusal receipt))
+        (str "a stderr reader that died must be reported as a typed fact, got "
+             (pr-str receipt)))
+    (is (str/includes? (str (:message receipt)) "stderr reader died")
+        "the refusal must carry what actually went wrong")))
+
+;; @spec TEST-ISO-RACE-001
+(deftest a-teardown-failure-still-deletes-the-workspace
+  (let [project (temp-dir "prepared-wire-teardown-witness-")]
+    (try
+      :body-succeeded
+      (finally
+        (stop-child! (exploding-child))
+        (delete-tree! project)))
+    (is (not (.exists project))
+        (str "the workspace " (.getPath project) " survived a teardown whose "
+             "first step threw -- cleanup sequenced after a call that can "
+             "throw is not cleanup"))))
