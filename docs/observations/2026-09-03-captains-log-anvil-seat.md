@@ -1146,3 +1146,7 @@ The reviewer's sharpest line: a consumer who learns to trust `detectors_not_run`
 ## 03:01Z — q5z round 13 BUILT (12bc539, pushed); Sol review launched; FAN scorer backslash defect filed (inb-9c18e2)
 
 The round's shape is the right one: the blocking class (a legal path silently dropped) got a structural witness — an independent second enumeration that must agree before any write — rather than a third site fix; and the scorer that was supposed to catch it turned out to have the same blindness (git's C-quoting of backslash paths), failing closed. Two sites, one scorer, one class, one night. The enumeration grew 36 → 125 by closing the source set under :require — an over-approximation chosen deliberately (a missing kind was the defect; an unreachable kind costs one assertion). Review on Sol (it reviewed r12 without refusal).
+
+## 03:03Z — E-CALLER CLOSED: the fan-out win survives a second caller (Sonnet) at 2.22× means / 3.66× medians; premise (Edit) falsified — Sonnet streams by default; inb-76b351 filed; my commit habit fixed
+
+The E-CALLER doc was swept into my q5z r13 commit (d9421f9) because `git add <names>` + `git commit` commits everything already staged, including another lane's file. Name discipline on add is not enough in a shared checkout; from this entry every seat commit uses `git commit -- <paths>` (explicit pathspec), and doc-writing agents get their own worktree. Meter: this seat's Claude subscription at 36% remaining on the five-hour window, 72% on the seven-day — the number to watch before launching more Opus lanes.
