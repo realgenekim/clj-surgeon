@@ -245,7 +245,19 @@
    Returns {:files #{} :symlinks {path target-kind} :entries #{} :dirs-found N
             :dirs-entered M :entries-seen K :errors [{:kind :path :detail}]}.
    `:entries` is files + symlink leaves -- the set CHECK 1 reconciles against git's
-   own view, which lists a link and not its target."
+   own view, which lists a link and not its target.
+
+   KNOWN LIMIT, not fixed (round-4 review, finding 9, non-blocking): this JVM decodes
+   directory entry names with `sun.jnu.encoding` (UTF-8 here). Two distinct raw byte
+   filenames that are not valid UTF-8 can decode to the SAME Java string and so
+   collapse to one set element -- the walk then undercounts, and the one path it does
+   report is not necessarily the path on disk. This still fails closed: it does not
+   open a false-PASS route, because `git ls-files -z` (parsed via `String. bytes
+   \"UTF-8\"`, see `parse-tree` below) mangles the same two names the same way, so
+   both sides of the cross-check agree and the run refuses on a genuine mismatch
+   count. If exact non-UTF-8 filenames ever matter, this needs a byte-level path
+   comparison (e.g. `sun.jnu.encoding=ISO-8859-1`, or comparing raw bytes rather than
+   `Path`/`String`), not a fix within the current encoding."
   [wt]
   (let [wt-path (.toPath (io/file wt))
         dirs-found (atom 0) dirs-entered (atom 0) entries-seen (atom 0)
