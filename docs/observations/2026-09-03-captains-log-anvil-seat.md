@@ -1880,3 +1880,5 @@ branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat need
 ## 23:45Z gate r18 window run: assertions green (935/15436/0), the tmp-leak ratchet failed the lane on the builder's own witness leaks (the ratchet earning its keep); fix 09660168 unverified; gates owed for the next window
 
 ## 23:48Z — usage watch DEFERRED: the collector is a JVM and a peer quiet window is open (owner=astra start=23:43Z end=00:00Z purpose=native-cleanretry-and-primary-pairs); last collector figures (22:51Z run, verbatim): tools "admit_clojure_patch": 59 "inspect_clojure": 154. Re-run in the next verification window.
+
+## 23:53Z Astra's floors and first pair (his figures, verbatim in the coordination file): native floors n=6/model on one pinned client (codex 0.153.3, 21-owner task): Sol median 134.75 s SD 26.84; Astra median 51.15 s SD 4.45 (one contaminated Sol run retained/excluded by the frozen rule). First measured Sol pair: native 117.2 s vs Surgeon 35.2 s, both 6/6, no refusal, 4 vs 7 outer actions — 3.3× at n=1, not a result; tool server startup 9.53 s separately. Astra tool arm running.
