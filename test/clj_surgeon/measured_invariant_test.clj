@@ -304,6 +304,21 @@
    "Calendar/getInstance" "java.util.Calendar, which was in neither list"
    ".getTimeInMillis" "Calendar's epoch accessor"
    "(. System nanoTime" "the DOT SPECIAL FORM: the text is not `System/nanoTime` at all"
+   ;; Round-six review finding 4: the babashka floor was short by exactly one
+   ;; entry of the JVM-minus-babashka difference, and nothing checked it, so
+   ;; the scanning gate's clock pattern was strictly weaker in the runtime it
+   ;; actually runs in. `the-babashka-clock-floor-is-the-complete-jvm-difference`
+   ;; below is the ratchet; this is the entry it was missing.
+   "(. Calendar getInstance" "the dot special form of the java.util.Calendar factory — the third spelling babashka cannot derive, and the one the floor did not carry"
+   ;; Round-six review findings 2 and 3: neither the class nor the method is a
+   ;; source token in `(.getMethod (Class/forName "java.lang.System") "nanoTime" ...)`,
+   ;; and the dot special form's alternative was anchored so that a
+   ;; fully-qualified class did not match it. Both published a raw sixteen-digit
+   ;; nanoTime in a receipt field inside the hashed parity subject.
+   "\"nanoTime\"" "the monotonic clock's method named as a STRING, which is what .getMethod takes"
+   "\"currentTimeMillis\"" "the wall clock's method as a string"
+   "\"java.lang.System\"" "the clock source class's FULLY-QUALIFIED NAME as a string: Class/forName cannot be reached without one"
+   "(. java.lang.System nanoTime" "the dot special form with a fully-qualified class — the simple-name form matched and this one did not"
    "Date." "a CONSTRUCTOR reads the clock, and a constructor is not a method, so .getMethods cannot see one"})
 
 (def ^:private clock-pattern
@@ -439,6 +454,19 @@
    "measured/start-nanos" "the private verb that opens a start tick"
    "._launder" "the protocol method as MUNGED Java interop — the round-five review's finding 1"
    ".-launder" "the same method spelled as an unmunged field access"
+   ;; Round-six review findings 1a/1b/1c: a call that names its target as a
+   ;; STRING, and the DOT SPECIAL FORM. Every alternative above is a source
+   ;; TOKEN, and `(.getMethod (class r) "_launder" ...)`,
+   ;; `(Reflector/invokeInstanceMethod r "_launder" ...)` and `(. r _launder)`
+   ;; spell no such token — all three published a clock-derived number in an
+   ;; undeclared receipt field inside the hashed parity subject with the
+   ;; round-six gate green at 24 tests and 126 assertions.
+   "\"_launder\"" "the munged protocol method named as a STRING, which is the only way .getMethod and Reflector/invokeInstanceMethod can name it"
+   "\"-launder\"" "the unmunged protocol method as a string, the name Reflector takes for a Clojure-compiled interface method"
+   "\"launderable\"" "the opaque type's field named as a string, which is what .getDeclaredField takes"
+   "(. _launder" "the DOT SPECIAL FORM of the munged interop route: `(. r _launder)` is `(._launder r)` with two characters moved"
+   "(. -launder" "the dot special form of the unmunged spelling"
+   "(. launderable" "the dot special form of the field access"
    ".-launderable" "the deftype's private field, which babashka's interop does not enforce"
    ".launderable" "the same field spelled as a method call"
    "launderable" "the same field named bare, as a reflective lookup spells it"})
@@ -621,6 +649,8 @@
    {:reads 1 :channel :control :why "prune ordering: newest detail files kept, by file mtime"}
    ["src/clj_surgeon/mcp_telemetry.clj" "prune!"]
    {:reads 2 :channel :control :why "telemetry retention cutoff and each candidate file's mtime"}
+   ["src/clj_surgeon/mcp_tool.clj" "refusal-fact-line"]
+   {:reads 2 :channel :control :why "the ONE print deadline for a refusal's fact line: a wall instant taken once to set the budget and once to spend it, compared against itself and never rendered into a fact or any receipt field"}
    ["src/clj_surgeon/memory_battery_runner.clj" "measure-once"]
    {:reads 2 :channel :control :why "the battery harness's own wall row"}
    ["src/clj_surgeon/memory_battery_runner.clj" "run-battery"]
@@ -786,6 +816,89 @@
                  "derivation does not spell: " (pr-str iface-methods)))))))
 
 ;; @spec MCP-OP-TIME-006
+(def ^:private round-six-review-plants
+  "The five call sites the round-six review published a clock number through,
+  verbatim, with the gate green.
+
+  Each is a line of ordinary Clojure planted at
+  `src/clj_surgeon/mcp_hot_verify.clj:114` — the receipt-building site the two
+  round-five plants used — and each put a clock-derived number in an UNDECLARED
+  field inside the HASHED PARITY SUBJECT while the scanning gate reported 24
+  tests and 126 assertions, 0 failures. The class they share is one sentence:
+  every alternative of both derived patterns was a source TOKEN, and each of
+  these names its target as a STRING, or by the DOT SPECIAL FORM, or with a
+  fully-qualified prefix the dot-form alternative was anchored against.
+
+  Held as data so the witness below cannot drift from the review, and so a
+  future reviewer can add a plant without writing a test."
+  [{:label "A — .getMethod names the method as a STRING"
+    :pattern :escape
+    :source "(.invoke (.getMethod (class rr) \"_launder\" (into-array Class [])) rr (into-array Object []))"}
+   {:label "B — clojure.lang.Reflector, what the compiler itself emits for an un-hinted interop call"
+    :pattern :escape
+    :source "(clojure.lang.Reflector/invokeInstanceMethod rr \"_launder\" (into-array Object []))"}
+   {:label "H — the DOT SPECIAL FORM, round-five finding 1 with two characters moved"
+    :pattern :escape
+    :source "(. rr _launder)"}
+   {:label "D — Class/forName plus reflection: neither the class nor the method is a token"
+    :pattern :clock
+    :source "(.invoke (.getMethod (Class/forName \"java.lang.System\") \"nanoTime\" (into-array Class [])) nil (into-array Object []))"}
+   {:label "K — the dot special form with a FULLY-QUALIFIED class"
+    :pattern :clock
+    :source "(. java.lang.System nanoTime)"}])
+
+;; @spec MCP-OP-TIME-005
+;; @spec MCP-OP-TIME-006
+(deftest every-round-six-review-plant-is-seen-by-the-scan-that-owns-it
+  (testing "a call that names its target as a string or a dot form is scanned"
+    (doseq [{:keys [label pattern source]} round-six-review-plants]
+      (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                               (str "measured-r6-plant-" (System/nanoTime))))
+            victim (io/file root "clj_surgeon" "planted_r6.clj")]
+        (.mkdirs (.getParentFile victim))
+        (spit victim
+              (str "(ns clj-surgeon.planted-r6)\n\n"
+                   "(defn publish-a-receipt\n"
+                   "  [rr]\n"
+                   "  {:ok true :receipt {:verification_wall_ms " source "}})\n"))
+        (try
+          (let [scanned (scan (case pattern
+                                :escape escape-hatch-pattern
+                                :clock clock-pattern)
+                              root)]
+            (is (= #{["src/clj_surgeon/planted_r6.clj" "publish-a-receipt"]}
+                   (set (keys scanned)))
+                (str "round-six review plant " label
+                     " reaches a receipt field unseen by the "
+                     (name pattern) " scan: " (pr-str scanned)
+                     " — source: " source)))
+          (finally
+            (.delete victim)
+            (.delete (.getParentFile victim))
+            (.delete (io/file root))))))))
+
+(defn- escape-route-call
+  "A spelling written as the SOURCE that actually reaches the number.
+
+  A plant is evidence only if it is the shape production code would take, so a
+  STRING spelling is planted inside the reflective call that gives a string its
+  power — `.getMethod` plus `.invoke` — rather than as a bare literal in call
+  position, and a DOT SPECIAL FORM spelling is reassembled with a receiver.
+  (`witness through the production path`: a fix witnessed only through a tamper
+  seam is a fix witnessed nowhere.)"
+  [spelling]
+  (cond
+    (str/starts-with? spelling "(. ")
+    (str "(. subject " (subs spelling 3) ")")
+
+    (str/starts-with? spelling "\"")
+    (str "(.invoke (.getMethod (class subject) " spelling
+         " (into-array Class [])) subject (into-array Object []))")
+
+    :else
+    (str "(" spelling " subject)")))
+
+;; @spec MCP-OP-TIME-006
 (deftest the-escape-hatch-scanner-catches-every-route-planted-in-a-receipt
   (testing "each route, planted where a receipt is built"
     (doseq [[spelling why] (sort escape-hatch-spellings-the-ratchet-must-carry)]
@@ -797,7 +910,7 @@
               (str "(ns clj-surgeon.planted-route)\n\n"
                    "(defn publish-a-receipt\n"
                    "  [subject]\n"
-                   "  {:ok true :receipt {:wall_ms (" spelling " subject)}})\n"))
+                   "  {:ok true :receipt {:wall_ms " (escape-route-call spelling) "}})\n"))
         (try
           (let [planted (scan escape-hatch-pattern root)]
             (is (= {["src/clj_surgeon/planted_route.clj" "publish-a-receipt"] 1}
@@ -1082,6 +1195,15 @@
                    (str/starts-with? expression ".") (str "(" expression " subject)")
                    ;; The dot special form is already an open paren.
                    (str/starts-with? expression "(") (str expression ")")
+                   ;; A STRING spelling is planted in the shape that gives a
+                   ;; string its power: a fully-qualified class name reaches
+                   ;; `Class/forName`, a method name reaches `.getMethod`.
+                   ;; Round-six review findings 2 and 3.
+                   (str/starts-with? expression "\"")
+                   (if (str/includes? expression ".")
+                     (str "(Class/forName " expression ")")
+                     (str "(.getMethod (class subject) " expression
+                          " (into-array Class []))"))
                    :else (str "(" expression ")"))]
         (.mkdirs (.getParentFile victim))
         (spit victim
