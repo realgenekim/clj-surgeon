@@ -1887,11 +1887,13 @@
        ;; line is advisory about itself and points at the call that IS a gate.
        :assert (str "the per-leg sha256 is the human-checkable detail of what"
                     " this read-only verb read; it enforces nothing itself, so"
-                    " do NOT re-read the ranges to check it. Pass"
-                    " next_call.expect_pre_sha256 (whole-file digests) to"
-                    " admit_clojure_patch, which BINDS the pre-image at write"
-                    " time and answers a mismatch with a typed refusal, never"
-                    " a retry")}
+                    " do NOT re-read the ranges to check it. Pass the subset"
+                    " of next_call.expect_pre_sha256 your patch touches"
+                    " (whole-file digests; select it from next_call.by_leg,"
+                    " because admit_clojure_patch requires EXACTLY the files"
+                    " the patch touches) to admit_clojure_patch, which BINDS"
+                    " the pre-image at write time and answers a mismatch with"
+                    " a typed refusal, never a retry")}
       (verify-row cache legs))))
 
 ;; @spec MCP-OP-THREAD-025
@@ -1904,23 +1906,37 @@
   line named a control that did not exist. This row emits digests admit can
   consume, so the receipt hands the caller the gate rather than an instruction."
   [cache legs]
-  (let [files (->> legs
-                   (filter located?)
-                   (mapcat (fn [l] (into [(:file l)]
-                                         (map :file (:co_primaries l)))))
-                   (remove nil?)
-                   distinct
-                   sort)
-        digests (into {}
-                      (keep (fn [f]
-                              (let [{:keys [ok source]} (read-source cache f)]
-                                (when ok [f (sha256-hex source)])))
-                            files))]
+  (let [located (filter located? legs)
+        files-of (fn [l] (->> (into [(:file l)] (map :file (:co_primaries l)))
+                              (remove nil?)
+                              distinct
+                              sort))
+        files (->> located (mapcat files-of) distinct sort)
+        digest (fn [f] (let [{:keys [ok source]} (read-source cache f)]
+                         (when ok [f (sha256-hex source)])))
+        digests (into {} (keep digest files))
+        ;; @spec MCP-OP-THREAD-025
+        ;; `admit_clojure_patch` refuses a pre-image map that is not EXACTLY the
+        ;; set of files the patch touches. A single map naming all six legs is
+        ;; therefore obeyable only by a patch that touches all six; the normal
+        ;; edit -- handler plus its test -- is refused. So the row also emits
+        ;; the digests split BY LEG, which is the unit a caller actually reasons
+        ;; in, and says plainly that the argument is a subset (round-three, 3.2).
+        by-leg (into {}
+                     (keep (fn [l]
+                             (let [m (into {} (keep digest (files-of l)))]
+                               (when (seq m) [(keyword (:id l)) m])))
+                           located))]
     (when (seq digests)
       {:tool "admit_clojure_patch"
        :expect_pre_sha256 digests
+       :by_leg by-leg
        :note (str "whole-file digests, the subject admit_clojure_patch binds;"
-                  " the per-leg sha256 above is over the line range only")})))
+                  " the per-leg sha256 above is over the line range only."
+                  " Pass the subset your patch touches -- admit_clojure_patch"
+                  " requires expect_pre_sha256 to name EXACTLY the files the"
+                  " patch touches, so select from by_leg rather than sending"
+                  " this whole map")})))
 
 ;; ---------------------------------------------------------------------------
 ;; Assembling one thread
@@ -2323,6 +2339,14 @@
                (str "\nnext_call " (:tool n) " expect_pre_sha256="
                     (str/join " " (map (fn [[f sha]] (str f ":" sha))
                                        (sort (:expect_pre_sha256 n))))
+                    (when (seq (:by_leg n))
+                      (str "\n  by_leg "
+                           (str/join "\n  by_leg "
+                                     (map (fn [[leg m]]
+                                            (str (name leg) ": "
+                                                 (str/join " " (sort (keys m)))))
+                                          (sort-by (comp name key)
+                                                   (:by_leg n))))))
                     "  — " (:note n))))
         elisions (:elided result)
         elision-lines (map #(str "elided " (:leg %) " " (:bytes %)
