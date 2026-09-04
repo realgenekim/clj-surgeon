@@ -1789,3 +1789,5 @@ independent machine is for. One escalation for Gene: the nightly is dormant unti
 ## 21:24Z G2 withdrawn AND a functional failure: the r16 gate refused the task's JavaScript files (Clojure-only scope); two admit calls, both refused, no feature landed; product ask = opaque non-Clojure files in the same snapshot (gate r18). Sol r17 review refused by the filter → Opus fallback running.
 
 ## 21:24Z CORRECTION: G2's failure was my mandate contradicting the gate's correct remedy (apply JS natively); the gate's defect is a looping next_call — sent to the r17 Opus review; G3/GN3 relaunched with the gate's own prescription
+
+## 21:27Z default-branch flip: seat identity lacks admin (404 on PATCH); request filed for the mayor in the merge queue doc; Gene can also flip it in Settings → Branches
