@@ -1,0 +1,373 @@
+# clj-surgeon trunk CI -- the merge gate, and the battery fanned out one job
+# per namespace.
+#
+# Gene, 2026-09-04: "something that really helps us ensure we have integrity,
+# but allows super fast dev loops... safely expand K, decrease t 10x... we want
+# more parallelism."
+#
+# The shape follows the suite spike's measurement, not a preference. Round one
+# (docs/observations/2026-09-04-suite-spike-round1.md) timed the 49-namespace
+# JVM lane at 716.7 s and found ELEVEN namespaces that launch cold JVM/bb/CLI
+# children are 674.0 s of it -- 94% -- while the other 36 finish 865 tests'
+# worth of work in 20.9 s. It also found that running two full copies
+# concurrently costs about 6% of wall, because that 94% is subprocesses blocked
+# on their own JVM startup rather than on this JVM's CPU. So the serial lane
+# was never buying throughput; it was serialising work that does not contend.
+#
+# Therefore:
+#   * fast-integration (`make mcp-test` = fast + integration lanes) is THE
+#     MERGE GATE and is the only job anyone should have to wait on.
+#   * the battery fans out to ONE JOB PER NAMESPACE, so its wall stops being
+#     the SUM of eleven cold-launcher drives and becomes the MAX of them
+#     (reader-eval-fence-test, ~465 s). That is the 10x on t.
+#   * fail-fast is OFF everywhere. A matrix that cancels its siblings on the
+#     first red tells you ONE cell failed and hides whether the other ten did.
+#     For a suite whose whole spike was about flakiness under contention, the
+#     other ten cells are the evidence, not the noise.
+#
+# TRUNK IS `MCP/main`. `main` is FROZEN (Gene, 2026-09-04: nobody merges or
+# pushes clj-surgeon main, the mayor included). It is deliberately absent from
+# every trigger and every ref check in this file.
+
+name: mcp-main
+
+on:
+  push:
+    branches:
+      - 'MCP/main'
+      - 'bridge/**'
+  workflow_dispatch: {}
+  # Nightly battery on the trunk tip -- the :landing-and-nightly cadence the
+  # lane manifest declares for it.
+  #
+  # CAVEAT, stated here because it is invisible from the YAML: GitHub runs
+  # `schedule` ONLY from the repository's DEFAULT branch. This repo's default
+  # is `main`, which is frozen and will never carry this file, so this cron is
+  # DECLARED AND DORMANT until either MCP/main becomes the default branch or
+  # the workflow is landed on the default. Until then the nightly is a
+  # `workflow_dispatch` someone (or `~/bin/land`) fires. Do not read a green
+  # history as evidence the nightly ran.
+  schedule:
+    - cron: '11 10 * * *'   # 03:11 PT
+
+permissions:
+  contents: read
+
+# Per-ref group. Branch pushes cancel their own older runs -- that is the fast
+# dev loop, and an obsolete run of a branch you have already amended is pure
+# queue. MCP/main NEVER cancels: every trunk commit gets a complete, citable
+# receipt, because `~/bin/land` reads that receipt by commit sha and a
+# cancelled run is indistinguishable from one that never ran.
+concurrency:
+  group: mcp-main-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/MCP/main' }}
+
+jobs:
+  # --------------------------------------------------------------------
+  # plan -- read the battery matrix out of the lane manifest AT WORKFLOW TIME
+  # --------------------------------------------------------------------
+  plan:
+    name: plan (battery matrix from the lane manifest)
+    runs-on: ubuntu-latest
+    outputs:
+      battery: ${{ steps.matrix.outputs.battery }}
+      width: ${{ steps.matrix.outputs.width }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up babashka
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          bb: latest
+
+      - id: matrix
+        name: Emit the battery matrix
+        run: |
+          bb --classpath test .github/scripts/lane_matrix.clj battery --self-test
+          m=$(bb --classpath test .github/scripts/lane_matrix.clj battery)
+          echo "battery=$m" >> "$GITHUB_OUTPUT"
+          w=$(printf '%s' "$m" | bb -e '(count (cheshire.core/parse-string (slurp *in*)))')
+          echo "width=$w" >> "$GITHUB_OUTPUT"
+          {
+            echo "### plan"
+            echo ""
+            echo "battery matrix width: **$w**"
+            echo ""
+            echo '| namespace | cadence | apt | clj-kondo |'
+            echo '|---|---|---|---|'
+            printf '%s' "$m" | bb -e '(doseq [c (cheshire.core/parse-string (slurp *in*) true)] (println (format "| `%s` | %s | %s | %s |" (:ns c) (:cadence c) (if (seq (:apt c)) (:apt c) "--") (:kondo c))))'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # --------------------------------------------------------------------
+  # fast-integration -- THE MERGE GATE
+  # --------------------------------------------------------------------
+  # `make mcp-test` is fast + integration (36 + 4 namespaces) plus the shell
+  # ratchets that ride it, and it depends on `mcp-operation-oracle`, so this
+  # job needs swi-prolog and clj-kondo.
+  #
+  # WHY THIS IS A SEPARATE JOB FROM `bb-lane` AND NOT A SECOND STEP: they share
+  # nothing but the checkout. The bb lane is a different runtime with a
+  # different dependency set, it does not touch ~/.m2, and round one put it
+  # outside the JVM lane's wall entirely. As two steps their walls ADD on the
+  # critical path; as two jobs the pair costs max(), and the merge gate's
+  # verdict arrives at the JVM lane's wall rather than at the sum. The measured
+  # walls for both are in docs/observations/2026-09-04-gha-round1.md.
+  fast-integration:
+    name: fast-integration (MERGE GATE -- make mcp-test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      wall: ${{ steps.gate.outputs.wall }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/clj-env
+        with:
+          apt: swi-prolog
+          clj-kondo: 'true'
+
+      - id: gate
+        name: make mcp-test (fast + integration lanes)
+        run: |
+          log="${RUNNER_TEMP}/mcp-test.log"
+          t0=$(date +%s)
+          set +e
+          make mcp-test 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          t1=$(date +%s)
+          echo "wall=$((t1 - t0))" >> "$GITHUB_OUTPUT"
+          {
+            echo "### fast-integration (merge gate) -- $((t1 - t0)) s, exit $rc"
+            echo ""
+            echo '```'
+            grep -E '^(lanes:|Ran |[0-9]+ tests, )' "$log" || echo "(no Ran lines found -- the gate produced no test summary, which is itself the finding)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+  # --------------------------------------------------------------------
+  # bb-lane -- the babashka suite (`make test-bb`)
+  # --------------------------------------------------------------------
+  bb-lane:
+    name: bb-lane (bb test/run_all.clj)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      wall: ${{ steps.bb.outputs.wall }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/clj-env
+
+      - id: bb
+        name: bb test/run_all.clj
+        run: |
+          log="${RUNNER_TEMP}/bb-lane.log"
+          t0=$(date +%s)
+          set +e
+          bb test/run_all.clj 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          t1=$(date +%s)
+          echo "wall=$((t1 - t0))" >> "$GITHUB_OUTPUT"
+          {
+            echo "### bb-lane -- $((t1 - t0)) s, exit $rc"
+            echo ""
+            echo '```'
+            grep -E '^(Ran |[0-9]+ tests, )' "$log" || echo "(no Ran lines found)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+  # --------------------------------------------------------------------
+  # The small gates -- seconds each, so they run beside the merge gate and
+  # give an independent early verdict instead of hiding inside its wall.
+  # --------------------------------------------------------------------
+  oracle:
+    name: oracle (mcp-operation-oracle, SWI-Prolog)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      wall: ${{ steps.o.outputs.wall }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/clj-env
+        with:
+          apt: swi-prolog
+      - id: o
+        name: make mcp-operation-oracle
+        run: |
+          t0=$(date +%s)
+          make mcp-operation-oracle
+          t1=$(date +%s)
+          echo "wall=$((t1 - t0))" >> "$GITHUB_OUTPUT"
+          echo "### oracle -- $((t1 - t0)) s, PASS" >> "$GITHUB_STEP_SUMMARY"
+
+  hygiene:
+    name: hygiene (repository-hygiene gate + self-test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      wall: ${{ steps.h.outputs.wall }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/clj-env
+      - id: h
+        name: make repository-hygiene
+        run: |
+          t0=$(date +%s)
+          make repository-hygiene
+          make repository-hygiene-self-test
+          t1=$(date +%s)
+          echo "wall=$((t1 - t0))" >> "$GITHUB_OUTPUT"
+          echo "### hygiene -- $((t1 - t0)) s, PASS" >> "$GITHUB_STEP_SUMMARY"
+
+  # The repo has no target literally named "intent audit". The linked-intent
+  # witness that exists is the performance-regression sentinel's: a shell
+  # scanner over the intent markers plus the sentinel's own clojure.test
+  # namespaces. That is what this job runs, named for what it is.
+  intent-audit:
+    name: intent-audit (performance-regression sentinel intents)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      wall: ${{ steps.i.outputs.wall }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/clj-env
+      - id: i
+        name: make performance-regression-sentinel-test
+        run: |
+          t0=$(date +%s)
+          log="${RUNNER_TEMP}/intent.log"
+          set +e
+          make performance-regression-sentinel-test 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          t1=$(date +%s)
+          echo "wall=$((t1 - t0))" >> "$GITHUB_OUTPUT"
+          {
+            echo "### intent-audit -- $((t1 - t0)) s, exit $rc"
+            echo '```'
+            grep -E '^(Ran |[0-9]+ tests, )' "$log" || echo "(no Ran lines)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+  # --------------------------------------------------------------------
+  # battery -- ONE JOB PER NAMESPACE
+  # --------------------------------------------------------------------
+  # The matrix comes from `plan`, which reads clj-surgeon.lane-manifest. Adding
+  # a battery namespace to the manifest widens this matrix on the next push
+  # with no edit here; that is the single-source-of-truth property TEST-ISO-001
+  # bought, extended one layer up into CI.
+  #
+  # Each cell runs exactly its own namespace through the PRODUCTION runner via
+  # `--ns`, so the manifest's typed refusal (a namespace with no lane) is
+  # reachable from CI rather than being dead code a witness keeps alive. Note
+  # the runner decides home-isolation from the RESOLVED SET: a battery
+  # namespace means no throwaway $HOME, which is correct -- these cells launch
+  # cold `clojure`/`bb`/`git` children that need the runner's ~/.m2 and
+  # ~/.gitlibs.
+  #
+  # WHAT THE SEAT'S HAZARDS BECOME ON A RUNNER (per-namespace table is in
+  # docs/observations/2026-09-04-gha-round1.md):
+  #   * strace (mcp-relation-census-test)   -- apt, declared per cell by the planner.
+  #   * clj-kondo (admit-patch-test)        -- setup-clojure, declared per cell.
+  #   * chmod 000 (relation-census, alias-migration) -- the runner user is
+  #     `runner`, NOT root, so a 000 directory really is unreadable. On a
+  #     root seat it would not be, and the assertion would silently invert.
+  #   * the network clone (mcp-prepared-wire-test pulls clojure-mcp through
+  #     ~/.gitlibs) -- runners have egress; it runs for real here.
+  #   * /home/forge/tmp absolute roots (txn-journal-test) -- redirected by
+  #     CLJ_SURGEON_MEMORY_TMP in the composite action.
+  #   * flock /home/forge/tmp/suite.lock -- NOT reached: the lock lives in
+  #     memory-red/memory-red-kernel, which are outside every lane. One job per
+  #     namespace on its own VM is a stronger isolation than the lock was.
+  battery:
+    name: battery / ${{ matrix.cell.short }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # No max-parallel: public repo, free runners, and the whole point is that
+      # the battery's wall becomes max() instead of sum().
+      matrix:
+        cell: ${{ fromJSON(needs.plan.outputs.battery) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/clj-env
+        with:
+          apt: ${{ matrix.cell.apt }}
+          clj-kondo: ${{ matrix.cell.kondo }}
+
+      - name: ${{ matrix.cell.ns }}
+        run: |
+          log="${RUNNER_TEMP}/battery.log"
+          t0=$(date +%s)
+          set +e
+          clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-deps \
+            -m clj-surgeon.mcp-test-runner --ns "${{ matrix.cell.ns }}" 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          t1=$(date +%s)
+          {
+            echo "### battery / ${{ matrix.cell.short }} -- $((t1 - t0)) s, exit $rc"
+            echo ""
+            echo '```'
+            grep -E '^(lanes:|Ran |[0-9]+ tests, )' "$log" || echo "(no Ran lines found)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+  # --------------------------------------------------------------------
+  # receipt -- ONE LINE, addressed by commit sha
+  # --------------------------------------------------------------------
+  # `if: always()` so the receipt exists for a red run too. A receipt that only
+  # appears when everything passed is not a receipt; it is a trophy.
+  receipt:
+    name: receipt
+    needs: [plan, fast-integration, bb-lane, oracle, hygiene, intent-audit, battery]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: One line, by sha
+        run: |
+          gate='${{ needs.fast-integration.result }}'
+          batt='${{ needs.battery.result }}'
+          if [ "$gate" = "success" ] && [ "$batt" = "success" ] \
+             && [ '${{ needs.bb-lane.result }}' = "success" ] \
+             && [ '${{ needs.oracle.result }}' = "success" ] \
+             && [ '${{ needs.hygiene.result }}' = "success" ] \
+             && [ '${{ needs.intent-audit.result }}' = "success" ]; then
+            verdict=GREEN
+          elif [ "$gate" = "success" ]; then
+            verdict=GATE-GREEN-TAIL-RED
+          else
+            verdict=RED
+          fi
+          line="receipt sha=${GITHUB_SHA} verdict=${verdict}"
+          line="$line gate=${gate}/${{ needs.fast-integration.outputs.wall }}s"
+          line="$line bb=${{ needs.bb-lane.result }}/${{ needs.bb-lane.outputs.wall }}s"
+          line="$line oracle=${{ needs.oracle.result }}/${{ needs.oracle.outputs.wall }}s"
+          line="$line hygiene=${{ needs.hygiene.result }}/${{ needs.hygiene.outputs.wall }}s"
+          line="$line intent=${{ needs.intent-audit.result }}/${{ needs.intent-audit.outputs.wall }}s"
+          line="$line battery=${batt}/${{ needs.plan.outputs.width }}-wide"
+          line="$line run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "$line"
+          {
+            echo "## receipt"
+            echo ""
+            echo '```'
+            echo "$line"
+            echo '```'
+            echo ""
+            echo "Per-job wall, machine-readable:"
+            echo '```'
+            echo "gh run view ${GITHUB_RUN_ID} --repo ${GITHUB_REPOSITORY} --json jobs \\"
+            echo "  --jq '.jobs[] | {name, conclusion, startedAt, completedAt}'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # The receipt job itself stays GREEN so `~/bin/land` reads the
+          # VERDICT LINE, not this job's colour -- a receipt that fails when
+          # its subject fails carries no information the subject did not.
