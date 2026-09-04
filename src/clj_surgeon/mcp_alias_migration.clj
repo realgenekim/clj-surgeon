@@ -23,6 +23,7 @@
    (java.util EnumSet UUID)))
 
 (declare unknown-profile?)
+(declare elide)
 
 (def request-fields
   #{:op :workspace_root :from :to :scope :expect :verify})
@@ -73,6 +74,11 @@
   [error-type message extra]
   (merge {:ok false
           :operation "alias_migration"
+          ;; @spec MCP-OP-ALIAS-059
+          ;; forwarded-refusal-kind: every caller spells its kind as a
+          ;; keyword literal at its own call site, scanned there by the
+          ;; `:error_type "…"` scan; this constructor only forwards that
+          ;; argument verbatim and mints nothing of its own
           :error_type (name error-type)
           :error message
           :source_unchanged true
@@ -170,6 +176,117 @@
   [pattern]
   (.getPathMatcher (FileSystems/getDefault) (str "glob:" pattern)))
 
+;; @spec MCP-OP-ALIAS-051
+(defn glob-parse-error
+  "The glob parser's own message for one unparseable pattern, or nil.
+
+  `getPathMatcher` is handed CALLER TEXT, and it throws
+  `PatternSyntaxException` on an unclosed group, class or escape — `src/{**` is
+  one keystroke from `src/{clj,cljs}/**`. The throw had no catch anywhere on
+  the path: `execute!` catches `OutOfMemoryError` only and
+  `mcp-operation/invoke!` catches nothing, so it surfaced as
+  `mcp-adapter-failure`, a receipt carrying no `source_unchanged`, no
+  `mutation_attempted`, no remedy and no next_call, whose text is raw JSON that
+  never passes through the refusal summary. Compiling the pattern here, before
+  the walk, turns that class into the typed refusal the rest of this verb
+  publishes — and the parser's own message is the only thing that tells the
+  caller WHERE the spelling broke, so it travels in the refusal."
+  [pattern]
+  (try
+    (glob-matcher pattern)
+    nil
+    (catch Exception error
+      (or (.getMessage error) (.getName (class error))))))
+
+;; @spec MCP-OP-ALIAS-060
+(defn- relative-path
+  "One project-relative path string, byte-faithful to the filesystem it came
+  from.
+
+  The separator is the one THAT filesystem uses, read from the filesystem
+  itself, and never a hardcoded backslash. On POSIX a backslash is an ordinary
+  path character: `\\` is a legal top-level directory name and `c\\d.clj` is a
+  legal file name, so replacing every backslash with a slash turned one
+  segment into two and dropped the owner under it from `scope.paths [\"**\"]` —
+  after which the verb committed the owners it could still see under a receipt
+  claiming complete discovery."
+  [^Path root ^Path candidate]
+  (let [relative (.relativize root candidate)
+        separator (.getSeparator (.getFileSystem relative))
+        text (.toString relative)]
+    (if (= "/" separator)
+      text
+      (str/replace text separator "/"))))
+
+
+;; @spec MCP-OP-ALIAS-061
+(def refused-code-point-types
+  "Unicode general categories no `scope.paths` entry may carry.
+
+  C0 and C1 controls and DEL (CONTROL), the format and bidirectional-override
+  characters (FORMAT — U+200B, U+FEFF, U+202E), unpaired surrogates
+  (SURROGATE), private-use and unassigned code points. SPACE_SEPARATOR is NOT
+  here: a directory named `root with spaces` is ordinary, and this gate exists
+  for the spellings a caller cannot SEE, not for the ones they can."
+  #{(int Character/CONTROL) (int Character/FORMAT) (int Character/SURROGATE)
+    (int Character/PRIVATE_USE) (int Character/UNASSIGNED)
+    (int Character/LINE_SEPARATOR) (int Character/PARAGRAPH_SEPARATOR)})
+
+;; @spec MCP-OP-ALIAS-061
+(def replacement-character
+  "U+FFFD, the only trace a malformed byte sequence can leave in a JVM string.
+
+  Overlong UTF-8 cannot survive decoding: the `C0 AF` encoding of `/` is
+  normalised to `/` by the JSON layer before this verb sees it, so there is
+  nothing left to type. A decoder that does NOT normalise emits U+FFFD, and
+  that is the observable form of the same malformation."
+  \ufffd)
+
+;; @spec MCP-OP-ALIAS-061
+(defn refused-code-point
+  "The first non-printable or malformed code point in one scope entry.
+
+  Returns `{:code-point n :index i}` or nil. Only U+0000 was ever typed, and
+  NUL is not special: it is one member of a class whose whole point is that
+  the caller cannot see it. Every other member compiled as a glob, matched
+  nothing, and was published as `scope-matches-nothing` — an assertion about
+  the TREE that the walk never made.
+
+  A surrogate is refused only when it is UNPAIRED: a valid pair is one
+  ordinary supplementary character and names a path like any other."
+  [entry]
+  (let [text (str entry)
+        length (count text)]
+    (loop [index 0]
+      (when (< index length)
+        (let [ch (.charAt text index)
+              paired? (and (Character/isHighSurrogate ch)
+                           (< (inc index) length)
+                           (Character/isLowSurrogate (.charAt text (inc index))))
+              code-point (if paired?
+                           (Character/toCodePoint ch (.charAt text (inc index)))
+                           (int ch))]
+          (cond
+            (and (not paired?)
+                 (or (= replacement-character ch)
+                     (contains? refused-code-point-types
+                                (int (Character/getType (int ch))))))
+            {:code-point code-point :index index}
+
+            paired?
+            (if (contains? refused-code-point-types
+                           (int (Character/getType code-point)))
+              {:code-point code-point :index index}
+              (recur (+ index 2)))
+
+            :else (recur (inc index))))))))
+
+;; @spec MCP-OP-ALIAS-061
+(defn code-point-label
+  "One code point, spelled the way a caller can search for it."
+  [code-point]
+  (format "U+%04X" code-point))
+
 ;; @spec MCP-OP-ALIAS-057
 (defn scope-glob-patterns
   "The glob patterns one `scope.paths` entry selects under `root`.
@@ -189,25 +306,31 @@
   Resolution is lexical-then-checked: an entry that escapes the root, is
   absolute, or is the root itself contributes no subtree pattern, so the
   confinement the walk performs afterwards is never handed a wider tree than the
-  caller named."
+  caller named.
+
+  The subtree pattern is built from the entry NORMALISED AGAINST THE ROOT and
+  never from the caller's raw text. The check and the pattern must agree about
+  which directory the entry names, or the entry is detected as a directory and
+  then handed a glob that can never match it: `./src` was read as a directory
+  and published as the patterns `[\"./src\" \"./src/**\"]`, neither of which
+  matches a project-relative path, so it selected zero files and earned the
+  `scope-matches-nothing` refusal this requirement exists to end — as did
+  `src/.`, `src//`, and every other spelling of the same directory."
   [^Path root pattern]
   (let [trimmed (str/replace pattern #"/+$" "")
-        directory?
-        (and (not (str/blank? trimmed))
-             (not (str/starts-with? trimmed "/"))
-             (not (str/includes? trimmed "\u0000"))
-             (try
-               (let [candidate (.normalize (.resolve root trimmed))]
-                 (and (.startsWith candidate root)
-                      (not (.equals candidate root))
-                      (Files/isDirectory candidate (make-array LinkOption 0))))
-               (catch Exception _ false)))]
+        subtree
+        (when (and (not (str/blank? trimmed))
+                   (not (str/starts-with? trimmed "/"))
+                   (not (str/includes? trimmed "\u0000")))
+          (try
+            (let [candidate (.normalize (.resolve root trimmed))]
+              (when (and (.startsWith candidate root)
+                         (not (.equals candidate root))
+                         (Files/isDirectory candidate (make-array LinkOption 0)))
+                (str (relative-path root candidate) "/**")))
+            (catch Exception _ nil)))]
     (cond-> [pattern]
-      directory? (conj (str trimmed "/**")))))
-
-(defn- relative-path
-  [^Path root ^Path candidate]
-  (str/replace (.toString (.relativize root candidate)) "\\" "/"))
+      subtree (conj subtree))))
 
 (def max-walk-entries
   "Ceiling on the RAW entries one scope walk visits, filtered or not.
@@ -251,31 +374,75 @@
   the retired lib."
   64)
 
+;; @spec MCP-OP-ALIAS-060
+(defn independent-scope-count
+  "A SECOND count of the sources one scope selects, over Path objects alone.
+
+  The scope walk derives one relative path STRING per entry and matches on
+  that string; this counts the same scope by matching the compiled patterns
+  against the relative PATH the filesystem hands back, so it builds no path
+  string and cannot inherit the walk's path arithmetic. Two enumerations that
+  share no arithmetic are two witnesses; one enumeration is an assertion.
+
+  It exists because a discovery defect is SILENT by construction: round twelve
+  found a legal POSIX directory dropped from `scope.paths [\"**\"]`, and the
+  verb committed the remainder under a receipt claiming complete discovery.
+  Nothing in the receipt could have contradicted it, because nothing had
+  counted the tree a second time.
+
+  Runs only where the walk already returned `:ok`, so every bound the walk
+  enforces — depth, entry ceiling, readability — has already been cleared by
+  the same tree."
+  [^Path root patterns exclude]
+  (let [matchers (mapv glob-matcher patterns)
+        excluded (into #{}
+                       (map (fn [^String entry]
+                              (.getPath (.getFileSystem root) entry
+                                        (make-array String 0))))
+                       exclude)
+        counted (volatile! 0)
+        visitor
+        (proxy [SimpleFileVisitor] []
+          (preVisitDirectory [dir _attrs]
+            (let [^Path directory dir]
+              (if (and (not (.equals root directory))
+                       (contains? skipped-directories
+                                  (str (.getFileName directory))))
+                FileVisitResult/SKIP_SUBTREE
+                FileVisitResult/CONTINUE)))
+          (visitFile [file _attrs]
+            (let [^Path candidate file
+                  relative (.relativize root candidate)]
+              (when (and (source-file-name? candidate)
+                         (Files/isRegularFile candidate
+                                              (make-array LinkOption 0))
+                         (not (contains? excluded relative))
+                         (some #(.matches ^PathMatcher % relative) matchers))
+                (vswap! counted inc)))
+            FileVisitResult/CONTINUE)
+          (visitFileFailed [_file _error] FileVisitResult/CONTINUE)
+          (postVisitDirectory [_dir _error] FileVisitResult/CONTINUE))]
+    (Files/walkFileTree root
+                        (EnumSet/noneOf FileVisitOption)
+                        Integer/MAX_VALUE
+                        visitor)
+    @counted))
+
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-037
 ;; @spec MCP-OP-ALIAS-048
 ;; @spec MCP-OP-ALIAS-049
 ;; @spec MCP-OP-ALIAS-050
-(defn scan-scope
-  "Every confined project-relative Clojure source under scope.paths, or a scan
-  refusal.
+;; @spec MCP-OP-ALIAS-060
+(defn- scan-parsed-scope
+  "The bounded walk itself, over globs already proved parseable.
 
-  `Files/walkFileTree` is called with an empty option set, so `FOLLOW_LINKS` is
-  off: a symlinked directory is reported once and never descended. A link cycle
-  inside the root therefore terminates, and a directory link pointing out of the
-  root is never entered — the realpath gate downstream then has nothing to
-  refuse rather than a whole foreign tree. Build output and version-control
-  directories are pruned as whole subtrees rather than filtered afterwards.
-
-  Depth is checked per entry rather than handed to `walkFileTree` as its
-  `maxDepth`, because that parameter truncates silently and this bound must be
-  observable to the caller.
-
-  Every visitor callback returns TERMINATE once the entry ceiling is crossed,
-  read failures included. A ceiling that counts an entry class it will not stop
-  on is not a ceiling for that class."
-  [^Path root {:keys [paths exclude]}]
-  (let [matchers (mapv glob-matcher (mapcat #(scope-glob-patterns root %) paths))
+  Split from `scan-scope` so pattern COMPILATION happens before the first
+  filesystem entry is visited: a `PatternSyntaxException` raised half-way
+  through a walk is a throw with a partial answer behind it, and this verb owes
+  its caller a typed refusal it can read the tree's state from."
+  [^Path root patterns exclude]
+  (let [matchers (mapv glob-matcher patterns)
         excluded (set exclude)
         default-fs (FileSystems/getDefault)
         found (java.util.ArrayList.)
@@ -387,17 +554,154 @@
        :unreadable-paths (vec unreadable)
        :unreadable-count @unreadable-count}
 
-      :else {:ok true :files (vec (sort found))})))
+      :else
+      ;; @spec MCP-OP-ALIAS-060
+      ;; the completeness claim is WITNESSED and never asserted: an
+      ;; independent enumeration of the same scope must agree with what the
+      ;; walk considered, or the scope's contents are not knowable and no
+      ;; migration downstream may claim to have closed the fan-out
+      (let [files (vec (sort found))
+            enumerated (independent-scope-count root patterns exclude)]
+        (if (= (count files) enumerated)
+          {:ok true :files files}
+          {:ok false
+           :error-type :alias-migration-discovery-incomplete
+           :files-considered (count files)
+           :files-enumerated enumerated})))))
+
+;; @spec MCP-OP-ALIAS-004
+;; @spec MCP-OP-ALIAS-037
+;; @spec MCP-OP-ALIAS-048
+;; @spec MCP-OP-ALIAS-049
+;; @spec MCP-OP-ALIAS-050
+(defn scan-scope
+  "Every confined project-relative Clojure source under scope.paths, or a scan
+  refusal.
+
+  `Files/walkFileTree` is called with an empty option set, so `FOLLOW_LINKS` is
+  off: a symlinked directory is reported once and never descended. A link cycle
+  inside the root therefore terminates, and a directory link pointing out of the
+  root is never entered — the realpath gate downstream then has nothing to
+  refuse rather than a whole foreign tree. Build output and version-control
+  directories are pruned as whole subtrees rather than filtered afterwards.
+
+  Depth is checked per entry rather than handed to `walkFileTree` as its
+  `maxDepth`, because that parameter truncates silently and this bound must be
+  observable to the caller.
+
+  Every visitor callback returns TERMINATE once the entry ceiling is crossed,
+  read failures included. A ceiling that counts an entry class it will not stop
+  on is not a ceiling for that class."
+  [^Path root {:keys [paths exclude]}]
+  (let [;; @spec MCP-OP-ALIAS-061
+        refused (first (keep (fn [entry]
+                               (when-let [found (refused-code-point entry)]
+                                 (assoc found :entry entry)))
+                             paths))
+        nul (when (and refused (zero? (:code-point refused))) refused)
+        expanded (when-not refused
+                   (mapv (fn [entry]
+                           {:entry entry
+                            :patterns (scope-glob-patterns root entry)})
+                         paths))
+        unparseable (first
+                      (keep (fn [{:keys [entry patterns]}]
+                              (when-let [pattern (first (filter glob-parse-error
+                                                                patterns))]
+                                {:entry entry
+                                 :pattern pattern
+                                 :cause (glob-parse-error pattern)}))
+                            expanded))]
+    (cond
+      ;; @spec MCP-OP-ALIAS-051
+      ;; a NUL cannot appear in any filesystem path, but `getPathMatcher`
+      ;; accepts one, so the entry compiled, matched nothing, and earned
+      ;; `scope-matches-nothing` — a refusal about the TREE for a spelling
+      ;; cause that prints as nothing at all. It is refused here, before the
+      ;; first visited entry, and the byte is named in words because the
+      ;; caller cannot see it in their own request.
+      nul
+      {:ok false
+       :error-type :alias-migration-scope-path-refused
+       :refusal-reason :nul-byte
+       :path (:entry nul)
+       :pattern (:entry nul)
+       :cause (str "the entry carries a NUL byte (U+0000) at index "
+                   (:index nul)
+                   ", which no filesystem path can hold, so the entry names no"
+                   " path this walk could visit")}
+
+      ;; @spec MCP-OP-ALIAS-061
+      ;; every OTHER invisible or malformed spelling, refused for the same
+      ;; reason NUL is and named the same way: the caller cannot see it in
+      ;; their own request, so the refusal has to say which code point it is
+      ;; and where
+      refused
+      {:ok false
+       :error-type :alias-migration-scope-path-refused
+       :refusal-reason :refused-code-point
+       :path (:entry refused)
+       :pattern (:entry refused)
+       :cause (str "the entry carries the non-printable or malformed code "
+                   "point " (code-point-label (:code-point refused))
+                   " at index " (:index refused)
+                   ", which renders as nothing a caller can see, so the entry"
+                   " names no path this walk could visit")}
+
+      ;; @spec MCP-OP-ALIAS-051
+      unparseable
+      {:ok false
+       :error-type :alias-migration-scope-path-refused
+       :refusal-reason :unparseable-glob
+       :path (:entry unparseable)
+       :pattern (:pattern unparseable)
+       :cause (:cause unparseable)}
+
+      :else
+      (scan-parsed-scope root (mapcat :patterns expanded) exclude))))
+
+;; @spec MCP-OP-ALIAS-051
+;; @spec MCP-OP-ALIAS-058
+(def glob-metacharacter-escapes
+  "Every character `java.nio.file.PathMatcher` reads as glob syntax.
+
+  A directory name is DATA and a glob is SYNTAX; deriving one from the other
+  without escaping publishes the caller's own filesystem as a pattern
+  language. `a{b` is a legal POSIX directory name and `a{b/**` is not a legal
+  glob; `[x]`, `{a,b}` and `*` are legal names AND legal globs, which is
+  worse, because the pattern parses and then selects something else."
+  {\\ "\\\\" \* "\\*" \? "\\?" \[ "\\[" \] "\\]" \{ "\\{" \} "\\}"})
+
+;; @spec MCP-OP-ALIAS-051
+;; @spec MCP-OP-ALIAS-058
+(defn glob-escape
+  "One literal path segment, spelled so a glob matches it and nothing else."
+  [segment]
+  (str/escape segment glob-metacharacter-escapes))
 
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-058
 (def max-suggested-scope-paths
-  "How many source roots one `scope-matches-nothing` remedy names.
+  "How many source roots one `scope-matches-nothing` remedy NAMES.
 
   The remedy is a next_call and a next_call is constant-size or it is not
-  publishable; a tree with many top-level source directories is narrowed to the
-  first few rather than allowed to grow the refusal."
+  publishable; a tree with many top-level source directories has only a sample
+  of them named. The sample is not the selection: when roots are dropped the
+  remedy also carries `**`, so the bound costs the caller detail in the listing
+  and never a file in the file set (`suggested-scope-paths`)."
   6)
+
+;; @spec MCP-OP-ALIAS-058
+(def completing-scope-path
+  "The pattern appended when the root listing is truncated.
+
+  It is the pattern the walk itself used, so a truncated remedy selects exactly
+  the file set the walk saw. A bounded LISTING is honest; a bounded SELECTION
+  presented as \"the source roots this tree actually holds\" is not — on a
+  nine-root tree the alphabetical first six selected 14 of 118 sources and
+  dropped `src/**`, the root holding a hundred namespaces, with no field saying
+  a root had been dropped."
+  "**")
 
 ;; @spec MCP-OP-ALIAS-058
 (defn suggested-scope-paths
@@ -412,19 +716,166 @@
   remedy that silently drops a file class is the defect this refusal exists to
   end.
 
-  Returns a sorted, bounded vector; empty when the tree holds no Clojure source
-  at all, which is itself the honest answer and is reported as such."
+  A root name is DATA: its glob metacharacters are escaped before the pattern
+  is built, so the directory `a{b` becomes `a\\{b/**` — a pattern that parses
+  and matches that directory alone — and `[x]`, `{a,b}` and `*` stop matching
+  something else in silence. Every derived pattern is then validated through
+  `glob-parse-error`, the same gate the scan applies to a caller's own entry,
+  so a remedy this verb would refuse is never published as a correction.
+
+  Roots are ranked by the number of sources they hold, ties broken
+  lexicographically, so the sample a bound keeps is the part of the tree the
+  caller most likely meant rather than the part whose name sorts first. When
+  the tree holds more roots than the bound names, `completing-scope-path` is
+  appended and `:roots` / `:roots-listed` differ: the caller is told the
+  listing is a sample, and the selection stays complete either way. The listed
+  roots keep their sorted order so the published call is a function of the tree
+  and not of the ranking's tie order.
+
+  Returns `{:source-files n :roots m :roots-listed k :truncated? bool :paths v}`;
+  `:paths` is empty when the tree holds no Clojure source at all, which is
+  itself the honest answer and is reported as such."
   [^Path root]
   (let [relatives (:files (scan-scope root {:paths ["**"] :exclude []}))
-        roots (reduce (fn [acc ^String relative]
-                        (let [cut (.indexOf relative "/")]
-                          (conj acc (if (neg? cut)
-                                      "*"
-                                      (str (subs relative 0 cut) "/**")))))
-                      (sorted-set)
-                      relatives)]
+        counts (reduce (fn [acc ^String relative]
+                         (let [cut (.indexOf relative "/")]
+                           (update acc
+                                   (if (neg? cut)
+                                     "*"
+                                     (str (glob-escape (subs relative 0 cut))
+                                          "/**"))
+                                   (fnil inc 0))))
+                       {}
+                       relatives)
+        ;; @spec MCP-OP-ALIAS-051
+        ;; the derived remedy is validated through the SAME parser gate the
+        ;; scan uses before it is published: a pattern this verb would refuse
+        ;; is never handed to the caller as a correction, and dropping one
+        ;; leaves `roots` above the listed count, so the completing `**` is
+        ;; appended and the selection stays whole
+        ranked (->> counts
+                    (sort-by (fn [[pattern n]] [(- n) pattern]))
+                    (map key)
+                    (remove glob-parse-error))
+        listed (vec (sort (take max-suggested-scope-paths ranked)))
+        truncated? (> (count counts) (count listed))]
     {:source-files (count relatives)
-     :paths (vec (take max-suggested-scope-paths roots))}))
+     :roots (count counts)
+     :roots-listed (count listed)
+     :truncated? truncated?
+     :ranked (vec ranked)
+     :counts counts
+     :paths (cond-> listed
+              truncated? (conj completing-scope-path))}))
+
+;; @spec MCP-OP-ALIAS-058
+(defn root-listing
+  "One candidate listing of `n` roots, completed when it does not name them all.
+
+  Separated from the bound so the listing can be SHRUNK: the completing
+  pattern keeps the selection whole at any listing size, so dropping a root
+  from the listing costs the caller a name and never a file."
+  [{:keys [ranked roots]} n]
+  (let [listed (vec (sort (take n ranked)))
+        truncated? (> roots (count listed))]
+    {:roots-listed (count listed)
+     :truncated? truncated?
+     :paths (cond-> listed
+              truncated? (conj completing-scope-path))}))
+
+;; @spec MCP-OP-ALIAS-058
+(defn fitting-suggestion
+  "The largest root listing whose rescoping call fits the next_call ceiling.
+
+  A remedy is executable or it is prose. `rescoping-call` answers nil past its
+  512-character bound, and six top-level directories with ordinary
+  fifty-two-character names compose a 539-character call — so the round-11
+  receipt published `next_call nil` beside a remedy that opened \"Resend the
+  next_call\". The bound belongs on the LISTING, which the completing `**`
+  makes free to shrink, and never on the selection: this drops one root name
+  at a time until the call fits, and the file set the call selects is the same
+  file set at every size.
+
+  When no listing fits — a request already carrying enough exclusions that the
+  one-pattern call `[\"**\"]` is past the ceiling — the widest listing is
+  returned with `:next-call nil` and `:next-call-characters`, the measured size
+  of that smallest possible call, so the refusal can name the ceiling, the size
+  that missed it, and the roots the caller must choose from rather than point
+  at a call nobody composed."
+  [request {:keys [ranked] :as suggestion}]
+  (let [ceiling (min max-suggested-scope-paths (count ranked))
+        fitted (first (keep (fn [n]
+                              (let [candidate (root-listing suggestion n)]
+                                (when-let [call (planner/rescoping-call
+                                                  request (:paths candidate))]
+                                  (assoc candidate :next-call call))))
+                            (range ceiling -1 -1)))]
+    (or fitted
+        (assoc (root-listing suggestion ceiling)
+               :next-call nil
+               :next-call-characters
+               (planner/next-call-characters
+                 (planner/rescoping-call-shape
+                   request [completing-scope-path]))))))
+
+;; @spec MCP-OP-ALIAS-058
+(def max-refusal-root-list-characters
+  "Ceiling on the rendered root listing one refusal embeds, in CHARACTERS.
+
+  An item COUNT is not a size. Seven legal top-level directories, each named a
+  digit followed by 246 quotation marks, are six items — inside every count
+  bound this verb states — and 3,019 JSON characters, which carried the
+  visible refusal 794 characters past the 4,096 it publishes as its ceiling.
+  A bound that counts entries bounds the caller's patience and not the
+  receipt."
+  512)
+
+;; @spec MCP-OP-ALIAS-059
+(defn root-sizes
+  "The largest roots as `<pattern> (<sources>)`, bounded in CHARACTERS.
+
+  What a caller needs when no call can be composed: not the sample the remedy
+  would have sent, but the roots themselves with the weight of each, so the
+  scope they spell by hand is the part of the tree they meant.
+
+  Each entry is elided at the per-field ceiling, because a root NAME is
+  caller-supplied data, and the listing then stops at the first entry that
+  would carry it past `max-refusal-root-list-characters`. The ceiling is read
+  on the RENDERED form and not on the raw string: the remedy embeds
+  `(pr-str listing)`, and a root name of 246 quotation marks renders at twice
+  its own length, which is exactly how a listing inside every count bound
+  reached 3,019 characters. Where entries are dropped the listing says so and
+  says how many, so a caller reading six of seven roots knows the seventh
+  exists — silent truncation inside a remedy is the same defect as silent
+  truncation inside a fact line, and worse, because the caller acts on a
+  remedy.
+
+  That drop marker is PART OF THE LISTING and is charged against the same
+  ceiling: a budget that stopped one item short of the end retained four
+  ordinary 116-character roots and rendered 528 characters against a stated
+  512, the overflow carried by the very item announcing that the bound had
+  fired. So the bound is read on the RENDERED listing with the marker inside
+  it, and the listing shrinks until that measurement fits."
+  [{:keys [ranked counts]}]
+  (let [candidates (mapv (fn [pattern]
+                           (elide (str pattern " (" (get counts pattern) ")")))
+                         (take max-suggested-scope-paths ranked))
+        total (count candidates)
+        listing (fn [kept-count]
+                  (let [dropped (- total kept-count)]
+                    (cond-> (subvec candidates 0 kept-count)
+                      (pos? dropped)
+                      (conj (str "… [+" dropped
+                                 " more roots, complete in structuredContent]")))))
+        ;; the ceiling is read on the listing this returns, marker INCLUDED,
+        ;; so the answer is measured rather than estimated: an incremental
+        ;; charge of `(count (pr-str item)) + 1` over a starting 2 is one
+        ;; character more than the vector renders, and cut a listing that
+        ;; rendered at exactly the ceiling
+        fitted (first (filter #(<= (count (pr-str (listing %)))
+                                   max-refusal-root-list-characters)
+                              (range total -1 -1)))]
+    (listing (or fitted 0))))
 
 (defn expand-scope
   "The sources one scope selects, when the bounded scan admits it.
@@ -526,6 +977,58 @@
                    prefix]))
        first))
 
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-field-characters
+  "Ceiling on ONE caller-supplied string a refusal carries.
+
+  `max-refusal-fact-characters` bounds the rendered `facts ·` line, and only
+  that line: `:error` and `:remedy` are envelope keys, rendered whole, and
+  both quote the caller's own text. A 10,001-character `scope.paths` entry
+  produced a 20,031-character parser message — the parser echoes the pattern
+  twice — inside a 30,141-character error sentence and a 51,191-character text
+  block. Every other ceiling this verb carries reads on the size of the TREE;
+  this one reads on the size of the caller's own input, which is the one thing
+  in a refusal that nothing upstream of it constrains."
+  200)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-field-items
+  "How many caller-supplied entries one refusal field names."
+  8)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-text-characters
+  "The ceiling the whole rendered refusal text is held to.
+
+  Stated as a number the witness can assert the rendered block against: a
+  receipt is constant-size or it is not a receipt, and per-field bounds are
+  only a claim about the whole until the whole is measured."
+  4096)
+
+;; @spec MCP-OP-ALIAS-059
+(defn elide
+  "One caller-supplied string, bounded, naming the length it replaced.
+
+  Truncation with a typed marker rather than in silence: the caller sent the
+  bytes and is the only one who can recognise them from a prefix, and the
+  original length is what says the prefix is a prefix."
+  [value]
+  (let [text (str value)]
+    (if (<= (count text) max-refusal-field-characters)
+      text
+      (str (subs text 0 max-refusal-field-characters)
+           "… [elided, " (count text) " characters]"))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn elide-items
+  "One caller-supplied list, bounded in entry length AND in entry count."
+  [values]
+  (let [values (vec values)
+        bounded (mapv elide (take max-refusal-field-items values))]
+    (cond-> bounded
+      (> (count values) max-refusal-field-items)
+      (conj (str "… [elided, " (count values) " entries]")))))
+
 ;; @spec MCP-OP-ALIAS-006
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-038
@@ -550,18 +1053,86 @@
         scanned (count relatives)
         expected (get-in request [:expect :files])]
     (cond
+      ;; @spec MCP-OP-ALIAS-051
+      ;; the glob never compiled, so no file was visited and the tree's state
+      ;; is known exactly: untouched. The parser's own message is the only
+      ;; thing that says WHERE the spelling broke, so it is quoted rather than
+      ;; summarised, and no next_call is computable — a malformed pattern has
+      ;; no mechanical correction, only the one the caller meant.
+      (= :alias-migration-scope-path-refused (:error-type scan))
+      (let [nul? (= :nul-byte (:refusal-reason scan))
+            invisible? (or nul?
+                           (= :refused-code-point (:refusal-reason scan)))]
+        (refusal :alias-migration-scope-path-refused
+                 (str "scope.paths entry " (pr-str (elide (:path scan)))
+                      (if invisible?
+                        " cannot name a path"
+                        (str " is not a parseable glob"
+                             (when-not (= (:path scan) (:pattern scan))
+                               (str " — it names a directory, and the subtree"
+                                    " pattern "
+                                    (pr-str (elide (:pattern scan)))
+                                    " derived from it"))))
+                      ": " (elide (:cause scan))
+                      ". No file was visited, so what the scope contains is not"
+                      " known.")
+                 {:path (elide (:path scan))
+                  :pattern (elide (:pattern scan))
+                  :cause (elide (:cause scan))
+                  :next_call nil
+                  :remedy
+                  (if invisible?
+                    (str "Remove the code point the cause names and resend. "
+                         "It renders as "
+                         "nothing in a console, a log and a diff, so an entry "
+                         "that looks exactly right can still carry one — the "
+                         "cause above names its index. No next_call is "
+                         "composed because only the caller knows which path "
+                         "the entry was meant to spell.")
+                    (str "Correct the glob and resend. The parser reported "
+                         (pr-str (elide (:cause scan)))
+                         "; an unclosed {group}, [class] or trailing \\ is "
+                         "the usual cause — src/{clj,cljs}/** is one "
+                         "keystroke from src/{**. No next_call is composed "
+                         "because only the caller knows which paths the "
+                         "pattern was meant to select."))}))
+
+      ;; @spec MCP-OP-ALIAS-060
+      (= :alias-migration-discovery-incomplete (:error-type scan))
+      (refusal :alias-migration-discovery-incomplete
+               (str "Discovery considered " (:files-considered scan)
+                    " source file(s) under scope.paths while an independent "
+                    "enumeration of the same scope found "
+                    (:files-enumerated scan)
+                    ", so what the scope contains is not knowable and no "
+                    "migration over it could claim to have closed the fan-out")
+               {:files_considered (:files-considered scan)
+                :files_enumerated (:files-enumerated scan)
+                :next_call nil
+                :remedy (str "Nothing was written. Two enumerations of the "
+                             "same scope disagree, which means one of them "
+                             "cannot see a file the other can — a tree "
+                             "changing under the walk, or a path this build "
+                             "derives incorrectly. Re-run against a quiescent "
+                             "tree; if the counts still disagree, this is a "
+                             "clj-surgeon defect and the migration must not "
+                             "be attempted, because a partial migration "
+                             "published under a complete-discovery receipt is "
+                             "worse than a refusal: the caller stops looking.")})
+
       ;; @spec MCP-OP-ALIAS-048
       (= :alias-migration-scope-too-deep (:error-type scan))
       (refusal :alias-migration-scope-too-deep
-               (str (:path scan) " is " (:depth scan)
+               (str (elide (:path scan)) " is " (:depth scan)
                     " path segments below the project root, past the "
                     max-scope-depth "-segment bound one alias_migration walks")
-               {:path (:path scan)
+               {:path (elide (:path scan))
                 :depth (:depth scan)
                 :max_depth (:max-depth scan)
                 :next_call nil
                 :remedy (str "Narrow scope.paths so the walk does not reach "
-                             (:path scan) ", or flatten that tree; the bound is "
+                             (elide (:path scan))
+                             ", or flatten that tree; the bound is "
                              "refused rather than truncated so no file can "
                              "silently leave the found count.")})
 
@@ -585,8 +1156,8 @@
                (str (:unreadable-count scan)
                     " path(s) under scope.paths could not be read, so what the"
                     " scope contains is not knowable: "
-                    (str/join ", " (:unreadable-paths scan)))
-               {:unreadable_paths (:unreadable-paths scan)
+                    (str/join ", " (elide-items (:unreadable-paths scan))))
+               {:unreadable_paths (elide-items (:unreadable-paths scan))
                 :unreadable_count (:unreadable-count scan)
                 :next_call nil
                 :remedy (str "Make those paths readable, or exclude them "
@@ -600,8 +1171,21 @@
       ;; scope requires from.lib" — is a claim discovery never got to make.
       ;; Four of four E3-P tool arms were refused here and told the wrong cause.
       (zero? scanned)
-      (let [given (vec (get-in request [:scope :paths]))
-            {:keys [source-files paths]} (suggested-scope-paths root)]
+      (let [;; @spec MCP-OP-ALIAS-059
+            ;; the caller's own paths ride the refusal bounded in entry length
+            ;; and in entry count: they are named AS GIVEN, and a name that
+            ;; does not fit is elided with the length it replaced
+            given (elide-items (get-in request [:scope :paths]))
+            suggestion (suggested-scope-paths root)
+            {:keys [source-files roots]} suggestion
+            ;; @spec MCP-OP-ALIAS-058
+            ;; the LISTING is shrunk until the call fits; the completing `**`
+            ;; keeps the selection whole at every listing size, so a remedy
+            ;; that would have published `next_call nil` publishes a shorter
+            ;; listing and a call the caller can actually resend
+            {:keys [roots-listed truncated? paths next-call
+                    next-call-characters]}
+            (fitting-suggestion request suggestion)]
         (refusal :alias-migration-scope-matches-nothing
                  (str "scope.paths " (pr-str given) " matched 0 files. "
                       "scope.paths are globs: an entry selects a file only when "
@@ -611,23 +1195,82 @@
                       "namespace here requires "
                       (get-in request [:from :lib])
                       " is not known, because no file was read.")
-                 {:paths given
-                  :files_matched 0
-                  :source_files_under_root source-files
-                  :suggested_paths paths
-                  :expected_files expected
-                  :next_call (planner/rescoping-call request paths)
-                  :expect_files_unchanged_reason
-                  planner/expect-files-unchanged-reason
-                  :remedy
-                  (if (seq paths)
-                    (str "Resend the next_call: it replaces scope.paths with "
-                         (pr-str paths) ", the source roots this tree actually "
-                         "holds. expect.files declared " expected
-                         " and is left as declared, because no file was read.")
+                 (cond->
+                  {:paths given
+                   :files_matched 0
+                   :source_files_under_root source-files
+                   :source_roots roots
+                   :roots_listed roots-listed
+                   :suggested_paths paths
+                   :expected_files expected
+                   :next_call next-call
+                   :expect_files_unchanged_reason
+                   planner/expect-files-unchanged-reason
+                   :remedy
+                   (cond
+                    ;; @spec MCP-OP-ALIAS-058
+                    ;; no source anywhere under the root: there is nothing to
+                    ;; derive a spelling from, and saying so is the honest
+                    ;; answer rather than a fabricated remedy
+                    (zero? roots)
                     (str "This project root holds no .clj, .cljs or .cljc file "
                          "at all, so no spelling of scope.paths can select one. "
-                         "Check workspace_root before correcting scope.paths."))}))
+                         "Check workspace_root before correcting scope.paths.")
+
+                    ;; @spec MCP-OP-ALIAS-058
+                    ;; no listing fits the ceiling — a request already carrying
+                    ;; enough exclusions that even ["**"] is past it. A remedy
+                    ;; may name a next_call only when the receipt carries one:
+                    ;; the round-11 receipt said "Resend the next_call" two
+                    ;; lines above "next_call · none"
+                    (nil? next-call)
+                    (str "No next_call is composed: the shortest call this "
+                         "remedy can compose is " next-call-characters
+                         " characters, past the "
+                         planner/max-next-call-characters
+                         "-character next_call ceiling, so there is no call to "
+                         "resend. Spell scope.paths yourself. This tree's "
+                         (count (root-sizes suggestion)) " largest of " roots
+                         " top-level source roots, each with the number of "
+                         "sources it holds, are "
+                         (pr-str (root-sizes suggestion)) "; "
+                         (pr-str completing-scope-path)
+                         " on its own selects every one of the " source-files
+                         " sources the walk saw. expect.files declared "
+                         expected
+                         " and is left as declared, because no file was read.")
+
+                    ;; @spec MCP-OP-ALIAS-058
+                    ;; the listing is a bounded SAMPLE and the selection is
+                    ;; complete; both facts are stated, because a remedy that
+                    ;; names six of nine roots and calls them "the source roots
+                    ;; this tree actually holds" selected a sixth of the tree
+                    truncated?
+                    (str "Resend the next_call: it replaces scope.paths with "
+                         (pr-str paths) " — the " roots-listed " largest of "
+                         "this tree's " roots " top-level source roots, "
+                         "completed by " (pr-str completing-scope-path)
+                         " so it still selects every one of the " source-files
+                         " sources the walk saw. expect.files declared "
+                         expected
+                         " and is left as declared, because no file was read.")
+
+                    :else
+                    (str "Resend the next_call: it replaces scope.paths with "
+                         (pr-str paths) ", every one of the " roots
+                         " source roots this tree holds, selecting all "
+                         source-files " of its sources. expect.files declared "
+                         expected
+                         " and is left as declared, because no file was read."))}
+
+                   ;; @spec MCP-OP-ALIAS-058
+                   ;; the roots and their weights ride the receipt only where
+                   ;; the caller must spell the scope by hand
+                   (and (pos? roots) (nil? next-call))
+                   (assoc :next_call_characters next-call-characters
+                          :max_next_call_characters
+                          planner/max-next-call-characters
+                          :source_root_sizes (root-sizes suggestion)))))
 
       (> scanned max-scope-files)
       ;; @spec MCP-OP-ALIAS-055
@@ -1463,6 +2106,15 @@
      :new_file new-file
      :retired_to (:retired-file commit)}))
 
+;; @spec MCP-OP-ALIAS-034
+(def max-string-mention-sites
+  "How many `file:line` string-mention sites one receipt names.
+
+  The count is exact and the list is bounded: the receipt is constant in N or
+  it is not a receipt, and a caller with twenty sites already has a day's work
+  they can find the rest of by searching for the name the count reports."
+  20)
+
 ;; @spec MCP-OP-ALIAS-042
 (defn receipt
   "Render one receipt whose length is constant in the number of namespaces.
@@ -1483,7 +2135,17 @@
        :refer_sites (:refer-sites totals)
        :alias_histogram (into {} (:alias-histogram totals))
        :collisions_resolved (:collisions-resolved totals)
+       ;; @spec MCP-OP-ALIAS-034
        :string_mentions (count (:string-mentions totals))
+       :string_mention_sites (vec (take max-string-mention-sites
+                                        (:string-mentions totals)))
+       ;; @spec MCP-OP-ALIAS-034
+       ;; the bound says that it fired: a caller had to compare
+       ;; `string_mentions` against the length of the list to learn that the
+       ;; list was a sample, which is the silent-truncation class this verb
+       ;; has already paid for twice
+       :string_mention_sites_shown (min max-string-mention-sites
+                                        (count (:string-mentions totals)))
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
        ;; @spec MCP-OP-ALIAS-052
@@ -1534,6 +2196,13 @@
                            (:source_unchanged commit)
 
                            :else (not (:committed commit)))]
+    ;; @spec MCP-OP-ALIAS-059
+    ;; forwarded-refusal-kind: the kernel's own error-type travels VERBATIM
+    ;; rather than being renamed to a constant, so every kind the transaction
+    ;; kernel can mint is a kind this verb's text block must render. It is the
+    ;; one site in the entrance's reachable set where the kind is not a
+    ;; literal, and it invents nothing: the kinds it forwards are minted, and
+    ;; scanned, in the kernel's own sources.
     (refusal (or (some-> (or (:error-type commit) (:error_type commit)) name)
                  "alias-migration-transaction-refused")
              (or (:error commit) "The alias migration transaction refused")
@@ -1757,6 +2426,9 @@
     ;; the retire could not honour refuses with nothing yet mutated
     (and retire-source (not (:ok retire-source)))
     {:error (:error retire-source)
+     ;; @spec MCP-OP-ALIAS-059
+     ;; forwarded-refusal-kind: the retire resolution's own kind, minted and
+     ;; scanned in this namespace, travels verbatim rather than being renamed
      :error-type (:error-type retire-source)
      :source-unchanged true}
 
@@ -1825,10 +2497,24 @@
                    (change-buffer/capture-verification-baseline!
                      project-root profile verification-profiles files))]
     (if (and baseline (not (:ok baseline)))
+      ;; @spec MCP-OP-ALIAS-028
+      ;; the cause, and the one correction the caller can execute. A baseline
+      ;; that cannot read its analyzer's answer is not transient, so the
+      ;; generic "re-send the same request" remedy is exactly wrong here: the
+      ;; E-CALLER arm re-sent it, reproduced the refusal, and succeeded only
+      ;; when it dropped `verify` — which nothing in the receipt suggested.
       {:error "Verification baseline capture failed before the alias migration"
        :error-type (or (:error-type baseline) :verification-baseline-failed)
        :verification baseline
-       :source-unchanged true}
+       :verification_profile verify
+       :verification_command (some :command (remove :ok (:checks baseline)))
+       :source-unchanged true
+       :remedy (str "The migration itself is unaffected — nothing was written "
+                    "— and `verify` is opt-in. Send the next_call, which is "
+                    "this same request with the \"" verify "\" profile "
+                    "dropped, or configure a profile whose diagnostic command "
+                    "answers EDN this server can read. Re-sending this request "
+                    "unchanged reproduces this refusal.")}
       (let [;; @spec MCP-OP-ALIAS-047
             ;; the marker is set by the transaction's OWN write boundary, not
             ;; by this call site. Entering `execute-mcp-change!` is not a
@@ -1958,13 +2644,30 @@
                     (when rolled-back?
                       (.delete (io/file (:receipt-file result))))
                     (merge
+                      ;; @spec MCP-OP-ALIAS-028
+                      ;; the same rule as the baseline branch: a profile that
+                      ;; reported a failure reports it again on an identical
+                      ;; re-send, so the generic "re-send the same request"
+                      ;; remedy would be a retry loop. The rollback restored
+                      ;; the tree, so the executable correction is the same
+                      ;; request without the profile — which is what this
+                      ;; refusal's next_call carries.
                       {:error (str "Verification failed; "
                                    (rollback-sentence rolled-back?
                                                       (:receipt-file result)
                                                       count-migrated))
                        :error-type (or (:error-type verification)
                                        :verification-failed)
-                       :verification verification}
+                       :verification verification
+                       :verification_profile verify
+                       :remedy (str "The \"" verify "\" profile reported a "
+                                    "failure and the migration was rolled "
+                                    "back, so re-sending this request "
+                                    "unchanged reports it again. Send the "
+                                    "next_call — this same request with the "
+                                    "profile dropped — or correct what the "
+                                    "profile reported and send this request "
+                                    "again after that.")}
                       report))))))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001
@@ -2019,7 +2722,13 @@
               ;; @spec MCP-OP-ALIAS-056
               ;; the kernel's own write boundary, not a literal: the same
               ;; volatile ALIAS-047's heap guard reads
-              (commit-refusal plan commit @attempted)
+              (cond-> (commit-refusal plan commit @attempted)
+                ;; @spec MCP-OP-ALIAS-028
+                ;; a baseline failure has exactly one executable correction,
+                ;; and it is composed here because this is where the REQUEST
+                ;; is: the same call without the profile that could not be read
+                (and (:verification commit) verify)
+                (assoc :next_call (planner/unverified-call request)))
               (receipt plan
                        (-> commit
                            (assoc :undo_receipt (:receipt-file commit)

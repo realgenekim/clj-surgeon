@@ -610,6 +610,11 @@
   [error-type message extra next-call]
   (merge {:ok false
           :operation "alias_migration"
+          ;; @spec MCP-OP-ALIAS-059
+          ;; forwarded-refusal-kind: every caller spells its kind as a
+          ;; keyword literal at its own call site, scanned there by the
+          ;; `:error_type "…"` scan; this constructor only forwards that
+          ;; argument verbatim and mints nothing of its own
           :error_type (name error-type)
           :error message
           :source_unchanged true
@@ -665,6 +670,22 @@
   [call]
   (<= (count (json/generate-string call)) max-next-call-characters))
 
+;; @spec MCP-OP-ALIAS-028
+(defn unverified-call
+  "The same request with the verification profile dropped.
+
+  The one correction a caller whose baseline capture failed can execute: the
+  migration itself is unaffected — the tree was never touched — and `verify`
+  is opt-in. `base-call` already spells the request's closed field set without
+  it, so this is that set and nothing else.
+
+  Published because the E-CALLER arm was told to \"Re-send the same
+  alias_migration request\", did, reproduced the refusal, and found the one
+  change that worked by itself."
+  [request]
+  (let [call (base-call request)]
+    (when (within-next-call-bound? call) call)))
+
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-051
 (defn excluding-call
@@ -707,6 +728,27 @@
                      declared))))))
 
 ;; @spec MCP-OP-ALIAS-058
+(defn next-call-characters
+  "The wire length of one composed call.
+
+  `within-next-call-bound?` measures the JSON the MCP boundary publishes, so a
+  refusal that REPORTS the size it could not publish must measure it the same
+  way, or the caller cannot check the arithmetic the refusal states."
+  [call]
+  (count (json/generate-string call)))
+
+;; @spec MCP-OP-ALIAS-058
+(defn rescoping-call-shape
+  "The rescoping call as composed, whether or not it fits the bound.
+
+  `rescoping-call` answers nil past the ceiling, which is the right answer for
+  a caller and the wrong one for a refusal that must say HOW FAR past it the
+  call was: a call nobody composed has no length. This is the composition
+  without the guard, so the guard's own subject can be measured and named."
+  [request paths]
+  (assoc-in (base-call request) ["scope" "paths"] (vec paths)))
+
+;; @spec MCP-OP-ALIAS-058
 (defn rescoping-call
   "The same request with `scope.paths` replaced outright, or nil if it would not fit.
 
@@ -715,7 +757,7 @@
   only correction is a different spelling. `expect.files` is left exactly as
   declared, because not one file of the new scope has been read."
   [request paths]
-  (let [call (assoc-in (base-call request) ["scope" "paths"] (vec paths))]
+  (let [call (rescoping-call-shape request paths)]
     (when (and (seq paths) (within-next-call-bound? call)) call)))
 
 ;; @spec MCP-OP-ALIAS-015
@@ -959,15 +1001,35 @@
           :else
           (let [{:keys [alias collided]} (choose-alias root direct policy)]
             (if (nil? alias)
+              ;; @spec MCP-OP-ALIAS-008
+              ;; NO next_call. The composition used to append
+              ;; `(str (last policy) "-2")`, so a four-entry policy was
+              ;; answered with `store-2-2` — a value the caller's own request
+              ;; forbids. A next_call is the caller's request with one field
+              ;; corrected, and a correction that violates a constraint the
+              ;; caller stated is not executable by the caller who stated it.
+              ;; Which alias to add is the one thing here only they know.
               {:refusal (refusal :alias-migration-alias-policy-exhausted
                                  (str "Every alias_policy entry is already bound in "
                                       file)
                                  {:file file
                                   :alias_policy policy
-                                  :collided_bindings collided}
-                                 (-> (base-call request)
-                                     (update-in ["to" "alias_policy"] conj
-                                                (str (last policy) "-2"))))}
+                                  :collided_bindings collided
+                                  :remedy
+                                  (str "to.alias_policy is exhausted for "
+                                       file ": every one of its "
+                                       (count policy) " entries — "
+                                       (pr-str (vec policy))
+                                       " — is already bound to another "
+                                       "namespace in that file's ns form. No "
+                                       "next_call is composed, because any "
+                                       "alias this verb could propose would "
+                                       "be outside the policy you sent and "
+                                       "your own request forbids it. Add an "
+                                       "alias that file does not bind to "
+                                       "to.alias_policy, or exclude " file
+                                       " through scope.exclude, and resend.")}
+                                 nil)}
               (let [referred (:referred target)
                     var-bare? (and (not lib-mode?)
                                    (or (contains? referred from-var)
@@ -1069,18 +1131,81 @@
               (children root))))))
 
 ;; @spec MCP-OP-ALIAS-034
+(defn- string-literal-lines
+  "Every line of `source` carrying a STRING LITERAL whose value is `needle`.
+
+  Read rather than grepped: a comment and a regex literal spell a name exactly
+  as a string does, and only the reader can tell the three apart. A file the
+  reader cannot parse cannot be migrated either, so the fallback below is
+  unreachable through `execute!` — it is there because a silent zero is the
+  one answer this requirement forbids, and a parse failure must not become
+  one."
+  [needle source]
+  (try
+    (->> (tree-seq (fn [node]
+                     ;; @spec MCP-OP-ALIAS-034
+                     ;; a reader DISCARD is not a string literal the reader
+                     ;; read: `#_ "lib/var"` is dropped before any value
+                     ;; exists. The migration walker already stops here
+                     ;; (`(= :uneval tag) (leaf node)`), and a count published
+                     ;; as EXACT cannot count what the reader never built.
+                     ;; `(comment …)` is NOT this case and is descended: it is
+                     ;; an ordinary macro whose body the reader reads, so its
+                     ;; string literal exists and names stale work an operator
+                     ;; must go and look at.
+                     (and (n/inner? node) (not= :uneval (n/tag node))))
+                   n/children
+                   (parser/parse-string-all source))
+         (remove #(= :uneval (n/tag %)))
+         (filter #(contains? #{:token :multi-line} (n/tag %)))
+         (keep (fn [node]
+                 (let [value (try (n/sexpr node) (catch Exception _ nil))]
+                   (when (= needle value)
+                     (:row (meta node)))))))
+    (catch Exception _
+      (let [quoted (str "\"" needle "\"")]
+        (keep-indexed (fn [index line]
+                        (when (str/includes? line quoted) (inc index)))
+                      (str/split-lines source))))))
+
+;; @spec MCP-OP-ALIAS-034
 (defn string-mentions
-  "Files whose source contains the old lib name as a STRING literal.
+  "`file:line` of every STRING literal naming what this migration retires.
 
   These are not code references — they are assertions about the codebase
   (architecture tests), documentation paths, and data. The verb does not touch
   them and does not refuse for them, but a silent zero would hide real work, so
-  the count travels in the receipt."
-  [from-lib sources]
-  (vec (sort (keep (fn [{:keys [file source]}]
-                     (when (str/includes? source (str "\"" from-lib "\""))
-                       file))
-                   sources))))
+  the count travels in the receipt.
+
+  The needle is what the migration RETIRES and is chosen by the caller: a
+  lib-only migration retires the lib, so the lib name is the needle; a var
+  migration retires one qualified var and leaves the lib and its other vars
+  standing, so `lib/var` is the needle and a string naming the surviving lib is
+  not stale work. Var mode used to pass no needle at all — the count was a
+  literal `[]` — so every var migration published `string_mentions: 0`
+  whatever the tree held.
+
+  Sites rather than files: a file is where the caller must go, a line is where
+  they must look, and two mentions in one file are two edits. Sorted by FILE
+  and then by NUMERIC LINE, so the receipt is a function of the tree and not
+  of read order — and so the bound the receipt applies keeps the first sites a
+  caller would walk to. Sorting the rendered `file:line` strings instead put
+  `src/z.clj:10` ahead of `src/z.clj:2`, and over 26 mentions the bound of 20
+  kept lines 2, 3 and 10-27 and dropped 4-9: a bound is only as honest as the
+  ranking underneath it.
+
+  A STRING LITERAL is what the READER says one is, matched on the literal's
+  VALUE. The scan used to be `str/includes?` of the quoted needle over raw
+  lines, so `; a comment mentioning \"lib/var\"` and `#\"lib/var\"` both counted:
+  a go-look-here list can afford a false positive, but this count is published
+  as exact and must be exactly what the requirement names."
+  [needle sources]
+  (->> sources
+       (mapcat (fn [{:keys [file source]}]
+                 (map (fn [line] [file line])
+                      (string-literal-lines needle source))))
+       (sort-by (fn [[file line]] [file line]))
+       (mapv (fn [[file line]] (str file ":" line)))))
 
 ;; @spec MCP-OP-ALIAS-022
 ;; @spec MCP-OP-ALIAS-023
@@ -1233,9 +1358,15 @@
                                                          (frequencies (map :alias files)))
                                   :collisions-resolved
                                   (reduce + 0 (map #(count (:collided %)) files))
+                                  ;; @spec MCP-OP-ALIAS-034
+                                  ;; the needle follows what this migration
+                                  ;; retires: the lib in lib mode, the one
+                                  ;; qualified var in var mode
                                   :string-mentions
-                                  (if (nil? from-var)
-                                    (string-mentions (get-in request [:from :lib])
-                                                     sources)
-                                    [])}}
+                                  (string-mentions
+                                    (if (nil? from-var)
+                                      (get-in request [:from :lib])
+                                      (str (get-in request [:from :lib])
+                                           "/" from-var))
+                                    sources)}}
                   renamed (assoc :lib-rename renamed))))))))))

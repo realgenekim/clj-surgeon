@@ -719,7 +719,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
 fi
 
 if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
-  self_test_root=$(cd "$(mktemp -d /tmp/clj-surgeon-benchmark-self-test.XXXXXX)" && pwd -P)
+  self_test_root=$(cd "$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-benchmark-self-test.XXXXXX")" && pwd -P)
   original_result_dir=$result_dir
   result_dir="$self_test_root/results"
   owner_dir="$result_dir/.benchmark-owner"
@@ -830,7 +830,7 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     "$self_test_root/events.jsonl" > "$self_test_root/started-items.json"
   test "$(mcp_first_mutation "$self_test_root/started-items.json")" = false
   printf '%s\n' \
-    '{"type":"item.started","item":{"type":"command_execution","command":"cat /tmp/skills/clj-surgeon/SKILL.md"}}' \
+    '{"type":"item.started","item":{"type":"command_execution","command":"cat /sandbox/skills/clj-surgeon/SKILL.md"}}' \
     '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"inspect_clojure"}}' \
     '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"edit_clojure"}}' \
     '{"type":"item.started","item":{"type":"file_change"}}' \
@@ -846,8 +846,8 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     > "$self_test_root/transform-first-mutation-items.json"
   test "$(mcp_first_mutation "$self_test_root/transform-first-mutation-items.json")" = true
   printf '%s\n' \
-    '{"command":"rg apply_clojure_changes /tmp/tool/src/clj_surgeon/mcp_tool.clj"}' \
-    '{"command":"rg moved-owner /tmp/workspace/src/sample/server.clj"}' \
+    '{"command":"rg apply_clojure_changes /sandbox/tool/src/clj_surgeon/mcp_tool.clj"}' \
+    '{"command":"rg moved-owner /sandbox/workspace/src/sample/server.clj"}' \
     > "$self_test_root/catalog-commands.jsonl"
   jq -s . "$self_test_root/catalog-commands.jsonl" \
     > "$self_test_root/catalog-commands.json"
@@ -1059,7 +1059,7 @@ for source_ref in "$pre_commit" "$post_commit"; do
 done
 
 acquire_result_owner
-setup_root=$(cd "$(mktemp -d /tmp/clj-surgeon-benchmark-setup.XXXXXX)" && pwd -P)
+setup_root=$(cd "$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-benchmark-setup.XXXXXX")" && pwd -P)
 
 mkdir -p "$result_dir" "$setup_root/tools/pre" "$setup_root/tools/post" \
   "$setup_root/bin/pre" "$setup_root/bin/post" "$setup_root/templates"
@@ -1395,7 +1395,7 @@ if [ "${BENCH_PROMPT_SELF_TEST:-false}" = true ]; then
     echo 'relation arm resolver accepted a non-relation context' >&2
     exit 1
   fi
-  relation_profile_workspace=$(mktemp -d /tmp/clj-surgeon-relation-profile.XXXXXX)
+  relation_profile_workspace=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-relation-profile.XXXXXX")
   prepare_relation_workspace mcp-relation-n-no-skill \
     submission-row-extraction-cleanup "$relation_profile_workspace"
   cmp -s \
@@ -1426,11 +1426,11 @@ if [ "${BENCH_PROMPT_SELF_TEST:-false}" = true ]; then
     echo 'discover prompt leaked the withheld root set' >&2
     exit 1
   fi
-  literal_prompt=$(literal_format_extraction_call_prompt /tmp/example-workspace)
+  literal_prompt=$(literal_format_extraction_call_prompt /sandbox/example-workspace)
   literal_args=$(printf '%s\n' "$literal_prompt" | tail -n 1)
   printf '%s\n' "$literal_prompt" | grep -q 'Preserve every field, value, and array order'
   jq -e '
-    .workspace_root == "/tmp/example-workspace"
+    .workspace_root == "/sandbox/example-workspace"
     and .verify == "exact"
     and .extraction.file == "src/cfp_scheduler_killer/views.clj"
     and .extraction.to == "src/cfp_scheduler_killer/views/format.clj"

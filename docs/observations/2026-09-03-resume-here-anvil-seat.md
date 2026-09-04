@@ -416,3 +416,68 @@ Mayor: draining via the integration branch; owns curtain-call merges (Sol-review
 ## RESUME DELTA 05:04Z — temp files go to /var/tmp/forge, never /tmp (Gene)
 
 Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/seat-tmp-guard.sh refuses a tmpfs temp dir and is sourced by suite-run and sol-yolo. Every brief from here names /var/tmp/forge/<lane>-fx. Repo ratchet building on bridge/tmp-leak-ratchet (runners fail on leaked temp entries and refuse tmpfs). Heartbeats: df -i /tmp + count of forge-owned entries.
+
+## RESUME DELTA 2026-09-04T05:43Z — full state for a post-compaction seat (Gene asked for the prompt at ~06:00Z)
+
+**Rules in force (Gene, tonight, all verbatim in the captain's log):** origin/main FROZEN for everyone (public repo; nothing publishes until a months-dogfooded winner) — this seat pushed ~40 docs commits to main before 01:40Z, disclosed, not rewritten; `MCP/main` is the working trunk (seat checkout /home/forge/src/clj-surgeon is ON it; landings by `merge --no-ff` from the seat after an executed review); temp files to /var/tmp/forge never /tmp (profile + ~/bin/seat-tmp-guard.sh + Claude settings env; repo ratchet building on bridge/tmp-leak-ratchet); reviews Sol first, Opus on filter refusal (nine refusals tonight, all on permission/symlink/lock/trust-root lanes); the meter is TOOL CALLS; keep cclsp running — but this seat has none (inb-41c1cc: repo 404, launchd-only start; 7890 is the surgeon seat's, never touch); cohorts with a tool arm void arms that hit semantic-provider-unavailable.
+
+**Landed on MCP/main:** the six-lane integration (2556a38 via the candidate), the admit gate (9b7220c3, fresh-clone GO-WITH-FIX; trailing suite 711/8436/0). **Standing sentence (Gene report 04:55Z, 2026-09-04-gene-report-0455z.md):** square 2 fan-out wins 2–7× in emitted chars for two callers at N ≤ 21 on the apply_patch harness; bounded at N* = 23 (E-NSWEEP), by write path (E-HARNESS-2: Bash-only native 0.68×), survives a second caller (E-CALLER 2.2×/3.7×); squares 1 (detection, E-GATE-R), 3, 4 withdrawn; the feature-thread study measured (E-THREAD: native 5/5, 0 false-completes; the script halves calls on SMW) — verdict "not a verb" was then REFRAMED by Gene on tool calls: build `feature_thread` v2 (bodies + sha + anchor + sibling one-axis + rules; 10/16 KB) and measure tool calls to a correct Dequote/Format edit (study §12; the mayor's transcript analysis: six read rounds is the human baseline; Dequote/Format is a NAMED TEST CASE with five assertions + a second fixture at the moment it broke).
+
+**Lanes and where their state lives (agent IDs do not survive compaction; branches and verdict files do):**
+| lane | branch @ tip | state | next |
+|---|---|---|---|
+| MEM-003 second landing | bridge/integration-2026-09-03-mem003 @ 3692e9b (r4 building: trunk merged in, deftype reading, :refer forbidden) | r3 Opus NO-GO | on push: review (Sol then Opus), land |
+| O2 study-ops (MCP ls-tree) | bridge/study-ops-mcp @ 515e8109 (r5 building: budgeted dropped line, monotone fit, mid-band witness, with-envelope shape-agnostic) | r4 Opus NO-GO (regression) | on push: review; then recompose onto MEM-003 landing (template f835394) |
+| census | bridge/census-verb @ 563c300d | r19 Opus review running (/home/forge/tmp/sol/census19-opus-review.md) | file; r20 or land |
+| q5z alias_migration | bridge/q5z-alias-migration @ b6d1d17b | r15 Sol review running (q5z15-sol-review.md) | file; r16 or land |
+| admit gate r3/r4 | bridge/admit-gate-r3 @ 95e7aed9 (r4 building on current trunk) | r3 Sol NO-GO (4) | on push: review; land |
+| FAN scorer | bridge/fanout-fixtures-in-git @ f2fa8be9 | r5 Sol review running (fanout5-sol-review.md; Opus on refusal) | file; land (apparatus) |
+| tmp-leak ratchet | bridge/tmp-leak-ratchet (building) | — | review; land |
+| feature_thread verb | bridge/feature-thread-verb (building; three amendments: named test case, fleet refinements, §12 deltas) | — | review; then the 30-arm adoption cohort (N/F/M-range/M-body/K ×6) |
+| E-SCALE-WALL | pre-registered (2026-09-04-escalewall-preregistration.md) | waits for a QUIET box (load < 2 before each arm) | run alone, after the review lanes land |
+| curtaincall | bridge/cc-integration-2026-09-03 @ 37978a74 seat-gated green | with the mayor (offline since ~01:30Z) | mayor's Sol review + landing |
+
+**Verdict files:** /home/forge/tmp/sol/<lane><n>-sol-review.md or -opus-review.md; logs /home/forge/tmp/sol/<lane><n>.log, finished when the LAST line is `EXIT n`. Inbox ids: inb-1165ce (mayor landings), inb-3e298e (O2), inb-b873d0 (q5z), inb-cbca17 (admit refusal text), inb-9483a4 (/tmp inode leak), inb-62a674 (enumerating-witness rule), inb-41c1cc (cclsp), inb-2f150d/84f801/10f4cd (gate defects), inb-55e00e (study, closed).
+
+**Single next action:** heartbeat; file any finished verdict; relaunch the next round for any NO-GO; land any GO by merge --no-ff onto MCP/main from the seat checkout with the trailing suite; keep the mayor's queue current on inb-1165ce.
+
+## RESUME DELTA 05:48Z (post-compaction, first action done)
+- Compaction happened ~05:5xZ; Gene fed the resume prompt; note re-read. Memento pointer is LINE 1 of CLAUDE.md on MCP/main (7751e1f8).
+- **FAN scorer LANDED on MCP/main = 804febcb** (Sol r5 GO, merge --no-ff; a .PHONY union conflict in Makefile resolved by hand; trailing `make fanout-selftests` log at /home/forge/tmp/trunk-fanout-selftests.log). Row F closed; inb-9c18e2 completed.
+- Still in flight: MEM-003 r4, O2 r5, gate r4, tmp-leak ratchet, feature_thread verb (builders); census r19 (Opus), q5z r15 (Sol) reviews. Branch tips unchanged since 05:21Z.
+- Next action: file census19/q5z15 verdicts when their logs end in EXIT; land MEM-003 r4 → recompose study-ops; E-SCALE-WALL waits for load < 2.0.
+
+## RESUME DELTA 06:10Z
+- feature_thread verb BUILT @ 02e823e7 on bridge/feature-thread-verb; Sol r1 review running (ft1.log / ft1-sol-review.md; clone /home/forge/tmp/sol/ft1-wt; reviewer ports 8126–8128). Inbox inb-cc9a4a. Next after GO: land on MCP/main, then the adoption cohort on tool calls.
+- census r19 NO-GO filed; r20 builder merges the trunk in first (12-file conflict). q5z r15 GO-WITH-FIX filed; r16 building (ports 8123–8125).
+
+## RESUME DELTA 06:32Z — FOREGROUND PROGRAM (Gene): the 10x tweezer on feature_thread
+- Mission: prove tool-calls-to-a-green-edit 10x on the Dequote/Format replay; foreground tweezer, background orchestration. Baseline 17 calls to first patch (21 + patch to done). nREPL 43791 on ~/src/clj-surgeon-thread (bridge/feature-thread-verb @ ad49908c + round-two builder running on that worktree: implementation leg, governance anchors, co-primary tests, verify row, budget 24 KB + edit-aware elision). Receipt dump /var/tmp/forge/tweezer/r3-receipt.txt; watcher ~/bin/call-watcher. Next: naive-reader probe (Sol+Opus), then the measured replay: an agent given ONLY the receipt writes the patch; count calls with the watcher; then the cohort.
+
+## RESUME DELTA 07:17Z
+- Lanes: feature_thread r2 building (Opus, on ~/src/clj-surgeon-thread; r1 NO-GO folded in); q5z r17 building; tmp-leak r2 building; gate r5 building; MEM-003 r5 building; census r21 Sol review; O2 r5 Sol review. All reviews except O2/census are on Opus after Sol filter refusals (14 tonight). Trunk MCP/main last landing: the FAN scorer (804febcb). Foreground: the tweezer waits on feature_thread r2 for the measured replay (baseline 17 calls; target zero reads before the write).
+
+## RESUME DELTA 07:29Z
+- feature_thread r2 = 9139b2c5 (Sol r3 review running: ft3.log / ft3-sol-review.md). REPLAY in progress: clone /home/forge/tmp/replay/smw-base @ 2df99c98; arms N / T1 / T2 pre-registered in the log; receipt for the clone to be computed from the nREPL (port 43791, root = the clone); counts from the codex logs (exec_command + apply_patch), never from the driver.
+
+## RESUME DELTA 08:20Z
+- REPLAY DONE and verified (docs/observations/2026-09-04-feature-thread-replay-result.md; Gene report 2026-09-04-gene-report-0815z.md): N 32 / T1 24 / X 25 / P 31 / T1b 22 raw; "edit basis" withdrawn for this run, "discovery accelerator" stands; 10× is a harness claim (admit-gate write + no ceremony). N2 replicate still running (50+ calls). Next arms pre-registered: T2 (MCP-attached), T3 (round-three receipt; spec in 2026-09-04-feature-thread-round3-spec.md + the recall item), G (admit-gate write), C (no-ceremony repo).
+- Lanes: feature_thread r2 = 9139b2c5 (Opus r3 review running); q5z r17 = 15fdf59c (Opus review); MEM-003 r5 = dc6ee93f (Sol review); tmp-leak r2 = 86bd9de3 (Sol review; one-line .PHONY conflict to compose at landing); census r22, gate r5, O2 r6 building. Trunk MCP/main last landing 804febcb (scorer). Sol filter refusals: 17 tonight — proposal to route census/gate to Opus first is with Gene.
+- Housekeeping: /var/tmp/forge swept of own suite leaks >60 min each heartbeat until tmp-leak r2 lands; nREPL 43791 on ~/src/clj-surgeon-thread (feature_thread worktree); replay clones under /home/forge/tmp/replay/smw-*; meters ~/bin/rollout-calls (codex) and ~/bin/call-watcher (this session).
+
+## RESUME DELTA 08:54Z — replay complete for tonight (11 arms verified green; full record docs/observations/2026-09-04-feature-thread-replay-result.md)
+- STANDING SENTENCE: the feature_thread receipt is a DISCOVERY ACCELERATOR (reads before the first patch 11.7 → 1.3 at n=3; task-core 2.2×; raw 1.7×), NOT an edit basis (its own withdrawal line fired). The effect is content (placebo ≈ native); on a patch harness the BODIES carry it (stale ranges/shas ≈ correct receipt). Ceremony was NOT the diluter (withdrawn by the C pair). The MCP-attached arm halves reads but re-reads the lines after each anchor (after_context → round four). 10× is a harness claim: the write as one admit-gate call (arm G, needs the gate landed) + the round-three receipt (T3, needs r4).
+- Lanes: feature_thread r4 building (review B3/B1′/B2′ + the round-three spec + after_context); q5z r18 building; tmp-leak r3 fix round building (then LAND with the one-line .PHONY composition); gate r5 Sol review; MEM-003 r5 Opus review; census r22 + O2 r6 building. T2 server on :8165 stopped. Usage refusals ledgered inb-5f5edd; collector needs a warm path (inb-65c941).
+
+## RESUME DELTA 11:13Z
+- Outage ~09:30Z (session limit) → all lanes relaunched 10:03Z from local commits; rules now in every brief: builders push per item, reviewers write verdicts incrementally.
+- Lanes: feature_thread r4 building (ft3 NO-GO folded + round-three spec + after_context); q5z r19 fix round (r18 Sol NO-GO on one: kind in the second parameter); tmp-leak r4 Sonnet fix (r3 Opus GO-WITH-FIX: $(filter) subpaths) → then LAND with the one-line .PHONY composition; census r23 Opus review (r22 built; Sol refused); gate r6 building (r5 NO-GO: caller field echoed verbatim); MEM-003 r6 building (r5 NO-GO: ._launder interop + ns-resolve); study-ops r6 building (r5 Sol NO-GO). Trunk MCP/main last landing 804febcb (scorer).
+- Replay complete (11 arms verified; standing sentence in the 10:5xZ delta). Gene reports: 0815z, 1015z; captain's log entry "the night of the tweezer" at a96a665e.
+
+## RESUME DELTA 11:30Z
+- tmp-leak ratchet LANDED: MCP/main = d0b4e1ca (merge --no-ff of 5a6e7c81; gate + bb green on the merged tree; trailing mcp-test log /var/tmp/forge/land-tmpleak-mcp-test.log). Landings tonight: integration, scorer, tmp-leak. Row TMP closed; inb-9483a4 completed.
+
+## RESUME DELTA 12:14Z
+- Landings tonight: integration, scorer, tmp-leak (d0b4e1ca), alias_migration/q5z (44e70af5 + re-pin merge-fix). Trunk MCP/main last landing 44e70af5.
+- Replay: T3 (round-four receipt) = 19 raw, ZERO reads before the write, verified green — the edit-basis line for T3 is MET; T3b replicate running (12:13Z). Peers are elided by the trunk's 32,640 structured cap (round-five item). Arm G waits on the admit gate landing.
+- Lanes: feature_thread r5 (Sol review of bb3b6360; ft1-wt clone); MEM-003 r6 (Sol review of 432268cf, trunk-merged); gate r6 (Opus review of ed20fa35); census r24 fix build (trunk merge + :paths fence); study-ops r7 build (one carriage predicate). nREPL on ~/src/clj-surgeon-thread port 45759.

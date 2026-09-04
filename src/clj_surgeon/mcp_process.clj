@@ -354,10 +354,18 @@
         distinct
         (str/join java.io.File/pathSeparator))))
 
+;; @spec MCP-OP-TMPHYG-005
 (defn configure-environment!
-  "Give one ProcessBuilder environment the same paved local tool entrance."
+  "Give one ProcessBuilder environment the same paved local tool entrance --
+   and this process's own temp directory.
+
+   TMPDIR matters because `-Djava.io.tmpdir` is a JVM-internal property no
+   child PROCESS inherits: without it a subprocess that picks its own temp
+   location writes wherever the ambient environment points, outside any
+   isolated per-run root and invisible to the test suites' leak witness."
   [^java.util.Map environment]
   (.put environment "PATH" (effective-path (.getOrDefault environment "PATH" "")))
+  (.put environment "TMPDIR" (System/getProperty "java.io.tmpdir"))
   environment)
 
 (defn- destroy-process-tree!

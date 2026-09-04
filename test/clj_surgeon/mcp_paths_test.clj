@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-paths-test
   (:require
+   [babashka.fs :as fs]
    [clj-surgeon.mcp-paths :as paths]
    [clojure.test :refer [deftest is testing]])
   (:import
@@ -16,6 +17,7 @@
 (deftest resolves-only-absent-targets-below-an-existing-real-parent
   (let [root (temp-root)
         src (.resolve root "src")]
+   (try
     (Files/createDirectory src (make-array FileAttribute 0))
     (testing "an absent target is resolved without creating it"
       (let [result (paths/resolve-new-source-path root "src/moved.clj")]
@@ -42,4 +44,6 @@
     (testing "lexical traversal refuses"
       (is (= "invalid-relative-source-path"
              (:error_type
-               (paths/resolve-new-source-path root "../moved.clj")))))))
+               (paths/resolve-new-source-path root "../moved.clj")))))
+    (finally
+      (try (fs/delete-tree root) (catch Throwable _ nil))))))
