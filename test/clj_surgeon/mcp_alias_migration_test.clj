@@ -5,6 +5,7 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -426,6 +427,55 @@
                   (is (:ok committed) (pr-str committed))))))))
       (finally
         (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-057
+(deftest a-directory-entry-selects-the-same-subtree-under-every-spelling
+  ;; Round-10 review finding 2: the directory CHECK resolved and normalised the
+  ;; entry, and the emitted glob was built from the raw text, so a directory
+  ;; that IS detected yielded a pattern that can never match. `./src` — as
+  ;; natural a spelling as the one ALIAS-057 exists to accept — selected zero
+  ;; files and was refused `scope-matches-nothing`.
+  (let [workspace (workspace!)
+        root (mcp-paths/real-root (.getPath workspace))
+        select (fn [entry]
+                 (set (alias-migration/expand-scope root {:paths [entry]
+                                                          :exclude []})))
+        baseline (select "src")]
+    (try
+      (is (= 23 (count baseline)) "the fixture's own source root moved")
+      (testing "every spelling that normalises to `src` selects what `src` does"
+        (doseq [entry ["./src" "src/." "src/" "src//" "./src/" ".///src"
+                       "./src/." "src/./"]]
+          (is (= baseline (select entry))
+              (str "the entry " (pr-str entry)
+                   " selected a different set than \"src\""))))
+      (testing "a doubled separator inside the entry normalises too"
+        (is (= (select "src/acid") (select "src//acid"))
+            "`src//acid` selected a different set than `src/acid`")
+        (is (seq (select "src//acid"))
+            "`src//acid` selected nothing at all"))
+      (testing "the root itself still contributes no subtree pattern"
+        ;; ALIAS-057 is explicit that an entry naming the root contributes no
+        ;; subtree, so the whole-tree spelling stays a typed refusal rather
+        ;; than a silent whole-repository migration
+        (is (empty? (select "."))
+            "`.` widened the scope to the whole project root")
+        (is (empty? (select "./"))
+            "`./` widened the scope to the whole project root"))
+      (testing "the widening never narrows: a literal glob keeps its matches"
+        (is (= (select "src/acid/fanout/t01.clj")
+               #{"src/acid/fanout/t01.clj"})
+            "an exact file entry lost its match"))
+      (testing "a normalised directory entry reaches discovery end to end"
+        (let [result (execute! workspace {:scope {:paths ["./src"]}
+                                          :expect {:files 12}})]
+          (is (not= "alias-migration-scope-matches-nothing" (:error_type result))
+              (str "`./src` was refused for matching nothing: "
+                   (pr-str (select "./src"))))
+          (is (:ok result) (pr-str result))))
+      (finally
+        (delete-tree! workspace)))))
+
 
 ;; @spec MCP-OP-ALIAS-058
 (defn- many-root-workspace!
