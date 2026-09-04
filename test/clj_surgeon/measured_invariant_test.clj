@@ -1338,6 +1338,39 @@
              "a clock static IS reachable through a class bound to a local and "
              "no alternative spells that route"))))
 
+;; @spec MCP-OP-TIME-005
+;; @spec MCP-OP-TIME-006
+(deftest the-computed-member-name-residual-is-declared-at-its-real-width
+  (testing "round-eight review §4: the residual is stated, so it is checked"
+    ;; `MCP-OP-TIME-005`'s final clause used to promise to catch "any other
+    ;; route that spells no class name and no method name the scan can read".
+    ;; No source-text scan can do that, and a requirement a scan provably
+    ;; cannot satisfy is a requirement that reads as green forever. The
+    ;; requirement is now bounded by what a text scan can DECIDE and defers the
+    ;; rest to the residual declared in `src/clj_surgeon/measured.clj`, which
+    ;; round eight widened from FIELDS to any member reached by a computed
+    ;; name.
+    ;;
+    ;; This witness asserts the residual is REAL — the scan does not see these
+    ;; — so that the declaration cannot quietly become false in either
+    ;; direction. If a future round closes one of these routes, this test goes
+    ;; red and the declaration is corrected in the same commit rather than
+    ;; drifting into an overclaim nobody re-read.
+    (let [computed-member "(.invoke (.getDeclaredMethod (class subject) (str \"_lau\" \"nder\") (into-array Class [])) subject (into-array Object []))"
+          computed-ns "(resolve (symbol (str \"clj-surgeon\" \".measured\") \"value\"))"]
+      (is (= {} (scan-one-planted-line escape-hatch-pattern
+                                       (str "{:wall_ms " computed-member "}")))
+          (str "a COMPUTED member name is now seen by the escape-hatch scan. "
+               "That is good news and a documentation bug: widen what "
+               "`MCP-OP-TIME-005` promises and narrow the residual paragraph "
+               "in src/clj_surgeon/measured.clj, which currently declares this "
+               "route as accepted and unreachable by a text scan."))
+      (is (= {} (scan-one-planted-line escape-hatch-pattern
+                                       (str "{:wall_ms " computed-ns "}")))
+          (str "a namespace assembled at runtime is now seen by the "
+               "escape-hatch scan; same correction, one level up — the "
+               "residual paragraph declares this route too")))))
+
 ;; @spec MCP-OP-TIME-006
 (deftest the-escape-hatch-scanner-catches-every-route-planted-in-a-receipt
   (testing "each route, planted where a receipt is built"

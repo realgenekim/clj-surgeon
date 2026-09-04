@@ -138,21 +138,37 @@
 ;; one by one in the invariant witness's allow-list.
 ;;
 ;; ACCEPTED RESIDUAL, declared rather than chased (round-four review §3,
-;; sharpened by round six §7): reflection over the type's fields BY ANY ROUTE,
-;; NAMED OR POSITIONAL.
+;; sharpened by round six §7, WIDENED by round eight §4): reflection over ANY
+;; MEMBER OF THE TYPE — field or method — REACHED BY A COMPUTED NAME, and any
+;; member reached BY POSITION.
 ;;
-;; The named route is a COMPUTED field name —
-;; `(.getDeclaredField (class r) (str "launder" "able"))` — which reads the
-;; number and which no textual scan can see. The POSITIONAL route spells no
-;; name at all: `(.get (doto (first (.getDeclaredFields (class r)))
-;; (.setAccessible true)) r)`, which the round-six reviewer used as plant F.
-;; The earlier wording said "with a computed field name" and did not cover it;
-;; a residual that names only half of its own class understates itself, and
-;; this one is now stated at the width of the thing it admits.
+;; The named route is a COMPUTED member name. Round six's plant used a field —
+;; `(.getDeclaredField (class r) (str "launder" "able"))` — and round eight's
+;; N6 used a METHOD, `(.getDeclaredMethod (class r) (str "_lau" "nder")
+;; (into-array Class []))`, which is the same class of route and was not
+;; mentioned. The POSITIONAL route spells no name at all: `(.get (doto (first
+;; (.getDeclaredFields (class r))) (.setAccessible true)) r)`, which the
+;; round-six reviewer used as plant F. Each earlier wording named a subset of
+;; its own class — first "with a computed field name", then fields by any
+;; route — and a residual that names part of what it admits understates
+;; itself. This one is stated at the width of the thing it admits: a NAME THAT
+;; EXISTS ONLY AT RUNTIME cannot be read by a scan over source text, whatever
+;; kind of member it names. The same is true one level up, of the namespace
+;; rather than the type: `(resolve (symbol (str "clj-surgeon" ".measured")
+;; "value"))` spells no namespace anywhere and is the same residual.
+;;
+;; This paragraph is what `MCP-OP-TIME-005` defers to. Its final clause used to
+;; promise to catch "any other route that spells no class name and no method
+;; name the scan can read" — which no source-text scan can do, and a
+;; requirement a scan provably cannot satisfy is a requirement that reads as
+;; green forever. The requirement is now bounded by what a text scan can
+;; decide, and points here for the rest.
 ;;
 ;; What IS closed: the literal spellings — `.-launderable`, `.launderable`,
 ;; bare `launderable`, `"launderable"` as a reflective string argument, and
-;; `(. r launderable)` — are all escape-hatch alternatives, so every plant that
+;; `(. r launderable)` — together with the parenthesised member spelling
+;; `(. r (_launder))` and the `..` and `memfn` macros that emit it (round-eight
+;; review finding 1) — are all escape-hatch alternatives, so every plant that
 ;; writes the name is caught. What is not is any route that computes or indexes
 ;; to it, and a JVM without a security manager cannot prevent reflection at
 ;; all. The reviewer's ruling, which this comment exists to record: "Textual
