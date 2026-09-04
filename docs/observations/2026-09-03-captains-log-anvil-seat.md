@@ -1220,3 +1220,7 @@ The round that finally moves the trust root: the base inventory is rebuilt from 
 ## 04:47Z — MEM-003 second landing round 3 BUILT (3692e9b, pushed); Sol review launched
 
 Three rounds to reach the right rung: r1 stripped one key, r2 relocated declared names, r3 makes the bad state unrepresentable — the clock returns an opaque tick, only the measured namespace can turn it into a reading, the reading carries its tag, and the boundary refuses what it cannot place. That is rung 5 of the ratchet ladder (typed refusal in the op itself); the two earlier rounds were rung 2 witnesses over an enumerable that the reviewer could always extend by one. The reviewer is asked whether the :control allow-list is itself a hole (can an allow-listed site publish?), which is the question the shape now reduces to.
+
+## 04:48Z — O2 round 4 BUILT (515e8109, pushed); Sol review launched
+
+Two record corrections worth the line: an EARS clause (STUDY-046) had encoded a fixed allowance as a requirement — the rule the same branch forbids — and the test helper measured the two faces of a receipt at different clocks (18 bytes apart), the same class as the publish reserve it was testing. Rung D from r3 is now a red test: an unenumerated refusal reason throws a plain exception the caller cannot mistake for its own refusal.
