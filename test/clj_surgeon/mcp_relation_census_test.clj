@@ -7171,3 +7171,165 @@
               (str runtime " " label " published "
                    (alength (.getBytes (str out) "UTF-8"))
                    " bytes")))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND NINETEEN, item 4 — Sol's round-eighteen item 4.
+;;
+;; Round seventeen's items 4 and 5 gave the workspace root ONE name and
+;; repaired three sites. The round-eighteen brief then claimed "no absolute
+;; root". The reviewer drove it and found the claim false of the CLI's remedy:
+;;
+;;   :directory "<workspace_root>"
+;;   :error     "the directory <workspace_root> may not be read or traversed…"
+;;   :remedy    "<workspace_root> came from the workspace walk … make
+;;               <workspace_root> readable under /tmp/census18-fx/sol/denied,
+;;               remove it, or name the sources to census with :file."
+;;
+;; Two names for one subject in one sentence, one of them the server's absolute
+;; path. The repair had reached the three sites the previous finding named and
+;; stopped there: a rule applied at the sites a reviewer happened to list is
+;; that list's habit, not a rule.
+;;
+;; THE RULE: a refusal's PROSE never names the workspace root absolutely. The
+;; root has one name, `census/workspace-root-token`, and prose uses it. The
+;; absolute root survives only in the fields that must be REPLAYABLE or
+;; IDENTIFYING — the CLI's `:anchor` and `:dir`, the tool's `workspace_root`,
+;; and every continuation — which are enumerated below rather than discovered,
+;; and which MCP-OP-CENSUS-014 has always required to carry it.
+;;
+;; A path the CALLER named is not the root and is not covered: a refusal about
+;; `:file /ws/src/a/missing.clj` must echo the caller's own bytes, which is why
+;; the assertion is about the root NAMED AS ITSELF — the root not followed by a
+;; path separator — and not about any string that contains it.
+;;
+;; Two witnesses, because one of them cannot see the defect the other exists
+;; for: the drive proves no refusal WE DRIVE names the root, and the source
+;; scan proves no site RENDERS one, including the branches no fixture reaches.
+;; ---------------------------------------------------------------------------
+
+(def ^:private root-carrying-fields
+  "The refusal fields that carry the workspace root ABSOLUTELY, by contract.
+
+   ENUMERATED, so that adding a field which leaks the root is a deliberate edit
+   to this set and not an accident nobody sees. `:anchor` and `:dir` name the
+   workspace the caller named and are what a reader checks their request
+   against; `workspace_root` is the tool's half of the same; every continuation
+   is EXECUTABLE and a relative path in an argument position runs somewhere
+   else."
+  #{:anchor :dir :workspace_root :next-command :next-command-argv :next_call})
+
+(defn- names-the-root-itself
+  "Every prose string in `refusal` that names `root` AS ITSELF.
+
+   The root followed by a separator is a path UNDER the root — the caller's own
+   `:file`, a project-relative name made absolute — and naming one of those is
+   what a refusal is for. The root standing alone is the defect: it is a fact
+   about the box published where the token belongs."
+  [refusal root]
+  (let [pattern (re-pattern (str (java.util.regex.Pattern/quote (str root))
+                                 "(?!/)"))]
+    (->> (dissoc refusal :anchor :dir :workspace_root
+                 :next-command :next-command-argv :next_call)
+         (tree-seq coll? seq)
+         (filter string?)
+         (filter #(re-find pattern %))
+         vec)))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-018
+(deftest no-refusal-names-the-workspace-root-in-its-prose
+  (let [parent (temp-dir)
+        trees (cli-refusal-fixture! parent)
+        denied-root (io/file parent "denied-root")
+        mcp-parent (temp-dir)
+        arms (io/file mcp-parent "arms")
+        bare (io/file mcp-parent "bare")
+        broken (io/file mcp-parent "broken")]
+    (try
+      (spit-file! (io/file denied-root "src/a/one.clj") arm-source)
+      (spit-file! (io/file arms "src/a/one.clj") arm-source)
+      (spit-file! (io/file arms "src/b/two.clj") arm-source)
+      (spit-file! (io/file arms "src/small.clj") "()")
+      (.mkdirs (io/file bare "src"))
+      (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
+
+      (testing "the CLI enumeration: no declared refusal names its root"
+        (doseq [{:keys [label root result]}
+                (run-cli-drives (cli-refusal-drives trees))]
+          (let [named (.getCanonicalPath ^java.io.File root)
+                leaks (names-the-root-itself result named)]
+            (is (= [] leaks)
+                (str label " named its workspace root absolutely in prose: "
+                     (pr-str leaks))))))
+
+      (testing "the MCP enumeration: no declared refusal names its root"
+        (doseq [{:keys [label drive]}
+                (mcp-refusal-drives {:arms arms :bare bare :broken broken})]
+          (let [result (drive)
+                leaks (names-the-root-itself result (.getCanonicalPath arms))]
+            (is (= [] leaks)
+                (str label " named its workspace root absolutely in prose: "
+                     (pr-str leaks))))))
+
+      (testing "the reviewer's own drive: a root the walk may not enter"
+        ;; Sol's round-eighteen item 4, exactly: `:dir <chmod 000 directory>`.
+        ;; The subject of this refusal IS the root, which is the shape that has
+        ;; no workspace-relative name and therefore the shape that reaches for
+        ;; the absolute one.
+        (let [named (.getCanonicalPath denied-root)]
+          (deny-traversal! denied-root)
+          (try
+            (let [cli (refusal-or-throw
+                        #(core/run-relation-census {:dir named}))
+                  tool (census-tool/execute-request! {:project-root named} {})]
+              (doseq [[entrance result] [[:cli cli] [:tool tool]]]
+                (is (false? (:ok result))
+                    (str entrance " accepted a root it may not enter"))
+                (is (= [] (names-the-root-itself result named))
+                    (str entrance " named its workspace root absolutely: "
+                         (pr-str (names-the-root-itself result named))))
+                (is (str/includes? (pr-str (:remedy result))
+                                   census/workspace-root-token)
+                    (str entrance " remedy does not use the root's one name: "
+                         (pr-str (:remedy result))))))
+            (finally (allow-traversal! denied-root)))))
+
+      (testing "no arm-bearing tree is refused with its root in the prose"
+        ;; `no-fold-arms-found` is the shape whose remedy names what it
+        ;; SCANNED, and it named it absolutely.
+        (let [named (.getCanonicalPath ^java.io.File (:empty-ws trees))
+              cli (refusal-or-throw #(core/run-relation-census {:dir named}))]
+          (is (= :no-fold-arms-found (:error-type cli)))
+          (is (= [] (names-the-root-itself cli named))
+              (str "the empty-tree remedy named its root absolutely: "
+                   (pr-str (names-the-root-itself cli named))))))
+      (finally
+        (allow-traversal! denied-root)
+        (delete-tree! parent)
+        (delete-tree! mcp-parent)))))
+
+;; @spec MCP-OP-CENSUS-018
+(deftest no-refusal-SITE-renders-a-raw-workspace-root-into-prose
+  ;; The ratchet. The drive above can only see the branches a fixture reaches;
+  ;; this one reads the sources and refuses the SHAPE — a root binding adjacent
+  ;; to a prose string literal — so a remedy added next round with the old
+  ;; wording fails here even if nothing drives it. A literal with no whitespace
+  ;; is a path JOIN (`(str root "/" name)`), which is how both entrances build
+  ;; the absolute paths their anchors and continuations are required to carry;
+  ;; a literal with whitespace is a SENTENCE.
+  (let [renders
+        (for [source ["src/clj_surgeon/core.clj"
+                      "src/clj_surgeon/mcp_relation_census.clj"
+                      "src/clj_surgeon/mcp_paths.clj"]
+              :let [text (slurp (io/file repo-root source))]
+              ;; `(?<![\w-])root` and not `\broot`: `census-root`,
+              ;; `real-root` and `workspace-root` are NAMES, and a `defn`
+              ;; followed by its docstring is not a render.
+              pattern [#"(?:\(census-root dir\)|(?<![\w-])root)\s+\"[^\"]*\s[^\"]*\""
+                       #"\"[^\"]*\s[^\"]*\"\s+(?:\(census-root dir\)|(?<![\w-])root)\b"]
+              match (re-seq pattern text)]
+          [source match])]
+    (is (= [] (vec renders))
+        (str "these sites render a raw workspace root into a prose string; "
+             "the root has one name, `census/workspace-root-token`: "
+             (pr-str (vec renders))))))
