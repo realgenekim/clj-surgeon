@@ -1553,8 +1553,15 @@
   everything else as an identity marker — `level` standing in for the old
   `*print-level*` second floor, since `*print-length*` is now redundant: the
   writer's own character ceiling is what actually stops an endless or huge
-  value, exactly as before."
-  [value ceiling]
+  value, exactly as before.
+
+  The three-argument arity takes the budget as a DEADLINE ALLOWANCE, so a
+  caller rendering several values into one receipt can spend one budget across
+  all of them rather than one each: `refusal-fact-line` renders up to sixteen
+  facts, and sixteen unrenderable values cost a measured 32,011 ms when each
+  gets its own two seconds. The receipt is the unit a caller waits on."
+  ([value ceiling] (bounded-pr-str value ceiling print-time-budget-ms))
+  ([value ceiling budget-ms]
   (let [builder (StringBuilder.)
         outcome-promise (promise)
         ;; @spec MCP-OP-ALIAS-059
@@ -1578,7 +1585,7 @@
                        "clj-surgeon-bounded-print")
                  (.setDaemon true)
                  (.start))
-        outcome (deref outcome-promise print-time-budget-ms ::timed-out)]
+        outcome (deref outcome-promise (max 1 (long budget-ms)) ::timed-out)]
     (cond
       ;; @spec MCP-OP-ALIAS-059
       ;; A character ceiling cannot stop work that produces no character. A
@@ -1600,7 +1607,7 @@
         (bounded-text builder ceiling)
         (throw ^Throwable outcome))
 
-      :else (bounded-text builder ceiling))))
+      :else (bounded-text builder ceiling)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn refusal-fact-line
@@ -1637,14 +1644,21 @@
                                     field)))
                         (sort-by key))
         dropped (max 0 (- (count renderable) max-refusal-facts))
+        ;; @spec MCP-OP-ALIAS-059
+        ;; ONE print budget for the whole receipt, not one per fact: a refusal
+        ;; carrying sixteen unrenderable values cost a measured 32,011 ms while
+        ;; each fact got its own. `mapv` and not `map`, because a deadline
+        ;; means nothing to a sequence nobody has realised yet.
+        deadline (+ (System/currentTimeMillis) print-time-budget-ms)
         facts (->> renderable
                    (take max-refusal-facts)
-                   (map (fn [[field value]]
-                          ;; @spec MCP-OP-ALIAS-059
-                          ;; bounded in WORK, not merely cut afterwards
-                          (str (name field) "="
-                               (bounded-pr-str
-                                 value max-refusal-fact-characters)))))]
+                   (mapv (fn [[field value]]
+                           ;; bounded in WORK, not merely cut afterwards
+                           (str (name field) "="
+                                (bounded-pr-str
+                                  value max-refusal-fact-characters
+                                  (- deadline
+                                     (System/currentTimeMillis)))))))]
     (when (seq facts)
       (str "facts · " (str/join " · " facts)
            (when (pos? dropped)
