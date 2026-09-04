@@ -562,6 +562,35 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-034
+(deftest only-string-literals-count-as-mention-sites
+  ;; Round-11 re-review finding 6: the scan was `str/includes?` of the quoted
+  ;; needle, line by line, with no reader, so a COMMENT naming the retired var
+  ;; and a REGEX literal spelling it both counted as string-literal sites:
+  ;;
+  ;;   sites = ["src/z.clj:2" "src/z.clj:3" "src/z.clj:4"]
+  ;;   comment line 2 counted? => true
+  ;;   regex   line 3 counted? => true
+  ;;
+  ;; MCP-OP-ALIAS-034 says STRING LITERAL sites and publishes the count as
+  ;; exact. A go-look-here list can afford a false positive; a count published
+  ;; as exact cannot be something other than what the requirement names.
+  (let [needle (str fixture/from-lib "/" fixture/from-var)
+        source (str "(ns z)\n"
+                    "; a comment mentioning \"" needle "\"\n"
+                    "(def r #\"" needle "\")\n"
+                    "(def s \"" needle "\")\n")
+        sites (planner/string-mentions needle
+                                       [{:file "src/z.clj" :source source}])]
+    (is (= ["src/z.clj:4"] sites)
+        "a comment or a regex literal was counted as a string literal")
+    (testing "the string literal is still found where the others are absent"
+      (is (= ["src/z.clj:2"]
+             (planner/string-mentions
+               needle
+               [{:file "src/z.clj"
+                 :source (str "(ns z)\n(def s \"" needle "\")\n")}]))))))
+
 
 ;; @spec MCP-OP-ALIAS-057
 (deftest a-directory-entry-selects-the-same-subtree-under-every-spelling
