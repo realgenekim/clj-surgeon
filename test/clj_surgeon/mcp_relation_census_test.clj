@@ -6349,3 +6349,161 @@
       (finally
         (delete-tree! parent)
         (doseq [top [arms-top bare-top broken-top]] (delete-tree! top))))))
+
+;; ---------------------------------------------------------------------------
+;; Opus's round-seventeen NO-GO item 2, blocking. `overflow-measurement` was
+;; written for round sixteen's item 5 — "a remedy blaming the workspace path on
+;; a twenty-four-character root" — and weighs exactly TWO of the candidate's
+;; parts, `workspace_root` and `files`. The candidate carries more than two:
+;; the `:refusal loaded` branch builds it as `(assoc (dissoc params :files) …)`
+;; so EVERY caller-supplied option rides through, `doors` included.
+;;
+;; With a 19-character root and 600-odd bytes of `doors`, `(>= root-bytes
+;; entry-bytes)` wins and the remedy says "workspace_root alone measures 19 of
+;; those bytes — retry with workspace_root reaching the same tree by a shorter
+;; path". Nineteen bytes of 723: 2.6% named as the cause. A caller who follows
+;; it shortens the one thing that is not the problem and receives the identical
+;; refusal — the loop-with-a-receipt MCP-OP-CENSUS-014 forbids a continuation,
+;; arriving in a remedy instead. That is round-sixteen item 5's own rejected
+;; receipt, from the function written to replace it, one round later.
+;;
+;; Why the round-sixteen witness was green over it: its three fixtures — 500
+;; short entries, one 609-byte entry, a 647-byte root — vary only the two
+;; dimensions the fix weighs. A witness whose fixtures ARE the fix's own two
+;; dimensions cannot see a third.
+;;
+;; So the rule this round states is not "weigh `doors` too". It is that the
+;; cause is DERIVED by walking the candidate's ACTUAL fields and their measured
+;; byte weights and naming the heaviest, and that a named field list is
+;; FORBIDDEN. The witness proves the walk rather than the list: it puts the
+;; bulk in a field whose name appears nowhere in the source, and asserts the
+;; remedy names that field.
+;; ---------------------------------------------------------------------------
+
+(defn- overflow-remedy-for
+  "The remedy the tool would publish for a candidate too large to send."
+  [candidate]
+  (let [{:keys [overflow]} (census-tool/continuation candidate)]
+    (is (some? overflow)
+        (str "the candidate FITTED, so this drive measures nothing: "
+             (census/utf8-byte-count (json/generate-string candidate))
+             " bytes"))
+    {:overflow overflow
+     :remedy (#'census-tool/continuation-overflow-remedy overflow)}))
+
+(defn- bulk-value
+  "A vector of entries weighing about `n` bytes in rendered JSON."
+  [n]
+  (mapv (fn [i] (str "d" i (apply str (repeat (quot n 4) \x)))) (range 4)))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest the-overflow-remedy-names-the-heaviest-field-it-measured
+  (let [parent (temp-dir)
+        ws (io/file parent "ws")]
+    (try
+      (spit-file! (io/file ws "src/app/arm.clj") arm-source)
+      (let [named (.getCanonicalPath ws)]
+
+        (testing "the reviewer's receipt: a doors-heavy continuation on a short root"
+          ;; Driven through `execute-request!`, the way the reviewer reached
+          ;; it, so this is the field behaviour and not a unit of the private
+          ;; measurement.
+          (doseq [doors [(mapv (fn [i] (str "d" i (apply str (repeat 150 \x))))
+                               (range 4))
+                         (mapv (fn [i] (str "d" i (apply str (repeat 80 \x))))
+                               (range 8))
+                         (mapv (fn [i] (str "d" i (apply str (repeat 300 \x))))
+                               (range 2))]]
+            (let [result (census-tool/execute-request!
+                           {:project-root named}
+                           {:files ["src/app/arm.clj" "src/app/missing.clj"]
+                            :doors doors})
+                  remedy (str (:remedy result))]
+              (is (false? (:ok result)))
+              (is (not (str/includes? remedy "the length of the workspace path"))
+                  (str "the remedy blames the workspace path for a "
+                       "continuation whose bulk is doors: " (pr-str remedy)))
+              (is (str/includes? remedy "doors")
+                  (str "the remedy does not name the field it measured: "
+                       (pr-str remedy))))))
+
+        (testing "the cause is WALKED, not listed: a field named nowhere in the source"
+          ;; The falsifier for "derived". `synthetic_option` appears in no
+          ;; namespace this witness checks; a measurement built from a named
+          ;; field list cannot name it, whatever that list contains.
+          (let [{:keys [overflow remedy]}
+                (overflow-remedy-for {:workspace_root "/ws"
+                                      :files ["src/a.clj"]
+                                      :synthetic_option (bulk-value 700)})]
+            (is (str/includes? remedy "synthetic_option")
+                (str "the remedy does not name the synthetic field that "
+                     "carries the bulk: " (pr-str remedy)))
+            (is (not (str/includes? remedy "the length of the workspace path"))
+                (str "the remedy blames the workspace path: " (pr-str remedy)))
+            (is (>= (* 2 (:measured overflow)) (:bytes overflow))
+                (str "the named cause accounts for " (:measured overflow)
+                     " of " (:bytes overflow)
+                     " bytes — a minority named as the cause is the defect"))))
+
+        (testing "the heaviest field wins wherever the bulk is put"
+          ;; Three DIFFERENT synthetic names, so nothing can be green by
+          ;; having learned one of them.
+          (doseq [field [:doors :pool_hint :some_future_option]]
+            (let [{:keys [remedy]}
+                  (overflow-remedy-for (assoc {:workspace_root "/ws"
+                                               :files ["src/a.clj"]}
+                                              field (bulk-value 700)))]
+              (is (str/includes? remedy (name field))
+                  (str "the bulk was in " field " and the remedy named "
+                       "something else: " (pr-str remedy))))))
+
+        (testing "the round-sixteen fixtures still answer as round sixteen fixed them"
+          (let [long-root (str "/" (apply str (repeat 647 \r)))
+                {:keys [overflow remedy]}
+                (overflow-remedy-for {:workspace_root long-root
+                                      :files ["src/a.clj"]})]
+            (is (= :workspace-root-length (:cause overflow))
+                (str "a 647-byte root measured as " (pr-str overflow)))
+            (is (str/includes? remedy "the length of the workspace path")))
+
+          (let [{:keys [overflow remedy]}
+                (overflow-remedy-for
+                  {:workspace_root "/ws"
+                   :files (mapv #(str "src/a" % ".clj") (range 500))})]
+            (is (= :entry-count (:cause overflow))
+                (str "500 short entries measured as " (pr-str overflow)))
+            (is (str/includes? remedy "the NUMBER of sources")))
+
+          (let [{:keys [overflow remedy]}
+                (overflow-remedy-for
+                  {:workspace_root "/ws"
+                   :files [(str "src/" (apply str (repeat 609 \e)) ".clj")]})]
+            (is (= :entry-length (:cause overflow))
+                (str "one 609-byte entry measured as " (pr-str overflow)))
+            (is (str/includes? remedy "the length of a source path"))))
+
+        (testing "whatever it names, it named the HEAVIEST field of the candidate"
+          ;; The invariant, computed here from the candidate rather than read
+          ;; back from the code under test: the field the remedy names is the
+          ;; one carrying the most bytes on the wire, so no caller is ever
+          ;; pointed at a minority.
+          (doseq [candidate [{:workspace_root "/ws" :files ["src/a.clj"]
+                              :doors (bulk-value 700)}
+                             {:workspace_root (str "/" (apply str (repeat 647 \r)))
+                              :files ["src/a.clj"]}
+                             {:workspace_root "/ws"
+                              :files (mapv #(str "src/a" % ".clj") (range 500))}
+                             {:workspace_root "/ws" :files ["src/a.clj"]
+                              :some_future_option (bulk-value 700)}]]
+            (let [{:keys [overflow]} (overflow-remedy-for candidate)
+                  weights (into {} (for [[k v] (dissoc candidate :tool)]
+                                     [(name k)
+                                      (census/utf8-byte-count
+                                        (json/generate-string {k v}))]))
+                  heaviest (key (apply max-key val weights))]
+              (is (= heaviest (:field overflow))
+                  (str "the remedy named " (pr-str (:field overflow))
+                       " while the heaviest field is " (pr-str heaviest)
+                       ": " (pr-str weights)))))))
+      (finally
+        (delete-tree! parent)))))
