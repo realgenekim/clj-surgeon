@@ -79,3 +79,12 @@ Independent gate re-run for N3 and T1c (seat, 08:4xZ): === N3 test-js JS_EXIT=0 
 | X stale | 25 | 14 | 5 | 2 | 7 | 11 |
 | P placebo | 31 | 19 | 12 | 2 | 5 | 12 |
 Means, n=3: native raw 38.3 / task-core 23.7 / reads 13.0; receipt raw 22.7 / task-core 10.0 (+1 receipt = 11.0) / reads 3.3. Ratios: **raw 1.7×, task-core 2.2×, reads 3.9×** (reads over the whole task; before-first-patch reads were 11.7 vs 1.3, 8.8×). Ceremony is ~35% of native raw and ~55% of receipt raw — the receipt arms' ceremony did not shrink, so the raw ratio is capped by it exactly as the Amdahl argument said.
+
+## T2 (MCP-attached, the TOOL arm) and T1C (receipt, ceremony-free) — finished 08:5xZ (gates re-running); NC (native, ceremony-free) still running
+| arm | raw | task-core | reads (whole task) | patches | suite runs | ceremony | first call | sites |
+|---|---|---|---|---|---|---|---|---|
+| T2 — agent calls feature_thread itself via MCP (server :8165 from 9139b2c5, conventions installed) | 31 | 18 | 6 | 10 | 2 | 13 | mcp__clj_surgeon__feature_thread (as mandated) | seven files, the six real sites |
+| T1C — receipt injected, CLAUDE.md 3 lines, no beads | 27 | 17 | 6 | 4 | 5 | 10 (tool-list probe, git checks, stdin waits) | — | six real sites |
+| NC — native, ceremony-free (running at 08:5xZ) | 22+ | 21 | 15 | 5 | 1 | **1** | — | — |
+
+Two things T2 shows. (1) The tool arm's raw count (31) is NATIVE-like, but its reads are 6 vs native 12–15: the receipt through MCP still halves discovery; the count is inflated by TEN apply_patch calls (vs 2–3 in the injected arms) — the agent patched piecemeal; whether the MCP text face invites that (whitespace/newline differences between faces) is now a round-four item. (2) Its two post-receipt source reads were the lines immediately AFTER each anchor (transform.clj 668-712, editor-commands.js 438-492): apply_patch needs post-context to insert "after:L680" — the receipt should carry `after_context` per anchor (round-four addendum sent). T1C read the peers (editor-commands.js 230-388, the selection commands) and the test classification — the same two gaps as every receipt arm; ceremony did NOT vanish for it (probe + git checks + waits), so raw fell only 24 → 27?? — no: T1C is 27 vs T1's 24, i.e. no improvement; the ceremony-free change removed beads (~5 calls) and the agent spent them on reads instead. NC's ceremony did collapse (1) — its raw will decide whether ceremony was the diluter for native.
