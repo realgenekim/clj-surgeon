@@ -1,0 +1,164 @@
+(ns clj-surgeon.lane-manifest
+  "TEST-ISO-001 -- THE SINGLE SOURCE OF TRUTH for which JVM test lane every
+   test namespace runs in.
+
+   Round one (docs/observations/2026-09-04-suite-spike-round1.md) measured the
+   49-namespace `clojure -M:clj-surgeon/mcp-test` lane at 716.7 s and found
+   that ELEVEN namespaces which launch cold JVM/bb/CLI child processes are
+   674.0 s of it (94%), while the other 36 finish 865 tests' worth of work in
+   20.9 s. The lane cap the fleet pays on every builder brief is bought by
+   those eleven, not by the tests as a body. This manifest is the partition
+   that lets the rest stop queueing behind them.
+
+   THREE THINGS AGREE, AND A WITNESS CHECKS ALL THREE
+   (`clj-surgeon.lane-manifest-test`):
+     1. this map -- what the runner actually runs;
+     2. each namespace's OWN ns metadata `{:lane :fast}` -- readable at the
+        file you are editing, so moving a test needs a reason at the pin;
+     3. the set of `*_test.clj` files on disk -- so a new test namespace that
+        nobody put in a lane fails the suite by name instead of silently
+        never running.
+   The map is the authority; 2 and 3 are cross-checks against it. A namespace
+   the runner is asked for that is not in this map is a TYPED REFUSAL
+   (`clj-surgeon.mcp-test-runner/lane-namespaces`), not a silent skip.
+
+   THE LANE RULES -- what a lane MEANS, not merely which names are in it:
+
+   :fast        No child process. No socket bind. No network. No read of the
+                real `$HOME` or of anything outside the run's own
+                `java.io.tmpdir` subtree -- and TEST-ISO-006 makes that one
+                unrepresentable rather than merely checked: the fast lane's
+                JVM is launched with `-Duser.home` AND `-Djava.io.tmpdir` on
+                a throwaway root that is deleted when the run ends. No write
+                into the repository working tree. Target: under 60 s cold.
+
+   :integration Binds an EPHEMERAL port (`:port 0`) or drives a server
+                in-process, or writes a per-test workspace into the
+                repository root. Per-test unique resources only; still no
+                cold child JVM and still no network.
+
+   :battery     Launches a JVM, `bb`, a CLI, `clj-kondo`, `git`, `strace`, or
+                anything else that costs a cold runtime; or measures the
+                machine (wall-clock deadlines); or reaches the NETWORK.
+                Minutes-scale. Deliberately OUT of the merge-gate lane
+                (`make mcp-test` = fast + integration); `make test` runs it
+                after.
+
+   NETWORK IS A BATTERY PROPERTY, EXPLICITLY. Round one's runtime sampler
+   caught `mcp-prepared-wire-test` spawning `clojure -X:clj-surgeon/mcp`,
+   which spawns `git remote-https origin https://github.com/bhauman/clojure-mcp`
+   through `~/.gitlibs`. No source scan of that namespace names a URL. A fast
+   or integration lane MUST NOT touch the network: those lanes run N-wide
+   from N clones, and a lane whose wall depends on a remote host is not a
+   merge gate."
+  (:require [clojure.string :as str]))
+
+(def lanes
+  "Declaration order is execution order across lanes."
+  [:fast :integration :battery])
+
+(def manifest
+  "test namespace -> lane. THE authority. Adding a JVM test namespace without
+   adding it here fails `clj-surgeon.lane-manifest-test` by name."
+  {
+
+   ;; ---- :fast (35) ----
+   'clj-surgeon.census-pool-test                        :fast
+   'clj-surgeon.lane-manifest-test                      :fast
+   'clj-surgeon.mcp-change-buffer-test                  :fast
+   'clj-surgeon.mcp-combinable-transaction-test         :fast
+   'clj-surgeon.mcp-compact-edit-fields-test            :fast
+   'clj-surgeon.mcp-compact-edit-test                   :fast
+   'clj-surgeon.mcp-compact-location-test               :fast
+   'clj-surgeon.mcp-compact-relations-test              :fast
+   'clj-surgeon.mcp-contract-test                       :fast
+   'clj-surgeon.mcp-create-files-test                   :fast
+   'clj-surgeon.mcp-extraction-plan-test                :fast
+   'clj-surgeon.mcp-extraction-test                     :fast
+   'clj-surgeon.mcp-inspect-contract-test               :fast
+   'clj-surgeon.mcp-inspect-tool-test                   :fast
+   'clj-surgeon.mcp-intent-contract-test                :fast
+   'clj-surgeon.mcp-operation-async-test                :fast
+   'clj-surgeon.mcp-operation-registry-test             :fast
+   'clj-surgeon.mcp-operation-test                      :fast
+   'clj-surgeon.mcp-paths-test                          :fast
+   'clj-surgeon.mcp-prepared-confirmation-test          :fast
+   'clj-surgeon.mcp-prepared-request-test               :fast
+   'clj-surgeon.mcp-program-tool-test                   :fast
+   'clj-surgeon.mcp-read-request-normalization-test     :fast
+   'clj-surgeon.mcp-recovery-test                       :fast
+   'clj-surgeon.mcp-relation-census-round20-test        :fast
+   'clj-surgeon.mcp-schema-test                         :fast
+   'clj-surgeon.mcp-semantic-client-test                :fast
+   'clj-surgeon.mcp-telemetry-test                      :fast
+   'clj-surgeon.mcp-workspace-test                      :fast
+   'clj-surgeon.mcp-write-refusal-test                  :fast
+   'clj-surgeon.outline-differential-test               :fast
+   'clj-surgeon.outline-memory-test                     :fast
+   'clj-surgeon.quoted-var-refs-test                    :fast
+   'clj-surgeon.scope-stream-test                       :fast
+   'clj-surgeon.workspace-onboarding-test               :fast
+
+   ;; ---- :integration (4) ----
+   'clj-surgeon.mcp-hot-verify-test                     :integration
+   'clj-surgeon.mcp-server-test                         :integration
+   'clj-surgeon.mcp-http-server-test                    :integration
+   'clj-surgeon.mcp-tool-test                           :integration
+
+   ;; ---- :battery (11) ----
+   'clj-surgeon.admit-patch-test                        :battery
+   'clj-surgeon.core-discovery-test                     :battery
+   'clj-surgeon.mcp-alias-migration-test                :battery
+   'clj-surgeon.mcp-cold-verify-test                    :battery
+   'clj-surgeon.mcp-prepared-wire-test                  :battery
+   'clj-surgeon.mcp-process-test                        :battery
+   'clj-surgeon.mcp-relation-census-launcher-test       :battery
+   'clj-surgeon.mcp-relation-census-test                :battery
+   'clj-surgeon.reader-eval-fence-test                  :battery
+   'clj-surgeon.repository-hygiene-test                 :battery
+   'clj-surgeon.txn-journal-test                        :battery
+   })
+
+(def excluded
+  "Test namespaces that are on disk and in NO JVM lane, each with the reason
+   it is not. An entry here is a DECLARED omission; anything else on disk
+   that is in neither `manifest` nor `test/run_all.clj` fails the witness."
+  {'clj-surgeon.analyzer-contract-test
+   "own serialized runner -- `make analyzer-contract-test` (alias :clj-surgeon/analyzer-contract-test)"
+
+   'clj-surgeon.memory.journal-green-test
+   "transaction-kernel memory witness -- `make memory-red-kernel`, exclusive suite.lock"
+
+   'clj-surgeon.memory.oom-reproduction-test
+   "transaction-kernel memory witness -- `make memory-red-kernel`, exclusive suite.lock"
+
+   'clj-surgeon.worktree-lifecycle-prune-test
+   "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"
+
+   'clj-surgeon.worktree-lifecycle-recovery-test
+   "own Make target -- `make worktree-lifecycle-recovery-test` (Makefile:834)"
+
+   'clj-surgeon.mcp-formatter-test
+   "ORPHAN as of 2026-09-04: required by no runner and no Make target. Declared here rather than silently adopted; adopting it is a round-three decision with its own measurement."})
+
+(defn lane-of
+  "The declared lane for `ns-sym`, or nil when it is not in the manifest."
+  [ns-sym]
+  (get manifest ns-sym))
+
+(defn namespaces-for
+  "The manifest's namespaces for `lane`, in manifest order."
+  [lane]
+  (->> manifest (filter (comp #{lane} val)) (map key) sort vec))
+
+(defn refusal-message
+  "The typed refusal for a namespace the runner was asked to run that carries
+   no lane declaration. Names the subject, the rule, and the remedy."
+  [ns-sym]
+  (format (str "lane-refused: %s carries no lane declaration. Every JVM test "
+               "namespace must appear in clj-surgeon.lane-manifest/manifest "
+               "with one of %s AND carry the same {:lane ...} in its own ns "
+               "metadata (TEST-ISO-001). Add it to the manifest and to the ns "
+               "form, or declare why it belongs to no JVM lane in "
+               "clj-surgeon.lane-manifest/excluded.")
+          ns-sym (str/join ", " (map str lanes))))
