@@ -1226,12 +1226,18 @@
 (defn- error-type-value-sites
   "Every `:error-type`/`:error_type` map entry of a source, with its value node."
   [text]
-  (for [candidate (node-seq (parser/parse-string-all text))
+  (for [top-level (significant-children (parser/parse-string-all text))
+        candidate (node-seq top-level)
         :when (= :map (n/tag candidate))
         [key-node value-node] (partition 2 (significant-children candidate))
         :let [key-value (node-value key-node)]
         :when (contains? #{:error-type :error_type} key-value)]
+    ;; @spec MCP-OP-ALIAS-059
+    ;; the enclosing TOP-LEVEL form travels with the site: a bare symbol
+    ;; forwards or mints according to what it was bound to, and that binding
+    ;; lives outside the value expression
     {:value value-node
+     :context top-level
      :literal (literal-kind value-node)
      :text (try (n/string value-node) (catch Exception _ "<unprintable>"))}))
 
@@ -1256,41 +1262,197 @@
      some first second filter remove keep seq})
 
 ;; @spec MCP-OP-ALIAS-059
+(def ^:private kind-minting-symbols
+  "The functions that BUILD a name out of data, wherever they appear.
+
+  Round-sixteen review finding 1: `kind-forwarding-heads` is an allowlist of
+  CALL HEADS, and a call head is not where a threading macro puts its
+  functions. `(some-> kind name keyword)` has exactly one list, whose head is
+  `some->` — an allowed selecting head — and the minting `keyword` is a bare
+  symbol in argument position that the head test never looked at. So the
+  minting side is read as a set of SYMBOLS matched anywhere in the expression,
+  not as a set of heads: a name-builder is a mint whether it is called
+  directly, threaded into, or passed to something else."
+  '#{keyword symbol str format subs})
+
+;; @spec MCP-OP-ALIAS-059
+(def ^:private keyword-selector-heads
+  "Heads whose keyword ARGUMENTS are selectors rather than kind sources.
+
+  `(some :error-type (remove :ok checks))` — the change buffer's own forward —
+  passes two keywords as FUNCTIONS: each names a field to read out of an
+  incoming refusal and can mint no name. Everywhere else a keyword literal is
+  a value the expression can hand back as the kind, which is exactly how a
+  literal table mints invisibly: `(get {:a :brand-new-kind} kind)` selects,
+  and the thing it selects is a fresh keyword no `(refusal :kw` scan can see."
+  '#{some first second filter remove keep seq map mapcat})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- mint-evidence
+  "Every reason `node` MINTS a kind rather than forwarding one, form-DEEP.
+
+  Two shapes, both read at every depth and in every position:
+
+  1. a symbol from `kind-minting-symbols` ANYWHERE — head, argument, or
+     threaded — because a name-builder builds a name from whichever position
+     it is called; and
+  2. a keyword LITERAL that is not a lookup head and not a keyword-as-function
+     argument of a `keyword-selector-heads` call, because such a keyword is a
+     value the expression can return as the kind. A literal table's entries
+     are exactly this shape, and `get`/`get-in` against one was exempt while
+     the kind it yields appeared in no source scan.
+
+  Returned as reasons rather than as a boolean so a witness that fails can say
+  WHICH shape it found."
+  ([node] (mint-evidence node nil false false))
+  ([node parent-head head? selector?]
+   (let [value (node-value node)
+         list? (= :list (n/tag node))
+         kids (try (when (seq (n/children node)) (significant-children node))
+                   (catch Exception _ nil))
+         child-head (when list? (node-value (first kids)))]
+     (concat
+       (when (and (symbol? value) (contains? kind-minting-symbols value))
+         [(str "mints with `" value "`")])
+       (when (and (keyword? value)
+                  (not head?)
+                  (not selector?)
+                  (not (contains? keyword-selector-heads parent-head)))
+         [(str "reads the literal kind source `" value "`")])
+       (mapcat (fn [index child]
+                 (mint-evidence child
+                                (when list? child-head)
+                                (and list? (zero? index))
+                                ;; @spec MCP-OP-ALIAS-059
+                                ;; a `get`/`get-in` KEY or PATH names a field
+                                ;; to read out of an incoming map and can mint
+                                ;; nothing — `(get-in data [:admission
+                                ;; :error-type])` is mcp_cold_verify's own
+                                ;; forward. The COLLECTION argument is not a
+                                ;; selector: a keyword inside it is a value the
+                                ;; expression can hand back as the kind, which
+                                ;; is exactly how a literal table mints.
+                                (or selector?
+                                    (and list?
+                                         (contains? '#{get get-in} child-head)
+                                         (= 2 index)))))
+               (range)
+               (or kids []))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- binding-values-in
+  "Every `let`-style binding of `context`, by the symbol it binds.
+
+  Round-sixteen review finding 1's third shape: a kind LITERAL bound one line
+  above the site and relayed as a bare symbol. A bare symbol is the purest
+  forwarding shape there is — `authority-error` in `mcp_cold_verify` is one —
+  so the symbol cannot be judged on its own; it is judged on what it was bound
+  to, inside the same top-level form."
+  [context]
+  (reduce (fn [acc [bound value-node]]
+            (update acc bound (fnil conj []) value-node))
+          {}
+          (for [candidate (node-seq context)
+                :when (= :list (n/tag candidate))
+                :let [kids (significant-children candidate)
+                      head (node-value (first kids))
+                      binding-vector (second kids)]
+                :when (contains? '#{let let* loop if-let when-let if-some
+                                    when-some binding with-open with-local-vars
+                                    doseq for}
+                                 head)
+                :when (and binding-vector (= :vector (n/tag binding-vector)))
+                [name-node value-node] (partition 2 (significant-children
+                                                      binding-vector))
+                :let [bound (node-value name-node)]
+                :when (symbol? bound)]
+            [bound value-node])))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- binding-mints?
+  "Whether a symbol BOUND to this expression carries a minted kind.
+
+  A bound symbol cannot be judged by `mint-evidence` alone: the change
+  buffer's `checks` is bound to a vector of check maps whose own `:ok` and
+  `:error-type` keys are keyword literals, and reading those as kind sources
+  put the spurious kind `ok` back into the enumeration. What separates that
+  from the shape the review named — a kind literal bound one line above and
+  relayed as a bare symbol — is a RUNTIME SOURCE: `checks` is computed from
+  incoming values, while `:planted-let-kind` and `{:a :brand-new-kind}` are
+  pure literal data that can only ever hand back the name written in them.
+
+  So a binding mints when it BUILDS a name (`keyword`, `str`, … appear in it),
+  or when it carries `mint-evidence` and names no symbol at all — a literal,
+  or a literal table, wearing a forward's clothes."
+  [node]
+  (let [symbols (set (for [candidate (node-seq node)
+                           :let [value (node-value candidate)]
+                           :when (symbol? value)]
+                       value))]
+    (boolean (or (some kind-minting-symbols symbols)
+                 (and (seq (mint-evidence node)) (empty? symbols))))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn- forwarded-kind-expression?
   "Whether `node` FORWARDS a kind rather than MINTING one.
 
-  Two conditions, both required:
+  Three conditions, all required:
 
   1. every call in the expression uses a head from `kind-forwarding-heads`, or
      is a keyword lookup (a keyword in head position is a lookup and can mint
-     no name whatever the keyword is); and
-  2. the expression names at least one runtime SOURCE — a symbol outside head
+     no name whatever the keyword is);
+  2. the expression carries no `mint-evidence` — no name-builder in ANY
+     position and no keyword literal that is a value source rather than a
+     selector; and
+  3. the expression names at least one runtime SOURCE — a symbol outside head
      position, or such a lookup — so a bare literal composition cannot pass by
      containing no calls at all.
+
+  Where `context` is given — the enclosing top-level form — every symbol the
+  expression relays is additionally resolved through that form's `let`-style
+  bindings and its bound expression checked for `mint-evidence`. The bound
+  expression is NOT held to condition 1: a symbol bound to an ordinary helper
+  call, `(analyzer-authority-error-type process)`, is a forward through a
+  named function and not a mint, while a symbol bound to `:planted-kind` is a
+  literal wearing a forward's clothes.
 
   This is what makes the `forwarded-refusal-kind` marker a CHECKED capability
   rather than a comment: a marker on a site that mints is now named by the
   guard exactly as an unmarked one is."
-  [node]
-  (let [nodes (node-seq node)
-        lists (filter #(= :list (n/tag %)) nodes)
-        heads (set (keep #(first (significant-children %)) lists))
-        ;; a KEYWORD in head position is always a map lookup and can never
-        ;; mint a name, whatever the keyword is
-        lookup? (fn [candidate]
-                  (keyword? (node-value (first (significant-children candidate)))))
-        head-forwards? (fn [candidate]
-                         (or (lookup? candidate)
-                             (contains? kind-forwarding-heads
-                                        (node-value
-                                          (first (significant-children
-                                                   candidate))))))
-        source? (fn [candidate]
-                  (or (and (symbol? (node-value candidate))
-                           (not (contains? heads candidate)))
-                      (and (= :list (n/tag candidate)) (lookup? candidate))))]
-    (and (every? head-forwards? lists)
-         (boolean (some source? nodes)))))
+  ([node] (forwarded-kind-expression? node nil))
+  ([node context]
+   (let [nodes (node-seq node)
+         lists (filter #(= :list (n/tag %)) nodes)
+         heads (set (keep #(first (significant-children %)) lists))
+         ;; a KEYWORD in head position is always a map lookup and can never
+         ;; mint a name, whatever the keyword is
+         lookup? (fn [candidate]
+                   (keyword? (node-value (first (significant-children candidate)))))
+         head-forwards? (fn [candidate]
+                          (or (lookup? candidate)
+                              (contains? kind-forwarding-heads
+                                         (node-value
+                                           (first (significant-children
+                                                    candidate))))))
+         source? (fn [candidate]
+                   (or (and (symbol? (node-value candidate))
+                            (not (contains? heads candidate)))
+                       (and (= :list (n/tag candidate)) (lookup? candidate))))
+         bindings (if context (binding-values-in context) {})
+         relayed (set (for [candidate nodes
+                            :let [value (node-value candidate)]
+                            :when (and (symbol? value)
+                                       (not (contains? heads candidate)))]
+                        value))]
+     (and (every? head-forwards? lists)
+          (empty? (mint-evidence node))
+          ;; EVERY binding of a relayed symbol, not the last one read: a
+          ;; symbol bound twice in one top-level form forwards only if no
+          ;; binding of it mints
+          (every? (fn [symbol-name]
+                    (not-any? binding-mints? (get bindings symbol-name)))
+                  relayed)
+          (boolean (some source? nodes))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- forwarding-marked?
@@ -1315,7 +1477,7 @@
   control."
   [text site]
   (and (forwarding-marked? text (:text site))
-       (forwarded-kind-expression? (:value site))))
+       (forwarded-kind-expression? (:value site) (:context site))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- reachable-entrance-source-text
