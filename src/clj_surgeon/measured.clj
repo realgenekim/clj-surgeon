@@ -438,7 +438,7 @@
   when a new clock site publishes a name this set does not carry. A name is in
   here because a clock produced it — never because it is merely a number."
   #{:elapsed_ms :elapsed-ms :job_elapsed_ms :inspection_elapsed_ms
-    :scan_ms :window-ns :max-ns :wall-ms})
+    :phases_elapsed_ms :scan_ms :window-ns :max-ns :wall-ms})
 
 (defn attach
   "Add measured `fields` to `x`'s measured block, keeping what is already there.

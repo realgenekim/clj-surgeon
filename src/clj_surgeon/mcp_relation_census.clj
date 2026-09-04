@@ -15,6 +15,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.relation-census :as census]
    [clojure.string :as str])
   (:import
@@ -80,12 +81,21 @@
                 "guarded" {:type "array"}
                 "unknown" {:type "array"}
                 "pool_size" {:type "integer"}
-                "phases_elapsed_ms" {:type "object"}
                 "next_action" {:type "string"}
                 "next_call" {:type "object"}
                 "error_type" {:type "string"}
-                "elapsed_ms" {:type "number" :minimum 0}}
-   :required ["ok" "operation" "elapsed_ms"]})
+                ;; @spec MCP-OP-TIME-004
+                ;; @spec MCP-OP-TIME-005
+                ;; The request clock AND the per-phase clocks live in the
+                ;; measured partition, like every other public MCP result's.
+                ;; This tool landed while the partition was landing on a
+                ;; branch, so its schema was written in the old wire: a
+                ;; top-level `elapsed_ms` the finalizer no longer produces and
+                ;; a top-level `phases_elapsed_ms` the partition relocates,
+                ;; with no `measured` block, which every other canonical
+                ;; output schema requires.
+                "measured" mcp-operation/measured-output-schema}
+   :required ["ok" "operation" "measured"]})
 
 (def census-annotations
   {:title "Relation Census"
@@ -816,41 +826,52 @@
         unrecognised (census/unrecognised-summary
                        (:unrecognised merged) max-listed-unrecognised)]
     (bound-receipt
-      (into {}
-            (remove (comp nil? val))
-            ;; The discovery facts are the SAME facts every refusal publishes,
-            ;; built by the same kernel: a success is not a different receipt
-            ;; shape with evidence rules of its own.
-            (merge
-              {:ok true
-               :operation "relation-census"
-               :census_version census/census-version
-               ;; A census that skipped a source in scope is not complete, and
-               ;; says so in the same receipt that names what it skipped.
-               :read_complete (empty? oversized)
-               :files (:files merged)
-               :arms (:arms merged)
-               :sites (:sites merged)
-               :outside_arms (:outside-arms merged)
-               :counts counts
-               :by_file (into (sorted-map)
-                              (take max-listed-files
-                                    (map (fn [[f v]]
-                                           [f (assoc (:counts v)
-                                                     :arms (:arms v)
-                                                     :sites (:sites v))])
-                                         (:by-file merged))))
-               :raw (listed sites :raw)
-               :guarded (listed sites :guarded)
-               :unknown (listed sites :unknown)
-               :pool_size pool-size
-               :pool_size_requested (when (and requested-pool
-                                               (> requested-pool pool-size))
-                                      requested-pool)
-               :phases_elapsed_ms phases
-               :unrecognised_calls unrecognised
-               :next_action (next-action counts unrecognised)}
-              facts))
+      (merge
+        (into {}
+              (remove (comp nil? val))
+              ;; The discovery facts are the SAME facts every refusal
+              ;; publishes, built by the same kernel: a success is not a
+              ;; different receipt shape with evidence rules of its own.
+              (merge
+                {:ok true
+                 :operation "relation-census"
+                 :census_version census/census-version
+                 ;; A census that skipped a source in scope is not complete, and
+                 ;; says so in the same receipt that names what it skipped.
+                 :read_complete (empty? oversized)
+                 :files (:files merged)
+                 :arms (:arms merged)
+                 :sites (:sites merged)
+                 :outside_arms (:outside-arms merged)
+                 :counts counts
+                 :by_file (into (sorted-map)
+                                (take max-listed-files
+                                      (map (fn [[f v]]
+                                             [f (assoc (:counts v)
+                                                       :arms (:arms v)
+                                                       :sites (:sites v))])
+                                           (:by-file merged))))
+                 :raw (listed sites :raw)
+                 :guarded (listed sites :guarded)
+                 :unknown (listed sites :unknown)
+                 :pool_size pool-size
+                 :pool_size_requested (when (and requested-pool
+                                                 (> requested-pool pool-size))
+                                        requested-pool)
+                 :unrecognised_calls unrecognised
+                 :next_action (next-action counts unrecognised)}
+                facts))
+        ;; @spec MCP-OP-TIME-004
+        ;; @spec MCP-OP-CENSUS-013
+        ;; The phase clocks are published INSIDE the measured block, at the
+        ;; level the request clock joins them at, rather than beside it as a
+        ;; top-level field. The intent is unchanged — every phase that ran is
+        ;; still named with its own figure — only the PARTITION moves, and it
+        ;; moves because a clock-derived field outside the block reaches the
+        ;; hashed parity subject by a second route the projection is blind to.
+        ;; Built HERE rather than left to the finalizer's relocation so that
+        ;; `bound-receipt` measures the bytes the wire actually carries.
+        (measured/measured {:phases_elapsed_ms phases}))
       (or reserved 0))))
 
 ;; ---------------------------------------------------------------------------
@@ -1024,12 +1045,19 @@
   (let [root (mcp-paths/real-root project-root)
         canonical (.toString root)
         want-declared? (boolean (seq doors))
-        t0 (System/nanoTime)
+        ;; @spec MCP-OP-TIME-004
+        ;; @spec MCP-OP-TIME-005
+        ;; Phase ticks through `measured`, so every phase figure is a TAGGED
+        ;; READING carrying its own provenance instead of a bare number this
+        ;; adapter could publish anywhere. Raw `System/nanoTime` here is what
+        ;; the invariant witness named when the two lanes met.
+        t0 (measured/start)
         requested (when (seq files) (mapv str files))
         discovered (when-not requested (candidate-files root))
         scanned (or requested (:files discovered))
         skipped-outside-root (:skipped-outside-root discovered 0)
-        t-discovered (System/nanoTime)
+        discover-ms (measured/elapsed-ms t0)
+        t-discovered (measured/start)
         ;; Both bounds are checked BEFORE any read: a tree the census may not
         ;; finish is refused, never partially read and published as complete.
         ;; A subtree the walk could not ENTER bounds the census exactly as
@@ -1041,7 +1069,7 @@
                               (seq (:unreadable-directories discovered))))
         loaded (when-not bounded?
                  (collect-inputs root scanned {:declared? want-declared?}))
-        t-read (System/nanoTime)
+        read-ms (measured/elapsed-ms t-discovered)
         ;; Two ways one real source reaches the census twice: a caller who
         ;; names it twice, and a walk that finds two paths onto it. Both are
         ;; collapsed, and the receipt reports the SUM — the caller cannot
@@ -1330,11 +1358,11 @@
                      :facts facts
                      :pool-size pool-size
                      :requested-pool requested-pool
-                     :phases (cond-> {:read (/ (- t-read t-discovered) 1e6)
+                     :phases (cond-> {:read read-ms
                                       :classify (get-in planned [:phases :classify])
                                       :merge (get-in planned [:phases :merge])}
                                discovered
-                               (assoc :discover (/ (- t-discovered t0) 1e6)))}))))))))))
+                               (assoc :discover discover-ms))}))))))))))
 
 ;; @spec MCP-OP-CENSUS-017
 (defn- exhaustion-refusal
@@ -1421,10 +1449,16 @@
            " · guarded " (:guarded c 0) " · door " (:door c 0)
            " · set " (:set c 0) " · outside-arms " (:outside_arms result)
            " · pool " (:pool_size result) " · "
-           (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+           ;; @spec MCP-OP-TIME-005
+           ;; The request clock lives in the measured partition now; reading
+           ;; it as a TOP-LEVEL field got `nil` from the finalizer's own
+           ;; output and `format-elapsed-ms` refused it, typed, on a receipt
+           ;; that was otherwise complete. `mcp-operation/elapsed-ms` is the
+           ;; reader every other tool's summary already uses.
+           (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
            "\nnext_action: " (:next_action result)))
     (str "relation_census refused · " (:error_type result)
-         " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+         " · " (mcp-operation/format-elapsed-ms (mcp-operation/elapsed-ms result))
          "\n" (:error result) "\nnothing was written")))
 
 (defn handle-relation-census

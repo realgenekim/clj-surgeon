@@ -2272,7 +2272,10 @@
               ;; source is not expressible in this grammar. So it carries the
               ;; anchor and a remedy, and no continuation at all.
               (not (:ok result))
-              (merge result
+              (merge (-> result
+                         (dissoc :phases)
+                         (merge (measured/measured
+                                  {:phases_elapsed_ms (:phases result)})))
                      {:anchor anchor
                       :remedy (str (:file result)
                                    " could not be censused, and a request "
@@ -2303,7 +2306,17 @@
                                    (:unrecognised result) 5)
                     skipped (:oversized-skipped @scan)]
                 (-> result
-                    (dissoc :all-sites :declared :unrecognised)
+                    ;; @spec MCP-OP-TIME-004
+                    ;; @spec MCP-OP-TIME-005
+                    ;; The plan's phase figures are TAGGED READINGS now, and a
+                    ;; reading published under an ordinary key would reach this
+                    ;; entrance's wire as a record rather than a number. The
+                    ;; CLI has no shared finalizer to relocate it, so it builds
+                    ;; the same partition the tool's receipt does, under the
+                    ;; same field name, here.
+                    (dissoc :all-sites :declared :unrecognised :phases)
+                    (merge (measured/measured
+                             {:phases_elapsed_ms (:phases result)}))
                     ;; The discovery facts are the SAME facts every refusal
                     ;; above publishes, through the same kernel the tool uses.
                     (merge (facts))

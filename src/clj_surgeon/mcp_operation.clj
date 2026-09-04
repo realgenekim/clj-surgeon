@@ -83,6 +83,13 @@
    :properties {"elapsed_ms" {:type "number" :minimum 0}
                 "job_elapsed_ms" {:type "number" :minimum 0}
                 "inspection_elapsed_ms" {:type "number" :minimum 0}
+                ;; @spec MCP-OP-TIME-004
+                ;; A narrower internal phase keeps its own figure, under a
+                ;; phase-specific field of THIS partition. The census's map of
+                ;; per-phase durations is one object rather than four fields
+                ;; because the set of phases that ran is a fact about the
+                ;; request, not a fixed shape.
+                "phases_elapsed_ms" {:type "object"}
                 "scan_ms" {:type "number" :minimum 0}}
    :required ["elapsed_ms"]})
 

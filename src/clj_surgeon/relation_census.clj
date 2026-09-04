@@ -9,6 +9,7 @@
    This namespace is pure and babashka-compatible. Parallelism is injected by
    the caller as `:map-fn`; it changes elapsed time and never the answer."
   (:require
+   [clj-surgeon.measured :as measured]
    [clojure.set :as set]
    [clojure.string :as str]
    [clojure.walk :as walk]
@@ -2210,16 +2211,23 @@
    elapsed time and never the answer."
   [{:keys [inputs doors multi map-fn]
     :or {doors default-doors multi 'fold-event map-fn map}}]
-  (let [t0 (System/nanoTime)
+  ;; @spec MCP-OP-TIME-004
+  ;; @spec MCP-OP-TIME-005
+  ;; The phase clock goes through `measured`, so each phase figure is a TAGGED
+  ;; READING rather than a bare number a caller could publish anywhere. The
+  ;; census landed these as raw `System/nanoTime` differences before the
+  ;; measured partition existed; a raw read here is a clock-derived value with
+  ;; no provenance, and the invariant witness names this fn when it is one.
+  (let [t0 (measured/start)
         results (vec (map-fn #(census-input {:doors doors :multi multi} %) inputs))
-        t1 (System/nanoTime)
+        classify (measured/elapsed-ms t0)
         failed (first (remove :ok results))]
     (if failed
-      (assoc failed :phases {:classify (/ (- t1 t0) 1e6)})
-      (let [merged (merge-results results)
-            t2 (System/nanoTime)]
+      (assoc failed :phases {:classify classify})
+      (let [t1 (measured/start)
+            merged (merge-results results)]
         (assoc merged
                :ok true
                :census-version census-version
-               :phases {:classify (/ (- t1 t0) 1e6)
-                        :merge (/ (- t2 t1) 1e6)})))))
+               :phases {:classify classify
+                        :merge (measured/elapsed-ms t1)})))))

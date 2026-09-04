@@ -91,10 +91,10 @@
       (is (= {:door 2 :set 1 :guarded 1 :raw 1 :unknown 2 :arms 9 :sites 7}
              (get (:by_file result) fixture)))
       (is (= #{:read :classify :merge}
-             (set (keys (:phases_elapsed_ms result))))
+             (set (keys (get-in result [:measured :phases_elapsed_ms]))))
           "an explicit file list discovers nothing, so no discover phase is claimed")
-      (is (every? number? (vals (:phases_elapsed_ms result))))
-      (is (every? #(not (neg? %)) (vals (:phases_elapsed_ms result))))
+      (is (every? number? (vals (get-in result [:measured :phases_elapsed_ms]))))
+      (is (every? #(not (neg? %)) (vals (get-in result [:measured :phases_elapsed_ms]))))
       (is (str/starts-with? (:next_action result) "review the raw sites")))
 
     (testing "the published receipt is bounded and carries only bounded excerpts"
@@ -105,7 +105,7 @@
 ;; @spec MCP-OP-CENSUS-010
 ;; @spec MCP-OP-CENSUS-011
 (deftest pool-size-one-and-pool-size-n-agree-byte-for-byte
-  (let [strip #(-> % (dissoc :elapsed_ms :phases_elapsed_ms :pool_size))
+  (let [strip #(-> % (dissoc :measured :pool_size))
         all [fixture second-fixture helpers]
         serial (run {:files all :pool_size 1})
         parallel (run {:files all :pool_size 8})
@@ -190,8 +190,24 @@
   (is (= "relation_census" (:name census-tool/relation-census-tool)))
   (is (= #'census-tool/handle-relation-census
          (:tool-fn census-tool/relation-census-tool)))
+  ;; @spec MCP-OP-SCHEMA-001
+  ;; @spec MCP-OP-TIME-005
+  ;; The request clock is declared where the finalizer publishes it — inside
+  ;; the measured partition — and the partition is REQUIRED, like every other
+  ;; canonical tool's. A top-level `elapsed_ms` is a shape this tool no longer
+  ;; produces, so declaring one would be a schema promising the old wire.
   (is (= {:type "number" :minimum 0}
-         (get-in census-tool/census-output-schema [:properties "elapsed_ms"])))
+         (get-in census-tool/census-output-schema
+                 [:properties "measured" :properties "elapsed_ms"])))
+  (is (= {:type "object"}
+         (get-in census-tool/census-output-schema
+                 [:properties "measured" :properties "phases_elapsed_ms"]))
+      "the per-phase clocks are declared beside the request clock")
+  (is (nil? (get-in census-tool/census-output-schema [:properties "elapsed_ms"])))
+  (is (nil? (get-in census-tool/census-output-schema
+                    [:properties "phases_elapsed_ms"])))
+  (is (= ["ok" "operation" "measured"]
+         (:required census-tool/census-output-schema)))
   (is (false? (:additionalProperties census-tool/census-tool-schema))))
 
 ;; @spec MCP-OP-CENSUS-010
@@ -653,16 +669,16 @@
   (testing "a census that discovered nothing reports no discover phase"
     (let [result (run {:files [fixture]})]
       (is (= #{:read :classify :merge}
-             (set (keys (:phases_elapsed_ms result)))))
-      (is (nil? (get-in result [:phases_elapsed_ms :parse]))
+             (set (keys (get-in result [:measured :phases_elapsed_ms])))))
+      (is (nil? (get-in result [:measured :phases_elapsed_ms :parse]))
           "the parse phase was a second serial census, not a parse")))
 
   (testing "a census that walked the tree reports what the walk cost"
     (let [result (run {})]
       (is (= #{:discover :read :classify :merge}
-             (set (keys (:phases_elapsed_ms result)))))
+             (set (keys (get-in result [:measured :phases_elapsed_ms])))))
       (is (every? #(and (number? %) (not (neg? %)))
-                  (vals (:phases_elapsed_ms result))))))
+                  (vals (get-in result [:measured :phases_elapsed_ms]))))))
 
   (testing "with doors, door confirmation still refuses an undefined door"
     (let [result (run {:files [fixture] :doors ["made-up-door"]})]
@@ -756,8 +772,8 @@
         mentions? (fn [needle] (boolean (str/includes? design needle)))
         walked (run {})
         named (run {:files [fixture]})
-        phases (set (concat (keys (:phases_elapsed_ms walked))
-                            (keys (:phases_elapsed_ms named))))]
+        phases (set (concat (keys (get-in walked [:measured :phases_elapsed_ms]))
+                            (keys (get-in named [:measured :phases_elapsed_ms]))))]
     (is (= #{:discover :read :classify :merge} phases)
         "the implementation's phase set changed; the design must follow it")
 

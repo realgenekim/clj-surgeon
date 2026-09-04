@@ -90,7 +90,8 @@ the resolver cannot reduce is `:unknown` with reason `:unresolved-target`.
 
 ## Phases
 
-A census publishes `phases_elapsed_ms` for exactly the phases that ran, and for
+A census publishes `phases_elapsed_ms`, inside its `measured` partition, for
+exactly the phases that ran, and for
 no others:
 
 - `discover` — only when the census walked a tree. A caller who names files
@@ -121,7 +122,7 @@ The receipt leads with state, is bounded at 4 KB, and carries no file text
 beyond one-line site sources. It reports `census_version`, per-file counts by
 class, every `:raw` site with its evidence, every `:guarded` site with its guard
 line, every `:unknown` site with its reason, the `:outside-arms` count,
-`phases_elapsed_ms` for each phase that ran, the
+`phases_elapsed_ms` (inside `measured`) for each phase that ran, the
 pool size, and a `next_action`. Listed evidence is trimmed until the receipt
 fits its budget, and the trim is reported.
 
