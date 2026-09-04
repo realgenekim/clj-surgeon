@@ -331,20 +331,32 @@
         _ (Files/copy (.toPath (io/file admission-script)) shim
                       (make-array java.nio.file.CopyOption 0))
         _ (.setExecutable (.toFile shim) true)
-        environment {"CLJ_SURGEON_CLJ_KONDO_REAL" "/bin/sleep"
-                     "CLJ_SURGEON_CLJ_KONDO_LOCK" lock-path
-                     "CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS" "100"
-                     "CLJ_SURGEON_PRESSURE_STATUS" test-pressure-status
-                     "CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD" "1000000"
-                     "CLJ_SURGEON_CLJ_KONDO_EVENTS" test-events-path
-                     "PATH" (System/getenv "PATH")}
+        base-environment {"CLJ_SURGEON_CLJ_KONDO_REAL" "/bin/sleep"
+                          "CLJ_SURGEON_CLJ_KONDO_LOCK" lock-path
+                          "CLJ_SURGEON_PRESSURE_STATUS" test-pressure-status
+                          "CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD" "1000000"
+                          "CLJ_SURGEON_CLJ_KONDO_EVENTS" test-events-path
+                          "PATH" (System/getenv "PATH")}
+        ;; The owner and the waiter need OPPOSITE admission timeouts, and the
+        ;; original gave both the same 100 ms. That number is the WAITER's
+        ;; contract -- it must give up and exit 75 while the lock is held --
+        ;; but for the OWNER it is a race against the box: at load 31 the
+        ;; owner's own admission could not complete inside 100 ms, so it
+        ;; exited 75, never took the lock, and the waiter was then correctly
+        ;; admitted. The test read `expected 75, got 0` and blamed the
+        ;; refusal. One env var doing two opposite jobs is the defect.
+        owner-environment (assoc base-environment
+                                 "CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS"
+                                 (str rendezvous-timeout-ms))
+        waiter-environment (assoc base-environment
+                                  "CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS" "100")
         owner (start-process "/tmp" [(str shim) (str (/ owner-hold-ms 1000.0))]
-                             environment)]
+                             owner-environment)]
     (try
       (is (wait-until rendezvous-timeout-ms
                       #(and (.isFile (io/file lock-path))
                             (str/includes? (slurp lock-path) "agent-shell"))))
-      (let [waiter (start-process "/tmp" [(str shim) "0"] environment)]
+      (let [waiter (start-process "/tmp" [(str shim) "0"] waiter-environment)]
         ;; The CONTRACT is that the waiter is REFUSED (exit 75) because the
         ;; owner holds the lock -- not that the refusal arrives inside one
         ;; second, and not that the owner is still holding by luck.
