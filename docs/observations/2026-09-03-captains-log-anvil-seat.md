@@ -1357,3 +1357,7 @@ The one I own: ad49908c changed the refusal text and I did not run the narrow su
 ## 07:09Z — q5z r16 (Opus): GO-WITH-FIX; round 17 launched. The lesson worth keeping: defence in depth hides a missing witness
 
 Reverting the allowlist alone left the witness green, because the guard and the time budget caught the same attack one layer down. Three layers, one witness, and the witness proved the OUTCOME, never any layer's own contract. Each layer asserts its own contract, or the day one layer is removed nobody learns it. Same shape as the census lane's "an allowlist by type admits every subtype" — the rule is now written into the intent text on the branch.
+
+## 07:10Z — tmp-leak r1 (Opus): NO-GO — the ratchet built to make the mistake impossible fails OPEN on the unknown case
+
+Two lessons the reviewer put words to. "Dead code that reads as defence-in-depth is worse than no fallback, because it is why nobody noticed the check is single-sourced" — the /proc/mounts branch could never run, and its presence made the findmnt dependency invisible. And "source text is not execution" from this seat's own memory, found again: the heap-config gate asserts the printed make line, while the re-exec silently ran the 512 MB suite at 7.8 GB. Round two: fail closed on unknown, literal prefix refusal (the seat guard already has it), streaming fallback, refusal-branch witnesses, root-path sentinel, TMPDIR forwarded, JVM flags forwarded and asserted by execution, all five runners gated.
