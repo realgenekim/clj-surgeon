@@ -1316,3 +1316,79 @@
           (is (str/includes? (str (:body js)) "return re.test(s);")
               "the receipt published a truncated function body"))
         (finally (delete-tree! scratch))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- B2': `(comment …)`, `#_` and multi-line `/* … */`
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-032
+(deftest a-comment-form-a-discard-and-a-block-comment-are-comment-mentions
+  (testing "a hit whose enclosing top-level form is `(comment …)`"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-commentform")]
+      (try
+        (spit (io/file scratch "src/writer/handlers/transform.clj")
+              "\n\n(comment\n  (widgetize {:draft \"x\"}))\n"
+              :append true)
+        (let [{:keys [text structured]}
+              (call! {:subject "widgetize"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})
+              h (leg structured "handler")]
+          (is (= "CANDIDATE" (:status h))
+              (str "a mention inside (comment …) was reported " (:status h)
+                   " with weak_reason " (pr-str (:weak_reason h))))
+          (is (str/includes? (str (:weak_reason h)) "comment"))
+          (is (not (str/includes? text "COMPLETE"))))
+        (finally (delete-tree! scratch)))))
+
+  (testing "a hit discarded by `#_`"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-discard")]
+      (try
+        (spit (io/file scratch "src/writer/handlers/transform.clj")
+              "\n\n#_(widgetize {:draft \"x\"})\n"
+              :append true)
+        (let [{:keys [structured]}
+              (call! {:subject "widgetize"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})
+              h (leg structured "handler")]
+          (is (= "CANDIDATE" (:status h))
+              (str "a mention after #_ was reported " (:status h)))
+          (is (str/includes? (str (:weak_reason h)) "comment")))
+        (finally (delete-tree! scratch))))))
+
+;; @spec MCP-OP-THREAD-032
+(deftest a-multi-line-block-comment-is-a-comment-mention
+  (testing "a subject mentioned only inside a JavaScript /* … */ block"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-blockcomment")]
+      (try
+        (write-file! scratch "resources/public/js/ghost.js"
+                     (str "/*\n"
+                          " * function ghostFeature(x) { return x; }\n"
+                          " */\n"
+                          "function realThing() { return 1; }\n"))
+        (let [{:keys [structured]}
+              (call! {:subject "ghostFeature"
+                      :config smw-conventions
+                      :scope {:workspace_root (.getPath scratch)}})
+              js (leg structured "js-function")]
+          (is (= "CANDIDATE" (:status js))
+              (str "a mention inside /* … */ was reported " (:status js)))
+          (is (str/includes? (str (:weak_reason js)) "comment")))
+        (finally (delete-tree! scratch)))))
+
+  (testing "the predicate itself, over the file's own text"
+    (let [clj "(defn live [] :ok)\n(comment\n  (live))\n#_(live)\n"
+          js "/*\n * ghost()\n */\nghost();\n"
+          commented-out? (or (resolve 'clj-surgeon.mcp-feature-thread/commented-out?)
+                             (constantly ::no-such-predicate))]
+      (is (false? (commented-out? clj 1 false))
+          "a live definition is not commented out")
+      (is (true? (commented-out? clj 3 false))
+          "line 3 is inside a (comment …) form")
+      (is (true? (commented-out? clj 4 false))
+          "line 4 is discarded by #_")
+      (is (true? (commented-out? js 2 true))
+          "line 2 is inside a /* … */ block")
+      (is (false? (commented-out? js 4 true))
+          "line 4 is live code after the block closed"))))
