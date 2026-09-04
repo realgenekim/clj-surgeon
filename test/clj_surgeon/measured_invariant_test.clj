@@ -128,38 +128,73 @@
             (remove #(= measured-namespace-file (site-path % root))
                     (src-files root))))))
 
+(def ^:private clock-source-class-roots
+  "The places a program can obtain a time FROM NOTHING, named as strings.
+
+  Strings, not class symbols, because babashka's sci exposes only an
+  allow-listed set of class symbols -- `java.util.Calendar` does not resolve
+  there at all -- while `Class/forName` reaches every class in both runtimes.
+
+  This is a list of ROOTS, not of classes: everything else is derived by
+  closure below. The round-five review's finding 3 (2026-09-04 §3) is that the
+  previous `clock-source-classes` was itself a hand-written list of eleven
+  classes, so `java.time.OffsetDateTime` -- already trusted enough to sit in
+  the RETURN types -- was never a SOURCE, and `java.util.Calendar` was in
+  neither. Four ordinary spellings fell outside all 46 alternatives."
+  ["java.lang.System"
+   "java.io.File"
+   "java.nio.file.Files"
+   "java.nio.file.attribute.BasicFileAttributes"
+   "java.nio.file.attribute.FileTime"
+   "java.time.Clock"
+   "java.time.Instant"
+   "java.util.Date"
+   "java.util.Calendar"
+   "java.sql.Timestamp"])
+
+(defn- class-named
+  "`Class/forName`, or nil. Nil is a real answer: `java.sql.Timestamp` need not
+   be on every classpath this file runs on."
+  [^String n]
+  (try (Class/forName n) (catch Throwable _ nil)))
+
+(def ^:private time-value-parents
+  "What makes a class a TIME VALUE rather than merely a number holder.
+
+  `java.time.temporal.Temporal` is the JDK's own answer for `java.time`, and it
+  deliberately EXCLUDES `Duration` and `Period`, which are `TemporalAmount`s --
+  an amount is a literal constant in a timeout, not a clock read, and
+  `(Duration/ofSeconds 3)` appears three times in `src/` as exactly that."
+  (keep class-named ["java.time.temporal.Temporal"
+                     "java.util.Date"
+                     "java.util.Calendar"
+                     "java.time.Clock"
+                     "java.nio.file.attribute.FileTime"]))
+
+(defn- time-type?
+  [^Class c]
+  (boolean (and c (not (.isPrimitive c))
+                (some #(.isAssignableFrom ^Class % c) time-value-parents))))
+
 (def ^:private clock-source-classes
-  "The JDK types a program reads a TIME from.
+  "Every JDK class a program reads a TIME from, DERIVED by closure from the
+   roots: a class is a clock source when a clock source hands one back."
+  (loop [seen (set (keep class-named clock-source-class-roots))
+         queue (vec seen)]
+    (if (empty? queue)
+      seen
+      (let [^Class c (peek queue)
+            found (->> (.getMethods c)
+                       (map #(.getReturnType ^java.lang.reflect.Method %))
+                       (filter time-type?)
+                       distinct
+                       (remove seen))]
+        (recur (into seen found) (into (pop queue) found))))))
 
-  The METHOD names are never typed out. The round-four review's second blocking
-  finding (2026-09-04 §2) was a hand-written list of four spellings —
-  `System/nanoTime|System/currentTimeMillis|Instant/now|.getTime` — that did not
-  contain `.lastModified`, so `mcp_admit_tool.clj` published a file mtime into a
-  receipt field inside the parity hash TWO LINES ABOVE the read the same scan
-  had just caught and routed. A list of names is a list of the names somebody
-  thought of; the CLASS is what the ratchet is about, so the spellings below are
-  derived from these classes by reflection."
-  [java.lang.System
-   java.time.Instant
-   java.time.Clock
-   java.time.LocalDateTime
-   java.time.LocalDate
-   java.time.ZonedDateTime
-   java.util.Date
-   java.io.File
-   java.nio.file.Files
-   java.nio.file.attribute.FileTime
-   java.nio.file.attribute.BasicFileAttributes])
-
-(def ^:private clock-return-types
-  "A method is a clock read only if it HANDS BACK a time: an epoch or duration
-   number, or one of the JDK's time values. `File/length` and `Files/size` also
-   return `long` and are not clock reads, which is what the name fragments
-   below are for."
-  #{Long/TYPE Integer/TYPE
-    java.time.Instant java.time.LocalDate java.time.LocalDateTime
-    java.time.LocalTime java.time.ZonedDateTime java.time.OffsetDateTime
-    java.time.Clock java.util.Date java.nio.file.attribute.FileTime})
+(def ^:private clock-numeric-return-types
+  "A raw epoch or duration number. `File/length` and `Files/size` also return
+   `long` and are not clock reads, which is what the name fragments are for."
+  #{Long/TYPE Integer/TYPE})
 
 (def ^:private clock-name-fragments
   "The morphemes a JDK time accessor is spelled with. Case-carrying fragments
@@ -170,42 +205,76 @@
    "Date" "Clock" "clock" "ystem"])
 
 (defn- derived-clock-expressions
-  "Every spelling of a clock read, derived from `clock-source-classes` by
-   reflection: `Class/method` for a static, `.method` for an instance method.
+  "Every spelling of a clock read, derived from `clock-source-classes`:
 
-  Sorted and distinct, so the pattern is deterministic and a diff of it is
-  readable."
+  - a STATIC returning a time value is a factory and needs no clock morpheme in
+    its name -- that is what makes `Calendar/getInstance` and
+    `OffsetDateTime/now` visible;
+  - any method returning a raw `long`/`int` needs a clock morpheme, so
+    `File/length` stays out;
+  - an INSTANCE method returning a time value needs one too, so `.plus`,
+    `.with` and `.parse` do not become alternatives;
+  - a public ZERO-ARGUMENT CONSTRUCTOR of a time value is a clock read that
+    `.getMethods` can never see -- `(java.util.Date.)` -- and is spelled
+    `SimpleName.`;
+  - every static spelling is ALSO emitted as the dot special form,
+    `(. Class method`, whose text contains no `Class/method` at all."
   []
   (vec
    (sort
     (distinct
-     (for [^Class c clock-source-classes
-           ^java.lang.reflect.Method m (.getMethods c)
-           :let [nm (.getName m)]
-           :when (and (contains? clock-return-types (.getReturnType m))
-                      (some #(str/includes? nm %) clock-name-fragments))]
-       (if (java.lang.reflect.Modifier/isStatic (.getModifiers m))
-         (str (.getSimpleName c) "/" nm)
-         (str "." nm)))))))
+     (concat
+      (for [^Class c clock-source-classes
+            ^java.lang.reflect.Method m (.getMethods c)
+            :let [nm (.getName m)
+                  rt (.getReturnType m)
+                  static? (java.lang.reflect.Modifier/isStatic (.getModifiers m))
+                  morpheme? (some #(str/includes? nm %) clock-name-fragments)]
+            :when (or (and static? (time-type? rt))
+                      (and (contains? clock-numeric-return-types rt) morpheme?)
+                      (and (time-type? rt) morpheme?))
+            spelling (if static?
+                       [(str (.getSimpleName c) "/" nm)
+                        (str "(. " (.getSimpleName c) " " nm)]
+                       [(str "." nm)])]
+        spelling)
+      (for [^Class c clock-source-classes
+            :when (time-type? c)
+            ^java.lang.reflect.Constructor k (.getConstructors c)
+            :when (zero? (alength (.getParameterTypes k)))]
+        (str (.getSimpleName c) ".")))))))
 
 (defn- clock-expression-alternative
   "One derived spelling as a regex alternative.
 
-  A static spelling is quoted literally, and it deliberately matches a
-  fully-qualified call too (`java.time.Instant/now` contains `Instant/now`). An
-  instance spelling gets a trailing word boundary so `.lastModified` does not
-  swallow `.lastModifiedTime` — both are separate alternatives and the scan
-  should say which one it found."
+  An INSTANCE spelling gets a trailing word boundary so `.lastModified` does
+  not swallow `.lastModifiedTime` -- both are separate alternatives and the
+  scan should say which one it found. A CONSTRUCTOR spelling gets a LEADING
+  word boundary, so `Date.` does not match inside `LocalDate.`. A DOT SPECIAL
+  FORM is matched with flexible whitespace, because `(.  System  nanoTime)` is
+  the same read. A STATIC spelling is quoted literally, and it deliberately
+  matches a fully-qualified call too (`java.time.Instant/now` contains
+  `Instant/now`)."
   [expression]
-  (if (str/starts-with? expression ".")
+  (cond
+    (str/starts-with? expression ".")
     (str "\\" expression "\\b")
+
+    (str/starts-with? expression "(. ")
+    (str "\\(\\.\\s+"
+         (str/join "\\s+" (map #(java.util.regex.Pattern/quote %)
+                               (rest (str/split expression #"\s+"))))
+         "\\b")
+
+    (str/ends-with? expression ".")
+    (str "\\b" (java.util.regex.Pattern/quote (subs expression 0 (dec (count expression)))) "\\.")
+
+    :else
     (java.util.regex.Pattern/quote expression)))
 
-(def ^:private clock-pattern
-  "Every way a JVM program reads a clock, DERIVED from the JDK rather than
-   listed."
-  (re-pattern (str/join "|" (map clock-expression-alternative
-                                 (derived-clock-expressions)))))
+(def clock-spellings
+  "The derivation's output, held so a witness can assert what it produced."
+  (derived-clock-expressions))
 
 (def clock-expressions-the-ratchet-must-carry
   "One representative spelling per JDK time shape, with the site that proved it
@@ -236,6 +305,24 @@
    ".getTimeInMillis" "Calendar's epoch accessor"
    "(. System nanoTime" "the DOT SPECIAL FORM: the text is not `System/nanoTime` at all"
    "Date." "a CONSTRUCTOR reads the clock, and a constructor is not a method, so .getMethods cannot see one"})
+
+(def ^:private clock-pattern
+  "Every way a JVM program reads a clock, DERIVED from the JDK rather than
+   listed, unioned with the floor above.
+
+   The union is a FLOOR, not a list. Babashka is a GraalVM native image and
+   carries reflection metadata only for the classes it registered:
+   `(.getMethods (Class/forName \"java.util.Calendar\"))` answers 57 methods on
+   the JVM and 6 under babashka, so `Calendar/getInstance` and
+   `.getTimeInMillis` are underivable there and the scan would otherwise be
+   weaker in the runtime the scanning gate actually runs in. The witness below
+   asserts the derivation produces every floor entry on a runtime whose
+   reflection is complete, so the floor is derived evidence rather than a list
+   of the spellings somebody thought of."
+  (re-pattern
+   (str/join "|" (map clock-expression-alternative
+                      (sort (distinct (concat clock-spellings
+                                              (keys clock-expressions-the-ratchet-must-carry))))))))
 
 (def ^:private laundering-sentinel
   "A number no clock produces and no fixture carries, so finding it outside a
@@ -580,10 +667,14 @@
    {:reads 1 :channel :control :why "lock stamp on disk"}
    ["src/clj_surgeon/workspace_onboarding.clj" "await-cclsp-workspace!"]
    {:reads 2 :channel :control :why "readiness poll deadline"}
+   ["src/clj_surgeon/worktree_lifecycle.clj" "instant-string?"]
+   {:reads 1 :channel :control :why "parses a CALLER's timestamp string to decide whether it is one; the predicate returns a boolean and the parsed value is discarded"}
+   ["src/clj_surgeon/worktree_lifecycle.clj" "valid-future-expiry?"]
+   {:reads 1 :channel :control :why "compares two CALLER-supplied timestamp strings; returns a boolean, publishes neither"}
    ["src/clj_surgeon/worktree_lifecycle_io.clj" "capture-inventory"]
    {:reads 1 :channel :control :why "inventory captured-at stamp"}
    ["src/clj_surgeon/worktree_lifecycle_io.clj" "issue-current?"]
-   {:reads 1 :channel :control :why "issue freshness cutoff"}})
+   {:reads 2 :channel :control :why "issue freshness cutoff: `Instant/now` against a CALLER-supplied expiry string it parses; the predicate returns a boolean"}})
 
 (def escape-hatch-allow-list
   "Every form in `src/` that calls a verb handing back an UNTAGGED number.
@@ -938,18 +1029,47 @@
 
 
 ;; @spec MCP-OP-TIME-007
+(def ^:private jdk-reflection-is-complete?
+  "Can this runtime reflect over a JDK class it was not built to know about?
+
+  Babashka is a GraalVM native image and carries reflection metadata only for
+  registered classes: `java.util.Calendar` answers 57 methods on the JVM and 6
+  under babashka. The derivation is therefore PROVEN on the JVM and RUN off the
+  floor under babashka -- and this predicate is measured rather than sniffed
+  from a property, so a future babashka that registers the class simply starts
+  proving the same assertions."
+  (delay (<= 20 (count (.getMethods ^Class (class-named "java.util.Calendar"))))))
+
+;; @spec MCP-OP-TIME-007
 (deftest the-derived-clock-pattern-carries-every-jdk-time-shape
   (testing "the derivation, not a list, is what makes .lastModified visible"
     (let [derived (set (derived-clock-expressions))
-          missing (vec (sort (remove derived
+          reflection-thin (set (when-not @jdk-reflection-is-complete?
+                                 ["Calendar/getInstance" ".getTimeInMillis"
+                                  "(. Calendar getInstance"]))
+          missing (vec (sort (remove (some-fn derived reflection-thin)
                                      (keys clock-expressions-the-ratchet-must-carry))))]
       (is (= [] missing)
           (str "the JDK derivation no longer produces these clock spellings, so "
                "a read written with one of them would be invisible to the scan: "
                (pr-str missing)))
-      (is (< 20 (count derived))
+      (is (< 60 (count derived))
           (str "the derivation produced only " (count derived)
-               " spellings; reflection is not finding the JDK time methods")))))
+               " spellings; reflection is not finding the JDK time methods"))
+      (is (contains? derived "Date.")
+          "a zero-argument constructor of a time value is not derived, so "
+          )
+      (is (contains? derived "(. System nanoTime")
+          "the dot special form is not derived")
+      (is (< 15 (count clock-source-classes))
+          (str "the class CLOSURE produced only " (count clock-source-classes)
+               " classes; it is a hand-written list again"))
+      (is (every? #(contains? (set (map (fn [^Class c] (.getName c)) clock-source-classes)) %)
+                  ["java.time.OffsetDateTime" "java.time.LocalTime" "java.util.Date"])
+          (str "a class the round-five review named is not in the closure: "
+               (pr-str (sort (map (fn [^Class c] (.getName c)) clock-source-classes)))))
+      (is (not-any? #(str/includes? (.getName ^Class %) "Duration") clock-source-classes)
+          "Duration is a TemporalAmount, and (Duration/ofSeconds 3) is a timeout constant"))))
 
 ;; @spec MCP-OP-TIME-007
 (deftest the-clock-scanner-catches-every-jdk-time-shape-planted-in-a-receipt
@@ -1306,7 +1426,8 @@
              [:inside-a-string-keyed-sorted-map
               {:ok true :staged (sorted-map "a.clj" 1
                                             "b.clj" (measured/reading sentinel))}
-              :refused]]]
+              :refused]
+]]
       (let [[outcome payload] (publish-outcome domain)]
         (is (= expected outcome)
             (str placement " was " outcome " (" (pr-str payload)
