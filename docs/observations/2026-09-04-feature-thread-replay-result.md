@@ -284,3 +284,15 @@ files — no analysis, whole-file derived pre-image binding, written atomically 
 verified by the same inline commands — with the receipt naming which files were analysed and which were opaque. Until
 then any gate-mandated arm on this task is a functional failure by construction, and the mandate text was wrong to
 forbid apply_patch for files the gate cannot take.
+
+**CORRECTION to the G2 entry (minutes later, from the refusal text itself):** the gate refused with a typed kind and a
+correct remedy — `unsupported-patch-target · The gate admits Clojure and EDN sources only; apply these natively:
+resources/public/js/editor-commands.js, test/js/browser_runtime_classic_script_test.js` — and my arm mandate ("do not
+apply_patch first") forbade exactly that remedy, so the agent stopped. The functional failure was the mandate, not the
+gate. The gate's actual defect is smaller: its `next_call` after that refusal is the SAME call that was just refused
+(mode preview, same patch_sha256, "resend the same patch text"), so an agent following next_call loops (two identical
+refusals, 39.66 ms and 8.75 ms). Sent to the r17 review as an attack. G3/GN3 relaunched with the mandate the gate
+prescribes: JS natively, clj/edn through the gate with inline verify.
+G3/GN3 pre-registration (21:24Z): same task, same clones, same server (8173); mandate = JS natively, clj/edn via the gate with
+inline verify. G3 raw ≤ 14, wall ≤ 6.5 min (native control), ≥ 1 admit call ADMITTED, 0 agent-run suite invocations;
+withdrawal: G3 raw > 18 or wall > 6.5, or the same refusal twice.
