@@ -1064,3 +1064,19 @@ fanout-selftests:
 		exit 1; \
 	fi; \
 	echo "fanout-selftests: all $$ran modes passed"
+
+clock-spellings-manifest:
+	# @spec MCP-OP-TIME-007
+	# Regenerate the JVM-derived clock-spelling manifest that
+	# `the-babashka-clock-floor-is-the-complete-jvm-difference` compares this
+	# runtime's derivation against. The SCANNING gate runs under babashka,
+	# whose reflection is thin, so the floor it needs can only be computed on a
+	# runtime whose reflection is complete -- and a hand-computed floor was
+	# short by one entry for two rounds with nothing checking it.
+	# NOTE the -Sdeps alias rather than :clj-surgeon/mcp-test: that alias pins
+	# :main-opts to the suite runner, so -e and -i are ignored and every
+	# attempt runs the whole suite instead (the round-six reviewer hit the same
+	# wall trying to isolate admit-patch-test). The namespace needs only `test`
+	# on the path.
+	clojure -Sdeps '{:aliases {:clock-manifest {:extra-paths ["test"]}}}' \
+	        -M:clock-manifest -i test/clock_spellings_manifest.clj
