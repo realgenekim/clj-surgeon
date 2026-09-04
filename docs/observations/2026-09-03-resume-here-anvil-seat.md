@@ -412,3 +412,7 @@ Mayor: draining via the integration branch; owns curtain-call merges (Sol-review
 - Gene, verbatim: "Get everything onto a branch called MCP/. Let's have that be our 'main' branch, if you know what I mean". `MCP/main` @ a93768f = candidate 3411e3b + seat records + policy. The ~/src/clj-surgeon checkout is ON `MCP/main`; commit and push seat records there. `main` stays frozen (public); nobody pushes it.
 - Landing rule on MCP/main: reviewed GO tips only, `merge --no-ff` from ~/src/clj-surgeon-cand (also on MCP/main) or this checkout; run mcp-test as the trailing check after each landing. bridge/anvil-seat-docs-2026-09-04 and bridge/main-candidate-2026-09-04 are retired (merged); do not push to them.
 - Pending landings: 0a38e3d after MEM-003 r2 GO; study-ops after O2 r3 GO; census after r17 GO; q5z after r12 GO; admit-gate after its fix round GO. Then restart the seat's MCP server (7906) on MCP/main and produce Gene's ls-tree-over-MCP receipt.
+
+## RESUME DELTA 05:04Z — temp files go to /var/tmp/forge, never /tmp (Gene)
+
+Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/seat-tmp-guard.sh refuses a tmpfs temp dir and is sourced by suite-run and sol-yolo. Every brief from here names /var/tmp/forge/<lane>-fx. Repo ratchet building on bridge/tmp-leak-ratchet (runners fail on leaked temp entries and refuse tmpfs). Heartbeats: df -i /tmp + count of forge-owned entries.

@@ -1212,3 +1212,75 @@ Two class findings from one round. (1) `exact-verification-visible-bytes` — a 
 ## 04:26Z — THE ADMIT GATE LANDED ON MCP/main (merge --no-ff of MCP/gate-landing-2026-09-04 @ 3860952) after a fresh-clone GO-WITH-FIX; the finding rides as inb-cbca17
 
 First landing of the night beyond the six-lane integration. The reviewer's method is worth keeping: it forced the analyzer-lock timeout the builder had called unprovokable (fcntl.lockf, not flock — different lock space), drove six of seven unverifiable types through the production path, and computed both LOST sets for the union. The remaining finding is the night's dominant class one more time — the only write tool's refusal text drops remedy and next_call, outside the trunk's text ⊇ structured ratchet; gate round 3 will bring admit under that witness. Note on the seat's own mechanics: the first landing attempt ran in the candidate worktree, which cannot check out MCP/main while the seat checkout holds it — the merge landed from the seat checkout instead; a trailing suite launched on the wrong tree was left to finish harmlessly and relaunched on the landed tip.
+
+## 04:40Z — FAN scorer r4 BUILT (a3a367c0); Sol review launched
+
+The round that finally moves the trust root: the base inventory is rebuilt from git's object store by content address and hash-verified in process, so a shimmed binary can lie only about WHICH commit it returns — closed when the caller passes a 40-hex base, which rescore-FAN.sh does. Entry classification and explicit enterability tests replace "did the walk find it". The self-test roster is derived from the script's own dispatch lines, which closes the request-vs-tree count drift by construction. One residual named for r5 (the rev-list fallback in rescore-FAN.sh).
+
+## 04:47Z — MEM-003 second landing round 3 BUILT (3692e9b, pushed); Sol review launched
+
+Three rounds to reach the right rung: r1 stripped one key, r2 relocated declared names, r3 makes the bad state unrepresentable — the clock returns an opaque tick, only the measured namespace can turn it into a reading, the reading carries its tag, and the boundary refuses what it cannot place. That is rung 5 of the ratchet ladder (typed refusal in the op itself); the two earlier rounds were rung 2 witnesses over an enumerable that the reviewer could always extend by one. The reviewer is asked whether the :control allow-list is itself a hole (can an allow-listed site publish?), which is the question the shape now reduces to.
+
+## 04:48Z — O2 round 4 BUILT (515e8109, pushed); Sol review launched
+
+Two record corrections worth the line: an EARS clause (STUDY-046) had encoded a fixed allowance as a requirement — the rule the same branch forbids — and the test helper measured the two faces of a receipt at different clocks (18 bytes apart), the same class as the publish reserve it was testing. Rung D from r3 is now a red test: an unenumerated refusal reason throws a plain exception the caller cannot mistake for its own refusal.
+
+## 04:50Z — usage watch: mcp_tool_calls 147, outcomes {"ok": 100, "refused": 47}, tools {"inspect_clojure": 147}; error_types (top) no-clojure-files 11, invalid-grep-pattern 7, study-tree-too-large 6, study-output-limit 4, invalid-relative-directory-path 3, inspect-output-limit 3; window until 2026-09-04T04:48:42Z. DELTA since 03:48Z: no change (147/100/47 identical); no new repeated refusal, nothing for the friction ledger. Pushed to MCP/main (main frozen).
+
+## 04:53Z — Sol's filter refused two more reviews (MEM-003 r3 — the clock/partition lane; FAN scorer r4 — the object-store/chmod lane) → Opus fallbacks launched with the identical briefs; q5z r14 Sol verdict is GO-WITH-FIX (filing when its log exits)
+
+Refusal tally tonight: MEM-003 r3 (earlier), fold-diff r9, census r16, census r17, admit-gate r1, MEM-003 r3 again, FAN r4 — seven; Sol reviewed census r18, q5z r12–r14, O2 r2–r4, FAN r1–r3 without refusal. The pattern: anything whose fixtures involve permissions, symlinks, lock contention, or a hash-verified trust root trips the filter; pure receipt/rendering lanes pass. Gene's rule (Sol first) stands and each fallback is named here.
+
+## 05:00Z — Gene: "gene report" — pasted in full to chat and filed as docs/observations/2026-09-04-gene-report-0455z.md (table first; wins/losses; learnings→ratchets; one action per lane)
+
+## 05:04Z — Gene, verbatim: "You must use /var/tmp — tmp is tmpfs, which uses ram." / "Make it impossible to make this mistake again" — the temp-dir ratchet
+
+Rungs shipped: (1) the seat's shell profile exports TMPDIR/TMP/TEMP=/var/tmp/forge and JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/var/tmp/forge, so every Bash, codex, claude -p and JVM the seat launches inherits it; (2) ~/bin/seat-tmp-guard.sh REFUSES (rc 97) when the temp dir is /tmp, /dev/shm, or any tmpfs — proven: TMPDIR=/tmp refused, the default passes; sourced by suite-run and sol-yolo (atomic swaps); (3) the leaked forge-owned JVM test dirs swept from /tmp (inodes 64% → 48%; 618 recent ones left to age out); (4) a repo ratchet building (bridge/tmp-leak-ratchet): every temp creation via java.io.tmpdir, deleted in finally, runners fail on leftovers and refuse a tmpfs temp dir; (5) CLAUDE.md on MCP/main carries the rule; briefs name /var/tmp/forge/<lane>-fx. What this seat cannot do without root: make /tmp unwritable; the guard and the profile are the strongest available rung, and the repo ratchet makes the leak itself a failing test.
+
+## 05:05Z — q5z r14 Sol review: GO-WITH-FIX (two items: work inside an arbitrary toString; keyword/name-derived kinds) → r15
+
+Lane trajectory: r12 NO-GO (silent partial write) → r13 GO-WITH-FIX (3) → r14 GO-WITH-FIX (2, neither data-safety). The remaining two are the last layer of the two ratchets (bounded printing and refusal enumeration): a Writer bound cannot stop a toString that runs before printing — so non-Clojure objects must be rendered by class/identity, never printed — and a source guard keyed on "contains a parameter" is one more existential predicate. r15 on Sonnet with the exact spec; review on Sol.
+
+## 05:06Z — temp-dir ratchet verified at three entrances; one hole found and closed
+
+Login shell: TMPDIR=/var/tmp/forge, JAVA_TOOL_OPTIONS set. Through suite-run: set (the guard). The harness's own Bash tool shell: UNSET — it is non-interactive and does not read ~/.bashrc, so a fixture created directly by a Bash call (or by an agent's Bash) would still default to /tmp. Closed by putting the four variables in ~/.claude/settings.json "env", which every tool shell and every subagent inherits; takes effect for new tool calls. The lesson generalises: a rule set in a shell profile is set for the shells that read the profile, and the harness's shell is not one of them — verify at each entrance, as the census rounds taught.
+
+## 05:07Z — O2 r4 review: Sol's filter refused (first refusal on the O2 lane — the round's probes include a Long/MAX_VALUE clock, a 10 MB string and endless sequences) → Opus fallback with the identical brief. Refusal tally: eight.
+
+## 05:08Z — admit gate round 3 BUILT on the trunk (95e7aed9, bridge/admit-gate-r3); Sol review launched
+
+The RED found a 37th kind a manual pass had missed (`invalid-relative-source-path`) — the source-scan enumeration paying out again — and the review brief asks the reviewer to diff it against a RUNTIME-derived set, since a source scan is the night's known weak rung. Sol first (a rendering lane; no permission fixtures in the brief, said so explicitly), Opus on refusal.
+
+## 05:11Z — FAN scorer r4 review (Opus): GO-WITH-FIX — the base-sha fallback is the last PATH-resolved input; round 5 launched
+
+The reviewer's line to keep: the content-addressed inventory is sound and "the scorer never reads a blob", so the only remaining freedom is WHICH commit — and rescore-FAN.sh hands it one from an exit-ignored PATH  when base.sha is missing, with no 40-hex check, while fan_check.clj's own comment claims the caller always passes 40 hex. Also the retroactive question answered by computation: all nine E-AFFORD arms rescore byte-identically and every published base.sha is 40-hex, so no published verdict rests on the open route. The race test (4,000 files, a background deleter, 13 typed errors on the first attempt) is the strongest evidence of the night that the per-entry rule is enforced, not documented.
+
+## CORRECTION to the previous entry — an unquoted heredoc swallowed a backticked word
+
+The r4 scorer entry above should read: "rescore-FAN.sh hands it one from an exit-ignored PATH `rev-list` fallback when base.sha is missing". The word `rev-list` was executed as a command substitution by an unquoted heredoc (the quoted-heredocs-for-prose rule, violated once more by the seat; `bash: rev-list: command not found` was the tell). No content lost beyond that word; recorded rather than rewritten.
+
+## 05:13Z — E-THREAD CLOSED (docs 9e86935b pre-registration, aa050310 results): the feature-thread study's answer is measured — do not build the verb; native 5/5 × 5 threads, 0 false-completes
+
+The pre-registration held even when the first grading said otherwise: eight "false-completes" were the oracle's — one witness frozen per slot where several existed, twice in the direction that would have earned the verb. The runner corrected the truth with timestamps and disclosed it; the verdict stands on the corrected oracle. Twelve arms voided when constructed fixtures lived only in working trees (clone carries commits, not dirt) — the runner now refuses a clone lacking the hidden-leg token. Gene's Marvin-app amendment produced the decisive thread (T5): search-invisible legs found by reading a comment. Study doc §8, brainfleet §37, Gene report updated; mayor told; inb-55e00e closed.
+
+## 05:15Z — census round 19 BUILT (563c300d, pushed); Sol review launched
+
+Nineteen rounds; the last three each closed the reviewer's items and found one more of the same class by ENUMERATING (r18: three unbounded CLI fields from the schema; r19: a third unbounded launcher refusal from the declared set, and a remedy that told the caller to make a directory readable under itself, shipped since r17). The witness that drives the launcher as a subprocess rather than a fn call is the right entrance discipline. The builder re-ran every gate under /var/tmp/forge after the TMPDIR rule landed mid-round, unprompted beyond the message — the ratchet propagated.
+
+## 05:23Z — census r19 review: Sol's filter refused (ninth refusal; census r18 had passed) → Opus fallback with the identical brief. gate r3 Sol review still running with one refusal inside its log.
+
+## 05:25Z — Gene, verbatim: "ask brainfleet -- and I suggest we build it, and see if any agents use it. ask brain fleet what would make it even more useful, for the next step; look at the exact nature of the feature I requested, and the info you'd need to get to the next step. (for clj and maybe js, bring back the forms? dunno, brainstorm! remember, reading is fast. but don't want to swamp context window)" / "remember the goal: 2x reading is good, but if we can save tool calls, we rack up gains"
+
+Reframe accepted: the unit of cost is the tool call (a model return), not characters. E-THREAD already measured the receipt cutting native from 7.4 to 3.3 calls on SMW. Next step: a receipt that carries the forms (Clojure parsed with line range + content hash; JS by an honest method; the sibling command to mirror; the wiring rules), bounded so it does not swamp the window, so the agent goes from one call to the write. Fleet poll launched (Sol + Opus) with the exact SMW request as the fixture; the verb gets built on the converged shape and adoption measured on TOOL CALLS to a correct edit.
+
+## 05:29Z — MEM-003 r3 review (Opus): NO-GO — a one-key MAP is not a tag; round 4 launched with the trunk merged in first
+
+The tag rides the value only if the value cannot be opened; a map can be opened by its own key. Rung 5 needs a type with no ILookup (deftype), and a scan that forbids `:refer` on the measured namespace. The reviewer also found the branch already conflicts with the trunk (the admit gate landed a new `run-process!` arity) and that the branch\'s ratchet, applied to the trunk, names a clock read in the admit tool it has never seen — which is the ratchet working, and the reason r4 composes onto current MCP/main before anything else.
+
+## 05:30Z — E-SCALE-WALL pre-registration on MCP/main (6390c430); MEM-003 r4 launched (trunk merged in first; deftype reading; :refer forbidden)
+
+The wall cohort waits for a quiet box by design — seven agents and four Sol/Opus reviews are running now, and wall above load 4 is void under its own rule. Scheduling: after the current review lanes land, before any new builders.
+
+## 05:34Z — mayor: the SMW transcript is on this box (/tmp/smw-dequote-format-transcript.md, 597 events) with his analysis; Gene, verbatim: "perfect.  this is super great, ask anvil to make it one of the test cases -- it's a real representative pattern that from my observation took a long time ot warm up and nail" — Dequote/Format is now a NAMED TEST CASE of the feature_thread verb (builder amended); gate r3 Sol NO-GO (4 blockers) → r4; Sol's thread poll filed (§10)
+
+The mayor's analysis corrects the whole premise: there were no five searches. Five FILE READS batched inside a Promise.all over six rounds, editor-commands.js read at four guessed line ranges, and thread members still being discovered after the agent had answered Gene; the only rg was an alternation over JS function names — the verb, hand-rolled. The cost was never that grep failed; it was that "what is the whole thread" was not askable, so it was paid in partial reads. Human baseline for the fixture: six rounds — that number is the product claim. Assertions the mayor requires: recall 5/5 from one seed; RANGES not files; no false members; a typed refusal naming the missing leg with the JS legs made unreadable; the warm-up meter reported honestly. A second fixture at the moment the feature BROKE (the transcript's tail). The governance tail (registry.edn entries, intent_contract_test, the Makefile target) is the `rules` row — returned, not refused.
