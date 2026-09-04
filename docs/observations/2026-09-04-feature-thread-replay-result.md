@@ -60,7 +60,9 @@ T1b reproduces T1 within two calls (24 → 22; reads 2 → 2; first patch 7 → 
 ## Third replicate pair — N3 and T1c finished 08:3xZ (gates re-running)
 | arm | raw | source reads before first patch | first patch at call | sites | note |
 |---|---|---|---|---|---|
-| N3 (native) | 33 | 12 | 18 | the six code sites + Makefile + editor-specs + tests.edn | see the test note below |
-| T1c (receipt) | 22 | **0** | 4 | six real sites incl. both tests | two later reads: test classification (Makefile 225-296, tests.edn) |
+| N3 (native) | 33 | 12 | 18 | the six code sites + Makefile + editor-specs + tests.edn; tests as two NEW untracked files (test/js/dequote_format_command_test.js, test/writer/dequote_format_test.clj) | verified green |
+| T1c (receipt) | 22 | **0** | 4 | six real sites incl. both tests | two later reads: test classification (Makefile 225-296, tests.edn); verified green |
 
 **Paired table at n=3 per arm (raw / source reads before the first patch):** native 32, 50, 33 → mean 38.3, reads 10, 13, 12 (mean 11.7); receipt 24, 22, 22 → mean 22.7, reads 2, 2, 0 (mean 1.3). Intervals do NOT overlap (native 32–50 vs receipt 22–24) — Opus's R0 withdrawal line is not met; the raw claim stands at n=3: **1.7× raw, 8.8× discovery reads**. Task-core figures to be recomputed after hand classification of all six.
+
+Independent gate re-run for N3 and T1c (seat, 08:4xZ): === N3 test-js JS_EXIT=0 === N3 runtests-unit CLJ_EXIT=0 === T1c test-js JS_EXIT=0 === T1c runtests-unit CLJ_EXIT=0 
