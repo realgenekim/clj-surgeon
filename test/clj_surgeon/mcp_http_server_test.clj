@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-http-server :as http-server]
+   [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as tool]
@@ -299,6 +300,20 @@
                            "(def answer 42)"))
         (is (= "(def answer 42)"
                (get-in result [:structuredContent :results 0 :forms 0 :source])))
+        ;; @spec MCP-OP-STUDY-040
+        ;; @spec MCP-OP-STUDY-044
+        ;; O2 round 3: the bound and the criterion hold at the HTTP entrance
+        ;; too — the pair a client is handed over the wire, not the pair a
+        ;; pure function returns.
+        (is (>= inspect-tool/max-public-result-bytes
+                (inspect-tool/mcp-result-byte-count
+                  (get-in result [:content 0 :text])
+                  (:structuredContent result)))
+            "the published pair is inside the declared public output budget")
+        (is (empty? (inspect/uncarried-leaves
+                      (get-in result [:content 0 :text])
+                      (:structuredContent result)))
+            "and the wire text carries every wire receipt leaf")
         (is (= true (get-in result [:structuredContent :read_complete]))))
       (finally
         (http-server/stop-http-server! running)
