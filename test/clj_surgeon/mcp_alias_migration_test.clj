@@ -859,20 +859,42 @@
   every `:error-type` the kernel can mint is a kind this text block must
   render. Each of the three is scraped in its own spelling — the alias verb
   writes its kinds as keywords or strings, the router and adapter as string
-  literals under `:error_type`, the kernel as keywords under `:error-type`."
+  literals under `:error_type`, the kernel as keywords under `:error-type`.
+
+  EVERY spelling is applied to the verb's OWN namespaces, whatever the prefix.
+  Prefix-locking the alias side to `alias-migration-` cost the enumeration
+  three kinds: `:unknown-verification-profile`, minted twice by
+  `mcp_alias_migration.clj` through the verb's own `refusal` constructor —
+  once in `execute-migration!` before any discovery, once on the undo path —
+  and `mcp_operation.clj`'s `:invalid-mcp-operation-result` and
+  `:invalid-mcp-elapsed-time`, thrown from the `invoke!` that
+  `handle-alias-migration` calls directly. A prefix is a naming convention,
+  not a boundary, and an enumeration that trusts one is narrower than its
+  subject.
+
+  `mcp_tool.clj` keeps the prefix filter, and only that: it is the shared
+  router that hosts every verb, so its unprefixed kinds —
+  `:receipt-publish-failed` on the extraction path,
+  `:compact-relation-path-conflict` on compact-relations — belong to verbs
+  `handle-alias-migration` never reaches."
   []
-  (let [alias-text (str (slurp "src/clj_surgeon/alias_migration.clj")
-                        (slurp "src/clj_surgeon/mcp_alias_migration.clj")
-                        (slurp "src/clj_surgeon/mcp_tool.clj"))
+  (let [verb-text (str (slurp "src/clj_surgeon/alias_migration.clj")
+                       (slurp "src/clj_surgeon/mcp_alias_migration.clj"))
+        router-text (slurp "src/clj_surgeon/mcp_tool.clj")
         entrance-text (str (slurp "src/clj_surgeon/mcp_workspace.clj")
                            (slurp "src/clj_surgeon/mcp_server.clj"))
+        operation-text (slurp "src/clj_surgeon/mcp_operation.clj")
         kernel-text (str (slurp "src/clj_surgeon/intent_transaction.clj")
                          (slurp "src/clj_surgeon/file_ops.clj"))]
     (into (sorted-set "invalid-mcp-request" "server-not-initialized")
           cat
           [(map second (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]"
-                               alias-text))
+                               (str verb-text router-text)))
+           (map second (re-seq #"\(refusal :([a-z][a-z0-9-]*)" verb-text))
+           (map second (re-seq #":error-type :([a-z][a-z0-9-]*)" verb-text))
            (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))
+           (map second (re-seq #":error-type :([a-z][a-z0-9-]*)"
+                               operation-text))
            (map second (re-seq #":error-type :([a-z-]+)" kernel-text))])))
 
 ;; @spec MCP-OP-ALIAS-059
