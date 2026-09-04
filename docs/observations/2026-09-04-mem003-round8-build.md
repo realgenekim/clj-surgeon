@@ -242,16 +242,48 @@ two lanes met — and it named every site.
 
 | gate | result |
 |---|---|
-| JVM suite | `Ran 870 tests containing 13082 assertions. 11 failures, 3 errors.` — **RED, all composition** |
+| JVM suite, run 1 | `Ran 870 tests containing 13082 assertions. 11 failures, 3 errors.` — **RED, all composition** |
+| JVM suite, run 2 | `Ran 870 tests containing 13082 assertions. 11 failures, 3 errors.` — identical, same fourteen, deterministic |
 | babashka suite | `Ran 935 tests containing 7403 assertions. 2 failures, 0 errors.` — the two are (a) |
 | operation oracle | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` |
 | intent audit | `:ok true :specs 410 :violations 0` |
 | txn kernel warnings | `kernel warning check: 2 namespace(s), 0 warning(s)` |
 | `git merge-tree --write-tree HEAD origin/MCP/main` | **exit 0, clean** (checked against `cc9544c4`) |
 
-**Not run, and named rather than implied:** the JVM suite a second time, `make memory-red` in
-green mode, the tmp-leak ratchet, the admit-analyzer memory self-test, the battery self-test,
-and the full memory battery. The box carried three other seats' suites on all three
-`suite-run` lanes at load ~9–10 for the duration, and these gates measure MEM-001's lane and
-the memory ratchets, none of which the composition blocker touches — they will have to be
-re-run on whatever tree resolves (a)–(d) regardless. No figure is claimed for any of them.
+| `make memory-red PARSER_RED_EXPECT=green` | `memory-red: 6/6 assertions held (expect=green)` |
+| tmp-leak ratchet | `tmp-leak ratchet witness passed` |
+| admit-analyzer memory self-test | `admit-analyzer-memory-self-test: 3/3 arms passed at -Xmx512m` |
+| battery self-test | `Ran 32 tests containing 171 assertions. 0 failures, 0 errors.` |
+
+**The full memory battery, ONCE, under `flock /home/forge/tmp/suite.lock`, a fresh
+`MEMBAT_ROOT=/home/forge/tmp/membat-r8`, reference built explicitly first, never
+`MEMBAT_ALLOW_ANY_ROOT`:**
+
+```text
+verdict: FAIL (INCOMPLETE)   exit 1
+  FAIL held-scales-with-n {:op :rename-ns-plan-full-match, :profile :default, :observed 9.8, :limit 3.0}
+  FAIL held-scales-with-n {:op :workspace-sources-read-all, :profile :default, :observed 40.8, :limit 6.5}
+  … 9 TREND lines …
+  UNMEASURED reserved-peak-over-budget ×4
+receipt: /home/forge/tmp/membat-r8/receipts/20260904T190931.688652498Z-battery.edn
+```
+
+Parity read from the receipt rather than from the console:
+
+```text
+cells: 48
+distinct :reference-mismatch: (nil)
+reference-mismatch cells: 0
+tool-errors: []
+:attestation :jvm "21.0.12" :head-sha "276931c19a2c06dae45c991260a6de53beb83a70"
+```
+
+Exactly the state the round-eight review recorded at `a2a15cc0`: `FAIL (INCOMPLETE)` exit 1,
+48 cells, ZERO reference mismatches, the two known `held-scales-with-n`, four `UNMEASURED`.
+All four are MEM-001's lane, pre-existing at the base and unchanged in kind by this branch or
+by the merge. The attestation names `276931c1`, the merge commit; `276931c1..294d8a46` is a
+single docs-only commit (this file), so the battery attests the merged tree's code exactly.
+
+**Fixtures** lived only under `/var/tmp/forge/mem003r8-fx` and are removed. No server was
+started on any port; none of 7888 / 7890 / 7894 / 7895 was contacted. Nothing was pushed to
+`main`; the trunk was merged INTO this branch and never the reverse.
