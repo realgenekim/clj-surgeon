@@ -1566,3 +1566,13 @@ building on ~/src/clj-surgeon-gate3.
 
 MEM-003 r8: Sol's content filter refused after the provenance item (the reflection/clock plants trip it, as in r4-r6);
 Opus fallback review launched with the same brief.
+
+## 15:22Z census round 24 built (2d82a677); Opus round-25 review launched
+
+Routing note: Opus directly, not Sol first — every census review with confinement/symlink fixtures has been refused by Sol's
+filter (r19, r21, r23), and the brief carries the same fixtures. The round's two lessons: (1) a trunk merge with three
+textual conflicts had five real ones — two intents collided with no text overlap (a marker the trunk's new scanning gate
+demanded; a remedy that interpolated the caller's root into prose against CENSUS-018) and only the gates on the MERGED tree
+found them; (2) the builder's first :paths fence half-passed in the most misleading way — java.io.File(parent, child)
+concatenates an absolute child while fs/path replaces the root, so the absolute plant walked past a fence that refused the
+relative one. Cost flag for the mayor: five launcher drives added to mcp-test, ~4 min per drive at load 12.
