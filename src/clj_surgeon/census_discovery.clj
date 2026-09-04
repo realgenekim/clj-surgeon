@@ -114,7 +114,9 @@
      :entries-yielded n
      :subtree-counts {project-relative directory -> candidates beneath it}
      :subtree-entries {project-relative directory -> entries beneath it}
-     :partial-dirs #{directories whose counts are lower bounds}}`
+     :partial-dirs #{directories whose counts are lower bounds}
+     :unreadable-directories [project-relative directories the walk could not
+                              enter; the walk STOPS at the first]}`
 
    `:observed` is the candidate count the walk had seen when it stopped; when
    `:exceeded?` it is a LOWER BOUND, because the walk stops rather than
@@ -142,6 +144,7 @@
           per-directory (volatile! {})
           per-directory-entries (volatile! {})
           terminated-in (volatile! nil)
+          unreadable-dir (volatile! nil)
           relative (fn [^Path path] (.toString (.relativize root path)))
           visit-file
           (fn [^File file ^String rel-dir]
@@ -214,18 +217,40 @@
                                   (recur)))
                               :continue)))
                         (finally (.close ^java.io.Closeable stream))))
-                    ;; A directory that cannot be opened or read contributes
-                    ;; nothing; it is not a fatal refusal, exactly as an
-                    ;; unlistable directory was not one before.
-                    (catch java.io.IOException _ :continue))]
+                    ;; Opus's round-sixteen item 4. This used to answer
+                    ;; `:continue` with no counter, so a `chmod 000` subtree
+                    ;; holding a thousand arms was invisible and the receipt
+                    ;; still said `read_complete true` — while ONE unreadable
+                    ;; FILE refused the entire census. A census is a
+                    ;; COMPLETENESS claim, which is the whole reason the file
+                    ;; rule is what it is; a subtree the walk could not enter
+                    ;; falsifies that claim in the same way and by a larger
+                    ;; amount. The walk records it and stops, exactly as it
+                    ;; stops at the first refusable member: nothing after it
+                    ;; can be trusted either, and deciding what to SAY about it
+                    ;; belongs to the entrance.
+                    (catch java.io.IOException _
+                      (vreset! unreadable-dir rel-dir)
+                      :unreadable))]
               [outcome (sort admitted)]))
           walk
           (fn walk [^File dir ^String rel-dir]
             (let [[outcome names] (admit dir rel-dir)]
-              (if (= :terminate outcome)
+              (cond
+                (= :terminate outcome)
                 (do (vreset! walk-exceeded true)
                     (vreset! terminated-in rel-dir)
                     :terminate)
+
+                ;; The subtree could not be entered. `:unreadable` propagates
+                ;; like `:terminate` — the walk stops — but it is a different
+                ;; fact and keeps its own name, because the entrance answers
+                ;; the two differently: a bound is about how big the tree is,
+                ;; a permission bit is about what may read it.
+                (= :unreadable outcome)
+                :unreadable
+
+                :else
                 (loop [names names]
                   (if-let [^String name (first names)]
                     (let [^File entry (File. dir name)
@@ -234,8 +259,8 @@
                                       :continue
                                       (walk entry (child-relative rel-dir name)))
                                     (visit-file entry rel-dir))]
-                      (if (= :terminate outcome)
-                        :terminate
+                      (if (#{:terminate :unreadable} outcome)
+                        outcome
                         (recur (rest names))))
                     :continue)))))
           subtree-totals
@@ -250,6 +275,12 @@
       (walk (.toFile root) "")
       {:root (.toString root)
        :files (vec (sort found))
+       ;; A LIST, because the count is a fact the receipt publishes and a
+       ;; single name would make "one" and "many" indistinguishable. The walk
+       ;; stops at the first, so today it holds at most one — and the shape
+       ;; says which fact it is reporting rather than leaving the reader to
+       ;; infer it from a nil.
+       :unreadable-directories (if @unreadable-dir [@unreadable-dir] [])
        :oversized (vec (sort oversized))
        :skipped-outside-root @skipped
        :duplicates @duplicates
@@ -266,6 +297,7 @@
     {:root nil
      :unresolved-root? true
      :files []
+     :unreadable-directories []
      :oversized []
      :skipped-outside-root 0
      :duplicates 0

@@ -653,6 +653,18 @@
         :skipped-outside-root (:skipped-outside-root discovered 0)
         :duplicates (:duplicates discovered 0)}
 
+       ;; A subtree the walk could not ENTER, decided after both bounds and
+       ;; before anything is read — the same position, and for the same
+       ;; reason, as a member the fence refuses. Opus's round-sixteen item 4.
+       (seq (:unreadable-directories discovered))
+       {:unreadable-directory (first (:unreadable-directories discovered))
+        :unreadable-directories (vec (:unreadable-directories discovered))
+        :discovered discovered
+        :scanned 0
+        :oversized-skipped (vec (:oversized discovered))
+        :skipped-outside-root (:skipped-outside-root discovered 0)
+        :duplicates (:duplicates discovered 0)}
+
        :else
        (let [;; WHERE the path came from, decided once. A `:file` request IS
              ;; the request, so the refusal names it exactly as the caller
@@ -1035,6 +1047,38 @@
       ;; remedy rather than a continuation. There is no continuation to
       ;; compute: the path came from the WALK and not from the request, so
       ;; there is no request to narrow.
+      ;; @spec MCP-OP-CENSUS-014
+      ;; @spec MCP-OP-CENSUS-018
+      ;; A subtree the walk could not ENTER. Opus's round-sixteen item 4: this
+      ;; was swallowed with `:continue` and no counter, so a `chmod 000`
+      ;; directory holding a thousand arms was invisible and the receipt still
+      ;; said `read-complete true` — while ONE unreadable FILE refused the
+      ;; whole census. A census is a completeness claim; a subtree the walk
+      ;; could not enter falsifies it exactly as an unreadable member does, so
+      ;; it earns the same type, and its own cause because what must change is
+      ;; a bit on a DIRECTORY. No continuation: the path came from the walk.
+      (:unreadable-directory @scan)
+      (let [directory (:unreadable-directory @scan)
+            root (census-root dir)]
+        (merge
+          {:ok false
+           :error-type :file-not-readable
+           :cause :directory-denied
+           :anchor anchor
+           :directory directory
+           :error (str "the directory " directory
+                       " may not be read or traversed by this process, so "
+                       "this census cannot claim to have read the tree")
+           :remedy (str directory " came from the workspace walk, not from "
+                        "the request, so there is no request to narrow and no "
+                        "narrower command can be computed: make " directory
+                        " readable under " root
+                        ", remove it, or name the sources to census with "
+                        ":file. A census is a completeness claim, and a "
+                        "subtree this process may not enter cannot be counted "
+                        "as read.")}
+          (facts)))
+
       ;; The remedy is chosen by PROVENANCE, not by the type. Opus's
       ;; round-sixteen item 1: a read that failed after the fence on the ONE
       ;; source a `:file` request named reached this branch, and the walk's

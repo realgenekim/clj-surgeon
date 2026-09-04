@@ -49,6 +49,10 @@
    again): it says what to fix, not which remedy applies."
   #{:not-found
     :parent-denied
+    ;; A DIRECTORY the walk could not enter, as distinct from a directory
+    ;; ABOVE a path the caller named: the subject differs, and so does what
+    ;; the caller must fix.
+    :directory-denied
     :permission-denied
     :not-a-regular-file
     :outside-project

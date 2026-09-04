@@ -863,7 +863,13 @@
         t-discovered (System/nanoTime)
         ;; Both bounds are checked BEFORE any read: a tree the census may not
         ;; finish is refused, never partially read and published as complete.
-        bounded? (or (:exceeded? discovered) (:walk-exceeded? discovered))
+        ;; A subtree the walk could not ENTER bounds the census exactly as
+        ;; the two ceilings do: a tree this census may not finish is refused
+        ;; before anything is read, never partially read and published as
+        ;; complete (Opus's round-sixteen item 4).
+        bounded? (boolean (or (:exceeded? discovered)
+                              (:walk-exceeded? discovered)
+                              (seq (:unreadable-directories discovered))))
         loaded (when-not bounded?
                  (collect-inputs root scanned {:declared? want-declared?}))
         t-read (System/nanoTime)
@@ -892,6 +898,34 @@
 
       (:exceeded? discovered)
       (ceiling-refusal discovered canonical facts)
+
+      ;; @spec MCP-OP-CENSUS-018
+      ;; A subtree the walk could not ENTER, decided after both bounds and
+      ;; before anything is read. Opus's round-sixteen item 4: it was swallowed
+      ;; with no counter and this tool answered `ok true, files 1, arms 1,
+      ;; read_complete true` about a tree it had not finished walking, while
+      ;; one unreadable FILE refused the whole census. The CLI answers the same
+      ;; tree with the same cause and the same directory name.
+      (seq (:unreadable-directories discovered))
+      (let [directory (first (:unreadable-directories discovered))]
+        (refusal :unreadable-source-path
+                 (str "the directory " directory " may not be read or "
+                      "traversed by this process, so this census cannot claim "
+                      "to have read the tree")
+                 nil
+                 (merge
+                   {:cause (name :directory-denied)
+                    :directory directory
+                    :remedy (str directory " came from the workspace walk, "
+                                 "not from the request, so there is no "
+                                 "request to narrow and no narrower call can "
+                                 "be computed: make " directory " readable "
+                                 "under the workspace root, remove it, or "
+                                 "name the sources to census with files. A "
+                                 "census is a completeness claim, and a "
+                                 "subtree this process may not enter cannot "
+                                 "be counted as read.")}
+                   facts)))
 
       (:refusal loaded)
       ;; The continuation is the request the caller made, MINUS the entries
