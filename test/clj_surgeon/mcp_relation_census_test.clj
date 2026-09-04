@@ -5972,10 +5972,28 @@
         into-tree (fn [tree params]
                     (census-tool/execute-request!
                       {:project-root (named tree)} params))
-        in-arms #(into-tree arms %)]
-    [{:label :invalid-workspace-root
-      :error-type :invalid-workspace-root
-      :drive #(run {:workspace_root (str (named arms) "/does-not-exist")})}
+        in-arms #(into-tree arms %)
+        ;; Opus's round-nineteen item 4: each drive carries the root IT runs
+        ;; against. The witness checked every result against `arms`, while two
+        ;; drives run against `bare` and `broken` — so a refusal naming ITS
+        ;; OWN root absolutely contained no occurrence of `arms` and the check
+        ;; returned []. The verifier was blind to its own subject.
+        with-root (fn [root drives] (mapv #(assoc % :root (named root)) drives))]
+    (concat
+      [{:label :invalid-workspace-root
+        :error-type :invalid-workspace-root
+        :root (str (named arms) "/does-not-exist")
+        :drive #(run {:workspace_root (str (named arms) "/does-not-exist")})}]
+      (with-root bare
+        [{:label :no-fold-arms-found
+          :error-type :no-fold-arms-found
+          :drive #(into-tree bare {})}])
+      (with-root broken
+        [{:label :unparseable-file
+          :error-type :unparseable-file
+          :drive #(into-tree broken {})}])
+      (with-root arms
+       [
 
      {:label :unknown-door-symbol
       :error-type :unknown-door-symbol
@@ -5992,15 +6010,6 @@
       ;; that COMPUTES a continuation, which is the branch under test.
       :drive #(with-redefs [census/max-source-bytes 8]
                 (in-arms {:files ["src/a/one.clj" "src/small.clj"]}))}
-
-     {:label :no-fold-arms-found
-      :error-type :no-fold-arms-found
-      ;; Discovered, not named: the branch that computes a continuation.
-      :drive #(into-tree bare {})}
-
-     {:label :unparseable-file
-      :error-type :unparseable-file
-      :drive #(into-tree broken {})}
 
      {:label :census-worker-failure
       :error-type :census-worker-failure
@@ -6048,7 +6057,7 @@
                    (census-tool/handle-relation-census
                      nil {} (fn [_ _ result] (reset! captured result)))
                    @captured
-                   (finally (reset! config saved)))))}]))
+                   (finally (reset! config saved)))))}]))))
 
 (defn- next-call-bytes
   "The rendered size of an MCP continuation, or nil when there is none."
@@ -7148,8 +7157,7 @@
   [refusal root]
   (let [pattern (re-pattern (str (java.util.regex.Pattern/quote (str root))
                                  "(?!/)"))]
-    (->> (dissoc refusal :anchor :dir :workspace_root
-                 :next-command :next-command-argv :next_call)
+    (->> (apply dissoc refusal root-carrying-fields)
          (tree-seq coll? seq)
          (filter string?)
          (filter #(re-find pattern %))
@@ -7183,10 +7191,16 @@
                      (pr-str leaks))))))
 
       (testing "the MCP enumeration: no declared refusal names its root"
-        (doseq [{:keys [label drive]}
+        ;; Opus's round-nineteen item 4: this checked every result against
+        ;; `arms` while two drives run against `bare` and `broken`, so a
+        ;; refusal naming its OWN root absolutely contained no occurrence of
+        ;; `arms` and the check returned []. It proved that no refusal names a
+        ;; root that refusal never had.
+        (doseq [{:keys [label drive root]}
                 (mcp-refusal-drives {:arms arms :bare bare :broken broken})]
           (let [result (drive)
-                leaks (names-the-root-itself result (.getCanonicalPath arms))]
+                leaks (names-the-root-itself
+                        result (or root (.getCanonicalPath arms)))]
             (is (= [] leaks)
                 (str label " named its workspace root absolutely in prose: "
                      (pr-str leaks))))))
@@ -7225,13 +7239,20 @@
 
       (testing "no arm-bearing tree is refused with its root in the prose"
         ;; `no-fold-arms-found` is the shape whose remedy names what it
-        ;; SCANNED, and it named it absolutely.
+        ;; SCANNED, and it named it absolutely. Opus's round-nineteen item 4:
+        ;; round nineteen identified the shape, fixed the CLI, wrote the
+        ;; witness for the CLI, and never asked the tool's twin — which was
+        ;; still naming its root absolutely. BOTH entrances are driven here.
         (let [named (.getCanonicalPath ^java.io.File (:empty-ws trees))
-              cli (refusal-or-throw #(core/run-relation-census {:dir named}))]
+              cli (refusal-or-throw #(core/run-relation-census {:dir named}))
+              tool (census-tool/execute-request! {:project-root named} {})]
           (is (= :no-fold-arms-found (:error-type cli)))
-          (is (= [] (names-the-root-itself cli named))
-              (str "the empty-tree remedy named its root absolutely: "
-                   (pr-str (names-the-root-itself cli named))))))
+          (is (= "no-fold-arms-found" (:error_type tool)))
+          (doseq [[entrance result] [[:cli cli] [:tool tool]]]
+            (is (= [] (names-the-root-itself result named))
+                (str entrance " named its root absolutely in the empty-tree "
+                     "remedy: "
+                     (pr-str (names-the-root-itself result named)))))))
       (finally
         (allow-traversal! denied-root)
         (delete-tree! parent)
