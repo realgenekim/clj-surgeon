@@ -5322,6 +5322,29 @@
       (is (str/includes? (slurp script) (name kind))
           (str "the battery script never names the kind it is excused for: "
                kind))
+      ;; @spec MCP-OP-ADMIT-138
+      ;; The line above proves the FILE MENTIONS the kind, which a comment
+      ;; satisfies. Execution is what the exemption actually claims, so the
+      ;; battery writes a receipt naming the kinds it published and this
+      ;; reads it. An ABSENT receipt is a named precondition rather than a
+      ;; silent pass or an ambient red: this suite does not own that fixture
+      ;; and must not redden on a fresh clone for a reason unrelated to the
+      ;; gate. A receipt that is PRESENT and contradicts the exemption is a
+      ;; loud failure.
+      (let [receipt (io/file
+                      "target/admit-transaction-recovery-battery-receipt.edn")]
+        (if (.exists receipt)
+          (let [record (read-string (slurp receipt))]
+            (is (contains? (set (:kinds-published record)) kind)
+                (str "the battery ran and did NOT publish the kind its"
+                     " exemption claims: " kind " · receipt "
+                     (pr-str record)))
+            (is (= target (:target record))
+                "the receipt names the target that wrote it"))
+          (println (str "PRECONDITION · no battery receipt at "
+                        (.getPath receipt) " · run `" target
+                        "` to prove " kind " by execution rather than by"
+                        " the structural checks alone"))))
       (is (str/includes? (slurp makefile) (str "\n" target-name ":"))
           (str "the Makefile has no such target: " target))
       (is (not (str/includes? (slurp makefile)
@@ -5733,9 +5756,22 @@
                                :mode mode}
                         (= mode "commit") (assoc :verify "focused")))
                     (finally (delete-tree! root)))))
-        ;; NAME_MAX on this filesystem, discovered by the drive below rather
-        ;; than asserted from a constant
-        name-max 255
+        ;; @spec MCP-OP-ADMIT-133
+        ;; NAME_MAX read from the filesystem this suite is running on, not
+        ;; hardcoded: it is 255 here and 143 on eCryptfs, and a witness that
+        ;; pins the number reddens on another filesystem for a reason that
+        ;; has nothing to do with the gate.
+        name-max (let [{:keys [exit out]}
+                       (shell/sh "getconf" "NAME_MAX" ".")
+                       parsed (when (zero? (long exit))
+                                (try (Long/parseLong (str/trim out))
+                                     (catch Exception _ nil)))]
+                   (or parsed
+                       ;; declared platform: POSIX's own minimum maximum is
+                       ;; 14, so a failure to read it is stated, not guessed
+                       (do (println (str "PRECONDITION · getconf NAME_MAX"
+                                         " unavailable; assuming 255"))
+                           255)))
         at (- name-max (count ".clj"))]
     (testing "at NAME_MAX the name is ordinary and preview succeeds"
       (let [preview (drive at "preview")]
@@ -6104,3 +6140,154 @@
             "a committed write's own claim is not reset by a size rule")
         (is (false? (:source-unchanged published)))
         (is (<= (write-refusal/json-bytes published) budget))))))
+
+;; ---------------------------------------------------------------------------
+;; Round six: every field a caller can influence, driven with bulk
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-143
+(defn- receipt-self-description-holds?
+  "Does this receipt's own account of itself match what it published?
+
+  Not a size check: a receipt can be inside the budget and still be lying
+  about how it got there. `receipt_reduced` without `receipt_omitted_fields`
+  is a claim with no content; `payload_truncated` without `payload_omitted`
+  is the same; a receipt that names a budget names THE budget; and a receipt
+  reduction could not bring inside the budget says so."
+  [receipt]
+  (let [budget write-refusal/public-byte-budget
+        problems
+        (cond-> []
+          (and (:receipt_reduced receipt)
+               (empty? (:receipt_omitted_fields receipt))
+               (not (:error_truncated receipt))
+               (not (:receipt_identity_bounded receipt)))
+          (conj "receipt_reduced with nothing named as dropped")
+
+          (and (:payload_truncated receipt)
+               (nil? (:payload_omitted receipt)))
+          (conj "payload_truncated with no payload_omitted")
+
+          (and (:public_byte_budget receipt)
+               (not= budget (:public_byte_budget receipt)))
+          (conj "the receipt names a budget that is not the budget")
+
+          (and (> (write-refusal/json-bytes receipt) budget)
+               (not (:receipt_over_budget receipt)))
+          (conj "over budget without saying so")
+
+          (and (:receipt_identity_bounded receipt)
+               (empty? (:receipt_identity_bounded receipt)))
+          (conj "an empty identity-bounding record"))]
+    (if (seq problems) problems true)))
+
+;; @spec MCP-OP-ADMIT-143
+(deftest every-field-a-caller-can-influence-is-driven-with-bulk
+  ;; Round five's finding 1f, for the third round running: the universal
+  ;; claim `a published receipt never exceeds the number it calls a budget`
+  ;; stood on ONE skeleton -- `:mode "preview"`, `:files []`, all the bulk in
+  ;; `next_call`. Change `"preview"` to a long string, which is what a caller
+  ;; does by sending one, and the assertion the witness is named for was
+  ;; false. So the witness ENUMERATES the fields a caller can influence and
+  ;; drives bulk through each of them at the MCP handler's own callback.
+  (let [budget write-refusal/public-byte-budget
+        bulk (apply str (repeat 60000 "b"))
+        root (temp-dir)
+        wide-n 30
+        deep (apply str (repeat 200 "d"))
+        wide-path (fn [i] (str "src/" deep "/" (apply str (repeat 200 "e"))
+                               i ".clj"))
+        wide-sources (into {} (for [i (range wide-n)]
+                                [(wide-path i)
+                                 (str "(ns n" i ")\n\n(defn f\n  [x]\n"
+                                      "  (inc x))\n")]))
+        wide-patch (apply str
+                          (for [i (range wide-n)]
+                            (str "--- a/" (wide-path i) "\n"
+                                 "+++ b/" (wide-path i) "\n"
+                                 "@@ -1,5 +1,5 @@\n"
+                                 " (ns n" i ")\n \n (defn f\n   [x]\n"
+                                 "-  (inc x))\n+  (inc (inc x)))\n")))
+        cases
+        [["mode" {"patch" clean-multi-file-patch "verify" "focused"
+                  "mode" bulk}]
+         ["verify" {"patch" clean-multi-file-patch "verify" bulk}]
+         ["workspace_root" {"patch" clean-multi-file-patch "verify" "focused"
+                            "workspace_root" bulk}]
+         ["patch" {"patch" bulk "verify" "focused"}]
+         ["patch (parseable, 30 deep-path files)"
+          {"patch" wide-patch "verify" "none"}]
+         ["expect_pre_sha256"
+          {"patch" clean-multi-file-patch "verify" "focused"
+           "expect_pre_sha256"
+           (into {} (for [i (range 300)]
+                      [(str "src/" deep "/file" i ".clj")
+                       (apply str (repeat 64 "a"))]))}]
+         ["note (an unknown caller key)"
+          {"patch" clean-multi-file-patch "verify" "focused" "note" bulk}]
+         ["allow_partial (a wrong-typed caller key)"
+          {"patch" clean-multi-file-patch "verify" "focused"
+           "allow_partial" bulk}]]]
+    (try
+      (write-sources! root (merge base-sources wide-sources))
+      (doseq [[field params] cases]
+        (testing (str "bulk in " field)
+          (let [{:keys [result text]} (published-at-handler-edge root params)
+                bytes (write-refusal/json-bytes result)
+                chars (count (str text))]
+            (is (some? result)
+                (str "no receipt at all for bulk in " field))
+            (is (<= bytes budget)
+                (str "bulk in " field " published " bytes
+                     " bytes, past the " budget "-byte number the gate calls"
+                     " a budget"))
+            (is (<= chars budget)
+                (str "bulk in " field " published a " chars
+                     "-character text face, past " budget))
+            (is (true? (receipt-self-description-holds? result))
+                (str "bulk in " field ": "
+                     (pr-str (receipt-self-description-holds? result))))
+            (is (not-any? #(and (string? %) (>= (count %) 60000))
+                          (vals result))
+                (str "bulk in " field " was echoed VERBATIM into the receipt"))
+            (when (:error-type result)
+              (is (contains? admit/admit-refusal-kinds (:error-type result))
+                  (str "bulk in " field " published an unenumerated kind: "
+                       (pr-str (:error-type result))))))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-143
+(deftest a-trimmed-payload-names-the-face-that-forced-the-trim
+  ;; Round five's advisory 4b. `payload_omitted_bytes` counts JSON, while the
+  ;; trimming loop's exit test is `public-faces-fit?` -- which for this gate
+  ;; can be the TEXT face. A payload trimmed because its text face did not fit
+  ;; reported a byte figure that was never the binding constraint.
+  (let [root (temp-dir)
+        n 40
+        path (fn [i] (str "src/app/m" i ".clj"))
+        sources (into {} (for [i (range n)]
+                           [(path i)
+                            (str "(ns app.m" i ")\n\n(defn f\n  [x]\n"
+                                 "  (inc x))\n")]))
+        patch (apply str
+                     (for [i (range n)]
+                       (str "--- a/" (path i) "\n"
+                            "+++ b/" (path i) "\n"
+                            "@@ -1,5 +1,5 @@\n"
+                            " (ns app.m" i ")\n \n (defn f\n   [x]\n"
+                            "-  (inc x))\n+  (inc (inc x)))\n")))]
+    (try
+      (write-sources! root sources)
+      (let [receipt (admit/execute-request!
+                      (stub-config root) {:patch patch :verify "none"})]
+        (is (true? (:payload_truncated receipt))
+            (str "this fixture must actually trim: "
+                 (pr-str (select-keys receipt [:payload_omitted
+                                               :payload_truncated]))))
+        (is (contains? #{"text" "structured" "both"}
+                       (:payload_binding_face receipt))
+            (str "a trimmed payload names which face forced it: "
+                 (pr-str (:payload_binding_face receipt))))
+        (is (some? (:payload_omitted_bytes receipt))
+            "and still reports the JSON figure beside it"))
+      (finally (delete-tree! root)))))

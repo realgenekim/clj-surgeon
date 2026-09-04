@@ -82,6 +82,31 @@
         (shell/sh "chmod" "755" (.getPath (io/file root "src/b")))
         (delete-tree! root)))))
 
+;; @spec MCP-OP-ADMIT-138
+(def observed-kinds
+  "Every `:error-type` this run actually published, recorded as it happens.
+
+  The exemption in the fast suite pointed at a SUBSTRING of this file: it
+  checked that the script MENTIONS `transaction-recovery-required`, which a
+  comment satisfies. What the exemption needs is a record of EXECUTION, so
+  the battery writes one."
+  (atom #{}))
+
+;; @spec MCP-OP-ADMIT-138
+(defn- write-receipt!
+  [passed]
+  (let [file (io/file "target/admit-transaction-recovery-battery-receipt.edn")]
+    (io/make-parents file)
+    (spit file
+          (pr-str {:target "make admit-transaction-recovery-battery"
+                   :script "test/admit_transaction_recovery_battery.clj"
+                   :at (str (java.time.Instant/now))
+                   :arms arms
+                   :arms-passed passed
+                   :kinds-published @observed-kinds}))
+    (println (str "battery receipt · " (.getPath file) " · kinds "
+                  (pr-str @observed-kinds)))))
+
 (defn- run-arm
   [n]
   (loop [tries 1 last-kind nil]
@@ -89,6 +114,8 @@
           receipt (attempt n)
           wall-ms (quot (- (System/nanoTime) started) 1000000)
           kind (:error-type receipt)
+          ;; @spec MCP-OP-ADMIT-138
+          _ (when kind (swap! observed-kinds conj kind))
           enumerated? (contains? admit/admit-refusal-kinds kind)
           hit? (and (false? (:ok receipt))
                     (= :transaction-recovery-required kind)
@@ -117,4 +144,6 @@
       passed (count (filter true? results))]
   (println (format "admit-transaction-recovery-battery: %d/%d arms passed"
                    passed (count arms)))
+  ;; @spec MCP-OP-ADMIT-138
+  (write-receipt! passed)
   (System/exit (if (= passed (count arms)) 0 1)))
