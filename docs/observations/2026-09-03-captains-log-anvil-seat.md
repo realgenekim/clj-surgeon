@@ -1158,3 +1158,7 @@ The strict criterion is now machine-checked per mode (every structured leaf verb
 ## 03:08Z — FAN scorer backslash fix BUILT (8ed5893, pushed, RED→GREEN with a permanent self-test); Sol review launched with the retroactive question
 
 Apparatus gets the same discipline as product: the scorer that graded seven cohorts had a blind spot the verb's own round found; the fix is small, but the question that matters is retroactive — could the old scorer have produced a false PASS on any published cohort? The old behaviour failed closed (missing + extras), and no published fixture contains a backslash path; the reviewer is asked to prove both from the generator's own output rather than take my word.
+
+## 03:23Z — FAN scorer r1 Sol NO-GO (ls-files failure not fail-closed → false-PASS possible) → r2; census r18 BUILT (3b7904a) → Sol review first
+
+The scorer verdict is the apparatus version of the night's theme: a listing that returns nothing reads as "nothing changed", which is the silent-zero class (the usage collector's false zero, the E-AFFORD scorer's awk -i zero, now this). Census r18 closed the two blockers as classes and, by enumerating from the schema rather than from a list, found three more unbounded fields on the other entrance — the enumerating-witness rule paying out on its first use.
