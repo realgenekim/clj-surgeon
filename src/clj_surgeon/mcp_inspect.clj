@@ -497,6 +497,86 @@
                       (leaf-rendered? text value))))
         (receipt-leaf-pairs result)))
 
+(defn- leaf-label
+  "`results[0].source_anchor.range.start.line` — the JSON pointer a caller
+  reads the same fact back out of `structuredContent` with."
+  [path]
+  (apply str
+         (map-indexed (fn [index segment]
+                        (cond
+                          (integer? segment) (str "[" segment "]")
+                          (zero? index) (name segment)
+                          :else (str "." (name segment))))
+                      path)))
+
+;; @spec MCP-OP-STUDY-044
+(defn receipt-fact-lines
+  "One `path: value` line for every receipt leaf `structural-text` does not
+  already carry, in receipt order.
+
+  The default is to RENDER: the rows a mode renders structurally satisfy the
+  criterion where they can, and everything left over prints here. A receipt
+  field added tomorrow therefore travels into the text the day it is added,
+  and only a member of `text-excluded-leaf-keys` can keep it out.
+
+  Field evidence (Sol O2 round-2 review, section 3): the round-2 renderer
+  projected selected row fields, so `forms` dropped every `source_anchor`
+  range and both hashes, `outline` dropped every `platforms` entry, `match`
+  dropped every `hash` and `preorder`, `ls-deps` dropped every `leaf?`, and
+  every mode dropped its top-level metadata — 182 leaves over nine modes, not
+  one of them named anywhere as deliberately excluded."
+  [structural-text result]
+  (first
+    (reduce
+      (fn [[lines text] [path value]]
+        (if (or (contains? text-excluded-leaf-keys (last path))
+                (leaf-rendered? text value))
+          [lines text]
+          (let [rendered (if (string? value) value (str value))
+                line (if (str/includes? rendered "\n")
+                       (str/join "\n"
+                                 (cons (str "  " (leaf-label path) ":")
+                                       (map #(str "    " %)
+                                            (str/split-lines rendered))))
+                       (str "  " (leaf-label path) ": " rendered))]
+            [(conj lines line) (str text "\n" line)])))
+      [[] structural-text]
+      (receipt-leaf-pairs result))))
+
+;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-040
+(defn fact-block
+  "The bounded receipt-fact section, and whether any fact was dropped.
+
+  Facts are dropped WHOLE and only from the tail, exactly as rows are: the
+  same bound governs both, because both are the receipt."
+  [structural-text result budget]
+  (let [lines (receipt-fact-lines structural-text result)
+        total (count lines)]
+    (loop [remaining lines kept [] used 0]
+      (if-let [line (first remaining)]
+        (let [cost (inc (count line))]
+          (if (> (+ used cost) budget)
+            {:lines kept :shown (count kept) :total total :dropped true}
+            (recur (next remaining) (conj kept line) (+ used cost))))
+        {:lines kept :shown (count kept) :total total :dropped false}))))
+
+;; @spec MCP-OP-STUDY-044
+(defn fact-section
+  "The rendered receipt-fact section, or nil when the structural rendering
+  already carried every leaf."
+  [block]
+  (when (or (seq (:lines block)) (:dropped block))
+    (str/join
+      "\n"
+      (concat
+        [(format "  receipt facts · %d of %d rendered%s"
+                 (:shown block) (:total block)
+                 (if (:dropped block)
+                   " · the complete receipt is in structuredContent"
+                   ""))]
+        (:lines block)))))
+
 (defn- kernel-refusal
   [request index result]
   (let [error-type (or (:error-type result) :inspect-kernel-refusal)]
@@ -1417,9 +1497,9 @@
       (let [cost (inc (count (:text block)))]
         (if (and (seq kept) (> (+ used cost) limit))
           {:blocks kept :dropped (- (count blocks) (count kept))
-           :total (count blocks)}
+           :total (count blocks) :used used}
           (recur (next remaining) (conj kept block) (+ used cost))))
-      {:blocks kept :dropped 0 :total (count blocks)})))
+      {:blocks kept :dropped 0 :total (count blocks) :used used})))
 
 ;; @spec MCP-OP-STUDY-040
 (def text-omitted-notice
@@ -1439,12 +1519,13 @@
   "inspect_clojure")
 
 ;; @spec MCP-OP-STUDY-041
+;; @spec MCP-OP-STUDY-044
 (defn concise-summary
-  "Render the MCP text companion — every row the receipt carries, bounded.
+  "Render the MCP text companion — every leaf the receipt carries, bounded.
 
   Bounded is not the same as elided. Above the allowance the block says how
-  many of how many rows it rendered and what to send next; it never claims
-  terminal evidence over evidence it dropped."
+  many of how many rows and facts it rendered and what to send next; it never
+  claims terminal evidence over evidence it dropped."
   [result]
   (case (:text_omitted result)
     "notice" text-omitted-notice
@@ -1471,40 +1552,59 @@
           kept (whole-block-prefix candidates limit)
           blocks (:blocks kept)
           blocks-dropped (:dropped kept)
-          abridged? (or (pos? blocks-dropped)
-                        (boolean (some :abridged blocks)))
-          facts (cond-> [(plural (:request_count result) "request")
-                         (plural (:file_count result) "file")]
-                  (pos? forms) (conj (plural forms "form"))
-                  (pos? matches) (conj (plural matches "match")))
-          elapsed (:elapsed_ms result)]
-      (str "inspect_clojure\n"
-           "  " (str/join " · " facts) "\n\n"
-           "✓ all requests resolved\n"
-           "✓ ordered snapshot\n"
-           "✓ hashes attached\n"
-           (cond
-             (:truncated result)
-             (str "! bounded receipt · read_complete=false · next action "
-                  (:next_action result) "\n")
+          rows-abridged? (or (pos? blocks-dropped)
+                             (boolean (some :abridged blocks)))
+          fact-budget (if imposed
+                        (max 0 (- limit (:used kept)))
+                        max-evidence-characters)
+          headline (cond-> [(plural (:request_count result) "request")
+                            (plural (:file_count result) "file")]
+                     (pos? forms) (conj (plural forms "form"))
+                     (pos? matches) (conj (plural matches "match")))
+          elapsed (:elapsed_ms result)
+          render
+          (fn [abridged? fact-text]
+            (str "inspect_clojure\n"
+                 "  " (str/join " · " headline) "\n\n"
+                 "✓ all requests resolved\n"
+                 "✓ ordered snapshot\n"
+                 "✓ hashes attached\n"
+                 (cond
+                   (:truncated result)
+                   (str "! bounded receipt · read_complete=false · next action "
+                        (:next_action result) "\n")
 
-             ;; @spec MCP-OP-STUDY-041
-             ;; Never "terminal evidence · next action none" over evidence the
-             ;; text dropped: the receipt is complete, this rendering is not.
-             abridged?
-             (str "! text abridged · read_complete=true · next action "
-                  "read_structured_content_or_narrow_request\n")
+                   ;; @spec MCP-OP-STUDY-041
+                   ;; Never "terminal evidence · next action none" over
+                   ;; evidence the text dropped: the receipt is complete,
+                   ;; this rendering is not.
+                   abridged?
+                   (str "! text abridged · read_complete=true · next action "
+                        "read_structured_content_or_narrow_request\n")
 
-             :else
-             "✓ terminal evidence · read_complete=true · next action none\n")
-           (when (pos? blocks-dropped)
-             (format (str "! text abridged · %d of %d result block%s "
-                          "rendered · the complete receipt is in "
-                          "structuredContent.results\n")
-                     (- (:total kept) blocks-dropped) (:total kept)
-                     (if (= 1 (:total kept)) "" "s")))
-           (when (seq blocks)
-             (str "\n" (str/join "\n" (map :text blocks)) "\n"))
-           "  " (format "%,d" (long (:source_character_count result)))
-           " source characters · "
-           (mcp-operation/format-elapsed-ms elapsed)))))
+                   :else
+                   "✓ terminal evidence · read_complete=true · next action none\n")
+                 (when (pos? blocks-dropped)
+                   (format (str "! text abridged · %d of %d result block%s "
+                                "rendered · the complete receipt is in "
+                                "structuredContent.results\n")
+                           (- (:total kept) blocks-dropped) (:total kept)
+                           (if (= 1 (:total kept)) "" "s")))
+                 (when (seq blocks)
+                   (str "\n" (str/join "\n" (map :text blocks)) "\n"))
+                 (when fact-text (str "\n" fact-text "\n"))
+                 "  " (format "%,d" (long (:source_character_count result)))
+                 " source characters · "
+                 (mcp-operation/format-elapsed-ms elapsed)))
+          ;; @spec MCP-OP-STUDY-044
+          ;; The facts are measured against the STRUCTURAL text that actually
+          ;; ships, so the pair cannot drift: dropping a fact changes the
+          ;; status line, which changes what the structural text already
+          ;; carries, so the second pass measures the shipped rendering.
+          first-pass (render rows-abridged? nil)
+          first-facts (fact-block first-pass result fact-budget)
+          abridged? (or rows-abridged? (:dropped first-facts))
+          facts (if (= abridged? rows-abridged?)
+                  first-facts
+                  (fact-block (render abridged? nil) result fact-budget))]
+      (render abridged? (fact-section facts)))))

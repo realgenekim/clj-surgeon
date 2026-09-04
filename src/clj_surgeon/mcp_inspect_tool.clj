@@ -1023,8 +1023,9 @@
     ;; @spec MCP-OP-STUDY-042
     (refusal-text (assoc result :mode "ls-tree") nil)
     (let [block (ls-tree-payload-block result)
-          payload (:text block)]
-      (str/join
+          payload (:text block)
+          structural
+          (str/join
         "\n"
         (remove
           nil?
@@ -1068,7 +1069,20 @@
            (ls-tree-continuation-line result)
            (when (and (:truncated result) (:remedy result))
              (str "→ " (:remedy result)))
-           (format "→ %s" (:next_action result))])))))
+           (format "→ %s" (:next_action result))]))
+          ;; @spec MCP-OP-STUDY-044
+          ;; Everything the tree rows do not already carry — `format`,
+          ;; `limit`, `truncated`, the counts — prints as a bounded
+          ;; `path: value` line, so the text is a superset of the receipt
+          ;; here exactly as it is in every typed mode.
+          facts (inspect/fact-section
+                  (inspect/fact-block
+                    structural result
+                    (if (:text_evidence_limit result)
+                      (max 0 (- (:text_evidence_limit result)
+                                (count (or payload ""))))
+                      inspect/max-evidence-characters)))]
+      (if facts (str structural "\n\n" facts) structural))))
 
 (def inspect-schema
   {:type "object"

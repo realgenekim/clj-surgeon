@@ -509,12 +509,21 @@
                           {:operation "match" :match_count 2}]
                 :source_character_count 1234 :elapsed_ms 12.5}
         summary (inspect/concise-summary result)]
+    ;; @spec MCP-OP-STUDY-044
+    ;; O2 round 3: the envelope is unchanged and one line joins it — the
+    ;; receipt-fact section. `source_character_count` is the one leaf the
+    ;; envelope does not already carry verbatim, because the footer renders
+    ;; it grouped as `1,234`, and the criterion is the value the receipt
+    ;; spells. Nothing else here is new, and nothing is projected away.
     (is (= (str "inspect_clojure\n"
                 "  2 requests · 1 file · 3 forms · 2 matches\n\n"
                 "✓ all requests resolved\n"
                 "✓ ordered snapshot\n"
                 "✓ hashes attached\n"
                 "✓ terminal evidence · read_complete=true · next action none\n"
+                "\n"
+                "  receipt facts · 1 of 1 rendered\n"
+                "  source_character_count: 1234\n"
                 "  1,234 source characters · 12.50 ms")
            summary))
     (is (not (.contains summary "(defn")))))

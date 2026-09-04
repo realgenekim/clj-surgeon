@@ -2658,11 +2658,24 @@
         ;; The bound a fitted result is measured against is the declared
         ;; budget less `publish-reserve`: the fit measures with the clock
         ;; stopped at zero and the publisher renders the real elapsed time
-        ;; into both the text block and `structuredContent`.
-        exact (pad (- inspect-tool/max-fitted-result-bytes (public-bytes base)))
+        ;; into both the text block and `structuredContent`. The size is
+        ;; SEARCHED rather than computed, because since MCP-OP-STUDY-044 one
+        ;; more padding character no longer costs exactly one more byte.
+        exact (loop [low 0 high inspect-tool/max-fitted-result-bytes
+                     best (pad 0)]
+                (if (> low high)
+                  best
+                  (let [mid (quot (+ low high) 2)
+                        probe (pad mid)]
+                    (if (<= (public-bytes probe)
+                            inspect-tool/max-fitted-result-bytes)
+                      (recur (inc mid) high probe)
+                      (recur low (dec mid) best)))))
         over (update exact :padding str "x")]
     (testing "at the bound the result passes through unchanged"
-      (is (= inspect-tool/max-fitted-result-bytes (public-bytes exact)))
+      (is (>= inspect-tool/max-fitted-result-bytes (public-bytes exact)))
+      (is (< inspect-tool/max-fitted-result-bytes (public-bytes over))
+          "and one character more is over it")
       (is (= exact (inspect-tool/fit-public-result exact))))
     (testing "one byte over is a bounded TEXT, not a refusal"
       (is (>= inspect-tool/max-public-result-bytes (structured-bytes over))
@@ -2851,6 +2864,33 @@
           (is (empty? misses)
               (str "ls-tree names: " (count misses) " — "
                    (miss-report misses))))))))
+
+;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-040
+(deftest a-budget-abridged-text-declares-its-drop-and-is-never-terminal
+  ;; The other side of the criterion. A text the public output budget forced
+  ;; to drop rows or facts cannot carry every leaf — and must say exactly
+  ;; that, name where the complete receipt is, and never read as terminal.
+  (with-tmp-project
+    #(build-toy-project! % 200)
+    (fn [config]
+      (let [published (assoc
+                        (inspect-tool/fit-public-result
+                          (inspect-tool/execute-ls-tree
+                            config {:mode "ls-tree" :dir "." :format "text"
+                                    :limit 16384}))
+                        :elapsed_ms 1.0)
+            text (inspect-tool/inspect-summary published)
+            misses (leaf-misses text published)]
+        (is (seq misses)
+            "the fixture must actually reach the budget for this to mean anything")
+        (is (str/includes? text "abridged")
+            "a text that could not carry the receipt says so")
+        (is (str/includes? text "structuredContent")
+            "and names where the complete receipt is")
+        (is (not (str/includes? text "✓ complete tree · read_complete=true")))
+        (is (not (str/includes? text terminal-claim)))
+        (is (>= inspect-tool/max-public-result-bytes (public-bytes published)))))))
 
 ;; @spec MCP-OP-STUDY-044
 (deftest the-excluded-leaf-set-is-frozen-and-every-member-carries-its-reason

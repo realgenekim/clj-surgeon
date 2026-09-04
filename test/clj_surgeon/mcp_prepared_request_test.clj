@@ -129,15 +129,28 @@
       (str "(def alpha \"" (apply str (repeat padding-size "x")) "\")"))))
 
 (defn- result-at-prefinalized-bytes
+  "The largest padded candidate whose prefinalized public result is at or
+   under `target` bytes.
+
+   Binary search rather than arithmetic: since MCP-OP-STUDY-044 the text block
+   carries every receipt leaf the structural rendering does not, so one more
+   padding character no longer costs exactly one more byte. The witness wants
+   the boundary, not a formula for it."
   [result target]
   (let [summary (private-var 'clj-surgeon.mcp-inspect-tool 'inspect-summary)
-        empty-candidate (assoc result :padding "")
-        empty-normalized (assoc empty-candidate :elapsed_ms 0.0)
-        empty-size (inspect-tool/mcp-result-byte-count
-                     (summary empty-normalized) empty-normalized)
-        padding-size (- target empty-size)]
-    (when-not (neg? padding-size)
-      (assoc result :padding (apply str (repeat padding-size "x"))))))
+        candidate (fn [n] (assoc result :padding (apply str (repeat n "x"))))
+        measure (fn [c] (let [normalized (assoc c :elapsed_ms 0.0)]
+                          (inspect-tool/mcp-result-byte-count
+                            (summary normalized) normalized)))]
+    (when (<= (measure (candidate 0)) target)
+      (loop [low 0 high target best (candidate 0)]
+        (if (> low high)
+          best
+          (let [mid (quot (+ low high) 2)
+                probe (candidate mid)]
+            (if (<= (measure probe) target)
+              (recur (inc mid) high probe)
+              (recur low (dec mid) best))))))))
 
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-002
@@ -536,7 +549,10 @@
               summary (private-var 'clj-surgeon.mcp-inspect-tool
                                    'inspect-summary)
               edge (result-at-prefinalized-bytes result 32768)
-              overflow (result-at-prefinalized-bytes result 32769)
+              ;; One character past the largest candidate that fits: the
+              ;; receipt grows by at least that byte, so this is over the
+              ;; budget by construction rather than by arithmetic.
+              overflow (update edge :padding str "x")
               edge-ordinary (dissoc edge :prepared_request)
               overflow-ordinary (dissoc overflow :prepared_request)]
           (is (map? edge))
