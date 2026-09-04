@@ -144,14 +144,20 @@ Every other `createTemp*` site in `src/` deletes in a `finally`.
 
 ## Deliberately out of scope in this leaf
 
-- **Fixing every hard-coded `/tmp` string in `bench/*.sh`.** (The Makefile
-  recipes that INVOKE those harnesses no longer hand them `/tmp` roots —
-  MCP-OP-TMPHYG-010 — but the scripts' own internal defaults are untouched.) Those scripts are
-  not required by `test/run_all.clj` or `mcp_test_runner.clj` and are not
-  covered by this leaf's gates; `test/relation_causal_cohort_runner_test.sh`
-  and `test/performance_regression_sentinel_runner_test.sh` (genuinely under
-  `test/`) were fixed to `"${TMPDIR:-/tmp}/..."` as part of this leaf, but the
-  `bench/` harnesses were left as a named follow-up.
+- ~~**Fixing every hard-coded `/tmp` string in `bench/*.sh`.** Those scripts
+  are not required by `test/run_all.clj` or `mcp_test_runner.clj` and are not
+  covered by this leaf's gates.~~ **WITHDRAWN in round two — the sentence was
+  false.** `make test` itself runs `bench/retain_benchmark_result.sh`
+  (`--self-test` and `--verify-tracked`), `bench/run_clean_codex.sh`,
+  `bench/run_clean_claude.sh` and, through `benchmark-inspect-mcp-self-test`,
+  `bench/run_inspect_mcp_benchmark.sh`. Every one of those created a directory
+  in RAM by name with `TMPDIR` set and ignored, so `make test` was a
+  RAM-writing command while the -010 scan stayed green. `bench/*.sh` is now
+  IN SCOPE of both MCP-OP-TMPHYG-010 scans, and the eleven `mktemp` write
+  targets under `bench/` derive from `${TMPDIR:-/var/tmp}`. The only `/tmp`
+  strings removed that were NOT write targets were five synthetic fixture
+  literals in `run_clean_codex.sh` (a sandbox path inside JSON/prompt test
+  data), renamed to `/sandbox/...` so the scan needs no exemption for them.
 - ~~**`test/mcp_heap_config_test.sh`'s `MCP_STATE_DIR='/tmp/...'`** is a
   `make -n` assertion, so it is not a leak.~~ CORRECTED in round two: true as
   far as it goes, and beside the point. That gate reading only recipe TEXT is
