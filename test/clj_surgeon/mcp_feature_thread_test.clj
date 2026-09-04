@@ -1395,3 +1395,45 @@
           "line 2 is inside a /* … */ block")
       (is (false? (commented-out? js 4 false))
           "line 4 is live code after the block closed"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- 3.5: the walk's containment test and its duplicates
+;; ---------------------------------------------------------------------------
+
+(defn- symlink!
+  [^java.io.File link ^java.io.File target]
+  (java.nio.file.Files/createSymbolicLink
+    (.toPath link) (.toPath target)
+    (into-array java.nio.file.attribute.FileAttribute [])))
+
+;; @spec MCP-OP-THREAD-033
+(deftest the-walk-confines-to-the-root-and-lists-each-file-once
+  (testing "a sibling directory whose name merely EXTENDS the root's is OUTSIDE it"
+    (let [base (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-confine"
+                               (into-array java.nio.file.attribute.FileAttribute []))))
+          root (io/file base "repo")
+          evil (io/file base "repo-evil")]
+      (try
+        (write-file! root "src/own.clj" "(ns own)\n")
+        (write-file! evil "stolen.clj" "(ns stolen)\n")
+        (symlink! (io/file root "hop") evil)
+        (let [{:keys [ok paths]} (ft/walk-relative-paths (.getPath root) nil ["**/*.clj"])]
+          (is ok)
+          (is (not-any? #(str/includes? % "stolen") paths)
+              (str "a file in the sibling `repo-evil` was reported as a path"
+                   " inside `repo`: " (pr-str paths))))
+        (finally (delete-tree! base)))))
+
+  (testing "a symlink to a directory INSIDE the tree does not list its files twice"
+    (let [root (io/file (str (java.nio.file.Files/createTempDirectory
+                               "feature-thread-dupwalk"
+                               (into-array java.nio.file.attribute.FileAttribute []))))]
+      (try
+        (write-file! root "src/a.clj" "(ns a)\n")
+        (symlink! (io/file root "alias") (io/file root "src"))
+        (let [{:keys [ok paths]} (ft/walk-relative-paths (.getPath root) nil ["**/*.clj"])]
+          (is ok)
+          (is (= (vec (distinct paths)) (vec paths))
+              (str "the same file was walked more than once: " (pr-str paths))))
+        (finally (delete-tree! root))))))
