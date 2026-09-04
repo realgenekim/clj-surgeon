@@ -1491,3 +1491,25 @@ The round-four verb on social-media-writer: COMPLETE (6 of 6) in 1.86 s over 240
 ## 13:35Z — gate r7 built (94e4a00c); Sol r7 review launched; it lands on GO. One thing to rule before landing: the fast suite now depends on a gitignored battery receipt and goes red on a fresh clone — the seat's own scar (ambient state is an invisible precondition) — asked of the reviewer explicitly.
 ## 13:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, ninth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
 ## 14:14Z — gate r7 (Sol): NO-GO on the precondition the seat had flagged (a fast gate red on a fresh clone) and on an order the witnesses never observed; round 8 makes the gate own its receipt and witnesses the order — then it lands. study-ops r7 (Sol): NO-GO — an unescaped dotted pointer lets two leaves share one line; a newline in a pointer breaks the single-line contract; round 8 escapes pointers RFC-6901 style.
+
+## 14:23Z feature_thread round six built; round-seven review and the T4 replay pair launched
+
+Round six (tip 529755f0) closed the round-five blockers: a route leg is a parsed route-table entry, never a
+docstring (saveDraft's real entry is routes.clj L2121; the fixture had blanked that range and was restored);
+escaping conventions globs and scope.paths with .. are typed refusals naming the spelling; the structured face
+drops the bodies the text carries (30,713 -> 15,183 B on the fixture); peers ride as rows (range, sha256,
+anchor, refetch) by default with bodies on peer_bodies or when room remains; runs_namespace in every verify
+row. Sol round-seven review launched on the ft1-wt clone at 529755f0 with the round-five verdict and the
+round-six claims as the attack list (report /home/forge/tmp/sol/ft7-sol-review.md).
+
+T4 pre-registered arm launched (two replicates, smw-T4 and smw-T4b, fresh clones at 2df99c98): the round-six
+receipt computed on the REAL repo at the default budget. Real-repo figures: text 28,449 B, structured 15,962 B,
+peers present as rows (openTransformFromSelection, expound, bulletize) with bodies elided under the default
+28,672 text budget; at 32,768 nothing is elided (text 30,853, structured 15,748) — that receipt is saved as
+replay-receipt-T4-full32k.txt for a T4c if the pre-registration line is missed. Pre-registration stands:
+reads before the write = 0 on BOTH replicates; raw calls <= 18. Meter: ~/bin/rollout-calls on the codex rollout.
+
+Correction of my own claim earlier tonight: "peers present at the default budget" was measured on the
+fixture; on the real repo the default budget elides the peer BODIES (rows stay). The receipt says so in its
+elided row with the remedy. The default is 28,672 for a reason (public budget); a caller who wants bodies
+asks for them.
