@@ -22,6 +22,45 @@
                  "%.2f ms"
                  (object-array [(double elapsed-ms)])))
 
+;; @spec MCP-OP-STUDY-040
+(def envelope-keys
+  "The top-level keys the FINALIZER adds to a domain result — the request
+  envelope, in whatever shape the wire gives it.
+
+  Declared HERE, in the namespace that owns the envelope, because two other
+  places need to know it without knowing its shape: the public budget gate
+  measures the FINAL published envelope, and every substitute the gate builds
+  from scratch must carry the envelope of the result it replaces.
+
+  `finalize-result` adds `:elapsed_ms` today. The MEM-003 landing nests the
+  request clock and its siblings under `measured`. Both are named, and a
+  witness fails if the finalizer ever adds a third key that is not.
+
+  Field evidence (Opus O2 round-4 review, 2026-09-04, section 7): the budget
+  gate copied `:elapsed_ms` by name and guarded on `(contains? result
+  :elapsed_ms)`, so the moment the wire nests the clock every substitute would
+  silently lose it and the fit would throw on the first request instead of
+  measuring the result. Neither is a wire change — both are one namespace
+  assuming a shape another namespace owns."
+  #{:elapsed_ms :measured})
+
+;; @spec MCP-OP-STUDY-040
+(defn envelope
+  "The envelope of a finalized result, as a map to merge into a substitute."
+  [result]
+  (select-keys result envelope-keys))
+
+;; @spec MCP-OP-STUDY-040
+(defn finalized?
+  "Does this result carry the envelope the publisher publishes?
+
+  A result with no envelope is not one the publisher could publish, so
+  measuring it would reintroduce the gap the 64-byte publish reserve used to
+  paper over. The question is asked about the envelope, never about one of
+  its shapes."
+  [result]
+  (boolean (some #(contains? result %) envelope-keys)))
+
 (defn- finalize-result
   [domain-result started-ns finished-ns]
   (when-not (map? domain-result)

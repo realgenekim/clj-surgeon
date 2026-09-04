@@ -4153,3 +4153,80 @@
                      " leaves whose value another value of the same type could "
                      "replace with a byte-identical text — "
                      (pr-str (take 6 ambiguous))))))))))
+
+;; ============================================================
+;; O2 ROUND 5 — the envelope is whatever the finalizer added
+;; (Opus O2 round-4 review, section 7 — before the MEM-003 landing)
+;; ============================================================
+;; Round four made the fit measure the FINAL published envelope, which is
+;; right, and then named that envelope `:elapsed_ms` in two places. MEM-003's
+;; second landing nests the request clock and its siblings under `measured`.
+;; At that moment `with-envelope` would copy nothing — every budget-gate
+;; SUBSTITUTE silently losing the clock — and `fit-public-result`'s
+;; `(contains? raw-result :elapsed_ms)` guard would throw on the very first
+;; request instead of measuring the result. Neither is a wire change; both are
+;; this namespace assuming a shape it does not own.
+
+(def ^:private nested-measured
+  "The MEM-003 envelope: five clock fields under one `measured` block."
+  {:elapsed_ms 1.0
+   :inspection_elapsed_ms 2.0
+   :job_elapsed_ms 3.0
+   :scan_ms 4.0
+   :queue_ms 5.0})
+
+;; @spec MCP-OP-STUDY-040
+(deftest the-envelope-is-whatever-the-finalizer-added
+  (testing "the finalizer adds only keys the envelope namespace declares"
+    (let [fitted (atom nil)]
+      (mcp-operation/invoke!
+        {:execute (fn [] {:ok true :operation "probe"})
+         :fit (fn [result] (reset! fitted result) result)
+         :summarize (fn [_] "probe")
+         :callback (fn [_ _ _] nil)})
+      (is (seq (remove #{:ok :operation} (keys @fitted)))
+          "the finalizer must add something, or this proves nothing")
+      (is (every? mcp-operation/envelope-keys
+                  (remove #{:ok :operation} (keys @fitted)))
+          (str "a key the finalizer adds is not declared in "
+               "`mcp-operation/envelope-keys`, so the budget gate cannot "
+               "carry it or check for it: "
+               (pr-str (remove (into #{:ok :operation}
+                                     mcp-operation/envelope-keys)
+                               (keys @fitted)))))))
+  (testing "a result carrying NO envelope is still refused, in any shape"
+    (is (thrown? IllegalArgumentException
+                 (inspect-tool/fit-public-result {:ok true :operation "probe"}))))
+  (with-tmp-project
+    #(build-toy-project! % 200)
+    (fn [config]
+      (let [domain (inspect-tool/execute-ls-tree
+                     config {:mode "ls-tree" :dir "." :format "text"
+                             :limit 16384})]
+        (doseq [[shape envelope]
+                [["top-level elapsed_ms" {:elapsed_ms 1.0}]
+                 ["a nested measured block" {:measured nested-measured}]]]
+          (testing shape
+            (let [raw (merge domain envelope)
+                  fitted (inspect-tool/fit-public-result raw)
+                  published (inspect-tool/mcp-result-byte-count
+                              (inspect-tool/inspect-summary fitted) fitted)]
+              (is (>= inspect-tool/max-public-result-bytes published)
+                  (format "%s published %d bytes" shape published))
+              (is (or (pos-int? (:text_evidence_limit fitted))
+                      (false? (:ok fitted)))
+                  "an over-budget result is a typed truncation or a refusal")
+              (testing "and a SUBSTITUTE the gate builds carries the envelope"
+                (let [huge (merge domain envelope
+                                  {:tree (apply str
+                                                (repeat
+                                                  (* 40 1024) "x"))})
+                      substitute (inspect-tool/fit-public-result huge)]
+                  (is (false? (:ok substitute))
+                      "the fixture must actually reach the refusal rung")
+                  (is (= envelope (select-keys substitute
+                                               (keys envelope)))
+                      (str shape ": the substitute lost the envelope of the "
+                           "result it replaced — "
+                           (pr-str (select-keys substitute
+                                                mcp-operation/envelope-keys)))))))))))))
