@@ -963,7 +963,16 @@
     ;; and no marker. That is the reviewer's own finding one frame over, and
     ;; it was invisible until the names were written down: an enumeration that
     ;; describes a subset of what an entrance emits is green over the rest.
-    :unknown-operation})
+    :unknown-operation
+    ;; Round twenty-two, Opus's round-twenty-one item 4. A 10,001-deep nested
+    ;; EDN argument reached the reader and came back as an untyped
+    ;; `StackOverflowError` — an `Error`, which `-main`'s `catch Exception`
+    ;; never saw — so a caller-controlled argument produced a raw stack trace
+    ;; at both real launchers. `core/parse-val` now measures nesting depth by
+    ;; SCANNING DELIMITERS, deciding the refusal without the reader and
+    ;; without the stack, and the name is declared here so the enumeration
+    ;; witness drives it through both launchers like every other.
+    :argument-nesting-too-deep})
 
 ;; @spec MCP-OP-CENSUS-014
 (def mcp-refusal-types

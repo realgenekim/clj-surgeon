@@ -2572,6 +2572,90 @@
         bounded)
       (run-op canonical opts))))
 
+(def max-argument-nesting-depth
+  "How deeply one CLI argument may nest before it is refused unread.
+
+   Opus's round-twenty-one item 4. `edn/read-string` is recursive, so a
+   10,001-deep nested argument overflowed the reader's stack and left both
+   real launchers as an untyped `StackOverflowError` — an `Error`, which
+   `-main`'s `catch Exception` never saw. Nothing was evaluated and no caller
+   value was published unbounded, which is why the reviewer ruled it
+   non-blocking; what it broke is the claim that every refusal the launcher
+   prints leaves through ONE bounded exit, because a raw stack trace is a
+   refusal no enumeration can drive.
+
+   256, and the number is a CEILING rather than a measurement of what the
+   reader survives: every argument this CLI accepts is a path, a keyword, a
+   flat list of door symbols or a one-level map, so a legitimate request is
+   two or three deep and the ceiling is three orders of magnitude of slack.
+   A bound set where the stack happens to give out would move with the JVM,
+   the platform and the thread; a bound set where the REQUESTS are is a
+   property of the tool."
+  256)
+
+(def ^:private opening-delimiters
+  "The three characters that open a nesting level in EDN."
+  #{\[ \{ \(})
+
+(def ^:private closing-delimiters
+  "The three characters that close one."
+  #{\] \} \)})
+
+(defn- scanned-nesting-depth
+  "The deepest run of open delimiters in `s`, measured WITHOUT a reader.
+
+   Character scanning, deliberately: the whole point is to answer \"is this
+   too deep to read\" before anything recursive touches it, and a reader that
+   throws on depth has already used the stack it was supposed to protect.
+
+   EDN strings and character literals are skipped, so a path or a door name
+   containing a bracket is not counted as nesting. It stops as soon as the
+   ceiling is exceeded, so the scan is bounded by the answer rather than by
+   the argument."
+  [^String s]
+  (let [n (.length s)]
+    (loop [i 0 depth 0 deepest 0 in-string? false escaped? false]
+      (if (or (>= i n) (> deepest max-argument-nesting-depth))
+        deepest
+        (let [c (.charAt s i)]
+          (cond
+            in-string?
+            (recur (inc i) depth deepest
+                   (not (and (not escaped?) (= c \")))
+                   (and (not escaped?) (= c \\)))
+
+            (= c \") (recur (inc i) depth deepest true false)
+
+            ;; A character literal: `\\[` is a bracket the caller wrote, not a
+            ;; delimiter, so the next character is consumed whatever it is.
+            (= c \\) (recur (+ i 2) depth deepest false false)
+
+            (opening-delimiters c)
+            (let [d (inc depth)] (recur (inc i) d (max deepest d) false false))
+
+            (closing-delimiters c)
+            (recur (inc i) (dec depth) deepest false false)
+
+            :else (recur (inc i) depth deepest false false)))))))
+
+(defn- refuse-over-nested!
+  "Throw the DECLARED launcher refusal when one argument nests past the
+   ceiling. Named separately from `parse-val` so the two branches that read
+   cannot drift into checking different things."
+  [^String s]
+  (let [measured (scanned-nesting-depth s)]
+    (when (> measured max-argument-nesting-depth)
+      (throw (ex-info
+               (str "an argument nests at least " measured
+                    " deep, past the " max-argument-nesting-depth
+                    "-level ceiling; it is refused unread, because a reader "
+                    "deep enough to measure it is a reader deep enough to "
+                    "overflow")
+               {:error-type :argument-nesting-too-deep
+                :ceiling max-argument-nesting-depth
+                :measured measured
+                :value s})))))
+
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.
    Pure: string in, value out.
@@ -2604,8 +2688,8 @@
     (= s "true") true
     (= s "false") false
     (.startsWith s ":") (keyword (subs s 1))
-    (.startsWith s "[") (edn/read-string s)  ;; parse EDN vectors after shell unquoting
-    (.startsWith s "{") (edn/read-string s)  ;; parse EDN maps
+    (.startsWith s "[") (do (refuse-over-nested! s) (edn/read-string s))
+    (.startsWith s "{") (do (refuse-over-nested! s) (edn/read-string s))
     :else s))
 
 (defn parse-args
@@ -2655,6 +2739,52 @@
                                   (filter #(= repeated (first %)) pairs))}))))
       (cond-> (into {} pairs)
         has-help? (assoc :help true)))))
+
+(defn launcher-throwable-refusal
+  "The LAST-RESORT refusal for anything that reaches `-main`'s outermost catch.
+
+   `Throwable`, not `Exception`, and that one word is Opus's round-twenty-one
+   item 4. A 10,001-deep nested EDN argument overflowed the reader's stack, and
+   a `StackOverflowError` is an `Error`: it walked past `catch Exception` and
+   both real launchers published a raw stack trace instead of a typed refusal.
+   A caller-controlled argument reaching an untyped stack trace is a refusal no
+   enumeration can drive, which is the round-nineteen argument about undeclared
+   names one class over.
+
+   `core/max-argument-nesting-depth` now refuses that particular input unread,
+   so no argv is expected to arrive here at all — which is exactly why this
+   exists. The depth bound is a guess about which `Error` a caller can reach;
+   this is the promise that the guess being wrong still leaves a typed,
+   bounded exit rather than a stack trace.
+
+   The name is `:invalid-arguments`, the launcher's already-declared generic,
+   whenever the `Throwable` carries none of its own: this catch sits at the end
+   of a body whose only work is turning argv into a request, so an unnamed
+   failure here is a failure about the arguments. An `Error` carries no
+   `ex-data` and often no message, so the class name is published when there is
+   nothing else to say — the caller needs to know WHAT failed, and the class is
+   the tool's own fact, not the caller's value.
+
+   Bounded by `print-launcher-refusal!` like every other launcher refusal; a
+   returned map rather than a printed one so a witness can drive it with a real
+   `StackOverflowError`, which no argv can produce once the ceiling is in
+   place."
+  [^Throwable t]
+  ;; `ex-data`, not `(instance? clojure.lang.IExceptionInfo t)`: a class
+  ;; literal is resolved when this namespace is ANALYSED and babashka's
+  ;; runtime does not carry that interface, so the literal took the bb
+  ;; launcher out at analysis time — the same lesson `census-adapter-failure`
+  ;; already records about `VirtualMachineError`. `ex-data` answers nil for
+  ;; anything that carries none, which is the question being asked.
+  (let [data (or (ex-data t) {})
+        message (.getMessage t)]
+    (merge data
+           {:error (if (and message (not (str/blank? message)))
+                     message
+                     (str "the launcher failed with "
+                          (.getName (class t))
+                          " and no message"))
+            :error-type (or (:error-type data) :invalid-arguments)})))
 
 (defn -main [& args]
   (try
@@ -2753,10 +2883,6 @@
                 :else (run opts))))]
       (when (and (map? result) (:error result))
         (System/exit 1)))
-    (catch Exception e
-      (print-launcher-refusal!
-        (merge (or (ex-data e) {})
-               {:error (.getMessage e)
-                :error-type (or (:error-type (ex-data e))
-                                :invalid-arguments)}))
+    (catch Throwable t
+      (print-launcher-refusal! (launcher-throwable-refusal t))
       (System/exit 1))))
