@@ -1841,3 +1841,5 @@ banking if codex gates review throughput.
 ## 22:30Z Held-out SMW acceptance check landed: 25 arms ACCEPT 4/4, G2 REJECT (the feature-absent arm, caught), three unchanged trees REJECT (negative controls). Every wall in the replay doc now has an independent ACCEPT beside it. Oracle shared with Astra.
 
 ## 22:33Z feature_thread r12 landing review (Sol): GO — landing 508f26f5 via ~/bin/land (twelve rounds; the lane freezes after)
+
+## 22:38Z suite spike r3 built (105f4b6f): all gates green on a fresh clone, N=4 battery PASS x2, battery ledger + freshness tripwire (which caught its own false-alarm bug before landing); landing review awaits Astra's slot
