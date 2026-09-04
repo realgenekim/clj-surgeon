@@ -1855,3 +1855,5 @@ banking if codex gates review throughput.
 ## 22:52Z CI-fixes checkpointed (49b92905): the inherited branch was red on the full suite — a typed throw escaped two map-contract callers; fixed by translation at the boundaries; remaining gates deferred. Usage watch 22:51Z: admit 59, inspect 154.
 
 ## 22:54Z feature_thread LANDED (23703002) — seventh landing; the lane is FROZEN. SUSPEND-ALL executed for Astra until 23:20Z; E-THREAD runner clocks fixed per his audit; a fourth self-kill → ~/bin/kill-pattern.
+
+## 22:57Z admit gate r18 checkpointed (dcb40838): overlay escape, modes/mtimes, tail — all RED→GREEN with sabotage; full gates and the landing review wait for capacity after 23:20Z
