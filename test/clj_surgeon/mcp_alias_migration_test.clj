@@ -1655,6 +1655,56 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-008
+(deftest an-exhausted-alias-policy-proposes-no-alias-the-policy-forbids
+  ;; E-PREWRITE cohort, 2026-09-04, live against alias_migration at 656a0a3c
+  ;; over its own fixture, whose src/acid/fanout/ns_100.clj binds all four
+  ;; alias_policy entries:
+  ;;
+  ;;   alias_policy (given)=> ["store2" "st2" "es" "store-2"]
+  ;;   collided_bindings   => ["store2" "st2" "es" "store-2"]
+  ;;   next_call policy    => ["store2" "st2" "es" "store-2" "store-2-2"]
+  ;;
+  ;; `store-2-2` is not in the policy the caller sent. A next_call is the
+  ;; caller's own request with one field corrected; it may never answer with a
+  ;; value the caller's own request forbids, because the caller cannot execute
+  ;; it without abandoning a constraint they stated. When the policy is
+  ;; exhausted for a file the correction is not mechanical — only the caller
+  ;; knows which alias they are willing to add — so there is no next_call, and
+  ;; the remedy has to say the policy is exhausted and name the file.
+  (let [workspace (workspace!)]
+    (try
+      (spit (io/file workspace "src/acid/fanout/allbound.clj")
+            (str "(ns acid.fanout.allbound\n  (:require\n"
+                 "   [acid.fanout.store :as st]\n"
+                 "   [acid.fanout.util-a :as store2]\n"
+                 "   [acid.fanout.util-b :as st2]\n"
+                 "   [acid.fanout.util-c :as es]\n"
+                 "   [acid.fanout.util-d :as store-2]))\n\n"
+                 "(defn one [id] (st/find-event id))\n"))
+      (let [result (execute! workspace {:expect {:files 13}})
+            remedy (str (:remedy result))]
+        (is (= "alias-migration-alias-policy-exhausted" (:error_type result))
+            (pr-str result))
+        (is (= "src/acid/fanout/allbound.clj" (:file result)))
+        (is (= (vec fixture/alias-policy) (:collided_bindings result))
+            "every policy entry was expected to be bound in that file")
+        (testing "no next_call proposes a value the caller's policy forbids"
+          (is (every? (set fixture/alias-policy)
+                      (get-in result [:next_call "to" "alias_policy"]))
+              (str "the next_call proposes an alias outside the caller's own "
+                   "alias_policy: "
+                   (pr-str (get-in result [:next_call "to" "alias_policy"]))))
+          (is (nil? (:next_call result))
+              "an exhausted policy has no mechanical correction to compose"))
+        (testing "the remedy says what is exhausted, and where"
+          (is (str/includes? remedy "exhausted")
+              (str "the remedy does not say the policy is exhausted: " remedy))
+          (is (str/includes? remedy "src/acid/fanout/allbound.clj")
+              (str "the remedy does not name the file: " remedy))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-002
 (deftest the-request-is-closed-and-refuses-unknown-or-malformed-fields
   (let [workspace (workspace!)]
