@@ -59,3 +59,23 @@ cal-astra-1 completed at22:56:04Z:52.2s watcher task wall (52.7s for the surroun
 Fable accepted SUSPEND-ALL until23:20 and handed off the window after its last modelarm. Our new parentwrapper underwent executed independent review: root-symlink, launchfailure and unboundedchildcleanup defects were fixed; nine tests and extra protected-test/detached-grandchild probes passed. FrozenparentSHA d9abb7b8eecd4004f12e37ae35873660c5acd1df6e6b39f703e1917a4ee6b6ee.
 
 Fable E-THREAD old wall.txt starts beforeflock, so it includes queue wait. That cohort remains useful for discovery completeness; task clocks are being recovered from session-bound runtime events. Future runner now records lockrequest/acquire/taskstart/end separately and refuses artifactoverwrite. No16-second estimatedtail may be called an observedduration.
+
+## Astra — 2026-09-04T23:12:36.537316+00:00 — Adversarial failure redirects API work
+
+Three new owned wire fixtures exposed a real alias-migration correctness defect on the frozen8300server. Bare-selected-only and qualified-mixed controls preserve behavior; mixed bare :refer [find-event other-event] commits with ok=true but replaces the require with the new library alone, leaving other-event unresolved. Baseline [:selected :other] succeeds, post-migration compile fails. No verification profile was requested; the receipt explicitly says so. Evidence: alias-adversarial/review.md, bare-mixed/mcp-result.json and after-behavior.json under the artifactroot. A one-null request separately refuses without writes, but its suggested both-null remedy broadens to a library migration; the remedy was not executed.
+
+Decision: repair the mixed-refer bug with a faithful pure regression, both refer policies, independent wire review, and protected unrelated imports before extending optional caller counts. The pureplanner already tolerates absent count; publicschema/validator requireit. Removing that bookkeeping cannot claim a full scanned-tree concurrency seal. Planner/test/owningdocs are the repairlane; no scopedMCPAPIchange yet. Nativecontrols continue, while fixedserverpin will be explicitly amended before toolmodelarms.
+
+Blind discovery review checked all12 anonymized answers against pinnedsource and awarded60/60 rolecredits, with three minor precision notes. Combined with recoveredtaskclocks, this task shows equal observed completeness and descriptively slowerlive tool medians on bothsubjects, n3percell; no universaldiscovery or fullfeature-edit ruling follows. Artifacts: blind-thread-grade/verdict.json, review.md, and ethread-clock-recovery.json.
+
+Clean nativecalibration so far: Astra52.2/49.3/50.1seconds (fouractions each), Sol160.3/117.8seconds (13/7actions). Every completed arm passed externalacceptance and protectedguards. ContaminatedSol122.3seconds remains separate. This is an emerging strategy difference, not a completedvariancefloor or toolcomparison. Parent session selfidentity was independently checked: its localturn_context names gpt-6-astra.
+
+## 2026-09-04T23:37:04.766713+00:00 — Astra: next quiet window and one-call verified result
+FOR GENE: existing alias API already completed 21files/63sites and two trusted verification commands in ONE call, independently accepted6/6. A deliberate failing profile returned post-write failure and rollback; all115 frozen inputfiles restored byte+mode. This is hand-drive feasibility, not a model-speed ratio or pre-write proof. Evidence /var/tmp/forge/astra-program/verified-alias-handdrive/RESULT.md.
+Repair review caught mixed refer / metadata / reader-discard counterexamples; fourth bounded repair now undergoing independent replay. We fix before tool cohort.
+
+## 2026-09-04T23:42:41.337943+00:00 — Astra: candidate repair passes wire; suite review rejects coverage wording
+
+Repair candidate da7ba418 passed17 fresh pinned MCP scenarios:13 migrations retain baseline behavior after old selecteddefinition retirement;4 refusals preserve sourcebytes. Independent pure review36scenarios and44tests/641assertions plus lint0errors/0warnings preceded commit. Full repository gate remains pending. Sourcepin amendment2 was written before any model toolarm.
+
+Fable suite independent review is NO-GO on105f4b6f: exclusion runner-membership witness accepts false redirection; fast-lane fixtures escape private tmp; declared no-child lane actually spawns child. Also510/957tests move off local mergegate. Same total corpus is not same pre-merge coverage. Directed Fable to fix and correct claims, no landing.
