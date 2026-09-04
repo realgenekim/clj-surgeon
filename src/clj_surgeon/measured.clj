@@ -137,15 +137,27 @@
 ;; yields the number is `measured/value` — whose call sites in `src/` are named
 ;; one by one in the invariant witness's allow-list.
 ;;
-;; ACCEPTED RESIDUAL, declared rather than chased (round-four review §3):
-;; `setAccessible` reflection with a COMPUTED field name —
-;; `(.getDeclaredField (class r) (str "launder" "able"))` — reads the number,
-;; and no textual scan can see it. The literal spelling IS in the escape-hatch
-;; pattern, so a plain plant is caught; the computed one is not, and a JVM
-;; without a security manager cannot prevent reflection at all. The reviewer's
-;; ruling, which this comment exists to record: "Textual scanning cannot close
-;; that, and a deliberate attacker is not the threat model here — record it, do
-;; not chase it."
+;; ACCEPTED RESIDUAL, declared rather than chased (round-four review §3,
+;; sharpened by round six §7): reflection over the type's fields BY ANY ROUTE,
+;; NAMED OR POSITIONAL.
+;;
+;; The named route is a COMPUTED field name —
+;; `(.getDeclaredField (class r) (str "launder" "able"))` — which reads the
+;; number and which no textual scan can see. The POSITIONAL route spells no
+;; name at all: `(.get (doto (first (.getDeclaredFields (class r)))
+;; (.setAccessible true)) r)`, which the round-six reviewer used as plant F.
+;; The earlier wording said "with a computed field name" and did not cover it;
+;; a residual that names only half of its own class understates itself, and
+;; this one is now stated at the width of the thing it admits.
+;;
+;; What IS closed: the literal spellings — `.-launderable`, `.launderable`,
+;; bare `launderable`, `"launderable"` as a reflective string argument, and
+;; `(. r launderable)` — are all escape-hatch alternatives, so every plant that
+;; writes the name is caught. What is not is any route that computes or indexes
+;; to it, and a JVM without a security manager cannot prevent reflection at
+;; all. The reviewer's ruling, which this comment exists to record: "Textual
+;; scanning cannot close that, and a deliberate attacker is not the threat
+;; model here — record it, do not chase it."
 
 ;; SECOND ACCEPTED RESIDUAL, declared rather than chased (round-five review
 ;; §4): VALUE EQUALITY is an oracle, and now that `hashCode` is a constant it

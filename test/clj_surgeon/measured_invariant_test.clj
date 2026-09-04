@@ -1510,13 +1510,18 @@
 ;;        `unwrap-readings` is private, `(measured/unwrap-readings ...)` in
 ;;        `src/` fails this witness by name-independent construction.
 ;;
-;; RESIDUAL, declared and accepted (round-four review §3): `setAccessible` with
-;; a COMPUTED field name — `(.getDeclaredField (class r) (str "launder" "able"))`
-;; — reads the number and no textual scan can see it. The reviewer's sentence:
-;; "Textual scanning cannot close that, and a deliberate attacker is not the
-;; threat model here — record it, do not chase it." A JVM without a security
-;; manager cannot prevent reflection, so this is a property of the platform,
-;; not a gap in the ratchet.
+;; RESIDUAL, declared and accepted (round-four review §3, sharpened by round
+;; six §7): reflection over the type's fields BY ANY ROUTE, NAMED OR
+;; POSITIONAL. The named route computes the name —
+;; `(.getDeclaredField (class r) (str "launder" "able"))`. The positional route
+;; spells no name at all — `(first (.getDeclaredFields (class r)))` plus
+;; `setAccessible`, the round-six reviewer's plant F. Neither is visible to a
+;; textual scan. The earlier wording said "with a computed field name" and did
+;; not cover the positional half, which is a residual understating its own
+;; class. The reviewer's sentence stands: "Textual scanning cannot close that,
+;; and a deliberate attacker is not the threat model here — record it, do not
+;; chase it." A JVM without a security manager cannot prevent reflection, so
+;; this is a property of the platform, not a gap in the ratchet.
 
 (def sanctioned-laundering-vars
   "The public vars of `clj-surgeon.measured` that MAY turn a TAGGED READING

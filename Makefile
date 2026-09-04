@@ -959,6 +959,22 @@ test-fast:
 # reproducible in seconds. Takes the exclusive suite lock, like the battery:
 # it measures heap and must not share a box lane with another JVM suite.
 PARSER_RED_ROOT ?= /home/forge/tmp/admit/parser-red
+
+# THE DEFAULT MODE IS `red`, AND SINCE THE ADMISSION FIX LANDED THE BARE TARGET
+# CORRECTLY FAILS. `make memory-red` with no argument asks "does the defect
+# still reproduce?", and the answer on this branch is no: every arm reports
+# `:outcome :parser-admission-refused` and the run prints
+# `memory-red: 0/3 assertions held (expect=red) -- FAIL`.
+#
+# THE GATE IS THE GREEN MODE:  make memory-red PARSER_RED_EXPECT=green
+# which asserts the refusal holds, and reports `6/6 assertions held`.
+#
+# Written here rather than left for the reader to rediscover: the round-six
+# reviewer ran the bare target, read the failure correctly as red-by-design,
+# and said so -- "I flag it only so nobody runs the bare target later and reads
+# the failure as a regression." The default is not flipped, because a red
+# witness whose default stops asking its own question is a witness that has
+# quietly become an assertion; the cost of keeping it honest is this comment.
 PARSER_RED_EXPECT ?= red
 
 # @spec MCP-OP-MEM-021
