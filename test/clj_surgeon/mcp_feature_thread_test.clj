@@ -1595,3 +1595,36 @@
 
     (testing "and the text reader can see the same selection"
       (is (str/includes? text "by_leg")))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR / round-three spec 4 -- the classic-script statement
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-035
+(deftest a-script-leg-states-whether-the-subject-is-exported
+  (testing "no export, no module.exports, no window.X = : say so"
+    (let [{:keys [text structured]} (thread! fixture-root)
+          js (leg structured "js-function")]
+      (is (= "FOUND" (:status js)))
+      (is (= "none (classic script; functions are globals)" (:export js))
+          (str "the js leg said " (pr-str (:export js))
+               "; a reader must not have to search for a registration site"))
+      (is (str/includes? text "export=none (classic script; functions are globals)"))))
+
+  (testing "a registration site, when there is one, is NAMED with its line"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-export")]
+      (try
+        (spit (io/file scratch "resources/public/js/editor-commands.js")
+              "\nwindow.formatDraft = formatDraft;\n" :append true)
+        (let [{:keys [structured]} (thread! (.getPath scratch))
+              js (leg structured "js-function")]
+          (is (str/includes? (str (:export js)) "window.formatDraft = formatDraft;")
+              (str "the registration site was not named: " (pr-str (:export js))))
+          (is (re-find #"resources/public/js/editor-commands\.js:L\d+" (str (:export js)))
+              "and it must carry the file and line the reader would open"))
+        (finally (delete-tree! scratch)))))
+
+  (testing "a Clojure leg makes no such claim"
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (is (nil? (:export (leg structured "handler")))
+          "`export` is a JavaScript question and belongs only to script legs"))))
