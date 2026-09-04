@@ -4954,11 +4954,13 @@
           (let [line (->> (str/split-lines text)
                           (filter #(str/starts-with? % "next_call · "))
                           first)
-                recovered (json/parse-string
-                            (subs line (count "next_call · ")) true)]
-            (is (= (:next_call preview) recovered)
+                ;; parsed WITHOUT keywordising: the expect_pre_sha256 keys are
+                ;; file paths, and turning "src/app/m11.clj" into a keyword is
+                ;; the witness corrupting the thing it is checking
+                recovered (json/parse-string (subs line (count "next_call · ")))]
+            (is (= (json/parse-string encoded) recovered)
                 "the JSON parsed back out of the text is the receipt's own call")
-            (is (= n (count (get-in recovered [:arguments :expect_pre_sha256])))
+            (is (= n (count (get-in recovered ["arguments" "expect_pre_sha256"])))
                 "every pre-image digest the commit needs survived the render"))))
       (finally (delete-tree! root)))))
 

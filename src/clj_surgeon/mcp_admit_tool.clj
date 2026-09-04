@@ -1816,11 +1816,57 @@
         (telemetry/emit! state :tool.call event))))
   receipt)
 
-;; @spec MCP-OP-ADMIT-069
-(defn- bound-receipt
-  "Fit one public receipt inside the shared MCP payload budget."
+;; @spec MCP-OP-ADMIT-135
+(defn- oversize-next-call-refusal
+  "A next_call the public budget cannot carry is a typed refusal naming its
+  size -- never a pointer, and never a silently truncated call.
+
+  There is no honest degraded rendering of a next_call: it is the one field a
+  caller must be able to send back byte for byte, so a shortened one is not a
+  smaller version of the affordance, it is the absence of it wearing its name.
+  If it will not fit, the receipt says so, states the exact character count
+  and the budget it exceeded, and refuses -- so a caller knows the call
+  existed, knows why it cannot have it, and knows the number that would
+  change the answer.
+
+  Round three's answer, a pointer at structuredContent, is the same failure
+  one level down: the reader this text block exists for is the one who cannot
+  read structuredContent."
   [receipt]
-  (-> receipt
+  (when-let [call (:next_call receipt)]
+    (let [encoded (json/generate-string call)
+          characters (count encoded)]
+      (when (> characters write-refusal/public-byte-budget)
+        (merge (empty-receipt (or (:mode receipt) "preview"))
+               {:ok false
+                :operation :admit-patch-refused
+                :error-type :next-call-exceeds-public-budget
+                :error (str "this receipt's next_call is " characters
+                            " characters and the public payload budget is "
+                            write-refusal/public-byte-budget
+                            "; it cannot be published verbatim, and a"
+                            " next_call a caller cannot send back byte for"
+                            " byte is not a next_call")
+                :next_call_characters characters
+                :public_byte_budget write-refusal/public-byte-budget
+                :blocked_next_call_for (:error-type receipt)
+                :source-unchanged (:source-unchanged receipt)
+                :remedy (str "narrow the request so its follow-up call fits "
+                             write-refusal/public-byte-budget
+                             " characters; fewer files in one patch is the"
+                             " lever, because expect_pre_sha256 carries one"
+                             " digest per file")})))))
+
+;; @spec MCP-OP-ADMIT-069
+;; @spec MCP-OP-ADMIT-135
+(defn- bound-receipt
+  "Fit one public receipt inside the shared MCP payload budget, refusing
+  outright when its next_call alone cannot fit.
+
+  This is the one place every receipt `execute-request!` returns passes
+  through, and it sits OUTSIDE every `catch` on that path."
+  [receipt]
+  (-> (or (oversize-next-call-refusal receipt) receipt)
       (write-refusal/bound-public-refusal pr-str)
       (write-refusal/bound-public-payload trimmable-receipt-keys)))
 
@@ -2047,6 +2093,7 @@
          text)))
 
 ;; @spec MCP-OP-ADMIT-134
+;; @spec MCP-OP-ADMIT-135
 (defn- admit-receipt-facts
   "Every leaf of `result` a text-reading client would otherwise never see,
   on a refusal and on a success alike.
@@ -2061,8 +2108,10 @@
   leaf's VALUE is cut at `max-admit-receipt-fact-characters`, naming the
   cut; (2) then whole leaves are dropped from the TAIL of the path-sorted
   order until the section fits `admit-fact-section-byte-budget`, and the
-  text states how many were dropped; (3) the `next_call` is rendered after
-  this section, so everything else gives ground before it does."
+  text states how many were dropped; (3) the `next_call` is never elided at
+  any size -- it is rendered after this section, verbatim, and if it alone
+  cannot fit the public budget the receipt becomes a typed refusal rather
+  than a pointer (MCP-OP-ADMIT-135)."
   [result]
   (let [facts (->> (apply dissoc result admit-receipt-fact-exclusions)
                    (mapcat (fn [[k v]] (admit-leaf-entries (name k) v)))
@@ -2097,13 +2146,7 @@
             (recur (subvec kept 0 (dec (count kept))))))))))
 
 ;; @spec MCP-OP-ADMIT-132
-(def ^:private max-rendered-admit-next-call-characters
-  "Round three's ceiling on the next_call JSON the text inlines verbatim.
-  Blocker 4 of the round-three review kills it; it survives this commit only
-  so that blocker 2's change is the only behaviour this commit alters."
-  1024)
-
-;; @spec MCP-OP-ADMIT-132
+;; @spec MCP-OP-ADMIT-135
 (defn- admit-rendered-next-call
   "The next_call line: the JSON verbatim at any size, or a stated absence.
 
@@ -2111,19 +2154,18 @@
   structuredContent -- an invented second budget one thirtieth the size of
   the real one, and the tool description tells callers to copy
   `expect_pre_sha256` out of this very field. A routine 14-file preview
-  produced 1,548 characters, so the instructed copy was impossible from the
-  text for an ordinary change. The next_call is the one thing in a receipt
+  produced 1,550 characters here and 1,554 in the review, so the instructed
+  copy was already impossible for an ordinary change -- and impossible
+  precisely for the text-only caller this ratchet exists for, because a
+  pointer at structuredContent is no use to someone who cannot read
+  structuredContent. The next_call is the one thing in a receipt
   a caller must be able to send back byte for byte; it is rendered last so
   that everything else gives ground before it, and it never gives ground.
   A next_call that alone cannot fit the public payload budget is a typed
   refusal (`oversize-next-call-refusal`), never a pointer."
   [result]
   (if-let [call (:next_call result)]
-    (let [encoded (json/generate-string call)]
-      (if (<= (count encoded) max-rendered-admit-next-call-characters)
-        (str "next_call · " encoded)
-        (str "next_call · " (count encoded)
-             " characters, in structuredContent.next_call — send it verbatim")))
+    (str "next_call · " (json/generate-string call))
     (str "next_call · none — this receipt has no follow-up call")))
 
 ;; @spec MCP-OP-ADMIT-134
@@ -2151,6 +2193,7 @@
          (when-let [facts (admit-receipt-facts result)]
            (str "\n" facts))
          ;; @spec MCP-OP-ADMIT-132
+         ;; @spec MCP-OP-ADMIT-135
          "\n" (admit-rendered-next-call result))
     (str "admit_clojure_patch refused · " (name (or (:error-type result)
                                                     :unknown))
@@ -2168,6 +2211,7 @@
          (when-let [facts (admit-receipt-facts result)]
            (str "\n" facts))
          ;; @spec MCP-OP-ADMIT-132
+         ;; @spec MCP-OP-ADMIT-135
          "\n" (admit-rendered-next-call result))))
 
 ;; @spec MCP-OP-ADMIT-129
