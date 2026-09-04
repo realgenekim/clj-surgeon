@@ -1278,6 +1278,70 @@
 
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- ceiling-writer
+  "A `Writer` that collects into `builder` and refuses past `ceiling`.
+
+  Every concrete `Writer.write` overload is intercepted rather than only the
+  abstract one, because `print-method` reaches the writer three different
+  ways: `append` on a char for an ordinary character, `write` on a String for
+  an escape sequence, and `write` on a char array for a copied region."
+  [^StringBuilder builder ceiling]
+  (let [refuse! (fn []
+                  (when (> (.length builder) ceiling)
+                    (throw (ex-info "print ceiling reached"
+                                    {::print-ceiling true}))))]
+    (proxy [java.io.Writer] []
+      (write
+        ([data]
+         (cond
+           (integer? data) (.append builder (char (int data)))
+           (string? data) (.append builder ^String data)
+           :else (.append builder (String. ^chars data)))
+         (refuse!))
+        ([data off len]
+         (if (string? data)
+           (.append builder ^String (subs ^String data off (+ (int off) (int len))))
+           (.append builder ^String (String. ^chars data (int off) (int len))))
+         (refuse!)))
+      (flush [])
+      (close []))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn bounded-pr-str
+  "`pr-str` bounded in WORK as well as in output.
+
+  A ceiling applied to a finished string is a bound on the receipt and not on
+  the request. `pr-str` realises the complete value before anything measures
+  it, so an endless lazy sequence never reaches the gate, a value nested
+  twenty thousand deep takes the renderer down with a StackOverflowError, and
+  a ten-megabyte string is rendered whole in order to publish 160 characters
+  of it — 362 ms of work to produce a fact line nobody could tell apart from
+  the cheap one.
+
+  So printing STOPS at the ceiling instead: the writer refuses the moment the
+  buffer passes it, and `*print-length*` and `*print-level*` are bound to the
+  same number as a second floor under the same guarantee. Both are set to the
+  CHARACTER ceiling rather than to something smaller, so neither can fire on a
+  value the character bound would have admitted whole: N elements or N levels
+  of nesting cost at least N characters, so anything the length or level bound
+  would cut was already past the character bound. Nothing that fitted before
+  renders differently now."
+  [value ceiling]
+  (let [builder (StringBuilder.)]
+    (try
+      (binding [*print-length* ceiling
+                *print-level* ceiling
+                *print-readably* true]
+        (print-method value (ceiling-writer builder ceiling)))
+      (catch clojure.lang.ExceptionInfo e
+        (when-not (::print-ceiling (ex-data e))
+          (throw e))))
+    (let [text (.toString builder)]
+      (if (> (count text) ceiling)
+        (str (subs text 0 ceiling) "…")
+        text))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn refusal-fact-line
   "The refusal's own discriminating fields, rendered for a text-reading client.
 
@@ -1315,14 +1379,11 @@
         facts (->> renderable
                    (take max-refusal-facts)
                    (map (fn [[field value]]
-                          (let [rendered (pr-str value)]
-                            (str (name field) "="
-                                 (if (> (count rendered)
-                                        max-refusal-fact-characters)
-                                   (str (subs rendered 0
-                                              max-refusal-fact-characters)
-                                        "…")
-                                   rendered))))))]
+                          ;; @spec MCP-OP-ALIAS-059
+                          ;; bounded in WORK, not merely cut afterwards
+                          (str (name field) "="
+                               (bounded-pr-str
+                                 value max-refusal-fact-characters)))))]
     (when (seq facts)
       (str "facts · " (str/join " · " facts)
            (when (pos? dropped)
