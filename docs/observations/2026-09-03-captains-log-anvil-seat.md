@@ -1240,3 +1240,7 @@ Rungs shipped: (1) the seat's shell profile exports TMPDIR/TMP/TEMP=/var/tmp/for
 ## 05:05Z — q5z r14 Sol review: GO-WITH-FIX (two items: work inside an arbitrary toString; keyword/name-derived kinds) → r15
 
 Lane trajectory: r12 NO-GO (silent partial write) → r13 GO-WITH-FIX (3) → r14 GO-WITH-FIX (2, neither data-safety). The remaining two are the last layer of the two ratchets (bounded printing and refusal enumeration): a Writer bound cannot stop a toString that runs before printing — so non-Clojure objects must be rendered by class/identity, never printed — and a source guard keyed on "contains a parameter" is one more existential predicate. r15 on Sonnet with the exact spec; review on Sol.
+
+## 05:06Z — temp-dir ratchet verified at three entrances; one hole found and closed
+
+Login shell: TMPDIR=/var/tmp/forge, JAVA_TOOL_OPTIONS set. Through suite-run: set (the guard). The harness's own Bash tool shell: UNSET — it is non-interactive and does not read ~/.bashrc, so a fixture created directly by a Bash call (or by an agent's Bash) would still default to /tmp. Closed by putting the four variables in ~/.claude/settings.json "env", which every tool shell and every subagent inherits; takes effect for new tool calls. The lesson generalises: a rule set in a shell profile is set for the shells that read the profile, and the harness's shell is not one of them — verify at each entrance, as the census rounds taught.
