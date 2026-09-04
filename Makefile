@@ -33,6 +33,10 @@ MCP_STOP_ATTEMPTS ?= 100
 MCP_JAVA_HOME ?= $(JAVA_HOME)
 MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command -v java 2>/dev/null))
 MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
+# Scratch root for self-tests that need a real directory. NEVER /tmp: it is a
+# RAM-backed tmpfs on this seat, and 82,210 leaked fixture directories took it
+# to 96% of its inodes (inb-9483a4). @spec MCP-OP-TMPHYG-010
+SELF_TEST_TMP ?= $(or $(TMPDIR),/var/tmp)
 MCP_DEV_PORT ?= 7889
 MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
 MCP_DEV_URL ?= http://127.0.0.1:$(MCP_DEV_PORT)/mcp
@@ -739,12 +743,13 @@ benchmark-anvil-portfolio-pair:
 	bash bench/run_anvil_portfolio_pair.sh "$(RESULT_DIR)" "$(TASK)" "$(ORDER)" "$(or $(REPLICATES),1)"
 
 benchmark-anvil-portfolio-pair-self-test:
+	@# @spec MCP-OP-TMPHYG-010
 	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_portfolio_pair.sh \
-		/tmp/clj-surgeon-anvil-pair-self-test decision-batch-edit compact-first 2
+		$(SELF_TEST_TMP)/clj-surgeon-anvil-pair-self-test decision-batch-edit compact-first 2
 	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_public_cfp_cleanup.sh \
-		/tmp/clj-surgeon-public-cfp-self-test native-first 1
+		$(SELF_TEST_TMP)/clj-surgeon-public-cfp-self-test native-first 1
 	ANVIL_FORMAT_CONFIG_SELF_TEST=true bash bench/run_anvil_format_extraction.sh \
-		/tmp/clj-surgeon-format-extraction-self-test mcp-first 1
+		$(SELF_TEST_TMP)/clj-surgeon-format-extraction-self-test mcp-first 1
 
 benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh

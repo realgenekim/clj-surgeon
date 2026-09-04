@@ -68,6 +68,10 @@ required), `[x]` implemented (implementation and test witnesses required),
   `src/clj_surgeon/memory_battery_runner.clj` — shall enforce this leaf's
   refusal and isolation before running anything.
 
+- [x] **MCP-OP-TMPHYG-010**: No Makefile recipe and no `test/*.sh` gate shall
+  name a hard-coded `/tmp/<path>` write target; scratch roots derive from
+  `TMPDIR` with a real-disk default.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb

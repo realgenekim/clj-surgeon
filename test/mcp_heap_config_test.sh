@@ -20,11 +20,13 @@ assert_heap_flags mcp-serve '-J-Xms64m -J-Xmx512m'
 assert_heap_flags mcp-serve-benchmark '-J-Xms64m -J-Xmx512m'
 assert_heap_flags mcp-start '-J-Xms64m -J-Xmx512m'
 
+# @spec MCP-OP-TMPHYG-010
+lifecycle_state_dir="${TMPDIR:-/var/tmp}/clj-surgeon-mcp-lifecycle-test"
 start_output=$(make --no-print-directory -n mcp-start \
-  MCP_STATE_DIR='/tmp/clj-surgeon-mcp-lifecycle-test' \
+  MCP_STATE_DIR="$lifecycle_state_dir" \
   MCP_STOP_ATTEMPTS=7)
 printf '%s\n' "$start_output" | grep -Fq -- \
-  'test -f "/tmp/clj-surgeon-mcp-lifecycle-test/ready.edn"'
+  "test -f \"$lifecycle_state_dir/ready.edn\""
 printf '%s\n' "$start_output" | grep -Fq -- 'seq 1 7'
 printf '%s\n' "$start_output" | grep -Fq -- 'refusing a competing launch'
 
