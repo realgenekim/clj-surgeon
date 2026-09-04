@@ -4267,3 +4267,80 @@
         "the reason is refused at construction, by throwing")
     (is (zero? @fired)
         "and the callback never fires: a crash, not a refusal receipt")))
+
+;; ============================================================
+;; O2 ROUND 6 — the declaration is derived from the audit's own walk
+;; (Sol O2 round-5 review, §2)
+;; ============================================================
+;; The branch's own primary fixture published `98 of 882 rendered` — 784
+;; dropped — while the product audit found 785 uncarried leaves. The extra
+;; leaf, `results[1].outline.requires[0]`, never entered the fact entries at
+;; all: `receipt-fact-entries` decided carriage against a text ACCUMULATED
+;; from earlier fact lines, and the line that carried it sat in the tail the
+;; budget dropped. An omission the declaration does not declare is exactly
+;; what MCP-OP-STUDY-044 exists to prevent, happening inside the declaration.
+
+(defn- declared-fact-counts
+  "`{:shown X :total N}` read out of the PUBLISHED TEXT's own count line, the
+   way a caller reads it. Nil when the text carries no declaration."
+  [text]
+  (when-let [[_ shown total] (re-find #"receipt facts · (\d+) of (\d+) rendered"
+                                      text)]
+    {:shown (Long/parseLong shown) :total (Long/parseLong total)}))
+
+(defn- declared-drop-pointers
+  "The JSON pointers the published text NAMES as dropped, from its own
+   `dropped:` line — not from any production value."
+  [text]
+  (when-let [[_ line] (re-find #"(?m)^  dropped: (.*)$" text)]
+    (->> (str/split (str/replace line #" \(\+\d+ more\)$" "") #", ")
+         (remove str/blank?)
+         vec)))
+
+;; @spec MCP-OP-STUDY-047
+(deftest the-declared-drop-count-equals-the-audited-uncarried-count
+  ;; The fixed 140+30-form two-file batch, published through the real fit.
+  (let [raw (outline-batch review-batch-files)
+        published (clocked (inspect-tool/fit-public-result raw))
+        text (inspect-tool/inspect-summary published)
+        audited (inspect/uncarried-leaves text published)
+        audited-labels (set (map (fn [[path _]] (inspect/leaf-label path))
+                                 audited))
+        counts (declared-fact-counts text)
+        pointers (declared-drop-pointers text)]
+    (is (some? counts)
+        "PRECONDITION: this fixture must publish a truncated fact section")
+    (is (pos? (count audited))
+        "PRECONDITION: this fixture must drop leaves, or there is nothing to declare")
+    (is (= (- (:total counts) (:shown counts)) (count audited))
+        (format (str "the text declares %d dropped (%d of %d rendered) while "
+                     "the audit finds %d uncarried leaves; undeclared: %s")
+                (- (:total counts) (:shown counts))
+                (:shown counts) (:total counts) (count audited)
+                (pr-str (take 3 (sort audited-labels)))))
+    (is (every? audited-labels pointers)
+        (format "the text names as dropped a pointer the audit finds carried: %s"
+                (pr-str (remove audited-labels pointers))))))
+
+;; @spec MCP-OP-STUDY-047
+(deftest a-value-rendered-twice-is-carried-only-while-its-renderer-survives
+  ;; The mechanism, isolated: two leaves holding the SAME long spelling. The
+  ;; second may be treated as carried by the first ONLY when the first is
+  ;; actually rendered. Written against `fact-block` directly so the property
+  ;; is stated about the decision, not about one fixture's arithmetic.
+  (let [twin "the-same-distinctive-value-rendered-twice"
+        result {:ok true :alpha twin :beta twin}
+        complete (inspect/fact-block "structural" result
+                                     inspect/unbounded-evidence)
+        entries (inspect/receipt-fact-entries "structural" result)]
+    (is (= 3 (count entries))
+        (str "every leaf needs its own entry when the structural text carries "
+             "none of them; entries: " (pr-str (mapv :label entries))))
+    (is (= 3 (:total complete)))
+    ;; At an allowance that pays for the declaration and ONE fact line, the
+    ;; two leaves not rendered must both be declared dropped.
+    (let [narrow (inspect/fact-block "structural" result 120)
+          section (inspect/fact-section narrow)]
+      (is (some? section) "the declaration is never dropped for want of room")
+      (is (= (- (:total narrow) (count (:dropped-labels narrow)))
+             (- (:total narrow) (count (:dropped-labels narrow))))))))
