@@ -5434,6 +5434,53 @@
                  ") changed shape"))))))
 
 ;; @spec MCP-OP-ALIAS-059
+;; Round-fifteen review finding 3: the bounded renderer's own recursion
+;; replaced `print-method`'s, and two of `print-method`'s renderings were not
+;; carried across — a record lost its `#namespace.Record` tag and became an
+;; ordinary map, and collection metadata disappeared under `*print-meta*`
+;; while SYMBOL metadata still rendered. Neither shows in the ordinary-receipt
+;; corpus, so the compatibility claim held for those receipts and not
+;; universally. Both previous forms are bounded — a class name is read with
+;; `.getName` and never with `toString`, and a metadata map recurses through
+;; the same bounded writer as any other value — so they are RESTORED rather
+;; than narrowed.
+(defrecord RendererCompatRecord [a b])
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-fact-renderer-keeps-every-rendering-callers-already-saw
+  (let [ceiling mcp-tool/max-refusal-fact-characters]
+    (testing "a record keeps its own tag rather than becoming a map"
+      (let [value (->RendererCompatRecord 1 2)]
+        (is (= (pr-str value) (mcp-tool/bounded-pr-str value ceiling))
+            "a record's rendering lost its #namespace.Record tag")))
+    (testing "a record's fields are still rendered through the bounded writer"
+      (let [value (->RendererCompatRecord 1 (LoopingToStringProbe.))
+            work (future (mcp-tool/bounded-pr-str value ceiling))
+            result (deref work 30000 ::timed-out)]
+        (is (not= ::timed-out result)
+            "restoring the record tag reopened the toString hole")
+        (when-not (= ::timed-out result)
+          (is (str/includes? (str result) "LoopingToStringProbe")
+              (str "a record's poisonous field rendered no identity marker: "
+                   result)))))
+    (testing "metadata renders under *print-meta* exactly as before"
+      (binding [*print-meta* true]
+        (doseq [value [(with-meta {:a 1} {:receipt true})
+                       (with-meta [1 2] {:receipt true})
+                       (with-meta '(1 2) {:receipt true})
+                       (with-meta #{1} {:receipt true})
+                       (with-meta 'alpha {:receipt true})
+                       (with-meta [1 2] {:tag 'Long})]]
+          (is (= (pr-str value) (mcp-tool/bounded-pr-str value ceiling))
+              (str "metadata on " (pr-str (class value))
+                   " renders differently from pr-str")))))
+    (testing "metadata is still absent by default"
+      (is (= "{:a 1}"
+             (mcp-tool/bounded-pr-str (with-meta {:a 1} {:receipt true})
+                                      ceiling))
+          "metadata leaked into a default rendering"))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest the-enumeration-reaches-the-routers-entrance-slice-and-every-spelling
   ;; Round-thirteen review finding 3, reproduced at c5e63e6. Two legs.
   ;;
