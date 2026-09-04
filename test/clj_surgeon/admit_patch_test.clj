@@ -82,7 +82,7 @@
   message)
 
 ;; @spec MCP-OP-ADMIT-152
-(defn classify-battery-receipt
+(defn- classify-battery-receipt*
   "Classify a battery receipt into ABSENT, SATISFIED or FAILED.
 
   A receipt names its SUBJECT, its EVIDENCE and its VERDICT, and only a receipt
@@ -98,13 +98,22 @@
 
   Deliberately does NOT trust the battery to report its own failure. The
   round-nine receipt was written by a battery that exited nonzero; a rule that
-  asked it to say FAILED would be asking the failing party for the verdict."
+  asked it to say FAILED would be asking the failing party for the verdict.
+
+  Sorts any arm keys it prints with `sort-by pr-str` rather than bare `sort`:
+  `sort`'s pairwise `compare` throws `ClassCastException` the moment a
+  malformed receipt mixes key types (round eleven's `{\"8\" true, 32 true}`
+  attack), and `pr-str` is total over every value this function ever sees.
+  The public `classify-battery-receipt` below also wraps this in `try`, so
+  this is belt-and-suspenders, not the only guard -- but a classifier this
+  central should not need its safety net for an ordinary case."
   [record declared-arms]
   (let [failed (fn [reason] {:state :failed :reason reason})
         verdicts (:arm-verdicts record)
         failing (when (map? verdicts)
-                  (vec (sort (keep (fn [[arm ok]] (when-not (true? ok) arm))
-                                   verdicts))))]
+                  (vec (sort-by pr-str
+                                (keep (fn [[arm ok]] (when-not (true? ok) arm))
+                                      verdicts))))]
     (cond
       (nil? record)
       {:state :absent}
@@ -133,7 +142,7 @@
 
       (not= (set (keys verdicts)) (set declared-arms))
       (failed (str "the receipt records verdicts for "
-                   (pr-str (vec (sort (keys verdicts))))
+                   (pr-str (vec (sort-by pr-str (keys verdicts))))
                    " but the battery declares " (pr-str (vec declared-arms))))
 
       (seq failing)
@@ -153,6 +162,32 @@
 
       :else
       {:state :satisfied})))
+
+;; @spec MCP-OP-ADMIT-152
+(defn classify-battery-receipt
+  "The TOTAL public entry point: `classify-battery-receipt*` plus a `try`
+  that no malformed receipt can escape.
+
+  Round eleven's finding (Sol): a mixed-type arm-key receipt failed closed by
+  every cond branch's own logic, but the branch that BUILT its reason threw
+  before `fail-precondition!` ever ran -- the failure escaped the promised
+  counted bucket and the printed clearing command as an uncaught exception
+  instead. A checker that can throw is not a checker; it is a checker that
+  sometimes forgets to check. Any throw while classifying -- from this
+  function's own sorts, from a future cond branch, from anything -- is
+  itself a :failed classification, never a crash, so the caller
+  (`check-battery-precondition!`) can always route it through
+  `fail-precondition!` and the counted bucket."
+  [record declared-arms]
+  (try
+    (classify-battery-receipt* record declared-arms)
+    (catch Throwable e
+      {:state :failed
+       :reason (str "the receipt could not be classified without the"
+                    " classifier itself throwing -- " (.getName (class e))
+                    ": " (.getMessage e) " · receipt " (pr-str record)
+                    " · the classifier must be TOTAL; this is a bug in"
+                    " classify-battery-receipt*, not in the receipt")})))
 
 ;; @spec MCP-OP-ADMIT-152
 (defn check-battery-precondition!
