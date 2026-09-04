@@ -1790,6 +1790,13 @@
        :string_mentions (count (:string-mentions totals))
        :string_mention_sites (vec (take max-string-mention-sites
                                         (:string-mentions totals)))
+       ;; @spec MCP-OP-ALIAS-034
+       ;; the bound says that it fired: a caller had to compare
+       ;; `string_mentions` against the length of the list to learn that the
+       ;; list was a sample, which is the silent-truncation class this verb
+       ;; has already paid for twice
+       :string_mention_sites_shown (min max-string-mention-sites
+                                        (count (:string-mentions totals)))
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
        ;; @spec MCP-OP-ALIAS-052

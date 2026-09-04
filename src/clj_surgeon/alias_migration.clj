@@ -1107,17 +1107,24 @@
   whatever the tree held.
 
   Sites rather than files: a file is where the caller must go, a line is where
-  they must look, and two mentions in one file are two edits. Sorted, so the
-  receipt is a function of the tree and not of read order."
+  they must look, and two mentions in one file are two edits. Sorted by FILE
+  and then by NUMERIC LINE, so the receipt is a function of the tree and not
+  of read order — and so the bound the receipt applies keeps the first sites a
+  caller would walk to. Sorting the rendered `file:line` strings instead put
+  `src/z.clj:10` ahead of `src/z.clj:2`, and over 26 mentions the bound of 20
+  kept lines 2, 3 and 10-27 and dropped 4-9: a bound is only as honest as the
+  ranking underneath it."
   [needle sources]
   (let [quoted (str "\"" needle "\"")]
-    (vec (sort (mapcat (fn [{:keys [file source]}]
-                         (keep-indexed
-                           (fn [index line]
-                             (when (str/includes? line quoted)
-                               (str file ":" (inc index))))
-                           (str/split-lines source)))
-                       sources)))))
+    (->> sources
+         (mapcat (fn [{:keys [file source]}]
+                   (keep-indexed
+                     (fn [index line]
+                       (when (str/includes? line quoted)
+                         [file (inc index)]))
+                     (str/split-lines source))))
+         (sort-by (fn [[file line]] [file line]))
+         (mapv (fn [[file line]] (str file ":" line))))))
 
 ;; @spec MCP-OP-ALIAS-022
 ;; @spec MCP-OP-ALIAS-023
