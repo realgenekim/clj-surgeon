@@ -5388,6 +5388,128 @@
         (delete-tree! parent)))))
 
 ;; ---------------------------------------------------------------------------
+;; Opus's round-sixteen NO-GO item 7: receipts are capped at 4,096 bytes,
+;; continuations at 512, and refusals at nothing. A 10,001-character `files`
+;; entry yielded a ~30 KB tool refusal — `error`, `file` and `files_removed`
+;; each echoing the whole name, and `error` again the raw exception text — and
+;; a 50,612-byte CLI refusal. The same drive is the second place the two
+;; entrances were caught calling one input two different things.
+;;
+;; A refusal is the answer a caller reads when something has already gone
+;; wrong; it is the last place that should be able to hand back thirty
+;; kilobytes of the caller's own bad input. Truncation is only honest when it
+;; SAYS it truncated and says how much there was, so the caller is never left
+;; comparing a silently shortened path against the one they sent.
+;; ---------------------------------------------------------------------------
+
+(defn- all-strings
+  "Every string anywhere in a refusal, keys and values alike."
+  [x]
+  (cond
+    (string? x) [x]
+    (map? x) (mapcat all-strings (concat (keys x) (vals x)))
+    (coll? x) (mapcat all-strings x)
+    :else []))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest every-refusal-field-is-length-bounded-at-both-entrances
+  (let [root (temp-dir)
+        arm "src/app/folds.clj"
+        long-name (str "src/app/" (apply str (repeat 10001 \a)) ".clj")
+        ;; The policy this round establishes, owned by the witness rather than
+        ;; read back from the code it checks: no single refusal field renders
+        ;; more than 1,024 characters, plus the marker that says so.
+        max-field 1024
+        ceiling (+ max-field 64)
+        ;; A path of an EXACT length, built out of 24-character segments
+        ;; because one component over 255 bytes is ENAMETOOLONG and would be
+        ;; refused for a different reason than the one under test.
+        exact-path (fn [n]
+                     (let [segment (apply str (repeat 24 \d))
+                           body (subs (apply str (repeat (inc (quot n 25))
+                                                         (str segment "/")))
+                                      0 (- n 4))]
+                       (str body ".clj")))]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (let [named (.getCanonicalPath root)
+            tool (census-tool/execute-request!
+                   {:project-root named} {:files [long-name]})
+            cli (refusal-or-throw
+                  #(core/run-relation-census
+                     {:file (str named "/" long-name)}))
+            file-field (fn [path]
+                         (:file (census-tool/execute-request!
+                                  {:project-root named} {:files [path]})))]
+
+        (testing "the bound is enforced AT the ceiling, not near it"
+          (let [at (exact-path max-field)
+                over (exact-path (inc max-field))]
+            (is (= max-field (count at)))
+            (is (= (inc max-field) (count over)))
+            (is (= at (file-field at))
+                (str "a field exactly at the ceiling was truncated: "
+                     (pr-str (subs (str (file-field at)) 0 40))))
+            (is (not= over (file-field over))
+                "a field one character over the ceiling was published whole")
+            (is (str/includes? (str (file-field over)) (str (inc max-field)))
+                (str "the truncation does not say how long the original was: "
+                     (pr-str (str/join (take-last 60 (str (file-field over))))))))) 
+
+        (testing "no field of the tool's refusal is unbounded"
+          (is (false? (:ok tool))
+              (str "the drive did not refuse: " (pr-str (:ok tool))))
+          (doseq [text (all-strings tool)]
+            (is (<= (count text) ceiling)
+                (str "a refusal field renders " (count text)
+                     " characters: " (pr-str (str/join (take 80 text))))))
+          (is (< (count (json/generate-string tool)) 8192)
+              (str "the whole refusal renders "
+                   (count (json/generate-string tool))
+                   " bytes, against a 4096-byte receipt cap"))
+          (is (some #(str/includes? % "truncated") (all-strings tool))
+              "the tool shortened a field without saying so")
+          (is (some #(str/includes? % "10009") (all-strings tool))
+              (str "the tool does not say how long the original was: "
+                   (pr-str (take 3 (all-strings tool))))))
+
+        (testing "no field of the CLI's refusal is unbounded"
+          (is (false? (:ok cli))
+              (str "the drive did not refuse: " (pr-str cli)))
+          (doseq [text (all-strings cli)]
+            (is (<= (count text) ceiling)
+                (str "a refusal field renders " (count text)
+                     " characters: " (pr-str (str/join (take 80 text))))))
+          (is (< (count (pr-str cli)) 8192)
+              (str "the whole refusal renders " (count (pr-str cli))
+                   " bytes, against a 4096-byte receipt cap"))
+          (is (some #(str/includes? % "truncated") (all-strings cli))
+              "the CLI shortened a field without saying so"))
+
+        (testing "the two entrances call this one input the same thing"
+          (is (= :not-found (:cause cli))
+              (str "the CLI answered " (pr-str (:cause cli))))
+          (is (= "not-found" (:cause tool))
+              (str "the tool answered " (pr-str (:cause tool))))
+          (is (= (some-> (:cause cli) name) (:cause tool))
+              (str "CLI " (pr-str (:cause cli)) " vs tool "
+                   (pr-str (:cause tool)))))
+
+        (testing "an ordinary refusal is not truncated at all"
+          ;; The near-miss: a bound that fires on everything is not a bound,
+          ;; it is a censor. Nothing about a normal-length refusal changes.
+          (let [ordinary (census-tool/execute-request!
+                           {:project-root named}
+                           {:files ["src/app/missing.clj"]})]
+            (is (false? (:ok ordinary)))
+            (is (not-any? #(str/includes? % "truncated")
+                          (all-strings ordinary))
+                (str "an ordinary refusal was truncated: "
+                     (pr-str ordinary))))))
+      (finally
+        (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
 ;;
 ;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
