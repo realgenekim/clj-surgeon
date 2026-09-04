@@ -5038,6 +5038,78 @@
                  "of a ten-megabyte value before bounding it"))))))
 
 ;; @spec MCP-OP-ALIAS-059
+;; round-fourteen review finding 1: `print-method`'s own default for an
+;; object it does not recognise calls that object's `toString` before a
+;; single character reaches the ceiling writer, so a value nested inside no
+;; collection at all can still cost unbounded work.
+(deftype ^:private LoopingToStringProbe []
+  Object
+  (toString [_] (loop [] (recur))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftype ^:private ThrowingToStringProbe []
+  Object
+  (toString [_] (throw (ex-info "toString exploded" {}))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-fact-renderer-never-invokes-an-arbitrary-toString
+  ;; Round-fourteen review finding 1, reproduced at 6cbcbd48/524dd21d and
+  ;; every commit through 1cc5990b: `bounded-pr-str` bounds writes made AFTER
+  ;; `print-method` receives the value, but `print-method`'s default for an
+  ;; object it does not recognise invokes that object's `toString` before any
+  ;; character reaches `ceiling-writer` at all. A `deftype` whose `toString`
+  ;; never returns therefore hangs the renderer no matter how tight the
+  ;; ceiling is, and one whose `toString` throws escapes the ceiling's own
+  ;; catch. The fix admits only Clojure data before printing and renders
+  ;; everything else — recursively inside collections — as an identity
+  ;; marker, never touching its `toString`.
+  (let [ceiling mcp-tool/max-refusal-fact-characters]
+    (testing "a toString that never returns does not hang the renderer"
+      ;; the timeout guards the WITNESS, not the renderer: a regression fails
+      ;; this assertion in two seconds instead of hanging the test process
+      (let [work (future (mcp-tool/bounded-pr-str
+                           (LoopingToStringProbe.) ceiling))
+            result (deref work 2000 ::timed-out)]
+        (is (not= ::timed-out result)
+            "bounded-pr-str hung inside a toString that never returns")
+        (when-not (= ::timed-out result)
+          (is (str/includes? (str result) "LoopingToStringProbe")
+              (str "an opaque value renders no identity at all: " result)))))
+    (testing "a toString that throws does not escape the renderer"
+      (let [result (try (mcp-tool/bounded-pr-str
+                          (ThrowingToStringProbe.) ceiling)
+                         (catch Exception e
+                           (str "<threw " (.getSimpleName (class e)) ">")))]
+        (is (not (str/starts-with? result "<threw"))
+            (str "bounded-pr-str propagated the object's own toString "
+                 "exception: " result))
+        (is (str/includes? result "ThrowingToStringProbe")
+            (str "an opaque value renders no identity at all: " result))))
+    (testing "a Java collection wrapping such an object is opaque too"
+      (let [poison (doto (java.util.ArrayList.)
+                     (.add (ThrowingToStringProbe.)))
+            work (future (mcp-tool/bounded-pr-str poison ceiling))
+            result (deref work 2000 ::timed-out)]
+        (is (not= ::timed-out result)
+            "bounded-pr-str hung walking a Java collection's own toString")
+        (when-not (= ::timed-out result)
+          (is (str/includes? (str result) "ArrayList")
+              (str "the wrapping collection renders no identity at all: "
+                   result)))))
+    (testing "ordinary Clojure data still renders exactly as before"
+      (is (= "{:a 1, :b [2 3]}"
+             (mcp-tool/bounded-pr-str {:a 1 :b [2 3]} ceiling))
+          "an ordinary value's rendering changed shape")
+      (is (= "#{1}" (mcp-tool/bounded-pr-str #{1} ceiling))
+          "an ordinary set's rendering changed shape")
+      (is (= "(1 2)" (mcp-tool/bounded-pr-str '(1 2) ceiling))
+          "an ordinary list's rendering changed shape")
+      (is (= "nil" (mcp-tool/bounded-pr-str nil ceiling))
+          "nil's rendering changed shape")
+      (is (= "[nil 1]" (mcp-tool/bounded-pr-str [nil 1] ceiling))
+          "a nil element inside a vector is dropped rather than rendered"))))
+
+;; @spec MCP-OP-ALIAS-059
 (deftest the-enumeration-reaches-the-routers-entrance-slice-and-every-spelling
   ;; Round-thirteen review finding 3, reproduced at c5e63e6. Two legs.
   ;;
