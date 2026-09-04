@@ -1553,8 +1553,267 @@
       (str label " · " (:text site)))))
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- unwrap-meta
+  "The node a `^meta` or `#^meta` wrapper carries, however deep the wrapping."
+  [node]
+  (if (contains? #{:meta :meta*} (n/tag node))
+    (recur (last (significant-children node)))
+    node))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- non-head-symbols
+  "Every symbol of `node` outside FUNCTION position.
+
+  `(name error-type)` mentions two symbols; only `error-type` is a value the
+  expression can hand back. Reading the head as a value would make every
+  constructor look as though it relayed something it does not."
+  [node]
+  (letfn [(walk [node head?]
+            (let [value (node-value node)
+                  list? (= :list (n/tag node))
+                  kids (try (when (seq (n/children node))
+                              (significant-children node))
+                            (catch Exception _ nil))]
+              (reduce into
+                      (if (and (symbol? value) (not head?)) #{value} #{})
+                      (map-indexed (fn [index child]
+                                     (walk child (and list? (zero? index))))
+                                   (or kids [])))))]
+    (walk node false)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- map-parameter-locators
+  "How a call site reaches each symbol a MAP destructuring parameter binds.
+
+  `{:keys [kind message]}` at position 0 puts the kind at the `:kind` key of
+  the first argument; `{k :kind}` puts it at the same place under another
+  name. A map after `&` is keyword-argument destructuring, which no positional
+  read can reach, so it binds nothing here and its symbols fall through to the
+  unscannable branch."
+  [map-node index rest?]
+  (into {}
+        (when-not rest?
+          (mapcat
+            (fn [[key-node value-node]]
+              (let [key-value (node-value key-node)]
+                (cond
+                  (= :keys key-value)
+                  (keep (fn [child]
+                          (let [symbol-value (node-value (unwrap-meta child))]
+                            (when (symbol? symbol-value)
+                              [symbol-value
+                               [:map-key index (keyword (name symbol-value))]])))
+                        (significant-children value-node))
+
+                  (and (symbol? key-value) (keyword? (node-value value-node)))
+                  [[key-value [:map-key index (node-value value-node)]]]
+
+                  :else nil)))
+            (partition 2 (significant-children map-node))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- parameter-locators
+  "How a CALL SITE reaches each symbol one argument vector binds.
+
+  Round-eighteen review finding 1: the scan asked whether the constructor's
+  FIRST parameter carries the kind, and skipped the whole file when it did
+  not. The question a call site actually needs answered is WHICH ARGUMENT to
+  read, so the parameters are read into locators and the constructor's body
+  says which locator the published kind comes from.
+
+  A locator is `[:argument n]` — the nth argument of the call — or
+  `[:map-key n k]` — the value at key `k` of the nth argument, which must be a
+  map literal — or `:unreadable`, for a symbol bound through a shape no call
+  site can be read through: a nested sequential destructuring, or a bare
+  `& rest` the constructor takes apart itself."
+  [argument-vector]
+  (loop [nodes (map unwrap-meta (significant-children argument-vector))
+         index 0
+         rest? false
+         locators {}]
+    (if-let [node (first nodes)]
+      (let [value (node-value node)
+            tag (n/tag node)]
+        (cond
+          (= '& value) (recur (rest nodes) index true locators)
+
+          (symbol? value)
+          (recur (rest nodes) (inc index) rest?
+                 (assoc locators value
+                        (if rest? :unreadable [:argument index])))
+
+          ;; `& [error-type extra]` continues the POSITIONS a caller fills;
+          ;; a vector anywhere else destructures the contents of ONE argument,
+          ;; which a call site cannot be read through.
+          (= :vector tag)
+          (recur (rest nodes) (inc index) rest?
+                 (into locators
+                       (keep-indexed
+                         (fn [offset child]
+                           (let [symbol-value (node-value (unwrap-meta child))]
+                             (when (symbol? symbol-value)
+                               [symbol-value
+                                (if rest?
+                                  [:argument (+ index offset)]
+                                  :unreadable)])))
+                         (significant-children node))))
+
+          (= :map tag)
+          (recur (rest nodes) (inc index) rest?
+                 (into locators (map-parameter-locators node index rest?)))
+
+          :else (recur (rest nodes) (inc index) rest? locators)))
+      locators)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- refusal-arity-forms
+  "Every arity of a `refusal` definition, as `[argument-vector body-nodes]`.
+
+  Takes the definition's children AFTER the defined name and skips what the
+  reader says is not an argument vector — a docstring, an attribute map, a
+  metadata wrapper — then handles both shapes a definition takes: one vector
+  for a single arity, and a list per arity for a multi-arity body. A
+  `(def refusal (fn …))` is followed into the `fn`, whose own optional name is
+  skipped the same way. Each arity carries its OWN body, because two arities
+  of one constructor may take the kind in different positions."
+  [nodes]
+  (let [tail (drop-while (fn [node]
+                           (let [value (node-value node)]
+                             (or (string? value) (map? value) (symbol? value))))
+                         (map unwrap-meta nodes))
+        head (first tail)]
+    (cond
+      (nil? head) []
+
+      (= :vector (n/tag head)) [[head (vec (rest tail))]]
+
+      (and (= :list (n/tag head))
+           (contains? '#{fn fn*}
+                      (node-value (first (significant-children head)))))
+      (refusal-arity-forms (rest (significant-children head)))
+
+      :else (vec (for [node tail
+                       :when (= :list (n/tag node))
+                       :let [kids (map unwrap-meta (significant-children node))
+                             child (first kids)]
+                       :when (and child (= :vector (n/tag child)))]
+                   [child (vec (rest kids))])))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- published-kind-values
+  "Every `:error-type`/`:error_type`/`:kind` VALUE a constructor body publishes."
+  [body-nodes]
+  (for [body body-nodes
+        candidate (node-seq body)
+        :when (= :map (n/tag candidate))
+        [key-node value-node] (partition 2 (significant-children candidate))
+        :when (contains? #{:error-type :error_type :kind}
+                         (node-value key-node))]
+    value-node))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- arity-kind-locator
+  "Which ARGUMENT of a call to this arity carries the kind.
+
+  The parameter that flows into the published kind is followed back to the
+  position a caller fills, so second, third, destructured and rest positions
+  are all found. Three determinate answers and no fourth:
+
+  - a locator, when exactly one bound parameter reaches the published value;
+  - `:constructor-literal`, when NOTHING outside the constructor reaches it —
+    `mcp_workspace` and `extract_header` spell their one kind inside their own
+    map, where the `:error_type \"…\"` scan already has it, and their call
+    sites carry no kind to read;
+  - `:unscannable`, for every other reading — no published kind at all, more
+    than one parameter reaching it, a parameter bound through a shape a call
+    site cannot be read through, or a symbol the reader cannot account for.
+    Fail CLOSED: an unclassifiable constructor makes its sites unscannable and
+    named, and can no longer switch the file's scan off."
+  [argument-vector body-nodes]
+  (let [locators (parameter-locators argument-vector)
+        values (published-kind-values body-nodes)
+        symbols (reduce into #{} (map non-head-symbols values))
+        bound (distinct (keep locators symbols))
+        foreign (seq (remove (set (keys locators)) symbols))]
+    (cond
+      (empty? values) :unscannable
+      (= 1 (count bound)) (let [locator (first bound)]
+                            (if (= :unreadable locator) :unscannable locator))
+      (seq bound) :unscannable
+      foreign :unscannable
+      :else :constructor-literal)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- refusal-kind-arities
+  "Where each ARITY of this source's own `refusal` takes its kind.
+
+  ASSUMPTION, declared rather than implied: a call site is a list whose head
+  is the literal symbol `refusal`, so a constructor that is ALIASED or APPLIED
+  — `(def r refusal)`, `(let [r refusal] …)`, `(apply refusal …)` — is
+  invisible to this scan in either direction. `rg -n \"\\(apply refusal|\\(def r\"
+  src/` finds no such shape in the reachable set today, and one added later is
+  a hole this guard would not see."
+  [text]
+  (let [root (try (parser/parse-string-all text) (catch Exception _ nil))]
+    (vec
+      (when root
+        (for [top-level (significant-children root)
+              :when (= :list (n/tag top-level))
+              :let [kids (map unwrap-meta (significant-children top-level))]
+              :when (and (contains? '#{defn defn- def}
+                                    (node-value (first kids)))
+                         (= 'refusal (node-value (second kids))))
+              [argument-vector body-nodes] (refusal-arity-forms (drop 2 kids))
+              :let [parameters (map unwrap-meta
+                                    (significant-children argument-vector))]]
+          {:fixed (count (take-while #(not= '& (node-value %)) parameters))
+           :variadic? (boolean (some #(= '& (node-value %)) parameters))
+           :locator (arity-kind-locator argument-vector body-nodes)})))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- call-site-kind-locator
+  "The locator governing a `(refusal …)` call of `argument-count` arguments.
+
+  A file with no `refusal` constructor at all, and a call matching two arities
+  that disagree about the kind's position, are `:unscannable` — the site is
+  NAMED rather than silently exempt.
+
+  A call matching NO arity would throw an `ArityException` if it ever ran, so
+  it is not evidence about anything; rather than exempt it, it falls back to
+  the position every arity of the constructor AGREES on, and is unscannable
+  only when they disagree. The fallback errs toward scanning a site, never
+  toward skipping one."
+  [arities argument-count]
+  (let [matching (filter (fn [{:keys [fixed variadic?]}]
+                           (if variadic?
+                             (>= argument-count fixed)
+                             (= argument-count fixed)))
+                         arities)
+        locators (or (seq (distinct (map :locator matching)))
+                     (seq (distinct (map :locator arities))))]
+    (if (= 1 (count locators))
+      (first locators)
+      :unscannable)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- kind-node-at
+  "The node a locator points at among one call's arguments, or nil."
+  [locator arguments]
+  (when (vector? locator)
+    (let [[shape index key-value] locator
+          argument (get arguments index)]
+      (case shape
+        :argument argument
+        :map-key (when (and argument (= :map (n/tag argument)))
+                   (some (fn [[key-node value-node]]
+                           (when (= key-value (node-value key-node))
+                             value-node))
+                         (partition 2 (significant-children argument))))
+        nil))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn- refusal-call-sites-in
-  "Every `(refusal <kind> …)` CALL of one source, read with the READER.
+  "Every `(refusal …)` CALL of one source, read with the READER.
 
   Round-sixteen review finding 2: these sites were found by a per-LINE regex,
   `#\"\\(refusal\\s\"`, which is wrong in both directions — a call whose kind
@@ -1564,23 +1823,32 @@
   as many lines as it likes, and a string or a comment cannot be one BY
   CONSTRUCTION, because the reader never yields them as a list.
 
-  The namespace already reads this same text with this same reader for
-  `:error-type` value sites; deciding a call site by text in a file you are
-  already parsing is the defect class this requirement has now paid for twice.
+  Round-eighteen review findings 1 and 9: the site's KIND is no longer assumed
+  to be the first argument, and the file's scan is no longer gated on the
+  constructor's shape. `refusal-kind-arities` reads the constructor once,
+  `call-site-kind-locator` picks the arity this call fills, and `:kind` is the
+  argument that locator points at — second, third, inside a map literal, or
+  after a `&`. A site whose kind the reader cannot locate carries `:kind nil`
+  and is reported UNSCANNABLE by `dynamic-refusal-kind-sites-in`; only
+  `:constructor-literal` — a constructor that publishes a kind no caller
+  supplies — drops a site, and it drops one that carries no kind at all.
 
   Each site carries its kind expression, its enclosing TOP-LEVEL form (a bare
   symbol forwards or mints according to what it was bound to) and its ROW,
   read from the parser's own position metadata rather than counted by hand."
   [text]
-  (let [root (try (parser/parse-string-all text) (catch Exception _ nil))]
+  (let [root (try (parser/parse-string-all text) (catch Exception _ nil))
+        arities (refusal-kind-arities text)]
     (when root
       (for [top-level (significant-children root)
             candidate (node-seq top-level)
             :when (= :list (n/tag candidate))
             :let [kids (significant-children candidate)]
-            :when (and (= 'refusal (node-value (first kids)))
-                       (>= (count kids) 2))]
-        {:kind (second kids)
+            :when (= 'refusal (node-value (first kids)))
+            :let [arguments (vec (rest kids))
+                  locator (call-site-kind-locator arities (count arguments))]
+            :when (not= :constructor-literal locator)]
+        {:kind (kind-node-at locator arguments)
          :context top-level
          :row (:row (meta candidate))}))))
 
@@ -1602,127 +1870,41 @@
   was. The `:error-type` shape has read its non-literal values with
   `minted-kinds-in` since round fourteen; the call-site shape now reads them
   the same way, so every site is either NAMED by
-  `dynamic-refusal-kind-sites-in` — it spells its kind entirely at runtime —
-  or ENUMERATED here, and never neither."
+  `dynamic-refusal-kind-sites-in` — it spells its kind entirely at runtime, or
+  its kind argument cannot be located at all — or ENUMERATED here, and never
+  neither. A site whose kind the reader cannot locate contributes NOTHING
+  here: enumerating arguments that may be messages would mint phantom kinds,
+  and the site is named unscannable instead."
   [text]
   (for [site (refusal-call-sites-in text)
+        :when (:kind site)
         :let [value (node-value (:kind site))]
         kind (if (keyword? value)
                [(name value)]
                (minted-kinds-in (:kind site)))
         :when (re-matches #"[a-z][a-z0-9-]*" kind)]
     kind))
-;; @spec MCP-OP-ALIAS-059
-(defn- unwrap-meta
-  "The node a `^meta` or `#^meta` wrapper carries, however deep the wrapping."
-  [node]
-  (if (contains? #{:meta :meta*} (n/tag node))
-    (recur (last (significant-children node)))
-    node))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- argument-vectors-in
-  "Every argument VECTOR of a function definition, read as FORMS.
-
-  Takes the definition's children AFTER the defined name and skips what the
-  reader says is not an argument vector — a docstring, an attribute map, a
-  metadata wrapper — then handles both shapes a definition takes: one vector
-  for a single arity, and a list per arity for a multi-arity body. A
-  `(def name (fn …))` is followed into the `fn`, whose own optional name is
-  skipped the same way."
-  [nodes]
-  (let [tail (drop-while (fn [node]
-                           (let [value (node-value node)]
-                             (or (string? value) (map? value) (symbol? value))))
-                         (map unwrap-meta nodes))
-        head (first tail)]
-    (cond
-      (nil? head) []
-      (= :vector (n/tag head)) [head]
-      (and (= :list (n/tag head))
-           (contains? '#{fn fn*}
-                      (node-value (first (significant-children head)))))
-      (argument-vectors-in (rest (significant-children head)))
-      :else (vec (for [node tail
-                       :when (= :list (n/tag node))
-                       :let [child (first (map unwrap-meta
-                                               (significant-children node)))]
-                       :when (and child (= :vector (n/tag child)))]
-                   child)))))
-
-;; @spec MCP-OP-ALIAS-059
-(defn- own-refusal-constructor-takes-kind?
-  "Whether this source's own `refusal` takes the KIND as its first argument.
-
-  Only such a source can spell a kind at a `(refusal …)` call site at all;
-  where the kind is a literal INSIDE the constructor — `mcp_workspace`'s
-  `[message value]`, spelling `\"invalid-workspace-root\"` in its own map —
-  the `:error_type \"…\"` scan already has it and the call sites carry no kind
-  to read.
-
-  Round-seventeen review finding 1: this was a TEXT regex over the argument
-  NAME, `#\"\\(defn-?\\s+refusal\\s*\\n?\\s*\\[\\s*(error-type|kind)\\b\"`, whose `\\s*\\[`
-  cannot cross a docstring, an attribute map, a multi-arity body or a
-  `(def refusal (fn …))`. Five of the reviewer's six constructor shapes
-  therefore switched the whole file's scan OFF while the form scan found the
-  planted site in all six, and `mcp_workspace.clj:8` — which has a docstring —
-  already tripped it, reaching the right answer for the wrong reason. Adding a
-  docstring to `mcp_alias_migration.clj`'s constructor is the most ordinary
-  edit anyone could make to that namespace and it disabled the guard for all
-  fifteen of its sites with nothing going red: `a-gate-a-caller-can-turn-off`.
-
-  Decided with the READER, and on the question that matters rather than on a
-  naming convention: the first parameter of the constructor's first arity, and
-  whether it reaches the `:error-type`/`:error_type` value the constructor
-  publishes.
-
-  ASSUMPTION, declared rather than implied: a call site is a list whose head
-  is the literal symbol `refusal`, so a constructor that is ALIASED or APPLIED
-  — `(def r refusal)`, `(let [r refusal] …)`, `(apply refusal …)` — is
-  invisible to this scan in either direction. `rg -n \"\\(apply refusal|\\(def r\"
-  src/` finds no such shape in the reachable set today, and one added later is
-  a hole this guard would not see."
-  [text]
-  (let [root (try (parser/parse-string-all text) (catch Exception _ nil))]
-    (boolean
-      (when root
-        (some
-          (fn [top-level]
-            (when (= :list (n/tag top-level))
-              (let [kids (map unwrap-meta (significant-children top-level))]
-                (when (and (contains? '#{defn defn- def}
-                                      (node-value (first kids)))
-                           (= 'refusal (node-value (second kids))))
-                  (when-let [arity (first (argument-vectors-in (drop 2 kids)))]
-                    (let [parameter (node-value
-                                      (first (significant-children arity)))]
-                      (and (symbol? parameter)
-                           (boolean
-                             (some
-                               (fn [candidate]
-                                 (and (= :map (n/tag candidate))
-                                      (some
-                                        (fn [[key-node value-node]]
-                                          (and (contains?
-                                                 #{:error-type :error_type}
-                                                 (node-value key-node))
-                                               (some #(= parameter
-                                                         (node-value %))
-                                                     (node-seq value-node))))
-                                        (partition 2 (significant-children
-                                                       candidate)))))
-                               (node-seq top-level)))))))))) 
-          (significant-children root))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- dynamic-refusal-kind-sites-in
-  "Every `(refusal <non-literal>` site of ONE source, unmarked.
+  "Every `(refusal …)` site of ONE source whose kind no source scan can read.
 
-  A kind spelled at runtime cannot be scanned out of source, so an
-  enumeration derived from source is complete only while no reachable
-  namespace builds one. The single legitimate exception is FORWARDING a kind
-  another scanned source already minted, and such a site declares itself with
-  the marker `forwarded-refusal-kind` in the twelve lines above it.
+  Two shapes, both named the same way, because they cost the same thing — a
+  live refusal kind absent from the enumeration:
+
+  1. a kind spelled at RUNTIME. Source cannot scan it, so an enumeration
+     derived from source is complete only while no reachable namespace builds
+     one. The single legitimate exception is FORWARDING a kind another scanned
+     source already minted, and such a site declares itself with the marker
+     `forwarded-refusal-kind` in the twelve lines above it.
+  2. a kind whose ARGUMENT POSITION the reader cannot locate — the file
+     defines no `refusal`, the call matches no arity, or the constructor's own
+     body cannot be classified. Round-eighteen review findings 1 and 9: this
+     used to be a per-file ENABLE, so an unrecognised constructor made every
+     site in the file exempt and the reviewer drove a live kind through one.
+     It now fails CLOSED and carries no marker exemption: an unscannable site
+     is named whatever the comments above it say, because a marker declares
+     that a kind is forwarded, not that it cannot be found.
 
   Sites are read as FORMS by `refusal-call-sites-in`; only the MARKER is still
   a line window, because a marker is a comment and a comment is a line.
@@ -1739,16 +1921,11 @@
               (some #(str/includes? % "forwarded-refusal-kind")
                     (subvec lines
                             (max 0 (- index 12))
-                            (min (count lines) (inc index)))))))
-        ;; only a source whose OWN `refusal` takes the kind as its first
-        ;; argument can spell a kind at the call site at all; where the kind
-        ;; is a literal inside the constructor the `:error_type "…"` scan
-        ;; already has it. Decided with the READER — a text regex over the
-        ;; argument name was switched off by one docstring.
-        own-refusal-constructor? (own-refusal-constructor-takes-kind? text)]
+                            (min (count lines) (inc index)))))))]
     (vec
-      (for [site (when own-refusal-constructor? (refusal-call-sites-in text))
-            :let [value (node-value (:kind site))]
+      (for [site (refusal-call-sites-in text)
+            :let [kind (:kind site)
+                  value (when kind (node-value kind))]
             ;; a kind the enumeration can READ is not spelled at runtime: a
             ;; keyword literal at the kind position is the kind itself, and a
             ;; non-literal expression contributes every literal it can still
@@ -1756,12 +1933,14 @@
             ;; the same escape `runtime-spelled-kind-sites` has always had at
             ;; the `:error-type` shape — and it is what makes every site
             ;; either NAMED here or ENUMERATED there, never neither.
-            :when (not (and (keyword? value)
-                            (re-matches #"[a-z][a-z0-9-]*" (name value))))
-            :when (empty? (minted-kinds-in (:kind site)))
-            :when (not (and (marked? (:row site))
-                            (forwarded-kind-expression? (:kind site)
-                                                        (:context site))))]
+            :when (or (nil? kind)
+                      (and (not (and (keyword? value)
+                                     (re-matches #"[a-z][a-z0-9-]*"
+                                                 (name value))))
+                           (empty? (minted-kinds-in kind))
+                           (not (and (marked? (:row site))
+                                     (forwarded-kind-expression?
+                                       kind (:context site))))))]
         (str label ":" (:row site))))))
 
 ;; @spec MCP-OP-ALIAS-059
@@ -1799,6 +1978,32 @@
                 "src/clj_surgeon/mcp_tool.clj · entrance slice"
                 (router-entrance-slice)))))
 
+
+;; @spec MCP-OP-ALIAS-059
+(defn- literal-refusal-kinds-in-reachable-sources
+  "`literal-refusal-kinds-in` over each reachable source SEPARATELY.
+
+  Round-eighteen review findings 1 and 9: a `(refusal …)` site's kind ARGUMENT
+  is now located by reading the constructor that governs it, and a constructor
+  governs ONE FILE. `reachable-entrance-source-text` CONCATENATES every
+  reachable source into a single string, where eight `refusal` definitions
+  with four different arities all appear to govern every site at once — a
+  two-argument call matches `mcp_workspace`'s constant-kind constructor and
+  `mcp_program_tool`'s kind-first one together, and would be read as
+  unscannable for a disagreement that is an artifact of the concatenation and
+  exists nowhere in the code.
+
+  So the enumeration's unit is a FILE, exactly as `dynamic-refusal-kind-sites`'
+  already is, and the guard and the enumeration can never disagree about their
+  subject. The router's entrance SLICE is scanned as its own text for the same
+  reason it is scanned at all: it is a code path, not a file, and the forms it
+  carries are governed by no constructor of their own."
+  []
+  (into (vec (mapcat (fn [namespace-name]
+                       (literal-refusal-kinds-in
+                         (slurp (namespace-source-path namespace-name))))
+                     (sort (reachable-entrance-namespaces))))
+        (literal-refusal-kinds-in (router-entrance-slice))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- refusal-kinds-in-source
@@ -1844,7 +2049,7 @@
           cat
           [(map second (re-seq #"[:\"](alias-migration-[a-z-]+)[\"\s\)\}]"
                                (str verb-text router-text)))
-           (literal-refusal-kinds-in verb-text)
+           (literal-refusal-kinds-in-reachable-sources)
            (map second (re-seq #":error-type :([a-z][a-z0-9-]*)" verb-text))
            (map second (re-seq #":error_type \"([a-z-]+)\"" entrance-text))
            ;; @spec MCP-OP-ALIAS-059
