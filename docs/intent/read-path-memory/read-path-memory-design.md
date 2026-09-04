@@ -1,6 +1,6 @@
 # Read-Path Memory Bounds
 
-Status: draft LLD; `MCP-OP-MEM-015` and `MCP-OP-MEM-005` implemented.
+Status: draft LLD; `MCP-OP-MEM-015`, `MCP-OP-MEM-005` and `MCP-OP-MEM-003` implemented.
 
 ## Context
 
@@ -220,3 +220,427 @@ The adversarial `giant` file is 532,424 nodes — 2.66x over.
 - An empty source, a whitespace-only source, and a source with unbalanced
   delimiters are admitted (the parser, not the admission gate, reports a syntax
   error).
+
+# Bounded `ls-tree` output budget (`MCP-OP-MEM-003`)
+
+Status: implemented 2026-09-03.
+
+## Context
+
+The memory battery at `8a55dbc` (`MEMBAT_ROOT=/home/forge/tmp/stream/membat`,
+`-Xmx512m`, 5 reps) reports `cli-ls-tree` retaining:
+
+| N | held_mb (fresh / warm) | per file |
+|---:|---|---:|
+| 100 | 0.6 / 0.9 | ~9 KB |
+| 1,000 | 9.6 / 9.5 | 9.5 KB |
+| 10,000 | 94.0 / 93.6 | 9.4 KB |
+
+```
+FAIL held-scales-with-n {:op :cli-ls-tree, :profile :default, :observed 94.0,
+                         :limit 11.6, :small-n-observed 9.6, :slack-mb 2.0}
+```
+
+`held_mb` is the after-GC used heap **while the result is still referenced**: the
+retained size of what the operation hands back. It is a straight line in N
+because the operation has no output ceiling — `outline-all-files` realises every
+outline into one retained vector, and both formatters then traverse the complete
+set. The result IS the repository.
+
+## The control
+
+A **result ceiling `R`, counted in RECORDS, applied to the ENCODER** — not to the
+walk. The walk still visits and stats every candidate. What is bounded is what
+the encoder keeps: each file is admitted (MEM-005), parsed once (MEM-015),
+outlined, encoded, and **dropped**. The vector of all outlines is never built.
+
+`max-result-records = 1000` is a server hard cap; a request may lower it with
+`:max-results` and may never raise it. The derivation is in
+`docs/observations/2026-09-03-mem-003-streaming-ls-tree.md` §3: retention
+(9.4–9.5 KB/record makes the battery's held line hold by construction at this
+cap), real corpora (163 files here, 6.1x headroom), and output size (~1.5 MB of
+text at the cap).
+
+When the ceiling binds the caller gets one of two TYPED answers:
+
+- a **continuation** — the first `R` records plus `:next_call`, whose cursor is
+  `<cursor-id>:<offset>:<mac>`; or
+- a **refusal** — `:result-ceiling-exceeded`, when the caller passed
+  `:complete true`, naming `R`, the observed count and what fits.
+
+## Cursor integrity: a PINNED SNAPSHOT, not a re-derived digest
+
+The first design bound the cursor to a digest folded from
+`<relative-path>\t<size>\t<mtime>` per candidate, re-derived on every page.
+Sol's executed review (2026-09-03, findings 1, 2 and 7) killed it on three
+counts, and the first two were silent wrong results rather than refusals:
+
+1. A file whose BYTES changed while path, size and mtime were preserved paged
+   as unchanged, so page 2 served content page 1's tree never held.
+2. A cursor minted against one root was accepted against a DIFFERENT root whose
+   files carried the same stats.
+3. Re-deriving the digest per page made discovery `O(pages x N)`: two 1,000-record
+   pages over a 10,000-file corpus each folded all 10,000 stat rows.
+
+The remedy is PINNING rather than re-deriving. The first page that needs a
+cursor writes an immutable snapshot under the workspace state root
+(`~/.local/state/clj-surgeon/workspaces/<sha256 of canonical root>/ls-tree-cursors/<cursor-id>.edn`
+plus a `.rows` file): the ordered candidate list, and for every candidate its
+path and the SHA-256 of its CONTENT. Later pages are served FROM that snapshot — and only after the snapshot's own
+bytes are re-folded to the address they are filed under, on the SERVE path and
+not merely on the reuse path. Six facts become six typed refusals, and each
+names a DIFFERENT one:
+
+| the fact | the refusal |
+|---|---|
+| this server did not mint that token — the MAC does not verify | `:invalid-result-cursor` |
+| it did, but this root holds no such snapshot (another root — twins included — pruned, expired), or the rows filed under it no longer PROVE that address, or they cannot supply the slice they promised | `:unknown-result-cursor` |
+| it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
+| it did, the snapshot verified, and a row this page would serve does not resolve to a source file inside the scanned root — its PARENT DIRECTORY resolving outside it, or its LEAF still existing as a directory entry that does not resolve to a regular file | `:unconfined-manifest-row`, NAMING the path |
+| it did, and `stale-row`'s digest check — taken ONCE, at page start, against every candidate's source file — found the file no longer matched its pinned content | `:stale-result-cursor`, NAMING the path |
+| it did, everything verified, and the page encoded ZERO records with rows still remaining — a continuation would carry a cursor at its own offset | `:empty-result-page`, carrying no cursor |
+
+**The guard's whole premise is the DISCOVERY PREDICATE, so the predicate is
+written down.** `core/find-clj-files` runs
+
+```
+find <dir> ( -name '*.clj' -o -name '*.cljs' -o -name '*.cljc' )
+           ( -type f -o ( -type l -xtype f ) )
+```
+
+as argv tokens, with no `-L`. A candidate is therefore a REGULAR FILE, or a
+SYMLINK THAT RESOLVES TO ONE, and nothing else: not a directory, not a symlink
+to a directory, not a dangling symlink, not a FIFO, not a socket. Every
+confinement rule above is stated as "what discovery can never produce", so a
+guard is only as true as this line is.
+
+It is written here because the paraphrase was FALSE and the falsehood shipped.
+The command carried NO `-type` predicate at all, while `row-file`'s docstring
+justified refusing a directory-leaf row with "`find -type f` never lists a
+directory". A DIRECTORY named `src/mydir.clj` was therefore discovered, pinned
+as an honest manifest row, and then refused by that guard: a
+`:unconfined-manifest-row` receipt naming a path that IS inside the root, two
+innocent files never served, and a pagination no cursor could finish, while an
+unbounded scan of the same tree still served every record (Opus, 2026-09-03).
+Three traps sat in the one-line repair: `-type f` ALONE is false for a symlink,
+which would have stopped listing symlinked `.clj` files the design deliberately
+admits; the `-o` chain was UNPARENTHESISED, so a `-type` in front of it would
+have bound to the first `-name` only; and the same missing predicate made a
+FIFO named `src/pipe.clj` a candidate, where `open(2)` blocks rather than
+throwing and the scan returned nothing, forever, surviving SIGTERM.
+
+The leaf check in `row-file` is now the exact negation of the predicate —
+refuse when the leaf EXISTS as a directory entry (`NOFOLLOW_LINKS`) and does
+not resolve to a regular file (links FOLLOWED) — and neither half opens the
+file, because for a FIFO the open is the hang. `NOFOLLOW` on the existence test
+is what keeps an ordinary DELETION out of this refusal: a deleted file has no
+entry and still reaches `:stale-result-cursor`. Links are FOLLOWED on the
+regularity test because a symlink to a regular file is a candidate discovery
+admits, and testing it `NOFOLLOW` would refuse `src/fixt/zlinked.clj` and
+reintroduce the page-1/page-2 divergence the lexical leaf exists to avoid.
+
+**`:stale-result-cursor` is a boundary, not a read-time seal.** The digest
+check above runs ONCE per candidate, at page start; the encoder reopens each
+candidate's source file separately, after that check. A source file that
+changes in that window is not re-checked, so a page can carry fresh bytes of
+the correct, in-root, pinned file under a receipt that reports no staleness —
+measured at 15–19 of 400 page-2 reads under a deliberate live swap of an
+already-pinned source file (round-five review, 200-file corpus; unchanged from
+14 of 400 at the prior worktree, so the window is pre-existing, not a
+regression). The path served is always the pinned path and it is always
+inside the scanned root: this check never lets a different file, or a file
+outside the root, stand in for the one that was pinned. Closing the window
+would cost a second digest of every candidate per page and would still leave
+the gap between the encoder's own read and its parse — see the falsifier
+table's "source read window" row.
+
+**Verifying on reuse and trusting on serve makes the address a filename again
+on exactly the path a caller reads.** Round three's review tampered the rows so
+they no longer folded to their id, left the cursor untouched, and was served
+`[m06 m01 m08 m09 m10]` — `m01` silently standing in for `m07`. The serve path
+now resolves the snapshot with `verified-snapshot`, at a cost of one streaming
+pass over the manifest file.
+
+**`:returned` is MEASURED by the encoder that produced the page**, never
+computed from `(min ceiling remaining)`. The arithmetic form printed
+`:returned 5` over a page of two records, with a next cursor — a
+complete-looking page that holds nothing. The count now comes from the
+encoder's own emissions and the next cursor advances by that same number, so a
+receipt cannot outlive its page and no record can be skipped by one that
+overclaims.
+
+**One resolver, `snapshot/row-file`, turns a row into a file** at both the
+staleness check and the read. Two resolvers were a boundary in name only:
+`io/file` refused an absolute child while `fs/path` accepted it, so the file
+that was verified and the file that was read could differ, and an absolute row
+threw `IllegalArgumentException` out of the operation from the read side.
+Confinement resolves the PARENT and leaves the LEAF lexical: the row path must
+be relative and normalize under the normalized root, and then its parent
+directory — or, when that directory is gone, its deepest existing ancestor —
+must really be inside the real root, symlinks followed. The final component is
+never resolved.
+
+Both halves are measured facts about discovery rather than a compromise.
+`find-clj-files` shells to plain `find` with no `-L`, which LISTS a symlinked
+`.clj` file whose target is outside the root and NEVER DESCENDS a symlinked
+directory. Resolving the leaf would refuse on page 2 what page 1 encoded — a
+page-1/page-2 divergence introduced by the guard itself, which is what
+`a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered` pins.
+Leaving the parent lexical admitted a row no scan can produce: round four's
+review served `[m06 leaked.secret m08 m09 m10]` for `src/linkdir/secret.clj`
+with `src/linkdir -> OUTSIDE`, inside a snapshot re-folded so that it PASSED
+verification — round three's `..`-row outcome through a different spelling.
+The rule the two halves share: refuse what discovery can NEVER produce (an
+absolute path, a `..` escape, a symlinked DIRECTORY component) and defer to
+discovery on what it can. A row whose directory has been DELETED is not an
+escape and is not accused of one; it resolves lexically and refuses
+`:stale-result-cursor`, naming the file.
+
+The MAC is `sha256(cursor-id ‖ offset ‖ snapshot-secret)`, keyed on a
+per-snapshot secret that is written into the snapshot and NEVER returned to a
+caller. Keying it on the published manifest digest instead — which an earlier
+brief specified as `sha256(cursor-id ‖ offset ‖ snapshot-digest)` — would let
+any holder of a receipt mint any offset, which is finding 2 rather than a fix
+for it. **That boundary became load-bearing rather than incidental once the id
+was content-addressed (below): `cursor-id` now IS the published manifest
+digest, so a mac keyed on either is a mac keyed on material the receipt
+prints.**
+`:result-cursor-out-of-range` is deliberately distinct from
+`:invalid-result-cursor`: one says the token was not ours, the other says the
+token was ours and the position is not there. Before the range check a genuine
+cursor past the end returned an empty vector with no receipt — which every
+caller reads as a complete result.
+
+The snapshot costs nothing a scan under the ceiling would otherwise pay: a
+result at or under `R` needs no cursor, so it pins nothing, stats nothing and
+digests nothing. When it does pin, it is written STREAMING — one row rendered,
+digested, written and dropped — and read streaming: one pass over `line-seq`
+that folds every row into the manifest digest and drops it, RETAINING only the
+slice the page encodes. The fold is what proves the address, so a page pays one
+fold per row and holds one page. Heap is one 64 KB block
+buffer plus the page, at N = 10 and at N = 10,000 alike. The meta file is
+written last and renamed into place, so a snapshot is complete or absent; a
+crash mid-write leaves rows nobody can address and a cursor that resolves to
+`:unknown-result-cursor` rather than to a truncated manifest, and its build
+temporary is swept by the same TTL prune.
+
+## Cursor ADDRESSING: content, not entropy (amended 2026-09-03)
+
+The pinned snapshot above shipped with a random `cursor-id` — two
+`UUID/randomUUID` values per ceiling-binding scan — and the memory battery
+rejected it on its next run:
+
+```
+FAIL reference-mismatch {:op :cli-ls-tree, :n 10000, :phase :warm,
+                         :observed "nondeterministic:4", :limit "f1bcbdb9…"}
+```
+
+Four distinct output hashes across five reps of one operation over one corpus.
+Diffed line by line: **98,361 characters, exactly ONE differing line, and it is
+the cursor.** Every one of the 1,000 records was byte-identical. The id named
+the SCAN, not the tree — and the design it replaced, whose cursor was
+`<offset>:<manifest-digest>`, had been deterministic for exactly that reason.
+
+The second consequence was measured alongside it: an unchanged tree got a NEW
+snapshot per scan. Four identical scans left four snapshots totalling 5.4 MB,
+each paying a full 10,000-file content-digest pass, and nothing could detect
+that the tree had not moved.
+
+**`cursor-id` is now the manifest digest** — SHA-256 folded, in result order,
+over each row's `position ⇥ project-index ⇥ path ⇥ content-digest`, seeded with
+`manifest-version` AND the canonical root. Five properties follow, and each is a witness in
+`clj-surgeon.ls-tree-budget-test`:
+
+| property | why it holds |
+|---|---|
+| an unchanged tree scans BYTE-IDENTICALLY, cursor included | the id is a function of the tree, and the reused snapshot carries the same secret, so the mac is the same too |
+| an unchanged tree pins ONE snapshot however often it is scanned | the id is the only thing addressing a snapshot, so a scan of an unmoved tree finds its own |
+| a changed tree gets a new id | content moved ⇒ a different fold, by construction |
+| a receipt holder still cannot mint a cursor for another offset | the mac's key is the per-snapshot secret, and publishing the id publishes nothing about it |
+| a cursor from an identical TWIN checkout is `:unknown-result-cursor`, not `:invalid-result-cursor` | the canonical root is folded into the address, so twins do not share one |
+
+The first property holds WITHIN ONE WARM SNAPSHOT STORE. Across cold stores the
+manifest digest is identical and the mac differs, because the mac's key is a
+fresh per-snapshot secret — the trade that makes forgery from published
+material impossible. A cleaned state root, or a scan after the 24 h TTL prune,
+therefore differs on the cursor line and only on the cursor line.
+
+Binding the root into the address is what makes `:unknown-result-cursor` TRUE.
+With a content-only address, two identical checkouts folded to one digest, so
+once the twin had been scanned a foreign cursor resolved to the twin's meta and
+fell through to the mac check — refusing `:invalid-result-cursor`, the remedy
+text for a forgery, about a token this server had minted. The price is that
+`:manifest_digest` no longer identifies tree content ACROSS roots; that is the
+right trade for an identifier whose whole job is to answer which repository
+page 2 is a page of. `manifest-version` is 2 for this reason: the address
+changed, so every v1 snapshot is unaddressable at once.
+
+Two boundaries this addressing draws explicitly:
+
+- **Stat is not in the address.** Size and mtime were dropped from the manifest
+  row: they are not identity (that was finding 1), and folding mtime would give
+  a touched-but-unchanged tree a new id, a new snapshot, and a different
+  cursor — reintroducing the nondeterminism at one remove.
+- **A reused snapshot is VERIFIED, never assumed.** A file sitting under a
+  content address is a *claim* about its content. Reuse re-folds the rows on
+  disk and accepts the snapshot only when they still prove the id they are
+  filed under, the meta names this root, this id and this projection version,
+  and the row count matches. Anything else is a MISS: the snapshot is rebuilt
+  from the tree, with a FRESH secret, so a cursor minted against bytes that
+  failed verification refuses rather than being honoured against bytes nobody
+  verified. Without that check, content-addressing would be name-addressing
+  with a longer filename.
+
+What content-addressing does NOT buy: the pinning scan still pays one content
+pass over the corpus, because the address cannot be known before the last row
+is folded. The saving is in stored state (one snapshot per distinct tree state
+rather than one per scan) and in determinism, not in the pinning scan's wall.
+
+One caveat it introduces, stated here rather than discovered later: two scans
+that BOTH find no snapshot for the same tree and pin it concurrently now race
+for one address, where random ids gave each its own. Both write identical rows;
+the meta written last wins, and the loser's cursor fails its mac and refuses
+`:invalid-result-cursor`. It is a refusal, never a wrong result, and it
+requires both scans to pin the same unpinned tree within the same few hundred
+milliseconds. The fix, if it is ever seen, is a lock file in `cursor-dir` — not
+a return to entropy.
+
+Measured on the memory battery's 10,000-file corpus, `ad3cdc7`: across one
+reference rep and five battery reps in both phases — about eleven
+ceiling-binding scans — the state root gained ONE 1.24 MB snapshot and zero
+build temporaries, and the parity cell reports a single `:result-hash` equal to
+`:reference-hash` across four warm reps, where the random id produced
+`nondeterministic:4`.
+
+**Every digest is taken AT ISSUE TIME, not lazily when a page is served.** The
+cheaper variant — digest each file only when its own page is read, so the
+scan's single read (MEM-015) pays for it — was considered and rejected, because
+it does not close the blocker. A digest computed when page 3 is served is taken
+AFTER any change between page 1 and page 3, so it pins the changed bytes and
+reports them as unchanged: exactly the silent wrong result finding 1 names,
+moved later in the sequence and made harder to see. A snapshot is only immutable
+if it is complete when it is taken. The measured price is one extra pass over
+the corpus's bytes on the page that pins — SHA-256 over the battery's 40 MB
+corpus, inside the 565 ms page 1 below — and pages that pin nothing (every scan
+at or under `R`) pay none of it.
+
+The price, stated plainly: **a continuation is a SNAPSHOT read, not a live
+one.** Files created after the snapshot are not in it and will not appear on
+later pages; a file deleted or rewritten refuses when its own page is served.
+That is the honest trade for a page that reads its own slice instead of
+re-walking the tree, and it is strictly safer than what it replaces, which
+interleaved two repositories without saying so. Callers who need the new file
+rescan, and the receipt names the snapshot so they can tell.
+
+### Measured, 2026-09-03 (10,000-file corpus, `:max-results 1000`)
+
+| page | wall | manifest rows folded | tree walks |
+|---|---:|---:|---:|
+| 1 — discovers and PINS | 565 ms | 10,000 (once, at issue) | 1 |
+| 2 — served FROM the pin | **152 ms** | **1,000** | **0** |
+
+Sol measured the re-derived design at 1,305 ms and 661 ms for the same two
+pages, each folding all 10,000 stat rows. The row fold is the number that
+matters: it was `O(pages x N)` and is now `O(page)`, so page cost stops growing
+with the repository. Wall time follows it, but wall time alone would not have
+distinguished a faster walk from no walk at all — which is why the witness
+counts calls rather than clocking them.
+
+## Boundary
+
+- **It does not change outline CONTENT.** Every result at or under `R` is
+  byte-identical to the batch encoder's, in both the text and EDN encodings, and
+  in record order. The ceiling is invisible until it binds.
+- **It bounds the CLI `ls-tree` ENCODER, and the EARS says so.** The requirement
+  names that encoder rather than "`ls-tree`" at large, because the untightened
+  wording claimed more than the code delivers (Sol, finding 12).
+- **It does not bound the WALK, and DISCOVERY STILL RETAINS AN N-SIZED PATH
+  COLLECTION.** `discover-projects` returns a vector of project maps each
+  holding a vector of every candidate's absolute path, and that vector is live
+  for the whole scan — one path string per file, growing linearly in N. It is
+  roughly two orders of magnitude smaller per file than the 9.4 KB outline this
+  row removed, which is why the battery's held line passes at 10,000 files, but
+  it is NOT zero and it is NOT bounded. A repository large enough for the path
+  collection alone to matter is still unbounded here. Per-file bytes, aggregate
+  bytes, walk entries and depth are `MCP-OP-MEM-002`'s; the bounded walker is
+  q5z's. Anyone reading the battery's green line as "`ls-tree` is bounded in N"
+  is reading more than this row proves.
+- **It is not a peak-heap promise.** Peak is heap-size dependent under G1 and is
+  a trend line, not a gate. The promise is on retained result heap.
+- **A ceiling is never a silent truncation.** Every bounded result carries either
+  a continuation naming the exact resuming call or a typed refusal. A result
+  with no receipt is complete, and that is the only way to read one.
+- **It does not touch the MCP study-ops entrance.** `mcp_inspect_tool.clj` and
+  `study.clj` belong to the `bridge/study-ops-mcp` lane; they must adopt the same
+  ceiling, the same cursor shape, and the same two typed answers.
+
+## Misreadings this row forbids
+
+- *An outline is small, so retaining them all is fine.* 9.4 KB each is small;
+  10,000 of them is 94 MB, in a 512 MB budget shared with the parser's transient
+  peak.
+- *A bounded read is a truncated read.* It is not. Bounded means the result
+  names its own boundary and the call that continues past it. The unbounded read
+  is the one that silently hands back whatever the repository happened to
+  contain.
+- *`R` should be raised until nobody hits it.* That re-opens the failure. `R` may
+  be lowered by any request; raising the server cap requires re-measuring the
+  battery.
+- *A cursor is just an offset.* An offset alone silently interleaves two
+  different trees, and an offset nobody range-checks returns an empty page that
+  reads as a complete result. The MAC and the pinned snapshot are what make a
+  second page honest.
+- *Stat identity is content identity.* It is not. Path, size and mtime are all
+  preserved by a byte swap, and two different roots can carry identical stats.
+  Identity here is the SHA-256 of the file's CONTENT, pinned at issue time.
+- *The declared pool size is the concurrency.* Only if something MEASURES it.
+  `pmap` under a chunked window ran 33 outlines against a declared 18 while the
+  constant, the docstring and the window arithmetic all said 18.
+- *The materialiser window can be unbounded because the outlines are dropped.*
+  The window is what the parallel materialiser holds in flight; it is a constant
+  (`4 x pool`), and the retained-heap witness gates on `R + window`, not on `R`.
+
+## Boundaries the witnesses must hold
+
+- A result of exactly `R` records is COMPLETE, carries no receipt, and equals
+  the unbounded result exactly.
+- `R+1` candidates yield a continuation whose `:next_call` cursor parses to
+  `{:cursor-id <64 hex> :offset R :mac <64 hex>}`, and whose pages concatenate
+  to the unbounded result in the same order — a bounded result is the PREFIX of
+  the unbounded one, never a sample.
+- With `:complete true`, `R+1` candidates refuse with `:error-type
+  :result-ceiling-exceeded`, `:complete false`, `:source-unchanged true`, and a
+  `:limit` naming `:requested`, `:server-max`, `:observed` and `:fits`. The
+  remedy narrows the scope; it never says raise the heap.
+- A cursor whose pinned file's BYTES changed under a preserved path, size and
+  mtime is refused as `:stale-result-cursor`, naming the path and both digests.
+- A cursor minted against another root — an identical twin checkout included —
+  is `:unknown-result-cursor`, as are rows that no longer prove their address
+  and rows that cannot supply the slice they promised; a forged offset is
+  `:invalid-result-cursor`; a genuine offset past the end is
+  `:result-cursor-out-of-range`, naming the offset and the manifest total; a
+  row that does not resolve to a source file inside the scanned root is
+  `:unconfined-manifest-row`, naming the row — its parent resolving outside the
+  root, or its leaf still existing as a directory entry that does not resolve to
+  a regular file (a directory, a symlink to one, a dangling symlink, a FIFO); a
+  row whose file was simply DELETED has no entry at all, is not refused here,
+  and reaches `:stale-result-cursor` instead. None of the five is ever an empty
+  vector without a receipt, and none is ever a throw.
+- A malformed `:max-results` is `:invalid`, never silently promoted to the cap;
+  a 40-digit `:max-results` or cursor offset is that same typed refusal, never a
+  `NumberFormatException`.
+- The ceiling is exercised at the SHIPPED server value `R = 1000`, not only at a
+  caller-lowered fixture ceiling.
+- Measured maximum outline concurrency is at or below `outline-pool-size`, taken
+  with the scan instrumented and separately proved non-serial (a serial peak
+  would make the bound vacuous), and `outline-window-size` is a fixed multiple
+  of the pool at every corpus size.
+- A continuation page performs NO discovery: it reads its own slice of the
+  pinned rows and nothing else.
+- An empty scan prints what it searched and exits 1 — never a receipt whose
+  `:error` is nil.
+- Retained heap tracks `R`, not `N`: at a fixed `R`, scanning 8x the files must
+  not retain measurably more, and an unbounded control on the same corpus must
+  retain measurably more than both — otherwise the witness is measuring nothing.
+- The differential over `src/` and `test/` is zero mismatches in text, in EDN,
+  and in record order.

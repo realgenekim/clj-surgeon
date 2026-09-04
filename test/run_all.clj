@@ -27,6 +27,7 @@
    [clj-surgeon.lens-query-test]
    [clj-surgeon.measured-channel-test]
    [clj-surgeon.memory-battery-test]
+   [clj-surgeon.ls-tree-budget-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
@@ -79,6 +80,7 @@
                    'clj-surgeon.edit-test
                    'clj-surgeon.edit-dsl-test
                    'clj-surgeon.cljc-existing-ops-test
+                   'clj-surgeon.ls-tree-budget-test
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
                    'clj-surgeon.owner-hypotheses-test

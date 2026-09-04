@@ -41,6 +41,7 @@
   `:measured` is measured. A new timing field is added there and no
   determinism row has to be renegotiated again.
 
+  @spec MCP-OP-MEM-003
   @spec MCP-OP-MEM-005
   @spec MCP-OP-MEM-011"
   (:require

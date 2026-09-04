@@ -21,16 +21,20 @@
    [clj-surgeon.forms :as forms]
    [clj-surgeon.forward-refs :as fwd]
    [clj-surgeon.intent-transaction :as intent-transaction]
+   [clj-surgeon.ls-tree-snapshot :as snapshot]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.measured :as measured]
    [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.rename :as rename]
+   [clj-surgeon.result-budget :as budget]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.pprint :as pp]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  (:import
+   (java.util.concurrent Executors FutureTask)))
 
 (defn- named-plan-refusal
   "Run `f`; turn a parser-admission refusal into a NAMED refusal the caller can
@@ -297,19 +301,82 @@
    turned one real path into two fictional ones that then failed to parse and
    were silently dropped (Andon pull inb-d27b79, 2026-09-03). The -name
    alternation is parenthesised because -print0 would otherwise bind to the
-   last -name only."
+   last -name only.
+
+   `-H` for the same reason as `find-build-files`: a source path may itself be
+   reached through a symlinked ROOT, and find's `-P` default does not descend a
+   symlinked start point, so the entrance accepted a root and discovery
+   silently found nothing. `-H` follows the START POINT only, which is why the
+   file-level `-type l -xtype f` clause below is still load-bearing.
+
+   THIS PREDICATE IS THE CONTRACT `ls-tree-snapshot/row-file` IS WRITTEN
+   AGAINST. A candidate is a REGULAR FILE, or a SYMLINK THAT RESOLVES TO ONE —
+   nothing else. Everything downstream reasons about what discovery can
+   produce, so the predicate has to be stated in one place and be true.
+
+   It was `-name \"*.clj\" -o -name \"*.cljs\" -o -name \"*.cljc\"` with no
+   `-type` at all, and `row-file`'s docstring justified refusing a
+   directory-leaf row with \"`find -type f` never lists a directory\" — a flag
+   that was not there. So a DIRECTORY named `src/mydir.clj` was discovered,
+   pinned as an honest manifest row, and then refused by that guard:
+   `:unconfined-manifest-row` naming a path inside the root, two innocent
+   files lost, and a pagination no cursor could finish, while an unbounded
+   scan of the same tree still served every record (Opus, 2026-09-03). The
+   same missing flag made a FIFO named `src/pipe.clj` a candidate, and
+   `open(2)` on a FIFO BLOCKS: a scan of that tree returned nothing, forever,
+   and survived SIGTERM.
+
+   Output is NUL-DELIMITED (`-print0`, split on `\\u0000`), not line-delimited.
+   `find`'s default is one path per LINE, so a file whose NAME CONTAINS A
+   NEWLINE — legal on this filesystem — printed as two lines for one file: an
+   absolute fragment and a bare relative leftover. The relative fragment is
+   not under the scanned root, so it reached `rel-path`'s `fs/relativize` and
+   threw `IllegalArgumentException` out of the whole operation instead of a
+   typed receipt (Opus, 2026-09-03). A NUL cannot appear inside a POSIX
+   filename, so it is the only delimiter `find -print0` and this parse can
+   trust.
+
+   Three details, each of which was a trap:
+
+   - `-type f` ALONE is wrong. It is false for a symlink (there is no `-L`
+     here), so it would stop listing symlinked `.clj` FILES, which discovery
+     deliberately admits and
+     `a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered`
+     pins. Hence `( -type f -o ( -type l -xtype f ) )`: `-xtype f` is
+     GNU find asking what the link RESOLVES to, so a symlink to a directory
+     and a DANGLING symlink are both excluded while a symlink to a regular
+     file is kept.
+   - the `-o` chain was UNPARENTHESIZED, so a `-type` predicate dropped in
+     front of it would have bound to the first `-name` only and silently
+     changed the result set. Both chains are parenthesized now.
+   - the name chain runs FIRST so the type test — which costs a `stat`, twice
+     for a symlink — is only paid for paths that could be candidates at all.
+
+   Arguments are an argv vector, never a shell string, so the parentheses
+   reach `find` as literal arguments and need no escaping."
   [dir]
   (when (existing-directory? dir)
     (try
       (let [result (babashka.process/shell
                      {:out :string :err :string :continue true}
-                     ;; -H for the same reason as find-build-files: a source
-                     ;; path may itself be reached through a symlinked root.
+                     ;; -H: the symlinked-ROOT fix (andon inb-d27b79).
+                     ;; find-start-token: a relative path starting with `-`
+                     ;; would be read as an option.
                      "find" "-H" (find-start-token dir)
                      "(" "-name" "*.clj"
                      "-o" "-name" "*.cljs"
-                     "-o" "-name" "*.cljc" ")" "-print0")]
+                     "-o" "-name" "*.cljc" ")"
+                     ;; the type predicate MEM-003's row-file guard is written
+                     ;; against: a regular file, or a symlink resolving to one.
+                     "(" "-type" "f" "-o" "(" "-type" "l" "-xtype" "f" ")" ")"
+                     "-print0")]
         (when (zero? (:exit result))
+          ;; `nul-separated-paths` and not a local split: it drops only the
+          ;; genuinely empty trailing token (a whitespace-only filename is
+          ;; legal and is DATA), and it SORTS, which is what makes discovery
+          ;; order deterministic across filesystems — a precondition of
+          ;; MEM-003's manifest address, which is a function of the ordered
+          ;; rows.
           (seq (nul-separated-paths (:out result)))))
       (catch Exception _e nil))))
 
@@ -415,6 +482,17 @@
          (remove #(empty? (:files %)))
          vec)))
 
+(defn- source-kind
+  "What a non-regular candidate actually is, for the receipt. Descriptive, not
+   load-bearing: the refusal is decided by `fs/regular-file?` alone."
+  ;; @spec MCP-OP-MEM-003
+  [file]
+  (cond
+    (not (fs/exists? file {:nofollow-links true})) :absent
+    (fs/directory? file)                           :directory
+    (fs/sym-link? file)                            :unresolvable-symlink
+    :else                                          :not-a-regular-file))
+
 (defn- safe-outline
   "Run outline on a file, returning error map on parse errors.
 
@@ -423,32 +501,62 @@
    and `:observed` so the scan's receipt can name and count it. It stays a
    per-file skip — before this, a file deep enough to exhaust the reader's
    stack threw a StackOverflowError, which is an `Error` and not an
-   `Exception`, and killed the whole scan."
+   `Exception`, and killed the whole scan.
+
+   THE SOURCE OPEN IS GUARDED BEFORE IT HAPPENS. `find-clj-files` now lists
+   only regular files and symlinks resolving to them, so the encoder should
+   never see anything else — but \"should never\" is exactly the premise the
+   round-six blocker was built on, and between discovery and this read there
+   is a real window: a path listed as a regular file can be a FIFO by the
+   time it is opened. That matters more than a stale stat, because `open(2)`
+   on a FIFO BLOCKS until a writer appears rather than throwing, so the
+   `catch Exception` below can never make it typed — the operation simply
+   returns nothing, forever (Opus, 2026-09-03: a scan of such a tree survived
+   SIGTERM). A refusal a caller can read beats a hang a caller cannot.
+
+   The predicate is `fs/regular-file?`, which is `Files/isRegularFile`
+   FOLLOWING links — deliberately NOT `NOFOLLOW_LINKS`, which is false for a
+   symlink to a regular file and would refuse `src/fixt/zlinked.clj`, a
+   candidate discovery admits on purpose. It costs one `stat` per file, which
+   is noise beside the parse it guards."
   ;; @spec MCP-OP-MEM-005
+  ;; @spec MCP-OP-MEM-003
   [file]
-  (try
-    (outline/outline file)
-    (catch clojure.lang.ExceptionInfo e
-      (let [data (ex-data e)]
-        (if (= :parser_admission_refused (:refusal data))
-          (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+  ;; The union of two GO'd lanes, and both halves are load-bearing. MEM-003's
+  ;; regular-file guard runs FIRST, because `open(2)` on a FIFO BLOCKS and no
+  ;; `catch` can make a hang typed. MEM-005's `StackOverflowError` catch is
+  ;; INSIDE it, because an Error is not an Exception and one overflowing file
+  ;; killed the whole pmap scan before it existed.
+  (if-not (fs/regular-file? file)
+    {:file file
+     :refusal :unreadable-source
+     :reason "source is not a regular file"
+     :observed (source-kind file)
+     :remedy "rescan; this path is not a source file the scan can read"
+     :error (str file " is not a regular file")}
+    (try
+      (outline/outline file)
+      (catch clojure.lang.ExceptionInfo e
+        (let [data (ex-data e)]
+          (if (= :parser_admission_refused (:refusal data))
+            (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+                   :file file
+                   :error (ex-message e))
+            {:file file :error (str (ex-message e))})))
+      (catch StackOverflowError _
+        ;; @spec MCP-OP-MEM-005
+        ;; The estimator is an ESTIMATE, and this catch is what makes the
+        ;; scan-kill class closed WITHOUT depending on it being complete. An
+        ;; Error is not an Exception, so before this one overflowing file
+        ;; killed the whole pmap scan and no file's outline came back at all.
+        (let [r (admission/stack-overflow-refusal file)]
+          (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
                  :file file
-                 :error (ex-message e))
-          {:file file :error (str (ex-message e))})))
-    (catch StackOverflowError _
-      ;; @spec MCP-OP-MEM-005
-      ;; The estimator is an ESTIMATE, and this catch is what makes the
-      ;; scan-kill class closed WITHOUT depending on it being complete. An
-      ;; Error is not an Exception, so before this one overflowing file killed
-      ;; the whole pmap scan and no file's outline came back at all.
-      (let [r (admission/stack-overflow-refusal file)]
-        (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
-               :file file
-               :error (str "parser admission refused "
-                           (admission/public-ceiling-name (:reason r))
-                           ": " file))))
-    (catch Exception e
-      {:file file :error (str (.getMessage e))})))
+                 :error (str "parser admission refused "
+                             (admission/public-ceiling-name (:reason r))
+                             ": " file))))
+      (catch Exception e
+        {:file file :error (str (.getMessage e))}))))
 
 (defn- admission-refusals
   "Every parser-admission refusal in a scan, as receipt rows in path order."
@@ -572,7 +680,7 @@
         ;; existed; the EDN receipt carries it unconditionally, because that is
         ;; the surface a regression check reads.
         ;;
-        ;; MCP-OP-MEM-003 (registered by bridge/streaming-ls-tree) — and the wall-clock half goes on its own
+        ;; @spec MCP-OP-MEM-003 — and the wall-clock half goes on its own
         ;; LABELLED line. Text has no keys, so the hashed/measured partition has
         ;; to be visible in the bytes: `measured/strip-measured-lines` is the
         ;; text counterpart of `measured/hashed-channel`, and a byte-identity
@@ -623,6 +731,250 @@
                   (assoc :parser_admission_refused
                          {:count (count refused) :files refused}))]
     (conj entries {:receipt receipt})))
+
+
+;; ============================================================
+;; The bounded output budget — streaming encode (MCP-OP-MEM-003)
+;; ============================================================
+
+;; @spec MCP-OP-MEM-003
+(def outline-pool-size
+  "Files outlined concurrently — the DECLARED bound on how much parser peak a
+   scan carries at once.
+
+   Public because a bound nobody can read is a bound nobody can check: the
+   concurrency witness gates on this number, and Sol's review found the
+   implementation running 32 outlines against a declared 18 precisely because
+   nothing measured it."
+  (+ 2 (.availableProcessors (Runtime/getRuntime))))
+
+;; @spec MCP-OP-MEM-003
+(def outline-window-size
+  "How many outlines the bounded materialiser may hold in flight: `4 x pool`.
+
+   The scan is consumed one window at a time, so the outlines resident at any
+   moment are the active worker set plus at most one window — never the vector
+   of all outlines. Public because the retained-heap witness gates on
+   `ceiling + window`, and a bound nobody can read is a bound nobody can check."
+  (* 4 outline-pool-size))
+
+(defn- rel-path
+  [root-path f]
+  (str (fs/relativize root-path (fs/path f))))
+
+(defn- candidate-seq
+  "Every candidate `[project-index file]` in result order, lazily. Holds no
+   outline and no source: the path strings already live in `projects`."
+  ;; @spec MCP-OP-MEM-003
+  [projects]
+  (for [[pidx project] (map-indexed vector projects)
+        f (:files project)]
+    [pidx f]))
+
+(defn- candidate-rows
+  "Every candidate as `{:pidx :path :abs}` in result order, lazily. This is the
+   shape the pinned manifest snapshot is written from; it holds no outline and
+   no source, and the seq is consumed one row at a time."
+  ;; @spec MCP-OP-MEM-003
+  [projects root-path]
+  (for [[pidx project] (map-indexed vector projects)
+        f (:files project)]
+    {:pidx pidx :path (rel-path root-path f) :abs (str f)}))
+
+(defn- candidate-total
+  "The candidate count, from the discovered project file lists. No stat, no
+   walk: the counts are already in hand, and a scan at or under the ceiling
+   must not pay a manifest pass it will never use."
+  ;; @spec MCP-OP-MEM-003
+  [projects]
+  (reduce + 0 (map #(count (:files %)) projects)))
+
+(defn- stream-outlines!
+  "Outline `candidates` and hand each `[project-index file outline]` to
+   `consume!` IN ORDER, dropping it immediately afterwards.
+
+   Two bounds hold at once, and they are different bounds:
+
+   - CONCURRENCY is `outline-pool-size`, enforced by a fixed thread pool. At
+     most that many outlines are ever executing, so parser peak cannot grow
+     with the corpus.
+   - IN-FLIGHT WORK is `outline-window-size` (`4 x pool`), enforced by the
+     submission loop. At most that many results are ever resident, so retained
+     heap cannot grow with the corpus either.
+
+   This replaces a chunked `pmap`, which enforced NEITHER: `pmap` realises its
+   input 32 at a time, so it ran 33 outlines against a declared 18 (Sol,
+   2026-09-03). A documented bound that the implementation cannot actually
+   hold is worse than no bound, because everything downstream is sized by it.
+
+   The pool is per-scan and shut down in a `finally`, so a refusal or a throw
+   mid-scan cannot leak threads. Work is submitted as `FutureTask` and handed
+   to `.execute`: both are single-signature, so the call cannot resolve to
+   `submit(Runnable)` and silently return nil results under a reflective
+   runtime such as babashka.
+
+   Results are consumed in SUBMISSION order from a FIFO queue, so a fast tiny
+   file finishing ahead of a slow large one does not reorder the output; the
+   encoding stays byte-identical to the batch path. Nothing accumulates: this
+   returns nil, and the only thing that grows with the scan is whatever
+   `consume!` chose to keep."
+  ;; @spec MCP-OP-MEM-003
+  ;; @spec MCP-OP-MEM-005
+  ;; `meter` is the PER-SCAN admission accumulator, closed over lexically here
+  ;; and rebound inside each task. Two concurrent `ls-tree` calls each charge
+  ;; their own — the counter was one global atom, and two scans zeroed each
+  ;; other's clock and both published a wrong figure, silently. Correctness
+  ;; does not depend on binding conveyance surviving a change of executor,
+  ;; which matters here precisely because this is no longer `pmap`.
+  [meter candidates consume!]
+  (let [pool (Executors/newFixedThreadPool outline-pool-size)]
+    (try
+      (loop [q (clojure.lang.PersistentQueue/EMPTY)
+             xs (seq candidates)]
+        (cond
+          (and xs (< (count q) outline-window-size))
+          (let [[pidx f] (first xs)
+                task (FutureTask. (fn []
+                                    (binding [admission/*scan-meter* meter]
+                                      [pidx f (safe-outline f)])))]
+            (.execute pool task)
+            (recur (conj q task) (next xs)))
+
+          (seq q)
+          (do (consume! (.get ^FutureTask (peek q)))
+              (recur (pop q) xs))
+
+          :else nil))
+      (finally (.shutdown pool)))))
+
+(defn- admission-refusal-row
+  [rel result]
+  {:file rel
+   :reason (:reason result)
+   :limit (:limit result)
+   :observed (:observed result)
+   :remedy (:remedy result)})
+
+(defn- refused?
+  [result]
+  (= :parser_admission_refused (:refusal result)))
+
+(defn- text-encoder
+  "Streaming text encoder. Appends one file's outline at a time and drops it.
+
+   A project header carries that project's form total, which is not known until
+   its last file is encoded, so the header is INSERTED at the recorded index
+   once the project closes. The bytes are identical to the batch formatter's
+   and nothing but the encoded output is retained."
+  ;; @spec MCP-OP-MEM-003
+  [root-path projects multi-project?]
+  (let [sb (StringBuilder.)
+        state (volatile! {:pidx nil :start 0 :files 0 :forms 0
+                          :total-files 0 :total-forms 0 :refused []})
+        close-project!
+        (fn []
+          (let [{:keys [pidx start files forms]} @state]
+            (when (and pidx multi-project?)
+              (.insert sb (int start)
+                       (format "── %s (%d files, %d forms)\n\n"
+                               (:name (nth projects pidx)) files forms)))))]
+    {:emit!
+     (fn [[pidx f result]]
+       (when (not= pidx (:pidx @state))
+         (close-project!)
+         (vswap! state assoc :pidx pidx :start (.length sb) :files 0 :forms 0))
+       (let [rel (rel-path root-path f)
+             forms (or (:form-count result) 0)]
+         (.append sb (format-file-text result rel))
+         (.append sb "\n")
+         (vswap! state (fn [st]
+                         (cond-> (-> st
+                                     (update :files inc)
+                                     (update :forms + forms)
+                                     (update :total-files inc)
+                                     (update :total-forms + forms))
+                           (refused? result)
+                           (update :refused conj
+                                   (admission-refusal-row rel result)))))))
+     :finish!
+     (fn [receipt resources]
+       (close-project!)
+       (let [{:keys [total-files total-forms refused]} @state]
+         (.append sb (format "── total: %d files, %d forms\n"
+                             total-files total-forms))
+         ;; @spec MCP-OP-MEM-005
+         ;; Byte-for-byte the batch encoder's refusal block, including its
+         ;; nil-limit branch: a stack-overflow skip MEASURED nothing, so it
+         ;; names no limit, and `format "%d"` on nil throws. The streaming
+         ;; encoder was written before that skip existed.
+         (when (seq refused)
+           (.append sb (format "── parser_admission_refused: %d file(s)\n"
+                               (count refused)))
+           (doseq [{:keys [file reason limit observed]} refused]
+             (.append sb (if (and limit observed)
+                           (format "   %s  %s limit %d, observed %d\n"
+                                   file
+                                   (admission/public-ceiling-name reason)
+                                   limit observed)
+                           (format "   %s  %s\n"
+                                   file
+                                   (admission/public-ceiling-name reason)))))
+           ;; The TEXT rendering keeps the quieter contract: resources appear
+           ;; only inside the refusal block, so an ordinary scan's human output
+           ;; is byte-identical to before this control existed. The wall-clock
+           ;; half is on its own labelled line — see `clj-surgeon.measured`.
+           (.append sb (format "── resources: bytes_scanned %s\n"
+                               (:bytes_scanned resources)))
+           (.append sb (format "%sscan_ms %s\n"
+                               measured/text-measured-prefix
+                               (:scan_ms (get resources
+                                              measured/measured-key)))))
+         (when receipt
+           (.append sb (budget/continuation-text receipt))))
+       (str sb))}))
+
+(defn- edn-encoder
+  "Streaming EDN encoder. Each outline is projected to its record and dropped;
+   the retained vector is the bounded output, never the outline set."
+  ;; @spec MCP-OP-MEM-003
+  [root-path]
+  (let [entries (volatile! (transient []))
+        refused (volatile! [])]
+    {:emit!
+     (fn [[_ f result]]
+       (let [rel (rel-path root-path f)]
+         (vswap! entries conj! (-> result
+                                   (assoc :file rel)
+                                   (dissoc :forward-refs)))
+         (when (refused? result)
+           (vswap! refused conj (admission-refusal-row rel result)))))
+     :finish!
+     (fn [receipt resources]
+       (let [records (persistent! @entries)
+             rows @refused
+             ;; @spec MCP-OP-MEM-005
+             ;; `:resources` is UNCONDITIONAL — a scan regression shows up on
+             ;; ORDINARY scans, which are ~100% of production runs, and a gauge
+             ;; wired to the rare branch is a gauge nobody sees move. So the
+             ;; trailer is never empty and the EDN result always ends in one
+             ;; receipt map.
+             ;;
+             ;; @spec MCP-OP-MEM-003
+             ;; The trailer is PARTITIONED. `:resources` carries the
+             ;; deterministic `bytes_scanned` plus a `:measured` block; the
+             ;; ceiling half (`:result_ceiling`, `:next_call`) is present only
+             ;; when the result is actually bounded. So "a complete result
+             ;; carries no HASHED receipt" holds: nothing a determinism row
+             ;; hashes appears until there is something to say.
+             trailer (cond-> {:resources resources}
+                       (seq rows)
+                       (assoc :parser_admission_refused
+                              {:count (count rows) :files rows})
+
+                       receipt
+                       (assoc :result_ceiling (:result_ceiling receipt)))]
+         (conj records (cond-> {:receipt trailer}
+                         receipt (assoc :next_call (:next_call receipt))))))}))
 
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
@@ -697,41 +1049,319 @@
      :dir (str dir)
      :next-action "pass_an_existing_directory_path"}))
 
-(defn run-ls-tree
-  "Outline every Clojure project under :dir.
+(defn no-clojure-files-message
+  "The message an empty scan prints. Extracted so it has a witness: this
+   `format` call sat inside a fn that destructured `:format` out of its own
+   opts map, shadowing `clojure.core/format`, and an empty scan threw an NPE
+   instead of saying what it found."
+  ;; @spec MCP-OP-MEM-003
+  [abs grep]
+  (format "No Clojure files found under %s%s"
+          abs (if grep (str " matching '" grep "'") "")))
 
-   The `:format` value is bound as `output-format`, NOT destructured as
-   `format`: a binding named `format` shadows clojure.core/format for the whole
-   body, so the empty-result branch below called the caller's :format VALUE as
-   a function (`ArityException: Wrong number of args (3) passed to: :edn`).
-   Never name a local after a core fn this body calls."
-  [{:keys [dir grep] output-format :format :as _opts}]
+(defn- page-cursor
+  "The cursor token for `offset` in one pinned snapshot: the snapshot's id, the
+   offset, and a mac over both keyed on the snapshot's private secret."
+  ;; @spec MCP-OP-MEM-003
+  [cursor-id secret offset]
+  (budget/cursor-token cursor-id offset (snapshot/mac cursor-id offset secret)))
+
+(defn- pinned-candidates
+  "The `[project-index absolute-path]` pairs a page will outline, taken from
+   the PINNED manifest rows rather than from a fresh walk of the tree.
+
+   Resolved by `snapshot/row-file` — the SAME resolver the staleness check
+   uses. It used to be `fs/path` here against `io/file` there, so the file
+   that was verified and the file that was read could differ. Callers reach
+   this only after `unconfined-row` has refused any row that escapes the root,
+   and a fresh scan's rows are relativized under the root by construction, so
+   every row here resolves."
+  ;; @spec MCP-OP-MEM-003
+  [abs rows]
+  (mapv (fn [{:keys [x p]}] [x (str (snapshot/row-file abs p))]) rows))
+
+(defn- encode-page
+  "Outline `candidates` through the streaming encoder and return the encoded
+   page. `projects` supplies the text encoder's per-project headers.
+
+   `receipt-fn` is called with the number of records the encoder ACTUALLY
+   emitted and returns the trailing receipt — or is `(constantly nil)` for a
+   complete result. The count comes from the encoder's own emissions, on the
+   consuming thread, in submission order, so a receipt cannot claim more
+   records than the page beside it holds: the number and the records are
+   produced by one act. It used to be `(min ceiling remaining)` — arithmetic
+   about the manifest — which printed `:returned 5` over a page of two.
+
+   Counting here rather than at the call sites is the point. A caller that
+   computes the number separately can always drift from the encoder; a caller
+   that is HANDED it cannot."
+  ;; @spec MCP-OP-MEM-003
+  ;; @spec MCP-OP-MEM-005
+  [abs projects candidates output-format receipt-fn]
+  (let [encoder (if (= :edn output-format)
+                  (edn-encoder (fs/path abs))
+                  (text-encoder (fs/path abs) projects (> (count projects) 1)))
+        emit! (:emit! encoder)
+        encoded (volatile! 0)
+        meter (admission/new-meter)]
+    (stream-outlines! meter candidates (fn [record]
+                                         (vswap! encoded inc)
+                                         (emit! record)))
+    ((:finish! encoder) (receipt-fn @encoded) (admission/meter-resources meter))))
+
+(defn- run-fresh-scan
+  "A scan with no cursor: discover, count, and either encode the whole result
+   or PIN a manifest snapshot and serve its first page.
+
+   A result at or under the ceiling pins nothing. It needs no cursor, so it
+   pays no stat pass, no content digest and no snapshot file — which makes the
+   ordinary scan cheaper than it was before this budget existed, when every
+   scan folded a manifest digest it then discarded."
+  ;; @spec MCP-OP-MEM-003
+  [{:keys [abs dir grep ceiling complete output-format base render]}]
+  (let [projects (if grep
+                   (discover-projects-grep (grep-tree grep abs) abs)
+                   (discover-projects abs))]
+    (if (empty? projects)
+      (do (println (no-clojure-files-message abs grep))
+          (System/exit 1))
+      (let [total (candidate-total projects)]
+        (if-not (> total ceiling)
+          (encode-page abs projects (candidate-seq projects) output-format
+                       (constantly nil))
+          (let [{:keys [cursor-id digest secret]}
+                (snapshot/write-snapshot!
+                  {:root abs
+                   :projects projects
+                   :rows (candidate-rows projects (fs/path abs))})
+                request (assoc base :digest digest :total total :offset 0)]
+            (if complete
+              (render (budget/ceiling-refusal
+                        (assoc request :next-cursor
+                               (page-cursor cursor-id secret 0))))
+              ;; Read back through the SAME verified fold the serve path
+              ;; uses: this scan wrote those bytes, but a snapshot is a file,
+              ;; and a file read without proving its address is a filename.
+              (if-let [rows (:rows (snapshot/verified-page abs cursor-id 0
+                                                           ceiling))]
+                (let [advanced (volatile! 0)
+                      page (encode-page
+                             abs projects (pinned-candidates abs rows)
+                             output-format
+                             ;; MEASURED, not asserted: the next page starts
+                             ;; exactly where this one stopped, so no record
+                             ;; can be skipped by a receipt that overclaims.
+                             (fn [encoded]
+                               (vreset! advanced encoded)
+                               (when (pos? encoded)
+                                 (budget/continuation
+                                   (assoc request
+                                          :returned encoded
+                                          :next-cursor (page-cursor
+                                                         cursor-id secret
+                                                         encoded))))))]
+                  ;; A page ADVANCES by what it encoded, so a page that
+                  ;; encoded nothing would hand back a cursor at its own
+                  ;; offset. See `budget/empty-page-refusal`.
+                  (if (zero? @advanced)
+                    (render (budget/empty-page-refusal
+                              (assoc request :slice (count rows))))
+                    page))
+                (render (budget/unknown-cursor-refusal
+                          (assoc base :token (page-cursor cursor-id secret
+                                                          0))))))))))))
+
+(defn- run-pinned-page
+  "A page served from a pinned manifest snapshot.
+
+   Six typed refusals guard it. Four name a DIFFERENT fact about the caller's
+   cursor: `:invalid-result-cursor` — this server did not mint that token;
+   `:unknown-result-cursor` — it did, but not for this root, the snapshot is
+   gone, the bytes filed under it no longer PROVE the manifest they are filed
+   as, or the manifest cannot supply the slice it promised;
+   `:result-cursor-out-of-range` — it did, and the position is not in the
+   manifest; `:stale-result-cursor` — it did, and a file this page must serve
+   no longer holds its pinned content.
+
+   Two state a fact about the MANIFEST or the PAGE rather than the cursor:
+   `:unconfined-manifest-row` — the token is good, the snapshot verified, and
+   one of the rows this page would serve names a path whose parent directory
+   resolves outside the scanned root; it names that path and reads nothing.
+   `:empty-result-page` — everything verified and the page still encoded zero
+   records with rows remaining, so the continuation it would mint would carry
+   a cursor at this page's own offset.
+
+   The snapshot and the slice come from ONE OPEN of the rows file
+   (`snapshot/verified-page`): the same pass folds the manifest digest, counts
+   the rows and cuts the slice, so the address is proved OF THE BYTES SERVED.
+   Verifying in one open and slicing in a second left a window that is not a
+   hairline but the whole fold — O(N), so it grew with the corpus — and round
+   four measured 92 of 400 page-2 reads serving a substituted candidate under
+   a valid cursor while a swapper renamed rows files into place.
+
+   No discovery, no glob, no tree walk: the page reads its own slice of the
+   pinned rows and nothing else."
+  ;; @spec MCP-OP-MEM-003
+  [{:keys [abs cursor ceiling complete output-format base render]}]
+  (if-let [{:keys [cursor-id offset mac]} (budget/parse-cursor cursor)]
+    ;; VERIFIED, never merely read: a snapshot file is a CLAIM about its
+    ;; content, and the claim is re-checked on the path that SERVES it, not
+    ;; only on the path that reuses it.
+    ;; ONE OPEN of the rows file: the fold that proves the address and the
+    ;; slice this page serves come out of the same reading of the same bytes.
+    (let [page (snapshot/verified-page abs cursor-id offset ceiling)
+          snap (:meta page)]
+      (cond
+        (nil? snap)
+        (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
+
+        (not= mac (snapshot/mac cursor-id offset (:secret snap)))
+        (render (budget/invalid-cursor-refusal (assoc base :token cursor)))
+
+        (>= offset (:total snap))
+        (render (budget/out-of-range-refusal
+                  (assoc base :offset offset :total (:total snap))))
+
+        :else
+        (let [total (:total snap)
+              remaining (- total offset)
+              over? (> remaining ceiling)
+              slice (min ceiling remaining)
+              rows (:rows page)
+              unconfined (snapshot/unconfined-row abs rows)
+              ;; A DELAY, not a sibling binding. `unconfined-row` promises the
+              ;; confinement refusal costs no read, and a sibling `let` broke
+              ;; that promise quietly: `stale-row` digests every confined row
+              ;; before the offending one whether or not confinement refuses.
+              ;; The order of the `cond` below is the whole point of the
+              ;; promise, so the evaluation has to follow it.
+              stale (delay (snapshot/stale-row abs rows))
+              request (assoc base :digest (:digest snap) :total total
+                             :offset offset)]
+          (cond
+            ;; The manifest verified and still could not supply the slice
+            ;; it promised. This is the COUNT direction, and it is the SAFE
+            ;; one: a short page under a full receipt lies about how much was
+            ;; shown, never about WHAT was shown. The dangerous direction is
+            ;; DIFFERENT rows of the right length, which no count can see —
+            ;; round four served `[m06 m01 m08 m09 m10]` that way 92 times in
+            ;; 400 reads. That direction is not closed here; it is closed
+            ;; upstream by `snapshot/verified-page` folding and slicing in one
+            ;; open, so the rows below are a slice of bytes that prove the id.
+            ;; This guard remains as the arithmetic check it always was.
+            (not= slice (count rows))
+            (render (budget/unknown-cursor-refusal (assoc base :token cursor)))
+
+            ;; Confinement, before staleness and before any candidate is
+            ;; built: a row that escapes the root is never opened.
+            unconfined
+            (render (budget/unconfined-row-refusal
+                      (assoc base :path (:path unconfined))))
+
+            @stale
+            (render (budget/stale-cursor-refusal (merge base @stale)))
+
+            (and complete over?)
+            (render (budget/ceiling-refusal
+                      (assoc request :next-cursor
+                             (page-cursor cursor-id (:secret snap) offset))))
+
+            :else
+            (let [advanced (volatile! 0)
+                  page (encode-page
+                         abs (:projects snap) (pinned-candidates abs rows)
+                         output-format
+                         (fn [encoded]
+                           (vreset! advanced encoded)
+                           (when (and over? (pos? encoded))
+                             (budget/continuation
+                               (assoc request
+                                      :returned encoded
+                                      :next-cursor
+                                      (page-cursor cursor-id (:secret snap)
+                                                   (+ offset encoded)))))))]
+              ;; `over?` is derived from `(- total offset)` and the advance is
+              ;; derived from `encoded`. When they disagree in the direction
+              ;; `rows remain, nothing encoded`, the continuation would carry a
+              ;; cursor at this page's OWN offset and a caller would follow it
+              ;; forever. See `budget/empty-page-refusal`.
+              ;;
+              ;; UNCONDITIONAL on `over?`, matching `run-fresh-scan`'s copy of
+              ;; this same guard (core.clj:840). `over?` is false BY
+              ;; DEFINITION on every final page, so gating on it made the
+              ;; guard structurally unable to fire there: a forced zero-encode
+              ;; on the last page returned a bare `[]` — no records, no
+              ;; receipt, no refusal — which a caller reads as a complete
+              ;; result. `rows` is never empty here (the `(not= slice (count
+              ;; rows))` clause above already refused that), so a zero
+              ;; `@advanced` on ANY page — mid or final — is the same "rows
+              ;; remained, nothing advanced" hazard, and gets the same
+              ;; refusal.
+              (if (zero? @advanced)
+                (render (budget/empty-page-refusal
+                          (assoc request :slice (count rows))))
+                page))))))
+    (render (budget/invalid-cursor-refusal (assoc base :token cursor)))))
+
+(defn run-ls-tree
+  "Map namespaces across a directory tree.
+
+   The result is BOUNDED (MCP-OP-MEM-003). Every candidate is walked, but the
+   encoder keeps at most `:max-results` records — a request may lower the
+   server cap `clj-surgeon.result-budget/max-result-records` and may never
+   raise it. A scan at or under the ceiling is encoded whole and is identical
+   to the unbounded path; past it the caller gets one of two TYPED answers and
+   never a silent truncation: a continuation carrying `:next_call` with a
+   cursor bound to a PINNED MANIFEST SNAPSHOT, or, when the caller asked for a
+   complete result with `:complete true`, a refusal naming the ceiling, the
+   observed count, and what fits.
+
+   A continuation is a SNAPSHOT read. The first page that needs a cursor pins
+   the ordered candidate list and every candidate's CONTENT digest under the
+   workspace state root; later pages are served from that snapshot and refuse,
+   by name, when a file they must serve no longer holds its pinned bytes. The
+   price is that files created after the snapshot are not in it — the honest
+   trade for a page that reads only its own slice instead of re-walking the
+   whole tree."
+  ;; @spec MCP-OP-MEM-003
+  ;; @spec MCP-OP-SHELL-ARGV-002
+  [{:keys [dir grep max-results cursor complete] :as opts}]
   (when-not dir
     (println "Error: :dir is required for :ls-tree")
     (System/exit 1))
-  (let [dir (try (str (fs/absolutize dir))
-                 (catch Exception _e (str dir)))]
-    (if-let [refusal (ls-tree-root-refusal dir)]
-      ;; The CLI top level turns a result map carrying :error into exit 1,
-      ;; so the shell contract is unchanged while the refusal stays testable.
-      refusal
-      (let [projects (if grep
-                       ;; Fast path: rg first, skip expensive directory globbing
-                       (let [hits (grep-tree grep dir)]
-                         (discover-projects-grep hits dir))
-                       ;; Full scan: discover all projects
-                       (discover-projects dir))]
-        (if (empty? projects)
-          ;; NOTE (inb-eca3b1): calling System/exit from inside a library
-          ;; operation is owed a separate fix; the exit-1 contract is unchanged
-          ;; here, only the message that precedes it.
-          (do (println (format "No Clojure files found under %s%s"
-                               dir (if grep (str " matching '" grep "'") "")))
-              (System/exit 1))
-          (let [projects (outline-all-files projects)]
-            (if (= output-format :edn)
-              (format-ls-tree-edn projects dir)
-              (format-ls-tree-text projects dir))))))))
+  (let [output-format (:format opts)
+        ;; `absolutize` itself can throw on a hostile :dir, and a root that is
+        ;; not a directory must never reach discovery: an empty result is
+        ;; indistinguishable from an empty tree, and the caller needs to know
+        ;; its root was wrong (Andon pull inb-d27b79).
+        abs (try (str (fs/absolutize dir))
+                 (catch Exception _e (str dir)))
+        requested (budget/parse-ceiling max-results)
+        ceiling (budget/resolve-ceiling max-results)
+        base {:dir dir :ceiling ceiling :output-format output-format}
+        render (fn [receipt]
+                 (if (= :edn output-format)
+                   receipt
+                   (budget/refusal-text receipt)))
+        ctx {:abs abs :dir dir :grep grep :cursor cursor :ceiling ceiling
+             :complete complete :output-format output-format
+             :base base :render render}]
+    (cond
+      ;; FIRST, and returned as it is rather than through `render`: this is
+      ;; the andon lane's typed refusal, its shape is its contract
+      ;; (`:error-type :workspace-root-not-a-directory`), and it is checked
+      ;; ahead of the ceiling because a bad root is a fact about the request
+      ;; that no budget arithmetic can improve on. A cursor is exempt: a
+      ;; pinned page reads its own snapshot slice and does not walk the root.
+      (and (nil? cursor) (ls-tree-root-refusal abs))
+      (ls-tree-root-refusal abs)
+
+      (= :invalid requested)
+      (render (budget/invalid-ceiling-refusal (assoc base :requested max-results)))
+
+      (some? cursor) (run-pinned-page ctx)
+      :else (run-fresh-scan ctx))))
+
 
 ;; ============================================================
 ;; Ops registry — single source of truth for dispatch + help
@@ -1057,9 +1687,13 @@
                        :desc      "Map namespaces across a directory tree"
                        :args      {:dir    {:required true :desc "Root directory to scan"}
                                    :grep   {:desc "Filter pattern (regex) — uses ripgrep"}
-                                   :format {:desc ":edn for machine-readable (default: text)"}}
+                                   :format {:desc ":edn for machine-readable (default: text)"}
+                                   :max-results {:desc "Records this result may hold; lowers the server cap (1000), never raises it"}
+                                   :cursor {:desc "Continuation cursor copied verbatim from a previous result's :next_call"}
+                                   :complete {:desc "true to refuse rather than continue when the result does not fit"}}
                        :examples  ["clj-surgeon :op :ls-tree :dir ."
-                                   "clj-surgeon :op :ls-tree :dir ~/src.local/ :grep \"postgres|jdbc\""]
+                                   "clj-surgeon :op :ls-tree :dir ~/src.local/ :grep \"postgres|jdbc\""
+                                   "clj-surgeon :op :ls-tree :dir ~/src.local/ :max-results 200"]
                        :category  :read}
 
     :mv               {:handler run-mv

@@ -26,6 +26,7 @@
   the deterministic resource facts — `bytes_scanned` stays in it — and the
   measured fields ride beside it, clearly labelled.
 
+  @spec MCP-OP-MEM-003
   @spec MCP-OP-MEM-005
   @spec MCP-OP-MEM-011"
   (:require
