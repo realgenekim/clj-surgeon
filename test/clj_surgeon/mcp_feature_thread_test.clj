@@ -1751,3 +1751,47 @@
           (str "`(let [{:keys [reason] :as conflict} (ex-data e)]` is not a"
                " read of the request body; handler_reads was "
                (pr-str (:handler_reads rc)))))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR / round-three spec 3 -- negative evidence, and the probe param
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-THREAD-038
+(deftest the-receipt-carries-negative-evidence
+  (testing "a probed identifier that is not in the tree is REPORTED absent"
+    (let [{:keys [text structured]} (thread! fixture-root {:probe ["dequote" "widgetize"]})
+          absent (:absent structured)]
+      (is (= #{"dequote" "widgetize"} (set (map :identifier absent)))
+          (str "absent was " (pr-str absent)
+               "; a reader must never have to run `rg -i dequote` to learn"
+               " there is nothing"))
+      (is (every? #(seq (str (:searched %))) absent)
+          "an absence with no search behind it is an opinion")
+      (is (every? #(str/includes? (str (:searched %)) "rg -n") absent))
+      (is (str/includes? text "absent dequote"))))
+
+  (testing "a seed that IS there is not reported absent"
+    (let [{:keys [structured]} (thread! fixture-root)]
+      (is (not-any? #{"formatDraft" "mechanical-format"}
+                    (map :identifier (:absent structured)))
+          (str "a located seed was called absent: "
+               (pr-str (map :identifier (:absent structured)))))))
+
+  (testing "an identifier that exists ONLY in a comment is absent"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-absentcomment")]
+      (try
+        (spit (io/file scratch "src/writer/handlers/transform.clj")
+              "\n;; TODO: ghostThing should be written one day\n" :append true)
+        (let [{:keys [structured]} (thread! (.getPath scratch) {:probe ["ghostThing"]})]
+          (is (contains? (set (map :identifier (:absent structured))) "ghostThing")
+              "a mention in a `;;` comment is not an occurrence"))
+        (finally (delete-tree! scratch)))))
+
+  (testing "probe is validated like any other field"
+    (let [{:keys [structured]} (thread! fixture-root {:probe "dequote"})]
+      (is (false? (:ok structured)))
+      (is (= "feature-thread-invalid-probe" (:error_type structured))))
+    (let [{:keys [structured]}
+          (thread! fixture-root {:probe (vec (repeat 40 "x"))})]
+      (is (false? (:ok structured)))
+      (is (= "feature-thread-probe-too-many" (:error_type structured))))))
