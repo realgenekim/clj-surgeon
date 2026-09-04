@@ -406,3 +406,9 @@ Mayor: draining via the integration branch; owns curtain-call merges (Sol-review
 - **Reviews running (Sol):** O2 r2 a0b0520, MEM-003 0a38e3d, census r17 fb7f3b1, q5z r12 61dd334 — verdicts at /home/forge/tmp/sol/{o2r2,mem003,census17,q5z12}-sol-review.md; file them on the seat branch.
 - **Cohorts:** E-HARNESS-2 (10 arms, both write-path flanks) on the lock; E-NSWEEP (12 native arms, N ∈ {30,40,55}) queued; E-GATE-R replay (0 arms) + chars/s vs load running. Standing: square 2 WIN bounded to N ≲ 40 (E-CEILING80: native writes a generator at N=80 and beats the tool on chars); squares single-edit/3/4 withdrawn; square 1 pending E-GATE-R.
 - **Single next action:** when a Sol verdict lands, file it on the seat branch, update the queue row, and if GO put the tip onto the candidate branch (merge --no-ff in ~/src/clj-surgeon-cand, push the branch).
+
+## RESUME DELTA 01:56Z — the working trunk is `MCP/main` (Gene); this note and all seat records live there
+
+- Gene, verbatim: "Get everything onto a branch called MCP/. Let's have that be our 'main' branch, if you know what I mean". `MCP/main` @ a93768f = candidate 3411e3b + seat records + policy. The ~/src/clj-surgeon checkout is ON `MCP/main`; commit and push seat records there. `main` stays frozen (public); nobody pushes it.
+- Landing rule on MCP/main: reviewed GO tips only, `merge --no-ff` from ~/src/clj-surgeon-cand (also on MCP/main) or this checkout; run mcp-test as the trailing check after each landing. bridge/anvil-seat-docs-2026-09-04 and bridge/main-candidate-2026-09-04 are retired (merged); do not push to them.
+- Pending landings: 0a38e3d after MEM-003 r2 GO; study-ops after O2 r3 GO; census after r17 GO; q5z after r12 GO; admit-gate after its fix round GO. Then restart the seat's MCP server (7906) on MCP/main and produce Gene's ls-tree-over-MCP receipt.
