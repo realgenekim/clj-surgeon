@@ -278,6 +278,70 @@
                            root isolated-root-prefix)))
         false)))
 
+;; @spec MCP-OP-TMPHYG-007
+(def ^:private stale-root-hours
+  "Age past which an isolated root whose OWNING PID IS DEAD is swept at the
+   next run's startup. Override with CLJ_SURGEON_TMP_STALE_HOURS."
+  (or (some-> (System/getenv "CLJ_SURGEON_TMP_STALE_HOURS") parse-long) 4))
+
+(defn- root-owner-pid
+  "The pid encoded in one of this namespace's own root names, or nil for any
+   other name -- including a legacy `clj-surgeon-suite-<hex>` root and every
+   entry another tenant created."
+  [name]
+  (some-> (re-matches #"clj-surgeon-suite-(\d+)-[0-9a-f]+" name) second parse-long))
+
+(defn- pid-alive?
+  "True when `pid` is a live process. Defaults to TRUE when the answer cannot
+   be obtained: an unknown liveness must never authorise a delete."
+  [pid]
+  (try
+    (let [handle (java.lang.ProcessHandle/of pid)]
+      (and (.isPresent handle) (.isAlive (.get handle))))
+    (catch Throwable _ true)))
+
+;; @spec MCP-OP-TMPHYG-007
+(defn sweep-stale-roots!
+  "Deletes isolated roots left under `base` by runs that are gone: name shape
+   ours, owning pid dead, and older than `stale-root-hours`. All three, so a
+   concurrent run's root and another tenant's entries are never candidates.
+   Returns the number swept."
+  [base]
+  (try
+    (let [cutoff (- (System/currentTimeMillis) (* stale-root-hours 60 60 1000))]
+      (count
+        (filter
+          (fn [^java.io.File f]
+            (and (.isDirectory f)
+                 (< (.lastModified f) cutoff)
+                 (when-let [pid (root-owner-pid (.getName f))]
+                   (and (not (pid-alive? pid)) (sweep-root! f)))))
+          (or (seq (.listFiles (io/file (str base)))) []))))
+    (catch Throwable _ 0)))
+
+;; @spec MCP-OP-TMPHYG-007
+(defn- register-root-sweep!
+  "Sweeps `root` (and destroys `child`, when there is one) if this process is
+   terminated in a way the VM can observe -- an external `timeout`'s SIGTERM,
+   a Ctrl-C. Nothing can run after SIGKILL or an OOM."
+  [root child-atom]
+  (try
+    (.addShutdownHook
+      (Runtime/getRuntime)
+      (Thread.
+        ^Runnable
+        (fn []
+          (when-let [child @child-atom]
+            (try
+              (let [^Process p (:proc child)]
+                (doseq [^java.lang.ProcessHandle d (reverse (vec (.toList (.descendants (.toHandle p)))))]
+                  (.destroyForcibly d))
+                (.destroyForcibly p)
+                (.waitFor p 5 java.util.concurrent.TimeUnit/SECONDS))
+              (catch Throwable _ nil)))
+          (sweep-root! root))))
+    (catch Throwable _ nil)))
+
 ;; @spec MCP-OP-TMPHYG-005
 (defn- child-environment
   "The env the isolated child (and every descendant of it) is launched with.
@@ -329,7 +393,9 @@
         (let [actual (System/getProperty "java.io.tmpdir")]
           (if (and (= (canonical declared) (canonical actual))
                    (own-isolated-root? actual))
-            {:refused false :root (io/file actual)}
+            (let [root (io/file actual)]
+              (register-root-sweep! root (atom nil))
+              {:refused false :root root})
             (refuse! {:reason :sentinel-mismatch
                       :base actual
                       :detail (format (str "it names root=%s but this process's java.io.tmpdir "
@@ -338,12 +404,17 @@
                                       (pr-str declared) (pr-str actual))})))
         (let [root (io/file base (format "%s%d-%s" isolated-root-prefix (current-pid)
                                          (subs (str (random-uuid)) 0 8)))]
+          (sweep-stale-roots! base)
           (fs/create-dirs root)
-          (let [cmd (reexec-child-command target root args)
-                {:keys [exit]} (apply proc/shell
-                                       {:continue true
-                                        :extra-env (child-environment root)}
-                                       cmd)]
+          (let [child (atom nil)
+                _ (register-root-sweep! root child)
+                cmd (reexec-child-command target root args)
+                proc (apply proc/process
+                            {:inherit true
+                             :extra-env (child-environment root)}
+                            cmd)
+                _ (reset! child proc)
+                exit (:exit @proc)]
             (sweep-root! root)
             (System/exit exit))))))))
 

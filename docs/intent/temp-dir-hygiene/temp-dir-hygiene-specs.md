@@ -49,6 +49,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   picks its own temp location cannot write outside the root the leak witness
   watches.
 
+- [x] **MCP-OP-TMPHYG-007**: When a test-runner process is terminated in a
+  way the VM can observe — an external `timeout`'s SIGTERM, a Ctrl-C — before
+  its run completes, clj-surgeon shall still delete that run's isolated root;
+  and at the start of a run it shall delete isolated roots left under the
+  base by runs whose owning process is dead and whose age exceeds the stale
+  threshold, touching nothing whose name it did not itself create.
+
 ## Misreadings these requirements exist to forbid
 
 - "Exporting `TMPDIR=/var/tmp/forge` before invoking bb is enough." bb
