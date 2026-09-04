@@ -125,10 +125,11 @@
 ;; @spec MCP-OP-TMPHYG-010
 (deftest no-gate-names-a-hard-coded-ram-path
   (testing "a refusal at the runner is worthless if the gates around it create
-            directories in RAM by name. `${TMPDIR:-...}` forms and prose
-            mentions of /tmp are not matches; only a literal /tmp/<name> used
-            as a path is, and `/home/x/tmp/y` is not one."
-    (let [pattern #"(?:^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]"
+            directories in RAM by name. Two shapes are offenders: a literal
+            /tmp/<name> used as a path, and a TMPDIR fallback that NAMES /tmp
+            (which is taken in every shell without seat-tmp-guard.sh). Prose
+            mentions of /tmp are not matches, and `/home/x/tmp/y` is not one."
+    (let [pattern #"(?:^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]|TMPDIR:-/tmp\}"
           shells (fn [dir] (filter #(str/ends-with? (.getName ^java.io.File %) ".sh")
                                    (.listFiles (io/file dir))))
           ;; `bench/*.sh` is IN SCOPE: `make test` runs four of those harnesses,
@@ -139,8 +140,12 @@
                           :when (.exists f)
                           [n line] (map-indexed (fn [i l] [(inc i) l])
                                                 (str/split-lines (slurp f)))
-                          :when (and (re-find pattern line)
-                                     (not (str/includes? line "TMPDIR:-/tmp")))]
+                          ;; No exemption for `${TMPDIR:-/tmp}`: that form
+                          ;; NAMES the RAM path and takes it whenever TMPDIR is
+                          ;; unset -- which is every shell without
+                          ;; seat-tmp-guard.sh. An audit written to permit the
+                          ;; exact fallback it exists to forbid is backwards.
+                          :when (re-find pattern line)]
                       (str (.getPath f) ":" n ": " (str/trim line)))]
       (is (empty? offenders)
           (str "hard-coded /tmp write targets: " (pr-str (vec offenders)))))))

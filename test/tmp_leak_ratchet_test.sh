@@ -346,8 +346,12 @@ assert_runner_refuses clj-surgeon.mcp-test-runner
 # A refusal at the runner is worthless if the gates around it still create
 # directories in RAM by name. This is a source scan on purpose -- "never X
 # anywhere" cannot be witnessed by executing one path.
-# `${TMPDIR:-...}` forms and prose mentions of /tmp are not matches; only a
-# literal /tmp/<name> used as a path is.
+# Prose mentions of /tmp are not matches; only a literal /tmp/<name> used as a
+# path is. A TMPDIR fallback that NAMES the RAM path is also a match as of
+# round two: that shape takes /tmp whenever TMPDIR is unset, which is every
+# shell without seat-tmp-guard.sh. Default to /var/tmp instead.
+# (This comment deliberately avoids writing the offending shape out, because
+# this file is one of the files the scan reads.)
 #
 # `bench/*.sh` is IN SCOPE (round two): `make test` runs
 # `bench/retain_benchmark_result.sh`, `bench/run_clean_codex.sh`,
@@ -355,7 +359,7 @@ assert_runner_refuses clj-surgeon.mcp-test-runner
 # hard-coded root in a bench self-test is a directory this repo's own test
 # command creates in RAM. The design doc previously called `bench/*.sh` out of
 # scope on the grounds that no gate reached it; that sentence was wrong.
-hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]' Makefile test/*.sh bench/*.sh || true)
+hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]|TMPDIR:-/tmp\}' Makefile test/*.sh bench/*.sh || true)
 if [ -n "$hardcoded" ]; then
   echo "$hardcoded" >&2
   fail "10: hard-coded /tmp write targets remain in Makefile / test / bench shell gates"
