@@ -396,3 +396,13 @@ Gene's rulings tonight (verbatim in the log): Gene reports = vs-native perf firs
 | kernel | GO 2df05b3 (merge point) | in the integration branch |
 
 Mayor: draining via the integration branch; owns curtain-call merges (Sol-reviewed per Gene). Weekly Claude limit resets 19:00Z. Usage watch 96/49/47 flat by construction (cohort servers log elsewhere).
+
+## RESUME DELTA 2026-09-04T01:41Z — MAIN IS FROZEN; this note now lives on bridge/anvil-seat-docs-2026-09-04
+
+- **Gene, verbatim (01:4xZ):** "no one should be merging to main, even mayor. People are using public repo, and I don't want to publish anything on main until we have clear and decisive winner that is tested and dogfooded for months." Nothing from this seat goes to origin/main — code OR docs. The ~/src/clj-surgeon checkout is on `bridge/anvil-seat-docs-2026-09-04`; all seat records commit and push THERE.
+- **Integration line:** `bridge/main-candidate-2026-09-04` @ 3411e3b = origin/main 56efeff + 2556a38 (code tree byte-identical to 2556a38; ten-gate seat pass applies). Next onto it, after their Sol verdicts: 0a38e3d (MEM-003 second landing), then the study-ops composition (bridge/integration-2026-09-03-studyops, building). The mayor fast-forwards NOTHING until Gene names a winner.
+- **Policy commit:** bridge/main-policy-2026-09-04 (CLAUDE.md first section + AGENTS.md + this pointer) — Gene decides whether it lands on main.
+- **Mayor:** OFFLINE since ~01:3xZ; told via inb-1165ce + queued session messages.
+- **Reviews running (Sol):** O2 r2 a0b0520, MEM-003 0a38e3d, census r17 fb7f3b1, q5z r12 61dd334 — verdicts at /home/forge/tmp/sol/{o2r2,mem003,census17,q5z12}-sol-review.md; file them on the seat branch.
+- **Cohorts:** E-HARNESS-2 (10 arms, both write-path flanks) on the lock; E-NSWEEP (12 native arms, N ∈ {30,40,55}) queued; E-GATE-R replay (0 arms) + chars/s vs load running. Standing: square 2 WIN bounded to N ≲ 40 (E-CEILING80: native writes a generator at N=80 and beats the tool on chars); squares single-edit/3/4 withdrawn; square 1 pending E-GATE-R.
+- **Single next action:** when a Sol verdict lands, file it on the seat branch, update the queue row, and if GO put the tip onto the candidate branch (merge --no-ff in ~/src/clj-surgeon-cand, push the branch).
