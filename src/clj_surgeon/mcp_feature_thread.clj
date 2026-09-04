@@ -934,10 +934,22 @@
                         (str/join "|" (remove nil? [idents rts tails]))])])
       (remove nil? [(when idents ["identifier" idents])]))))
 
+;; @spec MCP-OP-THREAD-030
 (defn- render-search
-  [globs [label regex]]
-  (str label ": rg -n -e '" regex "'"
-       (apply str (map #(str " -g '" % "'") globs))))
+  "The search line the receipt prints, reproducing the candidate set the verb
+  ACTUALLY searched.
+
+  A printed `rg` line is executable, so a caller can run it — and if it names
+  a wider file set than the verb walked, the caller gets an answer the receipt
+  does not have. That is the strongest possible tell that a receipt does not
+  know its own scope (round-three review, B3). `scope.paths` narrowing is
+  therefore rendered as extra `-g` filters, never silently dropped."
+  ([globs pair] (render-search globs pair nil))
+  ([globs [label regex] scope-paths]
+   (str label ": rg -n -e '" regex "'"
+        (apply str (map #(str " -g '" % "'") globs))
+        (apply str (map #(str " -g '" (str/replace % #"/+$" "") "/**'")
+                        (remove str/blank? (or scope-paths [])))))))
 
 ;; @spec MCP-OP-THREAD-024
 (defn comment-mention?
@@ -1231,7 +1243,7 @@
 (defn resolve-leg
   "One leg: FOUND with an exact range, a boundary label, a sha256 of the body
   bytes and the body; or ABSENT with every search that was run."
-  [cache paths seeds leg {:keys [handler-name exclude-ranges]}]
+  [cache paths seeds leg {:keys [handler-name exclude-ranges scope-paths]}]
   (let [{:keys [id kind globs]} leg
         exclude-ranges (set exclude-ranges)
         ;; What the exclusion DROPPED, kept so an empty result can say whether
@@ -1243,7 +1255,9 @@
                                     #(contains? exclude-ranges
                                                 [(:file %) (:from %) (:to %)])
                                     members)]
-                     (vswap! dropped into (map #(select-keys % [:file :from :to]) cut))
+                     (vswap! dropped into
+                             (map #(select-keys % [:file :from :to :form_name])
+                                  cut))
                      (vec out)))
         member-opts {:narrow? (contains? #{:use :route} kind)
                      :test-call? (= kind :test)}
@@ -1264,7 +1278,7 @@
           (merge base {:status "ABSENT" :searches ran :unreadable unreadable})
           (let [result (scan cache paths globs regex)
                 hits (:hits result)
-                ran' (conj ran (render-search globs [label regex]))
+                ran' (conj ran (render-search globs [label regex] scope-paths))
                 unreadable' (into unreadable (:unreadable result))]
             (cond
               (and (= kind :def) (seq hits))
@@ -1277,7 +1291,8 @@
                   (merge base {:status "ABSENT"
                                :evidence hop-evidence
                                :searches (cond-> ran'
-                                           extra (conj (render-search globs extra)))
+                                           extra (conj (render-search
+                                                         globs extra scope-paths)))
                                :unreadable unreadable'})))
 
               (seq hits)
@@ -1675,43 +1690,97 @@
                                    (filter script-path?
                                            (mapcat :globs (:legs conventions))))))}))
 
+(defn- seed-of-range
+  "The seed whose definition the excluded range holds, or nil.
+
+  The `N/A` reason is a specific, checkable statement about a named file and
+  line range, so it must be ABOUT the seed it drops. Round three: it named
+  `editor-commands.js:L389-L454` — `formatDraft`'s JS function — as the reason
+  `mechanical-format` was uncounted."
+  [cache identifiers dup]
+  (let [{:keys [ok lines]} (when (:file dup) (read-source cache (:file dup)))
+        text (when ok
+               (str/join "\n" (subvec (vec lines)
+                                      (max 0 (dec (or (:from dup) 1)))
+                                      (min (count lines) (or (:to dup) 1)))))]
+    (or (some (fn [i] (when (= i (:form_name dup)) i)) identifiers)
+        (when text
+          (some (fn [i]
+                  (when (re-find (re-pattern
+                                   (str "(?:defn?-? +|function +|[.]|\\b)"
+                                        (quote-literal i) "\\b"))
+                                 text)
+                    i))
+                identifiers)))))
+
 ;; @spec MCP-OP-THREAD-016
+;; @spec MCP-OP-THREAD-029
 (defn resolve-implementation
   "Resolve the automatic implementation leg against the already-resolved legs.
 
-  Deduped by file+range: when the only definition a seed names is a form the
-  receipt ALREADY carries (the handler itself, the script function), this leg
-  adds nothing and says so rather than printing the same body twice. When no
-  seed names a definition at all the leg is `N/A` and is NOT counted in the
-  status: a repository whose feature has no definition of its own is complete
-  without one."
-  [cache paths seeds auto-leg declared]
-  (let [taken (set (for [l declared :when (located? l)]
-                     [(:file l) (:from l) (:to l)]))
-        resolved (resolve-leg cache paths seeds auto-leg {:exclude-ranges taken})]
-    (if (located? resolved)
-      (assoc resolved :elide :implementation)
-      (merge (select-keys resolved [:id :leg_kind :searches :unreadable])
-             {:status "N/A"
-              :reason (if-let [dup (first (:excluded resolved))]
-                        (str "the only definition a seed names is already a leg"
-                             " of this receipt (" (:file dup) ":L" (:from dup)
-                             "-L" (:to dup) ")")
-                        "no seed names a definition")
-              :elide :implementation}))))
+  Three outcomes, and the difference between the last two is the whole point.
+  FOUND: a definition no declared leg already carries. `N/A`, uncounted: a
+  search really ran over this leg's globs and every definition it found is
+  already a leg of this receipt — and the reason NAMES THE SEED it dropped.
+  `UNSCANNED`, COUNTED: this leg's globs were not part of the workspace walk,
+  so nothing was searched and the verb has no right to say the leg is
+  inapplicable. Round three's false green was exactly that conflation: the walk
+  was bounded before this leg existed, so a definition sitting in
+  `src/writer/other/dup.clj` was reported `N/A` and the thread `COMPLETE`."
+  [cache paths seeds auto-leg declared walked-globs]
+  (let [missing-globs (vec (remove (set walked-globs) (:globs auto-leg)))]
+    (if (seq missing-globs)
+      {:id (:id auto-leg)
+       :leg_kind (name (:kind auto-leg))
+       :status "UNSCANNED"
+       :searches []
+       :unreadable []
+       :reason (str "this leg's globs were not part of the workspace walk, so"
+                    " nothing was searched for a definition: "
+                    (str/join " " missing-globs))
+       :elide :implementation}
+      (let [taken (set (for [l declared :when (located? l)]
+                         [(:file l) (:from l) (:to l)]))
+            resolved (resolve-leg cache paths seeds auto-leg
+                                  {:exclude-ranges taken
+                                   :scope-paths (:scope-paths auto-leg)})]
+        (if (located? resolved)
+          (assoc resolved :elide :implementation)
+          (merge (select-keys resolved [:id :leg_kind :searches :unreadable])
+                 {:status "N/A"
+                  :reason (if-let [dup (first (:excluded resolved))]
+                            (str "the definition of "
+                                 (or (seed-of-range cache (:identifiers seeds) dup)
+                                     "the seed")
+                                 " is already a leg of this receipt ("
+                                 (:file dup) ":L" (:from dup)
+                                 "-L" (:to dup) ")")
+                            "no seed names a definition")
+                  :elide :implementation}))))))
 
 (defn resolve-thread
   "The legs of one subject, in the convention set's declared order, plus the
-  automatic implementation leg."
-  [cache paths conventions seeds handler]
-  (let [declared (mapv (fn [leg]
-                         (assoc (resolve-leg cache paths seeds leg
-                                             {:handler-name (:name handler)})
-                                :elide (elision-class leg)))
-                       (:legs conventions))]
-    (if-let [auto-leg (implementation-leg conventions)]
-      (conj declared (resolve-implementation cache paths seeds auto-leg declared))
-      declared)))
+  automatic implementation leg.
+
+  `walked-globs` is the glob set the workspace walk actually used. It is passed
+  rather than recomputed so the automatic leg can REFUSE to report an outcome
+  for files nobody scanned."
+  ([cache paths conventions seeds handler]
+   (resolve-thread cache paths conventions seeds handler nil nil))
+  ([cache paths conventions seeds handler walked-globs scope-paths]
+   (let [declared (mapv (fn [leg]
+                          (assoc (resolve-leg cache paths seeds leg
+                                              {:handler-name (:name handler)
+                                               :scope-paths scope-paths})
+                                 :elide (elision-class leg)))
+                        (:legs conventions))]
+     (if-let [auto-leg (implementation-leg conventions)]
+       (conj declared (resolve-implementation
+                        cache paths seeds
+                        (assoc auto-leg :scope-paths scope-paths)
+                        declared
+                        (or walked-globs (:globs auto-leg))))
+       declared))))
 
 ;; @spec MCP-OP-THREAD-013
 ;; @spec MCP-OP-THREAD-016
@@ -1722,7 +1791,7 @@
   counting an inapplicable leg would report INCOMPLETE for a thread that is
   whole."
   [legs]
-  (let [legs (remove #(= "N/A" (:status %)) legs)
+  (let [legs (remove #(= "N/A" (:status %)) legs)  ; UNSCANNED is NOT removed
         total (count legs)
         found (count (filter #(= "FOUND" (:status %)) legs))
         missing (mapv :id (remove #(= "FOUND" (:status %)) legs))]
@@ -1740,7 +1809,9 @@
 
   The sibling row never counts toward the five-leg status: it is context for the
   edit, not a leg of the thread."
-  [cache paths conventions seeds legs mirror]
+  ([cache paths conventions seeds legs mirror]
+   (resolve-sibling cache paths conventions seeds legs mirror nil nil))
+  ([cache paths conventions seeds legs mirror walked-globs scope-paths]
   (let [route-leg (first (filter #(= "route" (:leg_kind %)) legs))
         rule (or (get-in conventions [:sibling :rule]) :adjacent-route-entry)
         derived (when (nil? mirror)
@@ -1755,7 +1826,8 @@
                     "; pass mirror to name one explicitly")}
       (let [sib-seeds (split-seeds [seed])
             sib-handler (derive-handler cache paths conventions sib-seeds)
-            sib-legs (resolve-thread cache paths conventions sib-seeds sib-handler)]
+            sib-legs (resolve-thread cache paths conventions sib-seeds
+                                     sib-handler walked-globs scope-paths)]
         {:status "FOUND"
          :rule (if mirror "explicit-mirror" (name rule))
          :seed seed
@@ -1765,7 +1837,7 @@
                                                :evidence :sha256 :bytes :anchor])
                          (located? l)
                          (assoc :refetch (refetch-command (:file l) (:from l) (:to l)))))
-                     sib-legs)}))))
+                     sib-legs)})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Rendering: the text block, and the completion pass that makes it a superset
@@ -2343,9 +2415,17 @@
                              (dissoc conv :ok :error_type :error))
                      {:workspace_root (str root)})
               (let [conventions (:conventions conv)
+                    ;; @spec MCP-OP-THREAD-028
+                    ;; The automatic implementation leg's globs are unioned in
+                    ;; BEFORE the walk. Round three bounded the walk here and
+                    ;; built that leg later, so it could only ever find a
+                    ;; definition inside a file a DECLARED leg already selected
+                    ;; — and reported `N/A` (uncounted, thread COMPLETE) for the
+                    ;; files it never opened.
                     candidate-globs (vec (distinct
                                            (concat
                                              (mapcat :globs (:legs conventions))
+                                             (:globs (implementation-leg conventions))
                                              (get-in conventions
                                                      [:governance :globs]))))
                     walk (walk-relative-paths root (:exclude-dirs conventions)
@@ -2358,11 +2438,14 @@
                         cache (make-cache root)
                         seeds (split-seeds (into [subject] (or also [])))
                         handler (derive-handler cache paths conventions seeds)
-                        legs (resolve-thread cache paths conventions seeds handler)
+                        legs (resolve-thread cache paths conventions seeds
+                                             handler candidate-globs
+                                             (:paths scope))
                         legs (if bodies? legs (strip-bodies legs))
                         status (thread-status legs)
                         sibling (resolve-sibling cache paths conventions seeds
-                                                 legs mirror)
+                                                 legs mirror candidate-globs
+                                                 (:paths scope))
                         axis' (or axis (:axis conventions))
                         rules (build-rules cache paths conventions seeds legs axis')
                         base (merge
