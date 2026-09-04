@@ -15,6 +15,7 @@
    [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.patch-apply :as patch-apply]
    [clj-surgeon.workspace-lock :as workspace-lock]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.set :as set]
@@ -106,8 +107,17 @@
   attack), and `pr-str` is total over every value this function ever sees.
   The public `classify-battery-receipt` below also wraps this in `try`, so
   this is belt-and-suspenders, not the only guard -- but a classifier this
-  central should not need its safety net for an ordinary case."
-  [record declared-arms]
+  central should not need its safety net for an ordinary case.
+
+  `exists?` is the file's own existence, not a fact about `record`. Round
+  thirteen: the old test was `(nil? record)`, BY VALUE -- so a present file
+  whose content reads as `nil` (the three bytes `nil`, or an empty/blank
+  file) took the ABSENT skip and printed \"no battery receipt at ...\" about
+  a file sitting right there on disk. Existence and readable-content are
+  different questions; only the first decides ABSENT. A present file that
+  reads as nil is `(not (map? record))` and falls through to the ordinary
+  FAILED \"not a map\" reason below, same as any other non-map content."
+  [exists? record declared-arms]
   (let [failed (fn [reason] {:state :failed :reason reason})
         verdicts (:arm-verdicts record)
         failing (when (map? verdicts)
@@ -115,7 +125,7 @@
                                 (keep (fn [[arm ok]] (when-not (true? ok) arm))
                                       verdicts))))]
     (cond
-      (nil? record)
+      (not exists?)
       {:state :absent}
 
       (not (map? record))
@@ -189,9 +199,9 @@
   itself a :failed classification, never a crash, so the caller
   (`check-battery-precondition!`) can always route it through
   `fail-precondition!` and the counted bucket."
-  [record declared-arms]
+  [exists? record declared-arms]
   (try
-    (classify-battery-receipt* record declared-arms)
+    (classify-battery-receipt* exists? record declared-arms)
     (catch Throwable e
       {:state :failed
        :reason (str "the receipt could not be classified without the"
@@ -208,17 +218,29 @@
   exact function rather than around it. Spends the same number of assertions in
   every state (MCP-OP-ADMIT-147) and returns the state it took."
   [^java.io.File receipt kind target declared-arms]
-  (let [record (when (.exists receipt)
+  (let [exists? (.exists receipt)
+        record (when exists?
                  ;; Round eleven's finding-3 site :166: a 60,000-deep nested
                  ;; receipt threw StackOverflowError, an Error rather than an
                  ;; Exception, straight past `(catch Exception e ...)` and
                  ;; out of the run uncaught. `catch Throwable` closes every
                  ;; shape the reader can throw, not only the checked ones.
-                 (try (read-string (slurp receipt))
+                 ;;
+                 ;; Round eleven's finding 5 (hardening): `clojure.core/
+                 ;; read-string` leaves `*read-eval*` ON, so a receipt
+                 ;; beginning `#=(...)` is EVALUATED by the reader -- proved
+                 ;; the hard way while building this fix, when a receipt of
+                 ;; `#=(java.lang.System/exit 3)` killed the JVM running this
+                 ;; very suite instead of merely misclassifying. `clojure.edn/
+                 ;; read-string` never evaluates: `#=` is not an EDN dispatch
+                 ;; macro, so it is a parse failure, same shape as any other
+                 ;; unreadable receipt, and the classifier below reports it
+                 ;; as :failed via the existing ::unreadable branch.
+                 (try (edn/read-string (slurp receipt))
                       (catch Throwable e
                         {::unreadable (.getMessage e)})))
         {:keys [state reason failed-arms]}
-        (classify-battery-receipt record declared-arms)]
+        (classify-battery-receipt exists? record declared-arms)]
     (case state
       :satisfied
       (do
