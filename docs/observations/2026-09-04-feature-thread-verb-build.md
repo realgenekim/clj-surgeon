@@ -508,33 +508,50 @@ mirror — which was also missing `admit_clojure_patch` and now names both.
 
 ---
 
-## 7a. Gates — CURRENT (refreshed each round; round six, 2026-09-04)
+## 7a. Gates — CURRENT (refreshed each round; round EIGHT, 2026-09-04)
 
 Round-five review, finding 10: the round-one focused count in section 7 was
 quoted long after it had moved. Section 7 is now dated and frozen; this section
 is the one to read, and it is refreshed with every round.
 
-Tip: `86b286f2` on `bridge/feature-thread-verb` (trunk `origin/MCP/main`
-merged at `5dfebf25`).
+Tip: `72e0bf82` on `bridge/feature-thread-verb` (trunk `origin/MCP/main` at
+`e6a11a7f`).
 
 | gate | result |
 |---|---|
 | `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` · EXIT=0 |
 | `make repository-hygiene` | `repository hygiene: no machine-local build cache is tracked at any depth` · EXIT=0 |
-| `sh test/tmp_leak_ratchet_test.sh` | `tmp-leak ratchet witness passed` · EXIT=0 |
-| `make mcp-smoke` | seven tools, `{:ok true, :operation :mcp-stdio-smoke, …, :response-count 3}` · EXIT=0 |
-| `~/bin/suite-run clojure -M:clj-surgeon/mcp-test` | `Ran 827 tests containing 12263 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+| `~/bin/suite-run clojure -M:clj-surgeon/mcp-test` (run 1) | `Ran 832 tests containing 12371 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+| `~/bin/suite-run clojure -M:clj-surgeon/mcp-test` (run 2) | `Ran 832 tests containing 12371 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
 | `~/bin/suite-run bb test/run_all.clj` | `Ran 825 tests containing 6770 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
-| intent audit (`audit-current-repository`) | `{:ok true, :violations 0}` |
-| `clj-surgeon.mcp-feature-thread-test` alone | `Ran 62 tests containing 2076 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+| intent audit (`audit-current-repository`) | `{:ok true, :violations []}` · 417 specs, 52 of them `MCP-OP-THREAD` |
+| `clj-surgeon.mcp-feature-thread-test` alone | `Ran 67 tests containing 2184 assertions.` / `0 failures, 0 errors.` · EXIT=0 |
+| `git merge-tree --write-tree HEAD origin/MCP/main` | tree `f40aa7c6`, no conflicts · EXIT=0 |
 
-The feature-thread spec file carries 49 requirements (MCP-OP-THREAD-001 through
--049); round six added -043 through -049.
+The feature-thread spec file carries 52 requirements (MCP-OP-THREAD-001 through
+-052); round eight added -050 (a string that only MENTIONS the subject is a
+lead), -051 (the conventions file is resolved before it is read) and -052 (a
+range digest covers the bytes its own refetch prints), and widened -012 to count
+a keyword as a leaf.
 
-**Two things this table is NOT.** It is not a claim about any other branch, and
-it is not a claim that these numbers hold under arbitrary machine load: one run
-of the JVM suite during this round reported three failures on a box carrying
-three other seats' work, and the immediately following run on the same tree, and
-two after it, were clean. The failures' identities were lost because that run
-kept only `tail -2` of its output — which is itself the lesson: a gate that
-keeps only its summary cannot tell you what broke.
+### Sabotage — measured at THIS tip, one mutation per closure
+
+Each row exports the tip with `git archive HEAD`, changes exactly one thing,
+verifies the source digest actually moved (a no-op sabotage would be a false
+green), and runs the feature-thread namespace alone. Clean at this tip is
+`67 tests / 2184 assertions / 0 failures`.
+
+| mutation | failures |
+|---|---|
+| finding 3: delete the `:in-string-mention?` branch of `leg-strength` | **17** |
+| finding 4: make `conventions-escape-refusal` always return nil | **9** |
+| finding 5: digest the joined body again instead of the range slice | **20** |
+| finding 6: keep `:elide` in the face AND drop the keyword leaf from `leaf-paths` | **20** |
+| text face renders `(str/trim (:body leg))` | **3** |
+
+The last row corrects a stale count carried forward from round five, which said
+**two**. The round-seven reviewer measured three, and three is what this tip
+measures; the number moved when the peer-body and text-superset witnesses were
+added, and nobody re-ran it. A sabotage count quoted after the witness set has
+changed is the same class of defect as section 7 itself.
+
