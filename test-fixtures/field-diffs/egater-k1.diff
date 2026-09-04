@@ -1,0 +1,678 @@
+diff --git a/src/acid/fanout/ns_003.clj b/src/acid/fanout/ns_003.clj
+index da42c94..0b12e1b 100644
+--- a/src/acid/fanout/ns_003.clj
++++ b/src/acid/fanout/ns_003.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-003
+   "Namespace acid.fanout.ns-003. Historical note: find-event moved."
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-d :as u1]))
+ 
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-3
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-3
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-3
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f3-0
+     [x]
+diff --git a/src/acid/fanout/ns_005.clj b/src/acid/fanout/ns_005.clj
+index e4abecd..85da0db 100644
+--- a/src/acid/fanout/ns_005.clj
++++ b/src/acid/fanout/ns_005.clj
+@@ -1,5 +1,5 @@
+ (ns acid.fanout.ns-005
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             ;; the util aliases below are shared fleet-wide
+             [acid.fanout.other :as other]
+             [acid.fanout.util-b :as u1]))
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-5
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-5
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-5
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f5-0
+     [x]
+diff --git a/src/acid/fanout/ns_010.cljc b/src/acid/fanout/ns_010.cljc
+index e713ac4..b193cd4 100644
+--- a/src/acid/fanout/ns_010.cljc
++++ b/src/acid/fanout/ns_010.cljc
+@@ -1,5 +1,5 @@
+ (ns acid.fanout.ns-010
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             ;; the util aliases below are shared fleet-wide
+             [acid.fanout.other :as other]
+             [acid.fanout.util-c :as u1]
+@@ -31,16 +31,16 @@
+ 
+ (defn site-a-10
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-10
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-10
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f10-0
+   [x]
+diff --git a/src/acid/fanout/ns_013.clj b/src/acid/fanout/ns_013.clj
+index 1f5edca..d102a33 100644
+--- a/src/acid/fanout/ns_013.clj
++++ b/src/acid/fanout/ns_013.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-013
+   (:require [acid.fanout.util-b :as u1]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-13
+@@ -23,16 +23,16 @@
+ 
+ (defn site-a-13
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-13
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-13
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f13-0
+     [x]
+diff --git a/src/acid/fanout/ns_017.clj b/src/acid/fanout/ns_017.clj
+index b91caa2..fd82cb4 100644
+--- a/src/acid/fanout/ns_017.clj
++++ b/src/acid/fanout/ns_017.clj
+@@ -2,7 +2,7 @@
+   (:require [acid.fanout.util-b :as u1]
+             [acid.fanout.util-c :as u2]
+             [acid.fanout.util-d :as u3]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-17
+@@ -25,16 +25,16 @@
+ 
+ (defn site-a-17
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-17
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-17
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f17-0
+     [x]
+diff --git a/src/acid/fanout/ns_023.clj b/src/acid/fanout/ns_023.clj
+index 1dade80..e9b2ca1 100644
+--- a/src/acid/fanout/ns_023.clj
++++ b/src/acid/fanout/ns_023.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-023
+   (:require [acid.fanout.util-d :as u1]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-a :as u2]))
+ 
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-23
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-23
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-23
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f23-0
+     [x]
+diff --git a/src/acid/fanout/ns_025.clj b/src/acid/fanout/ns_025.clj
+index a2214d6..98e6ea5 100644
+--- a/src/acid/fanout/ns_025.clj
++++ b/src/acid/fanout/ns_025.clj
+@@ -2,7 +2,7 @@
+   (:require [acid.fanout.util-b :as u1]
+             ;; the util aliases below are shared fleet-wide
+             [acid.fanout.util-c :as u2]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-25
+@@ -25,16 +25,16 @@
+ 
+ (defn site-a-25
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-25
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-25
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f25-0
+     [x]
+diff --git a/src/acid/fanout/ns_026.clj b/src/acid/fanout/ns_026.clj
+index 9594b83..91244b6 100644
+--- a/src/acid/fanout/ns_026.clj
++++ b/src/acid/fanout/ns_026.clj
+@@ -1,7 +1,7 @@
+ (ns acid.fanout.ns-026
+   (:require [acid.fanout.util-c :as u1]
+             [acid.fanout.util-d :as u2]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-26
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-26
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-26
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-26
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f26-0
+   [x]
+diff --git a/src/acid/fanout/ns_027.clj b/src/acid/fanout/ns_027.clj
+index b7a0788..4e2cf04 100644
+--- a/src/acid/fanout/ns_027.clj
++++ b/src/acid/fanout/ns_027.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-027
+   "Namespace acid.fanout.ns-027. Historical note: find-event moved."
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-d :as u1]
+             [acid.fanout.util-a :as u2]
+@@ -26,16 +26,16 @@
+ 
+ (defn site-a-27
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-27
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-27
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f27-0
+     [x]
+diff --git a/src/acid/fanout/ns_029.clj b/src/acid/fanout/ns_029.clj
+index 393d299..8957768 100644
+--- a/src/acid/fanout/ns_029.clj
++++ b/src/acid/fanout/ns_029.clj
+@@ -1,7 +1,7 @@
+ (ns acid.fanout.ns-029
+   (:require [acid.fanout.util-b :as u1]
+             [acid.fanout.util-c :as u2]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-29
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-29
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-29
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-29
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f29-0
+     [x]
+diff --git a/src/acid/fanout/ns_035.clj b/src/acid/fanout/ns_035.clj
+index d6c8f98..500a362 100644
+--- a/src/acid/fanout/ns_035.clj
++++ b/src/acid/fanout/ns_035.clj
+@@ -1,7 +1,7 @@
+ (ns acid.fanout.ns-035
+   (:require [acid.fanout.util-d :as u1]
+             ;; the util aliases below are shared fleet-wide
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-a :as u2]))
+ 
+@@ -25,16 +25,16 @@
+ 
+ (defn site-a-35
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-35
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-35
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f35-0
+     [x]
+diff --git a/src/acid/fanout/ns_039.clj b/src/acid/fanout/ns_039.clj
+index ef130a5..1dde2a0 100644
+--- a/src/acid/fanout/ns_039.clj
++++ b/src/acid/fanout/ns_039.clj
+@@ -1,7 +1,7 @@
+ (ns acid.fanout.ns-039
+   "Namespace acid.fanout.ns-039. Historical note: find-event moved."
+   (:require [acid.fanout.util-d :as u1]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-39
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-39
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-39
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-39
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f39-0
+     [x]
+diff --git a/src/acid/fanout/ns_043.clj b/src/acid/fanout/ns_043.clj
+index 135b44a..eb4198d 100644
+--- a/src/acid/fanout/ns_043.clj
++++ b/src/acid/fanout/ns_043.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-043
+   (:require [acid.fanout.util-d :as u1]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-43
+@@ -23,16 +23,16 @@
+ 
+ (defn site-a-43
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-43
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-43
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f43-0
+     [x]
+diff --git a/src/acid/fanout/ns_055.clj b/src/acid/fanout/ns_055.clj
+index 96f6175..12a4f2b 100644
+--- a/src/acid/fanout/ns_055.clj
++++ b/src/acid/fanout/ns_055.clj
+@@ -1,7 +1,7 @@
+ (ns acid.fanout.ns-055
+   (:require [acid.fanout.util-d :as u1]
+             ;; the util aliases below are shared fleet-wide
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-a :as u2]))
+ 
+@@ -25,16 +25,16 @@
+ 
+ (defn site-a-55
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-55
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-55
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f55-0
+     [x]
+diff --git a/src/acid/fanout/ns_058.clj b/src/acid/fanout/ns_058.clj
+index 829ac32..5a07ca1 100644
+--- a/src/acid/fanout/ns_058.clj
++++ b/src/acid/fanout/ns_058.clj
+@@ -2,7 +2,7 @@
+   (:require [acid.fanout.util-c :as u1]
+             [acid.fanout.util-d :as u2]
+             [acid.fanout.util-a :as u3]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-58
+@@ -25,16 +25,16 @@
+ 
+ (defn site-a-58
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-58
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-58
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f58-0
+   [x]
+diff --git a/src/acid/fanout/ns_066.clj b/src/acid/fanout/ns_066.clj
+index b6f0e2b..9f86b3d 100644
+--- a/src/acid/fanout/ns_066.clj
++++ b/src/acid/fanout/ns_066.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-066
+   "Namespace acid.fanout.ns-066. Historical note: find-event moved."
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-c :as u1]
+             [acid.fanout.util-d :as u2]
+@@ -26,16 +26,16 @@
+ 
+ (defn site-a-66
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-66
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-66
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f66-0
+   [x]
+diff --git a/src/acid/fanout/ns_068.clj b/src/acid/fanout/ns_068.clj
+index 644c502..71e374d 100644
+--- a/src/acid/fanout/ns_068.clj
++++ b/src/acid/fanout/ns_068.clj
+@@ -1,5 +1,5 @@
+ (ns acid.fanout.ns-068
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-a :as u1]))
+ 
+@@ -23,16 +23,16 @@
+ 
+ (defn site-a-68
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-68
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-68
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f68-0
+   [x]
+diff --git a/src/acid/fanout/ns_078.clj b/src/acid/fanout/ns_078.clj
+index e6dbb87..098f10c 100644
+--- a/src/acid/fanout/ns_078.clj
++++ b/src/acid/fanout/ns_078.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-078
+   "Namespace acid.fanout.ns-078. Historical note: find-event moved."
+-  (:require [acid.fanout.store :as store]
++  (:require [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-c :as u1]))
+ 
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-78
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-78
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-78
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f78-0
+   [x]
+diff --git a/src/acid/fanout/ns_083.clj b/src/acid/fanout/ns_083.clj
+index 2caa801..54dbdb2 100644
+--- a/src/acid/fanout/ns_083.clj
++++ b/src/acid/fanout/ns_083.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-083
+   (:require [acid.fanout.util-d :as u1]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-a :as u2]))
+ 
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-83
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-83
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-83
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f83-0
+     [x]
+diff --git a/src/acid/fanout/ns_091.clj b/src/acid/fanout/ns_091.clj
+index 93cd4d9..c518bf0 100644
+--- a/src/acid/fanout/ns_091.clj
++++ b/src/acid/fanout/ns_091.clj
+@@ -1,6 +1,6 @@
+ (ns acid.fanout.ns-091
+   (:require [acid.fanout.util-d :as u1]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]
+             [acid.fanout.util-a :as u2]))
+ 
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-91
+     [id]
+-    (store/find-event id))
++    (store2/fetch-event id))
+ 
+ (defn site-b-91
+     [id]
+-    (let [ev (store/find-event id)]
++    (let [ev (store2/fetch-event id)]
+       (assoc ev :seen true)))
+ 
+ (defn site-c-91
+     [ids]
+-    (mapv store/find-event ids))
++    (mapv store2/fetch-event ids))
+ 
+ (defn f91-0
+     [x]
+diff --git a/src/acid/fanout/ns_098.clj b/src/acid/fanout/ns_098.clj
+index 5bc6b8b..e3bb170 100644
+--- a/src/acid/fanout/ns_098.clj
++++ b/src/acid/fanout/ns_098.clj
+@@ -1,7 +1,7 @@
+ (ns acid.fanout.ns-098
+   (:require [acid.fanout.util-c :as u1]
+             [acid.fanout.util-d :as u2]
+-            [acid.fanout.store :as store]
++            [acid.fanout.store2 :as store2]
+             [acid.fanout.other :as other]))
+ 
+ (defn local-98
+@@ -24,16 +24,16 @@
+ 
+ (defn site-a-98
+   [id]
+-  (store/find-event id))
++  (store2/fetch-event id))
+ 
+ (defn site-b-98
+   [id]
+-  (let [ev (store/find-event id)]
++  (let [ev (store2/fetch-event id)]
+     (assoc ev :seen true)))
+ 
+ (defn site-c-98
+   [ids]
+-  (mapv store/find-event ids))
++  (mapv store2/fetch-event ids))
+ 
+ (defn f98-0
+   [x]

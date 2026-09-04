@@ -184,6 +184,7 @@
    "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
    "docs/intent/alias-migration/alias-migration-specs.md"
    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
+   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
    "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
    "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/memory/memory-transaction-specs.md"
@@ -215,7 +216,8 @@
   ["docs/intent/alias-migration/alias-migration-specs.md"
    "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/memory/memory-transaction-specs.md"
-   "docs/intent/read-path-memory/read-path-memory-specs.md"])
+   "docs/intent/read-path-memory/read-path-memory-specs.md"
+   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"

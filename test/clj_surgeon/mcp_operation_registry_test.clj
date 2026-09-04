@@ -40,7 +40,14 @@
     :committed
     'clj-surgeon.mcp-program-tool-test/commits-the-compiled-addressed-edits-with-read-back-proof
     :typed-refusal
-    'clj-surgeon.mcp-program-tool-test/callback-reports-elapsed-time-on-success-and-refusal}})
+    'clj-surgeon.mcp-program-tool-test/callback-reports-elapsed-time-on-success-and-refusal}
+   "admit_clojure_patch"
+   {:preview
+    'clj-surgeon.admit-patch-test/preview-writes-nothing
+    :committed
+    'clj-surgeon.admit-patch-test/a-clean-commit-writes-atomically-and-proves-read-back
+    :typed-refusal
+    'clj-surgeon.admit-patch-test/a-refusal-class-hazard-blocks-the-commit-and-returns-a-full-receipt}})
 
 (defn- public-tool-registry
   []
