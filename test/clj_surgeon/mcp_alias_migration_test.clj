@@ -5831,7 +5831,7 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (def ^:private frozen-refusal-kinds
-  "The 139 kinds the entrance's enumeration held at 51da9446.
+  "The 143 kinds the entrance's enumeration holds on the MCP/main landing (139 at 51da9446 + four trunk kinds).
 
   A PIN, not a source: `refusal-kinds-in-source` stays derived, and this set
   exists so that a change to the derivation is LOUD. Round sixteen shipped a
@@ -5841,6 +5841,9 @@
   reading the enumeration by hand. A kind added here on purpose is one line of
   diff with a reason; a kind that appears here by accident is a failing test."
   #{
+    ;; re-pinned at the MCP/main landing (2026-09-04): four kinds the trunk publishes (the admit-gate
+    ;; and parser-admission landings) that the branch never saw — 139 → 143
+    "expect-matched-invalid-pattern" "expect-matched-stale" "expect-matched-unreadable-source" "parser-admission-refused"
     "alias-migration-alias-policy-exhausted"
     "alias-migration-ambiguous-ownership"
     "alias-migration-discovery-incomplete" "alias-migration-empty-scope"
@@ -5916,7 +5919,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 139 (count kinds))
+    (is (= 143 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
