@@ -382,3 +382,22 @@ test, report or implementation detail from any arm. ~16 s per clone. Contract an
 
 So every wall number in this document belongs to a delivered feature except G2's, which was already withdrawn. From here an
 arm's row is (wall, turns, ACCEPT/REJECT), never (wall, turns, suite-green).
+
+## E-THREAD live-tool cells, scored with actual task clocks (Astra's recovery, 2026-09-04 22:59Z; my runner's queue-wait caveat withdrawn for these cells)
+
+Astra matched all twelve AN/AT sessions by rollout UUID + cwd and read task_started → task_complete: start-to-task-start was 0.7–1.7 s on all
+twelve, so NO material queue wait sat inside these walls (my runner-code warning was a real potential bias, not the explanation). Descriptive n=3,
+Sol on codex 0.147.0, box load 7–21, quality graded by the legacy grader only so far (strict grader rows pending):
+
+| thread | native (AN) task wall s | tool (AT, live feature_thread via MCP) task wall s | median ratio AT/AN | legs (legacy) |
+|---|---|---|---:|---|
+| T4 ackReply | 43.1 / 56.7 / 59.1 | 67.2 / 86.6 / 97.7 | **1.53 slower** | both 5/5 |
+| T5 streamAction | 58.7 / 61.0 / 49.4 | 71.4 / 75.6 / 75.5 | **1.29 slower** | AN 4/5, AT 5/5 |
+
+On Astra's JSON role task the agent called the verb AND kept reading (T4-AT-1: 7 calls vs AN's 3), so the live tool ADDED a turn and its
+receipt-reading cost without removing reads. On the 05Z slot-schema prompts (cells L) the same verb REPLACED the reads (2–5 calls vs native's
+4–7; T4-L-1 60 s at load 20). Two prompt styles, two results — the verb's value depends on whether the task frames the five slots so the
+receipt answers them directly. Both findings preserved; neither is a speed claim: n=3, uncontrolled load, one model, legacy grading.
+
+Astra's own hand-drive numbers, for the record: Astra-native migration of the 21-file/63-site fixture in 52.7 s (49.3 s on rep 2) on a quiet box
+with a guarded script; Sol-native 122.3 s (contaminated by load). The native floor per model is not yet established; no cross-model ratio.

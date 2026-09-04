@@ -1857,3 +1857,5 @@ banking if codex gates review throughput.
 ## 22:54Z feature_thread LANDED (23703002) — seventh landing; the lane is FROZEN. SUSPEND-ALL executed for Astra until 23:20Z; E-THREAD runner clocks fixed per his audit; a fourth self-kill → ~/bin/kill-pattern.
 
 ## 22:57Z admit gate r18 checkpointed (dcb40838): overlay escape, modes/mtimes, tail — all RED→GREEN with sabotage; full gates and the landing review wait for capacity after 23:20Z
+
+## 23:03Z Astra recovered the E-THREAD task clocks: live feature_thread on his JSON task is SLOWER than native (1.53×/1.29× medians, n=3, no queue wait); on the slot-schema prompts it replaces reads. Both preserved. Astra-native migration 52.7 s on a quiet box.
