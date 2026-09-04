@@ -1807,3 +1807,11 @@ witnesses that reproduce the truncation and the mode loss, plus the four non-blo
 (the G2 ask) wait for r19: safety first.
 
 ## 21:51Z — usage watch: tools "admit_clojure_patch": 52 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:48Z load 14.50 ; === rc 0 end 21:51Z)
+
+## 21:53Z suite spike r2 (Sol): NO-GO on the orphan formatter test (a real coverage loss) + the rename sweep; round 3 launched. GN3 3× native; N5 shows the plate wall-neutral, churn gone
+
+The suite review is the kind of NO-GO that lands next round: everything structural held (lane refusals by name, both
+isolation entrances, four race stages red under contention, N=6 green), and the blocker is a test nobody ran that turns
+out to cover real behaviour. Round three wires it, sweeps the rename, refreshes the counts, merges the trunk and adds
+the battery receipt ledger with the freshness tripwire. Usage watch 21:51Z: admit_clojure_patch 52 (today's arms and
+reviews), inspect 148.

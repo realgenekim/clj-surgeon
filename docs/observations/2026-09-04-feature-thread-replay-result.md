@@ -316,3 +316,16 @@ opaque non-Clojure files in the same snapshot; a next_call that never repeats a 
 T5 + N5 LAUNCHED 21:43Z on smw-base2 (d5b1ba53, the merged landing contract): T5 = receipt + contract + gate as prescribed;
 N5 = native on the new plate (contract-only baseline). Pre-registration (from the T5 section above): T5 raw 5–7 predicted,
 withdrawal if T5 raw > 12 on both replicates or N5 also < 12.
+
+## GN3 / N5 results (2026-09-04 21:5xZ)
+
+| arm | base | wall | turns | MCP | .local_version churn | gates |
+|---|---|---:|---:|---:|---:|---|
+| GN3 (native + r16 gate, the gate's prescription) | 2df99c98 | 20.6 min | 50 | 9 | 1 | unit 227/712/0, js green |
+| N5 (native on the merged landing-contract plate, no gate, no receipt) | d5b1ba53 | 6.3 min | 33 | 0 | 0 | unit 227/712/0, js green |
+| NC (native, old plate, same afternoon) | 2df99c98 | 6.5 min | 30 | 0 | (n/a) | green |
+
+GN3: the gate as the write path for a NATIVE agent (no receipt) is 3× native wall; 9 MCP turns, 9 suite runs of its
+own despite the mandate, 8 write turns at 9.0 min — the agent fought the gate. N5: the landing-contract plate is wall-
+NEUTRAL for native (6.3 vs 6.5) and removed the churn exactly as designed (0 vs 1–3 turns); reads still 7. The plate's
+value is hygiene, not wall — its wall share shows only once the receipt has removed the reads (T5, running).
