@@ -192,9 +192,25 @@
     (catch Exception error
       (or (.getMessage error) (.getName (class error))))))
 
+;; @spec MCP-OP-ALIAS-060
 (defn- relative-path
+  "One project-relative path string, byte-faithful to the filesystem it came
+  from.
+
+  The separator is the one THAT filesystem uses, read from the filesystem
+  itself, and never a hardcoded backslash. On POSIX a backslash is an ordinary
+  path character: `\\` is a legal top-level directory name and `c\\d.clj` is a
+  legal file name, so replacing every backslash with a slash turned one
+  segment into two and dropped the owner under it from `scope.paths [\"**\"]` —
+  after which the verb committed the owners it could still see under a receipt
+  claiming complete discovery."
   [^Path root ^Path candidate]
-  (str/replace (.toString (.relativize root candidate)) "\\" "/"))
+  (let [relative (.relativize root candidate)
+        separator (.getSeparator (.getFileSystem relative))
+        text (.toString relative)]
+    (if (= "/" separator)
+      text
+      (str/replace text separator "/"))))
 
 ;; @spec MCP-OP-ALIAS-057
 (defn scope-glob-patterns
@@ -283,11 +299,66 @@
   the retired lib."
   64)
 
+;; @spec MCP-OP-ALIAS-060
+(defn independent-scope-count
+  "A SECOND count of the sources one scope selects, over Path objects alone.
+
+  The scope walk derives one relative path STRING per entry and matches on
+  that string; this counts the same scope by matching the compiled patterns
+  against the relative PATH the filesystem hands back, so it builds no path
+  string and cannot inherit the walk's path arithmetic. Two enumerations that
+  share no arithmetic are two witnesses; one enumeration is an assertion.
+
+  It exists because a discovery defect is SILENT by construction: round twelve
+  found a legal POSIX directory dropped from `scope.paths [\"**\"]`, and the
+  verb committed the remainder under a receipt claiming complete discovery.
+  Nothing in the receipt could have contradicted it, because nothing had
+  counted the tree a second time.
+
+  Runs only where the walk already returned `:ok`, so every bound the walk
+  enforces — depth, entry ceiling, readability — has already been cleared by
+  the same tree."
+  [^Path root patterns exclude]
+  (let [matchers (mapv glob-matcher patterns)
+        excluded (into #{}
+                       (map (fn [^String entry]
+                              (.getPath (.getFileSystem root) entry
+                                        (make-array String 0))))
+                       exclude)
+        counted (volatile! 0)
+        visitor
+        (proxy [SimpleFileVisitor] []
+          (preVisitDirectory [dir _attrs]
+            (let [^Path directory dir]
+              (if (and (not (.equals root directory))
+                       (contains? skipped-directories
+                                  (str (.getFileName directory))))
+                FileVisitResult/SKIP_SUBTREE
+                FileVisitResult/CONTINUE)))
+          (visitFile [file _attrs]
+            (let [^Path candidate file
+                  relative (.relativize root candidate)]
+              (when (and (source-file-name? candidate)
+                         (Files/isRegularFile candidate
+                                              (make-array LinkOption 0))
+                         (not (contains? excluded relative))
+                         (some #(.matches ^PathMatcher % relative) matchers))
+                (vswap! counted inc)))
+            FileVisitResult/CONTINUE)
+          (visitFileFailed [_file _error] FileVisitResult/CONTINUE)
+          (postVisitDirectory [_dir _error] FileVisitResult/CONTINUE))]
+    (Files/walkFileTree root
+                        (EnumSet/noneOf FileVisitOption)
+                        Integer/MAX_VALUE
+                        visitor)
+    @counted))
+
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-037
 ;; @spec MCP-OP-ALIAS-048
 ;; @spec MCP-OP-ALIAS-049
 ;; @spec MCP-OP-ALIAS-050
+;; @spec MCP-OP-ALIAS-060
 (defn- scan-parsed-scope
   "The bounded walk itself, over globs already proved parseable.
 
@@ -408,7 +479,20 @@
        :unreadable-paths (vec unreadable)
        :unreadable-count @unreadable-count}
 
-      :else {:ok true :files (vec (sort found))})))
+      :else
+      ;; @spec MCP-OP-ALIAS-060
+      ;; the completeness claim is WITNESSED and never asserted: an
+      ;; independent enumeration of the same scope must agree with what the
+      ;; walk considered, or the scope's contents are not knowable and no
+      ;; migration downstream may claim to have closed the fan-out
+      (let [files (vec (sort found))
+            enumerated (independent-scope-count root patterns exclude)]
+        (if (= (count files) enumerated)
+          {:ok true :files files}
+          {:ok false
+           :error-type :alias-migration-discovery-incomplete
+           :files-considered (count files)
+           :files-enumerated enumerated})))))
 
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-037
@@ -868,6 +952,29 @@
                          "keystroke from src/{**. No next_call is composed "
                          "because only the caller knows which paths the "
                          "pattern was meant to select."))}))
+
+      ;; @spec MCP-OP-ALIAS-060
+      (= :alias-migration-discovery-incomplete (:error-type scan))
+      (refusal :alias-migration-discovery-incomplete
+               (str "Discovery considered " (:files-considered scan)
+                    " source file(s) under scope.paths while an independent "
+                    "enumeration of the same scope found "
+                    (:files-enumerated scan)
+                    ", so what the scope contains is not knowable and no "
+                    "migration over it could claim to have closed the fan-out")
+               {:files_considered (:files-considered scan)
+                :files_enumerated (:files-enumerated scan)
+                :next_call nil
+                :remedy (str "Nothing was written. Two enumerations of the "
+                             "same scope disagree, which means one of them "
+                             "cannot see a file the other can — a tree "
+                             "changing under the walk, or a path this build "
+                             "derives incorrectly. Re-run against a quiescent "
+                             "tree; if the counts still disagree, this is a "
+                             "clj-surgeon defect and the migration must not "
+                             "be attempted, because a partial migration "
+                             "published under a complete-discovery receipt is "
+                             "worse than a refusal: the caller stops looking.")})
 
       ;; @spec MCP-OP-ALIAS-048
       (= :alias-migration-scope-too-deep (:error-type scan))
