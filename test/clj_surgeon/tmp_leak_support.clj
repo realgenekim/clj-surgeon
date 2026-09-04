@@ -77,6 +77,18 @@
    the check that refuses when no mount source can answer at all."
   ["/tmp" "/dev/shm"])
 
+;; @spec TEST-ISO-006
+(def isolated-home-name
+  "The throwaway `user.home` a home-isolated run is launched on, as a child of
+   that run's own private temp root -- so it is created by the same act that
+   creates the root and destroyed by the same `sweep-root!` that destroys it.
+   A throwaway home with its own lifecycle would be a second thing to leak."
+  "home")
+
+(defn isolated-home
+  [root]
+  (io/file (str root) isolated-home-name))
+
 (defn- canonical
   [dir]
   (try (.getCanonicalPath (io/file (str dir)))
@@ -215,6 +227,9 @@
             (str "cannot be used as a temp base: " detail)
             :sentinel-mismatch
             (str "was handed a re-exec sentinel it does not own: " detail)
+            :home-not-isolated
+            (str "was launched WITHOUT the isolated user.home this run "
+                 "requires (TEST-ISO-006): " detail)
             "is not usable as a temp base.")
           refusal-remedy))
 
@@ -253,6 +268,10 @@
                              "getInputArguments" (into-array Class []))]
       (->> (.invoke method bean (into-array Object []))
            (remove #(str/starts-with? % "-Djava.io.tmpdir="))
+           ;; @spec TEST-ISO-006 -- like java.io.tmpdir, the child is given a
+           ;; fresh one; inheriting the parent's would silently defeat the
+           ;; isolation the re-exec exists to create.
+           (remove #(str/starts-with? % "-Duser.home="))
            (remove #(str/starts-with? % "-agentlib:jdwp"))
            vec))
     (catch Throwable _ [])))
@@ -263,12 +282,17 @@
    clojure.main -m <main-ns>` under a real JVM (avoids re-running the
    slower `clojure` CLI / deps resolution; the classpath this process
    already resolved is exactly the one the child needs)."
-  [{:keys [bb-script main-ns]} tmp-root args]
-  (let [args (mapv str args)]
+  [{:keys [bb-script main-ns isolate-home?]} tmp-root args]
+  (let [args (mapv str args)
+        ;; @spec TEST-ISO-006
+        home-flags (when isolate-home?
+                     [(str "-Duser.home=" (isolated-home tmp-root))])]
     (if (bb-runtime?)
-      (into ["bb" (str "-Djava.io.tmpdir=" tmp-root) bb-script] args)
+      (into (into ["bb" (str "-Djava.io.tmpdir=" tmp-root)] home-flags)
+            (into [bb-script] args))
       (into (into ["java" "-cp" (System/getProperty "java.class.path")]
-                  (conj (parent-jvm-options) (str "-Djava.io.tmpdir=" tmp-root)))
+                  (into (conj (parent-jvm-options) (str "-Djava.io.tmpdir=" tmp-root))
+                        home-flags))
             (into ["clojure.main" "-m" main-ns] args)))))
 
 ;; @spec MCP-OP-TMPHYG-004
@@ -376,11 +400,16 @@
    `tempfile.mkdtemp` -- would write to the SHARED base, outside the isolated
    root and invisible to the leak witness. TMPDIR/TMP/TEMP put every
    descendant inside the run's own root."
-  [root]
-  {reexec-sentinel (str root)
-   "TMPDIR" (str root)
-   "TMP" (str root)
-   "TEMP" (str root)})
+  ([root] (child-environment root false))
+  ([root isolate-home?]
+   (cond-> {reexec-sentinel (str root)
+            "TMPDIR" (str root)
+            "TMP" (str root)
+            "TEMP" (str root)}
+     ;; @spec TEST-ISO-006 -- a subprocess reads $HOME, never the JVM
+     ;; property, so an isolated run that set only -Duser.home would leak
+     ;; through the first thing that shells out.
+     isolate-home? (assoc "HOME" (str (isolated-home root))))))
 
 (defn secure-tmpdir!
   "Resolves the base temp directory (`env-or-current-tmpdir`) and REFUSES --
@@ -410,7 +439,8 @@
    runner's own argv, forwarded to the child."
   ([target] (secure-tmpdir! target nil))
   ([target args]
-  (let [base (env-or-current-tmpdir)]
+  (let [base (env-or-current-tmpdir)
+        isolate-home? (boolean (:isolate-home? target))]
     (try (fs/create-dirs base) (catch Throwable _ nil))
     ;; @spec MCP-OP-TMPHYG-008
     (if-let [refusal (base-refusal base)]
@@ -424,8 +454,23 @@
           (if (and (= (canonical declared) (canonical actual))
                    (own-isolated-root? actual))
             (let [root (io/file actual)]
-              (register-root-sweep! root (atom nil))
-              {:refused false :root root})
+              ;; @spec TEST-ISO-006 -- when this run asked for home isolation,
+              ;; the child REFUSES unless it is actually running on the
+              ;; throwaway. Without this the isolation could be silently
+              ;; absent (a stripped flag, an inherited sentinel) and the lane
+              ;; would run on the seat's real home while every witness that
+              ;; asks the JVM what its home is agreed that it had not.
+              (if (and isolate-home?
+                       (not= (canonical (isolated-home root))
+                             (canonical (System/getProperty "user.home"))))
+                (refuse! {:reason :home-not-isolated
+                          :base actual
+                          :detail (format (str "user.home is %s but this run asked for "
+                                               "an isolated home at %s.")
+                                          (pr-str (System/getProperty "user.home"))
+                                          (pr-str (str (isolated-home root))))})
+                (do (register-root-sweep! root (atom nil))
+                    {:refused false :root root})))
             (refuse! {:reason :sentinel-mismatch
                       :base actual
                       :detail (format (str "it names root=%s but this process's java.io.tmpdir "
@@ -437,6 +482,9 @@
           (sweep-stale-roots! base)
           (try
             (fs/create-dirs root)
+            ;; @spec TEST-ISO-006 -- created by the same act that creates the
+            ;; run root, so `sweep-root!` destroys both.
+            (when isolate-home? (fs/create-dirs (isolated-home root)))
             (catch Throwable t
               (refuse! {:reason :unusable-base :base base
                         :detail (str (.getSimpleName (class t)) ": " (.getMessage t))})
@@ -446,7 +494,7 @@
                 cmd (reexec-child-command target root args)
                 proc (apply proc/process
                             {:inherit true
-                             :extra-env (child-environment root)}
+                             :extra-env (child-environment root isolate-home?)}
                             cmd)
                 _ (reset! child proc)
                 exit (:exit @proc)]

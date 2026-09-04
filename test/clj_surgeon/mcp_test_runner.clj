@@ -72,10 +72,19 @@
 
 (defn -main
   [& args]
-  (let [{:keys [refused root]}
-        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"} args)
+  (let [lanes (parse-lanes args)
+        ;; @spec TEST-ISO-006 -- ONLY the fast lane is launched on a throwaway
+        ;; user.home. Integration drives in-process servers and battery
+        ;; launches cold `clojure`/`bb` children that legitimately need the
+        ;; seat's ~/.m2 and ~/.gitlibs; giving those a throwaway home would
+        ;; not isolate them, it would make them re-download the world. The
+        ;; fast lane needs none of it, which is exactly why it can have this.
+        isolate-home? (= #{:fast} (set lanes))
+        {:keys [refused root]}
+        (tmp-leak/secure-tmpdir! {:main-ns "clj-surgeon.mcp-test-runner"
+                                  :isolate-home? isolate-home?}
+                                 args)
         _ (when refused (System/exit 97))
-        lanes (parse-lanes args)
         _ (when (empty? lanes)
             (binding [*out* *err*]
               (println (str "lane-refused: no lane named. Usage: -m "
