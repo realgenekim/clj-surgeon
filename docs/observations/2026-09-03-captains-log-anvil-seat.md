@@ -1353,3 +1353,7 @@ The Opus reader, given only the receipt, answered Gene's parenthetical from the 
 The reviewer's B1 is the finding of the night for this verb: the lexer's "single failure mode is did not close, which is loud" covered one direction of the regex/division ambiguity; `return /[}]/` fails the other way, into a CLOSED wrong range with a hash on it — exactly the false green a pre-image is supposed to prevent. B2 is the completeness claim built on line-regex evidence: a comment mention counts. Both go to the round-two builder as RED→GREEN items with the rest of the findings.
 
 The one I own: ad49908c changed the refusal text and I did not run the narrow suite before pushing; test:388 asserted "exactly five" and the tip went red for an hour. The tweezer is for the DESIGN; the commit still needs its witness run, even for two lines. Ratchet in memory: no src push from the seat without the affected test namespace run first.
+
+## 07:09Z — q5z r16 (Opus): GO-WITH-FIX; round 17 launched. The lesson worth keeping: defence in depth hides a missing witness
+
+Reverting the allowlist alone left the witness green, because the guard and the time budget caught the same attack one layer down. Three layers, one witness, and the witness proved the OUTCOME, never any layer's own contract. Each layer asserts its own contract, or the day one layer is removed nobody learns it. Same shape as the census lane's "an allowlist by type admits every subtype" — the rule is now written into the intent text on the branch.
