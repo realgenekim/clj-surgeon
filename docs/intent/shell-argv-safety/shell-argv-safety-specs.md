@@ -17,6 +17,10 @@ required), `[x]` implemented (implementation and test witnesses required),
 
 - [x] **MCP-OP-SHELL-ARGV-003**: When clj-surgeon consumes the output of an external file-discovery command, clj-surgeon shall delimit that output with NUL so that a path containing a newline is returned as one intact path.
 
+- [x] **MCP-OP-SHELL-ARGV-004**: When clj-surgeon reads a build file it discovered under a caller-named directory — `deps.edn`, `bb.edn` or `project.clj`, reached from `:ls-tree`'s `:dir` through project discovery — clj-surgeon shall read that file AS DATA with a reader that does not evaluate, shall never evaluate any form the file contains, and shall fall back to the default source paths when the file is not readable as data; and "as data" means a reader for which `*read-eval*` is not consulted, not a reader called with `*read-eval*` bound false, because a binding is a property of one call site and the requirement is a property of the reader.
+
+- [x] **MCP-OP-SHELL-ARGV-005**: When any source under `src/` calls a reader that evaluates what it reads — `clojure.core/read-string` or `clojure.core/load-string`, whether unqualified, fully qualified, or reached through an alias of `clojure.core` — clj-surgeon shall fail its own test suite naming the file and the symbol, unless that site is enumerated in the witness's allow-list together with the reason it is safe; the allow-list's target is empty, and "the caller cannot name this file today" is not a reason, because it is a statement about the current call graph rather than about the reader.
+
 ## Misreadings these requirements exist to forbid
 
 - "Escape or quote the directory before interpolating it." A filter is

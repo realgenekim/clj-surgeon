@@ -283,11 +283,46 @@
     ["src"]))
 
 (defn- extract-source-paths
-  "I/O wrapper: read a build file and return its source paths."
+  "I/O wrapper: read a build file AS DATA and return its source paths.
+
+   `edn/read-string`, NOT `clojure.core/read-string`, and the difference is a
+   class rather than a nicety — the same class round twenty closed one frame
+   over at `core/parse-val`, and Opus's round-twenty-one BLOCKING finding
+   is that it survived HERE, in the entrance the round-twenty enumeration did
+   not walk.
+
+   `clojure.core/read-string` honours `*read-eval*`, which defaults to true,
+   so the reader EVALUATES `#=(…)` in the file it is reading. The file is a
+   `deps.edn` / `bb.edn` / `project.clj` DISCOVERED UNDER THE DIRECTORY THE
+   CALLER NAMED, so the caller does not even need to control argv text:
+   controlling a directory is enough. Demonstrated at both real launchers at
+   0a91e720 under the ordinary invocation:
+
+     $ cat $FX/evil-tree/deps.edn
+     {:paths #=(clojure.core/spit \"$FX/PWNED-LSTREE.txt\" \"…\")}
+     $ clj-surgeon :op :ls-tree :dir $FX/evil-tree
+     EXIT=0
+     src/a.clj  1 lines, 0 forms
+     $ cat $FX/PWNED-LSTREE.txt
+     READER EVAL EXECUTED via :op :ls-tree :dir
+
+   Exit 0, a green receipt, nothing printed. The `catch` below does not help
+   and never did: the evaluation happens INSIDE the reader, before any value
+   is returned, so the catch swallows the evidence rather than the effect.
+
+   A build file is data this op looks ONE key up in. `edn/read-string` reads
+   every shape `source-paths-from-config` was written for — the `deps.edn` and
+   `bb.edn` maps, and the `project.clj` list whose `:source-paths` is looked up
+   positionally — and refuses `#=`, arbitrary tagged literals and every other
+   reader escape. A `project.clj` that genuinely needs code reading (an
+   unquote, say) now throws and falls back to [\"src\"], which is the same
+   answer this fn already gave for an unreadable build file; that is a refusal
+   to guess, not a regression, and it is the argument for refusing such a file
+   rather than for `*read-eval*`."
   [build-file]
   (try
     (source-paths-from-config (str (fs/file-name build-file))
-                              (read-string (slurp (str build-file))))
+                              (edn/read-string (slurp (str build-file))))
     (catch Exception _e ["src"])))
 
 ;; @spec MCP-OP-SHELL-ARGV-003
