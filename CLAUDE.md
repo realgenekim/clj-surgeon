@@ -6,15 +6,16 @@ and dogfooded for months."*
 
 - `main` is the PUBLIC release line. Nothing lands on it — no code, no docs, no merges — until
   Gene names a clear and decisive winner that has been tested and dogfooded for months.
-- All work lands on branches. The integration line is a candidate branch
-  (`bridge/main-candidate-<date>`), landed by fast-forward only when Gene says so.
-- Seat records (captain's logs, cohort docs, verdicts, resume notes) go to a seat branch
-  (`bridge/anvil-seat-docs-<date>`), never to `main`.
+- **`MCP/main` is the working trunk** (Gene, 2026-09-04: "Get everything onto a branch called MCP/.
+  Let's have that be our 'main' branch"). Reviewed GO tips land on `MCP/main` by `merge --no-ff`;
+  seat records commit there directly; cohorts and servers run from it. `main` stays frozen until Gene
+  names the winner and fast-forwards it himself.
+- Seat records (captain's logs, cohort docs, verdicts, resume notes) go to `MCP/main`, never to `main`.
 - A `git push origin main` from any agent seat is a rule violation, whatever it carries.
 
 ## First action after compaction (the Memento rule)
 
-Read, in this order (on the seat branch `bridge/anvil-seat-docs-2026-09-04`, NOT main — main is frozen): `docs/observations/2026-09-03-resume-here-anvil-seat.md` (host facts for the seat on forge@anvil since 2026-09-03: no reply tool, no sudo, never ports 7888/7894/7895, never `~/acid/GO-*` or the cohort lock, nothing merges from here) and `docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state). Keep both current when state changes materially.
+Read, in this order (on `MCP/main`, the working trunk — `main` is frozen): `docs/observations/2026-09-03-resume-here-anvil-seat.md` (host facts for the seat on forge@anvil since 2026-09-03: no reply tool, no sudo, never ports 7888/7894/7895, never `~/acid/GO-*` or the cohort lock, nothing merges from here) and `docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state). Keep both current when state changes materially.
 
 # clj-surgeon
 
