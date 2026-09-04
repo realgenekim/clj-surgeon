@@ -446,3 +446,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - **FAN scorer LANDED on MCP/main = 804febcb** (Sol r5 GO, merge --no-ff; a .PHONY union conflict in Makefile resolved by hand; trailing `make fanout-selftests` log at /home/forge/tmp/trunk-fanout-selftests.log). Row F closed; inb-9c18e2 completed.
 - Still in flight: MEM-003 r4, O2 r5, gate r4, tmp-leak ratchet, feature_thread verb (builders); census r19 (Opus), q5z r15 (Sol) reviews. Branch tips unchanged since 05:21Z.
 - Next action: file census19/q5z15 verdicts when their logs end in EXIT; land MEM-003 r4 → recompose study-ops; E-SCALE-WALL waits for load < 2.0.
+
+## RESUME DELTA 06:10Z
+- feature_thread verb BUILT @ 02e823e7 on bridge/feature-thread-verb; Sol r1 review running (ft1.log / ft1-sol-review.md; clone /home/forge/tmp/sol/ft1-wt; reviewer ports 8126–8128). Inbox inb-cc9a4a. Next after GO: land on MCP/main, then the adoption cohort on tool calls.
+- census r19 NO-GO filed; r20 builder merges the trunk in first (12-file conflict). q5z r15 GO-WITH-FIX filed; r16 building (ports 8123–8125).
