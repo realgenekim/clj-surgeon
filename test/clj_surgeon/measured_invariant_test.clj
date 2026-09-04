@@ -230,6 +230,95 @@
    ".toEpochMilli" "an Instant converted to an epoch number"
    "FileTime/fromMillis" "an epoch number turned back into a file time"})
 
+(def ^:private laundering-sentinel
+  "A number no clock produces and no fixture carries, so finding it outside a
+   `:measured` block is proof a public verb handed a reading's number back."
+  987654.321)
+
+(def ^:private laundering-tick-sentinel
+  "The same idea for a START TICK, which holds a `long` rather than a double.
+
+  A tick is the other opaque value in the namespace and `start-nanos` opens it,
+  so a probe that only ever hands out `Reading`s cannot see that verb launder.
+  It is integral because `start-nanos` coerces with `long`, and a double
+  sentinel would come back truncated and unrecognisable."
+  987654321)
+
+(defn- sentinel-outside-a-measured-block?
+  "Does `laundering-sentinel` appear in `x` anywhere a caller could read it as
+   an ordinary number — that is, anywhere except under `measured-key`?
+
+  Inside the block the number is the publication itself: `measured` and
+  `attach` BUILD that block and must be allowed to."
+  [x]
+  (letfn [(walk [node]
+            (cond
+              (or (= laundering-sentinel node)
+                  (= laundering-tick-sentinel node)) true
+              (map? node) (boolean (some (fn [[k v]]
+                                           (or (walk k)
+                                               (and (not= k measured/measured-key)
+                                                    (walk v))))
+                                         node))
+              (or (vector? node) (seq? node) (set? node))
+              (boolean (some walk node))
+              :else false))]
+    (walk x)))
+
+(defn- reading-arguments
+  "The argument pool for the READING probe: the sentinel as a TAGGED reading,
+   in the placements a caller has — bare, under a key, inside a vector — plus
+   the key those maps use, so a two-argument reader can be handed both halves.
+
+  Nothing in this pool carries the sentinel as a bare number, so the sentinel
+  coming BACK outside a measured block means the var produced it."
+  []
+  [(measured/reading laundering-sentinel)
+   {:probe (measured/reading laundering-sentinel)}
+   [(measured/reading laundering-sentinel)]
+   (measured/->Tick laundering-tick-sentinel)
+   :probe])
+
+(defn- block-arguments
+  "The argument pool for the BLOCK probe: an already-published measured block,
+   whose contents are bare numbers by construction, and its key."
+  []
+  [(measured/measured {:probe (measured/reading laundering-sentinel)})
+   :probe])
+
+(defn- argument-combinations
+  [pool n]
+  (reduce (fn [acc _] (for [args acc a pool] (conj args a)))
+          [[]]
+          (range n)))
+
+(defn- probed-arities
+  "Every fixed arity of `v` this probe can call. Variadic tails are dropped:
+   the fixed prefix is probed by the arity that names it.
+
+  A callable var with no `:arglists` — a protocol method under some runtimes, a
+  keyword, a set — is probed at arity 1 and 2, the arities such a value has."
+  [v]
+  (let [declared (->> (:arglists (meta v))
+                      (map #(count (take-while (complement #{'&}) %)))
+                      distinct
+                      sort
+                      vec)]
+    (if (seq declared) declared [1 2])))
+
+(defn- yields-the-sentinel?
+  "Does calling `v` over `pool` hand the sentinel back outside a measured
+   block?"
+  [v pool]
+  (boolean
+    (some (fn [n]
+            (some (fn [args]
+                    (try
+                      (sentinel-outside-a-measured-block? (apply @v args))
+                      (catch Throwable _ false)))
+                  (argument-combinations pool n)))
+          (probed-arities v))))
+
 (def escape-hatch-spellings-the-ratchet-must-carry
   "Every spelling that reaches a reading's number, with the route it opens.
 
@@ -256,19 +345,134 @@
    "measured/start-nanos" "the private verb that opens a start tick"
    "._launder" "the protocol method as MUNGED Java interop — the round-five review's finding 1"
    ".-launder" "the same method spelled as an unmunged field access"
-   ".-launderable" "the deftype's private field, which babashka's interop does not enforce"})
+   ".-launderable" "the deftype's private field, which babashka's interop does not enforce"
+   ".launderable" "the same field spelled as a method call"
+   "launderable" "the same field named bare, as a reflective lookup spells it"})
+
+(defn- untagged-clock-intern?
+  "Does calling `v` with NO arguments hand back a bare number?
+
+  That is what `raw-nanos` and `raw-ms` are: a clock read with no tag on it.
+  `start` returns a tick, `wall-clock-ms` returns a reading, and every other
+  intern throws — so this predicate names the untagged clock verbs without
+  knowing any of their names."
+  [v]
+  (try (number? (@v)) (catch Throwable _ false)))
+
+(defn- laundering-interns
+  "Every intern of `clj-surgeon.measured` — PUBLIC OR PRIVATE — that either
+  reads a clock untagged or hands a tagged value's number back.
+
+  `ns-interns`, not `ns-publics`, and that is the point: `unwrap-readings` and
+  `start-nanos` are private, privacy in Clojure is a resolution convention
+  rather than a boundary, and a pattern that only knows the public names cannot
+  cost a site that reached past them."
+  []
+  (->> (ns-interns 'clj-surgeon.measured)
+       (filter (fn [[_ v]] (and (ifn? @v)
+                                (or (untagged-clock-intern? v)
+                                    (yields-the-sentinel? v (reading-arguments))))))
+       (map (comp name first))
+       sort
+       vec))
+
+(defn- protocol-method-names
+  "Every method name of every protocol defined in `clj-surgeon.measured`, from
+  the protocol map's own `:sigs`.
+
+  `:sigs` rather than reflection on the compiled interface, because sci does
+  not compile a protocol to a Java interface at all and the scan has to be the
+  same in both runtimes. The JVM's compiled interface is checked against this
+  list by the witness below."
+  []
+  (->> (ns-interns 'clj-surgeon.measured)
+       vals
+       (mapcat (fn [v]
+                 (let [x (try @v (catch Throwable _ nil))]
+                   (when (and (map? x) (map? (:sigs x)))
+                     (map name (keys (:sigs x)))))))
+       distinct
+       sort
+       vec))
+
+(defn- opaque-type-field-names
+  "Every declared field of the opaque types, by reflection on the JVM.
+
+  EMPTY UNDER BABASHKA — sci's `deftype` is a `SciType` with no declared
+  fields — which is exactly why `escape-hatch-spellings-the-ratchet-must-carry`
+  carries the field spelling as a floor as well: `(.-launderable r)` is a live
+  route under babashka and an unreflectable one. The witness below proves the
+  JVM derivation produces it, so the floor entry is derived evidence rather
+  than a name somebody thought of."
+  []
+  (->> [(measured/reading 1.0) (measured/start)]
+       (mapcat (fn [x] (try (->> (.getDeclaredFields (class x))
+                                 (remove #(java.lang.reflect.Modifier/isStatic
+                                           (.getModifiers ^java.lang.reflect.Field %)))
+                                 (remove #(.isSynthetic ^java.lang.reflect.Field %))
+                                 (map #(.getName ^java.lang.reflect.Field %)))
+                            (catch Throwable _ nil))))
+       ;; The compiler's own fields — `__cached_class__0`, `const__3` — are
+       ;; static and carry no reading; a scan alternative built from one would
+       ;; be noise with a word boundary on it.
+       (remove #(str/starts-with? % "__"))
+       distinct
+       sort
+       vec))
+
+(defn- escape-hatch-spellings
+  "Every SPELLING that reaches an untagged number out of the measured
+  namespace, derived from three sources and never typed out:
+
+  - each laundering or untagged-clock intern, as `measured/<name>`;
+  - each protocol method, as BOTH `.<name>` and `.<munged-name>` — the JVM
+    munges `-launder` to `_launder` and compiles it to an ordinary Java
+    interface method, so `(._launder r)` is the sanctioned door with no
+    namespace token in it at all (round-five review finding 1);
+  - each declared field of the opaque types, bare and as `.-<name>`, because
+    babashka's interop does not enforce a deftype field's privacy."
+  []
+  (vec
+   (sort
+    (distinct
+     (concat (map #(str "measured/" %) (laundering-interns))
+             (mapcat (fn [m] [(str "." m) (str "." (munge m))])
+                     (protocol-method-names))
+             (mapcat (fn [f] [f (str ".-" f) (str "." f)])
+                     (opaque-type-field-names)))))))
+
+(def derived-escape-hatch-spellings
+  "The derivation's output, held so a witness can assert what it produced."
+  (escape-hatch-spellings))
+
+(defn- escape-hatch-alternative
+  "One spelling as a regex alternative.
+
+  Quoted literally, with a lookahead that refuses a longer identifier, so
+  `measured/value` does not swallow a hypothetical `measured/value-of` and each
+  alternative names exactly the door it found."
+  [spelling]
+  (str (java.util.regex.Pattern/quote spelling) "(?![-\\w])"))
 
 (def ^:private escape-hatch-pattern
   "Every expression that hands back an UNTAGGED number from the measured
-   namespace: the raw clock reads, `value`, which strips a reading's tag, and
-   the two ways to reach past `value` into the opaque type — the protocol
-   method it is built on (`measured/-launder`) and the private field that
-   method reads (`launderable`, which babashka's interop does not enforce as
-   private even though the JVM does).
+   namespace, DERIVED from the namespace rather than listed.
 
-   The pattern is the type's whole surface, deliberately. A door the scanner
-   does not know is the exact defect the round-three review walked through."
-  #"measured/raw-nanos|measured/raw-ms|measured/value|measured/-launder|launderable")
+   The round-five review's blocking finding 1 (2026-09-04 §1) killed the list:
+   every alternative of it was anchored on the literal text `measured/`, and a
+   protocol method is a munged Java interface method, so `(._launder r)` walked
+   through the pattern, through the require rule, and through the public-var
+   probe — all nineteen tests green with a clock number in the parity hash.
+
+   The union with `escape-hatch-spellings-the-ratchet-must-carry` is a FLOOR,
+   not a list: every entry of it is asserted below to be produced by the
+   derivation in the runtime that can see it, and the floor exists only so the
+   scan is byte-identical under babashka, where a deftype's declared fields are
+   not reflectable at all."
+  (re-pattern
+   (str/join "|" (map escape-hatch-alternative
+                      (sort (distinct (concat derived-escape-hatch-spellings
+                                              (keys escape-hatch-spellings-the-ratchet-must-carry))))))))
 
 ;; ============================================================
 ;; 1. No raw clock read outside `clj-surgeon.measured`
@@ -445,6 +649,43 @@
                "escape-hatch-pattern matches, so their call sites cost nothing: "
                (pr-str (mapv (juxt identity escape-hatch-spellings-the-ratchet-must-carry)
                              missing)))))))
+
+;; @spec MCP-OP-TIME-006
+(deftest the-escape-hatch-pattern-is-derived-from-the-namespace-not-from-a-list
+  (testing "the floor is evidence the derivation produced, not a list of names"
+    (let [derived (set derived-escape-hatch-spellings)
+          fields (opaque-type-field-names)
+          field-spellings (set (mapcat (fn [f] [f (str ".-" f) (str "." f)]) fields))
+          ;; Under babashka a deftype has no declared fields to reflect on, so
+          ;; the field spellings are a floor there and derived evidence here.
+          expected (cond->> (keys escape-hatch-spellings-the-ratchet-must-carry)
+                     (empty? fields) (remove #(str/includes? % "launderable")))
+          missing (vec (sort (remove derived expected)))]
+      (is (= [] missing)
+          (str "the derivation stopped producing spellings the ratchet carries, "
+               "so the pattern is running on its floor alone: " (pr-str missing)))
+      (is (contains? derived "._launder")
+          (str "the MUNGED protocol-method spelling is not derived, which is "
+               "round-five finding 1 exactly: " (pr-str derived)))
+      (is (seq (protocol-method-names))
+          "no protocol method was derived, so the interop route is unwatched")
+      (is (= [] (vec (sort (remove derived field-spellings))))
+          (str "a field spelling was derived in one form and not another: "
+               (pr-str (sort field-spellings))))
+      ;; Every method of every clj-surgeon interface the opaque type actually
+      ;; implements must be in the derived set. On the JVM that is the compiled
+      ;; `Launderable`; under sci there is no such interface and this is
+      ;; vacuous, which is why `:sigs` is the derivation's source of truth.
+      (let [iface-methods (->> [(measured/reading 1.0) (measured/start)]
+                               (mapcat (fn [x] (try (seq (.getInterfaces (class x)))
+                                                    (catch Throwable _ nil))))
+                               (filter #(str/starts-with? (.getName ^Class %) "clj_surgeon"))
+                               (mapcat (fn [^Class c] (map #(.getName ^java.lang.reflect.Method %)
+                                                           (.getMethods c))))
+                               distinct sort vec)]
+        (is (= [] (vec (remove #(contains? derived (str "." %)) iface-methods)))
+            (str "the opaque type implements a clj-surgeon interface method the "
+                 "derivation does not spell: " (pr-str iface-methods)))))))
 
 ;; @spec MCP-OP-TIME-006
 (deftest the-escape-hatch-scanner-catches-every-route-planted-in-a-receipt
@@ -698,84 +939,6 @@
 ;; threat model here — record it, do not chase it." A JVM without a security
 ;; manager cannot prevent reflection, so this is a property of the platform,
 ;; not a gap in the ratchet.
-
-(def ^:private laundering-sentinel
-  "A number no clock produces and no fixture carries, so finding it outside a
-   `:measured` block is proof a public verb handed a reading's number back."
-  987654.321)
-
-(defn- sentinel-outside-a-measured-block?
-  "Does `laundering-sentinel` appear in `x` anywhere a caller could read it as
-   an ordinary number — that is, anywhere except under `measured-key`?
-
-  Inside the block the number is the publication itself: `measured` and
-  `attach` BUILD that block and must be allowed to."
-  [x]
-  (letfn [(walk [node]
-            (cond
-              (= laundering-sentinel node) true
-              (map? node) (boolean (some (fn [[k v]]
-                                           (or (walk k)
-                                               (and (not= k measured/measured-key)
-                                                    (walk v))))
-                                         node))
-              (or (vector? node) (seq? node) (set? node))
-              (boolean (some walk node))
-              :else false))]
-    (walk x)))
-
-(defn- reading-arguments
-  "The argument pool for the READING probe: the sentinel as a TAGGED reading,
-   in the placements a caller has — bare, under a key, inside a vector — plus
-   the key those maps use, so a two-argument reader can be handed both halves.
-
-  Nothing in this pool carries the sentinel as a bare number, so the sentinel
-  coming BACK outside a measured block means the var produced it."
-  []
-  [(measured/reading laundering-sentinel)
-   {:probe (measured/reading laundering-sentinel)}
-   [(measured/reading laundering-sentinel)]
-   :probe])
-
-(defn- block-arguments
-  "The argument pool for the BLOCK probe: an already-published measured block,
-   whose contents are bare numbers by construction, and its key."
-  []
-  [(measured/measured {:probe (measured/reading laundering-sentinel)})
-   :probe])
-
-(defn- argument-combinations
-  [pool n]
-  (reduce (fn [acc _] (for [args acc a pool] (conj args a)))
-          [[]]
-          (range n)))
-
-(defn- probed-arities
-  "Every fixed arity of `v` this probe can call. Variadic tails are dropped:
-   the fixed prefix is probed by the arity that names it.
-
-  A callable var with no `:arglists` — a protocol method under some runtimes, a
-  keyword, a set — is probed at arity 1 and 2, the arities such a value has."
-  [v]
-  (let [declared (->> (:arglists (meta v))
-                      (map #(count (take-while (complement #{'&}) %)))
-                      distinct
-                      sort
-                      vec)]
-    (if (seq declared) declared [1 2])))
-
-(defn- yields-the-sentinel?
-  "Does calling `v` over `pool` hand the sentinel back outside a measured
-   block?"
-  [v pool]
-  (boolean
-    (some (fn [n]
-            (some (fn [args]
-                    (try
-                      (sentinel-outside-a-measured-block? (apply @v args))
-                      (catch Throwable _ false)))
-                  (argument-combinations pool n)))
-          (probed-arities v))))
 
 (def sanctioned-laundering-vars
   "The public vars of `clj-surgeon.measured` that MAY turn a TAGGED READING
