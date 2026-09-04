@@ -850,6 +850,38 @@
     :census-resource-exhausted})
 
 ;; @spec MCP-OP-CENSUS-014
+(def launcher-refusal-types
+  "Every typed refusal the CLI LAUNCHER prints before any op is dispatched.
+
+   Sol's round-eighteen item 1, blocking. `cli-refusal-types` above declares
+   what the op can return once `parse-args` has built an opts map; these two
+   are raised BY `parse-args`, so no op exists yet and neither the op's last
+   step nor the dispatch shape exit ever sees them. Round eighteen read that
+   as an exemption — the names \"belong to no op\" — and the reviewer's ruling
+   is that it is not one:
+
+     \"'Belongs to no op' is not a valid bound exemption. It can explain why
+      these names do not belong in `cli-refusal-types`, but it cannot exempt
+      the public CLI entrance from the global CENSUS-014 promise that no
+      refusal field is unbounded.\"
+
+   Measured at 3b7904a through the real launcher: a repeated 10,001-character
+   `:doors` printed 20,228 bytes with a 10,001-character run and no truncation
+   marker; an unparseable numeric token printed 10,064.
+
+   So they are DECLARED, here, beside the other two sets and for the same
+   reason: a refusal nobody wrote down is a refusal nobody can drive, and the
+   bound that now fires at `-main`'s exit is only total because a witness
+   enumerates this set and drives every name in it through the real launcher.
+
+   A set of its own rather than a widening of `cli-refusal-types`, because the
+   CLI enumeration witness asserts of every name there that it names the
+   workspace the caller named — and a refusal raised before dispatch has no
+   request, no workspace and no anchor to name. Two different promises."
+  #{:duplicate-argument
+    :invalid-arguments})
+
+;; @spec MCP-OP-CENSUS-014
 (def mcp-refusal-types
   "Every typed refusal the `relation_census` MCP tool can return once its
    request has passed the ordered shape pass.
