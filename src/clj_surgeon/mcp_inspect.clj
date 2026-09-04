@@ -1087,62 +1087,258 @@
        (when (not= 1 count)
          (if (= "match" singular) "es" "s"))))
 
-(defn- compact-json
-  [value limit]
-  (let [rendered (json/generate-string (json-data value))]
-    (when (<= (count rendered) limit) rendered)))
+;; @spec MCP-OP-STUDY-041
+(def max-evidence-characters
+  "How many characters of ROW EVIDENCE one `inspect_clojure` text block
+  renders when nothing narrower is imposed.
 
-(defn- concise-result-line
+  The text block is not a summary of the receipt; it is the only copy of the
+  receipt a text-only client ever sees. It is bounded because it travels
+  inside a public MCP result whose complete size is bounded (MCP-OP-STUDY-040)
+  — never because rows are optional."
+  8192)
+
+;; @spec MCP-OP-STUDY-041
+(def ^:private min-evidence-characters
+  "The floor one result keeps when a batch divides the allowance."
+  512)
+
+;; @spec MCP-OP-STUDY-041
+(def ^:private max-continuation-characters
+  "How large a `next_call` may be before the text names where it lives
+  instead of spelling it. A continuation too long to retype is not a
+  continuation, and a truncated one is worse than none."
+  2048)
+
+(defn- compact-json
+  [value]
+  (json/generate-string (json-data value)))
+
+(defn- dependency-row
+  [{:keys [name type line depends_on]}]
+  (str name " " type "@" line
+       (if (seq depends_on)
+         (str " → " (str/join ", " depends_on))
+         " → (none)")))
+
+(defn- dep-tree-rows
+  "One row per node of an `ls-deps` tree, depth-first in receipt order."
+  [node depth]
+  (let [indent (apply str (repeat depth "  "))]
+    (if (:circular? node)
+      [(str indent (:name node) " (circular)")]
+      (into [(str indent (:name node) " " (:type node) "@" (:line node)
+                  (when (:leaf? node) " (leaf)"))]
+            (mapcat #(dep-tree-rows % (inc depth)))
+            (:deps node)))))
+
+;; @spec MCP-OP-STUDY-041
+(defn result-evidence
+  "The evidence one result's receipt carries, in RECEIPT ORDER.
+
+  Each entry is `{:row <one line> :body <verbatim source or nil>}`. This is
+  the single place a mode says what its rows are: the text renderer prints
+  these and nothing else, so the rendered rows and the receipt rows cannot
+  disagree by construction, and a witness can compare the two directly.
+
+  Field evidence (O2 re-review, 2026-09-03): every mode below rendered a row
+  COUNT — `request-1: deps · 27 of 27 rows` — while the rows sat in
+  `structuredContent`. A text-only client was handed the shape of an answer
+  and none of it, which is the same defect MCP-OP-STUDY-036 closed on
+  `ls-tree` alone."
   [result]
   (case (:operation result)
     "forms"
-    (when (seq (:forms result))
-      (str "  " (:id result) ": "
-           (str/join ", "
-                     (map #(str (:name %) "@" (:line %) "-" (:end_line %))
-                          (:forms result)))
-           " · " (:source_character_count result) " source characters"))
+    (mapv (fn [form]
+            {:row (str (:name form) "@" (:line form) "-" (:end_line form)
+                       " " (:form_type form))
+             :body (:source form)})
+          (:forms result))
 
     "outline"
-    (when-let [outline (:outline result)]
-      (let [forms (:forms outline)]
-        (str "  " (:id result) ": " (:lines outline) " lines · "
-             (:form_count outline) " forms · first " (:name (first forms))
-             " · last " (:name (last forms))
-             (when (some #(contains? % :string_symbols) forms)
-               (str " · "
-                    (plural (reduce + 0 (map #(count (:string_symbols %)) forms))
-                            "string symbol"))))))
+    (mapv (fn [form]
+            {:row (str (:line form) "-" (:end_line form) " "
+                       (:type form) " " (:name form)
+                       (when (:args form) (str " " (:args form)))
+                       (when-let [symbols (:string_symbols form)]
+                         (when (seq symbols)
+                           (str " · string symbols "
+                                (str/join ", " symbols)))))})
+          (get-in result [:outline :forms]))
 
     "match"
-    (when (:id result)
-      (let [matches (:matches result)
-            compact (compact-json
-                      (mapv #(select-keys % [:inside :source]) matches) 1024)]
-        (when compact
-          (str "  " (:id result) ": "
-               (plural (:match_count result) "match") " · " compact))))
+    (mapv (fn [match]
+            {:row (str (or (:inside match) "(top level)")
+                       "@" (:line match) "-" (:end_line match))
+             :body (:source match)})
+          (:matches result))
 
     "xray"
-    (when (contains? result :value)
-      (when-let [compact (compact-json (:value result) 1024)]
-        (str "  " (:id result) ": value " compact)))
+    (if (contains? result :value)
+      [{:row (str "value " (compact-json (:value result)))}]
+      [])
+
+    "deps"
+    (mapv #(hash-map :row (dependency-row %)) (:deps result))
+
+    "topo"
+    (let [topo (:topo result)]
+      (into (into []
+                  (map-indexed (fn [index name]
+                                 {:row (str "sorted " (inc index) ". " name)}))
+                  (:sorted topo))
+            (map (fn [name] {:row (str "cycle " name)}))
+            (:cycles topo)))
+
+    "ls-deps"
+    (mapv #(hash-map :row %) (dep-tree-rows (:dep_tree result) 0))
+
+    "ls-extract"
+    (mapv #(hash-map :row (dependency-row %))
+          (get-in result [:closure :forms]))
+
+    []))
+
+;; @spec MCP-OP-STUDY-041
+(defn result-rows
+  "The rows one result's receipt carries, in receipt order."
+  [result]
+  (mapv :row (result-evidence result)))
+
+(defn- result-headline
+  [result]
+  (case (:operation result)
+    "forms"
+    (str (plural (count (:forms result)) "form") " · "
+         (:source_character_count result) " source characters read")
+
+    "outline"
+    (let [outline (:outline result)
+          forms (:forms outline)
+          symbols (reduce + 0 (map #(count (:string_symbols %)) forms))]
+      (str (:lines outline) " lines · "
+           (plural (:form_count outline) "form")
+           (when (some #(contains? % :string_symbols) forms)
+             (str " · " (plural symbols "string symbol")))))
+
+    "match"
+    (str (plural (:match_count result) "match")
+         (when (:inside result) (str " inside " (:inside result))))
+
+    "xray" "xray"
 
     ("deps" "topo" "ls-deps" "ls-extract")
-    (str "  " (:id result) ": " (:operation result) " · "
-         (:returned result) " of "
+    (str (:operation result) " · " (:returned result) " of "
          (or (:form_count result) (:returned result)) " rows"
          (when (:truncated result)
            (str " · truncated, " (:omitted result) " omitted")))
 
-    nil))
+    (:operation result)))
 
-(defn concise-summary
-  "Render the ordinary source-free MCP text companion to structuredContent."
+;; @spec MCP-OP-STUDY-041
+(defn- continuation-line
+  "The `next_call` spelled where a text-only client can read it."
   [result]
-  (let [forms (reduce + 0 (map #(or (:form_count %) 0) (:results result)))
-        matches (reduce + 0 (map #(or (:match_count %) 0) (:results result)))
-        evidence-lines (keep concise-result-line (:results result))
+  (when-let [call (:next_call result)]
+    (let [rendered (compact-json (:arguments call))]
+      (if (<= (count rendered) max-continuation-characters)
+        (str "    → next call: " (:tool call) " " rendered)
+        (str "    → next call: " (:tool call)
+             " · " (count rendered) " characters · see structuredContent"
+             ".results[" (:id result) "].next_call")))))
+
+;; @spec MCP-OP-STUDY-041
+;; @spec MCP-OP-STUDY-040
+(defn- render-evidence
+  "Render one result's rows into `allowance` characters of text.
+
+  Rows are dropped WHOLE and only from the tail, and a dropped tail is always
+  declared. Nothing here may drop evidence silently: a caller told the read is
+  terminal and handed none of the answer is worse off than one told it was
+  truncated."
+  [result allowance]
+  (let [items (result-evidence result)
+        total (count items)]
+    (loop [remaining items lines [] shown 0 used 0]
+      (if-let [{:keys [row body]} (first remaining)]
+        (let [row-line (str "    · " row)
+              body-lines (when (seq body)
+                           (mapv #(str "      " %) (str/split-lines body)))
+              unit (+ (count row-line) 1
+                      (reduce + 0 (map #(inc (count %)) body-lines)))]
+          (cond
+            ;; Always render the first row: a result whose single row is
+            ;; larger than the whole allowance still has to say its name.
+            (zero? shown)
+            (let [with-body? (<= unit allowance)]
+              (recur (next remaining)
+                     (into [row-line] (when with-body? body-lines))
+                     1
+                     (if with-body? unit (inc (count row-line)))))
+
+            (> (+ used unit) allowance)
+            {:lines lines :shown shown :total total :abridged true}
+
+            :else
+            (recur (next remaining)
+                   (into lines (cons row-line body-lines))
+                   (inc shown)
+                   (+ used unit))))
+        {:lines lines :shown shown :total total
+         :abridged (< shown total)}))))
+
+;; @spec MCP-OP-STUDY-041
+(defn- concise-result-block
+  "The text one result contributes: its headline, its rows, and — whenever the
+  rows do not all fit or the receipt itself is truncated — what to send next."
+  [result allowance]
+  (let [rendered (render-evidence result allowance)
+        headline (str "  " (:id result) ": " (result-headline result))]
+    {:abridged (:abridged rendered)
+     :text
+     (str/join
+       "\n"
+       (remove nil?
+               (concat
+                 [headline]
+                 (:lines rendered)
+                 [(when (:abridged rendered)
+                    (format (str "    ! text abridged · %d of %d row%s "
+                                 "rendered · the complete receipt is in "
+                                 "structuredContent.results[%s]")
+                            (:shown rendered) (:total rendered)
+                            (if (= 1 (:total rendered)) "" "s")
+                            (:id result)))
+                  (when (and (:abridged rendered) (not (:truncated result)))
+                    (str "    → narrow the request so the whole answer fits "
+                         "the text block, or read structuredContent"))
+                  (when (:truncated result)
+                    (continuation-line result))
+                  (when (and (:truncated result) (:remedy result))
+                    (str "    → " (:remedy result)))])))}))
+
+;; @spec MCP-OP-STUDY-041
+(defn concise-summary
+  "Render the MCP text companion — every row the receipt carries, bounded.
+
+  Bounded is not the same as elided. Above the allowance the block says how
+  many of how many rows it rendered and what to send next; it never claims
+  terminal evidence over evidence it dropped."
+  [result]
+  (let [results (:results result)
+        forms (reduce + 0 (map #(or (:form_count %) 0) results))
+        matches (reduce + 0 (map #(or (:match_count %) 0) results))
+        allowance (max min-evidence-characters
+                       (quot (or (:text_evidence_limit result)
+                                 max-evidence-characters)
+                             (max 1 (count results))))
+        ;; A result with no rows contributes no block: `match` with zero
+        ;; matches has nothing to render, and a headline over nothing is the
+        ;; count-shaped noise this change exists to remove.
+        blocks (into [] (keep #(when (seq (result-evidence %))
+                                 (concise-result-block % allowance)))
+                     results)
+        abridged? (boolean (some :abridged blocks))
         facts (cond-> [(plural (:request_count result) "request")
                        (plural (:file_count result) "file")]
                 (pos? forms) (conj (plural forms "form"))
@@ -1153,12 +1349,22 @@
          "✓ all requests resolved\n"
          "✓ ordered snapshot\n"
          "✓ hashes attached\n"
-         (if (:truncated result)
+         (cond
+           (:truncated result)
            (str "! bounded receipt · read_complete=false · next action "
                 (:next_action result) "\n")
+
+           ;; @spec MCP-OP-STUDY-041
+           ;; Never "terminal evidence · next action none" over evidence the
+           ;; text dropped: the receipt is complete, this rendering is not.
+           abridged?
+           (str "! text abridged · read_complete=true · next action "
+                "read_structured_content_or_narrow_request\n")
+
+           :else
            "✓ terminal evidence · read_complete=true · next action none\n")
-         (when (seq evidence-lines)
-           (str "\n" (str/join "\n" evidence-lines) "\n"))
+         (when (seq blocks)
+           (str "\n" (str/join "\n" (map :text blocks)) "\n"))
          "  " (format "%,d" (long (:source_character_count result)))
          " source characters · "
          (mcp-operation/format-elapsed-ms elapsed))))

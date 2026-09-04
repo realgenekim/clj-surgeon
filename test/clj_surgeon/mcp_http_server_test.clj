@@ -293,8 +293,10 @@
         (is (= false (:isError result)))
         (is (str/starts-with? (get-in result [:content 0 :text])
                               "inspect_clojure\n"))
-        (is (not (str/includes? (get-in result [:content 0 :text])
-                                "(def answer")))
+        ;; @spec MCP-OP-STUDY-041
+        ;; O2 round 2: the wire text carries the rows the receipt carries.
+        (is (str/includes? (get-in result [:content 0 :text])
+                           "(def answer 42)"))
         (is (= "(def answer 42)"
                (get-in result [:structuredContent :results 0 :forms 0 :source])))
         (is (= true (get-in result [:structuredContent :read_complete]))))

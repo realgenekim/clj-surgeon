@@ -299,8 +299,14 @@
       (is (str/includes?
             (first (:content (first @calls)))
             (format "%.2f ms" (get-in @calls [0 :structured :elapsed_ms]))))
-      (is (not (str/includes? (first (:content (first @calls)))
-                              "(def answer")))
+      ;; @spec MCP-OP-STUDY-041
+      ;; Reversed by O2 round 2: the text block is not a source-free companion
+      ;; to the receipt, it is the only copy of the receipt a text-only client
+      ;; sees. `forms` returns source by default, so the text carries it —
+      ;; bounded, and declared when it does not all fit.
+      (is (str/includes? (first (:content (first @calls)))
+                         "(def answer 42)")
+          "the source the receipt returns travels in the text a client renders")
       (is (= "(def answer 42)"
              (get-in @calls [0 :structured :results 0 :forms 0 :source])))
       (finally
