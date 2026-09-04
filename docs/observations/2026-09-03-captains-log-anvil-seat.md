@@ -1408,3 +1408,4 @@ Round 20 found read-string with reader-eval in parse-val and fixed parse-val; th
 ## 08:21Z — N2 gates verified: JS_EXIT=0 CLJ_EXIT=0  — six arms, all verified green.
 ## 08:23Z — arms N3 + T1c (third replicate pair) launched 08:22Z; T2 (MCP-ATTACHED — the tool arm; the agent calls feature_thread itself through a Surgeon server from the branch at 9139b2c5 on :8165, conventions file installed in the clone) launched 08:22Z; its first recorded call IS mcp__clj_surgeon__feature_thread. /var/tmp/forge swept again (3233 → 2935).
 ## 08:24Z — MEM-003 r5: Sol's filter refused (18th tonight; third consecutive on this lane); Opus fallback.
+## 08:33Z — tmp-leak r2: Sol's filter refused (19th tonight); Opus fallback. Replicates N3 (33 raw) and T1c (22 raw) finished; gates re-running; T2 (MCP-attached) at 16 calls, still running.
