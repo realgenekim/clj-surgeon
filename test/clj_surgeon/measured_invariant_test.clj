@@ -39,11 +39,21 @@
 ;; ============================================================
 
 (defn- src-files
-  []
-  (->> (file-seq (io/file "src"))
-       (filter #(.isFile ^java.io.File %))
-       (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
-       (sort-by #(.getPath ^java.io.File %))))
+  ([] (src-files "src"))
+  ([root]
+   (->> (file-seq (io/file root))
+        (filter #(.isFile ^java.io.File %))
+        (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
+        (sort-by #(.getPath ^java.io.File %)))))
+
+(defn- site-path
+  "`file` named as it would be named under `src/`, whatever root it was read
+   from — so a scan of a scratch copy is comparable with a scan of the tree."
+  [^java.io.File file root]
+  (let [path (.getPath file)]
+    (if (str/starts-with? path (str root "/"))
+      (str "src/" (subs path (inc (count root))))
+      path)))
 
 (defn- sites
   "Every line of `file` matching `pattern`, named by the top-level form it sits
@@ -53,91 +63,234 @@
 
    `;;` comments are cut before matching: a comment EXPLAINING why a call was
    removed must not read as the call."
-  [^java.io.File file pattern]
-  (:hits
-   (reduce (fn [{:keys [form hits]} line]
-             (let [code (or (first (str/split line #";;")) "")
-                   form' (if (str/starts-with? line "(def")
-                           (second (str/split (str/trim line) #"[\s\[]+"))
-                           form)]
-               {:form form'
-                :hits (cond-> hits
-                        (re-find pattern code) (conj [(.getPath file) form']))}))
-           {:form nil :hits []}
-           (str/split-lines (slurp file)))))
+  ([^java.io.File file pattern] (sites file pattern "src"))
+  ([^java.io.File file pattern root]
+   (:hits
+    (reduce (fn [{:keys [form hits]} line]
+              (let [code (or (first (str/split line #";;")) "")
+                    form' (if (str/starts-with? line "(def")
+                            (second (str/split (str/trim line) #"[\s\[]+"))
+                            form)]
+                {:form form'
+                 :hits (cond-> hits
+                         (re-find pattern code)
+                         (conj [(site-path file root) form']))}))
+            {:form nil :hits []}
+            (str/split-lines (slurp file)))))) 
+
+(def ^:private measured-namespace-file
+  "The ONE file allowed to read a clock raw."
+  "src/clj_surgeon/measured.clj")
 
 (defn- scan
-  "`{[path form] reads}` over all of `src/`."
-  [pattern]
-  (frequencies (mapcat #(sites % pattern) (src-files))))
+  "`{[path form] hits}` over every `.clj` under `root` EXCEPT the measured
+   namespace itself, which is where the raw reads are allowed to live."
+  ([pattern] (scan pattern "src"))
+  ([pattern root]
+   (frequencies
+    (mapcat #(sites % pattern root)
+            (remove #(= measured-namespace-file (site-path % root))
+                    (src-files root))))))
 
 (def ^:private clock-pattern
-  #"System/nanoTime|System/currentTimeMillis")
+  "Every way a JVM program reads a clock."
+  #"System/nanoTime|System/currentTimeMillis|Instant/now|\.getTime")
+
+(def ^:private escape-hatch-pattern
+  "The verbs that hand back an UNTAGGED number: the raw clock reads inside
+   `clj-surgeon.measured`, and `value`, which strips a reading's tag."
+  #"measured/raw-nanos|measured/raw-ms|measured/value")
 
 ;; ============================================================
-;; 1. The clock-site inventory
+;; 1. No raw clock read outside `clj-surgeon.measured`
 ;; ============================================================
 
-(def clock-site-inventory
-  "Every clock read in `src/`, classified, with the count of reads in that form.
+(def clock-allow-list
+  "Every form in `src/` outside `clj-surgeon.measured` that may read a clock
+  RAW, with the count of reads in that form and why it is allowed.
 
-  `:receipt` — the value this clock produces is PUBLISHED, so it must reach the
-  caller inside a `:measured` block and never beside one.
+  The first repair of this invariant inventoried clock reads and classified
+  them `:receipt` or `:control`, comparing only READ COUNTS per form. Sol's
+  round-two review walked straight through it (2026-09-04 §1): bind one
+  existing read to a local, publish it under the declared name AND an
+  undeclared one, and the count is unchanged, the new name is in nobody's
+  vocabulary, and the undeclared field sails into the parity hash with every
+  witness green.
 
-  `:control` — the value never enters a published receipt: a lease deadline, an
-  expiry sweep, a retention cutoff, a transaction id, a poll loop, or the
-  battery harness's own row. Naming these is half the point. An inventory that
-  listed only the interesting sites would go stale silently; this one fails the
-  moment `src/` grows a clock read nobody has thought about.
+  So the rule is no longer 'a clock read is classified'. It is: **a clock read
+  whose value can be PUBLISHED does not happen outside `clj-surgeon.measured`.**
+  Receipt code calls `measured/start` and `measured/elapsed-ms`, which return a
+  TAGGED reading, and the publication boundary relocates every reading it
+  finds under any key at all. This list is therefore `:control` ONLY — a lease
+  deadline, an expiry sweep, a retention cutoff, a transaction id, a poll loop,
+  a file timestamp, the battery harness's own row. A `:receipt` entry here
+  would be a contradiction and the test below refuses one.
 
-  Adding a clock site means adding a line here and saying which channel it is
-  on. That is the whole cost, and it is the cost on purpose."
-  {["src/clj_surgeon/ls_tree_snapshot.clj" "prune!"]                   {:reads 1 :channel :control}
-   ["src/clj_surgeon/ls_tree_snapshot.clj" "touch!"]                   {:reads 1 :channel :control}
-   ["src/clj_surgeon/ls_tree_snapshot.clj" "write-snapshot!"]          {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_change_buffer.clj" "now-ms"]                  {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_change_buffer.clj" "run-process!"]            {:reads 2 :channel :receipt}
-   ["src/clj_surgeon/mcp_cold_verify.clj" "now-ms"]                    {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_cold_verify.clj" "run-job!"]                  {:reads 2 :channel :receipt}
-   ["src/clj_surgeon/mcp_combinable_transaction.clj" "new-registry"]   {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_hot_verify.clj" "verify!"]                    {:reads 3 :channel :receipt}
-   ["src/clj_surgeon/mcp_inspect_tool.clj" "elapsed-ms"]               {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/mcp_inspect_tool.clj" "execute-inspect-in-context!"] {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/mcp_operation.clj" "invoke!"]                     {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/mcp_prepared_confirmation.clj" "new-registry"]    {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_process.clj" "call-with-analyzer-contract-mission"] {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_process.clj" "claim-analyzer-mission-launch!"] {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_process.clj" "record-analyzer-mission-exit!"] {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_process.clj" "run-bounded!"]                  {:reads 2 :channel :receipt}
-   ["src/clj_surgeon/mcp_telemetry.clj" "prune!"]                      {:reads 1 :channel :control}
-   ["src/clj_surgeon/mcp_tool.clj" "elapsed-ms"]                       {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/mcp_tool.clj" "execute-request-in-context!"]      {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/mcp_tool.clj" "timed"]                            {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/memory_battery_runner.clj" "measure-once"]        {:reads 2 :channel :control}
-   ["src/clj_surgeon/parse_admission.clj" "refusal"]                   {:reads 2 :channel :receipt}
-   ["src/clj_surgeon/recovery.clj" "elapsed-ms"]                       {:reads 1 :channel :receipt}
-   ["src/clj_surgeon/recovery.clj" "recover!"]                         {:reads 3 :channel :receipt}
-   ["src/clj_surgeon/txn_journal.clj" "legacy-lock-dead?"]             {:reads 1 :channel :control}
-   ["src/clj_surgeon/txn_journal.clj" "mark-break-linked!"]            {:reads 1 :channel :control}
-   ["src/clj_surgeon/txn_journal.clj" "new-txid"]                      {:reads 1 :channel :control}
-   ["src/clj_surgeon/txn_journal.clj" "prune-broken-locks!"]           {:reads 1 :channel :control}
-   ["src/clj_surgeon/txn_journal.clj" "publish-one!"]                  {:reads 2 :channel :receipt}
-   ["src/clj_surgeon/txn_journal.clj" "retained-transactions"]         {:reads 1 :channel :control}
-   ["src/clj_surgeon/txn_journal.clj" "stamp-broken-at!"]              {:reads 1 :channel :control}
-   ["src/clj_surgeon/txn_journal.clj" "stamp-tombstone!"]              {:reads 1 :channel :control}
-   ["src/clj_surgeon/workspace_onboarding.clj" "await-cclsp-workspace!"] {:reads 2 :channel :control}})
+  Adding a control clock read means adding a line here and saying why the value
+  is never published. That is the whole cost, and it is the cost on purpose."
+  {["src/clj_surgeon/ls_tree_snapshot.clj" "prune!"]
+   {:reads 1 :channel :control :why "snapshot expiry sweep"}
+   ["src/clj_surgeon/ls_tree_snapshot.clj" "touch!"]
+   {:reads 1 :channel :control :why "file mtime, not a receipt field"}
+   ["src/clj_surgeon/ls_tree_snapshot.clj" "write-snapshot!"]
+   {:reads 1 :channel :control :why "snapshot creation stamp on disk"}
+   ["src/clj_surgeon/mcp_change_buffer.clj" "now-ms"]
+   {:reads 1 :channel :control :why "buffer lease clock"}
+   ["src/clj_surgeon/mcp_cold_verify.clj" "now-ms"]
+   {:reads 1 :channel :control :why "job store lease clock"}
+   ["src/clj_surgeon/mcp_combinable_transaction.clj" "new-registry"]
+   {:reads 1 :channel :control :why "registry lease clock seam"}
+   ["src/clj_surgeon/mcp_prepared_confirmation.clj" "new-registry"]
+   {:reads 1 :channel :control :why "registry lease clock seam"}
+   ["src/clj_surgeon/mcp_process.clj" "call-with-analyzer-contract-mission"]
+   {:reads 1 :channel :control :why "mission lease expiry"}
+   ["src/clj_surgeon/mcp_process.clj" "claim-analyzer-mission-launch!"]
+   {:reads 1 :channel :control :why "mission lease claim"}
+   ["src/clj_surgeon/mcp_process.clj" "record-analyzer-mission-exit!"]
+   {:reads 1 :channel :control :why "mission lease exit stamp"}
+   ["src/clj_surgeon/mcp_telemetry.clj" "emit!"]
+   {:reads 1 :channel :control :why "telemetry row timestamp, never a public result"}
+   ["src/clj_surgeon/mcp_telemetry.clj" "prune!"]
+   {:reads 1 :channel :control :why "telemetry retention cutoff"}
+   ["src/clj_surgeon/memory_battery_runner.clj" "measure-once"]
+   {:reads 2 :channel :control :why "the battery harness's own wall row"}
+   ["src/clj_surgeon/memory_battery_runner.clj" "run-battery"]
+   {:reads 2 :channel :control :why "battery run start/finish stamps"}
+   ["src/clj_surgeon/memory_battery_runner.clj" "write-receipt!"]
+   {:reads 1 :channel :control :why "receipt filename stamp"}
+   ["src/clj_surgeon/txn_journal.clj" "begin!"]
+   {:reads 1 :channel :control :why "transaction started-at stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "finish!"]
+   {:reads 1 :channel :control :why "transaction finished-at stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "legacy-lock-dead?"]
+   {:reads 1 :channel :control :why "lock liveness cutoff"}
+   ["src/clj_surgeon/txn_journal.clj" "lock-broken-line"]
+   {:reads 1 :channel :control :why "broken-lock journal line stamp"}
+   ["src/clj_surgeon/txn_journal.clj" "mark-break-linked!"]
+   {:reads 1 :channel :control :why "break-link stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "new-txid"]
+   {:reads 1 :channel :control :why "transaction id"}
+   ["src/clj_surgeon/txn_journal.clj" "prune-broken-locks!"]
+   {:reads 1 :channel :control :why "broken-lock retention cutoff"}
+   ["src/clj_surgeon/txn_journal.clj" "recover!"]
+   {:reads 2 :channel :control :why "recovery stamps on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "release-receipt!"]
+   {:reads 1 :channel :control :why "lease release stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "retained-transactions"]
+   {:reads 1 :channel :control :why "retention cutoff"}
+   ["src/clj_surgeon/txn_journal.clj" "stamp-broken-at!"]
+   {:reads 1 :channel :control :why "broken-at stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "stamp-tombstone!"]
+   {:reads 1 :channel :control :why "tombstone stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "write-lease!"]
+   {:reads 1 :channel :control :why "lease acquired-at stamp on disk"}
+   ["src/clj_surgeon/txn_journal.clj" "write-lock!"]
+   {:reads 1 :channel :control :why "lock stamp on disk"}
+   ["src/clj_surgeon/workspace_onboarding.clj" "await-cclsp-workspace!"]
+   {:reads 2 :channel :control :why "readiness poll deadline"}
+   ["src/clj_surgeon/worktree_lifecycle_io.clj" "capture-inventory"]
+   {:reads 1 :channel :control :why "inventory captured-at stamp"}
+   ["src/clj_surgeon/worktree_lifecycle_io.clj" "issue-current?"]
+   {:reads 1 :channel :control :why "issue freshness cutoff"}})
 
-(deftest every-clock-read-in-src-is-classified
-  (testing "a clock site nobody classified fails here rather than shipping"
+(def escape-hatch-allow-list
+  "Every form in `src/` that calls a verb handing back an UNTAGGED number.
+
+  `measured/value` strips a reading's tag; `measured/raw-nanos` and
+  `measured/raw-ms` read the clock without one. Laundering is legitimate — a
+  sum, a comparison, a telemetry row, a clock seam a caller may inject — and it
+  must be a deliberate, greppable act rather than a side effect, so every site
+  is named here with the reason it needs a bare number."
+  {["src/clj_surgeon/mcp_operation.clj" "invoke!"]
+   {:calls 1 :why "the injectable request-clock seam: callers pass a plain-long clock"}
+   ["src/clj_surgeon/mcp_operation.clj" "finalize-result"]
+   {:calls 1 :why "the boundary validates finiteness before it attaches the reading"}
+   ["src/clj_surgeon/mcp_change_buffer.clj" "capture-verification-baseline!"]
+   {:calls 1 :why "sums the per-check clocks into one derived reading"}
+   ["src/clj_surgeon/mcp_change_buffer.clj" "run-verification!"]
+   {:calls 2 :why "sums hot and per-check clocks into one derived reading"}
+   ["src/clj_surgeon/mcp_tool.clj" "exact-terminal-response"]
+   {:calls 2 :why "compares the verification clock against zero before publication"}
+   ["src/clj_surgeon/mcp_tool.clj" "record-result!"]
+   {:calls 1 :why "telemetry row, never a public result"}
+   ["src/clj_surgeon/mcp_tool.clj" "execute-request-in-context!"]
+   {:calls 1 :why "telemetry row, never a public result"}
+   ["src/clj_surgeon/mcp_inspect_tool.clj" "execute-inspect-in-context!"]
+   {:calls 1 :why "telemetry row, never a public result"}
+   ["src/clj_surgeon/parse_admission.clj" "refusal"]
+   {:calls 1 :why "the scan meter accumulates bare nanos across many files"}
+   ["src/clj_surgeon/txn_journal.clj" "commit!"]
+   {:calls 1 :why "keeps the widest commit window across the published paths"}})
+
+;; @spec MCP-OP-TIME-005
+(deftest no-raw-clock-read-lives-outside-the-measured-namespace
+  (testing "a published clock reading cannot be CONSTRUCTED outside the partition"
     (let [scanned (scan clock-pattern)
-          declared (into {} (map (fn [[k v]] [k (:reads v)])) clock-site-inventory)]
+          declared (into {} (map (fn [[k v]] [k (:reads v)])) clock-allow-list)]
       (is (= (set (keys declared)) (set (keys scanned)))
-          (str "unclassified clock sites: "
+          (str "raw clock reads with no allow-list entry: "
                (pr-str (sort (remove (set (keys declared)) (keys scanned))))
-               " ; inventoried sites that no longer exist: "
+               " ; allow-listed sites that no longer exist: "
                (pr-str (sort (remove (set (keys scanned)) (keys declared))))))
       (is (= declared scanned)
-          "a form's clock-read count changed; re-read it and re-classify"))))
+          "a form's raw clock-read count changed; re-read it and re-justify")
+      (is (= [] (sort (keep (fn [[site {:keys [channel]}]]
+                              (when (not= :control channel) site))
+                            clock-allow-list)))
+          "a RECEIPT clock read may not be raw: it must return a tagged reading"))))
+
+;; @spec MCP-OP-TIME-005
+(deftest every-untagged-clock-verb-call-site-is-named
+  (testing "laundering a reading back to a bare number is deliberate"
+    (let [scanned (scan escape-hatch-pattern)
+          declared (into {} (map (fn [[k v]] [k (:calls v)])) escape-hatch-allow-list)]
+      (is (= (set (keys declared)) (set (keys scanned)))
+          (str "untagged-clock verbs with no allow-list entry: "
+               (pr-str (sort (remove (set (keys declared)) (keys scanned))))
+               " ; allow-listed sites that no longer exist: "
+               (pr-str (sort (remove (set (keys scanned)) (keys declared))))))
+      (is (= declared scanned)
+          "a form's untagged-clock call count changed; re-read it and re-justify"))))
+
+;; @spec MCP-OP-TIME-005
+(deftest the-measured-namespace-is-never-aliased-to-another-name
+  (testing "an alias the scanner does not know is a hole in the scanner"
+    (let [offenders (->> (src-files)
+                         (keep (fn [^java.io.File file]
+                                 (let [text (slurp file)]
+                                   (when-let [m (re-find #"clj-surgeon\.measured :as ([a-z-]+)"
+                                                         text)]
+                                     (when (not= "measured" (second m))
+                                       [(site-path file "src") (second m)])))))
+                         sort)]
+      (is (= [] offenders)
+          (str "clj-surgeon.measured aliased to something other than `measured`: "
+               (pr-str offenders))))))
+
+;; @spec MCP-OP-TIME-005
+(deftest the-clock-scanner-catches-a-planted-raw-read
+  (testing "the ratchet goes RED when the defect is reintroduced"
+    (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                             (str "measured-plant-" (System/nanoTime))))
+          victim (io/file root "clj_surgeon" "planted.clj")]
+      (.mkdirs (.getParentFile victim))
+      (spit victim
+            (str "(ns clj-surgeon.planted)\n\n"
+                 "(defn publish-an-undeclared-clock-field\n"
+                 "  [started]\n"
+                 "  (let [duration-ms (/ (double (- (System/nanoTime) started))\n"
+                 "                       1000000.0)]\n"
+                 "    {:ok false :verification_wall_ms duration-ms}))\n"))
+      (try
+        (let [planted (scan clock-pattern root)]
+          (is (= {["src/clj_surgeon/planted.clj" "publish-an-undeclared-clock-field"] 1}
+                 planted)
+              (str "the scanner did not see a planted raw clock read: "
+                   (pr-str planted))))
+        (finally
+          (.delete victim)
+          (.delete (.getParentFile victim))
+          (.delete (io/file root)))))))
 
 ;; ============================================================
 ;; 2. The publication boundary

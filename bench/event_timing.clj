@@ -311,7 +311,8 @@
               "{\"type\":\"item.completed\",\"item\":{\"id\":\"m\","
               "\"type\":\"mcp_tool_call\",\"status\":\"completed\","
               "\"server\":\"clj-surgeon\",\"tool\":\"apply_clojure_changes\","
-              "\"result\":{\"structured_content\":{\"elapsed_ms\":2500.0,"
+              "\"result\":{\"structured_content\":{\"measured\":"
+              "{\"elapsed_ms\":2500.0},"
               "\"source\":\"PRIVATE-RESULT\"}}}}\n"
               "{\"type\":\"turn.completed\"}")
         input (ByteArrayInputStream. (.getBytes raw StandardCharsets/UTF_8))
@@ -344,6 +345,29 @@
                  (get-in summary [:item-spans :complete 0
                                   :server-authoritative-elapsed-ms]))
               "server clock must remain distinct")
+      ;; The server clock moved into the `measured` partition (MCP-OP-TIME-005).
+      ;; A reader that still looks for a TOP-LEVEL `elapsed_ms` finds nothing
+      ;; and reports no server clock at all — a silent zero, which is the worst
+      ;; possible answer because it terminates investigation. The old shape is
+      ;; REFUSED, loudly, rather than read as absence.
+      (check! (throws?
+                #(server-elapsed-ms
+                   {:item {:id "m" :tool "inspect_clojure"
+                           :result {:structured_content {:elapsed_ms 12.5}}}}))
+              "a top-level elapsed_ms must be refused, never read as absent")
+      (check! (throws?
+                #(server-elapsed-ms
+                   {:item {:id "m" :tool "inspect_clojure"
+                           :result {:structuredContent {:elapsed_ms 12.5}}}}))
+              "a top-level elapsed_ms must be refused in camelCase too")
+      (check! (= 12.5
+                 (server-elapsed-ms
+                   {:item {:id "m" :tool "inspect_clojure"
+                           :result {:structuredContent
+                                    {:measured {:elapsed_ms 12.5}}}}}))
+              "measured.elapsed_ms is the server clock")
+      (check! (nil? (server-elapsed-ms {:item {:id "m"}}))
+              "an event with no MCP result reports no server clock")
       (check! (= [{:item-id "c" :item-type "command_execution"
                    :start-sequence 4}]
                  (get-in summary [:item-spans :incomplete]))
