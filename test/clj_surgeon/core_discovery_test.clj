@@ -220,7 +220,7 @@
             ;; and asserted separately, so everything else -- projects, files,
             ;; forms, and `bytes_scanned` -- is still compared byte for byte.
             ;;
-            ;; @spec MCP-OP-MEM-003 — the drop is the PRODUCT's own rule
+            ;; MCP-OP-MEM-003 (registered by bridge/streaming-ls-tree) — the drop is the PRODUCT's own rule
             ;; (`measured/hashed-channel`), not this witness's regex. While it
             ;; was a local mask, the same wall-clock field went on to break the
             ;; battery's parity line and MEM-003's byte-identity row, because

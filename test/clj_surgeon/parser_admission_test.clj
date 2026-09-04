@@ -665,7 +665,7 @@
           text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
                 projects root)
           resources (get-in (last edn) [:receipt :resources])
-          ;; @spec MCP-OP-MEM-003 — the wall-clock half of the block lives on
+          ;; MCP-OP-MEM-003 (registered by bridge/streaming-ls-tree) — the wall-clock half of the block lives on
           ;; the MEASURED channel, off every hash. Still unconditional, still
           ;; in the `:resources` block, just on the side of it that no
           ;; determinism row hashes. See `clj-surgeon.measured`.

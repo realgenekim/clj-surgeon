@@ -10,6 +10,19 @@ These IDs are stable and must not be reused if a requirement is deleted. Ids
 002-010 and 012-014 are reserved; 006, 007 and 012-014 belong to the
 streaming-kernel builder and are not registered here.
 
+**This leaf is the SOLE home of `MCP-OP-MEM-001` and `MCP-OP-MEM-011`.** One
+requirement gets one authority. The transaction-journal leaf
+([`../memory/memory-transaction-specs.md`](../memory/memory-transaction-specs.md))
+carries both ids as `[D]` DEFERRED rows: its kernel sources hold
+`@spec MCP-OP-MEM-001` and `@spec MCP-OP-MEM-011` markers — the streaming
+reader's request-lowerable receipt ceiling, and the accountant's attributable
+reserved peak the `:journal-scope-stream` arm measures — and a deferred row
+keeps those markers traceable without restating anything. It states no
+requirement and demands no witness; it only says where the statement lives.
+A reader who lands there is sent here, and a reader who lands here now knows
+that markers for these ids exist in sources this leaf does not own. Nothing
+else may register these two ids.
+
 Both requirements below are **active gaps**: no operation on this branch
 satisfies either one. Their witnesses are the battery and its millisecond
 verdict test, so removing the battery breaks the contract audit rather than
@@ -25,6 +38,11 @@ In the requirements below:
   separate from the process `-Xmx`.
 - **unbounded reference output** means the operation's result, hashed, from a
   run at a heap large enough that no admission limit or spill path can engage.
+- **hashed channel** means the result with every MEASURED block removed — the
+  deterministic result together with the deterministic resource facts. A field
+  a clock produced is published BESIDE it, under the well-known `:measured`
+  key, never inside it. `clj-surgeon.measured/hashed-channel` is the sole
+  definition and the battery's `hash-result` digests nothing else.
 - **UNMEASURED** is a distinct third outcome from pass and fail: a line whose
   inputs were not observed. It is never reported as a pass.
 
@@ -43,7 +61,7 @@ In the requirements below:
 - [ ] **MCP-OP-MEM-011**: While the memory battery runs every tree-scale
   operation at the configured maximum N under the configured work budget in one
   bounded JVM, clj-surgeon shall for every operation reproduce the unbounded
-  reference output exactly, complete without exhausting the heap, keep the
+  reference output's HASHED CHANNEL exactly, complete without exhausting the heap, keep the
   attributable reserved peak at or below 192 MiB, keep the largest 10,000-file
   heap retained WHILE THE
   RESULT IS STILL REFERENCED within 2.0 MiB of the largest such value at 1,000
@@ -91,6 +109,17 @@ MCP-OP-MEM-011:
 - "INCOMPLETE is just a FAIL, so give it exit 1." Then no caller can tell an
   operation that broke a line from a line nobody measured, and the two have
   opposite remedies.
+- "The result is the subject, so hash all of it." Then no operation that
+  reports its own cost can ever be green. `scan_ms` is a wall-clock reading
+  MCP-OP-MEM-005 requires the ls-tree receipt to publish unconditionally;
+  inside the digest it produced `nondeterministic:4` — four output hashes over
+  five reps of ONE operation on ONE unchanged corpus — and twelve
+  `reference-mismatch` FAIL lines on `cli-ls-tree` alone, differing in exactly
+  that field. The subject is the HASHED CHANNEL. Amended 2026-09-04.
+- "Then drop the measured fields from the result and the problem goes away."
+  That satisfies parity by making the meter dark, which is the defect MEM-005
+  exists to prevent. Both rows hold at once only because the result is
+  PARTITIONED: measured beside hashed, not instead of it.
 - "The bounded run produced a result, so output parity holds." Parity is against
   a cached unbounded reference hash; with no reference, parity is UNMEASURED.
 - "A reference-hashes file is present, so parity can be checked." Existence is
@@ -145,6 +174,11 @@ MCP-OP-MEM-011:
 
 - The battery measures this branch's operations as black boxes through their
   public entrances. It never reaches inside an operation, and it changes none.
+- Output parity is a claim about the HASHED CHANNEL only. Measured fields are
+  reported, never compared: two runs of one operation on one unchanged corpus
+  are expected to differ in them, and a battery that gated on them would fail
+  every green run. Anything a predicate can decide — counts, digests, bytes —
+  belongs inside the hashed channel and is compared exactly.
 - Output parity is claimed only against an unbounded reference attested to this
   run's arms, operation sources, generator, corpus digests and JVM. The commit
   sha is recorded for forensics but not compared: the source digest already

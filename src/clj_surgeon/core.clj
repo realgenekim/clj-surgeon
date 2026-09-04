@@ -572,7 +572,7 @@
         ;; existed; the EDN receipt carries it unconditionally, because that is
         ;; the surface a regression check reads.
         ;;
-        ;; @spec MCP-OP-MEM-003 — and the wall-clock half goes on its own
+        ;; MCP-OP-MEM-003 (registered by bridge/streaming-ls-tree) — and the wall-clock half goes on its own
         ;; LABELLED line. Text has no keys, so the hashed/measured partition has
         ;; to be visible in the bytes: `measured/strip-measured-lines` is the
         ;; text counterpart of `measured/hashed-channel`, and a byte-identity

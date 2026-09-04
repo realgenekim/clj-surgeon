@@ -25,13 +25,14 @@ Reserved ids are not gaps to fill opportunistically. They name work Sol
 sequenced ahead of adoption, and taking one for something else would make the
 plan unreadable.
 
-**MCP-OP-MEM-001 is deliberately NOT registered in this leaf.** One requirement
-gets one authority, and MEM-001's is
+**MCP-OP-MEM-001 and MCP-OP-MEM-011 are deliberately NOT registered in this
+leaf.** One requirement gets one authority, and for both of them it is
 [`../memory-boundedness/memory-boundedness-specs.md`](../memory-boundedness/memory-boundedness-specs.md),
-owned by the memory-battery build. This leaf previously carried a second,
-checked copy of it; two spec files stating the same id, one `[x]` and one `[ ]`,
-is a contract that cannot be audited - a maintainer reading either one would be
-reading a statement the other contradicts.
+owned by the memory-battery build, which states the ownership back the other
+way so a reader arriving from either side lands in the same place. This leaf
+previously carried a second, checked copy of it; two spec files stating the same
+id, one `[x]` and one `[ ]`, is a contract that cannot be audited - a maintainer
+reading either one would be reading a statement the other contradicts.
 
 The kernel does carry two of MEM-001's clauses - the streaming reader's
 request-lowerable receipt ceiling under a server cap, and the accountant's
