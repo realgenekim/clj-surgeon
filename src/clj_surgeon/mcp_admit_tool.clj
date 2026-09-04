@@ -2023,12 +2023,8 @@
   (when-let [call (:next_call receipt)]
     (let [characters (count (json/generate-string call))]
       (when (not (public-faces-fit? receipt))
-        (let [receipt-bytes (write-refusal/json-bytes receipt)]
-        (merge (empty-receipt (or (:mode receipt) "preview"))
-               {:ok false
-                :operation :admit-patch-refused
-                :error-type :next-call-exceeds-public-budget
-                :error (str "this receipt's next_call is " characters
+        (let [receipt-bytes (write-refusal/json-bytes receipt)
+              sentence (str "this receipt's next_call is " characters
                             " characters and the receipt that would carry it"
                             " is " receipt-bytes " bytes; the public payload"
                             " budget is " write-refusal/public-byte-budget
@@ -2036,17 +2032,42 @@
                             " published verbatim, and a next_call a caller"
                             " cannot send back byte for byte is not a"
                             " next_call")
-                :next_call_characters characters
-                :receipt_bytes receipt-bytes
-                :public_byte_budget write-refusal/public-byte-budget
-                :blocked_next_call_for (:error-type receipt)
-                :source-unchanged (:source-unchanged receipt)
-                :remedy (str "narrow the request so its follow-up call and the"
-                             " receipt carrying it fit "
-                             write-refusal/public-byte-budget
-                             " bytes; fewer files in one patch is the"
-                             " lever, because expect_pre_sha256 carries one"
-                             " digest per file")}))))))
+              measurements {:next_call_characters characters
+                            :receipt_bytes receipt-bytes
+                            :public_byte_budget write-refusal/public-byte-budget
+                            :blocked_next_call_for (:error-type receipt)}]
+          (if (true? (:ok receipt))
+            ;; A receipt that was not otherwise a refusal BECOMES one, under
+            ;; the oversize kind, carrying its own safety claims forward.
+            (merge (empty-receipt (or (:mode receipt) "preview"))
+                   measurements
+                   {:ok false
+                    :operation :admit-patch-refused
+                    :error-type :next-call-exceeds-public-budget
+                    :error sentence
+                    :source-unchanged (:source-unchanged receipt)
+                    :mutation_attempted (:mutation_attempted receipt)
+                    :remedy (str "narrow the request so its follow-up call and"
+                                 " the receipt carrying it fit "
+                                 write-refusal/public-byte-budget
+                                 " bytes; fewer files in one patch is the"
+                                 " lever, because expect_pre_sha256 carries one"
+                                 " digest per file")})
+            ;; @spec MCP-OP-ADMIT-142
+            ;; A receipt that ALREADY refuses keeps its kind, its remedy and
+            ;; its safety claims; the next_call is the only thing that goes.
+            ;; Round five measured this arm turning a
+            ;; `transaction-recovery-required` refusal -- a third party changed
+            ;; the caller's files and the gate could not put them back -- into
+            ;; a size complaint whose `mutation_attempted` read `false` and
+            ;; whose remedy was `fewer files in one patch is the lever`. That
+            ;; is the exact swallowing MCP-OP-ADMIT-139's reduction arm was
+            ;; fixed for, one field over, on the arm that fires.
+            (merge receipt
+                   measurements
+                   {:next_call nil
+                    :next_call_omitted true
+                    :next_call_omission sentence})))))))
 
 ;; @spec MCP-OP-ADMIT-139
 (def ^:private receipt-identity-keys
@@ -2274,8 +2295,16 @@
     ;; droppable field is gone, the next_call is what is left, and blaming it
     ;; is then a fact rather than a guess. The guard runs last so the
     ;; refusal's own kind is checked too.
-    (checked-refusal-kind! (or (oversize-next-call-refusal bounded)
-                              bounded))))
+    ;; @spec MCP-OP-ADMIT-140
+    ;; The oversize refusal is bounded by the SAME pass as everything else.
+    ;; Round five published it around the bound: it was built by
+    ;; `(merge (empty-receipt (or (:mode receipt) "preview")) ...)`, which
+    ;; re-echoed the caller's 60,000-character mode into the receipt that is
+    ;; supposed to be the answer to `this did not fit`.
+    (checked-refusal-kind!
+      (if-let [replacement (oversize-next-call-refusal bounded)]
+        (reduce-receipt-to-budget (bound-identity-values replacement))
+        bounded))))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry point
@@ -2450,7 +2479,11 @@
    ;; @spec MCP-OP-ADMIT-141
    ;; a receipt reduction could not bring inside the budget says so on the
    ;; text face too, and elision is exactly what must not reach that
-   :receipt_over_budget :receipt_residual_bytes])
+   :receipt_over_budget :receipt_residual_bytes
+   ;; @spec MCP-OP-ADMIT-142
+   ;; and a receipt that had to drop its follow-up call says that where
+   ;; elision cannot reach either
+   :next_call_omitted :next_call_omission])
 
 ;; @spec MCP-OP-ADMIT-136
 (defn- fact-root
