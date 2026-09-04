@@ -1668,3 +1668,13 @@ tree — exactly the check the landing protocol runs and the reason it runs on t
 records to carry: a semantic conflict hides behind "Auto-merging"; and a --no-local clone does not carry
 remote-tracking refs, so merge evidence names the fetched trunk sha. Round fifteen is the merge round; on its green the
 lane LANDS and arm G runs. Also to correct in the r13 build record: the RED commit exited 1, not 3.
+
+## 18:09Z feature_thread r10 built (4d51ebc3); merge round before the landing review; the TEST-ISO decision carded to Gene
+
+Round ten's honest move: the recall table LOST a leg (openTransformFromSelection 5/5 → 4/5) because its only occurrences
+are inside assertion strings, character-for-character the reviewer's own attack; no rule can refuse one and admit the
+other, so the number moved and the README says why. The floor dispute resolved as two receipts, not one wrong number.
+Eight pre-existing conflicts with the census-merged trunk (the tool-count witnesses), so — the gate lane's lesson — the
+merge round runs first and the landing review reviews the merged tip. Decision card to Gene (help-gene-decide, phone
+format): round two of the suite spike = (a) full TEST-ISO family, (b) mechanism first + battery, (c) witnesses first;
+recommended b, silence → b.
