@@ -1312,33 +1312,46 @@
       (str label " · " (:text site)))))
 
 ;; @spec MCP-OP-ALIAS-059
-(defn- dynamic-refusal-kind-sites
-  "Every `(refusal <non-literal>` site in the reachable set, unmarked.
+(defn- dynamic-refusal-kind-sites-in
+  "Every `(refusal <non-literal>` site of ONE source, unmarked.
 
   A kind spelled at runtime cannot be scanned out of source, so an
   enumeration derived from source is complete only while no reachable
   namespace builds one. The single legitimate exception is FORWARDING a kind
   another scanned source already minted, and such a site declares itself with
-  the marker `forwarded-refusal-kind` in the twelve lines above it."
+  the marker `forwarded-refusal-kind` in the twelve lines above it.
+
+  Taken as TEXT rather than as a namespace so a witness can plant a site and
+  drive this directly; `dynamic-refusal-kind-sites` is the same scan over the
+  reachable set."
+  [label text]
+  (let [lines (vec (str/split-lines text))
+        ;; only a source whose OWN `refusal` takes the kind as its first
+        ;; argument can spell a kind at the call site at all; where the kind
+        ;; is a literal inside the constructor the `:error_type "…"` scan
+        ;; already has it
+        own-refusal-constructor?
+        (boolean
+          (re-find #"\(defn-?\s+refusal\s*\n?\s*\[\s*(error-type|kind)\b" text))]
+    (vec
+      (for [[index line] (map-indexed vector lines)
+            :when own-refusal-constructor?
+            :when (and (re-find #"\(refusal\s" line)
+                       (not (re-find #"\(refusal\s+:[a-z]" line))
+                       (not (re-find #"defn-?\s+refusal" line)))
+            :when (not (some #(str/includes? % "forwarded-refusal-kind")
+                             (subvec lines (max 0 (- index 12)) (inc index))))]
+        (str label ":" (inc index))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- dynamic-refusal-kind-sites
+  "`dynamic-refusal-kind-sites-in` over every source the entrance reaches."
   []
   (vec
-    (for [namespace-name (sort (reachable-entrance-namespaces))
-          :let [path (namespace-source-path namespace-name)
-                text (slurp path)
-                lines (vec (str/split-lines text))]
-          ;; only a namespace whose OWN `refusal` takes the kind as its first
-          ;; argument can spell a kind at the call site at all; where the kind
-          ;; is a literal inside the constructor the `:error_type "…"` scan
-          ;; already has it
-          :when (re-find #"\(defn-?\s+refusal\s*\n?\s*\[\s*(error-type|kind)\b"
-                         text)
-          [index line] (map-indexed vector lines)
-          :when (and (re-find #"\(refusal\s" line)
-                     (not (re-find #"\(refusal\s+:[a-z]" line))
-                     (not (re-find #"defn-?\s+refusal" line)))
-          :when (not (some #(str/includes? % "forwarded-refusal-kind")
-                           (subvec lines (max 0 (- index 12)) (inc index))))]
-      (str path ":" (inc index)))))
+    (mapcat (fn [namespace-name]
+              (let [path (namespace-source-path namespace-name)]
+                (dynamic-refusal-kind-sites-in path (slurp path))))
+            (sort (reachable-entrance-namespaces)))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- unscannable-refusal-kind-sites
@@ -4581,6 +4594,113 @@
                "named: "
                (pr-str (runtime-spelled-kind-sites
                         "route-a-marked" route-a-marked)))))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-forwarded-refusal-kind-marker-is-checked-and-not-merely-believed
+  ;; Round-fifteen review finding 2: with `constructor-site?` gone, the marker
+  ;; became an UNCHECKED CAPABILITY — the guard exempts any dynamic site whose
+  ;; preceding twelve lines contain the marker text, without ever establishing
+  ;; that the marked expression FORWARDS a kind rather than MINTING one. The
+  ;; reviewer planted a reachable helper spelling
+  ;; `:error_type (keyword (:review_dynamic_kind params))` under the marker,
+  ;; drove a live kind that no source scan could see, and all four advertised
+  ;; enumeration witnesses stayed green over 20 assertions. A comment is not a
+  ;; control: the marker must be coupled to a mechanically checked forwarding
+  ;; SHAPE — a value selected from an incoming refusal — and must not exempt a
+  ;; constructor of a new kind from data.
+  (let [minting
+        [["(keyword (:review_dynamic_kind params)) mints from request data"
+          (str "(defn- route-minting-refusal\n"
+               "  [params]\n"
+               "  {:ok false\n"
+               "   :operation \"alias_migration\"\n"
+               "   ;; forwarded-refusal-kind: claims to forward, mints\n"
+               "   :error_type (keyword (:review_dynamic_kind params))\n"
+               "   :error \"routed refusal\"})\n")]
+         ["(keyword (name kind)) mints a new kind from a parameter"
+          (str "(defn- route-a-refusal-marked\n"
+               "  [kind]\n"
+               "  {:ok false\n"
+               "   :operation \"alias_migration\"\n"
+               "   ;; forwarded-refusal-kind: kind is this fn's own argument\n"
+               "   :error_type (keyword (name kind))\n"
+               "   :error \"routed refusal\"})\n")]
+         ["(str \"heldout-\" (name kind)) composes a kind from a literal"
+          (str "(defn- route-composed-refusal\n"
+               "  [kind]\n"
+               "  {:ok false\n"
+               "   :operation \"alias_migration\"\n"
+               "   ;; forwarded-refusal-kind: composed, not forwarded\n"
+               "   :error_type (str \"heldout-\" (name kind))\n"
+               "   :error \"routed refusal\"})\n")]]
+        forwarding
+        [["(name error-type) forwards the constructor's own argument"
+          (str "(defn refusal\n"
+               "  [error-type message]\n"
+               "  {:ok false\n"
+               "   ;; forwarded-refusal-kind: forwarded verbatim\n"
+               "   :error_type (name error-type)\n"
+               "   :error message})\n")]
+         ["(:error-type source) selects an incoming refusal's own kind"
+          (str "(defn- retire-refusal\n"
+               "  [retire-source]\n"
+               "  {:ok false\n"
+               "   ;; forwarded-refusal-kind: travels verbatim\n"
+               "   :error-type (:error-type retire-source)\n"
+               "   :error \"retired\"})\n")]
+         ["a bare symbol is the kind itself"
+          (str "(defn- refuse!\n"
+               "  ;; forwarded-refusal-kind: forwarded verbatim\n"
+               "  [error-type message]\n"
+               "  (throw (ex-info message {:error-type error-type})))\n")]
+         ["(or (some-> (or (:error-type c) (:error_type c)) name) literal)"
+          (str "(defn- commit-refusal\n"
+               "  [commit]\n"
+               "  {:ok false\n"
+               "   ;; forwarded-refusal-kind: the kernel's own kind travels verbatim\n"
+               "   :error_type (or (some-> (or (:error-type commit)\n"
+               "                                (:error_type commit)) name)\n"
+               "                   \"alias-migration-transaction-refused\")\n"
+               "   :error \"refused\"})\n")]]]
+    (doseq [[label text] minting]
+      (testing (str "a marked MINTING site is still named · " label)
+        (is (= 1 (count (runtime-spelled-kind-sites label text)))
+            (str "a site that MINTS a kind was exempted by an unchecked "
+                 "forwarded-refusal-kind marker: "
+                 (pr-str (runtime-spelled-kind-sites label text))))))
+    (doseq [[label text] forwarding]
+      (testing (str "a marked FORWARDING site stays exempt · " label)
+        (is (empty? (runtime-spelled-kind-sites label text))
+            (str "a genuinely forwarded kind was named: "
+                 (pr-str (runtime-spelled-kind-sites label text))))))
+    (testing "a marked MINTING (refusal …) call site is still named"
+      (let [text (str "(defn refusal\n"
+                      "  [error-type message]\n"
+                      "  {:ok false :error_type (name error-type) :error message})\n"
+                      "\n"
+                      "(defn- route-minting-call\n"
+                      "  [params]\n"
+                      "  ;; forwarded-refusal-kind: claims to forward, mints\n"
+                      "  (refusal (keyword (:review_dynamic_kind params))\n"
+                      "           \"routed refusal\"))\n")]
+        (is (= 1 (count (dynamic-refusal-kind-sites-in "plant" text)))
+            (str "a (refusal …) call that MINTS a kind was exempted by an "
+                 "unchecked marker: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))
+    (testing "a marked FORWARDING (refusal …) call site stays exempt"
+      (let [text (str "(defn refusal\n"
+                      "  [error-type message]\n"
+                      "  {:ok false :error_type (name error-type) :error message})\n"
+                      "\n"
+                      "(defn- commit-refusal\n"
+                      "  [commit]\n"
+                      "  ;; forwarded-refusal-kind: the kernel's own kind travels verbatim\n"
+                      "  (refusal (or (some-> (:error-type commit) name)\n"
+                      "               \"alias-migration-transaction-refused\")\n"
+                      "           \"refused\"))\n")]
+        (is (empty? (dynamic-refusal-kind-sites-in "plant" text))
+            (str "a genuinely forwarded (refusal …) kind was named: "
+                 (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; every invisible or malformed code point in a scope entry is typed
