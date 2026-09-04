@@ -56,3 +56,11 @@ T1b reproduces T1 within two calls (24 → 22; reads 2 → 2; first patch 7 → 
 | N2 (native, replicate) | 50 | 13 (editor-commands.js 1-480; rg formatDraft/Edit; AGENTS.md; editor-specs; editor-controller; state.clj; editor_journal; Makefile; test tree; transform_test; @spec greps) | 19 | 5 | ≥4 | the six real sites (+ Makefile, editor-design/specs docs; the clj test went into transform_test.clj; JS test added as an untracked new file) | green — VERIFIED by the seat (JS_EXIT=0 CLJ_EXIT=0) |
 
 **Paired figures at n=2 per arm (raw / reads-before-first-patch):** native 32, 50 (mean 41 / reads 10, 13); receipt 24, 22 (mean 23 / reads 2, 2). Raw ratio 1.8× at n=2 (was 1.3× at n=1); the native arm's spread (32–50) is wider than the receipt's (22–24). Discovery reads 11.5 → 2, 5.75×. Withdrawal check (Opus's R0 line: overlapping intervals at n=3 → withdraw the raw claim): intervals do not overlap at n=2; a third pair decides.
+
+## Third replicate pair — N3 and T1c finished 08:3xZ (gates re-running)
+| arm | raw | source reads before first patch | first patch at call | sites | note |
+|---|---|---|---|---|---|
+| N3 (native) | 33 | 12 | 18 | the six code sites + Makefile + editor-specs + tests.edn | see the test note below |
+| T1c (receipt) | 22 | **0** | 4 | six real sites incl. both tests | two later reads: test classification (Makefile 225-296, tests.edn) |
+
+**Paired table at n=3 per arm (raw / source reads before the first patch):** native 32, 50, 33 → mean 38.3, reads 10, 13, 12 (mean 11.7); receipt 24, 22, 22 → mean 22.7, reads 2, 2, 0 (mean 1.3). Intervals do NOT overlap (native 32–50 vs receipt 22–24) — Opus's R0 withdrawal line is not met; the raw claim stands at n=3: **1.7× raw, 8.8× discovery reads**. Task-core figures to be recomputed after hand classification of all six.
