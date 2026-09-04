@@ -2894,19 +2894,31 @@
                            :operation :admit-patch-refused
                            :error-type :server-not-initialized
                            :error "admit_clojure_patch server is not initialized"}))
+                 ;; @spec MCP-OP-ADMIT-146
+                 ;; Both catch arms publish THROUGH the bound. Round six
+                 ;; wrapped them in `checked-refusal-kind!` alone, so a
+                 ;; throwable message reached the caller verbatim: 60,617
+                 ;; bytes of structuredContent, 27,977 past the budget, with
+                 ;; no annotation of any kind. A receipt this handler can
+                 ;; publish and `bound-receipt` never sees is a hole in
+                 ;; MCP-OP-ADMIT-139's universal sentence, whether or not a
+                 ;; caller input is known that reaches it.
                  (catch Exception error
-                   (merge (empty-receipt "preview")
-                          {:ok false
-                           :operation :admit-patch-refused
-                           :error-type (if (str/includes? (.getName (class error))
-                                                          "StreamConstraints")
-                                         :patch-too-large
-                                         :admit-tool-failure)
-                           :error (or (.getMessage error)
-                                      (.getName (class error)))}))
+                   (bound-receipt
+                     (merge (empty-receipt "preview")
+                            {:ok false
+                             :operation :admit-patch-refused
+                             :error-type (if (str/includes?
+                                               (.getName (class error))
+                                               "StreamConstraints")
+                                           :patch-too-large
+                                           :admit-tool-failure)
+                             :error (or (.getMessage error)
+                                        (.getName (class error)))})))
                  ;; @spec MCP-OP-ADMIT-129
+                 ;; @spec MCP-OP-ADMIT-146
                  (catch Throwable error
-                   (edge-throwable-refusal error))))
+                   (bound-receipt (edge-throwable-refusal error)))))
      :summarize summary
      :callback callback}))
 
