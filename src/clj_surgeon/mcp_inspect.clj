@@ -694,6 +694,92 @@
                                        (segment-spelling segment)))))
                       path)))
 
+;; @spec MCP-OP-STUDY-054
+(defn wire-member-name
+  "The JSON object MEMBER NAME `structuredContent` publishes one receipt key
+  as — the string a caller sees between the quotes.
+
+  Stated HERE, once, because it is the identity the whole receipt rests on and
+  it is NOT the key: the complete keyword including its namespace, a string as
+  itself, `nil` as the EMPTY name, and everything else as its `str`. Cheshire
+  spells `{:a 1}`, `{\"a\" 1}` as `{\"a\":1}`, `{nil 1}` as `{\"\":1}`, and
+  `{0 1}`, `{\"0\" 1}` as `{\"0\":1}`, so four pairs of distinct Clojure keys
+  are ONE member name on the wire, and a witness asserts this function against
+  cheshire's own rendering rather than against a reading of it.
+
+  Apply it to the key `json-key` produced, never to the raw key: the `-`-to-`_`
+  normalization is part of what this namespace publishes, so `:a-b` and
+  `:a_b` are a collision this code MAKES."
+  [key]
+  (cond
+    (keyword? key) (subs (str key) 1)
+    (string? key) key
+    (nil? key) ""
+    :else (str key)))
+
+;; @spec MCP-OP-STUDY-054
+(defn colliding-receipt-keys
+  "The FIRST map inside a receipt that holds two DISTINCT keys publishing as
+  ONE JSON object member name, as `{:path :member :keys}` — or nil.
+
+  @spec MCP-OP-STUDY-054 — round eleven NAMED this as a safe residual
+  (MCP-OP-STUDY-052): `:a` and `\"a\"` deliberately spell one pointer,
+  \"because `structuredContent` publishes them as the same JSON object key.\"
+  That is true of one key at a time and false of both at once. With both in
+  one map the receipt publishes `{\"a\":1,\"a\":2}` — an object with duplicate
+  member names, which ordinary decoders collapse to one member, so the
+  STRUCTURED face is lossy before any rendering happens; and `leaf-label`
+  hands both leaves one pointer, so the renderer prints the first, declares
+  the second dropped, and `uncarried-leaves` finds the second carried by the
+  first's identical line. Field evidence (Sol O2 round-11 review, 2026-09-04,
+  section 2): declared and audited disagreed at allowances 102 and 100, and an
+  ORDINARY 32,684-byte fitted public result declared four dropped against an
+  audit of three.
+
+  The question is asked about the WIRE, not about the pointer, because the
+  pointer is only half the class: `0` and `\"0\"` spell the DISTINCT pointers
+  `[0]` and `0` (MCP-OP-STUDY-052) and still publish as the one member `\"0\"`.
+
+  `:keys` are the keys AS THE RECEIPT SPELLS THEM, so a refusal can name the
+  two things a reader can tell apart; `:path` is the receipt path of the map,
+  in the `json-key` spelling `receipt-leaf-pairs` uses, so `leaf-label` names
+  it the same way it names every other address. The walk is in RECEIPT ORDER
+  and returns the first collision, so the refusal is deterministic.
+
+  Shape-for-shape the same descent as `json-data`, and for the same reason:
+  a shape this walker declines to enter is a collision nobody sees."
+  ([result] (colliding-receipt-keys [] result))
+  ([path value]
+   (cond
+     (map? value)
+     ;; `contains?`, never `get` — the first colliding pair this walk had to
+     ;; find is `nil` against `""`, and a prior key of `nil` is FALSY: an
+     ;; `if-let` here reported no collision for exactly the pair the reviewer
+     ;; named. The absence of a member name and a member name whose key is
+     ;; `nil` are different questions.
+     (or (loop [entries (seq value) seen {}]
+           (when entries
+             (let [key (ffirst entries)
+                   member (wire-member-name (json-key key))]
+               (if (contains? seen member)
+                 {:path path :member member :keys [(get seen member) key]}
+                 (recur (next entries) (assoc seen member key))))))
+         (first (keep (fn [[key child]]
+                        (colliding-receipt-keys (conj path (json-key key)) child))
+                      value)))
+
+     (set? value)
+     (first (keep-indexed (fn [index child]
+                            (colliding-receipt-keys (conj path index) child))
+                          (sort-by pr-str value)))
+
+     (sequential? value)
+     (first (keep-indexed (fn [index child]
+                            (colliding-receipt-keys (conj path index) child))
+                          value))
+
+     :else nil)))
+
 ;; @spec MCP-OP-STUDY-044
 (defn leaf-spelling
   "The characters `structuredContent` spells one leaf value with.

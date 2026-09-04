@@ -5312,3 +5312,82 @@
               (format "%s / %s: declared %d against audited %d; text %s"
                       (pr-str key-a) (pr-str key-b)
                       (:declared r) (:audited r) (pr-str (:text r)))))))))
+
+;; @spec MCP-OP-STUDY-054
+;; The wire spelling is asserted against CHESHIRE's own rendering, not against
+;; a reading of it: `wire-member-name` is the identity the collision gate rests
+;; on, and a gate whose notion of the wire is a paraphrase of the encoder is a
+;; gate that can be right about the wrong wire.
+(deftest the-wire-member-name-is-the-member-name-cheshire-publishes
+  (doseq [key [:a "a" :a_b "a_b" nil "" 0 "0" 1 "1" 1.5 "1.5"
+               true "true" :ns/x "ns/x" :x.y "x.y" :with-dash]]
+    (let [rendered (json/generate-string (inspect/json-data {key 1}))
+          member (second (re-find #"^\{\"(.*)\":1\}$" rendered))]
+      (is (= member (inspect/wire-member-name
+                      (first (keys (inspect/json-data {key 1})))))
+          (format "%s publishes as %s; wire-member-name said %s"
+                  (pr-str key) (pr-str member)
+                  (pr-str (inspect/wire-member-name
+                            (first (keys (inspect/json-data {key 1})))))))))
+  (testing "and the pointer segment is the ESCAPED wire member name, which is "
+    ;; why a wire collision and a pointer collision are one event for every key
+    ;; but an integer — `leaf-label` spells an integer segment `[0]`, so `0`
+    ;; and `\"0\"` are distinct pointers and one member name.
+    (doseq [key [:a "a" nil "" :ns/x "ns/x" true :a.b "a.b"]]
+      (is (= (inspect/leaf-label [key])
+             (inspect/leaf-label [(inspect/wire-member-name key)]))
+          (pr-str key)))
+    (is (not= (inspect/leaf-label [0]) (inspect/leaf-label ["0"]))
+        "an integer segment is the one key whose pointer is not its member name")))
+
+;; @spec MCP-OP-STUDY-054
+;; The gate is asked at BOTH doors, and NESTED — the reviewer's fixture put the
+;; collision at the top level, and a receipt's interesting maps are its rows.
+(deftest the-collision-gate-is-asked-at-every-door-and-at-every-depth
+  (let [nested (clocked
+                 {:ok true :operation "inspect_clojure" :mode "outline"
+                  :request_count 1 :file_count 0 :source_character_count 0
+                  :read_complete true
+                  :results [{:id "r0"}
+                            {:id "r1" :probe {:a collision-twin
+                                              "a" collision-twin}}]})]
+    (testing "fit-public-result refuses it"
+      (is (= "receipt-key-collision"
+             (:error_type (inspect-tool/fit-public-result nested)))))
+    (testing "enforce-result-budget refuses it"
+      (is (= "receipt-key-collision"
+             (:error_type (inspect-tool/enforce-result-budget nested nested)))))
+    (testing "and the refusal names the nested path, not the root"
+      (let [refusal (inspect-tool/fit-public-result nested)]
+        (is (= "results[1].probe" (:path refusal))
+            (pr-str (:path refusal)))
+        (is (= "a" (:colliding_member refusal)))
+        (is (= [":a" "\"a\""] (:colliding_keys refusal))
+            (pr-str (:colliding_keys refusal)))))
+    (testing "and the gate is idempotent — the refusal itself publishes"
+      (let [refusal (inspect-tool/fit-public-result nested)]
+        (is (= refusal (inspect-tool/guard-receipt-key-collisions refusal)))
+        (is (<= (inspect-tool/mcp-result-byte-count
+                  (inspect-tool/inspect-summary refusal) refusal)
+                inspect-tool/max-public-result-bytes)))))
+  (testing "a receipt whose colliding key is enormous still fits the budget"
+    (let [huge (clocked
+                 {:ok true :operation "inspect_clojure" :mode "outline"
+                  :request_count 1 :file_count 0 :source_character_count 0
+                  :read_complete true
+                  (keyword (apply str (repeat 40000 \k))) collision-twin
+                  (apply str (repeat 40000 \k)) collision-twin})
+          refusal (inspect-tool/fit-public-result huge)]
+      (is (= "receipt-key-collision" (:error_type refusal)))
+      (is (<= (inspect-tool/mcp-result-byte-count
+                (inspect-tool/inspect-summary refusal) refusal)
+              inspect-tool/max-public-result-bytes)
+          (format "the collision refusal published %d bytes"
+                  (inspect-tool/mcp-result-byte-count
+                    (inspect-tool/inspect-summary refusal) refusal)))))
+  (testing "and an ordinary receipt is untouched by the gate"
+    (let [ordinary (outline-batch review-batch-files)]
+      (is (nil? (inspect/colliding-receipt-keys ordinary))
+          (pr-str (inspect/colliding-receipt-keys ordinary)))
+      (is (identical? ordinary
+                      (inspect-tool/guard-receipt-key-collisions ordinary))))))

@@ -2083,7 +2083,14 @@
                (:mode result) (assoc :mode (:mode result)))
         ;; Every byte here is a constant of this namespace or a number: no
         ;; caller-supplied value, and no mode, reaches it.
-        minimal (mcp-operation/stamp-envelope
+        ;; @spec MCP-OP-STUDY-054 — the ENVELOPE of the result being replaced,
+        ;; not an empty one. `stamp-envelope … {}` produced a substitute with a
+        ;; nil elapsed time, and `inspect-summary` renders a refusal through
+        ;; `format-elapsed-ms`, which REFUSES one: measuring this rung threw
+        ;; instead of answering, so the ladder's last rung could never be
+        ;; taken. Found by the round-twelve collision gate, which is the first
+        ;; caller that reaches a fallback rung with an oversized `full`.
+        minimal (with-envelope
                   {:ok false
                    :operation "inspect_clojure"
                    :error_type "inspect-output-limit"
@@ -2095,7 +2102,7 @@
                    :source_unchanged true
                    :remedy "Narrow the request so the complete result fits the public output budget."
                    :next_action "narrow_scope"}
-                  {})]
+                  result)]
     (cond
       (fits? full) full
       (fits? minimal) minimal
@@ -2106,6 +2113,139 @@
                             "honest receipt smaller than this one")
                        (mcp-result-byte-count (inspect-summary minimal) minimal)
                        max-public-result-bytes))))))
+
+;; @spec MCP-OP-STUDY-054
+(def ^:private max-named-key-characters
+  "How much of one colliding key a refusal may spell.
+
+  A refusal that names a key names a value this namespace did not choose, so
+  it is BOUNDED by construction rather than trusted to be small — the same
+  rule `public-budget-refusal` keeps, and for the same reason: a substitute
+  built from an unbounded input is a budget enforced on one map and published
+  on another."
+  120)
+
+;; @spec MCP-OP-STUDY-054
+(defn- bounded-spelling
+  "One caller-shaped string, bounded and told that it was.
+
+  Applied to the colliding MEMBER NAME as well as to the keys. Field evidence
+  (this branch's own witness, O2 round 12): only the keys were bounded, and a
+  receipt keyed by a 40,000-character name built a `full` refusal that could
+  not fit the budget — which is how the unclocked fallback rung below was
+  found. A bound on two of three caller-shaped fields is not a bound."
+  [spelled]
+  (let [spelled (str spelled)]
+    (if (<= (count spelled) max-named-key-characters)
+      spelled
+      (format "%s… (+%d more characters)"
+              (subs spelled 0 max-named-key-characters)
+              (- (count spelled) max-named-key-characters)))))
+
+;; @spec MCP-OP-STUDY-054
+(defn receipt-key-collision-refusal
+  "The typed refusal for a receipt that cannot be published because two of its
+  keys are ONE key on the wire.
+
+  @spec MCP-OP-STUDY-054 — REFUSE rather than normalize, and the choice is
+  about which face is allowed to be a rendering. A disambiguating spelling
+  (`~8a` for the keyword twin, say) would keep the pointer injective, but it
+  would put an invented member name into `structuredContent` itself: the
+  receipt would no longer be the object the kernel holds, a caller could no
+  longer read a fact back out by the key it asked with, and a literal key of
+  that spelling would collide with the escape. `structuredContent` is the
+  RECEIPT; `content[0].text` is the rendering of it. A refusal is the only
+  answer that keeps that true.
+
+  It is also the honest one. The published object would carry duplicate member
+  names, which RFC 8259 leaves to the decoder and ordinary decoders resolve by
+  keeping ONE — so the caller cannot address both keys however the text is
+  rendered. Publishing it is publishing an object we cannot describe truthfully.
+
+  Reachability: every key of every ordinary receipt is constructed inside
+  `clj-surgeon.mcp-inspect`, and within one map they are one type, so this is
+  unreachable in ordinary operation — which is the point. It is a bright line
+  under the declaration/audit invariant, not a request a caller is expected to
+  make.
+
+  @spec MCP-OP-STUDY-049 — the substitute is MEASURED before it is returned,
+  and the named keys are bounded before they are measured, so the fallback rung
+  exists for a receipt whose envelope is large rather than for a large key."
+  [result {:keys [path member keys]}]
+  (let [fits? (fn [candidate]
+                (<= (mcp-result-byte-count (inspect-summary candidate) candidate)
+                    max-public-result-bytes))
+        [key-a key-b] keys
+        pointer (inspect/leaf-label path)
+        full (cond-> (with-envelope
+                       {:ok false
+                        :operation "inspect_clojure"
+                        :error_type "receipt-key-collision"
+                        :scope "public_result"
+                        :error (format (str "Two receipt keys publish as one "
+                                            "structuredContent member \"%s\", so "
+                                            "the result cannot be published "
+                                            "without losing one of them")
+                                       (bounded-spelling member))
+                        :path pointer
+                        :colliding_member (bounded-spelling member)
+                        ;; `pr-str`, so a reader can tell the two keys APART:
+                        ;; the whole point of this refusal is that `:a` and
+                        ;; `"a"` are different keys, and rendering both as `a`
+                        ;; would print the collision instead of naming it.
+                        :colliding_keys [(bounded-spelling (pr-str key-a))
+                                         (bounded-spelling (pr-str key-b))]
+                        :read_complete false
+                        :source_unchanged true
+                        :remedy (str "This is a defect in the receipt this tool "
+                                     "built, not in the request: report the "
+                                     "colliding member and the path.")
+                        :next_action "report_colliding_receipt_keys"}
+                       result)
+               (:mode result) (assoc :mode (:mode result)))
+        ;; Constants only — no key, no member name and no path reach this rung.
+        ;; @spec MCP-OP-STUDY-054 — but it carries the measured result's
+        ;; ENVELOPE, because a substitute with no clock cannot be MEASURED:
+        ;; `inspect-summary` renders a refusal through `format-elapsed-ms`,
+        ;; which refuses a nil elapsed time, so `(stamp-envelope … {})` makes
+        ;; `fits?` THROW rather than fall back. A fallback rung that throws
+        ;; when it is reached is not a fallback rung.
+        minimal (with-envelope
+                  {:ok false
+                   :operation "inspect_clojure"
+                   :error_type "receipt-key-collision"
+                   :scope "public_result"
+                   :error "Two receipt keys publish as one structuredContent member"
+                   :read_complete false
+                   :source_unchanged true
+                   :remedy "Report the colliding receipt keys."
+                   :next_action "report_colliding_receipt_keys"}
+                  result)]
+    (cond
+      (fits? full) full
+      (fits? minimal) minimal
+      :else
+      (throw (IllegalArgumentException.
+               (format (str "the receipt-key-collision gate built a substitute "
+                            "of %d bytes against a %d-byte budget; there is no "
+                            "honest receipt smaller than this one")
+                       (mcp-result-byte-count (inspect-summary minimal) minimal)
+                       max-public-result-bytes))))))
+
+;; @spec MCP-OP-STUDY-054
+(defn guard-receipt-key-collisions
+  "`result`, or the typed refusal that replaces it when two of its keys are one
+  key on the wire.
+
+  Called at BOTH doors a published result can arrive by — `enforce-result-budget`,
+  which every mode passes through, and `fit-public-result`, which the study
+  modes reach and which is public and directly callable. Idempotent: the
+  refusal it builds carries no colliding keys, so a second call returns it
+  unchanged."
+  [result]
+  (if-let [collision (inspect/colliding-receipt-keys result)]
+    (receipt-key-collision-refusal result collision)
+    result))
 
 ;; @spec MCP-OP-STUDY-040
 (def public-fit-samples
@@ -2154,7 +2294,12 @@
              (str "fit-public-result measures the published envelope and "
                   "needs the finalized result: it carries none of "
                   (pr-str mcp-operation/envelope-keys)))))
-  (let [measure (fn [result]
+  ;; @spec MCP-OP-STUDY-054 — the collision gate runs BEFORE the fit, because
+  ;; a receipt whose keys collide on the wire has no fitting rendering: every
+  ;; allowance publishes an object a decoder collapses, and one rendered line
+  ;; discharges two leaves at whichever allowance renders exactly one of them.
+  (let [raw-result (guard-receipt-key-collisions raw-result)
+        measure (fn [result]
                   (mcp-result-byte-count (inspect-summary result) result))
         required (measure raw-result)]
     (if (<= required max-fitted-result-bytes)
@@ -2212,6 +2357,11 @@
 (defn enforce-result-budget
   "Bound the complete public MCP result — its text block included."
   [ordinary-result raw-result]
+  ;; @spec MCP-OP-STUDY-054 — the boundary EVERY mode passes through, so the
+  ;; collision gate is asked here and not only on the `fit-public-result`
+  ;; branch: a prepared, continuation, or prepare-change receipt publishes the
+  ;; same duplicate JSON member as an ordinary one.
+  (let [raw-result (guard-receipt-key-collisions raw-result)]
   (cond
     (:prepared_request raw-result)
     (let [required-bytes
@@ -2245,7 +2395,7 @@
     ;; @spec MCP-OP-STUDY-040
     ;; Every other mode — `ls-tree` and every typed study read — used to fall
     ;; through unenforced.
-    :else (fit-public-result raw-result)))
+    :else (fit-public-result raw-result))))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001
