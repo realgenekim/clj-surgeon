@@ -1468,16 +1468,28 @@
         "the scan does not see the constructor's own base map")
     (is (contains? keys-in-source "collided_bindings")
         "the scan does not see a facts map handed to the constructor")
-    (doseq [field (remove text-renders-by-value keys-in-source)]
+    ;; @spec MCP-OP-ALIAS-059
+    ;; Round-twelve review finding 6: every key was probed with the single
+    ;; synthetic string "probe-value", and the renderer dropped non-scalar
+    ;; values in silence — so this witness was blind to exactly the shape the
+    ;; review's sabotage used. Each key is now probed with the shapes a
+    ;; refusal's facts actually take, a nested map among them.
+    (doseq [field (remove text-renders-by-value keys-in-source)
+            [shape value] [["a string" "probe-value"]
+                           ["a number" 7]
+                           ["a boolean" false]
+                           ["a vector" ["a" "b"]]
+                           ["a nested map" {:nested "value"}]]]
       (let [receipt {:ok false
                      :operation "alias_migration"
                      :error_type "alias-migration-empty-scope"
                      :error "one sentence stating the cause"
                      :elapsed_ms 1.25
-                     (keyword field) "probe-value"}
+                     (keyword field) value}
             text (mcp-tool/alias-migration-summary receipt)]
         (is (str/includes? text field)
             (str "the text block drops the refusal key " field
+                 " when its value is " shape
                  ", which structuredContent carries"))))
     (testing "the four keys the text renders as values, not as names"
       (let [text (mcp-tool/alias-migration-summary
@@ -4428,3 +4440,162 @@
                [{:file "src/c.clj"
                  :source (str "(ns c)\n(comment \"" needle "\")\n")}]))
           "the reader reads a comment form's body and this dropped it"))))
+
+;; ---------------------------------------------------------------------------
+;; the two faces are diffed on the CONSTRUCTED receipt, not on source text
+
+;; @spec MCP-OP-ALIAS-059
+(defn- live-refusal-scenarios
+  "Refusals this verb really publishes, each driven through the entrance.
+
+  Round-twelve review finding 6: the advertised regression witnesses keyed on
+  SOURCE TEXT — `(refusal :kind` and `:error-type :kind` literals — and
+  probed the renderer with the synthetic string value `\"probe-value\"`. Both
+  stayed green under sabotage: a dynamically spelled kind was in neither
+  scan, and a nested-map fact added to the live `alias-policy-exhausted`
+  refusal was carried by structuredContent and absent from the text. A
+  witness that never sees a constructed value cannot see what construction
+  actually produced.
+
+  Each scenario returns the receipt the verb published, so the text ⊇
+  structured contract is applied to the real thing."
+  []
+  (let [scenarios (atom [])
+        record! (fn [label result cleanup]
+                  (swap! scenarios conj {:label label :result result})
+                  (cleanup))]
+    (let [workspace (workspace!)]
+      (record! "scope-matches-nothing"
+               (execute! workspace {:scope {:paths ["no-such-dir/**"]}})
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "empty-scope"
+               (execute! workspace {:scope {:paths ["src/acid/fanout/n0*.clj"]}
+                                    :expect {:files 0}})
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "scope-path-refused · unparseable glob"
+               (execute! workspace {:scope {:paths ["src/{**"]}})
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "scope-path-refused · invisible code point"
+               (execute! workspace
+                         {:scope {:paths [(str "src/" (char 1) "x/**")]}})
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "expect-mismatch"
+               (execute! workspace {:expect {:files 3}})
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "unknown-verification-profile"
+               (execute! workspace {:verify "no-such-profile"})
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "invalid-mcp-request"
+               (alias-migration/execute!
+                 (config workspace (io/file workspace "receipts"))
+                 (assoc (request workspace) :unknown_field 1))
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "invalid-diagnostic-output"
+               (let [script (kondo-stub! workspace)]
+                 (execute! workspace
+                           {:verify "focused"}
+                           {:verification-profiles
+                            {"focused" [(.getPath script)]}}))
+               #(delete-tree! workspace)))
+    (let [workspace (workspace!)]
+      (record! "alias-policy-exhausted"
+               (execute! workspace
+                         {:to {:lib fixture/to-lib :var fixture/to-var
+                               :alias_policy ["store2"]}
+                          :scope {:paths ["src/**"]}
+                          :expect {:files 12}})
+               #(delete-tree! workspace)))
+    (let [workspace (backslash-tree!)]
+      (record! "discovery-incomplete"
+               (with-redefs-fn
+                 {(resolve
+                    'clj-surgeon.mcp-alias-migration/independent-scope-count)
+                  (fn [& _] 99)}
+                 #(execute! workspace {:scope {:paths ["**"]}
+                                       :expect {:files 3}}))
+               #(delete-tree! workspace)))
+    @scenarios))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest every-live-refusal-renders-every-key-its-receipt-carries
+  ;; The two faces, diffed on ten receipts the verb actually published.
+  ;; Whatever a key's VALUE turns out to be — scalar, vector, or a nested map
+  ;; the renderer used to drop on the floor — the text names the key, because
+  ;; a client reading the text must never be told less than one reading the
+  ;; structure.
+  (doseq [{:keys [label result]} (live-refusal-scenarios)]
+    (testing label
+      (is (false? (:ok result)) (str label " · " (pr-str result)))
+      (let [receipt (cond-> result
+                      (nil? (:elapsed_ms result)) (assoc :elapsed_ms 1.0))
+            text (mcp-tool/alias-migration-summary receipt)
+            missing (vec (sort (for [[field _] receipt
+                                     :when (and (not (contains?
+                                                       mcp-tool/alias-migration-refusal-envelope-keys
+                                                       field))
+                                                (not (str/includes?
+                                                       text (name field))))]
+                                 (name field))))]
+        (is (empty? missing)
+            (str label " · the text block drops "
+                 (pr-str missing)
+                 ", which structuredContent carries"))
+        (is (not (str/includes? text "more in structuredContent"))
+            (str label " · a live refusal is past the fact bound of "
+                 mcp-tool/max-refusal-facts))
+        (is (not (str/includes? text "refusal text truncated"))
+            (str label " · a live refusal is past the "
+                 alias-migration/max-refusal-text-characters
+                 "-character text ceiling"))
+        (is (<= (count text) alias-migration/max-refusal-text-characters)
+            (str label " · " (count text) " characters"))))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest a-fact-of-any-shape-is-named-in-the-text-block
+  ;; The sabotage the review ran, as a permanent witness. `renderable-fact?`
+  ;; admitted strings, numbers, booleans and flat sequentials, and SILENTLY
+  ;; DROPPED everything else — so a nested map added to a live refusal was
+  ;; carried by structuredContent and absent from the text, and the
+  ;; source-derived key witness never noticed because it probed every key
+  ;; with the string "probe-value".
+  ;;
+  ;;   live sabotage key present structurally? => true
+  ;;   live sabotage key named in text?        => false
+  (doseq [[label value] [["a nested map" {:nested "value"}]
+                         ["a map of maps" {:a {:b 1}}]
+                         ["a vector of maps" [{:a 1}]]
+                         ["a set" #{"a" "b"}]
+                         ["a keyword" :some-keyword]
+                         ["nil" nil]
+                         ["a ratio" 3/4]]]
+    (testing label
+      (let [text (mcp-tool/alias-migration-summary
+                   {:ok false
+                    :operation "alias_migration"
+                    :error_type "alias-migration-alias-policy-exhausted"
+                    :error "one sentence stating the cause"
+                    :elapsed_ms 1.25
+                    :sabotage_detail value})]
+        (is (str/includes? text "sabotage_detail")
+            (str label " · the text block drops a fact structuredContent "
+                 "carries: " text)))))
+  (testing "a fact too large to render whole is elided, never dropped"
+    (let [text (mcp-tool/alias-migration-summary
+                 {:ok false
+                  :operation "alias_migration"
+                  :error_type "alias-migration-alias-policy-exhausted"
+                  :error "one sentence stating the cause"
+                  :elapsed_ms 1.25
+                  :wide_detail (zipmap (map #(keyword (str "k" %)) (range 60))
+                                       (range 60))})]
+      (is (str/includes? text "wide_detail")
+          "a wide fact was dropped rather than elided")
+      (is (str/includes? text "…")
+          "a wide fact was rendered whole past the per-fact bound"))))
