@@ -1400,3 +1400,4 @@ Round 20 found read-string with reader-eval in parse-val and fixed parse-val; th
 ## 08:03Z — negative controls landed: P (placebo) 31 raw / 10 reads ≈ N — content, not priming; X (stale ranges+shas, bodies intact) 25 raw / 1 read, correct sites — on a patch harness the BODIES carry the value and ranges/shas carry none until the admit gate binds on them; the agent checked the shas, saw the mismatch, and wrote from the bodies anyway. Gates re-running independently.
 ## 08:04Z — X and P gates re-run independently: JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0  — all four arms verified green.
 ## 08:04Z — Gene report written (docs/observations/2026-09-04-gene-report-0815z.md); replicates N2 + T1b launched for the variance floor.
+## 08:13Z — replicate T1b: 22 raw, 2 reads before the first patch, correct sites — reproduces T1 (24/2). N2 at 33 raw and 16 reads with no patch yet.

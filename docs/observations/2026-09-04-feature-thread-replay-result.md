@@ -43,3 +43,9 @@ A second finding from building the placebo: on the real repo, formatDraft is the
 Reading, against the pre-registered withdrawal lines (Opus's): **P ≈ N** (31 vs 32; 10 reads each) — the effect is CONTENT, not priming; the confound is ruled out. **X ≈ T1** (25 vs 24) with the patch on the correct sites — Opus's line said "if X lands at ~24 like T1 the receipt is not an edit basis"; the mechanism says something sharper: X kept the BODIES and mangled only ranges and shas, and `apply_patch` anchors on context lines, not line numbers, so on THIS harness the bodies carry the whole discovery value and ranges/shas carry none. The agent even checked the shas (call 4), saw they did not match, and wrote from the bodies anyway. That is the finding: for a patch harness the receipt is a BODY delivery; ranges/shas become load-bearing only when the write is the admit gate, which binds on them. The seat's own receipt-line "a mismatch is a REFUSAL, never a retry" was ignored by the agent, as the round-one reviewer predicted a printed instruction would be.
 
 Independent gate re-run for X and P (seat, 08:1xZ): JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0 
+
+## Replicates (launched 08:04Z) — T1b finished 08:1xZ
+| arm | raw | source reads before first patch | first patch at call | sites | gates |
+|---|---|---|---|---|---|
+| T1b (receipt, replicate) | 22 | 2 (registry ids; intent_contract_test + test_runner — the governance/test-classification reads) | 9 | six real sites (routes @2148, transform @682, js @456, tests @96/@386, registry @557) | seat re-run pending |
+T1b reproduces T1 within two calls (24 → 22; reads 2 → 2; first patch 7 → 9). N2 still running (33 raw / 16 reads at 08:1xZ, no patch yet — already above N's 32).
