@@ -1576,3 +1576,10 @@ demanded; a remedy that interpolated the caller's root into prose against CENSUS
 found them; (2) the builder's first :paths fence half-passed in the most misleading way — java.io.File(parent, child)
 concatenates an absolute child while fs/path replaces the root, so the absolute plant walked past a fence that refused the
 relative one. Cost flag for the mayor: five launcher drives added to mcp-test, ~4 min per drive at load 12.
+
+## 15:46Z admit gate round ten built (612ea68c); Sol round-eleven review launched
+
+The receipt now names its subject, its evidence and its verdict, and the witness checks the verdict against the script's own
+arm list rather than trusting the failing party's count — round nine's hole (a red battery's receipt suppressing the skip)
+is a typed FAILED third state that exits nonzero. Round eleven attacks the equality (permutation, extra arm, key types, a
+stale older-shape receipt). Nine rounds in, this lane's every finding has been a verifier blind to its own subject.
