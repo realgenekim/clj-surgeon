@@ -1477,3 +1477,432 @@ Newly cheap: every fan-out is the same product (keyword renames across maps, dep
 Further out, filed: fan-out where native cannot follow (cross-repo; semantic collision resolution — 30 collisions in one call tonight); the linked-intent ratchet as the merge gate (no change lands without a named intent and a witness the verb alone can produce); voice on top of the remote ("migrate store-2 to es across the app", one verified commit, receipt read back).
 
 Cherry-pick: tonight = E-AFFORD, E-PREWRITE, E-CEILING80, the first-call fix. Next session = multi-caller sweep; one more fan-out verb chosen for a real migration in one of Gene's repos; the apparatus write-up as a workshop unit.
+
+## 26. Cross-attack — Opus on Sol, verbatim (00:57Z). Its §0 CORRECTS §21/§23 and the 00:55Z Gene report: E3-P-N.md §5 already licensed a scripted edit; E-AFFORD is a salience gradient, not a counterfactual
+
+# Cross-attack: Opus red-teams SOL's E6-Q2 + E-REG poll
+
+*forge@anvil, 2026-09-04. Read-only. Sources read with `cat`/`sed` only, no Surgeon MCP call,
+nothing edited, no code run: `/home/forge/tmp/sol/e6q2-ereg-poll.md`,
+`/home/forge/tmp/sol/regpoll-opus.md`, `docs/observations/2026-09-04-e6q2-bigfile-cohort.md`,
+`docs/observations/2026-09-04-ereg-irregularity-cohort.md`,
+`docs/observations/2026-09-03-brainfleet-hills.md` §16–§23, plus the frozen apparatus under
+`/home/forge/tmp/arms/{ereg,e6q2}` and the prompt files at
+`clj-surgeon-arms/bench/anvil-arms/prompts/E3-P-{N,T}.md`.*
+
+**Rule I am holding myself to:** every objection below is scored against a figure that exists in
+a frozen receipt, and where the receipt kills my own objection I say so in the same paragraph.
+Two of the six objections die on the receipts. One of them kills a sentence of *mine* that is
+already in the brainfleet doc and is about to be quoted to Gene — that correction is §0.
+
+---
+
+## 0. Before the six: a correction that outranks the whole attack
+
+**The claim "native was never offered a scripted rewrite" is false, and it is my sentence.**
+
+`clj-surgeon-arms/bench/anvil-arms/prompts/E3-P-N.md` (sha256
+`9ab5267a77a2a02bb5bf4e4833d2bcbcb5055550f2830bdff092f316baa638f6`), §5 TOOLING, **verbatim, the
+prompt every one of the 8 E-REG native arms ran**:
+
+> You have your ordinary native tools only: shell, rg, sed, and apply_patch. There is no
+> structural editing server available. **Use whatever route you judge fastest and safe,
+> including a scripted edit if you believe it is correct for this tree.**
+
+`sed` is *named in the tool list* and a scripted edit is *explicitly licensed*. My poll §2 said
+the counterfactual gap was that "no native arm was ever *offered* a scripted rewrite… that is one
+prompt line away from collapsing," and my §6 sentence for Gene said "nobody ever offered it one."
+Both are wrong on the frozen prompt. What is true is weaker and still interesting: **native was
+licensed to script and declined 8 of 8 times anyway** (E-REG: "Zero of eight native arms used a
+`sed` or `perl` rewrite at any k — including k=1").
+
+Three consequences, all of which land tonight:
+
+1. **Square 2's claim gets *stronger*, not weaker.** "Native does not reach for the regex even
+   when it may" is now a measured behaviour under an explicit licence, not an artefact of silence.
+2. **E-AFFORD — launched at 00:38Z per §23 on my recommendation — is no longer a counterfactual.**
+   Its control cell is not "unlicensed"; it is "weakly licensed." E-AFFORD is now a **salience
+   gradient** experiment (licence buried in a clause vs licence made the headline of §5), which is
+   a smaller and more fragile claim. Its pre-registration must say so **before it lands**, or its
+   result will be reported against a control that does not exist.
+3. **§21 and §23 of the brainfleet doc, and my §6 sentence, need the correction in place before
+   anyone quotes the number to Gene.** This is exactly the class of defect the program has been
+   catching all night: a document asserting a state nobody verified at the place it takes effect.
+
+I am not asking Sol to own this. It is mine. It changes what I recommend at the end.
+
+---
+
+## 1. "350–450 chars per owner; refute with native-only N={5,21}, n=2, 4 arm-runs"
+
+**Sol's claim.** Payload is ~linear in owner count at 350–450 emitted chars per owner under the
+default patch policy; refute by holding k=1 and bytes-per-owner fixed, varying only N, 4 native
+arm-runs; the claim loses if N=21's mean is under 3× N=5's (4.2× predicted) or if compact
+generation appears in a majority of arms.
+
+### Objection A — the band as written covers **half** the arms it was fit to
+
+Per-owner chars, computed from E-REG's own table at N=21 (chars ÷ 21), per arm:
+
+| k | arm | chars | chars/owner | inside 350–450? |
+|---|---|---|---|---|
+| 1 | N-1 | 8,594 | **409** | yes |
+| 1 | N-2 | 1,929 | **92** | no |
+| 2 | N-1 | 9,724 | **463** | no |
+| 2 | N-2 | 7,377 | **351** | yes |
+| 3 | N-1 | 8,202 | **391** | yes |
+| 3 | N-2 | 8,179 | **389** | yes |
+| 6 | N-1 | 16,531 (2 patch calls; 8,951/call) | **787** (426/call) | no (yes per call) |
+| 6 | N-2 | 9,636 | **459** | no |
+
+**4 of 8 arms inside the band; 5 of 8 if k=6's two-call arm is scored per patch call.** And the
+k=1 *cell mean* is **5,262 / 21 = 251 chars per owner** — outside Sol's band entirely, because the
+one compact arm halves it. **Survives.** A band that already misses half its own training data
+cannot be the pre-registered predictor for a new sweep. *Change:* state the law **within the
+literal-patch stratum only** — there it is 389–463 chars/owner across 6 arms, a genuinely tight
+band — and report the compact-generation rate as a **separate** outcome, not as a loss condition
+bolted onto the same estimate.
+
+### Objection B — n=2 cannot see a 3× threshold through a bimodal outcome
+
+E-REG's k=1 native cell is **8,594 and 1,929 — a 4.5× spread inside one cell at n=2**. Sol's own
+loss condition ("compact generation appears in a majority of arms") concedes the contaminant
+exists, but with n=2 per cell "majority" is one arm. Worked case: if the N=21 cell draws two
+literal arms (~8,600 mean) and N=5 draws two literal arms (5 × 410 ≈ 2,050), the ratio is 4.2×
+and the claim passes. If N=21 draws *one* compact arm, its mean falls to ~5,250 and the ratio is
+2.6× — **the claim is refuted by a coin flip on a strategy that has nothing to do with N.**
+**Survives.** *Change:* n=3 per cell minimum, **median not mean**, and the strategy classifier
+pre-registered as a stratifier rather than as a footnote.
+
+### Objection C — the strategy mediator is **correlated with the manipulated variable**
+
+This is the one that breaks the design rather than resizing it. A compact program (the
+`ereg-k1-N-2` shape: "a compact JS table of 21 filenames" generating the patch body) has a fixed
+cost of roughly 1,500–2,000 characters and pays off only when the literal patch it replaces is
+larger than that. At **N=5** the literal patch is ~2,050 chars — *the compact program is not
+cheaper*, so no rational caller writes one. At **N=80** the literal patch is ~33,000 chars — the
+compact program is 15× cheaper and a strategy switch is the rational move. So the manipulation
+(N) **drives the mediator (strategy)** in a known direction, and a design that reports one mean
+per cell cannot separate "payload is linear in N" from "strategy switches with N." **Survives,
+and it is fatal to the 2-cell shape.** *Change:* three cells, classifier-stratified, and report
+the per-owner constant only within-stratum.
+
+### Objection D — "does N=5 even produce a patch big enough to measure?"
+
+**This objection FAILS on the receipts, and I withdraw it as posed.** The meter resolves to the
+character; the smallest native payload ever recorded in this program is **1,929 chars over a
+12.529 s emission gap at 154.0 chars/s** — comfortably measurable, and N=5's predicted ~2,050
+chars is larger than that. Measurability is not the problem.
+
+**But the receipt that saves it kills the cell for a different reason.** N=5's predicted literal
+patch (~2,050 chars) and the compact-program floor already observed at N=21 (**1,929 chars**) are
+**the same number**. The low cell sits exactly where its own two competing strategies become
+indistinguishable on the primary meter. **Drop N=5.** *Change:* the informative contrast is
+**N=21 (already have 8 native arms, free) vs N=80 (33,000 vs a ~2,000-char compact floor, a 16×
+separation)**. This also removes Sol's re-run of N=21 — 4 arm-runs recovered before anything
+launches.
+
+### Net for §1
+Objections A, B, C survive; D fails as posed and returns a stronger conclusion. **What to change:**
+do not run N={5,21} n=2. Reuse E-REG's 8 native N=21 arms as the anchor, spend the arms at N=80,
+n=3, k=1, classifier-stratified, median-scored.
+
+---
+
+## 2. "Retire 'a regex cannot close it'; the restated claim is 7–16× fewer chars in every cell"
+
+**We agree on the disposition** — I retired the same sentence in my §2 for the same reason. So
+the attack is on the *restatement*, which is what will be quoted.
+
+### Objection A — "7–16× … in every tested regularity cell" is a cell-mean statement wearing a per-arm uniform
+
+Cell means: 5,262/749 = **7.0×** (k=1), 8,550/1,140 = **7.5×**, 8,190/990 = **8.3×**,
+13,084/828 = **15.8×**. So 7–16× is right *for cell means*. Per **arm pairing** at k=1 the worst
+case is `ereg-k1-N-2` 1,929 vs `ereg-k1-T-1` 1,013 = **1.9×**. **Survives.** A sceptic reading
+"in every tested cell, 7–16×" and then finding a 1.9× pairing in the same table will discard the
+whole claim, and will be right to. *Change:* say it as I did — "**7.0× to 15.8× at the cell mean,
+never below 1.9× in any arm pairing**." The floor is unimpressive and it is the number that makes
+the claim un-dodgeable.
+
+### Objection B — the compact arm is missing from the restatement
+
+`ereg-k1-N-2` is the single most load-bearing arm in the cohort: the runner calls it "the one
+partial collapse… the most interesting arm in the cohort, and it still lost." Sol's restatement
+does not mention that native compressed once in two runs in the cell most favourable to it.
+**Survives.** *Change:* the restatement must carry "compressed once in two k=1 runs and still lost
+by 1.9×" — omitting it is the difference between a claim that survives review and one that gets
+called selective.
+
+### Objection C — the missing-evidence list omits the affordance fact from §0 above
+
+Sol lists "a direct comparison after making a compact native rewrite salient" as missing, which is
+correct as far as it goes, but §0 shows the licence was **already in the prompt**. **Survives, and
+it lands on both seats equally.** *Change:* the missing item is not "offer native a script"; it is
+"**make the licence salient rather than buried, and see whether salience alone moves 8/8**." That
+is a much narrower claim, and it changes what E-AFFORD can conclude.
+
+### Net for §2
+All three survive; none is fatal. Sol's disposition is right, the wording is over-claimed in one
+direction and under-claimed in another.
+
+---
+
+## 3. "Re-design, then run now" for N=80, given ~300 s native arms on a shared box
+
+### Objection A — "run now" contends for a lock another cohort already holds
+
+E-AFFORD launched at 00:38Z (§23) with 9 native arms, and every arm in this apparatus serialises
+on `flock /home/forge/tmp/arms/arm.lock` (`run-ereg.sh`, verbatim: "Serialised with E6-Q2 (port
+7909) via flock /home/forge/tmp/arms/arm.lock, PER ARM"). Six N=80 arms at ~300 s native +
+~40 s tool is **≈ 20 minutes of exclusive arm time queued behind ~20 minutes of E-AFFORD**.
+"Run now" is not available; the honest phrasing is "run next." **Survives as a scheduling
+correction**, not as a design objection.
+
+### Objection B — **the ordering is wrong, and this is the real hit**
+
+E-AFFORD is testing whether one line of §5 changes native's editing strategy. N=80's entire
+prediction ("native median 30,000 characters… with native still choosing literal patches in at
+least 2/3 arms") is **conditional on that strategy**. Running N=80 before E-AFFORD lands means, if
+E-AFFORD moves the strategy, the N=80 result measures a policy a one-line prompt edit removes —
+and the whole cohort has to be re-run against the new default. **Survives.** *Change:* N=80 runs
+**after** E-AFFORD, and inherits E-AFFORD's classifier and its winning §5 text as the pre-registered
+native condition.
+
+### Objection C — "measuring a number you can compute" — **this one FAILS**, and I concede it
+
+I made this objection in my own §3 ("80 × 410 = 32,800… the definition of waste"). Sol's re-design
+answers it exactly: the char total is derivable, but **the strategy switch is not**, and Sol keeps
+it as a pre-registered mediator. Objection C dies on Sol's own design. Concede.
+
+### Objection D — the wall clause is doing no work
+
+Sol says "make wall descriptive unless every included pair meets the load rule." Tonight's record:
+E-REG **11 of 16 walls void**, E6-Q2 **8 of 9 void** — **19 of 25**. The probability that three
+N=80 pairs all clear load 8 on a box that reached **18.19** tonight is small enough that the clause
+is decoration. **Survives, weakly.** *Change:* drop the conditional. Declare wall descriptive
+unconditionally at N=80 and stop spending sentences on it.
+
+### Net for §3
+Verdict **re-design** is right and I hold the same one. "Run now" is wrong on two counts —
+the lock, and the dependency on E-AFFORD. **Run third, not first.**
+
+---
+
+## 4. "Description-first canary" vs the E6-Q2 fact that 12 `invalid-mcp-request` refusals happened with the schema in `tools/list`
+
+### The receipt, verbatim (E6-Q2 cohort, "Secondary: 52% of `inspect_clojure` calls were refused")
+
+> **`invalid-mcp-request` × 12** — a missing `expect` block, or an argument at the wrong nesting
+> level (`file` at the request root instead of inside `requests`). **The coordinator hit the same
+> two refusals by hand in the pre-flight smoke test, on the first two calls, before any arm ran.**
+
+### Objection A — "the documentation was already there" is **not** what that receipt says. This objection FAILS.
+
+I made this argument in my §4 ("MCP ships the JSON schema in `tools/list`; the model read it and
+still emitted a flat shape"). It does not survive contact with the distinction Sol is drawing.
+**A JSON schema is not a worked example.** `tools/list` carries types and required keys; it does
+not carry one copyable nested request, and it does not enumerate the legal
+`verification_profile` values — which is exactly the second refusal class
+(**`unknown-verification-profile` × 2** in E-REG). Sol's fix targets the two things the schema
+provably does not supply. **My objection dies; Sol's canary is not refuted by the E6-Q2 fact.**
+I concede §4's core.
+
+### Objection B — but the human datapoint still bites, in a different place
+
+Three independent callers — one human coordinator and two model contexts, on two different verbs
+(`inspect_clojure` in E6-Q2, `alias_migration` in E-REG) — all guessed **flat where the tool
+demands nested**, and E-REG records "**the agent's first guess at the request shape is wrong
+three-quarters of the time**" (6 of 8 T arms). When a prior beats the specification across a human
+and two model contexts, "one more sentence" is a *hypothesis about that prior*, not a fix.
+**Survives as a probability statement, not as a refutation.** §23 already resolved it correctly —
+build both in one branch. Sol and I are both wrong to have litigated the order.
+
+### Objection C — the real error is spending **8 arm-runs** on the canary
+
+Sol's §5 #1 (E-FIRSTCALL-DESC) costs 8 arm-runs. Its primary — "first call accepted" — is binary
+and load-immune, so I concede it is *claimable*. But: (a) §23 has already ordered **both** fixes
+built, so the 8 arms are an **acceptance witness for a chore**, not an experiment; (b) my §4
+corollary stands unchallenged — on emitted characters, the only meter this program can currently
+claim, fixing it buys **~0** (the refusal costs ~120 chars of re-emission out of ~926); and (c) 8
+arms is roughly two-thirds of a night's arm budget. **Survives.** *Change:* **4 arms, one per
+E-REG fixture cell (k ∈ {1,2,3,6})**, run after the build, reported as an acceptance receipt and
+never as a cohort win.
+
+### Objection D — the predicted saving is 1.7–2.7× the runner's own measured figure
+
+Sol: "affected arms save 5–8 seconds and mean tool wall falls about 4–6 seconds." The E-REG cohort
+doc measures the price directly: "**The price is small (one call, ~3 s inside a 5.6–7.3 s total
+emission gap)**." Sol's 5–8 s is the brainfleet §20 paraphrase ("one refused call ≈ 5–8 s of the
+tool's 32–43 s wall"), not the runner's own number. And a predicted 4–6 s improvement on a
+34–40 s base is ~15% — **on a wall meter with a measured 172 s floor at n=3 and 19 of 25 walls
+void tonight**. **Survives.** *Change:* delete the wall prediction entirely; predict only the
+binary ("first call accepted, 7/8 → target ≥7/8"), which is the meter that survives the floor.
+
+### Net for §4
+Sol wins the description-vs-schema argument and I concede it. Sol loses on cost (8 arms → 4) and
+on the wall prediction (delete it).
+
+---
+
+## 5. E-PREWRITE — is "proof/refusal precedes the first worktree mutation" measurable for a native arm that never intends to prove anything, and is N 0/3 a tautology?
+
+### Objection A — **as worded, yes, it is a tautology, on BOTH sides.** Survives, and it is the sharpest objection in this document.
+
+Read the tool's own refusal constructor, `clj_surgeon/alias_migration.clj`, verbatim:
+
+```clojure
+(defn- refusal
+  [error-type message extra next-call]
+  (merge {:ok false
+          :operation "alias_migration"
+          :error_type (name error-type)
+          :error message
+          :source_unchanged true
+          :mutation_attempted false
+          :write_authority false
+          ...
+```
+
+and `plan`, which folds **every** source file into one result and short-circuits on the first
+refusal *before any write happens at all*. **T proving-before-write is an architectural invariant
+of the verb, not an empirical outcome.** Meanwhile, on a task every arm can complete, native's only
+"proof" is `bin/fan-test` — which the shared §3 DONE MEANS places *after* the edit. So on a task as
+Sol describes it, **T 3/3 and N 0/3 are both known before arm 1**, and six arm-runs buy a
+restatement of an implementation detail.
+
+*Change (this is what deliverable 2 fixes):* the task must be one where **the correct outcome is
+to change nothing and report**, the block must be **cheaply discoverable by a read**, and the
+prompt must state the all-or-nothing rule identically in both arms. Then N can win by two cheap
+actions — one `rg` and one sentence — and N 0/3 is a **behaviour**, not a definition.
+
+### Objection B — the receipt that makes N a live contender, so 0/3 would be a finding
+
+E6-Q2's native arm: "**three tool calls, flat, in all three runs**", "**~300 of 7,516 lines
+read**", **54/54 probes correct**, using `rg` then ten numbered `sed` windows. This caller is a
+**very** strong read-first agent. If a native arm that reads that well still writes before it
+reports a block it could have found with one `rg`, that is a genuine, quotable behavioural finding
+about square 4. **The objection to Sol here is not that N 0/3 is uninteresting — it is that Sol's
+task design makes it unearnable.**
+
+### Objection C — "witnessed by transcript plus filesystem hash" has no sampling procedure
+
+A hash at start and a hash at end **cannot detect a write-then-revert**, which is precisely the
+failure mode the meter exists to catch. Neither `inotifywait` nor `fswatch` is installed on this
+box (checked). **Survives.** *Change:* a driver-side 250 ms hash poller writing a change-only
+ledger, **plus** an independent second predicate at arm exit — `find src -newer <t0 stamp>`, since
+**ctime changes even when content is restored**. Two predicates, disagreement reported typed,
+never silently resolved.
+
+### Objection D — the T-side escape hatch is unpriced
+
+E3-P-T.md §5, verbatim: "**You still have your native tools; use them if the tool cannot complete
+the task.**" So a T arm can take the refusal and then hand-patch 21 files — which passes the
+proof-before-write primary and **fails the task**. Sol's withdrawal clause does not cover it.
+**Survives.** *Change:* pre-register it — if T proves-before-write 3/3 but fails the correctness
+gate in ≥2/3 arms, the product claim is withdrawn: *a refusal the agent immediately routes around
+is not proof before write, it is a speed bump.*
+
+### Objection E — Sol's withdrawal clause is half dead weight
+
+"withdraw square 4 if T fails to prove-before-write in any arm" is, per Objection A, near-impossible
+by construction; "or if N achieves it in ≥2/3" is the whole informative half. **Survives, weakly.**
+*Change:* keep both verbatim (a withdrawal condition written before arm 1 is not to be edited after)
+and **add** the two above, also before arm 1.
+
+### Net for §5
+Objection A is fatal to the experiment **as worded** and repairable **as designed** — which is what
+`/home/forge/tmp/sol/eprewrite-prereg.md` does. Sol's instinct (cheap, binary, load-immune, 6 arms)
+is right and beats my E-EXTRACT as the first square-4 experiment; Sol's task is the part that
+cannot survive.
+
+---
+
+## 6. The sentence for Gene
+
+Sol's sentence:
+
+> Gene: tonight's six results proved that disciplined, pre-registered falsification was worth
+> it—it killed square 3 and the irregularity story while exposing a real load-immune fan-out
+> emission win—but they did not prove a general wall-speed advantage, a correctness advantage, or
+> a product win beyond this caller and task family.
+
+### Objection A — it contains **zero numbers**, and Gene has ruled twice on exactly this
+
+Standing policy 3, count-first status: "every status line leads with the number a human would panic
+about." His 2026-09-02 ruling in my own memory: "every experiment report opens with the table
+(arm, wall, correct?) + one line of learning + one caveat; A vs B vs native timings first." Sol's
+sentence leads with a **methodological virtue**. **Survives.** *Change:* lead with 7,377–16,531 vs
+485–1,260, and 54/54 in three tool calls.
+
+### Objection B — "did not prove a general wall-speed advantage" understates the truth
+
+Nineteen of twenty-five walls tonight are **void**, not merely inconclusive: E-REG 11/16, E6-Q2
+8/9. "Did not prove" reads as "the evidence leaned the wrong way." The honest and stronger
+statement is "**no wall was claimable at all; every headline tonight rests on characters and
+counts, which load cannot move.**" **Survives.**
+
+### Objection C — it omits the experiment that can still take the headline away
+
+Mine named it; Sol's does not. Post-§0, the item has changed but has not gone away: the licence was
+buried in §5's last clause, salience was never varied, and 8/8 declined anyway. **Survives.**
+
+### Objection D — "a product win beyond this caller and task family" is doing too much work in one clause
+
+It bundles four distinct exposures the cohort docs list separately (another caller, another harness,
+another N, a real repo). One clause hides four. **Survives, mildly.**
+
+### The replacement sentence I would send
+
+> **On the same 21-file rename, the plain agent hand-typed 7,377 to 16,531 characters at about
+> 145 a second while the verb sent 485 to 1,260 and both landed byte-identical trees — the verb
+> won all four cells including the perfectly tidy one — and on the two biggest files in the repo
+> the plain agent answered 54 of 54 structural questions in three tool calls, so the read-side
+> square is withdrawn on its own pre-registered terms; no wall figure is claimed anywhere tonight
+> because 19 of 25 walls were void under load, and the one thing that could still take the
+> character win away is that the native prompt already licensed a scripted edit in its last line
+> and the agent declined it 8 times out of 8 — nobody has yet tested whether making that licence
+> prominent changes the number.**
+
+---
+
+## What I CONCEDE to Sol — one line each
+
+1. **§4 core:** a JSON schema in `tools/list` is not a worked example; my "the model already had
+   the description" overstated the receipt, and Sol's description-first canary is not refuted by
+   the E6-Q2 human datapoint.
+2. **§5 ordering:** E-PREWRITE beats my E-EXTRACT as the first square-4 experiment — binary,
+   load-immune, 6 arms, no 1.5-hour fixture build.
+3. **§3 objection C is dead:** the N=80 char total is derivable but the strategy switch is not, and
+   Sol's mediator design answers my own "measuring a number you can compute" objection.
+4. **§1 framing:** "per owner, conditional on the default editing policy" is the better statement of
+   the law than my "per emitted patch line" — it names the conditioning clause instead of the format.
+5. **§3/§5 withdrawal clauses:** Sol's are sharper than mine ("T not ≥5× smaller in ≥2/3 pairs";
+   "N achieves proof-before-write in ≥2/3") and I adopt both verbatim rather than re-wording them.
+6. **Wall posture:** Sol's "make wall descriptive" is the right default given 19 of 25 void tonight;
+   I was still arguing about wall in places where the meter no longer exists.
+
+---
+
+## One committed recommendation for the next 60 minutes of arm time
+
+**Do these three things, in this order, and start nothing else.**
+
+1. **(0–5 min, no arms) Land the §0 correction before any result is quoted.** Amend brainfleet §21
+   and §23 and my §6 sentence to say that E3-P-N.md §5 already licensed a scripted edit, and
+   re-label E-AFFORD's cells **weakly-licensed vs salient** in its pre-registration — *while it is
+   still running*, not after. An experiment whose control is mis-described in the doc that reports
+   it is the exact defect this program spent the night ratcheting against.
+2. **(5–25 min) Let E-AFFORD finish; do not add load.** It holds `arm.lock`; its 9 native arms are
+   the gate on both square 2's headline and N=80's native condition. Nothing else touches the box.
+3. **(25–60 min) Run E-PREWRITE from the merged pre-registration** at
+   `/home/forge/tmp/sol/eprewrite-prereg.md` — 6 arms (3 N + 3 T), the trap fixture derived from
+   the frozen `fanout-k2` tree, port **7941**, primary = worktree content hash unchanged at the
+   first proof/refusal. Its arms are short (the correct answer is "change nothing"), it needs no
+   new fixture generation, and it is the only unmeasured square left standing.
+
+**Explicitly NOT in the next 60 minutes:** N=80 in any spelling (it depends on E-AFFORD's result
+and costs ~20 min of exclusive lock); Sol's N=5 cell (its two strategies are indistinguishable at
+~2,000 chars — drop it permanently, and reuse E-REG's existing 8 native N=21 arms as the anchor);
+E-FIRSTCALL-DESC (it is a chore's acceptance witness, it runs after the build, and at 4 arms, not 8).
+
+**Coordinator actions on receipt (00:57Z):** E-AFFORD amendment 2 sent before its affected arms (cells relabelled N-weak / N-salient; no prompt bytes, predictions, or withdrawal clauses changed); the 00:55Z Gene report corrected in place; the merged E-PREWRITE pre-registration copied to docs/observations/2026-09-04-eprewrite-preregistration.md and its runner launched (setup + the six §12 validations now; arms queue behind E-AFFORD on arm.lock). N=5 dropped permanently; N=80 waits for E-AFFORD; the description canary runs at 4 arms after the build.
