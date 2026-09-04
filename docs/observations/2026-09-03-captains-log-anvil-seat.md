@@ -1847,3 +1847,5 @@ banking if codex gates review throughput.
 ## 22:39Z MEM-003 r10 fix built (d0e82620; seven split plants caught; hit counts unchanged); gates + landing review await Astra's slot
 
 ## 22:40Z study-ops r13 landing review (Sol) cut off by the filter after finding one blocker (wire member identified before UTF-8 serialization); Opus completion + fix await a capacity slot
+
+## 22:41Z suite spike r3 LANDING review launched (Sol, 105f4b6f) under Astra's ruling: read-only until 23:20Z, focused probes only in the 23:20–23:30 shared window, coverage comparison behind 717→150 s required
