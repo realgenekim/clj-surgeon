@@ -1585,3 +1585,12 @@ is a typed FAILED third state that exits nonzero. Round eleven attacks the equal
 stale older-shape receipt). Nine rounds in, this lane's every finding has been a verifier blind to its own subject.
 
 ## 15:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1028: study-agent-usage] Terminated
+
+## 15:53Z study-ops round nine (Sol): NO-GO, one blocking; both load flakes did not reproduce
+
+The ninth collision the brief asked for was found: the empty-string segment. `["" 0]` and `[0]` render as the same
+pointer, and the generated 5,219-path witness could not see it because its alphabet omitted "" — a control defined by a
+list, once more, this time the witness's alphabet rather than the scanner's. Unicode line and paragraph separators are
+still raw under STUDY-053. Both "unreproduced failures under load" disclosures of the night (feature_thread r6: 3,
+study-ops r8: 6) have now been re-run on fresh clones by reviewers and did not recur (0/10 and 0/2). Verdict: load 11–12
+with three seats on the box, not code. Scheduling remains the fix: cap concurrent JVM suites. Round 10 building.
