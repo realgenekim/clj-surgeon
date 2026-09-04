@@ -73,7 +73,15 @@
   [^File file]
   (boolean (re-find census/source-name-pattern (.getName file))))
 
-(defn- inside-root?
+(defn inside-root?
+  "Is `candidate` — a REAL path, links already resolved — at or beneath `root`?
+
+   Public because it is the census's fence and `clj-surgeon.core` needed the
+   same one. Round-23 review finding 3: `:op :ls-tree` followed a discovered
+   build file's `:paths` out of the caller's tree, and the census verb driven
+   against the identical fixture reported `files-scanned 1` because THIS
+   predicate held there. A second fence written beside a working one is how
+   two fences come to disagree; there is one, and both callers use it."
   [^Path root ^Path candidate]
   (and (some? candidate) (.startsWith candidate root)))
 

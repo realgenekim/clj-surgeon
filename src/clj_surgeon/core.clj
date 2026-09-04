@@ -327,6 +327,98 @@
                               (edn/read-string (slurp (str build-file))))
     (catch Exception _e ["src"])))
 
+;; @spec MCP-OP-SHELL-ARGV-006
+(defn- fenced-source-paths
+  "The subset of one build file's source paths this op may actually walk,
+   with a COUNT of the entries it refused.
+
+   Returns `{:paths [entry …] :refused n :refused-entries [spelling …]}`.
+
+   Round-23 review finding 3. Round twenty-one closed the READER half of this
+   vector — the build file is read as data now, so `#=` is inert — and left
+   the CONFIGURATION half open: the `:paths` the file names were used both
+   UNVALIDATED and UNFENCED. `{:paths [\"../outside\"]}` and
+   `{:paths [\"/any/absolute/tree\"]}` each directed `:op :ls-tree` to
+   enumerate and print an arbitrary tree — 80 files, 2,499 forms, every
+   namespace, every require and every def name with its line range — at exit
+   0, at both real launchers, from a directory whose only power the caller
+   had was to write a file in it. Same op, same frame, same premise as the
+   reader half: controlling a directory is enough.
+
+   Two checks, in this order, and both matter:
+
+   - a STRING check, because nothing performed one. `{:paths [[\"src\"] 42]}`
+     went straight to `io/file`, where the jvm launcher and bb produced two
+     different failures for one input (the review's §2 parity divergence, the
+     tell that pointed at this finding).
+
+   - a RESOLVE-then-FENCE check, on the REAL path and never on the spelling.
+     `..` and an absolute entry are the same escape reached by two spellings,
+     a symlink is a third, and a predicate over the text catches none of
+     them. This is `census-discovery`'s own fence, called rather than
+     re-implemented: the census verb driven against the identical hostile
+     fixture reported `files-scanned 1` precisely because that predicate held
+     there, and a second fence written beside a working one is how two fences
+     come to disagree.
+
+   The refusal names the entry AS THE CALLER SPELLED IT and never the tree it
+   resolved to: the target is a fact about the box, the spelling is the fact
+   about the request, and a refusal that publishes the target hands over the
+   very path it just declined to read. The count is returned rather than
+   swallowed because a tree whose build file names one escaping path and one
+   legitimate one must not be reported as complete — a completeness claim
+   over a walk that left the caller's tree is the defect this fence exists to
+   stop, wearing a green receipt."
+  [root src-paths]
+  (let [^java.nio.file.Path canonical (census-discovery/canonical-root (str root))]
+    (reduce
+      (fn [acc entry]
+        (if-not (string? entry)
+          (-> acc
+              (update :refused inc)
+              (update :refused-entries conj (pr-str entry)))
+          (let [;; RESOLVED THE WAY THE WALKER RESOLVES, and this is the whole
+                ;; correctness argument. The first draft of this fence joined
+                ;; with `java.io.File.(parent, child)`, which CONCATENATES an
+                ;; absolute child onto the parent and yields a path that does
+                ;; not exist — so the fence saw an unresolvable entry, waved
+                ;; it through, and `find-clj-files` then resolved the same
+                ;; text with `fs/path`, where an absolute component REPLACES
+                ;; the root. The absolute plant walked straight past the fence
+                ;; that was written to stop it. A fence that resolves its
+                ;; subject differently from the consumer is not a fence; it is
+                ;; a second opinion about a different path.
+                resolved (try (.normalize (.toAbsolutePath
+                                            ^java.nio.file.Path (fs/path root entry)))
+                              (catch Throwable _ nil))
+                ;; Links resolved too, when the entry exists. Lexical
+                ;; normalisation alone cannot see `src -> /elsewhere`.
+                real (when resolved
+                       (try (.toRealPath resolved
+                                         (make-array java.nio.file.LinkOption 0))
+                            (catch Throwable _ nil)))
+                escapes?
+                (cond
+                  ;; A root that does not resolve has no fence to apply; the
+                  ;; entrance already refuses that :dir upstream.
+                  (nil? canonical) false
+                  (nil? resolved) true
+                  ;; Both checks, and either one refuses. LEXICAL catches an
+                  ;; entry naming a tree that does not exist yet — which the
+                  ;; real-path check cannot see at all, and which the caller
+                  ;; can create between this scan and the next. REAL catches a
+                  ;; symlink out, which the lexical check cannot see.
+                  (not (census-discovery/inside-root? canonical resolved)) true
+                  (and real (not (census-discovery/inside-root? canonical real))) true
+                  :else false)]
+            (if escapes?
+              (-> acc
+                  (update :refused inc)
+                  (update :refused-entries conj (pr-str entry)))
+              (update acc :paths conj entry)))))
+      {:paths [] :refused 0 :refused-entries []}
+      src-paths)))
+
 ;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-clj-files
   "Find all .clj/.cljs/.cljc files under a directory using system find.
@@ -363,7 +455,9 @@
       (->> by-root
            (map (fn [[root files]]
                   (let [build-file (first files)
-                        src-paths (extract-source-paths build-file)
+                        ;; @spec MCP-OP-SHELL-ARGV-006
+                        fenced (fenced-source-paths root (extract-source-paths build-file))
+                        src-paths (:paths fenced)
                         root-path (fs/path root)
                         clj-files (->> src-paths
                                        (mapcat #(find-clj-files (fs/path root %)))
@@ -372,8 +466,19 @@
                                        vec)]
                     {:name (str (fs/file-name root-path))
                      :root (str root-path)
+                     :refused-source-paths (:refused fenced)
+                     :refused-source-path-entries (:refused-entries fenced)
                      :files clj-files})))
-           (remove #(empty? (:files %)))
+           ;; @spec MCP-OP-SHELL-ARGV-006
+           ;; A project is dropped when it has no files AND refused nothing.
+           ;; Keeping the one that refused everything is the whole point: the
+           ;; reviewer's plant names ONE escaping path, so dropping it here
+           ;; sends the op to "No Clojure files found under <the directory
+           ;; you named>" and exit 1 — a completeness claim over a walk that
+           ;; was fenced, with the fence itself invisible. The refusal has to
+           ;; survive discovery to be reported by it.
+           (remove #(and (empty? (:files %))
+                         (zero? (or (:refused-source-paths %) 0))))
            (sort-by :name)
            vec)
       ;; No build files — fallback to recursive scan
@@ -565,6 +670,22 @@
                                (or args-str "")))))
     (str lines)))
 
+(defn- source-path-refusals
+  "Every fenced-out `:paths` entry across the discovered projects, as spelled.
+
+   @spec MCP-OP-SHELL-ARGV-006. Shaped exactly like `admission-refusals`,
+   which is this repository's settled answer to the same question: a skip
+   must be NAMED and COUNTED, never silent. The alternative here is worse
+   than silence — a build file naming one escaping path and one legitimate
+   one produces a receipt that looks complete over a tree half of which was
+   declined, and a build file naming ONLY escaping paths produces `No Clojure
+   files found under <the directory you named>`, a completeness claim about a
+   walk that never happened."
+  [projects]
+  (vec (for [p projects
+             entry (:refused-source-path-entries p)]
+         {:project (:name p) :entry entry})))
+
 (defn format-ls-tree-text
   "Pure: format ls-tree results as compact text for LLM/human scanning.
    Expects projects with :outlines already computed."
@@ -590,6 +711,19 @@
     ;; A refused file is a named, counted skip — never a silent one and never a
     ;; dead scan. Nothing is appended when nothing was refused, so an ordinary
     ;; scan's output is byte-identical to before this control existed.
+    ;; @spec MCP-OP-SHELL-ARGV-006
+    ;; Named and counted, on the same terms as the admission block below and
+    ;; for the same reason. The ENTRY is printed as the caller spelled it and
+    ;; the tree it resolved to is not printed at all: publishing the target
+    ;; would hand over the very path this fence just declined to read.
+    (let [escaping (source-path-refusals projects)]
+      (when (seq escaping)
+        (.append sb (format "── source_paths_outside_project: %d entr%s\n"
+                            (count escaping)
+                            (if (= 1 (count escaping)) "y" "ies")))
+        (doseq [{:keys [project entry]} escaping]
+          (.append sb (format "   %s  %s  refused: it resolves outside the project root\n"
+                              project entry)))))
     (let [refused (admission-refusals projects dir)]
       (when (seq refused)
         (.append sb (format "── parser_admission_refused: %d file(s)\n"
@@ -642,10 +776,18 @@
         ;; and a regression shows up on ORDINARY scans, which are ~100% of
         ;; production runs and were 0% of the runs that printed the number. A
         ;; gauge wired to the rare branch is a gauge nobody will see move.
+        ;; @spec MCP-OP-SHELL-ARGV-006
+        escaping (source-path-refusals projects)
         receipt (cond-> {:resources (scan-resources projects)}
                   (seq refused)
                   (assoc :parser_admission_refused
-                         {:count (count refused) :files refused}))]
+                         {:count (count refused) :files refused})
+                  ;; Named and counted here too, and carrying only the
+                  ;; SPELLING. Conditional for the same reason the admission
+                  ;; key is: an ordinary scan's receipt is unchanged.
+                  (seq escaping)
+                  (assoc :source_paths_outside_project
+                         {:count (count escaping) :entries escaping}))]
     (conj entries {:receipt receipt})))
 
 (defn- find-nearest-build-file
@@ -672,14 +814,31 @@
         (->> (or build-hits [])
              (map (fn [bf]
                     (let [root (str (fs/parent (fs/path bf)))
-                          src-paths (extract-source-paths bf)
+                          ;; @spec MCP-OP-SHELL-ARGV-006
+                          ;; The grep fast path reads the same build files
+                          ;; through the same extractor, so it inherits the
+                          ;; same defect and needs the same fence. A fence at
+                          ;; one of two call sites is not a fence, it is that
+                          ;; call site's habit — and `:grep` is one argument
+                          ;; away for the caller who just planted the file.
+                          fenced (fenced-source-paths root (extract-source-paths bf))
+                          src-paths (:paths fenced)
                           clj-files (->> src-paths
-                                         (mapcat #(find-clj-files (str root "/" %)))
+                                         ;; @spec MCP-OP-SHELL-ARGV-006
+                                         ;; `fs/path`, not string concatenation,
+                                         ;; so this call site resolves an entry
+                                         ;; EXACTLY as the fence just did. Two
+                                         ;; resolvers over one string is how the
+                                         ;; absolute plant walked past the first
+                                         ;; draft of that fence.
+                                         (mapcat #(find-clj-files (fs/path root %)))
                                          (remove nil?)
                                          sort
                                          vec)]
                       {:name (str (fs/file-name (fs/path root)))
                        :root root
+                       :refused-source-paths (:refused fenced)
+                       :refused-source-path-entries (:refused-entries fenced)
                        :files clj-files})))
              (remove #(empty? (:files %))))
 
