@@ -2087,6 +2087,33 @@
       (throw (ex-info "Provide exactly one of :spec or :spec-file"
                       {:error-type :missing-spec-input})))))
 
+;; @spec MCP-OP-CENSUS-014
+(defn- print-launcher-refusal!
+  "THE ONE PLACE the LAUNCHER's own refusals are printed, and bounded.
+
+   Sol's round-eighteen item 1, blocking. `run-relation-census` bounds the op's
+   exits and `mcp-relation-census/entrance-bounded` bounds the tool's, and the
+   launcher — which is the public CLI entrance, the thing an operator actually
+   types — bounded nothing: `parse-args` throws BEFORE dispatch, so a repeated
+   10,001-character `:doors` reached the catch-all below and was printed
+   verbatim, twice in `:values` and once in the message, 20,228 bytes with no
+   truncation marker.
+
+   The bound is a property of the EXIT, not of the op. `census/bound-refusal`
+   is the same function the op's last step uses, for the reason its own
+   docstring gives: a bound enforced at some of the sites is not a bound, it is
+   those sites' habit, and the habit does not travel to the site added next
+   round. So there is ONE printing site for a launcher refusal, and it is
+   bounded; the names it can print are declared in
+   `census/launcher-refusal-types` and enumerated by a witness that drives both
+   real launchers as subprocesses.
+
+   Returns the bounded map, because `-main`'s exit code is decided from it."
+  [refusal]
+  (let [bounded (relation-census/bound-refusal refusal)]
+    (pp/pprint bounded)
+    bounded))
+
 (defn- run-op
   "Dispatch one shape-validated request. Loads project aliases first."
   [canonical {:keys [op] :as opts}]
@@ -2137,7 +2164,16 @@
                     :error-type :unknown-operation
                     :usage "clj-surgeon :op :help"}
                    opts))]
-    (if (string? result) (println result) (pp/pprint result))
+    (cond
+      (string? result) (println result)
+      ;; Round nineteen. THIS branch is a LAUNCHER refusal, not an op's: it is
+      ;; about the `:op` in the request, and no op ran. So it leaves through
+      ;; the launcher's one bounded exit, exactly as its `--help` twin does.
+      ;; Every other result here is an op's own — a receipt or a typed op
+      ;; refusal — and is printed untouched, because a bound belongs at the
+      ;; exit that OWNS the answer and this function does not own theirs.
+      (= :unknown-operation (:error-type result)) (print-launcher-refusal! result)
+      :else (pp/pprint result))
     result))
 
 (defn run [{:keys [op] :as opts}]
@@ -2230,33 +2266,6 @@
                                   (filter #(= repeated (first %)) pairs))}))))
       (cond-> (into {} pairs)
         has-help? (assoc :help true)))))
-
-;; @spec MCP-OP-CENSUS-014
-(defn- print-launcher-refusal!
-  "THE ONE PLACE the LAUNCHER's own refusals are printed, and bounded.
-
-   Sol's round-eighteen item 1, blocking. `run-relation-census` bounds the op's
-   exits and `mcp-relation-census/entrance-bounded` bounds the tool's, and the
-   launcher — which is the public CLI entrance, the thing an operator actually
-   types — bounded nothing: `parse-args` throws BEFORE dispatch, so a repeated
-   10,001-character `:doors` reached the catch-all below and was printed
-   verbatim, twice in `:values` and once in the message, 20,228 bytes with no
-   truncation marker.
-
-   The bound is a property of the EXIT, not of the op. `census/bound-refusal`
-   is the same function the op's last step uses, for the reason its own
-   docstring gives: a bound enforced at some of the sites is not a bound, it is
-   those sites' habit, and the habit does not travel to the site added next
-   round. So there is ONE printing site for a launcher refusal, and it is
-   bounded; the names it can print are declared in
-   `census/launcher-refusal-types` and enumerated by a witness that drives both
-   real launchers as subprocesses.
-
-   Returns the bounded map, because `-main`'s exit code is decided from it."
-  [refusal]
-  (let [bounded (relation-census/bound-refusal refusal)]
-    (pp/pprint bounded)
-    bounded))
 
 (defn -main [& args]
   (try
