@@ -1845,3 +1845,5 @@ banking if codex gates review throughput.
 ## 22:38Z suite spike r3 built (105f4b6f): all gates green on a fresh clone, N=4 battery PASS x2, battery ledger + freshness tripwire (which caught its own false-alarm bug before landing); landing review awaits Astra's slot
 
 ## 22:39Z MEM-003 r10 fix built (d0e82620; seven split plants caught; hit counts unchanged); gates + landing review await Astra's slot
+
+## 22:40Z study-ops r13 landing review (Sol) cut off by the filter after finding one blocker (wire member identified before UTF-8 serialization); Opus completion + fix await a capacity slot
