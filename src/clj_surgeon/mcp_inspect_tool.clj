@@ -834,30 +834,55 @@
               shown))))
 
 ;; @spec MCP-OP-STUDY-042
-(def ^:private refusal-detail-keys
-  "The refusal fields whose VALUE a caller needs to correct the call.
+(def refusal-structural-keys
+  "Refusal keys the text already renders as STRUCTURE — the header, the cause,
+  the owner evidence, the continuation coaching, the payload echo, and the
+  transport fields no caller acts on.
 
-  Enumerated rather than inferred, and written down here the way
-  MCP-OP-STUDY-034 writes down the source-carrying keys: a NEW refusal field
-  that a caller must act on belongs in this set the day it is added, or a
-  text-only client is handed a category name and told to try again."
-  [:path :failed_stage :missing :unknown :supported :expected :actual
-   :expected_match_count :actual_match_count :maximum :minimum :scope
-   :required :limits :request_id :request_index :observed_at_least
-   :paths_unresolved])
+  Everything else a refusal carries is rendered as a `key: value` detail line.
+  The set is written down here, and the default is to RENDER: a new refusal
+  field is carried into the text the day it is added, and only a deliberate
+  entry in this set can keep it out. Field evidence (O2 re-review): the
+  opposite default — an allow-list of fields to print — is how seven of nine
+  modes came to refuse with a category name and an arrow."
+  #{:ok :operation :mode :error :error_type :error-type :reason
+    :next_action :next-action :next_call :remedy :remedies
+    :read_complete :source_unchanged :source-unchanged :basis-retained
+    :elapsed_ms :inspection_elapsed_ms :workspace_root :file_read_count
+    :available_owners :available_owner_count :available_owners_returned
+    :available_owners_truncated :available_owners_omitted
+    :failed_request :failures :selection_failures :form_candidates
+    :candidates_truncated :hypotheses_truncated :continuation
+    :file_hashes :results :dir :grep :ns_grep :format :limit})
+
+(def ^:private refusal-detail-order
+  "The order the most-used detail lines print in. Keys outside it follow, in
+  name order, so the block is stable across runs and readable across kinds."
+  [:path :failed_stage :request_id :request_index :form :missing :unknown
+   :supported :expected :actual :scope :required :limits :maximum :minimum])
+
+(def ^:private max-refusal-detail-characters 512)
 
 ;; @spec MCP-OP-STUDY-042
 (defn- refusal-detail-lines
   [result]
-  (into []
-        (keep (fn [key]
-                (when (contains? result key)
-                  (let [value (get result key)]
-                    (str "  " (name key) ": "
-                         (if (string? value)
-                           value
-                           (json/generate-string value)))))))
-        refusal-detail-keys))
+  (let [keys-present (remove refusal-structural-keys (keys result))
+        ordered (concat (filter (set keys-present) refusal-detail-order)
+                        (sort (remove (set refusal-detail-order) keys-present)))]
+    (into []
+          (map (fn [key]
+                 (let [value (get result key)
+                       rendered (if (string? value)
+                                  value
+                                  (json/generate-string value))
+                       bounded (if (<= (count rendered)
+                                       max-refusal-detail-characters)
+                                 rendered
+                                 (str (subs rendered 0
+                                            max-refusal-detail-characters)
+                                      " … (" (count rendered) " characters)"))]
+                   (str "  " (name key) ": " bounded))))
+          ordered)))
 
 ;; @spec MCP-OP-STUDY-042
 (defn refusal-text

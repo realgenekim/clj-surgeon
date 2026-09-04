@@ -2421,3 +2421,169 @@
                         #(str % "\n  99: defn phantom-form []"))))
             #(is (not (agree?)))))
         (is (agree?) "and the mutation is restored")))))
+
+;; ============================================================
+;; THE CLASS RATCHET: a new mode or refusal cannot ship text-blind
+;; ============================================================
+;; O2 fixed one of ten members of this class and shipped. The re-review found
+;; the other nine by hand. That is the failure worth ratcheting: not any one
+;; mode's rendering, but the fact that nothing made the NEXT mode prove it
+;; renders. The two tables below are derived from the tool's PUBLISHED schema,
+;; so an operation or mode added to `inspect_clojure` without a rendering — or
+;; without an entry here — fails this witness before it can reach a client.
+
+(defn- schema-operations
+  []
+  (set (keep #(get-in % [:properties "operation" :const])
+             (get-in inspect-tool/inspect-schema
+                     [:properties "requests" :items :oneOf]))))
+
+(defn- schema-modes
+  []
+  (set (get-in inspect-tool/inspect-schema [:properties "mode" :enum])))
+
+(def ^:private class-ratchet-fixture
+  (str "(ns fixture.core\n"
+       "  (:require [clojure.string :as str]))\n"
+       "\n"
+       "(defn- helper [x]\n"
+       "  (str/upper-case (str x)))\n"
+       "\n"
+       "(defn greet [name]\n"
+       "  (helper name))\n"
+       "\n"
+       "(defn shout [name]\n"
+       "  (str (greet name) \"!\"))\n"))
+
+(def ^:private class-ratchet-requests
+  "One request per published `operation`. The key set is asserted equal to the
+   schema's, so a NEW operation lands here as a failing test rather than as a
+   text block carrying a count."
+  {"forms" {"forms" ["greet"] "expect" {"forms" 1}}
+   "outline" {}
+   "match" {"match" "(str _ _)"}
+   "xray" {"expression" "(-> (form 'greet) (xray count))"}
+   "deps" {"limit" 16384}
+   "topo" {"limit" 16384}
+   "ls-deps" {"form" "shout" "limit" 16384}
+   "ls-extract" {"form" "shout" "limit" 16384}})
+
+(def ^:private class-ratchet-mode-coverage
+  "Every published `mode`, and where its text block is witnessed.
+
+   `prepare-change` and `plan-extraction` carry their own dedicated summaries
+   and their own suites; they are named here so that a mode added to the
+   vocabulary cannot pass unclassified."
+  {"ls-tree" :witnessed-here
+   "prepare-change" :witnessed-in-mcp-inspect-tool-test
+   "plan-extraction" :witnessed-in-mcp-extraction-plan-test})
+
+;; @spec MCP-OP-STUDY-041
+(deftest every-published-mode-renders-its-rows-in-the-text
+  (is (= (schema-operations) (set (keys class-ratchet-requests)))
+      (str "every published operation needs an entry in the class ratchet; "
+           "unclassified: "
+           (pr-str (into (vec (remove (set (keys class-ratchet-requests))
+                                      (schema-operations)))
+                         (remove (schema-operations)
+                                 (keys class-ratchet-requests))))))
+  (is (= (schema-modes) (set (keys class-ratchet-mode-coverage)))
+      "every published mode is classified as witnessed here or named elsewhere")
+  (with-tmp-project
+    (fn [dir]
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (fs/create-dirs (str dir "/src/fixture"))
+      (spit (str dir "/src/fixture/core.clj") class-ratchet-fixture))
+    (fn [config]
+      (doseq [[operation extra] (sort class-ratchet-requests)]
+        (testing operation
+          (let [response (inspect-tool/execute-inspect!
+                           config
+                           {"requests" [(merge {"id" "r1"
+                                                "operation" operation
+                                                "file" "src/fixture/core.clj"}
+                                               extra)]
+                            "expect" {"requests" 1 "files" 1}})
+                result (result-of response)
+                text (inspect-tool/inspect-summary
+                       (assoc response :elapsed_ms 1.0))
+                rows (inspect/result-rows result)]
+            (is (true? (:ok response)) (pr-str (:error response)))
+            (is (seq rows)
+                (str operation " publishes no rows: `result-evidence` has no "
+                     "case for it, so its text block is a count"))
+            (is (= rows (evidence-rows text))
+                "rendered rows equal receipt rows, in receipt order")
+            (is (str/includes? text (:id result))
+                "and the block is addressable by its request id"))))
+      (testing "ls-tree"
+        (let [result (inspect-tool/execute-ls-tree
+                       config {:mode "ls-tree" :dir "." :format "text"})]
+          (is (= (ls-tree-receipt-rows result)
+                 (ls-tree-rendered-rows (text-block result)))))))))
+
+;; @spec MCP-OP-STUDY-042
+(deftest every-refusal-kind-renders-its-cause-and-carries-no-unrendered-fact
+  (doseq [[label params]
+          [[:missing-fields {"requests" [{"operation" "deps"}]
+                             "expect" {"requests" 1 "files" 1}}]
+           [:unknown-fields {"requests" [{"operation" "deps"
+                                          "file" real-file "pattern" "x"}]
+                             "expect" {"requests" 1 "files" 1}}]
+           [:expectation-mismatch {"requests" [{"operation" "outline"
+                                                "file" real-file}]
+                                   "expect" {"requests" 2 "files" 1}}]
+           [:unsupported-operation {"requests" [{"operation" "extract!"
+                                                 "file" real-file}]
+                                    "expect" {"requests" 1 "files" 1}}]
+           [:invalid-xray {"requests" [{"operation" "xray" "file" real-file
+                                        "expression" "*"}]
+                           "expect" {"requests" 1 "files" 1}}]
+           [:form-not-found {"requests" [{"operation" "forms" "file" real-file
+                                          "forms" ["no-such-form-xyz"]
+                                          "expect" {"forms" 1}}]
+                             "expect" {"requests" 1 "files" 1}}]
+           [:study-form-not-found {"requests" [{"operation" "ls-deps"
+                                                "file" real-file
+                                                "form" "no-such-form-xyz"}]
+                                   "expect" {"requests" 1 "files" 1}}]
+           [:file-not-found {"requests" [{"operation" "outline"
+                                          "file" "src/no_such_file_xyz.clj"}]
+                             "expect" {"requests" 1 "files" 1}}]
+           [:match-expectation {"requests" [{"operation" "match"
+                                             "file" real-file
+                                             "match" "(defn- _ _ _)"
+                                             "expect" {"matches" 99}}]
+                                "expect" {"requests" 1 "files" 1}}]
+           [:invalid-study-limit {"mode" "ls-tree" "dir" "." "limit" 99999}]
+           [:invalid-format {"mode" "ls-tree" "dir" "." "format" "EDN"}]
+           [:dir-not-found {"mode" "ls-tree" "dir" "no-such-dir-xyz"}]
+           [:unknown-parameter {"mode" "ls-tree" "dir" "." "depth" 2}]]]
+    (testing (name label)
+      (let [response (run params)
+            text (summary-of response)]
+        (is (false? (:ok response)) "the fixture must actually refuse")
+        (is (str/includes? text "refused ·"))
+        (is (str/includes? text (:error response))
+            "the cause travels verbatim in the text")
+        (is (or (str/includes? text (str (:next_action response)))
+                (str/includes? text "next call:")
+                (str/includes? text "retry"))
+            "and a next action, or the next call spelled")
+        (when (:remedy response)
+          (is (str/includes? text (:remedy response))))
+        ;; The class ratchet proper: EVERY key a refusal carries is either
+        ;; rendered as structure (header, cause, owners, continuation) or
+        ;; printed as a `key: value` detail line. A new refusal field is
+        ;; therefore carried into the text the day it is added, and a
+        ;; deliberate exclusion has to be written into
+        ;; `refusal-structural-keys` where a reviewer can see it.
+        (let [unrendered (remove
+                           (fn [key]
+                             (or (contains? inspect-tool/refusal-structural-keys
+                                            key)
+                                 (str/includes? text (str "  " (name key) ": "))))
+                           (keys response))]
+          (is (empty? unrendered)
+              (str "a refusal carries facts the text never renders: "
+                   (pr-str (vec unrendered)))))))))
