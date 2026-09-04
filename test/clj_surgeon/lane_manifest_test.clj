@@ -409,7 +409,7 @@
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
-    clj-surgeon.lane-manifest-test         23 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
+    clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
     clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
     clj-surgeon.mcp-feature-thread-test    69 ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
     clj-surgeon.mcp-feature-thread-sed-test 1 ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
@@ -425,9 +425,9 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 134 deftests  (12+4+23+3+69+1+1+21)
+  ;;   adopted since round one .................... 136 deftests  (12+4+25+3+69+1+1+21)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1054 deftests
+  ;;   total declared by the manifest ............. 1056 deftests
   ;;
   ;; ROUND FIVE MOVED ONE TEST OUT of a round-one namespace, which is why the
   ;; first line went 921 -> 920, and it is worth saying plainly because it is
@@ -461,9 +461,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 134 adopted) (str "adopted tests: " adopted)))
+      (is (= 136 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1054 total) (str "manifest declares " total " tests"))
+      (is (= 1056 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -579,3 +579,87 @@
              "2026-09-04 and that name is now the JVM fast lane, so this prose "
              "sends the reader to the wrong suite: "
              (str/join "; " (map (fn [[loc line]] (str loc " -- " line)) offenders))))))
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-007 -- ROUND FIVE, the review's non-blocking item: bounded
+;; polling sleeps in the merge-gate lanes.
+;;
+;; A test that sleeps is asserting about a CLOCK. Sometimes that is the only
+;; honest thing to do -- proving a thread is dead, or that a weak reference was
+;; collected, means waiting for something this JVM does not schedule -- and the
+;; right shape for those is a loop that succeeds THE INSTANT the condition
+;; holds and fails at a named deadline, which is what round three's GC fix
+;; installed. What must not happen is a fixed sleep quietly appearing because
+;; it made a flake go away.
+;;
+;; So every sleep site in the fast and integration lanes is ENUMERATED here
+;; with the reason it exists. A new one fails this witness by file and line
+;; and has to argue for itself at the pin. This is a declared-exemption list,
+;; not a ban -- the same shape as `namespace-budget-overrides`.
+;; ---------------------------------------------------------------------------
+
+(def ^:private declared-merge-gate-sleeps
+  "file -> {line -> why}. The line is deliberately part of the key: moving one
+   of these is an edit worth re-reading, and the pin costs one number."
+  {"test/clj_surgeon/census_pool_test.clj"
+   {19 "bounded poll -- succeeds the instant every worker thread is dead, fails after 100 tries"
+    38 "the ONLY fixed sleep left on the gate: 5 ms inside the work fn to force the pool to spread work across more than one thread. It backs `(> (count @threads) 1)`, which is a claim about scheduling and cannot be made without one."}
+   "test/clj_surgeon/scope_stream_test.clj"
+   {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
+   "test/clj_surgeon/mcp_tool_test.clj"
+   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}})
+
+(deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
+  (let [sources (fn [lane]
+                  (for [n (lm/namespaces-for lane)]
+                    (:file (get @on-disk n))))
+        found (for [path (concat (sources :fast) (sources :integration))
+                    :let [lines (str/split-lines (slurp (io/file path)))]
+                    [i line] (map-indexed vector lines)
+                    :when (re-find #"\(Thread/sleep" line)]
+                [path (inc i) (str/trim line)])
+        undeclared (remove (fn [[path line _]]
+                             (get-in declared-merge-gate-sleeps [path line]))
+                           found)
+        stale (for [[path lines] declared-merge-gate-sleeps
+                    [line _] lines
+                    :when (not (some (fn [[p l _]] (and (= p path) (= l line))) found))]
+                (str path ":" line))]
+    (is (empty? undeclared)
+        (str (count undeclared) " undeclared Thread/sleep site(s) in the "
+             "merge-gate lanes. A sleep is an assertion about a clock: make it "
+             "a bounded poll that succeeds on the CONDITION and fails at a "
+             "named deadline, then declare it in "
+             "`declared-merge-gate-sleeps` with the reason it must wait: "
+             (str/join "; " (map (fn [[p l s]] (str p ":" l " -- " s)) undeclared))))
+    (is (empty? stale)
+        (str "declared sleep site(s) that are no longer there -- delete the "
+             "line from the pin: " (str/join ", " stale)))))
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-001 -- ROUND FIVE: the rename scanner's REACH, pinned.
+;;
+;; The round-three review's remaining non-blocking item: prose that names
+;; `test-fast` but contains no Babashka spelling cannot be classified by the
+;; scanner above, and that limitation is disclosed. Disclosure decays -- the
+;; next reader sees a green witness called `no-living-prose-still-calls-the-
+;; bb-lane-by-its-old-name` and reasonably concludes the rename is fully
+;; covered. So the reach is a WITNESS: the scanner is asserted NOT to flag the
+;; unreachable shape. When someone closes the gap, this test fails and they
+;; delete it, which is the correct way to find out that a limit is gone.
+;; ---------------------------------------------------------------------------
+
+(deftest the-rename-scanner-cannot-see-a-bb-less-mention-and-says-so
+  (let [bb-spelling #"(?i)babashka|run_all\.clj"
+        ;; the two shapes, side by side, through the scanner's own predicate
+        classifiable "Run the babashka corpus with make test-fast."
+        invisible "For the quick suite, run make test-fast."]
+    (is (some? (re-find bb-spelling classifiable))
+        "sanity: a sentence naming babashka IS classifiable")
+    (is (nil? (re-find bb-spelling invisible))
+        (str "RESIDUAL, round three review, non-blocking: a sentence that "
+             "means the babashka lane without naming babashka or run_all.clj "
+             "is invisible to this scanner. It is caught by a human or not at "
+             "all. Closing it needs a meaning-level check, not a wider regex "
+             "-- a wider regex would flag every legitimate mention of the JVM "
+             "fast lane, and a witness that cries wolf gets deleted."))))
