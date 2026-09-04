@@ -533,13 +533,23 @@
   (measured/elapsed-ms started))
 
 (defn mcp-result-byte-count
-  "Measure the complete public MCP result shape, including its text summary."
+  "Measure the complete public MCP result shape, including its text summary.
+
+  @spec MCP-OP-TIME-005
+  The subject is the PARTITIONED candidate, because that is the shape the
+  finalizer will publish. Measuring the raw domain map instead is wrong twice:
+  it undercounts (the `measured` block spends more bytes than a top-level
+  field), and since a clock reading became an opaque type it does not even
+  serialize — a budget check would throw `JsonGenerationException` on the one
+  path whose whole job is to avoid an oversized payload. Callers zero the
+  clock; the 128-byte reserve in `mcp-write-refusal/public-byte-budget` covers
+  the digits the real reading will spend."
   [summary result]
   (count
     (.getBytes
       (json/generate-string
         {:content [{:type "text" :text summary}]
-         :structuredContent result
+         :structuredContent (measured/partition-measured result)
          :isError (not (:ok result))})
       "UTF-8")))
 

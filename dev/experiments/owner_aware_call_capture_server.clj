@@ -3,6 +3,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-http-server :as http-server]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [owner-aware-call-construction-screen :as screen])
@@ -27,26 +28,36 @@
                             [StandardCopyOption/ATOMIC_MOVE
                              StandardCopyOption/REPLACE_EXISTING]))))
 
+;; @spec MCP-OP-TIME-005
+;; ONE boundary, and a capture server is inside it. This handler REPLACES the
+;; `:tool-fn` of a registered production tool, so what it publishes is a public
+;; MCP result in every sense that matters to a reader or to a benchmark
+;; summarizer — and it used to build its own top-level `elapsed_ms` from a raw
+;; `System/nanoTime`, bypassing `mcp-operation/invoke!` entirely (round-three
+;; review §3, residual a). Every corpus it captured that way was invalid
+;; against the canonical output schema.
 (defn capture-handler [capture-file]
   (let [calls (atom [])]
     (fn [_exchange params callback]
-      (let [started (System/nanoTime)
-            call {:index (inc (count @calls))
-                  :params params}
-            observed (swap! calls conj call)]
-        (write-json-atomically!
-          capture-file
-          {:schema "clj-surgeon.owner-aware-call-capture.v1"
-           :calls observed})
-        (callback
-          ["edit_clojure\n  captured · no mutation\n✓ offline scorer owns validation"]
-          false
-          {:ok true
-           :captured true
-           :call_count (count observed)
-           :source_unchanged true
-           :elapsed_ms (/ (- (System/nanoTime) started) 1000000.0)
-           :next_action "none"})))))
+      (mcp-operation/invoke!
+        {:execute
+         (fn []
+           (let [call {:index (inc (count @calls))
+                       :params params}
+                 observed (swap! calls conj call)]
+             (write-json-atomically!
+               capture-file
+               {:schema "clj-surgeon.owner-aware-call-capture.v1"
+                :calls observed})
+             {:ok true
+              :captured true
+              :call_count (count observed)
+              :source_unchanged true
+              :next_action "none"}))
+         :summarize
+         (constantly
+           "edit_clojure\n  captured · no mutation\n✓ offline scorer owns validation")
+         :callback callback}))))
 
 (defn capture-tool [arm capture-file]
   (let [base (or (first (filter #(= :edit-clojure (:id %))

@@ -4,6 +4,7 @@
    [cheshire.core :as json]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-inspect :as inspect]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -97,22 +98,26 @@
            :source_unchanged true
            :next_action "none"})))))
 
+;; @spec MCP-OP-TIME-005
+;; Published through the shared finalizer, not beside it — see the note in
+;; `owner-aware-call-capture-server`.
 (defn capture-handler [calls capture-file tool]
   (fn [_exchange params callback]
-    (let [started (System/nanoTime)
-          observed (record-call! calls capture-file "next-action" tool params)]
-      (callback
-        [(str (:name tool)
-              "\n  captured · no mutation\n"
-              "✓ offline scorer owns validation")]
-        false
-        {:ok true
-         :captured true
-         :call_count (count observed)
-         :selected_tool (:name tool)
-         :source_unchanged true
-         :elapsed_ms (/ (- (System/nanoTime) started) 1000000.0)
-         :next_action "none"}))))
+    (mcp-operation/invoke!
+      {:execute
+       (fn []
+         (let [observed (record-call! calls capture-file "next-action" tool params)]
+           {:ok true
+            :captured true
+            :call_count (count observed)
+            :selected_tool (:name tool)
+            :source_unchanged true
+            :next_action "none"}))
+       :summarize
+       (constantly (str (:name tool)
+                        "\n  captured · no mutation\n"
+                        "✓ offline scorer owns validation"))
+       :callback callback})))
 
 (defn capture-tools [arm capture-file]
   (let [calls (atom [])]

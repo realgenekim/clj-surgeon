@@ -38,8 +38,23 @@
 ;; A source scanner: which top-level form does a line sit in
 ;; ============================================================
 
+(def scanned-roots
+  "Every directory whose Clojure this invariant governs.
+
+  `dev/experiments` is here because the round-three review found it (§3,
+  residual a): it is on the `:clj-surgeon/mcp-test` classpath (`deps.edn`), its
+  capture servers REPLACE the `:tool-fn` of a registered production tool, and
+  yet being outside `src/` it was reached by no scan in this file. Three of
+  them read `System/nanoTime` and published a top-level `elapsed_ms` straight
+  to the SDK callback, bypassing the finalizer entirely — so every arm-run
+  corpus they captured was invalid against the canonical output schema, and
+  the sweep table that claimed \"every other in-repository elapsed_ms reader
+  was swept\" had no `dev/` row. A scan whose boundary is a directory name
+  rather than a classpath is a scan with a blind spot in it."
+  ["src" "dev/experiments"])
+
 (defn- src-files
-  ([] (src-files "src"))
+  ([] (mapcat src-files scanned-roots))
   ([root]
    (->> (file-seq (io/file root))
         (filter #(.isFile ^java.io.File %))
@@ -48,12 +63,16 @@
 
 (defn- site-path
   "`file` named as it would be named under `src/`, whatever root it was read
-   from — so a scan of a scratch copy is comparable with a scan of the tree."
+   from — so a scan of a scratch copy is comparable with a scan of the tree.
+
+  A file under one of the real `scanned-roots` keeps the name it already has;
+  only a scratch root is rewritten."
   [^java.io.File file root]
   (let [path (.getPath file)]
-    (if (str/starts-with? path (str root "/"))
-      (str "src/" (subs path (inc (count root))))
-      path)))
+    (cond
+      (some #(str/starts-with? path (str % "/")) scanned-roots) path
+      (str/starts-with? path (str root "/")) (str "src/" (subs path (inc (count root))))
+      :else path)))
 
 (defn- sites
   "Every line of `file` matching `pattern`, named by the top-level form it sits
@@ -82,10 +101,27 @@
   "The ONE file allowed to read a clock raw."
   "src/clj_surgeon/measured.clj")
 
+(def ^:private sanctioned-measured-require
+  "The ONLY way `src/` may name the measured namespace.
+
+  Not a style rule. Every scan in this file is written against the `measured/`
+  spelling, so any OTHER way of naming the namespace is a hole in every scan at
+  once — which is how the round-three review's second bypass worked
+  (2026-09-04 §1b): a brand-new namespace requiring
+  `[clj-surgeon.measured :as measured :refer [raw-nanos]]` satisfied the alias
+  witness, called `(raw-nanos)` under a bare name the clock scan does not
+  match, published the result under an undeclared key, and left all nine tests
+  green with the field in the parity hash.
+
+  So the rule is the whole line: one alias, no `:refer`, no `:use`, and no
+  fully-qualified `clj-surgeon.measured/...` call either."
+  "[clj-surgeon.measured :as measured]")
+
 (defn- scan
-  "`{[path form] hits}` over every `.clj` under `root` EXCEPT the measured
-   namespace itself, which is where the raw reads are allowed to live."
-  ([pattern] (scan pattern "src"))
+  "`{[path form] hits}` over every `.clj` under the scanned roots EXCEPT the
+   measured namespace itself, which is where the raw reads are allowed to live."
+  ([pattern]
+   (apply merge-with + {} (map #(scan pattern %) scanned-roots)))
   ([pattern root]
    (frequencies
     (mapcat #(sites % pattern root)
@@ -97,9 +133,16 @@
   #"System/nanoTime|System/currentTimeMillis|Instant/now|\.getTime")
 
 (def ^:private escape-hatch-pattern
-  "The verbs that hand back an UNTAGGED number: the raw clock reads inside
-   `clj-surgeon.measured`, and `value`, which strips a reading's tag."
-  #"measured/raw-nanos|measured/raw-ms|measured/value")
+  "Every expression that hands back an UNTAGGED number from the measured
+   namespace: the raw clock reads, `value`, which strips a reading's tag, and
+   the two ways to reach past `value` into the opaque type — the protocol
+   method it is built on (`measured/-launder`) and the private field that
+   method reads (`launderable`, which babashka's interop does not enforce as
+   private even though the JVM does).
+
+   The pattern is the type's whole surface, deliberately. A door the scanner
+   does not know is the exact defect the round-three review walked through."
+  #"measured/raw-nanos|measured/raw-ms|measured/value|measured/-launder|launderable")
 
 ;; ============================================================
 ;; 1. No raw clock read outside `clj-surgeon.measured`
@@ -220,7 +263,9 @@
    ["src/clj_surgeon/parse_admission.clj" "refusal"]
    {:calls 1 :why "the scan meter accumulates bare nanos across many files"}
    ["src/clj_surgeon/txn_journal.clj" "commit!"]
-   {:calls 1 :why "keeps the widest commit window across the published paths"}})
+   {:calls 1 :why "keeps the widest commit window across the published paths"}
+   ["dev/experiments/formatter_process_canary.clj" "run-canary!"]
+   {:calls 1 :why "a canary report line, printed to stdout, never an MCP result"}})
 
 ;; @spec MCP-OP-TIME-005
 (deftest no-raw-clock-read-lives-outside-the-measured-namespace
@@ -253,19 +298,98 @@
           "a form's untagged-clock call count changed; re-read it and re-justify"))))
 
 ;; @spec MCP-OP-TIME-005
-(deftest the-measured-namespace-is-never-aliased-to-another-name
-  (testing "an alias the scanner does not know is a hole in the scanner"
-    (let [offenders (->> (src-files)
-                         (keep (fn [^java.io.File file]
-                                 (let [text (slurp file)]
-                                   (when-let [m (re-find #"clj-surgeon\.measured :as ([a-z-]+)"
-                                                         text)]
-                                     (when (not= "measured" (second m))
-                                       [(site-path file "src") (second m)])))))
-                         sort)]
+(defn- measured-naming-offence
+  "Why `code` names the measured namespace outside the sanctioned require, or
+   nil when it does not.
+
+   Three doors, each of which defeats every `measured/`-spelled scan in this
+   file, and prose that merely MENTIONS the namespace is none of them."
+  [code]
+  (cond
+    (re-find #"clj-surgeon\.measured/" code) :fully-qualified
+    (not (re-find #"clj-surgeon\.measured(?![-\w.])" code)) nil
+    (re-find #":refer" code) :refer
+    (re-find #":use" code) :use
+    (when-let [m (re-find #"clj-surgeon\.measured\s+:as\s+([\w-]+)" code)]
+      (not= "measured" (second m))) :alias))
+
+(defn- measured-naming-offenders
+  "Every line under `root` that names the measured namespace in any way other
+   than the one sanctioned require."
+  ([] (vec (mapcat measured-naming-offenders scanned-roots)))
+  ([root]
+   (vec
+    (for [^java.io.File file (remove #(= measured-namespace-file (site-path % root))
+                                     (src-files root))
+          [n line] (map-indexed vector (str/split-lines (slurp file)))
+          :let [code (str/trim (or (first (str/split line #";;")) ""))
+                offence (measured-naming-offence code)]
+          :when offence]
+      [(site-path file root) (inc n) offence code]))))
+
+;; @spec MCP-OP-TIME-005
+(deftest the-measured-namespace-is-named-only-by-the-sanctioned-require
+  (testing "a name the scanner does not know is a hole in every scanner"
+    (let [offenders (measured-naming-offenders)]
       (is (= [] offenders)
-          (str "clj-surgeon.measured aliased to something other than `measured`: "
-               (pr-str offenders))))))
+          (str "clj-surgeon.measured named other than `"
+               sanctioned-measured-require "`: " (pr-str offenders))))))
+
+;; @spec MCP-OP-TIME-005
+(deftest the-require-witness-catches-a-planted-refer
+  (testing "the round-three review's second bypass, replanted"
+    (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                             (str "measured-refer-plant-" (System/nanoTime))))
+          victim (io/file root "clj_surgeon" "planted_refer.clj")]
+      (.mkdirs (.getParentFile victim))
+      (spit victim
+            (str "(ns clj-surgeon.planted-refer\n"
+                 "  (:require\n"
+                 "   [clj-surgeon.measured :as measured :refer [raw-nanos]]))\n\n"
+                 "(defn publish-an-undeclared-clock-field\n"
+                 "  [started]\n"
+                 "  {:ok false\n"
+                 "   :verification_wall_ms (/ (double (- (raw-nanos) started))\n"
+                 "                            1000000.0)})\n"))
+      (try
+        (let [offenders (measured-naming-offenders root)]
+          (is (= [["src/clj_surgeon/planted_refer.clj" 3 :refer
+                   "[clj-surgeon.measured :as measured :refer [raw-nanos]]))"]]
+                 offenders)
+              (str "the require witness did not see a planted :refer: "
+                   (pr-str offenders))))
+        (finally
+          (.delete victim)
+          (.delete (.getParentFile victim))
+          (.delete (io/file root)))))))
+
+;; @spec MCP-OP-TIME-005
+(deftest a-reading-does-not-open-to-anything-but-the-laundering-verb
+  (testing "the round-three review's first bypass is now unrepresentable"
+    (let [r (measured/elapsed-ms (measured/start))]
+      ;; §1a, verbatim in effect: `(:clj-surgeon.measured/reading r)` was the
+      ;; whole bypass. It must not yield a number by any map-shaped route.
+      (doseq [[route opened]
+              [[:keyword-lookup (:clj-surgeon.measured/reading r)]
+               [:get (get r :clj-surgeon.measured/reading)]
+               [:get-with-default (get r :clj-surgeon.measured/reading nil)]
+               [:first-entry (try (key (first r)) (catch Exception _ nil))]
+               [:vals (try (first (vals r)) (catch Exception _ nil))]
+               [:seq-first (try (first (seq r)) (catch Exception _ nil))]
+               [:deref (try (deref r) (catch Exception _ nil))]]]
+        (is (not (number? opened))
+            (str "a reading opened to a bare number through " route ": "
+                 (pr-str opened))))
+      (is (false? (map? r)) "a reading is a map again; §1a reopens")
+      (is (false? (coll? r)) "a reading is a collection again; §1a reopens")
+      (is (number? (measured/value r))
+          "the one laundering verb no longer works")
+      (is (= "#clj-surgeon.measured/reading" (pr-str r))
+          (str "a reading prints as something other than a stable opaque "
+               "marker, so a leak would be non-reproducible as well as wrong: "
+               (pr-str (pr-str r))))
+      (is (false? (measured/reading? {:clj-surgeon.measured/reading 1.0}))
+          "a literal one-key map is a reading again; the map shape is back"))))
 
 ;; @spec MCP-OP-TIME-005
 (deftest the-clock-scanner-catches-a-planted-raw-read
@@ -351,6 +475,95 @@
       (is (= 0 (get-in result [:receipt :commit-window :reopens]))
           "a deterministic sibling of a measured field was moved with it"))))
 
+(def ^:private sentinel
+  "A number no ordinary field carries, so finding it anywhere in a hashed
+   channel is proof a planted reading was laundered rather than partitioned."
+  424242.5)
+
+(defn- publish-outcome
+  "Publish `domain-result` and classify what the boundary did with it.
+
+   `[:published result]`, `[:refused error-type]`, or `[:threw class-name]` —
+   and the third is a failure by itself: an unpartitionable reading must be a
+   TYPED refusal, never a raw JVM exception the caller cannot dispatch on."
+  [domain-result]
+  (try
+    [:published (publish domain-result (fixed-clock 0 1000000))]
+    (catch clojure.lang.ExceptionInfo error
+      (if-let [t (:error-type (ex-data error))]
+        [:refused t]
+        [:threw (.getName (class error))]))
+    (catch Exception error
+      [:threw (.getName (class error))])))
+
+(defn- sentinel-in-hash?
+  "Does the sentinel number survive anywhere in `x`'s hashed channel?"
+  [x]
+  (let [found (atom false)]
+    ((fn walk [node]
+       (cond
+         @found nil
+         (= sentinel node) (reset! found true)
+         (map? node) (doseq [[k v] node] (walk k) (walk v))
+         (or (vector? node) (seq? node) (set? node)) (doseq [v node] (walk v))
+         :else nil))
+     (measured/hashed-channel x))
+    @found))
+
+;; @spec MCP-OP-TIME-005
+(deftest a-clock-reading-never-becomes-a-raw-number-in-any-placement
+  (testing "the :control channel's promise, enforced at the boundary"
+    ;; The `clock-allow-list`'s 33 `:control` entries each assert in a `:why`
+    ;; string that their value is never published. The round-three review's
+    ;; §1d is that nothing checked it: the test read the `:channel` keyword and
+    ;; nothing else, so a control form could be edited to publish its value and
+    ;; the counts would not move.
+    ;;
+    ;; A `:why` string cannot be made true by a test. What CAN be made true —
+    ;; and is the property the `:why` strings are really claiming — is that a
+    ;; reading reaching the finalizer from ANYWHERE, in any placement a control
+    ;; site could contrive, either lands inside the partition or is refused by
+    ;; type. Never a bare number in the hash subject, and never a raw JVM
+    ;; exception.
+    (doseq [[placement domain expected]
+            [[:nested-under-an-undeclared-key
+              {:ok true :receipt {:inner {:verification_wall_ms
+                                          (measured/reading sentinel)}}}
+              :published]
+             [:inside-a-row-of-a-vector
+              {:ok true :rows [{:file "a.clj"}
+                               {:file "b.clj"
+                                :lease_wall_ms (measured/reading sentinel)}]}
+              :published]
+             [:directly-in-a-vector
+              {:ok true :rows [(measured/reading sentinel)]}
+              :refused]
+             [:directly-in-a-set
+              {:ok true :s #{(measured/reading sentinel)}}
+              :refused]
+             [:as-a-map-key
+              {:ok true :m {(measured/reading sentinel) :v}}
+              :refused]
+             [:inside-a-string-keyed-sorted-map
+              {:ok true :staged (sorted-map "a.clj" 1
+                                            "b.clj" (measured/reading sentinel))}
+              :refused]]]
+      (let [[outcome payload] (publish-outcome domain)]
+        (is (= expected outcome)
+            (str placement " was " outcome " (" (pr-str payload)
+                 "); an unpartitionable reading must be a typed refusal and a"
+                 " partitionable one must be relocated"))
+        (case outcome
+          :published (is (false? (sentinel-in-hash? payload))
+                         (str placement ": a clock reading reached the hash "
+                              "subject as a bare number: " (pr-str payload)))
+          :refused (is (= :unpartitioned-measured-field payload)
+                       (str placement ": the refusal is not typed: "
+                            (pr-str payload)))
+          :threw (is false
+                     (str placement ": the boundary threw an untyped "
+                          payload " instead of refusing")))))))
+
 ;; @spec MCP-OP-MEM-011
 ;; @spec MCP-OP-TIME-005
 (deftest the-parity-hash-is-stable-across-two-runs-with-different-clock-ticks
@@ -395,7 +608,10 @@
 ;; @spec MCP-OP-EXIT-001
 (deftest system-exit-appears-only-inside-a-cli-entrypoint
   (testing "a library that exits kills its caller"
-    (let [found (scan #"System/exit")
+    ;; `src/` only: the rule is about a LIBRARY exiting under its caller. The
+    ;; `dev/experiments/` scripts are standalone entrypoints run as their own
+    ;; process, and an exit code is their return value.
+    (let [found (scan #"System/exit" "src")
           offenders (sort (remove #(contains? exit-allow-list (second %))
                                   (keys found)))]
       (is (= [] offenders)

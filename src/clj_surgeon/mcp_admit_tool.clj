@@ -87,10 +87,16 @@
 
 ;; @spec MCP-OP-SCHEMA-001
 (def admit-output-schema
+  ;; @spec MCP-OP-TIME-005
+  ;; The request clock lives in the measured partition, like every other
+  ;; public MCP result's. The trunk added this tool while the partition was
+  ;; landing on a branch, so its schema was written in the old wire: a
+  ;; top-level `elapsed_ms` the finalizer no longer produces, and no `measured`
+  ;; block, which every other output schema requires.
   {:type "object"
    :properties {"ok" {:type "boolean"}
-                "elapsed_ms" {:type "number" :minimum 0}}
-   :required ["ok" "elapsed_ms"]})
+                "measured" mcp-operation/measured-output-schema}
+   :required ["ok" "measured"]})
 
 (def ^:private runtime-config runtime/tool-config)
 

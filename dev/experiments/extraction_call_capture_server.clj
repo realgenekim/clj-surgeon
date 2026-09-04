@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-http-server :as http-server]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.java.io :as io]
@@ -20,30 +21,35 @@
                   [java.nio.file.StandardCopyOption/ATOMIC_MOVE
                    java.nio.file.StandardCopyOption/REPLACE_EXISTING]))))
 
+;; @spec MCP-OP-TIME-005
+;; Published through the shared finalizer, not beside it — see the note in
+;; `owner-aware-call-capture-server`. A capture server that invents its own
+;; top-level clock produces a corpus no canonical reader can summarize.
 (defn capture-handler [calls capture-file tool]
   (fn [_exchange params callback]
-    (let [started (System/nanoTime)
-          call {:index (inc (count @calls))
-                :tool_id (:id tool)
-                :tool_name (:name tool)
-                :params params}
-          observed (swap! calls conj call)]
-      (write-json-atomically!
-        capture-file
-        {:schema "clj-surgeon.extraction-call-capture.v1"
-         :calls observed})
-      (callback
-        [(str (:name tool)
-              "\n  captured · no mutation\n"
-              "✓ offline scorer owns validation")]
-        false
-        {:ok true
-         :captured true
-         :call_count (count observed)
-         :selected_tool (:name tool)
-         :source_unchanged true
-         :elapsed_ms (/ (- (System/nanoTime) started) 1000000.0)
-         :next_action "none"}))))
+    (mcp-operation/invoke!
+      {:execute
+       (fn []
+         (let [call {:index (inc (count @calls))
+                     :tool_id (:id tool)
+                     :tool_name (:name tool)
+                     :params params}
+               observed (swap! calls conj call)]
+           (write-json-atomically!
+             capture-file
+             {:schema "clj-surgeon.extraction-call-capture.v1"
+              :calls observed})
+           {:ok true
+            :captured true
+            :call_count (count observed)
+            :selected_tool (:name tool)
+            :source_unchanged true
+            :next_action "none"}))
+       :summarize
+       (constantly (str (:name tool)
+                        "\n  captured · no mutation\n"
+                        "✓ offline scorer owns validation"))
+       :callback callback})))
 
 (defn capture-tool [arm calls capture-file tool]
   (let [base (surface/production-tool)

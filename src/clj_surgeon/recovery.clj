@@ -58,9 +58,18 @@
          ;; @spec MCP-OP-TIME-005
          ;; A recovery receipt is written to disk and fingerprinted; its three
          ;; clock readings ride the partition like every other measured field.
-         measured/measured-key {:elapsed-ms {:up up-elapsed
-                                 :probe probe-elapsed
-                                 :total (elapsed-ms started)}}
+         ;; `unwrap-readings`, because a measured BLOCK holds bare numbers:
+         ;; once a value is inside the partition its provenance is stated by
+         ;; the block it lives in. Round three placed the tagged readings here
+         ;; unwrapped, and this receipt is pprint'd to disk and read back with
+         ;; `clojure.edn`, so the tag reached the wire as a nested object — the
+         ;; exact defect `unpartitioned-measured-paths` names for a reading
+         ;; INSIDE a block. Nothing ran that diagnostic on this receipt, and
+         ;; while the tag was a plain map the round trip still parsed.
+         measured/measured-key (measured/unwrap-readings
+                                 {:elapsed-ms {:up up-elapsed
+                                               :probe probe-elapsed
+                                               :total (elapsed-ms started)}})
          :next-action :none})
       (catch Exception error
         (let [error-data (ex-data error)
@@ -78,7 +87,9 @@
                                          :recovery-failed)
                          :error (.getMessage error)
                          :agent-session-restart-required restart-required?
-                         measured/measured-key {:elapsed-ms {:total (elapsed-ms started)}}
+                         measured/measured-key
+                         (measured/unwrap-readings
+                           {:elapsed-ms {:total (elapsed-ms started)}})
                          :next-action (if restart-required?
                                         :restart-agent-session-once
                                         :report-failure-and-use-cli-fallback)}

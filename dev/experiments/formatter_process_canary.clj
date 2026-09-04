@@ -1,7 +1,9 @@
 (ns formatter-process-canary
   (:require
    [clj-surgeon.mcp-extraction-plan :as extraction-plan]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.measured :as measured]
    [clojure.java.io :as io])
   (:import
    (java.security MessageDigest)))
@@ -52,13 +54,20 @@
                           :timeout-ms 120000
                           :commands
                           [["/bin/test" "-s" target]]}}}
-        started (System/nanoTime)
+        ;; @spec MCP-OP-TIME-005
+        ;; The canary's own wall, through the measured clock like every other
+        ;; timed thing in the repository, and laundered ONCE — with an
+        ;; allow-list entry — because this line is printed, not published.
+        started (measured/start)
         result (mcp-tool/execute-request! config request)
-        wall-ms (/ (- (System/nanoTime) started) 1000000.0)]
+        wall-ms (measured/value (measured/elapsed-ms started))]
     {:arm arm
      :ok (:ok result)
      :wall-ms wall-ms
-     :server-elapsed-ms (:elapsed_ms result)
+     ;; Reads the PARTITION. `execute-request!` never set a top-level
+     ;; `elapsed_ms`, so this row was a silent nil before the partition
+     ;; existed and would be one after it (round-three review §3).
+     :server-elapsed-ms (mcp-operation/elapsed-ms result)
      :formatter (:formatter result)
      :telemetry (:telemetry result)
      :verification (:verification result)

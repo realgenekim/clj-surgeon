@@ -86,21 +86,69 @@
 ;; number is legitimate (a sum, a comparison, a telemetry row) and must be a
 ;; deliberate, greppable act rather than a side effect.
 
-(def reading-key
-  "The key of a TAGGED CLOCK READING: `{reading-key 12.5}`.
+(defprotocol Launderable
+  "The ONE door out of an opaque measured value.
 
-  Provenance that travels with the value. A reading is relocated into the
-  measured partition wherever it is found, under whatever key it was published
-  under — including a key nobody declared."
-  ::reading)
+  Implemented by `Reading` and `Tick` and called by exactly one verb, `value`.
+  It is a protocol rather than a public field because a `deftype` field that is
+  not `^:unsynchronized-mutable` is a public final Java field, and `(.-n r)`
+  would be a second door nobody named."
+  (-launder [x] "The bare number this opaque value carries."))
 
-(def started-key
-  "The key of an opaque START TICK, as `start` returns it.
+;; A `deftype`, not a map, and the reason is a reproduced defect.
+;;
+;; Round three tagged a reading as a one-key map, `{::reading 12.5}`, and
+;; documented `value` as "THE ONE LAUNDERING VERB". The round-three review
+;; opened it in three tokens (2026-09-04 §1a):
+;;
+;;     :elapsed_ms (:clj-surgeon.measured/reading (measured/elapsed-ms started))
+;;     :verification_wall_ms (:clj-surgeon.measured/reading
+;;                             (measured/elapsed-ms started))
+;;
+;;     {:undeclared-field 1.788624, :hashed-field 1.788624, :unpartitioned []}
+;;     Ran 9 tests containing 21 assertions. 0 failures, 0 errors.
+;;
+;; No raw clock read, no `value` call, no allow-list entry, no changed count —
+;; and an undeclared clock-derived field in the parity hash with every witness
+;; green. A keyword lookup is not a laundering verb anybody has to name, so
+;; while the reading was a map the "one door" claim was prose.
+;;
+;; The repair is a rung-5 one: make the bad state UNREPRESENTABLE. The reading
+;; is an opaque type implementing no map interface, no `ILookup`, no `IDeref`,
+;; no `seq`, and holding its number in a PRIVATE mutable field. `(:foo r)` and
+;; `(get r k)` return nil, `(count r)` throws, and the only expression that
+;; yields the number is `measured/value` — whose call sites in `src/` are named
+;; one by one in the invariant witness's allow-list.
 
-  Opaque on purpose: `(- (raw-nanos) (start))` does not typecheck, so the only
-  way to turn a start tick into a duration is `elapsed-ms` / `elapsed-nanos`,
-  and those return tagged readings."
-  ::started)
+(deftype Reading [^:unsynchronized-mutable launderable]
+  Launderable
+  (-launder [_] launderable)
+  Object
+  (toString [_] "#clj-surgeon.measured/reading")
+  (equals [_ other]
+    (and (instance? Reading other) (= launderable (-launder other))))
+  (hashCode [_] (hash launderable)))
+
+(deftype Tick [^:unsynchronized-mutable launderable]
+  Launderable
+  (-launder [_] launderable)
+  Object
+  (toString [_] "#clj-surgeon.measured/tick")
+  (equals [_ other]
+    (and (instance? Tick other) (= launderable (-launder other))))
+  (hashCode [_] (hash launderable)))
+
+;; DETERMINISTIC printing, deliberately without the number. The default
+;; `print-method` for a `deftype` writes `#object[... 0x1a2b3c ...]` — an
+;; IDENTITY HASH, which would make any byte-identity or parity subject that
+;; ever saw a reading non-reproducible for a reason having nothing to do with
+;; the clock. And the number is withheld because a printed reading is a leak
+;; being caught, not a value being published.
+(defmethod print-method Reading [_ ^java.io.Writer w]
+  (.write w "#clj-surgeon.measured/reading"))
+
+(defmethod print-method Tick [_ ^java.io.Writer w]
+  (.write w "#clj-surgeon.measured/tick"))
 
 (defn raw-nanos
   "The monotonic clock, untagged. Allow-listed call sites only."
@@ -112,46 +160,48 @@
   []
   (System/currentTimeMillis))
 
-(defn start
-  "An opaque start tick for `elapsed-ms` / `elapsed-nanos`."
-  []
-  {started-key (raw-nanos)})
-
-(defn- start-nanos
-  [started]
-  (cond
-    (and (map? started) (contains? started started-key)) (long (get started started-key))
-    (number? started) (long started)
-    :else (throw (ex-info "A measured interval needs a start tick"
-                          {:error-type :invalid-measured-start
-                           :started-type (some-> started class .getName)}))))
-
 (defn reading
   "Tag `n` as a number a clock produced."
   [n]
-  {reading-key n})
+  (->Reading n))
 
 (defn reading?
   "Is `x` a tagged clock reading?
 
-  Deliberately NOT `(contains? x reading-key)`. This predicate runs over every
-  value of every published result, and a result legitimately holds SORTED maps
-  keyed by file-name strings (the formatter's staged sources, for one). A
-  keyword lookup in a `PersistentTreeMap` of strings goes through `compareTo`
-  and throws `ClassCastException` — so the safe test is the shape a reading
-  actually has: exactly one entry, and that entry's key is the tag."
+  A type test, so it is exact and it is cheap — this predicate runs over every
+  value of every published result. It also cannot throw: the previous
+  shape-based test had to reason about `PersistentTreeMap`s keyed by strings
+  (the formatter's staged sources) because a keyword lookup in one goes through
+  `compareTo`; a type test has no such hazard."
   [x]
-  (and (map? x)
-       (== 1 (count x))
-       (= reading-key (key (first x)))))
+  (instance? Reading x))
+
+(defn start
+  "An opaque start tick for `elapsed-ms` / `elapsed-nanos`.
+
+  Opaque on purpose: `(- (raw-nanos) (start))` does not typecheck, so the only
+  way to turn a start tick into a duration is `elapsed-ms` / `elapsed-nanos`,
+  and those return tagged readings."
+  []
+  (->Tick (raw-nanos)))
 
 (defn value
   "The bare number inside a reading; `x` unchanged when it is not one.
 
-  THE ONE LAUNDERING VERB. Every call site in `src/` is named in the invariant
+  THE ONE LAUNDERING VERB, and now that is a fact about the type rather than a
+  promise in a docstring. Every call site in `src/` is named in the invariant
   witness's allow-list with the reason it needs a bare number."
   [x]
-  (if (reading? x) (get x reading-key) x))
+  (if (reading? x) (-launder x) x))
+
+(defn- start-nanos
+  [started]
+  (cond
+    (instance? Tick started) (long (-launder started))
+    (number? started) (long started)
+    :else (throw (ex-info "A measured interval needs a start tick"
+                          {:error-type :invalid-measured-start
+                           :started-type (some-> started class .getName)}))))
 
 (defn wall-clock-ms
   "The epoch wall clock in milliseconds, as a TAGGED reading.
@@ -329,7 +379,29 @@
                               (let [v' (partition-measured v)]
                                 (if (identical? v' v) acc (assoc acc k v')))))
                           x x)]
-      (if found (update base measured-key merge found) base))
+      (cond
+        ;; A reading used as a KEY has no name to be relocated under, so
+        ;; there is nothing honest to do with it here. Leave `x` exactly as it
+        ;; was: `unpartitioned-measured-paths` reports the key position and the
+        ;; boundary raises the typed `:unpartitioned-measured-field` refusal.
+        ;; Silently carrying it would put a clock-derived value into the hash
+        ;; subject as a MAP KEY, which is where the round-three review found it
+        ;; surviving (§5b).
+        (some reading? (keys x)) x
+
+        (nil? found) base
+
+        :else
+        ;; `assoc`ing the keyword `:measured` into a SORTED map keyed by
+        ;; strings — the formatter's staged sources are exactly that shape —
+        ;; throws `ClassCastException` from `compareTo`, which the round-three
+        ;; review reproduced (§5b): a raw JVM exception at the publication
+        ;; boundary instead of a receipt or a refusal. There is no honest place
+        ;; to put the block, so the map is returned untouched and the boundary
+        ;; refuses it by path, typed, like every other unpartitionable reading.
+        (try
+          (update base measured-key merge found)
+          (catch ClassCastException _ x))))
 
     (vector? x)
     (reduce-kv (fn [acc i v]
@@ -370,6 +442,13 @@
               (map? node)
               (mapcat (fn [[k v]]
                         (cond
+                          ;; A reading used as a KEY. The walk has to look at
+                          ;; keys as well as values: `partition-measured` can
+                          ;; only relocate a reading that sits UNDER a name, so
+                          ;; a reading standing where a name should be reached
+                          ;; the hashed channel untouched until this line
+                          ;; (round-three review §5b).
+                          (reading? k) [(conj path ::reading-as-key)]
                           (= k measured-key) (walk v (conj path k) true)
                           (and (not in-measured?)
                                (contains? measured-field-names k)

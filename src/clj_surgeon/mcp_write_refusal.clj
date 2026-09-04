@@ -2,6 +2,7 @@
   "Pure, source-free projections for bounded MCP write refusals."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str])
   (:import
@@ -182,9 +183,15 @@
              (candidate-continuation evidence returned-count)))))
 
 (defn json-bytes
-  "Serialized size of one public payload in UTF-8 bytes."
+  "Serialized size of one public payload in UTF-8 bytes.
+
+  @spec MCP-OP-TIME-005
+  The subject is the PARTITIONED value: a budget check measures the shape the
+  finalizer publishes, not the domain map on the way in. A clock reading is an
+  opaque type, so an unpartitioned candidate does not serialize at all."
   [value]
-  (count (.getBytes (json/generate-string value) "UTF-8")))
+  (count (.getBytes (json/generate-string (measured/partition-measured value))
+                    "UTF-8")))
 
 (defn- bounded-summary-result
   [result summarize]

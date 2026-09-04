@@ -25,10 +25,12 @@ counts, fixed limits, and
 `write_refusal_evidence_omitted=output-budget`. It omits dynamic error text,
 paths, IDs, names, maps, guards, descriptors, commands, and source. No
 requirement changes the active finalizer: it shall add finite non-negative
-`elapsed_ms`, and the byte meter shall measure the complete finalized MCP
-result plus summary. Domain projection shall reserve 128 bytes for timing and
-select the largest candidate prefix whose pre-finalization result and summary
-use at most 32,640 bytes. Final measurement is an invariant check and shall not
+`measured.elapsed_ms` inside the measured partition, and the byte meter shall
+measure the complete finalized MCP result plus summary. Domain projection
+shall measure the PARTITIONED candidate with its request clock zeroed, reserve
+128 bytes for the measured block's own digits, and select the largest
+candidate prefix whose pre-finalization result and summary use at most 32,640
+bytes. Final measurement is an invariant check and shall not
 change domain fields. Each family uses the stable stage registered in the
 parent design. No
 requirement authorizes the separately ratified read-only page operation needed
@@ -36,7 +38,7 @@ to consume a descriptor.
 
 In the requirements below, `longest deterministic fitting prefix` is a defined
 term for that largest prefix admitted by the 32,640-byte pre-finalization
-budget. It does not depend on the later actual `elapsed_ms` value.
+budget. It does not depend on the later actual `measured.elapsed_ms` value.
 
 ## Refusal families
 

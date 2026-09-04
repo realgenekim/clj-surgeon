@@ -786,7 +786,13 @@
     (is (= :missing-timing-reading
            (:error-type (try (timing/best [{:scan-ms 13} {:scan-ms 47} {}] :scan-ms)
                              (catch Exception e (ex-data e)))))
-        "a probe that reported nothing was counted as a fast one")))
+        "a probe that reported nothing was counted as a fast one")
+    ;; @spec MCP-OP-MEM-021
+    ;; The gate's own bound is `< 50`, so a reading truncated toward zero is
+    ;; permissive on exactly the figure in dispute.
+    (is (= 49.9 (timing/best [{:scan-ms 49.9} {:scan-ms 57} {:scan-ms 61}]
+                             :scan-ms))
+        "a fractional reading was truncated toward zero against a `< 50` bound")))
 
 ;; @spec MCP-OP-MEM-021
 (deftest a-wall-clock-receipt-carries-every-reading-behind-the-verdict
@@ -797,8 +803,16 @@
       (is (= {:best-scan-ms 13
               :scan-ms [47 13 57]
               :wall-ms [104 102 105]}
-             (timing/detail probes :scan-ms :wall-ms))
-          "the receipt hides the readings the verdict was chosen from"))))
+             (dissoc (timing/detail probes :scan-ms :wall-ms) :host))
+          "the receipt hides the readings the verdict was chosen from")
+      ;; @spec MCP-OP-MEM-021
+      ;; The load belongs to the detail map, which is what gets quoted, not to
+      ;; a line printed once per run and lost with the stdout it rode on.
+      (let [{:keys [cores load]} (:host (timing/detail probes :scan-ms))]
+        (is (pos-int? cores)
+            "the quoted detail map does not carry the host's processor count")
+        (is (string? load)
+            "the quoted detail map does not carry the host's load")))))
 
 ;; @spec MCP-OP-MEM-021
 (deftest a-wall-clock-receipt-names-the-host-it-was-taken-on

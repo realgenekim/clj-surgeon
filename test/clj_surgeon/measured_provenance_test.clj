@@ -40,17 +40,34 @@
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.measured :as measured]))
 
-(def reading-key
-  "The wire tag, spelled LITERALLY rather than read from `measured/reading-key`.
+(def superseded-reading-key
+  "The tag a reading USED to be a one-key map under, spelled literally.
 
-  A witness that resolves the mechanism's own var cannot be red at a tip where
-  the mechanism does not exist, and this keyword is a fact about the shape a
-  reading has — pinning it here is the point, not an accident."
+  Round three published a reading as `{:clj-surgeon.measured/reading n}` and
+  called `value` its one door. The round-three review opened it with a keyword
+  lookup and put an undeclared clock field into the parity hash with every
+  witness green (2026-09-04 §1a). A reading is now an opaque type, and its
+  shape can no longer be spelled literally by anyone — including by this
+  witness, which is the point.
+
+  So the literal keyword is kept here as the shape a reading must NOT have.
+  `a-literal-map-is-not-a-reading` below is the ratchet against the map coming
+  back."
   :clj-surgeon.measured/reading)
 
 (defn- reading
   [n]
-  {reading-key n})
+  (measured/reading n))
+
+;; @spec MCP-OP-TIME-005
+(deftest a-literal-map-is-not-a-reading
+  (testing "the map shape, whose keyword lookup was the §1a bypass, is gone"
+    (is (false? (measured/reading? {superseded-reading-key 2.5}))
+        "a one-key map is a reading again; a keyword lookup reopens §1a")
+    (is (true? (measured/reading? (measured/reading 2.5)))
+        "the opaque reading is not recognised by its own predicate")
+    (is (nil? (get (measured/reading 2.5) superseded-reading-key))
+        "a reading still answers a keyword lookup with its number")))
 
 (defn- fixed-clock
   [start-ns delta-ns]
@@ -158,9 +175,10 @@
            (cons (nth lines start))
            (str/join "\n")))))
 
-(defn- publish-sites
-  "`{[path form] calls}` for every call of the SDK's structured publish verb."
-  []
+(defn- scan-forms
+  "`{[path form] hits}` for every line under `root` matching `pattern`, named by
+   the top-level form it sits in."
+  [root pattern]
   (frequencies
     (mapcat
       (fn [^java.io.File file]
@@ -172,14 +190,74 @@
                                  form)]
                      {:form form'
                       :hits (cond-> hits
-                              (re-find #"\(structured-call-result" code)
+                              (re-find pattern code)
                               (conj [(.getPath file) form']))}))
                  {:form nil :hits []}
                  (str/split-lines (slurp file)))))
-      (->> (file-seq (io/file "src"))
+      (->> (file-seq (io/file root))
            (filter #(.isFile ^java.io.File %))
            (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
            (sort-by #(.getPath ^java.io.File %))))))
+
+(defn- publish-sites
+  "`{[path form] calls}` for every call of the SDK's structured publish verb."
+  ([] (publish-sites "src"))
+  ([root] (scan-forms root #"\(structured-call-result")))
+
+(def ^:private sdk-result-pattern
+  "Every way to build an SDK `CallToolResult` WITHOUT the sanctioned helper.
+
+  The round-three review named this gap (§2): `publish-sites` greps for the
+  literal `(structured-call-result`, so a publish site that assembles the SDK
+  result by hand — exactly what `structured-call-result` itself does — was
+  invisible, and the docstring's promise that \"a NEW publish site fails this
+  test\" was narrower than it read. The builder is now scanned too, and it is
+  allowed in exactly one form.
+
+  CONSTRUCTION, not the setter: `.structuredContent` is also how a CLIENT
+  reads a response (`mcp-semantic-client/normalize-result`), and a scan that
+  cannot tell a reader from a publisher is one somebody will re-bless."
+  #"CallToolResult/builder|CallToolResult\.")
+
+(def sdk-result-construction-site
+  "The ONE form in `src/` that may assemble an SDK result.
+
+  Everything else publishes by calling it, which is what makes
+  `public-result-publish-sites` an inventory rather than a sample."
+  {["src/clj_surgeon/mcp_server.clj" "structured-call-result"] 1})
+
+;; @spec MCP-OP-RESULT-002
+(deftest the-sdk-result-is-assembled-in-exactly-one-form
+  (testing "a hand-built CallToolResult is a publish site the grep cannot see"
+    (let [scanned (scan-forms "src" sdk-result-pattern)]
+      (is (= sdk-result-construction-site scanned)
+          (str "the SDK result is assembled outside `structured-call-result`: "
+               (pr-str scanned))))))
+
+;; @spec MCP-OP-RESULT-002
+(deftest the-sdk-scan-catches-a-hand-built-publish-site
+  (testing "the ratchet goes RED when the round-three gap is reintroduced"
+    (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                             (str "sdk-publish-plant-" (System/nanoTime))))
+          victim (io/file root "clj_surgeon" "planted_direct_publish.clj")]
+      (.mkdirs (.getParentFile victim))
+      (spit victim
+            (str "(ns clj-surgeon.planted-direct-publish)\n\n"
+                 "(defn planted-direct-publish\n"
+                 "  [json-mapper content structured]\n"
+                 "  (-> (McpSchema$CallToolResult/builder)\n"
+                 "      (.textContent content)\n"
+                 "      (.structuredContent json-mapper structured)\n"
+                 "      (.build)))\n"))
+      (try
+        (let [scanned (scan-forms root sdk-result-pattern)]
+          (is (= {[(.getPath victim) "planted-direct-publish"] 1} scanned)
+              (str "the scan did not see a hand-built SDK result: "
+                   (pr-str scanned))))
+        (finally
+          (.delete victim)
+          (.delete (.getParentFile victim))
+          (.delete (io/file root)))))))
 
 (def public-result-publish-sites
   "Every form in `src/` that hands a structured result to the MCP SDK, and the

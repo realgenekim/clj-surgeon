@@ -1,6 +1,7 @@
 (ns clj-surgeon.recovery-test
   (:require
    [clj-surgeon.mcp-workspace :as mcp-workspace]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.recovery :as recovery]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -62,6 +63,18 @@
     (is (= ["clj-surgeon" "report-failure" "--receipt"
             (.getCanonicalPath receipt-file)]
            (:report-command result)))
+    ;; @spec MCP-OP-TIME-005
+    ;; The receipt is pprint'd to disk and read back with `clojure.edn`, so a
+    ;; measured block holding a TAGGED reading rather than a bare number is a
+    ;; wire defect, not a cosmetic one: round three wrote the tag and the round
+    ;; trip only parsed because the tag happened to be a plain map.
+    (is (number? (get-in persisted [:measured :elapsed-ms :total]))
+        (str "the recovery receipt's measured block does not hold a bare "
+             "number: " (pr-str (:measured persisted))))
+    (is (= [] (vec (measured/unpartitioned-measured-paths persisted)))
+        (str "the persisted receipt carries measured values outside the "
+             "partition: "
+             (pr-str (vec (measured/unpartitioned-measured-paths persisted)))))
     (is (= :report-failure-and-use-cli-fallback (:next-action persisted)))
     (is (= :structural-cli (:safe-route persisted)))
     (is (= {:structural-read :ready
