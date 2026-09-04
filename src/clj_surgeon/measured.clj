@@ -314,6 +314,14 @@
   that BUILD or PARTITION a block — `measured`, `attach`, `partition-measured`
   — which is the boundary the whole namespace exists to be.
 
+  FOREIGN COLLECTIONS ARE LEFT ALONE, deliberately (round-five review §4): a
+  caller's `ArrayList` or `TreeMap` cannot honestly be replaced by a vector or
+  a Clojure map, and guessing at a replacement is how a `ClassCastException`
+  reached the publication boundary in round three. `unpartitioned-measured-paths`
+  DOES walk them, so a reading inside one is a typed
+  `:unpartitioned-measured-field` refusal naming its path rather than a value
+  that quietly reaches the wire.
+
   @spec MCP-OP-TIME-006"
   [x]
   (cond
@@ -540,6 +548,46 @@
 
               (or (vector? node) (seq? node) (set? node))
               (mapcat #(walk %1 (conj path %2) in-measured?) node (range))
+
+              ;; A FOREIGN collection. These two clauses come AFTER the Clojure
+              ;; ones on purpose: a Clojure map IS a `java.util.Map` and a
+              ;; vector IS a `java.util.Collection`, so the fast paths above
+              ;; must claim them first.
+              ;;
+              ;; Round-five review §4: all three walkers walked Clojure
+              ;; collections only, so a reading inside an `ArrayList` was
+              ;; neither unwrapped, relocated, nor diagnosed — it reached the
+              ;; published result untouched with `unpartitioned []`, and became
+              ;; visible only when cheshire refused to encode it. The DIAGNOSTIC
+              ;; is the walker that has to see it, because seeing it is what
+              ;; turns the loud-but-late encoder failure into the same typed
+              ;; `:unpartitioned-measured-field` refusal the other placements
+              ;; get.
+              ;;
+              ;; The two REWRITING walkers deliberately do not rebuild a
+              ;; foreign collection: there is no honest way to know that a
+              ;; caller's `ArrayList`, `LinkedHashMap` or sorted `TreeMap` may
+              ;; be replaced by a vector or a Clojure map, and guessing is how
+              ;; the sorted-map `ClassCastException` reached the boundary in
+              ;; round three. So a reading in a Java collection is REFUSED
+              ;; rather than relocated, and the refusal names its path.
+              (instance? java.util.Map node)
+              (mapcat (fn [^java.util.Map$Entry entry]
+                        (let [k (.getKey entry)
+                              v (.getValue entry)]
+                          (cond
+                            (reading? k) [(conj path ::reading-as-key)]
+                            (= k measured-key) (walk v (conj path k) true)
+                            (and (not in-measured?)
+                                 (contains? measured-field-names k)
+                                 (not (reading? v)))
+                            [(conj path k)]
+                            :else (walk v (conj path k) in-measured?))))
+                      (.entrySet ^java.util.Map node))
+
+              (instance? java.util.Collection node)
+              (mapcat #(walk %1 (conj path %2) in-measured?)
+                      (seq node) (range))
 
               :else nil))]
     (walk x [] false)))
