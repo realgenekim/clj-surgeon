@@ -271,11 +271,28 @@
                               (filter (fn [[_ n]] (pos? n)))
                               (sort-by second >))]
           (if (empty? candidates)
-            (assoc current
-                   :payload_truncated true
-                   :payload_truncation "public-byte-budget"
-                   :payload_omitted omitted
-                   :payload_omitted_bytes (- original-bytes (content current)))
+            ;; @spec MCP-OP-ADMIT-145
+            ;; A trim that trimmed NOTHING is not a truncation. Round six
+            ;; stamped `payload_truncated true` beside `payload_omitted {}`
+            ;; and `payload_omitted_bytes 0` whenever the result did not fit
+            ;; and none of the trimmable collections had content -- which for
+            ;; the admit gate is every refusal raised before the patch is
+            ;; applied. A reader who sees `payload_truncated` asks exactly one
+            ;; question, how much am I not being shown, and the honest answer
+            ;; here is `nothing, and this bound was not the one that could
+            ;; help`. The receipt's real omission, if it had one, is recorded
+            ;; by reduction in `receipt_omitted_fields`.
+            (if (seq omitted)
+              (assoc current
+                     :payload_truncated true
+                     :payload_truncation "public-byte-budget"
+                     :payload_omitted omitted
+                     :payload_omitted_bytes (- original-bytes
+                                               (content current)))
+              (assoc current
+                     :payload_trim_unavailable
+                     (str "no trimmable collection carried content, so this"
+                          " bound removed nothing")))
             (let [[key n] (first candidates)
                   kept (max 0 (dec (quot (* n 2) 3)))
                   omitted (update omitted key (fnil + 0) (- n kept))
