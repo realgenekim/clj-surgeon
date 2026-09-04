@@ -1,0 +1,154 @@
+# Suite spike, round five — the round-three landing review's four blockers
+
+Written 2026-09-04T23:59:40Z by forge-anvil on `bridge/suite-spike`.
+
+The reviewer's coverage comparison is the finding this round answers. The merge
+gate got faster by moving **510 of 957 tests** to the battery lane — the same
+corpus, not the same gate coverage — and the discipline that makes that safe was
+not enforced on the landing path. Three of the four blockers are the same class
+in different clothes: **a control that observes a NAME where the rule is about
+BEHAVIOUR**. A target that exists is not a target that runs your namespace. A
+tripwire that exists is not a tripwire on the path. A pid set is not a record of
+what executed.
+
+## Finding 4 (BLOCKING) — exclusions now prove runner MEMBERSHIP
+
+`clj-surgeon.runner-membership` resolves a named runner to the namespace set it
+actually executes: a Makefile rule to its prerequisites, its `$(MAKE)`
+sub-targets and its `-M:clj-surgeon/<alias>`; an alias to its `:main-opts`;
+`-m clj-surgeon.mcp-test-runner <lane>...` to the lane manifest; any other
+`-m <ns>` to that runner file's own spellings. It **fails closed**: a runner whose
+selection cannot be read is `:unresolved-runner`, because *I could not work out
+what that runs* must never read like *it runs yours*.
+
+RED (the reviewer's sabotage, against the extracted round-three predicate):
+
+```
+SABOTAGE violations: 0 []
+REAL-MAP violations: 0
+resolve make test-fast -> 0
+VERDICT: RED
+```
+
+GREEN:
+
+```
+SABOTAGE violations: 1 [:not-a-member]
+  excluded namespace clj-surgeon.analyzer-contract-test names runner(s) make
+  test-fast -- and none of them RUNS it. `make test-fast` runs 39
+  namespace(s), not including this one.
+REAL-MAP violations: 0
+resolve make test-fast -> 39
+VERDICT: GREEN
+```
+
+Every live exclusion proves membership, not existence:
+
+| excluded namespace | runner it names | runs | member |
+|---|---|---|---|
+| `analyzer-contract-test` | `make analyzer-contract-test` | 1 | yes |
+| `analyzer-contract-test` | `:clj-surgeon/analyzer-contract-test` | 1 | yes |
+| `memory.journal-green-test` | `make memory-red-kernel` | 3 | yes |
+| `memory.oom-reproduction-test` | `make memory-red-kernel` | 3 | yes |
+| `worktree-lifecycle-prune-test` | `make worktree-lifecycle-test` | 4 | yes |
+| `worktree-lifecycle-recovery-test` | `make worktree-lifecycle-recovery-test` | 1 | yes |
+
+## Finding 2 (BLOCKING) — `make landing-gate` is the target `~/bin/land` runs
+
+**`make landing-gate`.** That is the exact name. It runs, in order:
+`battery-fresh`, `mcp-test`, `test-bb`, `repository-hygiene`. The freshness
+tripwire runs **first** and costs a second of `bb`, so a stale receipt refuses
+before seven minutes of JVM and the remedy arrives while the seat is still
+looking at the screen. It is the single name to change when the landing gate's
+contents change, so the seat tool never drifts from what the repository
+considers a landing.
+
+RED, before the target existed:
+
+```
+$ make -n landing-gate
+make: *** No rule to make target 'landing-gate'.  Stop.
+```
+
+GREEN, sabotage on a `git archive` copy with the ledger aged to 40 h (1 of 1
+refused):
+
+```
+$ make landing-gate
+battery-fresh: REFUSED (stale) -- the newest battery receipt is 40.0 h old
+(sha 2522bd95…, started 2026-09-03T07:50:17Z); the tripwire refuses past 26 h
+REMEDY: run the battery and commit its receipt -- …
+make: *** [Makefile:1061: landing-gate] Error 2      RC=2
+```
+
+## Finding 6 (BLOCKING) — the fast lane now sees a child that already exited
+
+Two controls were blind to `mcp-inspect-tool-test` driving `/bin/sh` through the
+production cold-verify helper, and they were blind for the same reason: **both
+observe STATE, and a process that ran and exited leaves none.** The source scan
+looks for spawn spellings in the *test* file; the spawn is three namespaces away
+in `mcp-process/run-bounded!`. The pid diff is a set of *live* descendants; the
+test waits for the child to exit.
+
+So round five records the **event**. `clj-surgeon.spawn-ledger` is append-only;
+all four repository-owned spawn helpers append at the moment of launch
+(`mcp-process/run-bounded!`, `workspace-onboarding/run-command!`,
+`failure-report/run-captured!`, `worktree-lifecycle-io`); the fixture diffs the
+ledger across a namespace exactly as it diffs the live pid set, and a pid seen by
+both is reported once as the live kind.
+
+Then the lane was made true rather than the rule quieter: the one spawning test
+moved to `clj-surgeon.mcp-inspect-cold-job-test` (`:battery`). Reclassifying the
+whole namespace would have taken the other thirty-eight inspect-tool tests off
+the merge gate to fix one — the same trade the review criticised at a larger
+scale.
+
+**Reach, stated:** the ledger sees only helpers that record.
+`every-src-spawn-site-records-into-the-ledger` holds the src half closed by
+enumerating the `ProcessBuilder.` spelling, and its own comment says it is a
+spelling check, not a proof.
+
+## Finding 3 (BLOCKING) — confirmed closed, with a class-level pin
+
+Round four's tmpdir fix holds. A scan of all 40 `:fast` namespaces finds only
+`Files/createTempDirectory`/`createTempFile`, which derive from
+`java.io.tmpdir` by construction, and TEST-ISO-006 has already made that root a
+throwaway. The review found this by reading **one file**, so the ratchet scans
+the whole lane for the three real defect shapes (an env temp override with a
+seat-absolute fallback, an absolute-path literal fixture root,
+`/home/<user>/tmp`) —
+`no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir`.
+
+## Non-blocking items
+
+- **Bounded sleeps on the merge gate** are now an enumerated, declared-exemption
+  list with the reason at each site; an undeclared sleep fails by file and line,
+  and so does a declared site that no longer exists. Three are bounded polls
+  that succeed on their condition; one is the only fixed sleep left on the gate
+  (5 ms, census-pool, backing a claim about scheduling).
+- **The rename scanner's blind spot** is asserted rather than merely disclosed:
+  the scanner is proved NOT to see a `test-fast` mention with no babashka
+  spelling. Whoever closes the gap deletes a failing test.
+- **The GHA workflow** remains on `bridge/gha`, not this branch. Post-push and
+  nightly battery discipline is that branch's landing; `make landing-gate` is
+  the pre-merge half and does not depend on it.
+
+## The trunk merge
+
+`origin/MCP/main` at `a74d8407`, 94 commits, merged. Two conflicts, both
+resolved toward the lane runner: the runner's hard-coded 49-namespace
+`run-tests` and static `:require` block (HEAD kept on both hunks), and the
+spec-doc vector (unioned: feature-thread + temp-dir-hygiene + test-isolation).
+
+The trunk's `mcp-feature-thread-test` (69 deftests) is adopted into `:fast` with
+`^{:lane :fast}` on its ns form. It shells out to `sed` in one `testing` block,
+which the spawn ledger would now refuse by pid and command line, so that one
+assertion moved verbatim to `mcp-feature-thread-sed-test` (`:battery`) — the same
+trade as the inspect-tool cold job, for the same reason.
+
+Pins re-derived on the merged result: **57 namespaces (40 fast, 4 integration,
+13 battery)**; round one's 49 declare 920 deftests; adopted 136
+(12+4+25+3+69+1+1+21); total **1056 = 920 + 136**. A move keeps the total; a
+deletion does not, and only one of them passes that equality. Disk/manifest/ns
+metadata cross-check on the merged tree: on-disk 108, unaccounted 0, phantom 0,
+metadata mismatches 0.
