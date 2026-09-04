@@ -1960,8 +1960,51 @@
                                                     :unknown))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
          "\n" (:error result)
-         "\nsource unchanged"
+         ;; @spec MCP-OP-ADMIT-129
+         (if (true? (:source-unchanged result))
+           "\nsource unchanged"
+           "\nwhether the workspace was changed is unverified")
          (detector-note result))))
+
+;; @spec MCP-OP-ADMIT-129
+(defn- edge-throwable-refusal
+  "Turn anything that reached the handler's edge into a typed refusal.
+
+  Every catch below this one is `(catch Exception ...)`, and an
+  `OutOfMemoryError` raised while both analyzer images are live -- below the
+  read ceiling, on findings diversity rather than findings size -- is an
+  `Error`. It escaped with no receipt at all, and a caller that receives
+  nothing cannot tell a refusal from a write.
+
+  The heap is named because it is the number that would lift it. What is NOT
+  named is `source unchanged`: this is the one edge where the gate does not
+  know how far the failure got, and a false claim of safety here would
+  terminate the investigation that should start."
+  [^Throwable error]
+  (let [oom? (instance? OutOfMemoryError error)
+        max-heap-mib (quot (.maxMemory (Runtime/getRuntime)) (* 1024 1024))
+        message (or (.getMessage error) (.getName (class error)))]
+    (merge (empty-receipt "preview")
+           {:ok false
+            :operation :admit-patch-refused
+            :mutation_attempted nil
+            :source-unchanged nil
+            :error-type (cond
+                          oom? :analyzer-memory-exhausted
+                          (str/includes? (.getName (class error))
+                                         "StreamConstraints") :patch-too-large
+                          (instance? Error error) :admit-tool-error
+                          :else :admit-tool-failure)
+            :error (if oom?
+                     (str "the admit gate exhausted its heap (" max-heap-mib
+                          " MiB maximum) before it could publish a reading: "
+                          message)
+                     message)}
+           (when oom?
+             {:max_heap_mib max-heap-mib
+              :remedy (str "raise the server heap (MCP_JAVA_OPTS -J-Xmx; "
+                           max-heap-mib " MiB at this call) or narrow the"
+                           " patch to fewer files")}))))
 
 (defn handle-admit-clojure-patch
   "clojure-mcp callback handler retained as a Var for hot reload."
@@ -1984,7 +2027,10 @@
                                          :patch-too-large
                                          :admit-tool-failure)
                            :error (or (.getMessage error)
-                                      (.getName (class error)))})))
+                                      (.getName (class error)))}))
+                 ;; @spec MCP-OP-ADMIT-129
+                 (catch Throwable error
+                   (edge-throwable-refusal error)))
      :summarize summary
      :callback callback}))
 
