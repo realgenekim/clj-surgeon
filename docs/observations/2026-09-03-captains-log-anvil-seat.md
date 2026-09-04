@@ -1825,3 +1825,5 @@ clean boundary (after T5 and the current review rounds), with the version named 
 Verified which binary the in-flight arms run (see the pulse). Quota facts the mayor verified: this seat's Claude pool is
 30% remaining, resets Sep 10 19:00Z, separate from the mayor's; codex reports 2 usage-limit resets available — worth
 banking if codex gates review throughput.
+
+## 21:56Z study-ops r12 built (e24ee131): colliding wire keys refused, four specs rescued from a deleted block, a trunk `find` self-prune bug fixed; Sol r13 landing review launched
