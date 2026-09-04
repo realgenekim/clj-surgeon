@@ -1236,6 +1236,63 @@
      :text (try (n/string value-node) (catch Exception _ "<unprintable>"))}))
 
 ;; @spec MCP-OP-ALIAS-059
+(def ^:private kind-forwarding-heads
+  "The only call heads a FORWARDED kind expression may use.
+
+  Round-fifteen review finding 2. Every one of these SELECTS or RELAYS a value
+  that already exists — `or`/`and`/`if`/`when` choose among candidates, the
+  threading macros and `get`/`get-in` walk to one, `some`/`first`/`second`/
+  `filter`/`remove`/`keep`/`seq` pick one out of a sequence of incoming
+  refusals (`(some :error-type (remove :ok checks))` is the change buffer's
+  own forward), and `name` reads the name of a kind it was handed. None of
+  them can BUILD a name out of request data, which is exactly what `keyword`,
+  `symbol`, `str`, `format` and `subs` do — and what the reviewer's planted
+  `(keyword (:review_dynamic_kind params))` did under a marker that never
+  looked. An allowlist and not a denylist, for the same reason the renderer's
+  scalar allowlist is one: a denylist admits everything nobody thought of."
+  '#{or and if when if-let when-let let
+     -> ->> some-> some->>
+     get get-in name
+     some first second filter remove keep seq})
+
+;; @spec MCP-OP-ALIAS-059
+(defn- forwarded-kind-expression?
+  "Whether `node` FORWARDS a kind rather than MINTING one.
+
+  Two conditions, both required:
+
+  1. every call in the expression uses a head from `kind-forwarding-heads`, or
+     is a keyword lookup (a keyword in head position is a lookup and can mint
+     no name whatever the keyword is); and
+  2. the expression names at least one runtime SOURCE — a symbol outside head
+     position, or such a lookup — so a bare literal composition cannot pass by
+     containing no calls at all.
+
+  This is what makes the `forwarded-refusal-kind` marker a CHECKED capability
+  rather than a comment: a marker on a site that mints is now named by the
+  guard exactly as an unmarked one is."
+  [node]
+  (let [nodes (node-seq node)
+        lists (filter #(= :list (n/tag %)) nodes)
+        heads (set (keep #(first (significant-children %)) lists))
+        ;; a KEYWORD in head position is always a map lookup and can never
+        ;; mint a name, whatever the keyword is
+        lookup? (fn [candidate]
+                  (keyword? (node-value (first (significant-children candidate)))))
+        head-forwards? (fn [candidate]
+                         (or (lookup? candidate)
+                             (contains? kind-forwarding-heads
+                                        (node-value
+                                          (first (significant-children
+                                                   candidate))))))
+        source? (fn [candidate]
+                  (or (and (symbol? (node-value candidate))
+                           (not (contains? heads candidate)))
+                      (and (= :list (n/tag candidate)) (lookup? candidate))))]
+    (and (every? head-forwards? lists)
+         (boolean (some source? nodes)))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn- forwarding-marked?
   "Whether the twelve lines above the site declare it forwards another's kind."
   [text site-text]
@@ -1247,6 +1304,18 @@
                    (some #(str/includes? % "forwarded-refusal-kind")
                          (subvec lines (max 0 (- index 12)) (inc index)))))
             (range (count lines))))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- forwarding-exempt?
+  "Whether a dynamic site is exempt: MARKED and mechanically FORWARDING.
+
+  The marker alone was an unchecked capability — the guard exempted any site
+  whose preceding twelve lines carried the marker text without ever
+  establishing that the marked expression forwards. A comment is not a
+  control."
+  [text site]
+  (and (forwarding-marked? text (:text site))
+       (forwarded-kind-expression? (:value site))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- reachable-entrance-source-text
@@ -1275,7 +1344,7 @@
         (for [site (error-type-value-sites text)
               kind (if-let [literal (:literal site)]
                      [literal]
-                     (when-not (forwarding-marked? text (:text site))
+                     (when-not (forwarding-exempt? text site)
                        (minted-kinds-in (:value site))))
               ;; a value that spells the FIELD's own name is a key rename —
               ;; `(set/rename-keys {:error_type :error-type})` — and not a kind
@@ -1308,7 +1377,7 @@
     (for [site (error-type-value-sites text)
           :when (and (nil? (:literal site))
                      (empty? (minted-kinds-in (:value site)))
-                     (not (forwarding-marked? text (:text site))))]
+                     (not (forwarding-exempt? text site)))]
       (str label " · " (:text site)))))
 
 ;; @spec MCP-OP-ALIAS-059
@@ -1326,6 +1395,19 @@
   reachable set."
   [label text]
   (let [lines (vec (str/split-lines text))
+        line-offsets (reductions + 0 (map (comp inc count) lines))
+        ;; @spec MCP-OP-ALIAS-059
+        ;; the marked site's own kind EXPRESSION, read with the reader from
+        ;; the `(refusal` on that line — the marker is checked against the
+        ;; shape, never merely counted
+        kind-node
+        (fn [index line]
+          (when-let [column (str/index-of line "(refusal")]
+            (try
+              (second (significant-children
+                        (parser/parse-string
+                          (subs text (+ (nth line-offsets index) column)))))
+              (catch Exception _ nil))))
         ;; only a source whose OWN `refusal` takes the kind as its first
         ;; argument can spell a kind at the call site at all; where the kind
         ;; is a literal inside the constructor the `:error_type "…"` scan
@@ -1339,8 +1421,11 @@
             :when (and (re-find #"\(refusal\s" line)
                        (not (re-find #"\(refusal\s+:[a-z]" line))
                        (not (re-find #"defn-?\s+refusal" line)))
-            :when (not (some #(str/includes? % "forwarded-refusal-kind")
-                             (subvec lines (max 0 (- index 12)) (inc index))))]
+            :when (not (and (some #(str/includes? % "forwarded-refusal-kind")
+                                  (subvec lines (max 0 (- index 12))
+                                          (inc index)))
+                            (when-let [node (kind-node index line)]
+                              (forwarded-kind-expression? node))))]
         (str label ":" (inc index))))))
 
 ;; @spec MCP-OP-ALIAS-059
@@ -4572,12 +4657,20 @@
                      "   :operation \"alias_migration\"\n"
                      "   :error_type (keyword \"alias-migration-\" (name x))\n"
                      "   :error \"routed refusal\"})\n")
+        ;; @spec MCP-OP-ALIAS-059
+        ;; round-FIFTEEN review finding 2: the marked exemplar used to be
+        ;; `(keyword (name kind))` — a site that MINTS a kind and merely
+        ;; CLAIMS to forward one. The marker is now checked against the
+        ;; expression's shape, so that exemplar is named (asserted in
+        ;; `the-forwarded-refusal-kind-marker-is-checked-and-not-merely-believed`)
+        ;; and the marked exemplar here is a genuine forward: the incoming
+        ;; kind relayed verbatim.
         route-a-marked (str "(defn- route-a-refusal-marked\n"
                             "  [kind]\n"
                             "  {:ok false\n"
                             "   :operation \"alias_migration\"\n"
                             "   ;; forwarded-refusal-kind: kind is this fn's own argument\n"
-                            "   :error_type (keyword (name kind))\n"
+                            "   :error_type (name kind)\n"
                             "   :error \"routed refusal\"})\n")]
     (doseq [[label text]
             [["(keyword (name kind)) mentions the enclosing parameter" route-a]
