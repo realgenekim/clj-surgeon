@@ -3338,6 +3338,120 @@
       "the helper's own reason is enumerated"))
 
 ;; ============================================================
+;; O2 ROUND 4 — an allowance is DERIVED from the budget, never fixed
+;; (Sol O2 round-3 review, section 4)
+;; ============================================================
+;; MCP-OP-STUDY-044 says the text drops a leaf only where the OUTPUT BUDGET
+;; forces it. Round three dropped leaves at a fixed 8,192-character
+;; receipt-fact allowance instead, so a refusal whose complete rendering had
+;; thousands of bytes of room still lost its `error`, its `path`, and four
+;; more leaves:
+;;
+;;   error_type= invalid-source-path structured_bytes= 20504 text_chars= 1321
+;;   full_cause_in_text= false full_path_in_text= false declares_drop= true
+;;   uncarried_count= 6
+;;   hypothetical_one_copy_public_bytes= 31869 hypothetical_fits= true
+;;
+;; A fixed allowance is a second budget nobody declared. The allowance is what
+;; the public budget leaves after the envelope; elision happens only when the
+;; complete rendering would not fit; and an elision NAMES what it dropped, so
+;; a caller reading only the text knows exactly which leaf to go to
+;; `structuredContent` for.
+
+(defn- synthetic-refusal
+  [cause]
+  {:ok false
+   :operation "inspect_clojure"
+   :error_type "synthetic-refusal"
+   :error cause
+   :read_complete false
+   :source_unchanged true
+   :next_action "correct_request"})
+
+(defn- published-pair
+  "One result as a client is handed it: fitted, clocked, and rendered."
+  [raw]
+  (let [published (assoc (inspect-tool/fit-public-result
+                           (assoc raw :elapsed_ms 1.0))
+                         :elapsed_ms 1.0)
+        text (inspect-tool/inspect-summary published)]
+    {:published published
+     :text text
+     :bytes (inspect-tool/mcp-result-byte-count text published)
+     :misses (leaf-misses text published)}))
+
+(defn- largest-unelided-cause
+  "The largest cause length whose COMPLETE public result still fits, found by
+   bisection on the fit's own verdict rather than on a constant."
+  []
+  (loop [low 1 high 40000 best 1]
+    (if (> low high)
+      best
+      (let [mid (quot (+ low high) 2)]
+        (if (nil? (:text_evidence_limit
+                    (inspect-tool/fit-public-result
+                      (assoc (synthetic-refusal (apply str (repeat mid "c")))
+                             :elapsed_ms 1.0))))
+          (recur (inc mid) high mid)
+          (recur low (dec mid) best))))))
+
+;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-040
+(deftest a-refusal-elides-only-what-the-public-budget-forces
+  (testing "a complete rendering with room to spare is rendered complete"
+    (let [{:keys [published text bytes misses]}
+          (published-pair (synthetic-refusal (apply str (repeat 10000 "c"))))]
+      (is (nil? (:text_evidence_limit published))
+          "the fit imposes no limit, so nothing may be elided")
+      (is (<= bytes inspect-tool/max-public-result-bytes))
+      (is (empty? misses)
+          (str "a fixed allowance elided " (count misses)
+               " leaves the budget had room for — " (miss-report misses)))
+      (is (not (str/includes? text "the complete receipt is in structuredContent"))
+          "and the text does not claim a drop it did not make")))
+  (testing "at the boundary the complete rendering is carried"
+    (let [exact (largest-unelided-cause)
+          {:keys [published text bytes misses]}
+          (published-pair (synthetic-refusal (apply str (repeat exact "c"))))]
+      (is (nil? (:text_evidence_limit published)))
+      (is (<= bytes inspect-tool/max-public-result-bytes)
+          "the largest complete rendering is inside the budget")
+      (is (> bytes (- inspect-tool/max-public-result-bytes 64))
+          (str "the boundary must actually be the budget's, not a constant's: "
+               bytes " bytes of " inspect-tool/max-public-result-bytes))
+      (is (empty? misses) (miss-report misses))))
+  (testing "one character over, the elision is forced, bounded, and NAMED"
+    (let [over (inc (largest-unelided-cause))
+          {:keys [published text bytes misses]}
+          (published-pair (synthetic-refusal (apply str (repeat over "c"))))]
+      (is (some? (:text_evidence_limit published))
+          "the fit imposes a limit exactly one character past the boundary")
+      (is (<= bytes inspect-tool/max-public-result-bytes))
+      (is (seq misses) "the elision is real")
+      (is (str/includes? text "the complete receipt is in structuredContent"))
+      (doseq [[path _] misses]
+        (is (str/includes? text (inspect/leaf-label path))
+            (str "a dropped leaf the text never names: "
+                 (inspect/leaf-label path)))))))
+
+;; @spec MCP-OP-STUDY-044
+(deftest an-ok-receipt-elides-only-what-the-public-budget-forces
+  ;; The same rule on the success side: the row allowance is a rendering
+  ;; DEFAULT (MCP-OP-STUDY-041), but the receipt-fact allowance is the
+  ;; superset guarantee, and a guarantee bounded by a constant is not one.
+  (let [note (apply str (repeat 10000 "n"))
+        receipt {:ok true :operation "inspect_clojure"
+                 :request_count 0 :file_count 0 :source_character_count 0
+                 :results [] :read_complete true :next_action "none"
+                 :note note}
+        {:keys [published text bytes misses]} (published-pair receipt)]
+    (is (nil? (:text_evidence_limit published)))
+    (is (<= bytes inspect-tool/max-public-result-bytes))
+    (is (str/includes? text note)
+        "a 10,000-character leaf under the budget travels whole")
+    (is (empty? misses) (miss-report misses))))
+
+;; ============================================================
 ;; O2 ROUND 4 — the refusal enumeration comes from the RUNTIME
 ;; (Sol O2 round-3 review, sections 3 and 9)
 ;; ============================================================
@@ -3410,14 +3524,27 @@
             "the marker names the original length")
         (is (str/includes? text over)
             "and the complete cause still travels under the receipt-fact bound")))
-    (testing "a cause no bound can carry is dropped, declared, and the text stays bounded"
-      (let [huge (apply str (repeat 10000 "c"))
-            text (inspect-tool/inspect-summary (synthetic huge))]
+    (testing "a cause the public budget cannot carry is dropped, declared, and named"
+      ;; O2 round 4 (Sol round-3 review, section 4): the round-3 form of this
+      ;; clause expected a 10,000-character cause to be DROPPED and the whole
+      ;; refusal text to stay under 2,048 characters. That is the fixed
+      ;; allowance MCP-OP-STUDY-044 forbids: at 10,000 characters the complete
+      ;; rendering has thousands of bytes of room. The bound a refusal text
+      ;; obeys is the PUBLIC OUTPUT BUDGET, so the witness moves to a cause
+      ;; that genuinely cannot fit.
+      (let [huge (apply str (repeat 20000 "c"))
+            published (assoc (inspect-tool/fit-public-result (synthetic huge))
+                             :elapsed_ms 1.0)
+            text (inspect-tool/inspect-summary published)]
         (is (not (str/includes? text huge)))
         (is (str/includes? text "the complete receipt is in structuredContent"))
-        (is (< (count text) 2048)
-            (str "the refusal text is bounded by a constant, not by the "
-                 "caller's input: " (count text) " characters"))))))
+        (is (str/includes? text "error")
+            "and the text names the leaf it dropped")
+        (is (<= (inspect-tool/mcp-result-byte-count text published)
+                inspect-tool/max-public-result-bytes)
+            (str "the refusal text is bounded by the public output budget: "
+                 (inspect-tool/mcp-result-byte-count text published)
+                 " bytes"))))))
 
 ;; ============================================================
 ;; O2 ROUND 3 — the retired contract stays visibly retired
