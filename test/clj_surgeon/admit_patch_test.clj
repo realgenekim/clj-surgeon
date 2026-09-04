@@ -8,6 +8,7 @@
    [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.mcp-admit-tool :as admit]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-process :as process]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
    [clj-surgeon.mcp-write-refusal :as write-refusal]
@@ -3965,3 +3966,131 @@
               (str "never asked and everything answered are different facts "
                    "and must not share a value"))))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; An admission failure is a fact about this deployment, not one word
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-127
+(deftest every-admission-failure-type-survives-the-analyzer-boundary
+  (let [cases
+        [["the admission wrapper is not installed"
+          {:finished? false :launch-error true
+           :admission-error {:error-type :clj-kondo-admission-unavailable
+                             :gate "/no/such/wrapper"}}
+          :clj-kondo-admission-unavailable]
+         ["clj-kondo itself is not on this server's PATH"
+          {:finished? false :launch-error true
+           :admission-error {:error-type :clj-kondo-executable-unavailable
+                             :requested-executable "clj-kondo"}}
+          :clj-kondo-executable-unavailable]
+         ["the box was loaded and the analyzer was deferred"
+          {:finished? true :exit 75
+           :admission {:status :pressure-deferred
+                       :error-type :clj-kondo-pressure-deferred}}
+          :clj-kondo-pressure-deferred]
+         ["the wrapper waited past its deadline for the lock"
+          {:finished? true :exit 1
+           :admission {:status :admission-timeout
+                       :error-type :clj-kondo-admission-timeout}}
+          :clj-kondo-admission-timeout]
+         ["the bounded run was interrupted"
+          {:finished? false
+           :admission-error {:error-type :process-interrupted
+                             :admission {:status :delegated}}}
+          :process-interrupted]
+         ["an admitted run is not an admission failure"
+          {:finished? true :exit 0 :admission {:status :admitted}}
+          nil]
+         ["nor is a command that needs no admission"
+          {:finished? true :exit 0 :admission {:status :not-required}}
+          nil]]]
+    ;; Resolved rather than referred so the other witnesses in this rung
+    ;; still run while this one is red.
+    (let [admission-failure
+          (or (resolve 'clj-surgeon.mcp-admit-tool/analyzer-admission-failure)
+              (constantly nil))]
+      (doseq [[label raw expected] cases]
+        (testing label
+          (is (= expected (:error-type (admission-failure raw)))))))
+    (testing "every type this can publish reads as unverifiable"
+      (doseq [[label _ expected] cases
+              :when expected]
+        (is (contains? admit/unverifiable-lint-error-types expected)
+            (str label ": a type outside the set would score as partial"))))))
+
+;; @spec MCP-OP-ADMIT-127
+(deftest an-admission-failure-keeps-its-type-through-to-the-receipt
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (testing "this server cannot find its own admission wrapper"
+        (binding [process/*clj-kondo-admission-path*
+                  "/nonexistent/clj-kondo-admission"]
+          (let [result (admit/execute-request!
+                         {:project-root (.getPath root)}
+                         {:patch clean-multi-file-patch :verify "focused"})
+                lint (:lint_delta result)]
+            (is (= :clj-kondo-admission-unavailable (:error-type lint))
+                (str "a deployment fault published as a missing analyzer: "
+                     (pr-str (select-keys lint [:error-type :error]))))
+            (is (= "/nonexistent/clj-kondo-admission" (:gate lint))
+                "the ex-data names the exact path; so must the receipt")
+            (is (string? (:remedy lint))
+                "rung 1 carries :cap and :observed-bytes; this carries its own")
+            (is (= :unverified (:verification_status result)))
+            (is (= [{:detector "clj-kondo"
+                     :reason :clj-kondo-admission-unavailable}
+                    {:detector "focused-tests"
+                     :reason :no-focused-test-profile}]
+                   (:detectors_not_run result))))))
+      (testing "clj-kondo itself is not on this server's PATH"
+        ;; `expand-command` absolutizes a bare `clj-kondo` against its own
+        ;; search paths before admission ever sees it, so the executable is
+        ;; taken out from under the gate by naming it and emptying the PATH
+        ;; the admission wrapper resolves against.
+        (binding [process/*executable-path* "/nonexistent-bin"]
+          (let [result (admit/execute-request!
+                         {:project-root (.getPath root)
+                          :admit-analyzer-command
+                          ["/nonexistent/clj-kondo" "--lint" "{files}"]}
+                         {:patch clean-multi-file-patch :verify "focused"})
+                lint (:lint_delta result)]
+            (is (= :clj-kondo-executable-unavailable (:error-type lint)))
+            (is (string? (:remedy lint)))
+            (is (= :unverified (:verification_status result))))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-128
+(deftest the-admission-wrapper-resolves-without-the-jvms-working-directory
+  (let [home (temp-dir)
+        classpath (->> (str/split (System/getProperty "java.class.path") #":")
+                       (map #(.getCanonicalPath (io/file %)))
+                       (str/join ":"))
+        builder (doto (ProcessBuilder.
+                        ^java.util.List
+                        [(str (System/getProperty "java.home") "/bin/java")
+                         "-cp" classpath
+                         (str "-Duser.home=" (.getPath home))
+                         "clojure.main" "-e"
+                         (str "(require 'clj-surgeon.mcp-process)"
+                              "(print (str \"ADMISSION-PATH=\""
+                              " (clj-surgeon.mcp-process/"
+                              "clj-kondo-admission-path)))")])
+                  (.directory (io/file "/"))
+                  (.redirectErrorStream true))
+        _ (.remove (.environment builder) "CLJ_SURGEON_CLJ_KONDO_ADMISSION")
+        process (.start builder)
+        output (slurp (.getInputStream process))
+        exit (.waitFor process)
+        path (second (re-find #"ADMISSION-PATH=(\S+)" output))]
+    (try
+      (is (zero? exit) output)
+      (is (some? path) output)
+      (is (.isFile (io/file (str path)))
+          (str "a workspace-routed server started outside a clj-surgeon "
+               "checkout resolved its admission wrapper to " (pr-str path)
+               " and would report clj-kondo-unavailable for every admit call "
+               "on every workspace it routes"))
+      (is (.canExecute (io/file (str path))))
+      (finally (delete-tree! home)))))
