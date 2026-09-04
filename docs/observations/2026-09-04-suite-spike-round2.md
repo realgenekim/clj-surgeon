@@ -12,12 +12,21 @@ concurrency battery), and closes round one's two load-fragile namespaces.
 |---|---|---:|
 | `make test-fast` (36 ns, cold, load 16.04) | **358 tests, 3 569 assertions, 0 failures, 0 errors** | **30.31 s** |
 | `make test-integration` (4 ns) | 71 tests, 750 assertions, 0 failures, 0 errors | — |
-| `make mcp-test` = fast+integration (40 ns, full target: oracle + 8 self-tests) | 426 tests, 4 309 assertions, 0 failures, 0 errors | 149.82 s |
+| `make mcp-test` = fast+integration (40 ns, full target: oracle + 8 self-tests) | 429 tests, 4 323 assertions, 0 failures, 0 errors | 148.53 s |
 | `make test-battery` (11 ns, under `flock /home/forge/tmp/suite.lock`, load 8.27) | 456 tests, 8 809 assertions, 0 failures, 0 errors | 709.09 s |
 | `~/bin/suite-run bb test/run_all.clj` (bb lane, untouched) | 840 tests, 6 919 assertions, 0 failures, 0 errors | — |
 | `make mcp-operation-oracle` | `mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]` | — |
 | `make repository-hygiene` | `repository hygiene: no machine-local build cache is tracked at any depth` | — |
 | **`make suite-concurrency-battery N=4`, three runs** | **3/3 PASS, 12/12 clones 0 failures 0 errors** | 199 / 192 / 185 s |
+
+**CORRECTION (round three, 2026-09-04).** The `make mcp-test` row above read **426 tests,
+4 309 assertions, 149.82 s** until now. That was a stale execution: the last three cadence
+witnesses landed after it, and the runner at this branch's tip printed **429 / 4 323**. The
+round-two review re-measured the reviewed sha independently and got exactly that, at 148.53 s
+— so the row is corrected to the tip's real figure rather than to a number that was true for
+part of an afternoon. The concurrency-battery clones below always printed 429/4 323; the
+disagreement between the table and its own evidence, four sections apart, is the reason this
+correction exists.
 
 **Fast lane 30.31 s against a < 60 s target, on a box at load 16 carrying other seats.**
 
@@ -123,7 +132,7 @@ suite-battery: wall 185 s
 suite-battery: VERDICT PASS -- all 4 clones 0 failures, 0 errors
 ```
 
-(The 429/4323 here versus 426/4309 in the solo `make mcp-test` above is the three cadence
+(The 429/4323 here matched the solo `make mcp-test` once the table above was corrected; the earlier 426/4309 execution predates the three cadence
 witnesses, added between the two runs.)
 
 The load ceiling worked as designed and is worth recording: every run waited at 12-25 before
