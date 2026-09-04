@@ -1258,3 +1258,7 @@ The reviewer's line to keep: the content-addressed inventory is sound and "the s
 ## CORRECTION to the previous entry — an unquoted heredoc swallowed a backticked word
 
 The r4 scorer entry above should read: "rescore-FAN.sh hands it one from an exit-ignored PATH `rev-list` fallback when base.sha is missing". The word `rev-list` was executed as a command substitution by an unquoted heredoc (the quoted-heredocs-for-prose rule, violated once more by the seat; `bash: rev-list: command not found` was the tell). No content lost beyond that word; recorded rather than rewritten.
+
+## 05:13Z — E-THREAD CLOSED (docs 9e86935b pre-registration, aa050310 results): the feature-thread study's answer is measured — do not build the verb; native 5/5 × 5 threads, 0 false-completes
+
+The pre-registration held even when the first grading said otherwise: eight "false-completes" were the oracle's — one witness frozen per slot where several existed, twice in the direction that would have earned the verb. The runner corrected the truth with timestamps and disclosed it; the verdict stands on the corrected oracle. Twelve arms voided when constructed fixtures lived only in working trees (clone carries commits, not dirt) — the runner now refuses a clone lacking the hidden-leg token. Gene's Marvin-app amendment produced the decisive thread (T5): search-invisible legs found by reading a comment. Study doc §8, brainfleet §37, Gene report updated; mayor told; inb-55e00e closed.
