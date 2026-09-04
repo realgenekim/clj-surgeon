@@ -111,3 +111,31 @@ Why native won: T2 — followed `const formatDraft = runDraftFormatter` into ano
 The finding that outranks the cohort: the first grading reported 8 false-completes — all eight were the frozen ORACLE's error (a slot with several real witnesses frozen to one, twice in the direction that would have earned the verb on a broken meter). "A frozen oracle that admits one right answer per slot measures itself, not its subject." 12 arms voided and re-run when constructed fixtures turned out to live only in scratch working trees (git clone carries commits, not dirt); the runner now refuses any arm whose clone lacks the thread's hidden-leg token.
 
 Kept: on social-media-writer the receipt halved the search work (7.4 → 3.3 tool calls; 66 → 33 s) at identical quality; on the dictation app it bought nothing — keep the repo-local script where its config is tuned. Not tested, left open honestly: repo-wide SCALE (every thread touching X) and a GATE (every route has a handler and a test). Secondary for Gene's Prolog question: 0 of 6 T5 arms named the Prolog oracle in either cell — if agents should find `.pl` oracles, the lever is a link from code to oracle (the INTENT comment worked; a search tool did not).
+
+## 9. Next step, on Gene's reframe (tool calls are the meter) — Fable's position, written before the fleet's answers (05:26Z)
+
+Gene: "I suggest we build it, and see if any agents use it … bring back the forms? … reading is fast, but don't want to swamp context window … if we can save tool calls, we rack up gains."
+
+**The call sequence today, for the exact SMW request** (from the transcript and the E-THREAD N arms, ~7.4 calls): one or two searches for the identifier and the route; a read of the menu file; a read of the JS bridge; a read of the route table and handler; a read of the sibling command (Format Draft, the thing the new command must mirror); a read of the tests; then the writes. With the current receipt (~3.3 calls): the receipt, then the reads of the bodies it pointed at, then the writes. **The remaining calls are reads of the forms the receipt located.** So the next receipt carries the forms.
+
+**Shape, ten lines:**
+```
+feature_thread subject=formatDraft also=/api/transform/format budget=12288
+  menu-caller  FOUND js/menu.js:108-118       sha=…  body: <11 lines>
+  js-function  FOUND js/editor.js:340-362     sha=…  body: <23 lines>
+  route        FOUND routes.clj:58            sha=…  form: (POST "/api/transform/format" … handle-format-draft)
+  handler      FOUND handlers.clj:210-241     sha=…  form: (defn handle-format-draft …)   ; parsed, exact
+  tests        FOUND test/…_test.clj:77-112   sha=…  form: (deftest format-draft-… )
+  sibling      format-draft → the same five legs, bodies ELIDED to line ranges (budget)
+  rules        editor-path=durable,conflict-aware  selection=required-for-Dequote/Format  intent=SMW-EDIT-00x
+  status       COMPLETE (5/5)   bytes=9,812/12,288   elided: sibling bodies (ranges given)
+```
+Per leg: location, content hash (so the later edit can assert its pre-image), the body. Clojure legs are parsed forms with exact ranges (this is where Surgeon's parser earns the call). JS legs: a brace-matched body from the definition line, falling back to a fixed line window, always labelled which method produced it. The sibling row is the one native cannot know to ask for: "make one like Format Draft" needs Format Draft's five legs too. The rules row is the second receipt type — how X is wired AND what its rules are — and is the only row a grep script cannot produce.
+
+**Budget:** the five bodies for this feature are small (a menu entry, a ~20-line JS function, a route line, a ~30-line handler, a test); estimate 6–10 KB. Proposed default budget 12 KB (~3k tokens), hard cap 32 KB (the trunk's public-result budget); over budget → bodies become line ranges in a stated order (tests first, sibling next, never the handler), with `elided:` naming what was cut. Never a silent cut; never more than the budget. That answers "don't swamp the window": one receipt costs less than the two file reads it replaces.
+
+**Adoption experiment (pre-registered, tool calls primary):** the exact Dequote/Format task (and one mirror task on the dictation app), cells N (native, 7.4 calls baseline), F (verb described, free choice), M (mandated first call), K (a skill line: "for a change spanning JS and Clojure, call feature_thread first"); n = 3; primary = tool calls to a correct, gate-green edit; secondary returns, wall. Predictions: M and K 2–3 calls (receipt + write + test) vs N 7–8; F adoption ≤ 1/3 (the night's 0/19); correctness equal. Withdrawal: if M does not cut calls by ≥ 2× vs N on both tasks, the verb is not built into the product (the script stays); if F adoption is 0/3, routing is by skill or mandate, never by description.
+
+**Name:** `feature_thread` (the seat's own coinage; `trace_feature` if a verb is wanted).
+
+**One sentence for Gene:** build the verb with bodies + sibling + rules under a 12 KB budget, measure tool calls to a correct edit on your exact request; ≥ 2× fewer calls when mandated says it works, 0/3 free-choice adoption says route it by skill, and < 1.5× says stop.
