@@ -2130,7 +2130,16 @@
    ;; @spec MCP-OP-ADMIT-140
    ;; a receipt that dropped the note saying a value was cut would be telling
    ;; the reader a bounded value verbatim
-   :receipt_identity_bounded])
+   :receipt_identity_bounded
+   ;; @spec MCP-OP-ADMIT-141
+   ;; and neither is the payload's own truncation notice bulk: reduction was
+   ;; measured dropping all four of these to make room, which is a receipt
+   ;; jettisoning the only annotation that makes its cut honest
+   :payload_truncated :payload_truncation :payload_omitted
+   :payload_omitted_bytes :payload_binding_face
+   ;; the terminal answer itself
+   :receipt_over_budget :receipt_residual_bytes
+   :receipt_residual_text_characters :receipt_unreducible_fields])
 
 ;; @spec MCP-OP-ADMIT-139
 (defn- reduce-receipt-to-budget
@@ -2194,9 +2203,33 @@
               ;; If a next_call is what still will not fit, the oversize
               ;; next_call refusal below is the honest answer.
               (let [final (annotate (cut current omitted) omitted)]
-                (if (or (:error_truncated current) (public-faces-fit? final))
+                (if (public-faces-fit? final)
                   final
-                  final)))))))))
+                  ;; @spec MCP-OP-ADMIT-141
+                  ;; Nothing droppable remains and the sentences are already
+                  ;; cut. Round five's tail here was `(if (or ...) final
+                  ;; final)` -- both arms identical, the predicate computed
+                  ;; and thrown away -- so a 60,563-byte receipt was published
+                  ;; carrying `receipt_reduced true`, which a reader can only
+                  ;; read as `the reduction succeeded`. A budget this receipt
+                  ;; could not be brought inside is a FACT about it, and it is
+                  ;; stated in a typed way on both faces rather than left
+                  ;; wearing the shape of success.
+                  (let [residual (write-refusal/json-bytes final)
+                        residual-text (summary-characters final)]
+                    (assoc final
+                           :receipt_over_budget true
+                           :receipt_residual_bytes residual
+                           :receipt_residual_text_characters residual-text
+                           :receipt_unreducible_fields
+                           (->> receipt-identity-keys
+                                (filter #(contains? final %))
+                                (map (fn [k]
+                                       [(name k)
+                                        (write-refusal/json-bytes
+                                          {k (get final k)})]))
+                                (sort-by second >)
+                                (mapv first)))))))))))))
 
 ;; @spec MCP-OP-ADMIT-069
 ;; @spec MCP-OP-ADMIT-133
@@ -2413,7 +2446,11 @@
   and `next_call` are here for the same reason they have their own lines:
   they are the receipt's answer to `what now`."
   [:ok :operation :source-unchanged :mutation_attempted :pre_image_binding
-   :lock_scope :error :remedy :next_call])
+   :lock_scope :error :remedy :next_call
+   ;; @spec MCP-OP-ADMIT-141
+   ;; a receipt reduction could not bring inside the budget says so on the
+   ;; text face too, and elision is exactly what must not reach that
+   :receipt_over_budget :receipt_residual_bytes])
 
 ;; @spec MCP-OP-ADMIT-136
 (defn- fact-root
@@ -2557,9 +2594,22 @@
                      low))]
         (loop [named (- total kept)]
           (let [rendered (line kept named)]
-            (if (or (zero? named) (<= (count rendered) budget))
-              rendered
-              (recur (dec named)))))))))
+            (cond
+              (<= (count rendered) budget) rendered
+              (pos? named) (recur (dec named))
+              ;; @spec MCP-OP-ADMIT-141
+              ;; Below roughly 191 characters of remainder the note that
+              ;; ANNOUNCES the elision is itself longer than the remainder,
+              ;; so the section exceeded the budget it was handed in order to
+              ;; say that it had to. A shorter note is tried, and if even
+              ;; that will not fit the section is absent rather than over --
+              ;; a bound announced by a thing not charged against it is the
+              ;; same defect this round's blocker was.
+              :else
+              (let [short-note (str "facts_elided · " total
+                                    " leaf(s) are in structuredContent"
+                                    " and not above")]
+                (when (<= (count short-note) budget) short-note)))))))))
 
 ;; @spec MCP-OP-ADMIT-132
 ;; @spec MCP-OP-ADMIT-135
