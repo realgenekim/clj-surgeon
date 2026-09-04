@@ -263,3 +263,12 @@ run as a test inside `make mcp-test`) enforces both halves.
   (no occurrence at all, or every occurrence commented), so a reader never has
   to run `rg` to prove a negative. `probe` is admitted like any other field,
   with a ceiling of `max-probe-identifiers`.
+
+- [x] **MCP-OP-THREAD-039**: The use leg names its co-menu-item peers. When
+  `feature_thread` locates a `:use` leg, every other command bound in that same
+  form (`{:onclick "X()"}`) shall be reported in `peers` with evidence
+  `co-menu-item`: its definition range, `sha256`, boundary, anchor and body
+  under budget, or `ABSENT` with the search that was run. The subject is not
+  its own peer, and a command in a different form is not a peer of this one.
+  Peer BODIES are the first bodies cut after the sibling; peer ROWS are cut
+  only when even their ranges will not fit, and the ledger names both.

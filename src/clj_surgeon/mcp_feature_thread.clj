@@ -63,8 +63,11 @@
   save. Round four raised it again, from 24576 to 28672, when `after_context`
   (MCP-OP-THREAD-036) put the four source lines each anchor points AT into the
   receipt: at 24576 the complete receipt measures 25298 bytes and every leg's
-  after-context was cut, which is again the call the verb exists to save. 10240
-  is a good explicit `budget_bytes` for a caller that wants only the ranges."
+  after-context was cut, which is again the call the verb exists to save. 11264
+  is a good explicit `budget_bytes` for a caller that wants only the ranges:
+  with every body, every peer body and every anchor context elided the fixture
+  receipt measures 10484 bytes of text, and the receipt REFUSES rather than
+  truncate below that."
   28672)
 
 ;; @spec MCP-OP-THREAD-002
@@ -201,8 +204,9 @@
   definition the seed names. What goes first is context the caller can re-fetch
   without losing the edit basis. Fixed and stated so an elision is never a
   surprise."
-  [:sibling :after-context :governance-template :secondary-tests :next-call
-   :menu :route :tests-js :tests :implementation :js-function :handler])
+  [:sibling :peers :after-context :governance-template :secondary-tests
+   :peer-rows :next-call :menu :route :tests-js :tests :implementation
+   :js-function :handler])
 
 ;; ---------------------------------------------------------------------------
 ;; Small utilities
@@ -2206,6 +2210,52 @@
                             "no seed names a definition")
                   :elide :implementation}))))))
 
+(def ^:private onclick-pattern
+  "`{:onclick \"someCommand()\"}` in a menu form. The identifier, not the call."
+  #":onclick\s+\"([A-Za-z_$][A-Za-z0-9_$]*)\s*\(")
+
+;; @spec MCP-OP-THREAD-039
+(defn co-menu-peers
+  "The other commands bound in the SAME menu form as the subject, each resolved
+  to its own definition.
+
+  A caller adding a menu command reads its neighbours to learn the shape --
+  what a command looks like, where the separators go, which of them have an
+  implementation and which are still only bound. The transcript shows the real
+  agent reading four such ranges by hand. The peer set is taken from the `:use`
+  leg's OWN body, so `saveDraft` in the File menu is not a peer of an Edit menu
+  command; the subject is not its own peer.
+
+  A peer with no definition is reported ABSENT with the search that was run,
+  never omitted: `expound` and `bulletize` are bound in the fixture's Edit menu
+  and defined nowhere, and that is a fact the caller needs."
+  [cache paths def-globs leg seed-identifiers]
+  (when (and (located? leg) (:body leg) (seq def-globs))
+    (let [seeded (set seed-identifiers)
+          ids (->> (re-seq onclick-pattern (:body leg))
+                   (map second)
+                   distinct
+                   (remove seeded)
+                   vec)]
+      (when (seq ids)
+        (mapv
+          (fn [id]
+            (let [[label regex] (first (searches-for-kind
+                                         :def {:identifiers [id] :routes []}))
+                  searched (render-search def-globs [label regex])
+                  live (remove :in_comment (:hits (scan cache paths def-globs regex)))
+                  m (when (seq live)
+                      (hit->member cache (first live) "co-menu-item"))]
+              (if-not m
+                {:identifier id :status "ABSENT" :searched searched}
+                (let [strength (leg-strength m)]
+                  (cond-> (merge {:identifier id :searched searched}
+                                 (dissoc m :in-comment? :rank)
+                                 strength)
+                    (= "FOUND" (:status strength))
+                    (assoc :anchor (anchor-for cache m)))))))
+          ids)))))
+
 ;; @spec MCP-OP-THREAD-035
 (defn export-note
   "How the browser reaches a script leg's definition -- or the statement that it
@@ -2247,17 +2297,29 @@
   ([cache paths conventions seeds handler]
    (resolve-thread cache paths conventions seeds handler nil nil))
   ([cache paths conventions seeds handler walked-globs scope-paths]
-   (let [;; @spec MCP-OP-THREAD-035
-         enrich (fn [l]
+   (let [def-globs (->> (:legs conventions)
+                        (filter #(= :def (:kind %)))
+                        (mapcat :globs)
+                        distinct
+                        vec)
+         ;; @spec MCP-OP-THREAD-035
+         ;; @spec MCP-OP-THREAD-039
+         enrich (fn [leg l]
                   (cond-> l
                     (and (located? l) (script-path? (:file l)))
-                    (assoc :export (export-note cache l (:identifiers seeds)))))
+                    (assoc :export (export-note cache l (:identifiers seeds)))
+
+                    (= :use (:kind leg))
+                    (as-> l' (if-let [ps (co-menu-peers cache paths def-globs l'
+                                                        (:identifiers seeds))]
+                               (assoc l' :peers ps)
+                               l'))))
          declared (mapv (fn [leg]
                           (-> (resolve-leg cache paths seeds leg
                                            {:handler-name (:name handler)
                                             :scope-paths scope-paths})
                               (assoc :elide (elision-class leg))
-                              enrich))
+                              (->> (enrich leg))))
                         (:legs conventions))]
      (if-let [auto-leg (implementation-leg conventions)]
        (conj declared (resolve-implementation
@@ -2415,6 +2477,31 @@
          (when (:form_name leg) (str " form=" (:form_name leg)))
          (when (:export leg) (str " export=" (:export leg)))
          "\n  found by: " (str/join "\n  found by: " (:searches leg))
+         ;; @spec MCP-OP-THREAD-039
+         (when (seq (:peers leg))
+           (str "\n  peer "
+                (str/join "\n  peer "
+                          (map (fn [p]
+                                 (str (:identifier p) " " (:status p)
+                                      (when (located? p)
+                                        (str " " (:file p) " L" (:from p)
+                                             "-L" (:to p)
+                                             " sha256:" (:sha256 p)
+                                             " evid=" (:evidence p)
+                                             " boundary=" (:boundary p)
+                                             (when (:anchor p)
+                                               (str " anchor=" (:anchor p)))
+                                             " refetch=" (:refetch p)))
+                                      (when (:weak_reason p)
+                                        (str " weak=" (:weak_reason p)))
+                                      "\n    searched: " (:searched p)
+                                      (when (:body p)
+                                        (str "\n    BODY<<\n" (:body p)
+                                             "\n    >>"))
+                                      (when (:elided_reason p)
+                                        (str "\n    BODY ELIDED reason="
+                                             (:elided_reason p)))))
+                               (:peers leg)))))
          (when (seq (:after_context leg))
            (str "\n  AFTER<< L" (:after_context_from leg)
                 "-L" (:after_context_to leg) "\n"
@@ -2682,9 +2769,9 @@
                     :bytes 0
                     :reason "public-budget"
                     :from 0 :to 0 :sha256 "n/a"
-                    :refetch (str "re-run feature_thread with mode=locations"
-                                  " for the " (count (:expect_pre_sha256 n))
-                                  " whole-file digests admit_clojure_patch binds")}))
+                    :refetch (str "re-run with mode=locations for the "
+                                  (count (:expect_pre_sha256 n))
+                                  " whole-file digests admit binds")}))
        true]
       [result false])
 
@@ -2715,6 +2802,60 @@
                                      :refetch (:refetch m)})
                             cut)))
            true])))
+
+    ;; @spec MCP-OP-THREAD-039
+    ;; Peer BODIES go first after the sibling: a peer is context for shaping
+    ;; the edit, not the edit site, and every peer keeps its range, sha256 and
+    ;; anchor when its body is cut. One ledger row, not one per peer.
+    :peers
+    (let [carrying (fn [l] (some :body (:peers l)))
+          cut (count (mapcat #(filter :body (:peers %)) (:legs result)))]
+      (if (zero? cut)
+        [result false]
+        [(-> result
+             (update :legs
+                     #(mapv (fn [l]
+                              (if (carrying l)
+                                (update l :peers
+                                        (fn [ps]
+                                          (mapv (fn [pp]
+                                                  (if (:body pp)
+                                                    (-> pp (dissoc :body)
+                                                        (assoc :elided_reason
+                                                               "public-budget"))
+                                                    pp))
+                                                ps)))
+                                l))
+                            %))
+             (update :elided conj
+                     {:leg "peers"
+                      :bytes 0
+                      :reason (str "public-budget; " cut
+                                   " co-menu-item peer bodies dropped")
+                      :from 0 :to 0 :sha256 "n/a"
+                      :refetch "re-run feature_thread with a larger budget_bytes"}))
+         true]))
+
+    ;; @spec MCP-OP-THREAD-039
+    ;; When even the peer RANGES will not fit, the rows go rather than the
+    ;; receipt failing: a peer is the most re-derivable thing here (one
+    ;; `feature_thread` call per identifier), and the ledger names each one so
+    ;; the caller knows what it is asking for.
+    :peer-rows
+    (let [ids (mapcat #(map :identifier (:peers %)) (:legs result))]
+      (if (empty? ids)
+        [result false]
+        [(-> result
+             (update :legs #(mapv (fn [l] (dissoc l :peers)) %))
+             (update :elided conj
+                     {:leg "peer-rows"
+                      :bytes 0
+                      :reason (str "public-budget; " (count ids)
+                                   " co-menu-item peer rows dropped entirely")
+                      :from 0 :to 0 :sha256 "n/a"
+                      :refetch (str "feature_thread subject="
+                                    (first ids))}))
+         true]))
 
     ;; @spec MCP-OP-THREAD-036
     ;; after_context is the FIRST thing cut after the sibling: it is the only

@@ -530,6 +530,13 @@
                   :also ["/api/transform/format" "mechanical-format"]
                   :mirror "formatDraft"
                   :budget_bytes ft/hard-cap-bytes
+                  ;; Locations mode, deliberately: the sibling is a set of
+                  ;; RANGES and asking for it should not also cost six leg
+                  ;; bodies plus three co-menu-item peer bodies. In edit-basis
+                  ;; mode on this fixture the structured face reaches the
+                  ;; trunk's 32640-byte cap, which no `budget_bytes` can raise,
+                  ;; and the stated order correctly cuts the sibling first.
+                  :mode "locations"
                   :config smw-conventions
                   :scope {:workspace_root after-root}})
           sib (:sibling structured)]
@@ -589,14 +596,14 @@
           (is (string? (:refetch l)))))))
 
   (testing "every body elided still names every cut"
-    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 10240})]
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 11264})]
       (is (true? (:ok structured)))
       (is (every? #(nil? (:body %)) (:legs structured)))
       (is (every? #(nil? (:body %))
                   (mapcat :co_primaries (:legs structured))))
-      (is (= #{"sibling" "after-context" "governance-template" "next-call"
-               "menu-caller" "route" "tests(js)" "tests" "implementation"
-               "js-function" "handler"}
+      (is (= #{"sibling" "peers" "after-context" "governance-template"
+               "peer-rows" "next-call" "menu-caller" "route" "tests(js)"
+               "tests" "implementation" "js-function" "handler"}
              (set (map :leg (:elided structured))))
           "every step of the stated order is recorded when every body is cut")
       (is (str/includes? text "elided handler")))
@@ -616,8 +623,8 @@
       (is (true? (get-in over [:structured :ok])))))
 
   (testing "and at the fleet's smaller soft budget"
-    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 10240})]
-      (is (<= (:text_bytes structured) 10240))
+    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 11264})]
+      (is (<= (:text_bytes structured) 11264))
       (is (seq (:elided structured))))))
 
 ;; ---------------------------------------------------------------------------
@@ -902,8 +909,8 @@
                "; the whole point of raising it was that it must not"))))
 
   (testing "the stated order elides context first and the edit sites last"
-    (is (= [:sibling :after-context :governance-template :secondary-tests
-            :next-call :menu
+    (is (= [:sibling :peers :after-context :governance-template
+            :secondary-tests :peer-rows :next-call :menu
             :route :tests-js :tests :implementation :js-function :handler]
            ft/elision-order)))
 
@@ -917,10 +924,10 @@
       (is (string? (:body (leg structured "implementation")))
           "the definition the seed names was cut before the sibling")))
 
-  (testing "at 10240 every leg still names its range, its hash and its anchor"
-    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 10240})]
+  (testing "at the ranges-only floor every leg still names its range, its hash and its anchor"
+    (let [{:keys [structured text]} (thread! fixture-root {:budget_bytes 11264})]
       (is (true? (:ok structured)))
-      (is (<= (:text_bytes structured) 10240))
+      (is (<= (:text_bytes structured) 11264))
       (doseq [l (:legs structured)
               :when (= "FOUND" (:status l))]
         (is (integer? (:from l)) (str (:id l)))
@@ -1084,7 +1091,7 @@
     (is (str/includes? text "next_call admit_clojure_patch"))
 
     (testing "and it is elided under budget pressure with a named refetch"
-      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 10240})]
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 11264})]
         (is (nil? (:next_call structured)))
         (is (some #(= "next-call" (:leg %)) (:elided structured)))))))
 
@@ -1097,7 +1104,7 @@
   ;; fixpoint never settled. Once it was the clock; once it was the header's
   ;; own byte counts, at budget 12000 only.
   (testing "text_bytes is the size of the text block the caller receives"
-    (doseq [budget [nil 32768 20000 15000 13000 12000 11000 10240]]
+    (doseq [budget [nil 32768 20000 15000 13000 12000 11264]]
       (let [{:keys [text structured]}
             (thread! fixture-root (if budget {:budget_bytes budget} {}))]
         (is (= (:text_bytes structured) (ft/utf8-bytes text))
@@ -1700,7 +1707,7 @@
           (finally (delete-tree! scratch)))))
 
     (testing "and it is elided with the body under budget pressure"
-      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 10240})]
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 11264})]
         (doseq [l (:legs structured)
                 :when (:elided_reason l)]
           (is (nil? (:after_context l))
@@ -1838,14 +1845,23 @@
       (is (str/includes? text "peer openTransformFromSelection"))
       (is (str/includes? text "peer expound")))
 
-    (testing "peer bodies are the FIRST bodies cut after the sibling"
+    (testing "the default budget still holds the whole thread WITH its peers"
       (let [{:keys [structured]} (thread! fixture-root)]
-        (is (some #(= "peers" (:leg %)) (:elided structured))
-            (str "at the default budget the peer bodies should be cut before"
-                 " anything else; elided was "
+        (is (empty? (:elided structured))
+            (str "the default budget elided "
                  (pr-str (map :leg (:elided structured)))))
-        (is (every? #(nil? (:body %)) (:peers (leg structured "menu-caller"))))
-        (is (every? #(:from %)
-                    (filter #(= "FOUND" (:status %))
-                            (:peers (leg structured "menu-caller"))))
-            "a cut peer keeps its range")))))
+        (is (= 3 (count (:peers (leg structured "menu-caller")))))))
+
+    (testing "and under pressure peer bodies go FIRST, after the sibling only"
+      (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 24000})
+            cut (map :leg (:elided structured))
+            menu (leg structured "menu-caller")]
+        (is (= ["sibling" "peers"] (take 2 cut))
+            (str "the stated order was not followed; elided was " (pr-str cut)))
+        (is (every? #(nil? (:body %)) (:peers menu))
+            "a peer body survived its own elision step")
+        (is (every? #(and (:from %) (:sha256 %) (:refetch %))
+                    (filter ft/located? (:peers menu)))
+            "a cut peer must keep its range, its hash and its refetch")
+        (is (:body menu)
+            "the menu leg's OWN body is not cut by the peers step")))))
