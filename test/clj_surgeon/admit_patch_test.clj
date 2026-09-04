@@ -210,6 +210,12 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+;; @spec MCP-OP-ADMIT-134
+;; Round four's superset assertion is used by witnesses both above and below
+;; its definition; it is declared here so the file reads in narrative order
+;; rather than in dependency order.
+(declare ^:private assert-text-names-every-structured-leaf!)
+
 (defn- temp-dir
   []
   (.toFile (Files/createTempDirectory
@@ -3827,17 +3833,24 @@
               (is (str/includes? text (name reason))
                   (str "the text block never names the reason " (name reason)))))
           ;; @spec MCP-OP-ADMIT-132
-          (testing "the text block really is a superset of the structured receipt"
-            ;; This is an :ok true (unverified preview) receipt, not a
-            ;; refusal, so the general fact-line ratchet (MCP-OP-ADMIT-131)
-            ;; does not apply to it -- but its next_call does, and until this
-            ;; round nothing rendered next_call on the ok=true branch at all.
+          ;; @spec MCP-OP-ADMIT-134
+          (testing "this ok=true receipt's next_call and every other leaf"
+            ;; Renamed again, round four (Sol blocker 3). Round three called
+            ;; this block "really is a superset of the structured receipt"
+            ;; while asserting only that next_call appeared -- an overclaim
+            ;; corrected by relabelling the one above it and then repeated
+            ;; here. The superset claim for the ok branch is now carried by
+            ;; assert-text-names-every-structured-leaf!, which walks the
+            ;; receipt as JSON with no exclusions; what this block still
+            ;; earns is the narrower fact that a SUCCESSFUL receipt renders
+            ;; its next_call at all, which nothing did before round three.
             (is (some? (:next_call result))
                 "the fixture must actually carry a next_call, or this proves nothing")
             (is (str/includes? text (json/generate-string (:next_call result)))
                 (str "the text block drops next_call entirely on a successful "
                      "receipt; a caller reading only the text has no follow-up "
-                     "call at all")))
+                     "call at all"))
+            (assert-text-names-every-structured-leaf! result "detectors-not-run-preview"))
           (testing "and no field in it reads as clean"
             (is (empty? (:hazards result)))
             (is (str/includes? text "not a clean bill of health")

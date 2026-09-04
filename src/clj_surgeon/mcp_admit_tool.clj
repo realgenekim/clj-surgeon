@@ -2054,7 +2054,8 @@
   Round three ran this on the refusal branch only, so an `:ok true` receipt
   published its file records, pre/post digests, focused test namespaces and
   `detectors_not_run` to structuredContent and to nobody reading the text.
-  A receipt has two faces and one of them must not say less.
+  A receipt has two faces and one of them must not say less. It now runs on
+  both.
 
   The stated elision order, when the whole text will not fit: (1) each
   leaf's VALUE is cut at `max-admit-receipt-fact-characters`, naming the
@@ -2141,6 +2142,14 @@
          " verification_status="
          (name (or (:verification_status result) :unverified))
          (detector-note result)
+         ;; @spec MCP-OP-ADMIT-134
+         ;; The ok branch obeys the identical rule as the refusal branch.
+         ;; Round three ran the fact walk on refusals only, so a successful
+         ;; commit published its file records, digests and focused test
+         ;; namespaces to structuredContent and to nobody reading the text.
+         ;; A receipt has two faces and neither is allowed to say less.
+         (when-let [facts (admit-receipt-facts result)]
+           (str "\n" facts))
          ;; @spec MCP-OP-ADMIT-132
          "\n" (admit-rendered-next-call result))
     (str "admit_clojure_patch refused · " (name (or (:error-type result)
