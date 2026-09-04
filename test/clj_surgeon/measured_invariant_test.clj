@@ -1809,7 +1809,38 @@
           "a reading under a Clojure map inside a java.util.List is not diagnosed")
       (is (= [] (measured/unpartitioned-measured-paths
                   {:ok true :rows (java.util.ArrayList. ["a" 1])}))
-          "a Java collection with nothing measured in it became an offence"))))
+          "a Java collection with nothing measured in it became an offence")))
+  (testing "round-six review §5: an ARRAY is neither a Map nor a Collection"
+    ;; The round declared this class closed and it was closed for `ArrayList`
+    ;; only. An `Object[]` satisfies neither `java.util.Map` nor
+    ;; `java.util.Collection`, so the walker returned `[]`, the boundary's typed
+    ;; refusal never fired, and the reading travelled to the encoder -- loud,
+    ;; because cheshire refuses it, but loud in the WRONG PLACE: an encoder
+    ;; stack trace instead of `:unpartitioned-measured-field` naming the path.
+    (let [arr (into-array Object [(measured/reading 4.0)])
+          nested (into-array Object [{:inner (measured/reading 5.0)}])]
+      (is (seq (measured/unpartitioned-measured-paths {:ok true :xs arr}))
+          "a reading inside a Java ARRAY is not diagnosed")
+      (is (seq (measured/unpartitioned-measured-paths {:ok true :xs nested}))
+          "a reading under a Clojure map inside a Java ARRAY is not diagnosed")
+      (is (= [] (measured/unpartitioned-measured-paths
+                  {:ok true :xs (into-array Object ["a" 1])}))
+          "a Java array with nothing measured in it became an offence")
+      (is (= [] (measured/unpartitioned-measured-paths
+                  {:ok true :xs (into-array Long [1 2 3])}))
+          "a primitive-ish array with nothing measured in it became an offence")))
+  (testing "round-six review §5: an ITERATOR is REFUSED, not walked"
+    ;; The honest answer for an Iterator is a typed refusal rather than a
+    ;; diagnosis. Walking it CONSUMES it: the diagnostic would hand the
+    ;; boundary a verdict about a value it had just destroyed, and the encoder
+    ;; downstream would then serialise an exhausted iterator. So the walker
+    ;; reports the path itself as unpartitioned and lets the boundary refuse.
+    (let [it (.iterator (java.util.ArrayList. ["a" "b"]))]
+      (is (seq (measured/unpartitioned-measured-paths {:ok true :xs it}))
+          "an Iterator in a result is not refused")
+      (is (.hasNext it)
+          "the refusal CONSUMED the iterator it refused, which is the reason it
+           is refused rather than walked"))))
 
 (deftest the-partition-shares-structure
   (testing "partitioning a large result may not copy it"
