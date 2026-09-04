@@ -1307,6 +1307,117 @@
       (close []))))
 
 ;; @spec MCP-OP-ALIAS-059
+(defn- print-safe-leaf?
+  "True when `value` is a scalar `print-method` can render without ever
+  reaching an arbitrary object's `toString`.
+
+  Strings, numbers, keywords, symbols and booleans all print through core
+  implementations that write their own known characters; nothing here can
+  invoke a caller-supplied `toString`."
+  [value]
+  (or (nil? value)
+      (string? value)
+      (number? value)
+      (keyword? value)
+      (symbol? value)
+      (boolean? value)))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- opaque-object-marker
+  "Identity-only rendering for a value that is not Clojure data — the class's
+  simple name and identity hash, WITHOUT ever calling `.toString`.
+
+  `print-method`'s own default for an object it does not recognise calls
+  `.toString` before a single character reaches `ceiling-writer`, so a
+  `deftype` whose `toString` never returns hangs the renderer no matter how
+  tight the ceiling is, and one whose `toString` throws escapes the
+  ceiling's own catch entirely. A raw Java collection is exactly this shape
+  too: its own `toString` walks and stringifies every element, which is the
+  same unbounded work one level removed."
+  [value]
+  (str "#object[" (.getSimpleName (class value)) " "
+       (Integer/toHexString (System/identityHashCode value)) "]"))
+
+;; @spec MCP-OP-ALIAS-059
+(declare write-bounded)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded-elements
+  "Writes `coll`'s elements to `writer`, `sep`-separated, one at a time.
+
+  Walked with `seq`/`next` rather than `count`/`nth`, so an endless lazy
+  sequence is walked lazily — the ceiling writer's own refusal, thrown from
+  inside one of these `.write` calls, is what stops it, exactly as it always
+  stopped `print-method`'s recursion. A `(first coll)` truthiness check would
+  stop early on a real `nil` element, so emptiness is read from the seq
+  itself."
+  [^java.io.Writer writer coll level sep]
+  (loop [items (seq coll) first? true]
+    (when items
+      (when-not first? (.write writer ^String sep))
+      (write-bounded writer (first items) (dec level))
+      (recur (next items) false))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded-map-entries
+  [^java.io.Writer writer m level]
+  (loop [entries (seq m) first? true]
+    (when entries
+      (when-not first? (.write writer ", "))
+      (let [entry (first entries)]
+        (write-bounded writer (key entry) (dec level))
+        (.write writer " ")
+        (write-bounded writer (val entry) (dec level)))
+      (recur (next entries) false))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn- write-bounded
+  "Writes `value` to `writer`, recursing into Clojure data and refusing to
+  invoke `toString` on anything else.
+
+  The renderer prints only Clojure data — maps, vectors, sets, lists, seqs,
+  strings, numbers, keywords, symbols, booleans and nil — checked by type
+  BEFORE any printer is chosen; every other object, recursively inside
+  collections, renders as `opaque-object-marker` instead of being handed to
+  `print-method`'s object-toString fallback.
+
+  `level` mirrors the old `*print-level*` second floor: decremented on every
+  recursive descent, rendering `#` once it reaches zero. It is unreachable in
+  ordinary use for the same reason `*print-level*` was — `ceiling-writer`
+  throws on character count first, and every level of nesting costs at least
+  the two characters of its own delimiters."
+  [^java.io.Writer writer value level]
+  (cond
+    (print-safe-leaf? value)
+    (print-method value writer)
+
+    (zero? level)
+    (.write writer "#")
+
+    (map? value)
+    (do (.write writer "{")
+        (write-bounded-map-entries writer value level)
+        (.write writer "}"))
+
+    (set? value)
+    (do (.write writer "#{")
+        (write-bounded-elements writer value level " ")
+        (.write writer "}"))
+
+    (vector? value)
+    (do (.write writer "[")
+        (write-bounded-elements writer value level " ")
+        (.write writer "]"))
+
+    (or (list? value) (seq? value))
+    (do (.write writer "(")
+        (write-bounded-elements writer value level " ")
+        (.write writer ")"))
+
+    :else
+    (.write writer (opaque-object-marker value))))
+
+;; @spec MCP-OP-ALIAS-059
 (defn bounded-pr-str
   "`pr-str` bounded in WORK as well as in output.
 
@@ -1319,20 +1430,21 @@
   the cheap one.
 
   So printing STOPS at the ceiling instead: the writer refuses the moment the
-  buffer passes it, and `*print-length*` and `*print-level*` are bound to the
-  same number as a second floor under the same guarantee. Both are set to the
-  CHARACTER ceiling rather than to something smaller, so neither can fire on a
-  value the character bound would have admitted whole: N elements or N levels
-  of nesting cost at least N characters, so anything the length or level bound
-  would cut was already past the character bound. Nothing that fitted before
-  renders differently now."
+  buffer passes it. That alone is not enough — `print-method`'s own default
+  for an object it does not recognise calls that object's `toString` before a
+  single character reaches the writer, so a `deftype` whose `toString` never
+  returns hangs the renderer regardless of the ceiling. `write-bounded`
+  replaces `print-method`'s recursion for compound values with its own,
+  admitting only Clojure data before a value is ever printed and rendering
+  everything else as an identity marker — `level` standing in for the old
+  `*print-level*` second floor, since `*print-length*` is now redundant: the
+  writer's own character ceiling is what actually stops an endless or huge
+  value, exactly as before."
   [value ceiling]
   (let [builder (StringBuilder.)]
     (try
-      (binding [*print-length* ceiling
-                *print-level* ceiling
-                *print-readably* true]
-        (print-method value (ceiling-writer builder ceiling)))
+      (binding [*print-readably* true]
+        (write-bounded (ceiling-writer builder ceiling) value ceiling))
       (catch clojure.lang.ExceptionInfo e
         (when-not (::print-ceiling (ex-data e))
           (throw e))))
