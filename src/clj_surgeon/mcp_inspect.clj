@@ -879,14 +879,23 @@
   An entry past `shown` is dropped unless some line INSIDE `shown` already
   carries it. Derived from the same carriage rule `uncarried-leaves` applies
   to the published text, so the count the header declares and the count the
-  audit finds are two readings of one walk rather than two computations."
+  audit finds are two readings of one walk rather than two computations.
+
+  @spec MCP-OP-STUDY-050 — walked over the TAIL only. This used to
+  `map-indexed` the whole carrier vector and then `drop shown`, so one
+  question about the tail cost a pass over every entry; the descent in
+  `fact-block` asks it once per step, which made the pair quadratic in the
+  fact count."
   [carriers shown]
-  (into []
-        (comp (drop shown)
-              (keep (fn [[index carried-at]]
-                      (when-not (and carried-at (< carried-at shown))
-                        index))))
-        (map-indexed vector carriers)))
+  (let [total (count carriers)]
+    (loop [index shown acc (transient [])]
+      (if (>= index total)
+        (persistent! acc)
+        (let [carried-at (nth carriers index)]
+          (recur (inc index)
+                 (if (and carried-at (< carried-at shown))
+                   acc
+                   (conj! acc index))))))))
 
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
@@ -962,7 +971,27 @@
                                            (boolean dropped?)))
                (if dropped? (inc (count (dropped-line labels))) 0)
                (nth prefix shown))))
-        shown (loop [n total]
+        ;; @spec MCP-OP-STUDY-050 — the descent starts at the FEASIBLE
+        ;; CEILING, not at `total`. `prefix` is strictly increasing and
+        ;; `section-length` is never smaller than it — the count header is
+        ;; always rendered — so no `n` whose fact lines ALONE overrun the
+        ;; budget can fit, and the largest such `n` is a binary search over a
+        ;; genuinely monotone quantity. This is not the non-monotone
+        ;; bisection Opus's round-4 review killed: nothing here searches
+        ;; `fits?`. Below the ceiling the descent is linear and EXACT, and it
+        ;; is short by construction — every step it takes removes at least
+        ;; one whole line, while the only thing that can grow as it descends
+        ;; is the bounded declaration. Field evidence (Sol O2 round-5 review,
+        ;; section 5): a 10,000-fact result descended from 10,000 one step at
+        ;; a time, per candidate, and the fit took 69,132 ms.
+        ceiling (loop [low 0 high total]
+                  (if (>= low high)
+                    low
+                    (let [mid (quot (+ low high 1) 2)]
+                      (if (<= (nth prefix mid) budget)
+                        (recur mid high)
+                        (recur low (dec mid))))))
+        shown (loop [n ceiling]
                 (if (or (zero? n) (<= (section-length n) budget))
                   n
                   (recur (dec n))))
