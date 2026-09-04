@@ -7972,3 +7972,68 @@
                              "ceiling"))
           (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-SHELL-ARGV-001
+(deftest an-inline-command-string-is-split-never-handed-to-a-shell
+  (testing "a plain command line costs the caller nothing"
+    (is (= ["make" "test"] (admit/inline-command-argv "make test")))
+    (is (= ["clojure" "-M:test"] (admit/inline-command-argv " clojure  -M:test ")))
+    (is (= ["npx" "jest"] (admit/inline-command-argv "npx jest"))))
+  (testing "an array is exec'd exactly as given, shell or not -- the caller's own"
+    (is (= ["sh" "-c" "make test | tee log"]
+           (admit/inline-command-argv ["sh" "-c" "make test | tee log"]))))
+  (testing "a string that would NEED a shell is refused, never reduced"
+    (doseq [line ["make test | tee log"
+                  "make test && make lint"
+                  "make test; rm -rf /"
+                  "echo $(whoami)"
+                  "echo `whoami`"
+                  "TMPDIR=/var/tmp/forge make runtests-unit"
+                  "cat *.clj"]]
+      (testing line
+        (is (nil? (admit/inline-command-argv line))
+            "no clj-surgeon code path turns a caller string into sh -c"))))
+  (testing "and the refusal names the array form"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands ["make test | tee log"]}})]
+          (is (false? (:ok result)))
+          (is (= :invalid-admit-request (:error-type result)))
+          (is (str/includes? (str (:error result)) "array"))
+          (is (str/includes? (str (:error result)) "sh"))
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root)))))
+  (testing "a string command really does run, through exec"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands ["grep -q (fnil src/app/core.clj"]}})]
+          ;; `grep -q (fnil src/app/core.clj` has no metacharacter our set
+          ;; names except the paren, so this is the REFUSAL arm on purpose:
+          ;; the point is that the split never became a shell either way.
+          (is (false? (:ok result))))
+        (finally (delete-tree! root)))))
+  (testing "a metacharacter-free string command runs and passes"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands ["grep -q fnil src/app/core.clj"]}})]
+          (is (:ok result) (pr-str (:error result)))
+          (is (true? (:committed result)))
+          (is (= ["grep" "-q" "fnil" "src/app/core.clj"]
+                 (:argv (first (get-in result [:tests :commands]))))))
+        (finally (delete-tree! root))))))

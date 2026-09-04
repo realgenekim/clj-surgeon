@@ -916,19 +916,45 @@
         tail))))
 
 ;; @spec MCP-OP-ADMIT-153
-(defn inline-command-argv
-  "One caller command as argv.
+(def inline-shell-metacharacters
+  "Characters whose presence means the caller wrote a SHELL line, not a command.
 
-  A string is a shell line, because that is the spelling a receipt's verify
-  rows and a project's README both use (`TMPDIR=... make runtests-unit`), and
-  refusing it would send the caller back to hand-splitting argv. A vector is
-  exec'd as given, with no shell between the caller and the process."
+  MCP-OP-SHELL-ARGV-001 forbids any file under `src/` from handing a command
+  string to a shell interpreter at a process-spawning call site, and it is
+  right to: the fence exists so that no clj-surgeon code path can be the thing
+  that turns text into `sh -c`. The convenience of `\"make test\"` is real and
+  is kept -- by SPLITTING it here and exec'ing the result directly, never by
+  spawning a shell. Anything that would actually need one is refused by name,
+  with the array form as the remedy. A caller who genuinely wants a shell may
+  still say so explicitly, as `[\"sh\", \"-c\", \"…\"]`: that is the caller's
+  own argv and its own decision, exactly as a repository-declared focused-test
+  profile has always been, and no clj-surgeon code built it."
+  (set "|&;<>()$`\\\"'*?[]{}!~\n\r\t"))
+
+;; @spec MCP-OP-ADMIT-153
+(defn inline-command-argv
+  "One caller command as argv, with no shell anywhere in the path.
+
+  A vector is exec'd as given. A string is split on spaces and exec'd, so the
+  overwhelmingly common spellings -- `make test`, `npx jest`, `lein test`,
+  `clojure -M:test` -- cost the caller nothing; a string carrying a shell
+  metacharacter or a leading `NAME=value` assignment is NOT quietly reduced to
+  something else, it returns nil and the caller gets a typed refusal naming
+  the array form."
   [command]
   (cond
-    (string? command) ["sh" "-c" command]
+    (string? command)
+    (let [trimmed (str/trim command)
+          tokens (remove str/blank? (str/split trimmed #" +"))]
+      (when (and (seq tokens)
+                 (not-any? inline-shell-metacharacters trimmed)
+                 (not (re-find #"^[A-Za-z_][A-Za-z0-9_]*=" (first tokens))))
+        (vec tokens)))
+
     (and (sequential? command)
          (seq command)
          (every? string? command)) (vec command)
+
     :else nil))
 
 ;; @spec MCP-OP-ADMIT-153
@@ -985,10 +1011,17 @@
                      (count raw))}
 
         (some nil? argvs)
-        {:error (str "every verify command must be a shell line or a"
-                     " non-empty array of strings; command "
+        ;; @spec MCP-OP-ADMIT-153
+        {:error (str "every verify command must be a plain command line"
+                     " (\"make test\") or an array of arguments"
+                     " ([\"make\", \"test\"]); command "
                      (inc (long (count (take-while some? argvs))))
-                     " is neither")}
+                     " is neither. clj-surgeon never hands a string to a"
+                     " shell, so a command carrying a shell metacharacter"
+                     " (| & ; < > $ ` ( ) quotes globs) or a leading"
+                     " NAME=value assignment must be sent as an array --"
+                     " including [\"sh\", \"-c\", \"…\"] if a shell is"
+                     " what you actually want")}
 
         (and (some? cwd)
              (or (not (string? cwd))
