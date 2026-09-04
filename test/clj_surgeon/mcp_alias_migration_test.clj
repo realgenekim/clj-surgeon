@@ -4795,6 +4795,100 @@
             (str "a genuinely forwarded (refusal …) kind was named: "
                  (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))))
 
+;; @spec MCP-OP-ALIAS-059
+(deftest the-forwarded-kind-check-is-form-deep-and-not-merely-head-shaped
+  ;; Round-sixteen review finding 1: the shape check collected the expression's
+  ;; LISTS and tested only each list's FIRST child against the forwarding-head
+  ;; allowlist. In a threading form the minting function is a bare symbol in an
+  ;; ARGUMENT position and is never a list head, so `keyword`, `symbol` and
+  ;; `str` walked straight through the allowlist that exists to stop them:
+  ;; `(some-> kind name keyword)` — the brief's own named attack — was exempt,
+  ;; and the reviewer drove it end to end through the entrance with a live kind
+  ;; (`planted-runtime-kind`) absent from the enumeration while all four
+  ;; advertised witnesses stayed green. A `get`/`get-in` against a LITERAL
+  ;; TABLE was exempt for the same reason: `get` selects, but the value it
+  ;; selects is a keyword literal minted inside the table, and an exempt site's
+  ;; minted keywords never reach the enumeration. So is a literal bound one
+  ;; line above and relayed as a bare symbol.
+  ;;
+  ;; The check is now form-DEEP: a minting symbol ANYWHERE in the expression,
+  ;; or a keyword literal in any position that is not a lookup head or a
+  ;; keyword-as-function argument of a sequence selector, is a MINT.
+  (testing "a minting symbol in ARGUMENT position is a mint, not a forward"
+    (let [text (str "(defn refusal\n"
+                    "  [error-type message]\n"
+                    "  {:ok false :error_type (name error-type) :error message})\n"
+                    "\n"
+                    "(defn- route-threading-mint\n"
+                    "  [params]\n"
+                    "  ;; forwarded-refusal-kind: claims to forward, mints\n"
+                    "  (refusal (some-> (:review_kind params) name keyword)\n"
+                    "           \"routed refusal\"))\n")]
+      (is (= 1 (count (dynamic-refusal-kind-sites-in "plant" text)))
+          (str "a threading form whose minting fn is a bare symbol in argument "
+               "position was exempted by the head-only shape check: "
+               (pr-str (dynamic-refusal-kind-sites-in "plant" text))))))
+  (testing "the reviewer's end-to-end plant is named at its :error_type shape"
+    (let [text (str "(defn- validate-request\n"
+                    "  [params]\n"
+                    "  ;; forwarded-refusal-kind: claims to forward, mints\n"
+                    "  {:ok false\n"
+                    "   :error_type (some-> (:review_kind params) name keyword)\n"
+                    "   :error \"planted\"})\n")]
+      (is (= 1 (count (runtime-spelled-kind-sites "plant" text)))
+          (str "the planted threading mint was exempted: "
+               (pr-str (runtime-spelled-kind-sites "plant" text))))))
+  (testing "a literal TABLE mints the kinds it holds, marker or no marker"
+    (doseq [[label expression kind]
+            [["get against a literal table"
+              "(get {:a :brand-new-kind} kind)" "brand-new-kind"]
+             ["get-in against a nested literal table"
+              "(get-in {:a {:b :table-minted}} [kind :b])" "table-minted"]]]
+      (testing label
+        (let [text (str "(defn- route-table-refusal\n"
+                        "  [kind]\n"
+                        "  {:ok false\n"
+                        "   ;; forwarded-refusal-kind: claims to forward, mints\n"
+                        "   :error_type " expression "\n"
+                        "   :error \"routed refusal\"})\n")]
+          (is (contains? (structural-error-type-kinds text) kind)
+              (str "a keyword minted inside a literal table under the marker "
+                   "never reached the enumeration: "
+                   (pr-str (structural-error-type-kinds text))))))))
+  (testing "a literal bound above the site and relayed is a mint"
+    (let [text (str "(defn- route-let-bound\n"
+                    "  [params]\n"
+                    "  (let [planted :planted-let-kind]\n"
+                    "    {:ok false\n"
+                    "     ;; forwarded-refusal-kind: claims to forward, mints\n"
+                    "     :error_type planted\n"
+                    "     :error \"routed refusal\"}))\n")]
+      (is (= 1 (count (runtime-spelled-kind-sites "plant" text)))
+          (str "a bare symbol bound to a keyword LITERAL one line above was "
+               "read as a forward: "
+               (pr-str (runtime-spelled-kind-sites "plant" text))))))
+  (testing "the reachable set's real forwarding shapes stay exempt"
+    (doseq [[label text]
+            [["(some :error-type (remove :ok checks)) — the change buffer's own"
+              (str "(defn- verify-refusal\n"
+                   "  [checks]\n"
+                   "  {:ok false\n"
+                   "   ;; forwarded-refusal-kind: the failing check's OWN kind\n"
+                   "   :error-type (some :error-type (remove :ok checks))\n"
+                   "   :error \"verification refused\"})\n")]
+             ["a symbol bound to a HELPER CALL — mcp_cold_verify's own"
+              (str "(defn- run-job!\n"
+                   "  [process]\n"
+                   "  (let [authority-error (analyzer-authority-error-type process)]\n"
+                   "    {:ok true\n"
+                   "     ;; forwarded-refusal-kind: the kind the helper mints\n"
+                   "     :error-type authority-error\n"
+                   "     :exit 1}))\n")]]]
+      (testing label
+        (is (empty? (runtime-spelled-kind-sites label text))
+            (str "a genuinely forwarded kind was named: "
+                 (pr-str (runtime-spelled-kind-sites label text))))))))
+
 ;; ---------------------------------------------------------------------------
 ;; every invisible or malformed code point in a scope entry is typed
 
