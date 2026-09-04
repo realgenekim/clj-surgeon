@@ -160,11 +160,20 @@
    that is in neither `manifest` nor `test/run_all.clj` fails the witness.
 
    An exclusion is a REDIRECTION, not a declaration of orphanhood: its reason
-   must name a `make <target>` or a :clj-surgeon/<alias> that EXISTS and runs
-   the namespace, and `lane-manifest-test/every-exclusion-names-a-runner-that-actually-exists`
-   fails by name if it does not. Round two excluded `mcp-formatter-test` with
-   the reason \"required by no runner\"; round three adopted it into :fast and
-   made that shape unrepresentable."
+   must name a `make <target>` or a :clj-surgeon/<alias> that ACTUALLY RUNS
+   the namespace. `clj-surgeon.runner-membership` resolves the named runner to
+   the concrete namespace set it executes -- a Makefile rule to its
+   prerequisites, its `$(MAKE)` sub-targets and its `-M:clj-surgeon/<alias>`,
+   and that alias to its `:main-opts` and so to the lane manifest -- and
+   `lane-manifest-test/every-exclusion-is-actually-run-by-the-runner-it-names`
+   fails by name when the namespace is not IN that set. It fails CLOSED: a
+   runner whose selection cannot be read is a refusal, never an assumption.
+
+   Round two excluded `mcp-formatter-test` with the reason \"required by no
+   runner\"; round three adopted it into :fast. Round three then checked only
+   that a NAMED TARGET EXISTED, and the round-three landing review's finding
+   4 walked through it with the reason \"`make test-fast`\" on a namespace
+   test-fast does not run. Existence is a spelling; membership is the fact."
   {'clj-surgeon.analyzer-contract-test
    "own serialized runner -- `make analyzer-contract-test` (alias :clj-surgeon/analyzer-contract-test)"
 
