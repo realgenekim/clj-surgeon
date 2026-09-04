@@ -4758,6 +4758,79 @@
         (assert-text-names-every-structured-leaf! result "live-commit-refusal"))
       (finally (delete-tree! root)))))
 
+;; @spec MCP-OP-ADMIT-136
+(defn- generated-source
+  [index value]
+  (str "(ns app.gen" index ")\n"
+       "\n"
+       "(defn value\n"
+       "  []\n"
+       "  " value ")\n"))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- generated-sources
+  "`n` ordinary one-owner files, the shape a wide but unremarkable patch
+  touches."
+  [n]
+  (into {}
+        (map (fn [i] [(str "src/app/gen" i ".clj") (generated-source i 1)]))
+        (range n)))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- generated-patch
+  [n]
+  (apply str
+         (map (fn [i]
+                (str "--- a/src/app/gen" i ".clj\n"
+                     "+++ b/src/app/gen" i ".clj\n"
+                     "@@ -1,5 +1,5 @@\n"
+                     " (ns app.gen" i ")\n"
+                     " \n"
+                     " (defn value\n"
+                     "   []\n"
+                     "-  1)\n"
+                     "+  2)\n"))
+              (range n))))
+
+;; @spec MCP-OP-ADMIT-136
+(defn- wide-preview-receipt
+  "One `:ok true` preview of `n` one-line changes, through the entrance."
+  [n]
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root (generated-sources n))
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch (generated-patch n) :mode "preview"})]
+        (is (true? (:ok result))
+            (str n "-file preview must succeed: " (:error result)))
+        result)
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-136
+(deftest a-twenty-file-preview-text-names-every-leaf-of-its-own-receipt
+  ;; Round four's blocking finding, as a fixture. The reviewer called
+  ;; `assert-text-names-every-structured-leaf!` -- this file's own witness,
+  ;; unmodified -- on a live twenty-file preview and it failed 68 assertions:
+  ;; structuredContent was 15,086 bytes, well under the 32,640-byte public
+  ;; budget and not truncated, and the text dropped 68 leaves including
+  ;; `source-unchanged`, `pre_image_binding`, `lock_scope` and
+  ;; `mutation_attempted` -- stranded at the tail of a path-alphabetical sort
+  ;; by a fact-section budget of half the public one. The suite was green only
+  ;; because every fixture in it sat under that bound. This one does not.
+  (assert-text-names-every-structured-leaf!
+    (wide-preview-receipt 20) "twenty-file-preview"))
+
+;; @spec MCP-OP-ADMIT-136
+(deftest a-forty-file-preview-text-names-every-leaf-of-its-own-receipt
+  ;; Twice as wide: the reviewer measured 396 of 796 leaves absent from the
+  ;; text while the receipt still read `ok`. Here the structured face is the
+  ;; one that must give ground -- 40 files of facts cannot be spelled inside
+  ;; the public budget -- and whatever survives into structuredContent must be
+  ;; named, leaf for leaf, in the text.
+  (assert-text-names-every-structured-leaf!
+    (wide-preview-receipt 40) "forty-file-preview"))
+
 ;; @spec MCP-OP-ADMIT-134
 (deftest the-fact-walk-has-no-exclusion-list-to-get-wrong
   ;; The structural half of blocker 2. Round three's exclusion set had eleven
