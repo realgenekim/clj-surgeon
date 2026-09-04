@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-alias-migration-test
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.alias-migration :as planner]
    [clj-surgeon.alias-migration-fixture :as fixture]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
@@ -428,6 +429,76 @@
                   (is (:ok committed) (pr-str committed))))))))
       (finally
         (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-034
+(def ^:private nine-shape-source
+  "Every spelling of one migrated var, plus a live STRING naming it.
+
+  The string is the subject: the verb does not rewrite it — it is an assertion
+  about the codebase, not a code reference — and a receipt that reports zero
+  where one exists hides exactly the work the caller still owes."
+  (str "(ns acid.fanout.qshapes\n  (:require\n"
+       "   [acid.fanout.store :as store]))\n\n"
+       "(def a 'acid.fanout.store/find-event)\n"
+       "(def b '[acid.fanout.store/find-event :marker])\n"
+       "(def d '{:lookup acid.fanout.store/find-event})\n"
+       "(def e `acid.fanout.store/find-event)\n"
+       "(def g #'acid.fanout.store/find-event)\n"
+       "(def h #'store/find-event)\n"
+       "(def i `store/find-event)\n"
+       "(def f \"acid.fanout.store/find-event\")\n"
+       "(defn one [id] (store/find-event id))\n"))
+
+;; @spec MCP-OP-ALIAS-034
+(deftest string-mentions-are-counted-in-var-mode-and-name-their-site
+  ;; Round-10 review finding 5: `(if (nil? from-var) (string-mentions …) [])`
+  ;; made `string_mentions` a hardcoded zero for every var migration, against a
+  ;; docstring that says "a silent zero would hide real work, so the count
+  ;; travels in the receipt". Every E3-P receipt's `string_mentions: 0` was
+  ;; vacuous. In var mode the retired thing is the VAR — the lib survives, its
+  ;; other vars with it — so the string the receipt must find is the qualified
+  ;; var name, not the lib name.
+  (let [workspace (workspace!)]
+    (try
+      (spit (io/file workspace "src/acid/fanout/qshapes.clj") nine-shape-source)
+      (let [result (execute! workspace {:expect {:files 13}})]
+        (is (:ok result) (pr-str result))
+        (is (= 1 (:string_mentions result))
+            "a live string naming the retired var was reported as zero")
+        (is (= ["src/acid/fanout/qshapes.clj:12"]
+               (:string_mention_sites result))
+            "the receipt does not name the site the caller must go read")
+        (testing "the verb still does not rewrite it"
+          (is (str/includes? (slurp (io/file workspace
+                                             "src/acid/fanout/qshapes.clj"))
+                             "\"acid.fanout.store/find-event\"")
+              "the string literal was rewritten")))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-034
+(deftest the-string-needle-follows-what-the-migration-retires
+  ;; The needle is a function of the migration's own subject: a lib migration
+  ;; retires the LIB, a var migration retires one qualified VAR, and the string
+  ;; that names the surviving lib in a var migration is not stale work.
+  (let [sources [{:file "src/a.clj"
+                  :source (str "(ns a)\n(def x \"acid.fanout.store\")\n")}
+                 {:file "src/b.clj"
+                  :source (str "(ns b)\n\n"
+                               "(def y \"acid.fanout.store/find-event\")\n")}]]
+    (is (= ["src/a.clj:2"]
+           (planner/string-mentions "acid.fanout.store" sources))
+        "the lib needle no longer finds the bare lib string")
+    (is (= ["src/b.clj:3"]
+           (planner/string-mentions "acid.fanout.store/find-event" sources))
+        "the var needle does not find the qualified var string")
+    (is (= 2 (count (planner/string-mentions "acid.fanout.store"
+                                             [{:file "src/c.clj"
+                                               :source (str "(ns c)\n"
+                                                            "(def p \"acid.fanout.store\")\n"
+                                                            "(def q \"acid.fanout.store\")\n")}])))
+        "two sites in one file were collapsed to one")))
+
 
 ;; @spec MCP-OP-ALIAS-057
 (deftest a-directory-entry-selects-the-same-subtree-under-every-spelling
