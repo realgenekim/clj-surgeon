@@ -1645,3 +1645,5 @@ enumerate the GRAMMAR the names can appear in — `(. obj (member))` is Clojure'
 commit not yet written." Also on the record: the reviewer withdrew its round-six "there is no intent-audit runner" claim.
 Round eight builds the one-commit fix plus the trunk re-merge (txn_journal carries eleven :control clock entries) with
 counts and the 145 pin re-derived on the merged result. Suite spike round 1 launched in parallel on bridge/suite-spike.
+
+## 17:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
