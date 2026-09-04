@@ -17,6 +17,7 @@
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
@@ -95,6 +96,29 @@
         (.mkdirs ours)
         (is (true? (tmp-leak/sweep-root! ours)))
         (is (not (.exists ours)))))))
+
+;; @spec MCP-OP-TMPHYG-012
+(deftest the-make-layer-does-not-propagate-a-ram-tmpdir
+  (testing "SELF_TEST_TMP is handed straight to shell harnesses that never
+            reach the Clojure refusal, so the redirect has to happen at the
+            Make layer. This EXECUTES make's own expansion (a throwaway target
+            supplied with --eval against the real Makefile) rather than
+            reading the assignment as text."
+    (let [self-test-tmp (fn [tmpdir]
+                          (let [{:keys [exit out]}
+                                (shell/sh "env" (str "TMPDIR=" tmpdir)
+                                          "make" "-s"
+                                          "--eval=__tmphyg_print:; @echo $(SELF_TEST_TMP)"
+                                          "__tmphyg_print")]
+                            (when (zero? exit) (str/trim (or (last (str/split-lines out)) "")))))]
+      (doseq [ram ["/tmp" "/dev/shm"]]
+        (let [got (self-test-tmp ram)]
+          (is (= "/var/tmp" got)
+              (str "a RAM TMPDIR (" ram ") must be redirected, got " (pr-str got)))))
+      (is (= "/var/tmp" (self-test-tmp ""))
+          "an unset TMPDIR defaults to /var/tmp")
+      (is (= "/var/tmp/forge" (self-test-tmp "/var/tmp/forge"))
+          "a real-disk TMPDIR is honoured unchanged"))))
 
 ;; @spec MCP-OP-TMPHYG-013
 (deftest sweep-root-does-not-claim-a-delete-it-did-not-perform
