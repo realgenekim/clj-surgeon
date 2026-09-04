@@ -228,21 +228,72 @@
             (.getPath target)))
         images))
 
+(def default-analyzer-command
+  "The analyzer invocation, before the file list is expanded into it."
+  ["clj-kondo" "--lint" "{files}"])
+
+;; @spec MCP-OP-ADMIT-121
+(defn analyzer-read-ceiling
+  "How many bytes of analyzer output this gate will read back.
+
+  Named on the config so a workspace can raise it, and named on the refusal so
+  a caller who hits it can see what to raise."
+  [config]
+  (let [declared (:admit-analyzer-visible-bytes config)]
+    (if (and (number? declared) (pos? declared))
+      (long declared)
+      (long change-buffer/exact-verification-visible-bytes))))
+
+;; @spec MCP-OP-ADMIT-121
 (defn- kondo-findings
-  "Run clj-kondo over one materialized image set and return its findings."
-  [project-root paths]
-  (let [command (-> (change-buffer/expand-command
-                      ["clj-kondo" "--lint" "{files}"] (vec paths))
+  "Run clj-kondo over one materialized image set and return its findings.
+
+  Two failures live here and they are not the same fact. An analyzer that did
+  not answer -- absent, unlaunchable, killed, or answering something that is
+  not a findings map -- is `clj-kondo-unavailable`. An analyzer that answered
+  more than this gate read back is `analyzer-output-truncated`: the detector
+  ran, the truth existed, and the ceiling cut it. Collapsing the second into
+  the first is how a gate reports a missing tool it is in fact holding."
+  [config paths]
+  (let [project-root (:project-root config)
+        ceiling (analyzer-read-ceiling config)
+        command (-> (change-buffer/expand-command
+                      (or (:admit-analyzer-command config)
+                          default-analyzer-command)
+                      (vec paths))
                     (into ["--cache" "false"
                            "--config" "{:output {:format :edn}}"]))
-        {:keys [finished? exit output]} (change-buffer/run-process!
-                                          project-root command)
-        parsed (when finished?
+        {:keys [finished? exit output output-bytes output-truncated]}
+        (change-buffer/run-process! project-root command 120000 ceiling)
+        parsed (when (and finished? (not output-truncated))
                  (try (edn/read-string output) (catch Exception _ nil)))]
-    (if (and (map? parsed) (vector? (:findings parsed)))
+    (cond
+      output-truncated
+      (let [observed (long (or output-bytes 0))]
+        {:ok false
+         :error-type :analyzer-output-truncated
+         :detector "clj-kondo"
+         :cap ceiling
+         :observed-bytes observed
+         :exit exit
+         :remedy (str "clj-kondo answered with " observed
+                      " bytes of findings and this gate reads at most "
+                      ceiling
+                      "; raise the analyzer read ceiling"
+                      " (:admit-analyzer-visible-bytes) or narrow the patch"
+                      " to fewer files")
+         :error (str "clj-kondo findings were cut at " ceiling " bytes of "
+                     observed "; the analyzer ran and the gate could not read"
+                     " its answer")})
+
+      (and (map? parsed) (vector? (:findings parsed)))
       {:ok true :findings (:findings parsed)}
+
+      :else
       {:ok false
        :error-type :clj-kondo-unavailable
+       :detector "clj-kondo"
+       :error "clj-kondo did not produce readable findings"
        :exit exit
        :output (when output (subs output 0 (min 400 (count output))))})))
 
@@ -254,20 +305,32 @@
   against the snapshot and is identical in preview and in commit. Findings are
   compared location-independently, so an unrelated edit that merely moves an
   existing finding is not a regression."
-  [{:keys [project-root]} images]
+  [config images]
   (if (empty? images)
     {:ran false :reason :no-clojure-files}
     (let [before (temp-tree! "clj-surgeon-admit-pre")
           after (temp-tree! "clj-surgeon-admit-post")]
       (try
-        (let [pre (kondo-findings project-root (materialize! before images :pre))
-              post (kondo-findings project-root (materialize! after images :post))]
+        (let [pre (kondo-findings config (materialize! before images :pre))
+              post (kondo-findings config (materialize! after images :post))]
           (if-not (and (:ok pre) (:ok post))
-            {:ran false
-             :ok false
-             :status :unverified
-             :error-type (or (:error-type pre) (:error-type post))
-             :error "clj-kondo did not produce readable findings"}
+            ;; @spec MCP-OP-ADMIT-121
+            ;; The failing half speaks for itself: its type, the ceiling it
+            ;; hit, what it observed, and what would lift it. A single
+            ;; hard-coded sentence here is what turned a read ceiling into a
+            ;; report of a missing analyzer.
+            (let [failed (if (:ok pre) post pre)]
+              (cond-> {:ran false
+                       :ok false
+                       :status :unverified
+                       :detector (or (:detector failed) "clj-kondo")
+                       :error-type (:error-type failed)
+                       :error (or (:error failed)
+                                  "clj-kondo did not produce readable findings")}
+                (:cap failed) (assoc :cap (:cap failed))
+                (:observed-bytes failed)
+                (assoc :observed-bytes (:observed-bytes failed))
+                (:remedy failed) (assoc :remedy (:remedy failed))))
             (let [strip (fn [root findings]
                           (mapv #(update % :filename
                                          (fn [f]
