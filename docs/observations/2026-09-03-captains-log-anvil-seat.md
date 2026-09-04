@@ -1486,3 +1486,195 @@ The round-four verb on social-media-writer: COMPLETE (6 of 6) in 1.86 s over 240
 ## 12:34Z — gate r6 (Opus): GO-WITH-FIX — the blocker is closed; the two fixes are the round's own new fields lying about themselves (a fitting receipt that says it is over budget; a trim that trimmed nothing annotated as truncation) — 'the fourth round running in which the defect is a universal claim standing on a partial witness'. Round 7 fix; then the gate lands, and arm G can run.
 ## 12:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, eighth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
 ## 12:53Z — feature_thread r5 (Sol): NO-GO — the recall fix that made saveDraft COMPLETE was a string match on the handler's docstring; a route leg is a parsed route-table entry or it is a CANDIDATE. And a conventions file could name paths outside the workspace. Round 6 building with the round-five spec (peers under the cap; bodies out of the structured face).
+## 13:10Z — MEM-003 r6 (Opus): NO-GO — 'a derivation over names cannot see a call that names nothing.' Strings, positions, and the dot form with a package prefix all reach the number with the ratchet green. Round 7: three spellings per derived name, a floor manifest, calls not lines. The reviewer credited the one defence that held: the boundary function's behavioural witnesses caught a plant there; everything upstream is text-scan only.
+## 13:18Z — study-ops r7 built (f572e461); Sol r7 review launched. One item needs Gene: ls-tree's text output doubled and the 8 KB pass-line was replaced by a growth ratchet — a product change on the read-side square, flagged in the queue and the brief.
+## 13:35Z — gate r7 built (94e4a00c); Sol r7 review launched; it lands on GO. One thing to rule before landing: the fast suite now depends on a gitignored battery receipt and goes red on a fresh clone — the seat's own scar (ambient state is an invisible precondition) — asked of the reviewer explicitly.
+## 13:50Z — usage watch: collector TIMED OUT at 120 s (rc 124, ninth consecutive); no figures — ledger inb-65c941 (Pushed to MCP/main: main is frozen.)
+## 14:14Z — gate r7 (Sol): NO-GO on the precondition the seat had flagged (a fast gate red on a fresh clone) and on an order the witnesses never observed; round 8 makes the gate own its receipt and witnesses the order — then it lands. study-ops r7 (Sol): NO-GO — an unescaped dotted pointer lets two leaves share one line; a newline in a pointer breaks the single-line contract; round 8 escapes pointers RFC-6901 style.
+
+## 14:23Z feature_thread round six built; round-seven review and the T4 replay pair launched
+
+Round six (tip 529755f0) closed the round-five blockers: a route leg is a parsed route-table entry, never a
+docstring (saveDraft's real entry is routes.clj L2121; the fixture had blanked that range and was restored);
+escaping conventions globs and scope.paths with .. are typed refusals naming the spelling; the structured face
+drops the bodies the text carries (30,713 -> 15,183 B on the fixture); peers ride as rows (range, sha256,
+anchor, refetch) by default with bodies on peer_bodies or when room remains; runs_namespace in every verify
+row. Sol round-seven review launched on the ft1-wt clone at 529755f0 with the round-five verdict and the
+round-six claims as the attack list (report /home/forge/tmp/sol/ft7-sol-review.md).
+
+T4 pre-registered arm launched (two replicates, smw-T4 and smw-T4b, fresh clones at 2df99c98): the round-six
+receipt computed on the REAL repo at the default budget. Real-repo figures: text 28,449 B, structured 15,962 B,
+peers present as rows (openTransformFromSelection, expound, bulletize) with bodies elided under the default
+28,672 text budget; at 32,768 nothing is elided (text 30,853, structured 15,748) — that receipt is saved as
+replay-receipt-T4-full32k.txt for a T4c if the pre-registration line is missed. Pre-registration stands:
+reads before the write = 0 on BOTH replicates; raw calls <= 18. Meter: ~/bin/rollout-calls on the codex rollout.
+
+Correction of my own claim earlier tonight: "peers present at the default budget" was measured on the
+fixture; on the real repo the default budget elides the peer BODIES (rows stay). The receipt says so in its
+elided row with the remedy. The default is 28,672 for a reason (public budget); a caller who wants bodies
+asks for them.
+
+## 14:44Z T4 pair scored: line MISSED (T4 19 raw / 0 pre-write reads; T4b 18 / 2), both gate-green
+
+Round six did not move the count (T3 19/18 -> T4 19/18). T4b's two pre-write reads name what the receipt lacks: the
+dispatch/fold seam (state.clj L380-425, L500-530; applyAuthoritativeEditorFrame; fold-editor-snapshot-and-tx) and the
+registry tail. Filed as the round-seven product ask (a seventh leg, "dispatch", plus a registry-tail sample) in the replay
+result doc. The raw floor on this harness is ~12 (7 feature + 5 repo ceremony); the receipt cannot remove ceremony — arm G
+(the admit gate) is the next lever. Gates on both clones run by the seat: test-js exit 0, runtests-unit 229/721/0 and 229/722/0.
+
+## 14:45Z admit gate round eight built (8b4f88d2); Sol round-nine review launched
+
+The blocking item (an unowned battery receipt in the fast gate) closed by a counted, loud skip rather than wiring a 3-arm
+battery into a merge gate; the round-nine brief asks Sol to argue whether a counted skip is an honest gate and to break the
+battery on a fresh clone to see what goes red. The order witness (MCP-OP-ADMIT-151) shows five failures when the ladder runs
+before the cheap move. Fresh-clone gates green. One .PHONY conflict vs the trunk, composed at landing.
+
+## 14:50Z — usage watch: collector zero/timeout (rc 0) — check root; last 3 lines: make: *** [Makefile:1028: study-agent-usage] Terminated 
+
+## 14:58Z study-ops round eight built (e7bc588a); Sol round-nine review launched
+
+Both round-seven blockers closed with generative witnesses (a pointer is an injective encoding of its path; one leaf, one
+line). The builder went past the reviewer's proposal on its own evidence: `:` and `=` had to be escaped too, found by the
+generated family, and the indented-block rendering of multi-line values was withdrawn because two distinct values rendered
+byte-identically. Round nine asks Sol for a ninth collision and for value-side injectivity. Two lanes now each carry one
+"unreproduced failures under load" disclosure (feature_thread r6: 3; study-ops r8: 6); both reviews re-run mcp-test twice on
+fresh clones. If both come back clean the shared cause is the box at load 11 with three seats, and the fix is scheduling,
+not code; if either reproduces, it is a defect and the lane holds.
+
+## 14:59Z MEM-003 round seven built (a2a15cc0); Sol round-eight review launched
+
+The round's own lesson, in the builder's words: a floor entry and a derived property can catch the same plant, and when
+they do the plant witnesses the floor, not the property — a plant meant to witness a derivation has to name something the
+floor does not. That is how round six's dot-form fix read green while untested (sabotage S2 stayed green). Same class as the
+night's memory (scanner-brief-names-vs-spellings): the round-eight brief asks Sol to plant six forms that name nothing. Also
+recorded honestly by the builder: nine commits after a conflicted merge carry a red suite because `git commit` after
+`git add` commits the index, and two later fixes were never staged; first green commit ec143202.
+
+## 15:13Z three verdicts: feature_thread r7 NO-GO (4 blocking), admit gate r9 NO-GO (1 blocking), MEM-003 r8 Sol refused
+
+feature_thread r7 (Sol): the four blockers are all one family again — a control defined by a list. A parsed Clojure form
+is "unconditionally strong" so a subject inside a string is FOUND (the script path asks; the Clojure path does not); the
+conventions file is slurped by isFile without realpath containment while the source walk is no-follow; the range digest
+excludes the slice's final LF because the witness built its expected slice with split/join (the witness and the
+implementation shared the error, so the pair was green); the per-leg elide leaf has no text spelling. Each is a rung the
+reviewer climbed by executing the attack, not by reading. Round 8 building on ~/src/clj-surgeon-thread.
+
+admit gate r9 (Sol): the counted skip was ruled honest in principle, and then broken in one move — a battery that fails
+2/3 still writes its receipt, and the witness checks kinds/target/timestamp but never :arms-passed, so a RED battery
+produces a zero-skip green. A receipt must name the verdict it carries, not only the subject (house rule 20). Round 10
+building on ~/src/clj-surgeon-gate3.
+
+MEM-003 r8: Sol's content filter refused after the provenance item (the reflection/clock plants trip it, as in r4-r6);
+Opus fallback review launched with the same brief.
+
+## 15:22Z census round 24 built (2d82a677); Opus round-25 review launched
+
+Routing note: Opus directly, not Sol first — every census review with confinement/symlink fixtures has been refused by Sol's
+filter (r19, r21, r23), and the brief carries the same fixtures. The round's two lessons: (1) a trunk merge with three
+textual conflicts had five real ones — two intents collided with no text overlap (a marker the trunk's new scanning gate
+demanded; a remedy that interpolated the caller's root into prose against CENSUS-018) and only the gates on the MERGED tree
+found them; (2) the builder's first :paths fence half-passed in the most misleading way — java.io.File(parent, child)
+concatenates an absolute child while fs/path replaces the root, so the absolute plant walked past a fence that refused the
+relative one. Cost flag for the mayor: five launcher drives added to mcp-test, ~4 min per drive at load 12.
+
+## 15:46Z admit gate round ten built (612ea68c); Sol round-eleven review launched
+
+The receipt now names its subject, its evidence and its verdict, and the witness checks the verdict against the script's own
+arm list rather than trusting the failing party's count — round nine's hole (a red battery's receipt suppressing the skip)
+is a typed FAILED third state that exits nonzero. Round eleven attacks the equality (permutation, extra arm, key types, a
+stale older-shape receipt). Nine rounds in, this lane's every finding has been a verifier blind to its own subject.
+
+## 15:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1028: study-agent-usage] Terminated
+
+## 15:53Z study-ops round nine (Sol): NO-GO, one blocking; both load flakes did not reproduce
+
+The ninth collision the brief asked for was found: the empty-string segment. `["" 0]` and `[0]` render as the same
+pointer, and the generated 5,219-path witness could not see it because its alphabet omitted "" — a control defined by a
+list, once more, this time the witness's alphabet rather than the scanner's. Unicode line and paragraph separators are
+still raw under STUDY-053. Both "unreproduced failures under load" disclosures of the night (feature_thread r6: 3,
+study-ops r8: 6) have now been re-run on fresh clones by reviewers and did not recur (0/10 and 0/2). Verdict: load 11–12
+with three seats on the box, not code. Scheduling remains the fix: cap concurrent JVM suites. Round 10 building.
+
+## 16:13Z admit gate r11 Sol review cut off by the filter after two items; Opus completes it, r12 fix in parallel
+
+Sol got as far as the mixed-type key attack (my brief's own suggestion) and found it fails closed but outside the typed
+bucket — a refusal nobody hears is the same class as round nine's. The filter then refused the rest. Opus completes the
+review on the same tip; the round-twelve builder closes Sol's item meanwhile on its own worktree. GO-WITH-FIX is not GO.
+
+## 16:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 16:52Z census LANDED (merge bafc273a); four builds and two verdicts recorded; wall-clock refocus
+
+Fifth landing of the night. Gates on the MERGED tree: mcp-test 865/13023/0, bb 840/6919/0, oracle, hygiene, census
+battery exit 0 (17 min under load 5–7, mostly the reader-eval fence's six cold JVM launches). Records that waited on it:
+gate r11 Opus completion GO-WITH-FIX (five escapes, present-but-nil = absent, read-eval on), r12 built b489a276, r13
+building; feature_thread r8 built 3dfe0895 with Sol r9 review running; study-ops r10 built dda9fa29 with Sol r11 running.
+
+Gene's ruling this morning, in substance: chase 2× multiples on WALL CLOCK, not fractional gains where the juice is
+squeezed. By the wall decomposition (replay doc): the receipt's whole effect (−3.2 min of code reads) is done; the
+receipt arms spend over half their 6 min on bd ceremony + repo rules; verify + write ≈ 2.3 min. Levers: the SMW landing
+contract (≈ −3 min, native included; needs Gene's go on his repo) and the admit gate (arm G). feature_thread freezes after
+its landing review. Reviews already in flight run to completion; no new polish rounds are launched on any lane unless the
+finding is a landing blocker.
+
+## 16:55Z vision.md amended: the wall-clock rule (Gene: 2x on wall or withdraw); loop item 4 counts wins in minutes
+
+## 17:13Z feature_thread r9 (Sol): NO-GO, two blocking; round ten is the last round for this lane
+
+Both blockers are the same lesson as round seven, one rung up: the string rule now knows an occurrence is inside a
+literal but still lets the SPELLING (`subject(`) outrank the CONTEXT; and a refusal that names the resolved target
+publishes exactly the path the containment exists to hide. Plus a stale floor constant. Under the wall-clock rule this
+lane gets one more round scoped to landing blockers, lands on GO, and freezes; the wall levers are elsewhere.
+
+## 17:13Z admit gate r13 built (1bb136d0): a receipt file executed code inside the gate; Sol r14 review launched
+
+The read-eval item was rated non-blocking in round eleven ("printed a string"). At the RED commit the builder's witness
+`#=(java.lang.System/exit 3)` killed the JVM running the suite. A gate that reads its own receipts with the core reader is
+a gate any writer of the receipt file can drive. clojure.edn from here, and the r14 brief asks Sol to reproduce the kill
+at the RED sha on a real clone and to try tagged literals. feature_thread r10 (last round, blockers only) building.
+
+## 17:23Z admit gate r14: Sol refused after provenance (read-eval attack in the brief); Opus fallback launched
+
+## 17:33Z suite spike filed (docs/observations/2026-09-04-suite-spike-spec.md); round 1 launched on bridge/suite-spike
+
+## 17:34Z MEM-003 r8 (Opus): NO-GO on one finding; the same lesson, one rung up, for the fifth round
+
+Round six: a derivation over names cannot see a call that names nothing. Round eight: a derivation over names must also
+enumerate the GRAMMAR the names can appear in — `(. obj (member))` is Clojure's own reference spelling, and `..` and
+`memfn` expand to it. The reviewer's own note on why it holds a hole no live site exercises: "a ratchet's job is the
+commit not yet written." Also on the record: the reviewer withdrew its round-six "there is no intent-audit runner" claim.
+Round eight builds the one-commit fix plus the trunk re-merge (txn_journal carries eleven :control clock entries) with
+counts and the 145 pin re-derived on the merged result. Suite spike round 1 launched in parallel on bridge/suite-spike.
+
+## 17:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
+
+## 17:53Z study-ops r11 (Sol): NO-GO on the declared residual; landing needs Gene's product acceptance
+
+The residual the builder declared honest (a keyword key and its string twin collapse to one JSON key on the wire, so
+the text face gave them one pointer) fails exactly when both occur in one map: two identical pointers, declared and
+audited disagree. A declared residual is still a claim about safety, and it was not witnessed with both keys present.
+The reviewer also put on the record what only Gene can grant: the read-side text growth (STUDY-051, the ls-tree
+doubling) is a product change, and no reviewer's GO covers it. Round 12 builds the fix and the trunk re-merge; the
+acceptance question goes to Gene with the morning report. Killed one orphaned JVM in a deleted gate5 fixture dir
+(load 16.9 with the spike's two concurrent clones running as designed).
+
+## 17:54Z — usage watch (untimed run, 3 min at load 11, window since 2026-08-30T15:00Z "until": "2026-09-04T17:50:46.926236Z"): tools "admit_clojure_patch": 1 "inspect_clojure": 148 ; inspect_clojure "count": 148 median 96 ms p90 331 ms max 8405 ms (collector figures verbatim; ok/refused split not in the tail captured — full JSON at /var/tmp/forge/usage-untimed.log)
+
+## 18:06Z admit gate r14 (Opus): GO-WITH-FIX; the merge is red and merge-tree cannot see it
+
+Green + green = red. The trunk's census landing changed the admit entrance's refusal vocabulary in the gate lane's own
+test file, git auto-merged the text, and the lane's own set-equality witness (ADMIT-133) caught the drift on the merged
+tree — exactly the check the landing protocol runs and the reason it runs on the MERGED tree, never on the tip. Two
+records to carry: a semantic conflict hides behind "Auto-merging"; and a --no-local clone does not carry
+remote-tracking refs, so merge evidence names the fetched trunk sha. Round fifteen is the merge round; on its green the
+lane LANDS and arm G runs. Also to correct in the r13 build record: the RED commit exited 1, not 3.
+
+## 18:09Z feature_thread r10 built (4d51ebc3); merge round before the landing review; the TEST-ISO decision carded to Gene
+
+Round ten's honest move: the recall table LOST a leg (openTransformFromSelection 5/5 → 4/5) because its only occurrences
+are inside assertion strings, character-for-character the reviewer's own attack; no rule can refuse one and admit the
+other, so the number moved and the README says why. The floor dispute resolved as two receipts, not one wrong number.
+Eight pre-existing conflicts with the census-merged trunk (the tool-count witnesses), so — the gate lane's lesson — the
+merge round runs first and the landing review reviews the merged tip. Decision card to Gene (help-gene-decide, phone
+format): round two of the suite spike = (a) full TEST-ISO family, (b) mechanism first + battery, (c) witnesses first;
+recommended b, silence → b.

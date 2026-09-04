@@ -271,8 +271,8 @@
                (get-in (sse-json initialized)
                        [:result :capabilities :tools :listChanged])))
         (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                "transform_clojure" "alias_migration"
-                "admit_clojure_patch" "feature_thread"]
+                "transform_clojure" "relation_census"
+                "alias_migration" "admit_clojure_patch" "feature_thread"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
         (is (= false (get-in tools [0 :annotations :destructiveHint])))
@@ -379,6 +379,7 @@
                  "apply_clojure_changes"
                  "edit_clojure"
                  "transform_clojure"
+                 "relation_census"
                  "alias_migration"
                  "admit_clojure_patch"
                  "feature_thread"
@@ -402,8 +403,8 @@
         (is (= (:before-contract-hash added)
                (:after-contract-hash restored)))
         (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                 "transform_clojure" "alias_migration"
-                 "admit_clojure_patch" "feature_thread"}
+                 "transform_clojure" "relation_census"
+                 "alias_migration" "admit_clojure_patch" "feature_thread"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
                (get-in restored-by-name ["inspect_clojure" :description]))))

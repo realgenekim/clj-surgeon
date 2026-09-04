@@ -41,6 +41,11 @@
     'clj-surgeon.mcp-program-tool-test/commits-the-compiled-addressed-edits-with-read-back-proof
     :typed-refusal
     'clj-surgeon.mcp-program-tool-test/callback-reports-elapsed-time-on-success-and-refusal}
+   "relation_census"
+   {:read-success
+    'clj-surgeon.mcp-relation-census-test/censuses-the-real-bytes-fixture-through-the-tool
+    :typed-refusal
+    'clj-surgeon.mcp-relation-census-test/refuses-with-a-typed-reason-and-an-executable-next-call}
    "admit_clojure_patch"
    {:preview
     'clj-surgeon.admit-patch-test/preview-writes-nothing

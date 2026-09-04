@@ -20,6 +20,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-program-tool :as program-tool]
+   [clj-surgeon.mcp-relation-census :as census-tool]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -190,6 +191,7 @@
     (reset! runtime-config configured)
     (inspect-tool/init! configured)
     (program-tool/init! configured)
+    (census-tool/init! configured)
     (admit-tool/init! configured)
     (feature-thread/init! configured)))
 
@@ -1963,6 +1965,7 @@
            clj-change-tool
            edit-clojure-tool
            program-tool/transform-clojure-tool
+           census-tool/relation-census-tool
            alias-migration-tool
            admit-tool/admit-clojure-patch-tool
            feature-thread/feature-thread-tool]

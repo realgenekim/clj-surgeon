@@ -481,3 +481,30 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - Landings tonight: integration, scorer, tmp-leak (d0b4e1ca), alias_migration/q5z (44e70af5 + re-pin merge-fix). Trunk MCP/main last landing 44e70af5.
 - Replay: T3 (round-four receipt) = 19 raw, ZERO reads before the write, verified green — the edit-basis line for T3 is MET; T3b replicate running (12:13Z). Peers are elided by the trunk's 32,640 structured cap (round-five item). Arm G waits on the admit gate landing.
 - Lanes: feature_thread r5 (Sol review of bb3b6360; ft1-wt clone); MEM-003 r6 (Sol review of 432268cf, trunk-merged); gate r6 (Opus review of ed20fa35); census r24 fix build (trunk merge + :paths fence); study-ops r7 build (one carriage predicate). nREPL on ~/src/clj-surgeon-thread port 45759.
+
+## RESUME DELTA 12:54Z
+- Lanes: feature_thread r6 building (Sol r5 NO-GO: escaping conventions globs; saveDraft route from a docstring; + the round-five spec); MEM-003 r6 Opus review (Sol refused; 432268cf); census r24 fix build (trunk merge + :paths fence; from r23 GO-WITH-FIX) → lands after; study-ops r7 build (r6 Sol NO-GO: one carriage predicate); gate r7 fix build (r6 Opus GO-WITH-FIX: stale over-budget annotations; empty trim annotated) → lands after; then arm G. T4 waits on ft r6.
+- Sol filter refusals: 24 tonight. Landings: 4 (integration, scorer, tmp-leak d0b4e1ca, q5z 44e70af5).
+
+## RESUME DELTA 14:14Z
+- Lanes (all builders, no reviews running): gate r8 fix (r7 Sol NO-GO: the gate must own its battery receipt; witness the cheap-move-first ORDER) → lands on GO; study-ops r8 (r7 Sol NO-GO: escape dotted pointers; single-line rendering) — the ls-tree text-doubling product change awaits Gene; census r24 fix (r23 GO-WITH-FIX: :paths fence + oracle names + trunk merge) → lands after; feature_thread r6 (r5 Sol NO-GO: escaping globs; route from a docstring; + the round-five spec) → T4 after; MEM-003 r7 (r6 Opus NO-GO: three spellings per derived name; floor manifest; calls not lines).
+- Sol refusals: 24; every gate lane except gate r7 and O2 went to Opus. Landings: 4. Reviewers write incrementally; builders push per item (the census builder needed a nudge at 13:4xZ and complied).
+
+
+## RESUME DELTA 14:44Z — T4 pair scored
+- feature_thread r6 tip 529755f0; Sol r7 review RUNNING (ft7-sol-review.md, ft1-wt clone). T4 pair (round-six receipt, real repo): raw 19/18, pre-write reads 0/2 — line MISSED on T4b; residual = dispatch/fold seam + registry tail (see 2026-09-04-feature-thread-replay-result.md 'T4 pair'). Next lever is arm G (admit gate) once the gate lane lands. Receipt at 32k with nothing elided saved: /var/tmp/forge/tweezer/replay-receipt-T4-full32k.txt.
+- Builders live: gate r8, O2 r8, census r24, MEM-003 r7.
+
+
+## RESUME DELTA 16:52Z — census LANDED; Gene's wall-clock refocus
+- LANDED: census bridge/census-verb 2d82a677 as merge bafc273a on MCP/main (fifth landing). Trunk MCP/main head 49aeef9d.
+- GENE'S RULING (16:4xZ, this morning): chase >=2x on WALL CLOCK, not fractional gains. Standing meter = wall per turn species
+  (script in the replay doc, 'Wall clock by turn species'). Receipt effect is done (-3.2 min code reads). Levers: (1) SMW landing
+  contract — untrack .beads/.local_version (already in .beads/.gitignore, tracked by commit 638ec8c9), replace the bd boilerplate
+  block (CLAUDE.md L610-654) with an 8-line chain, distill the binding rules to the top — WAITS ON GENE'S GO (his repo); then rerun
+  native pair on the slimmed plate as the new baseline; (2) admit gate arm G (write+verify in one call) when the gate lane lands.
+  feature_thread FREEZES after its landing review (r9 Sol running on 3dfe0895). No new polish rounds unless a landing blocker.
+- Lanes: ft r9 Sol review (ft9-sol-review.md); gate r13 building on b489a276 (Sonnet; catch Throwable, present-but-nil = failed,
+  edn/read-string) then Sol/Opus review; study-ops r11 Sol review on dda9fa29; MEM-003 r8 Opus review on a2a15cc0 (Sol refused).
+- Gene decisions outstanding: SMW landing-contract branch go; cclsp repo (inb-41c1cc); ls-tree text doubling (STUDY-051).
+- Usage collector: 12 consecutive 120 s timeouts under load (ledger inb-65c941). maven-w is not installed on this seat.
