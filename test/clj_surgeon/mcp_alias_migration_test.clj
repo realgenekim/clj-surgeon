@@ -6,6 +6,7 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -683,6 +684,117 @@
                  "no-next-call")]
       (is (str/includes? text "65"))
       (is (str/includes? text "Narrow scope.paths")))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-refusal-enumeration-covers-every-kind-the-entrance-can-emit
+  ;; Round-10 review finding 4: `refusal-kinds-in-source` reads three files and
+  ;; claims "every refusal kind alias_migration can emit". The alias_migration
+  ;; ENTRANCE is `handle-alias-migration`, and three other sources reach the
+  ;; same renderer through it: `invalid-workspace-root` from mcp_workspace,
+  ;; `mcp-adapter-failure` from mcp_server, and the transaction kernel's own
+  ;; error-types, passed through verbatim by `commit-refusal`. A gate that
+  ;; derives its subject from a subset of its subject's sources is a listed
+  ;; enumeration wearing a derivation's clothes.
+  (let [kinds (refusal-kinds-in-source)]
+    (testing "the workspace router's refusal is one of them"
+      (is (contains? kinds "invalid-workspace-root")
+          "the enumeration does not see mcp_workspace.clj"))
+    (testing "the adapter's own failure is one of them"
+      (is (contains? kinds "mcp-adapter-failure")
+          "the enumeration does not see mcp_server.clj"))
+    (testing "every kernel error-type the entrance passes through is one of them"
+      (doseq [kind ["transaction-write-exception" "target-ancestor-changed"
+                    "intent-compiler-failure" "invalid-transaction-receipt"
+                    "future-source-transformation-failed"]]
+        (is (contains? kinds kind)
+            (str "the enumeration does not see the kernel's " kind))))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest a-refusal-without-a-remedy-does-not-point-at-one
+  ;; The rendered no-next_call line said "the remedy above names what only the
+  ;; caller can decide" unconditionally — on a receipt carrying no `:remedy` it
+  ;; points the caller at a sentence that is not there.
+  (let [text (mcp-tool/alias-migration-summary
+               {:ok false
+                :operation "alias_migration"
+                :error_type "invalid-workspace-root"
+                :error "workspace_root must be absolute"
+                :elapsed_ms 1.0
+                :source_unchanged true})]
+    (is (not (str/includes? text "the remedy above"))
+        (str "a receipt with no remedy pointed at one:\n" text))
+    (is (str/includes? text "next_call")
+        "an absent next_call was omitted rather than stated")))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest the-live-invalid-workspace-root-refusal-renders-cause-remedy-and-next-call
+  ;; Driven through the real entrance, not shaped by hand: this is the receipt
+  ;; the reviewer rendered, and it named a remedy it did not carry while
+  ;; suppressing the one discriminating fact it had — the bad value itself,
+  ;; hidden because `workspace_root` is an ENVELOPE key on every other receipt.
+  (let [workspace (workspace!)]
+    (try
+      (mcp-tool/init! (config workspace (io/file workspace "receipts")))
+      (let [captured (atom nil)]
+        (mcp-tool/handle-alias-migration
+          nil
+          (json/parse-string
+            (json/generate-string
+              (request workspace {:workspace_root "relative/path"}))
+            true)
+          (fn [content error? structured]
+            (reset! captured {:content content :error? error?
+                              :result structured})))
+        (let [{:keys [content result]} @captured
+              text (first content)]
+          (is (= "invalid-workspace-root" (:error_type result)) (pr-str result))
+          (is (string? (:remedy result))
+              "the live refusal carries no remedy at all")
+          (is (str/includes? text (:remedy result))
+              "the text block drops the remedy")
+          (is (not (str/includes? text "the remedy above"))
+              (str "the text pointed at a remedy the receipt does not carry:\n"
+                   text))
+          (is (str/includes? text "relative/path")
+              (str "the one discriminating fact — the bad workspace_root — is "
+                   "suppressed as an envelope key:\n" text))
+          ;; @spec MCP-OP-ALIAS-059
+          (assert-refusal-text! (assoc result :elapsed_ms 1.0)
+                                "invalid-workspace-root")))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest an-adapter-failure-renders-through-the-tools-own-summary
+  ;; `mcp-adapter-failure` is published by the SDK wrapper, which never saw the
+  ;; operation's summarizer, so its `content[0].text` was raw JSON — the one
+  ;; refusal class whose two faces could not agree because one of them was not
+  ;; rendered at all.
+  (let [shape (resolve 'clj-surgeon.mcp-server/adapter-failure)
+        _ (is (some? shape)
+              (str "mcp_server shapes its adapter failure inline, so nothing "
+                   "else can render or assert it"))
+        failure (when shape
+                  (shape "alias_migration"
+                         (ex-info "the adapter could not read the arguments" {})))]
+    (is (= "mcp-adapter-failure" (:error_type failure)))
+    (is (string? (:remedy failure))
+        "the adapter failure carries no remedy")
+    (is (not (contains? failure :source_unchanged))
+        (str "the adapter failure claims to know the tree's state; it cannot — "
+             "the operation's own receipt was never published"))
+    (is (= mcp-tool/alias-migration-summary
+           (:summarize (first (filter #(= "alias_migration" (:name %))
+                                      (mcp-tool/tools-for-profile :full)))))
+        "the alias_migration tool carries no summarizer for the adapter to use")
+    (when failure
+      (let [text (mcp-tool/alias-migration-summary
+                   (assoc failure :elapsed_ms 1.0))]
+        (is (str/includes? text "mcp-adapter-failure"))
+        (is (str/includes? text (:remedy failure)))
+        (is (str/includes? text "source state requires structured receipt review")
+            "an adapter failure asserted the source was unchanged")))))
+
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest a-live-refusals-text-and-structured-receipt-do-not-disagree
