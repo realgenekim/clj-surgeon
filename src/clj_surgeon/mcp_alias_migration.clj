@@ -455,6 +455,25 @@
        :cause (:cause unparseable)}
       (scan-parsed-scope root (mapcat :patterns expanded) exclude))))
 
+;; @spec MCP-OP-ALIAS-051
+;; @spec MCP-OP-ALIAS-058
+(def glob-metacharacter-escapes
+  "Every character `java.nio.file.PathMatcher` reads as glob syntax.
+
+  A directory name is DATA and a glob is SYNTAX; deriving one from the other
+  without escaping publishes the caller's own filesystem as a pattern
+  language. `a{b` is a legal POSIX directory name and `a{b/**` is not a legal
+  glob; `[x]`, `{a,b}` and `*` are legal names AND legal globs, which is
+  worse, because the pattern parses and then selects something else."
+  {\\ "\\\\" \* "\\*" \? "\\?" \[ "\\[" \] "\\]" \{ "\\{" \} "\\}"})
+
+;; @spec MCP-OP-ALIAS-051
+;; @spec MCP-OP-ALIAS-058
+(defn glob-escape
+  "One literal path segment, spelled so a glob matches it and nothing else."
+  [segment]
+  (str/escape segment glob-metacharacter-escapes))
+
 ;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-058
 (def max-suggested-scope-paths
@@ -492,6 +511,13 @@
   remedy that silently drops a file class is the defect this refusal exists to
   end.
 
+  A root name is DATA: its glob metacharacters are escaped before the pattern
+  is built, so the directory `a{b` becomes `a\\{b/**` — a pattern that parses
+  and matches that directory alone — and `[x]`, `{a,b}` and `*` stop matching
+  something else in silence. Every derived pattern is then validated through
+  `glob-parse-error`, the same gate the scan applies to a caller's own entry,
+  so a remedy this verb would refuse is never published as a correction.
+
   Roots are ranked by the number of sources they hold, ties broken
   lexicographically, so the sample a bound keeps is the part of the tree the
   caller most likely meant rather than the part whose name sorts first. When
@@ -511,13 +537,21 @@
                            (update acc
                                    (if (neg? cut)
                                      "*"
-                                     (str (subs relative 0 cut) "/**"))
+                                     (str (glob-escape (subs relative 0 cut))
+                                          "/**"))
                                    (fnil inc 0))))
                        {}
                        relatives)
+        ;; @spec MCP-OP-ALIAS-051
+        ;; the derived remedy is validated through the SAME parser gate the
+        ;; scan uses before it is published: a pattern this verb would refuse
+        ;; is never handed to the caller as a correction, and dropping one
+        ;; leaves `roots` above the listed count, so the completing `**` is
+        ;; appended and the selection stays whole
         ranked (->> counts
                     (sort-by (fn [[pattern n]] [(- n) pattern]))
-                    (map key))
+                    (map key)
+                    (remove glob-parse-error))
         listed (vec (sort (take max-suggested-scope-paths ranked)))
         truncated? (> (count counts) (count listed))]
     {:source-files (count relatives)
