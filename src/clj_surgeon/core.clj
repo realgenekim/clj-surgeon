@@ -1183,6 +1183,26 @@
                                measured/text-measured-prefix
                                (:scan_ms (get resources
                                               measured/measured-key)))))
+         ;; @spec MCP-OP-SHELL-ARGV-006
+         ;; Byte-for-byte the batch encoder's escaping-`:paths` block, and it
+         ;; is here for the same reason the admission block above is: the
+         ;; streaming encoder replaced `format-ls-tree-text` on the CLI path
+         ;; and carried only the refusal blocks that existed when it was
+         ;; written. The fence itself still held — nothing outside the tree was
+         ;; read — but the skip went SILENT, so a build file naming only
+         ;; escaping paths printed `── total: 0 files, 0 forms` and nothing
+         ;; else: a completeness claim over a walk that was refused. A skip
+         ;; the caller cannot map back to a line of their own build file is a
+         ;; number, not a refusal. The ENTRY is printed as the caller spelled
+         ;; it and the tree it resolved to is not printed at all.
+         (let [escaping (source-path-refusals projects)]
+           (when (seq escaping)
+             (.append sb (format "── source_paths_outside_project: %d entr%s\n"
+                                 (count escaping)
+                                 (if (= 1 (count escaping)) "y" "ies")))
+             (doseq [{:keys [project entry]} escaping]
+               (.append sb (format "   %s  %s  refused: it resolves outside the project root\n"
+                                   project entry)))))
          (when receipt
            (.append sb (budget/continuation-text receipt))))
        (str sb))}))
@@ -1191,7 +1211,7 @@
   "Streaming EDN encoder. Each outline is projected to its record and dropped;
    the retained vector is the bounded output, never the outline set."
   ;; @spec MCP-OP-MEM-003
-  [root-path]
+  [root-path projects]
   (let [entries (volatile! (transient []))
         refused (volatile! [])]
     {:emit!
@@ -1220,10 +1240,20 @@
              ;; when the result is actually bounded. So "a complete result
              ;; carries no HASHED receipt" holds: nothing a determinism row
              ;; hashes appears until there is something to say.
+             ;; @spec MCP-OP-SHELL-ARGV-006
+             ;; The EDN half of the same hole the text encoder carried: the
+             ;; batch formatter publishes this key and the streaming one did
+             ;; not, so a machine reader of the bounded path saw a receipt
+             ;; that looked complete over a tree half of which was fenced.
+             escaping (source-path-refusals projects)
              trailer (cond-> {:resources resources}
                        (seq rows)
                        (assoc :parser_admission_refused
                               {:count (count rows) :files rows})
+
+                       (seq escaping)
+                       (assoc :source_paths_outside_project
+                              {:count (count escaping) :entries escaping})
 
                        receipt
                        (assoc :result_ceiling (:result_ceiling receipt)))]
@@ -2431,7 +2461,7 @@
   ;; @spec MCP-OP-MEM-005
   [abs projects candidates output-format receipt-fn]
   (let [encoder (if (= :edn output-format)
-                  (edn-encoder (fs/path abs))
+                  (edn-encoder (fs/path abs) projects)
                   (text-encoder (fs/path abs) projects (> (count projects) 1)))
         emit! (:emit! encoder)
         encoded (volatile! 0)
