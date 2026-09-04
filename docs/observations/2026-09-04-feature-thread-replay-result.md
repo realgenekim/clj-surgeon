@@ -47,5 +47,5 @@ Independent gate re-run for X and P (seat, 08:1xZ): JS_EXIT=0 CLJ_EXIT=0 JS_EXIT
 ## Replicates (launched 08:04Z) — T1b finished 08:1xZ
 | arm | raw | source reads before first patch | first patch at call | sites | gates |
 |---|---|---|---|---|---|
-| T1b (receipt, replicate) | 22 | 2 (registry ids; intent_contract_test + test_runner — the governance/test-classification reads) | 9 | six real sites (routes @2148, transform @682, js @456, tests @96/@386, registry @557) | seat re-run pending |
+| T1b (receipt, replicate) | 22 | 2 (registry ids; intent_contract_test + test_runner — the governance/test-classification reads) | 9 | six real sites (routes @2148, transform @682, js @456, tests @96/@386, registry @557) | green — VERIFIED by the seat (JS_EXIT=0 CLJ_EXIT=0) |
 T1b reproduces T1 within two calls (24 → 22; reads 2 → 2; first patch 7 → 9). N2 still running (33 raw / 16 reads at 08:1xZ, no patch yet — already above N's 32).

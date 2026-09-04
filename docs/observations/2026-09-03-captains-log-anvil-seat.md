@@ -1401,3 +1401,4 @@ Round 20 found read-string with reader-eval in parse-val and fixed parse-val; th
 ## 08:04Z — X and P gates re-run independently: JS_EXIT=0 CLJ_EXIT=0 JS_EXIT=0 CLJ_EXIT=0  — all four arms verified green.
 ## 08:04Z — Gene report written (docs/observations/2026-09-04-gene-report-0815z.md); replicates N2 + T1b launched for the variance floor.
 ## 08:13Z — replicate T1b: 22 raw, 2 reads before the first patch, correct sites — reproduces T1 (24/2). N2 at 33 raw and 16 reads with no patch yet.
+## 08:13Z — q5z r17: Sol's filter refused (17th tonight); Opus fallback. T1b gates verified green (five arms verified so far).
