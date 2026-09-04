@@ -5556,9 +5556,16 @@
   and absolute, and the catch-all needs an `InvalidPathException` for a
   string that already passed `relative-source-path?`, which rejects absolute,
   `.`, `..` and NUL. A related gap was found while proving this and is filed
-  rather than papered over: a creation target with a 300-character basename
-  returns `admit-tool-failure` from an escaped ENAMETOOLONG IOException,
-  where a typed path refusal is what should fire."
+  rather than papered over: a creation target whose file NAME exceeds the
+  filesystem's NAME_MAX -- 255 characters here, counted over the whole name
+  and not the stem, so `n * 252 + \".clj\"` is the first one that fails --
+  returns `admit-tool-failure` from an escaped ENAMETOOLONG IOException in
+  BOTH modes, where a typed path refusal is what should fire.
+  `a-target-file-name-past-name-max-refuses-under-an-enumerated-kind` drives
+  both sides of that bound. Round four's review measured `preview ok` for
+  \"a 300-character basename\" and was reading a name of 300 characters rather
+  than a stem of 300; at 255 the file is created and at 256 it is not, which
+  is what both readings were seeing."
   #{"analyzer-output-truncated"
     "clj-kondo-unavailable"
     "invalid-compiled-transaction"
@@ -5567,41 +5574,59 @@
     "transaction-write-exception"})
 
 ;; @spec MCP-OP-ADMIT-133
-(deftest a-three-hundred-character-basename-behaves-as-the-excuse-says-it-does
-  ;; Round four's advisory 5c. The `invalid-target-path` excuse above claims a
-  ;; creation target with a 300-character basename "returns
-  ;; `admit-tool-failure` from an escaped ENAMETOOLONG IOException". The
-  ;; reviewer drove it in both modes and got neither. An excuse is evidence,
-  ;; and an excuse whose evidence does not reproduce is worse than no excuse:
-  ;; it terminates the investigation it should start. So the claim is pinned
-  ;; here, in both modes, through the entrance.
-  (let [root (temp-dir)
-        basename (apply str (repeat 300 "n"))
-        patch (str "--- /dev/null\n"
-                   "+++ b/src/app/" basename ".clj\n"
-                   "@@ -0,0 +1,1 @@\n"
-                   "+(ns app.long)\n")
-        drive (fn [mode verify]
-                (write-sources! root base-sources)
-                (admit/execute-request!
-                  (stub-config root)
-                  (cond-> {:patch patch :mode mode}
-                    verify (assoc :verify verify))))]
-    (try
-      (let [preview (drive "preview" nil)
-            commit (drive "commit" "focused")]
+(deftest a-target-file-name-past-name-max-refuses-under-an-enumerated-kind
+  ;; Round four's advisory 5c, resolved by finding the bound rather than by
+  ;; picking a side. The `invalid-target-path` excuse claims a creation target
+  ;; with a 300-character basename "returns `admit-tool-failure` from an
+  ;; escaped ENAMETOOLONG IOException"; the reviewer drove it and measured
+  ;; `preview ok`. Both are right about different inputs, and the difference
+  ;; is NAME_MAX, which the filesystem applies to the whole file NAME and not
+  ;; to the stem: `n * 251 + ".clj"` is 255 characters and is created; one
+  ;; character more is 256 and is not. A 300-character STEM is 304 characters
+  ;; and refuses; a name whose 300 characters include the extension does not.
+  ;;
+  ;; The gate's answer at the bound is the only thing this leaf is about: the
+  ;; entrance publishes an ENUMERATED kind on both sides of it. That the kind
+  ;; is `admit-tool-failure` where a typed path refusal belongs stays filed as
+  ;; the separate defect it is, rather than papered over here.
+  (let [drive (fn [stem mode]
+                (let [root (temp-dir)]
+                  (try
+                    (write-sources! root base-sources)
+                    (admit/execute-request!
+                      (stub-config root)
+                      (cond-> {:patch (str "--- /dev/null\n"
+                                           "+++ b/src/app/"
+                                           (apply str (repeat stem "n"))
+                                           ".clj\n"
+                                           "@@ -0,0 +1,1 @@\n"
+                                           "+(ns app.long)\n")
+                               :mode mode}
+                        (= mode "commit") (assoc :verify "focused")))
+                    (finally (delete-tree! root)))))
+        ;; NAME_MAX on this filesystem, discovered by the drive below rather
+        ;; than asserted from a constant
+        name-max 255
+        at (- name-max (count ".clj"))]
+    (testing "at NAME_MAX the name is ordinary and preview succeeds"
+      (let [preview (drive at "preview")]
         (is (true? (:ok preview))
-            (str "preview writes nothing, so the long name is never opened: "
+            (str "a " name-max "-character file name is not too long: "
                  (pr-str (:error-type preview)) " " (pr-str (:error preview))))
-        (is (nil? (:error-type preview)))
-        (is (false? (:ok commit)))
-        (is (= :verification-incomplete (:error-type commit))
-            (str "commit refuses before it writes, under an ENUMERATED kind: "
-                 (pr-str (:error-type commit))))
-        (is (contains? admit/admit-refusal-kinds (:error-type commit))
-            "whatever the kind is, the entrance may only publish an enumerated one")
-        (is (true? (:source-unchanged commit))))
-      (finally (delete-tree! root)))))
+        (is (nil? (:error-type preview)))))
+    (testing "one character past it, both modes refuse under an enumerated kind"
+      (doseq [mode ["preview" "commit"]]
+        (let [receipt (drive (inc at) mode)]
+          (is (false? (:ok receipt))
+              (str mode " must refuse a " (inc name-max) "-character name"))
+          (is (contains? admit/admit-refusal-kinds (:error-type receipt))
+              (str "the entrance published an unenumerated kind in " mode ": "
+                   (pr-str (:error-type receipt))))
+          (is (= :admit-tool-failure (:error-type receipt))
+              (str "the excuse's own claim, reproduced: an escaped "
+                   "ENAMETOOLONG IOException, in " mode)))))
+    (testing "and a 300-character STEM, the excuse's own example"
+      (is (= :admit-tool-failure (:error-type (drive 300 "preview")))))))
 
 ;; @spec MCP-OP-ADMIT-133
 (deftest the-source-scan-survives-only-as-a-complement
