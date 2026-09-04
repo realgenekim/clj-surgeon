@@ -113,6 +113,33 @@
   [patch]
   (when (string? patch) (structural-lens/source-hash patch)))
 
+;; @spec MCP-OP-ADMIT-140
+(def ^:private caller-field-spelling-characters
+  "How much of a caller-supplied value a refusal may quote back.
+
+  Enough for the caller to recognise the value that was refused; never enough
+  for the value to be the reason the receipt does not fit."
+  120)
+
+;; @spec MCP-OP-ADMIT-140
+(defn- bounded-caller-spelling
+  "One caller-supplied value as a quoted, BOUNDED spelling with the cut stated.
+
+  A refusal that names the field a caller got wrong has to show enough of the
+  value to be recognisable. A refusal that echoes the value VERBATIM lets the
+  caller choose the size of clj-surgeon's receipt: a 60,000-character `mode`
+  published a 61,214-byte receipt whose own sentence called 32,640 the budget
+  (MCP-OP-ADMIT-140)."
+  [value]
+  (let [text (if (string? value) value (pr-str value))
+        n (count text)]
+    (if (<= n caller-field-spelling-characters)
+      (str "\"" text "\"")
+      (str "\"" (subs text 0 caller-field-spelling-characters)
+           "\" […" (- n caller-field-spelling-characters)
+           " more character(s), cut here so a caller's value cannot be the"
+           " size of this receipt]"))))
+
 ;; @spec MCP-OP-ADMIT-069
 (defn- next-call
   "One executable follow-up that never carries the patch back.
@@ -121,8 +148,19 @@
   input that caused it, and the caller already holds the text. The digest
   binds the follow-up to the same patch without restating it."
   [{:keys [workspace-root patch verify expect-pre]} mode blocked-by]
+  ;; @spec MCP-OP-ADMIT-140
+  ;; A follow-up call is a call the caller SHOULD send, so it never echoes a
+  ;; caller's out-of-enum `mode` or `verify` back: those two are the fields
+  ;; whose legal values this gate declares, and a next_call proposing the
+  ;; unusable value that just refused is neither sendable nor an affordance.
   (cond-> {:tool "admit_clojure_patch"
-           :arguments (cond-> {:mode mode :verify (or verify "focused")}
+           :arguments (cond-> {:mode (if (contains? #{"preview" "commit"} mode)
+                                       mode
+                                       "preview")
+                               :verify (if (contains? #{"focused" "none"}
+                                                      verify)
+                                         verify
+                                         "focused")}
                         workspace-root (assoc :workspace_root workspace-root)
                         (seq expect-pre) (assoc :expect_pre_sha256 expect-pre))
            :patch_field "patch"
@@ -1545,22 +1583,39 @@
 (defn- execute-in-context!
   [config {:keys [patch mode verify expect_pre_sha256 allow_partial]}
    workspace-root]
-  (let [mode (or mode "preview")
-        verify (or verify "focused")
+  (let [requested-mode (or mode "preview")
+        requested-verify (or verify "focused")
+        ;; @spec MCP-OP-ADMIT-140
+        ;; The caller's strings are NORMALISED before either can reach a
+        ;; receipt. `context` is what `refusal` merges into
+        ;; `(empty-receipt (:mode context))`, so an unvalidated mode here is
+        ;; a caller writing an identity key of every refusal below.
+        mode (if (contains? #{"preview" "commit"} requested-mode)
+               requested-mode
+               "preview")
+        verify (if (contains? #{"focused" "none"} requested-verify)
+                 requested-verify
+                 "focused")
         context {:mode mode :workspace-root workspace-root
                  :patch patch :verify verify}]
     (cond
+      ;; @spec MCP-OP-ADMIT-140
+      ;; FIRST, before the patch is even looked at: a mode outside the enum is
+      ;; a typed refusal naming the field, quoting the value cut to a bounded
+      ;; spelling, and carrying the DEFAULT mode in the receipt it publishes.
+      (not (contains? #{"preview" "commit"} requested-mode))
+      (refusal context :invalid-admit-request
+               (str "mode must be preview or commit; this call sent "
+                    (bounded-caller-spelling requested-mode)))
+
+      (not (contains? #{"focused" "none"} requested-verify))
+      (refusal context :invalid-admit-request
+               (str "verify must be focused or none; this call sent "
+                    (bounded-caller-spelling requested-verify)))
+
       (not (and (string? patch) (not (str/blank? patch))))
       (refusal context :invalid-patch
                "patch must be non-blank unified diff text")
-
-      (not (contains? #{"preview" "commit"} mode))
-      (refusal context :invalid-admit-request
-               "mode must be preview or commit")
-
-      (not (contains? #{"focused" "none"} verify))
-      (refusal context :invalid-admit-request
-               "verify must be focused or none")
 
       (not (or (nil? expect_pre_sha256) (map? expect_pre_sha256)))
       (refusal context :invalid-admit-request
@@ -2010,10 +2065,72 @@
    :mutation_attempted :pre_image_binding :lock_scope :verification_complete
    :verification_status :elapsed_ms :next_call])
 
+;; @spec MCP-OP-ADMIT-140
+(def ^:private identity-value-byte-bound
+  "The most JSON one receipt-identity value may spend.
+
+  Twelve bounded identity values cannot add to the public budget, which is
+  the property that makes `no identity key can be the reason a receipt is
+  oversize` true by construction rather than by inspection."
+  1024)
+
+;; @spec MCP-OP-ADMIT-140
+(defn- bound-identity-values
+  "Bound every identity value except the ones that have their own answer.
+
+  `reduce-receipt-to-budget` may never DROP an identity key and `cut`
+  shortens only the two sentences, so an identity value carrying bulk was
+  reachable by no arm of the bound at all: a caller's 60,000-character `mode`
+  published a 61,214-byte receipt, 28,574 over, with no annotation of any kind
+  and a 389-character `next_call` blamed for it.
+
+  `:error` and `:remedy` are exempt because `cut` is their answer and it
+  states its cut; `:next_call` is exempt because a shortened next_call is not
+  a smaller affordance but the absence of one wearing its name, and
+  `oversize-next-call-refusal` is its answer; `:error-type` is exempt because
+  `checked-refusal-kind!` already bounds it to an enumerated keyword. Every
+  value this DOES bound is named in `receipt_identity_bounded`, so a reader is
+  never told a value verbatim that was not."
+  [receipt]
+  (if-not (map? receipt)
+    receipt
+    ;; NOTE the order: the error-type keyword is written LAST because the
+    ;; enumeration tripwire scans this file for a literal error-type key
+    ;; followed by a keyword, and a set literal that happened to put one
+    ;; after it would read as a refusal kind constructed here.
+    (let [exempt #{:ok :error :remedy :next_call :error-type}
+          candidates (remove exempt receipt-identity-keys)]
+      (reduce
+        (fn [current key]
+          (if-not (contains? current key)
+            current
+            (let [value (get current key)
+                  text (if (string? value) value (pr-str value))]
+              (if (<= (write-refusal/json-bytes {key value})
+                      identity-value-byte-bound)
+                current
+                (-> current
+                    (assoc key
+                           (str (subs text 0 (min (count text)
+                                                  caller-field-spelling-characters))
+                                "…[cut to " caller-field-spelling-characters
+                                " characters; this value was "
+                                (count text)
+                                " and an identity key may not be the size of"
+                                " a receipt]"))
+                    (update :receipt_identity_bounded
+                            (fnil conj []) (name key)))))))
+        receipt
+        candidates))))
+
 ;; @spec MCP-OP-ADMIT-139
 (def ^:private receipt-reduction-keys
   [:receipt_reduced :receipt_omitted_fields :receipt_bytes_before
-   :receipt_text_characters_before :public_byte_budget :error_truncated])
+   :receipt_text_characters_before :public_byte_budget :error_truncated
+   ;; @spec MCP-OP-ADMIT-140
+   ;; a receipt that dropped the note saying a value was cut would be telling
+   ;; the reader a bounded value verbatim
+   :receipt_identity_bounded])
 
 ;; @spec MCP-OP-ADMIT-139
 (defn- reduce-receipt-to-budget
@@ -2110,6 +2227,8 @@
   [receipt]
   (let [bounded (-> receipt
                     checked-refusal-kind!
+                    ;; @spec MCP-OP-ADMIT-140
+                    bound-identity-values
                     (write-refusal/bound-public-refusal pr-str)
                     ;; @spec MCP-OP-ADMIT-136
                     (write-refusal/bound-public-payload
