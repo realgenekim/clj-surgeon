@@ -284,6 +284,50 @@
 
 ;; @spec MCP-OP-SHELL-ARGV-005
 ;; @spec MCP-OP-SHELL-ARGV-004
+(declare max-argument-nesting-depth scanned-nesting-depth)
+
+;; @spec MCP-OP-SHELL-ARGV-007
+(defn- refuse-over-nested-build-file!
+  "Apply the CLI's own nesting ceiling to a build file's bytes, before reading.
+
+   The gap round twenty-two disclosed and the round-23 review reproduced. Argv
+   is bounded by `refuse-over-nested!` at 256 levels; the build file this op
+   DISCOVERS under the caller's `:dir` was read with no depth bound at all, so
+   a 10,001-deep `:paths` overflowed the reader's stack and left through
+   `-main`'s last-resort `catch Throwable` at both launchers.
+
+   Why close a gap the review ruled non-blocking: that exit is the LAST RESORT,
+   and its own docstring says it exists because `max-argument-nesting-depth` is
+   a guess about which `Error` a caller can reach. Taking it on an input that
+   can be MEASURED before it is read is using the airbag as a brake. And a
+   ceiling enforced on argv but not on a file the same op reads is not a
+   ceiling, it is one code path's habit — the identical argument
+   MCP-OP-SHELL-ARGV-004 made about the READER at this same site.
+
+   The same ceiling and the same scanner as argv, deliberately: a second
+   number here would be a second thing to keep in step, and
+   `scanned-nesting-depth` already measures without a reader, which is the
+   whole requirement (a reader deep enough to measure the input is a reader
+   deep enough to overflow on it).
+
+   It names the build FILE and not the file's bytes. The argv refusal carries
+   `:value` because there the caller's argument IS the subject; here the
+   subject is a file the caller can look at, its name is the actionable fact,
+   and 20 KB of nested brackets is not information."
+  [build-file ^String text]
+  (let [measured (scanned-nesting-depth text)]
+    (when (> measured max-argument-nesting-depth)
+      (throw (ex-info
+               (str "the build file " (str (fs/file-name build-file))
+                    " nests at least " measured " deep, past the "
+                    max-argument-nesting-depth "-level ceiling; it is refused "
+                    "unread, because a reader deep enough to measure it is a "
+                    "reader deep enough to overflow")
+               {:error-type :build-file-nesting-too-deep
+                :build-file (str (fs/file-name build-file))
+                :ceiling max-argument-nesting-depth
+                :measured measured})))))
+
 (defn- extract-source-paths
   "I/O wrapper: read a build file AS DATA and return its source paths.
 
@@ -322,10 +366,20 @@
    to guess, not a regression, and it is the argument for refusing such a file
    rather than for `*read-eval*`."
   [build-file]
-  (try
-    (source-paths-from-config (str (fs/file-name build-file))
-                              (edn/read-string (slurp (str build-file))))
-    (catch Exception _e ["src"])))
+  (let [text (try (slurp (str build-file)) (catch Exception _e nil))]
+    ;; @spec MCP-OP-SHELL-ARGV-007
+    ;; OUTSIDE the try below, and that placement is the requirement rather
+    ;; than a detail. The `["src"]` fallback is the right answer for a build
+    ;; file this tool cannot PARSE; it is the wrong answer for one it is
+    ;; REFUSING, because a caller told nothing cannot tell a build file that
+    ;; was ignored from one that was never read. Swallowing this refusal into
+    ;; the fallback would convert a typed refusal into a silent default —
+    ;; which is the shape of defect this whole round is about.
+    (when text (refuse-over-nested-build-file! build-file text))
+    (try
+      (source-paths-from-config (str (fs/file-name build-file))
+                                (edn/read-string text))
+      (catch Exception _e ["src"]))))
 
 ;; @spec MCP-OP-SHELL-ARGV-006
 (defn- fenced-source-paths
@@ -370,7 +424,20 @@
    over a walk that left the caller's tree is the defect this fence exists to
    stop, wearing a green receipt."
   [root src-paths]
-  (let [^java.nio.file.Path canonical (census-discovery/canonical-root (str root))]
+  (let [^java.nio.file.Path canonical (census-discovery/canonical-root (str root))
+        ;; The root NOT link-resolved, for the lexical half to compare against.
+        ;; Each check must compare like with like, and the first draft did not:
+        ;; it measured a lexically-normalised ENTRY against the link-RESOLVED
+        ;; root, so a caller whose `:dir` was a symlink had `link/src` tested
+        ;; against `target/` and every ordinary `{:paths [\"src\"]}` was refused.
+        ;; `core_discovery_test/a-symlinked-root-is-descended-just-like-its-target`
+        ;; caught it: the whole scan came back `0 files` with one refused entry
+        ;; spelled `\"src\"`. That is the declared round-19 rule — the workspace
+        ;; is the RESOLVED tree, so a link to a real tree IS that tree — broken
+        ;; by a fence that mixed the two frames of reference.
+        ^java.nio.file.Path lexical-root
+        (try (.normalize (.toAbsolutePath ^java.nio.file.Path (fs/path (str root))))
+             (catch Throwable _ nil))]
     (reduce
       (fn [acc entry]
         (if-not (string? entry)
@@ -401,15 +468,21 @@
                 (cond
                   ;; A root that does not resolve has no fence to apply; the
                   ;; entrance already refuses that :dir upstream.
-                  (nil? canonical) false
+                  (or (nil? canonical) (nil? lexical-root)) false
                   (nil? resolved) true
-                  ;; Both checks, and either one refuses. LEXICAL catches an
-                  ;; entry naming a tree that does not exist yet — which the
-                  ;; real-path check cannot see at all, and which the caller
-                  ;; can create between this scan and the next. REAL catches a
-                  ;; symlink out, which the lexical check cannot see.
-                  (not (census-discovery/inside-root? canonical resolved)) true
+
+                  ;; LEXICAL: the normalised entry against the UNRESOLVED root.
+                  ;; Catches `..` and an absolute entry, including one naming a
+                  ;; tree that does not exist yet — which the real-path check
+                  ;; cannot see at all, and which the caller can create between
+                  ;; this scan and the next.
+                  (not (census-discovery/inside-root? lexical-root resolved)) true
+
+                  ;; REAL: the link-resolved entry against the link-resolved
+                  ;; root. Catches `src -> /elsewhere`, which the lexical check
+                  ;; cannot see.
                   (and real (not (census-discovery/inside-root? canonical real))) true
+
                   :else false)]
             (if escapes?
               (-> acc

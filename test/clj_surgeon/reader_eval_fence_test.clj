@@ -128,7 +128,14 @@
    question is whether the op will follow what that file says."
   [^java.io.File root build-file-name entry]
   (let [src (io/file root "src")
-        outside (io/file root "..", (str (.getName root) "-outside"))]
+        ;; The sibling is built from the PARENT, not as `<root>/../<name>`.
+        ;; The first draft used the `..` spelling and leaked eight directories
+        ;; into the suite's temp root, which the trunk's tmp-leak ratchet
+        ;; caught: the cleanup deletes `root` first, and `<root>/../<name>` is
+        ;; then a path whose own prefix no longer exists, so the delete threw
+        ;; and the sibling survived. A cleanup that depends on the order two
+        ;; unrelated deletions happen in is not cleanup.
+        outside (io/file (.getParentFile root) (str (.getName root) "-outside"))]
     (.mkdirs src)
     (spit (io/file src "a.clj") "(ns a)
 ")
@@ -206,8 +213,10 @@
                        "the entry the caller spelled — stdout "
                        (pr-str (subs out 0 (min 400 (count out))))))))
           (finally
-            (fs/delete-tree root)
-            (fs/delete-tree outside)))))))
+            ;; The sibling FIRST: it is the one a failed delete leaves behind,
+            ;; and it must not depend on `root` still being there.
+            (fs/delete-tree outside)
+            (fs/delete-tree root)))))))
 
 ;; @spec MCP-OP-SHELL-ARGV-006
 (deftest a-non-string-paths-entry-never-reaches-io-file
@@ -236,6 +245,46 @@
                 (str "a non-string :paths entry overflowed rather than being "
                      "refused — exit " exit)))
           (finally (fs/delete-tree root)))))))
+
+;; @spec MCP-OP-SHELL-ARGV-006
+(deftest the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root
+  ;; The regression the first fence shipped, pinned here so it cannot come
+  ;; back. `core_discovery_test/a-symlinked-root-is-descended-just-like-its-
+  ;; target` caught it, and this is the same defect stated in the fence's own
+  ;; terms: when `:dir` is a SYMLINK, a lexically-normalised `src` resolves
+  ;; under the LINK while `canonical-root` resolves to the TARGET, so an
+  ;; ordinary `{:paths ["src"]}` was measured against the wrong root and
+  ;; refused. The whole scan came back `0 files` with one refused entry.
+  ;;
+  ;; It is the declared round-19 rule — the workspace is the RESOLVED tree, so
+  ;; a link to a real tree IS that tree — broken by a fence that mixed two
+  ;; frames of reference. A fence's false POSITIVES need a witness as much as
+  ;; its false negatives: this one would have refused every symlinked
+  ;; workspace in the fleet while looking exactly like a working control.
+  (doseq [runtime [:jvm :bb]]
+    (testing (name runtime)
+      (let [parent (.toFile (java.nio.file.Files/createTempDirectory
+                              "symlinked-root-fence"
+                              (make-array java.nio.file.attribute.FileAttribute 0)))
+            target (io/file parent "target")
+            link (io/file parent "link")]
+        (try
+          (.mkdirs (io/file target "src"))
+          (spit (io/file target "src" "core.clj") "(ns core)\n(defn f [])\n")
+          (spit (io/file target "deps.edn") "{:paths [\"src\"]}\n")
+          (java.nio.file.Files/createSymbolicLink
+            (.toPath link) (.toPath target)
+            (make-array java.nio.file.attribute.FileAttribute 0))
+          (let [{:keys [out exit]}
+                (run-launcher runtime [":op" ":ls-tree" ":dir" (.getPath link)])]
+            (is (str/includes? out "core.clj")
+                (str "an ordinary :paths entry was refused under a SYMLINKED "
+                     "root — the fence measured the entry against the resolved "
+                     "target while resolving the entry under the link. exit "
+                     exit ", stdout " (pr-str (subs out 0 (min 400 (count out))))))
+            (is (not (str/includes? out "source_paths_outside_project"))
+                "nothing was outside the project root; the counter must be absent"))
+          (finally (fs/delete-tree parent)))))))
 
 ;; @spec MCP-OP-SHELL-ARGV-007
 (deftest a-deeply-nested-build-file-is-refused-typed-not-overflowed
