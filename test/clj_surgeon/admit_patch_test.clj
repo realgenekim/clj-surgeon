@@ -6082,9 +6082,17 @@
                (not (:receipt_identity_bounded receipt)))
           (conj "receipt_reduced with nothing named as dropped")
 
+          ;; @spec MCP-OP-ADMIT-145
+          ;; `empty?`, not `nil?` -- `{}` is the value the branch actually
+          ;; produced, and testing `nil?` is what let MCP-OP-ADMIT-143's own
+          ;; EARS sentence, `payload_truncated names what it omitted`, be
+          ;; falsified by the predicate written to test it. Four lines above,
+          ;; the receipt-level case already uses `empty?`.
           (and (:payload_truncated receipt)
-               (nil? (:payload_omitted receipt)))
-          (conj "payload_truncated with no payload_omitted")
+               (empty? (:payload_omitted receipt)))
+          (conj (str "payload_truncated naming nothing omitted: "
+                     (pr-str (:payload_omitted receipt)) " / "
+                     (pr-str (:payload_omitted_bytes receipt)) " bytes"))
 
           (and (:public_byte_budget receipt)
                (not= budget (:public_byte_budget receipt)))
@@ -6386,6 +6394,88 @@
                 (str label ": "
                      (pr-str (receipt-self-description-holds?
                                published))))))))))
+
+
+;; @spec MCP-OP-ADMIT-145
+(deftest a-trim-that-trimmed-nothing-is-not-recorded-as-a-truncation
+  ;; Round six's finding 2. `bound-public-payload` stamped the full
+  ;; truncation annotation whenever the receipt did not fit and NOTHING in
+  ;; the trimmable collections had content -- which is every refusal raised
+  ;; before the patch is applied, since the trimmable keys are `hazards` and
+  ;; `files`. A caller who pasted the wrong `expect_pre_sha256` digest was
+  ;; told content had been withheld when none had; the real omission was
+  ;; recorded, correctly, one field over in `receipt_omitted_fields`.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [{:keys [result]}
+            (published-at-handler-edge
+              root {"patch" clean-multi-file-patch
+                    "verify" "focused"
+                    "expect_pre_sha256"
+                    {"src/app/core.clj" (apply str (repeat 60000 "a"))
+                     "src/app/util.clj" (apply str (repeat 64 "b"))}})]
+        (is (= :source-hash-mismatch (:error-type result))
+            (str "fixture must refuse on the digest: "
+                 (pr-str (:error-type result))))
+        (is (not (:payload_truncated result))
+            (str "a trim that removed nothing is recorded as a truncation: "
+                 (pr-str (select-keys result [:payload_truncated
+                                              :payload_omitted
+                                              :payload_omitted_bytes
+                                              :payload_binding_face]))))
+        (is (nil? (:payload_binding_face result))
+            "and carries a face attribution for a trim that never ran")
+        (is (true? (receipt-self-description-holds? result))
+            (pr-str (receipt-self-description-holds? result))))
+      (finally (delete-tree! root))))
+  (testing "the same on a receipt with no trimmable collection at all"
+    (let [published (#'admit/bound-receipt
+                      {:ok false :operation :admit-patch-refused
+                       :mode "commit"
+                       :error-type :transaction-recovery-required
+                       :error "the rollback could not restore src/a/f000.clj"
+                       :remedy "restore src/a/f000.clj by hand"
+                       :source-unchanged false :mutation_attempted true
+                       :next_call
+                       {:tool "admit_clojure_patch"
+                        :arguments {:expect_pre_sha256
+                                    {"src/app/core.clj"
+                                     (apply str (repeat 40000 "a"))}}}})]
+      (is (not (:payload_truncated published))
+          (str "payload_truncated on a receipt with no hazards and no files: "
+               (pr-str (select-keys published [:payload_truncated
+                                               :payload_omitted
+                                               :payload_omitted_bytes]))))
+      (is (true? (receipt-self-description-holds? published))
+          (pr-str (receipt-self-description-holds? published)))))
+  (testing "a trim that DID remove content still names what it omitted"
+    (let [root (temp-dir)
+          n 40
+          path (fn [i] (str "src/app/m" i ".clj"))
+          sources (into {} (for [i (range n)]
+                             [(path i)
+                              (str "(ns app.m" i ")\n\n(defn f\n  [x]\n"
+                                   "  (inc x))\n")]))
+          patch (apply str
+                       (for [i (range n)]
+                         (str "--- a/" (path i) "\n"
+                              "+++ b/" (path i) "\n"
+                              "@@ -1,5 +1,5 @@\n"
+                              " (ns app.m" i ")\n \n (defn f\n   [x]\n"
+                              "-  (inc x))\n+  (inc (inc x)))\n")))]
+      (try
+        (write-sources! root sources)
+        (let [receipt (admit/execute-request!
+                        (stub-config root) {:patch patch :verify "none"})]
+          (is (true? (:payload_truncated receipt)))
+          (is (seq (:payload_omitted receipt))
+              (str "a real trim names what it dropped: "
+                   (pr-str (:payload_omitted receipt))))
+          (is (pos? (long (:payload_omitted_bytes receipt))))
+          (is (true? (receipt-self-description-holds? receipt))
+              (pr-str (receipt-self-description-holds? receipt))))
+        (finally (delete-tree! root))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Round six: every field a caller can influence, driven with bulk
