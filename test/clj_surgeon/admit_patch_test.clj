@@ -4614,3 +4614,133 @@
           (is (str/includes? text sha)
               (str "the text drops the pre-image hash for " file))))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round four, blocker 2 (MCP-OP-ADMIT-134): "every leaf" was false by
+;; explicit exclusion and by shape, and the witness copied the policy
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-134
+(defn- json-leaves
+  "A second, independent leaf walk -- over the receipt AS JSON.
+
+  Deliberately not `clj-surgeon.mcp-admit-tool/admit-leaf-entries`, and
+  deliberately not a Clojure walk at all. The claim under test is `the text
+  names everything structuredContent spells`, and the only authority on what
+  structuredContent spells is the JSON encoder that produces it. Round
+  three's witness walked the Clojure map holding its OWN copy of the
+  renderer's eleven-key exclusion list, so the two sides agreed about what
+  may be missing by construction -- the reviewer's word was `tautological`.
+  This side shares no function and no constant with the renderer: it encodes
+  the receipt, parses it back, and reports every leaf the JSON actually has,
+  value-less shapes included."
+  [path v]
+  (cond
+    (and (map? v) (seq v))
+    (mapcat (fn [[k cv]] (json-leaves (str path (when (seq path) ".") k) cv)) v)
+
+    (map? v) [[path "{}"]]
+
+    (and (sequential? v) (seq v))
+    (apply concat
+           (map-indexed (fn [i cv] (json-leaves (str path "[" i "]") cv)) v))
+
+    (sequential? v) [[path "[]"]]
+
+    (nil? v) [[path "null"]]
+
+    (= v "") [[path "\"\""]]
+
+    :else [[path (str v)]]))
+
+;; @spec MCP-OP-ADMIT-134
+(defn- structured-leaves
+  [receipt]
+  (json-leaves "" (json/parse-string (json/generate-string receipt))))
+
+;; @spec MCP-OP-ADMIT-134
+(defn- assert-text-names-every-structured-leaf!
+  "Every leaf structuredContent spells appears in the text block as
+  `path=value`.
+
+  No exclusion list on this side, because the implementation is not allowed
+  one either: a receipt has two faces and the text face must not say less.
+  Leaves longer than the renderer's per-leaf ceiling are checked by their own
+  witness rather than here, so this assertion needs no constant from the
+  implementation at all."
+  [receipt label]
+  (let [receipt (assoc receipt :elapsed_ms (or (:elapsed_ms receipt) 1.0))
+        text (#'admit/summary receipt)]
+    (is (not-any? set? (tree-seq coll? seq receipt))
+        (str label " · a receipt leaf is a Clojure set; JSON has no sets, so "
+             "structuredContent's ordering of it is undefined and this "
+             "witness cannot bind the text to it"))
+    (doseq [[path value] (structured-leaves receipt)
+            :when (<= (count value) 200)]
+      (is (str/includes? text (str path "=" value))
+          (str label " · the text block never names " path "=" value)))
+    text))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-refusal-text-names-the-files-and-hashes-its-structure-carries
+  ;; Sol's round-three receipt, verbatim: `{:probe :shape-exclusions,
+  ;; :contains-files false, :contains-pre-hash false, ...}`. The renderer
+  ;; excluded :files and :hashes by name, on the reasoning that they are
+  ;; "diff metadata the caller already sent". The caller who reads only the
+  ;; text is exactly the caller who cannot go and look them up.
+  (assert-text-names-every-structured-leaf!
+    {:ok false
+     :operation :admit-patch-refused
+     :mode "preview"
+     :error-type :source-hash-mismatch
+     :error "the workspace changed while this admission was being verified"
+     :elapsed_ms 1.25
+     :source-unchanged true
+     :files ["src/app/core.clj" "src/app/util.clj"]
+     :hashes {"src/app/core.clj" {:pre "PRE-CORE-DIGEST" :post "POST-CORE-DIGEST"}
+              "src/app/util.clj" {:pre "PRE-UTIL-DIGEST" :post "POST-UTIL-DIGEST"}}
+     :next_call {:tool "admit_clojure_patch" :blocked_by "source-hash-mismatch"}}
+    "files-and-hashes"))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-value-less-shape-renders-the-characters-structured-content-spells
+  ;; The second half of Sol's receipt: :contains-empty false, :contains-map
+  ;; false, :contains-nil false. structuredContent spells `[]`, `{}`, `null`
+  ;; and `""`; a text that spells none of them is a strict subset of it.
+  (assert-text-names-every-structured-leaf!
+    {:ok false
+     :operation :admit-patch-refused
+     :mode "preview"
+     :error-type :verification-incomplete
+     :error "the analyzer ran and the gate could not read its answer"
+     :elapsed_ms 1.0
+     :source-unchanged true
+     :detectors_not_run []
+     :protected_node_drift {}
+     :verification_reasons []
+     :lock_scope nil
+     :focused_report_path ""
+     :next_call {:tool "admit_clojure_patch" :blocked_by "verification-incomplete"}}
+    "value-less-shapes"))
+
+;; @spec MCP-OP-ADMIT-134
+(deftest a-live-refusal-text-names-every-leaf-of-its-own-receipt
+  ;; The same claim through the production path rather than a fixture: a real
+  ;; commit refusal, whose receipt carries whatever the gate actually put in
+  ;; it -- not whatever this test remembered to write down.
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [truncated-lint
+            (fn [_ _]
+              {:ran false :ok false :status :unverified
+               :detector "clj-kondo" :error-type :analyzer-output-truncated
+               :cap 2000 :observed-bytes 5000
+               :error "the analyzer ran and the gate could not read its answer"})
+            result (admit/execute-request!
+                     (stub-config root {:admit-lint-runner truncated-lint})
+                     {:patch clean-multi-file-patch :mode "commit"
+                      :verify "focused"})]
+        (is (false? (:ok result)))
+        (assert-text-names-every-structured-leaf! result "live-commit-refusal"))
+      (finally (delete-tree! root)))))
