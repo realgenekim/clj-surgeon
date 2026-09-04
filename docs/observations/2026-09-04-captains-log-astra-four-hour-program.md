@@ -27,3 +27,13 @@ Own-work Surgeon dogfood: batched outlines of two oracle/generator files took 90
 Oracle hand-drive: canonical 21-file migration passed all six checks, including 100 namespace loads, 21 tests/147 assertions, and 106 preserved regions. An unchanged clone failed file-set/form-equality/residue while its same 147 assertions still passed. Thus the structural acceptance catches task non-completion that the behavioral suite alone does not. Negative receipt: /var/tmp/forge/astra-program/oracle-check/negative.log.
 
 Astra client handshake completed: actual session model gpt-6-astra, watcher bound to announced session 01a06e7e-c302-7d72-a11d-4a4aec838c44, no source changes. This was an untimed pwd-only smoke, excluded from performance comparisons. Sol same-client smoke follows.
+
+## Astra — 2026-09-04T22:32:50.627663+00:00 — Frozen comparison; actual capacity is the gate
+
+Both requested models were independently observed in successful untimed client smoke sessions. The common-client fanout protocol and adapter were frozen at 22:26:34Z before any measured migration model arm (FROZEN.json). A dedicated detached server-source worktree now pins 5b531d3b; changing journal HEAD cannot silently change server identity.
+
+Warm alias_migration hand-drive changed 63 sites in 21 files, observed HTTP call wall 1.309879 seconds (server 1.22098 seconds), and the independent six-part oracle passed. Its built-in kondo/focused-test fields said not-requested; external acceptance supplies those separate completion checks. This is not a comparative model-task result.
+
+The 22:16–22:36 quiet window did not produce reliably quiet capacity: load briefly fell below 8 then rose above 13 as multiple tmp-leak test JVMs appeared. No timed model migration arm was launched above threshold. Fable has been asked to identify their ownership, stop new competing suites, and prioritize the live discovery experiment plus essential safety fixes. Existing work is preserved.
+
+Ethnographic correction: the apparent native apply_patch samples in the parent session were real mixed wrappers that created request/helper files before issuing HTTP MCP calls. They are not false-positive native-patch classification and their outer durations are not patch-kernel latencies. Service telemetry correctly captured two inspect calls; generic script-carried RPCs cannot safely be inferred as first-class tool calls from filename matching. Keep service and session meters separate and correlate rather than double count.
