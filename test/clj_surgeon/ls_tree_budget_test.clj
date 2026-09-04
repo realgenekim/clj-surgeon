@@ -15,6 +15,7 @@
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clj-surgeon.ls-tree-snapshot :as snapshot]
+   [clj-surgeon.measured :as measured]
    [clj-surgeon.result-budget :as budget]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -75,6 +76,36 @@
       (when (and (map? last-entry) (nil? (:file last-entry)))
         last-entry))))
 
+(defn- ceiling-receipt
+  "The CEILING half of a trailing receipt — `:result_ceiling` and the
+   `:next_call` that carries a cursor — or nil when the result withheld
+   nothing.
+
+   *Amendment, 2026-09-04 (MCP-OP-MEM-003).* The row this reads used to say a
+   complete result carries NO receipt, and the witnesses asserted `(nil?
+   (receipt r))`. `MCP-OP-MEM-005` requires the ls-tree receipt to publish the
+   scan's own cost UNCONDITIONALLY, which a complete result must therefore also
+   carry, so the two rows could not both hold as written. The subject is
+   narrowed to what the row was always about: **a complete result carries no
+   HASHED receipt** — nothing that says something was withheld. The unhashed
+   `:resources` block rides beside it, and `hashed` below is what every
+   byte-identity assertion in this namespace compares."
+  [result]
+  (let [r (receipt result)]
+    (when (or (get-in r [:receipt :result_ceiling])
+              (:next_call r))
+      r)))
+
+(defn- hashed
+  "The HASHED CHANNEL of a result: the subject of every determinism, parity and
+   byte-identity row here. A measured field — `scan_ms` and any timing after it
+   — is published beside the result and never inside it, so it is dropped
+   before the comparison. See `clj-surgeon.measured`."
+  [result]
+  (if (string? result)
+    (measured/strip-measured-lines result)
+    (measured/hashed-channel result)))
+
 (def ^:private fixture-count 12)
 
 (defmacro ^:private with-project
@@ -111,9 +142,11 @@
           unbounded (core/run-ls-tree {:dir dir :format :edn})]
       (is (= fixture-count (count (entry-files at)))
           "every candidate is encoded when the ceiling is exactly the count")
-      (is (nil? (receipt at))
-          "a complete result carries no ceiling receipt")
-      (is (= unbounded at)
+      (is (nil? (ceiling-receipt at))
+          "a complete result carries no HASHED receipt: nothing was withheld,
+           so nothing says so. Its unhashed :resources block still meters the
+           scan — MCP-OP-MEM-005 — and no determinism row can see it.")
+      (is (= (hashed unbounded) (hashed at))
           "at the ceiling the bounded result is identical to the unbounded one"))))
 
 ;; @spec MCP-OP-MEM-003
@@ -195,7 +228,7 @@
       (is (= 5 (count (entry-files page-1))))
       (is (= 5 (count (entry-files page-2))))
       (is (= 2 (count (entry-files page-3))))
-      (is (nil? (receipt page-3)) "the last page is complete")
+      (is (nil? (ceiling-receipt page-3)) "the last page is complete")
       (testing "the pages concatenate to the whole result, in the same order"
         (is (= (entry-files whole)
                (into (into (entry-files page-1) (entry-files page-2))
@@ -249,7 +282,8 @@
   (testing "single project"
     (with-project [dir fixture-count "ls-tree-budget-diff-single"]
       (is (= (batch-result dir :text) (core/run-ls-tree {:dir dir})))
-      (is (= (batch-result dir :edn) (core/run-ls-tree {:dir dir :format :edn})))))
+      (is (= (hashed (batch-result dir :edn))
+             (hashed (core/run-ls-tree {:dir dir :format :edn}))))))
   (testing "multiple projects — the per-project headers carry counts that are
             only known after that project's last file is encoded"
     (let [parent (str (fs/create-temp-dir {:prefix "ls-tree-budget-diff-multi"}))]
@@ -260,8 +294,8 @@
             (spit (str p "/deps.edn") "{:paths [\"src\"]}")
             (dotimes [i n] (spit (format "%s/mod%03d.clj" src i) (tiny-source i)))))
         (is (= (batch-result parent :text) (core/run-ls-tree {:dir parent})))
-        (is (= (batch-result parent :edn)
-               (core/run-ls-tree {:dir parent :format :edn})))
+        (is (= (hashed (batch-result parent :edn))
+               (hashed (core/run-ls-tree {:dir parent :format :edn}))))
         (finally (fs/delete-tree parent))))))
 
 ;; @spec MCP-OP-MEM-003
@@ -273,7 +307,8 @@
       (spit (str dir "/src/good.clj") "(ns good)\n(defn g [] :ok)\n")
       (spit (str dir "/src/bad.clj") "(defn unclosed [")
       (is (= (batch-result dir :text) (core/run-ls-tree {:dir dir})))
-      (is (= (batch-result dir :edn) (core/run-ls-tree {:dir dir :format :edn})))
+      (is (= (hashed (batch-result dir :edn))
+             (hashed (core/run-ls-tree {:dir dir :format :edn}))))
       (finally (fs/delete-tree dir)))))
 
 ;; ============================================================
@@ -609,7 +644,7 @@
       (testing "exactly R records is a COMPLETE result, with no receipt"
         (let [r (core/run-ls-tree {:dir at :format :edn})]
           (is (= 1000 (count (entry-files r))))
-          (is (nil? (receipt r))
+          (is (nil? (ceiling-receipt r))
               "at the ceiling the caller is told nothing, because nothing was
                withheld")))
       (testing "R+1 candidates yield R records and a typed continuation"
@@ -629,7 +664,7 @@
                            {:dir over :format :edn
                             :cursor (get-in (receipt r) [:next_call :cursor])})]
               (is (= 1 (count (entry-files page-2))))
-              (is (nil? (receipt page-2)) "the last page is complete")))))
+              (is (nil? (ceiling-receipt page-2)) "the last page is complete")))))
       (testing "R+1 with :complete refuses, naming the shipped cap"
         (let [r (core/run-ls-tree {:dir over :format :edn :complete true})]
           (is (= :result-ceiling-exceeded (:error-type r)))
@@ -778,8 +813,16 @@
       (is (= a b)
           "two scans of an unchanged tree render BYTE-IDENTICAL text, cursor
            included; a random cursor-id differed in exactly this one line")
-      (is (= a-edn b-edn)
-          "and the EDN encoding likewise, receipt and next_call included")
+      (is (= (hashed a-edn) (hashed b-edn))
+          "and the EDN encoding likewise, receipt and next_call included —
+           on the HASHED CHANNEL, which is where the cursor, the manifest
+           digest and every deterministic resource fact live. The measured
+           scan cost beside them is expected to differ between two scans and
+           is exactly what may not be compared.")
+      (is (not= a-edn b-edn)
+          "and the meter is NOT dark: the unprojected results DO differ, so
+           this witness is comparing a projection and not an equality that
+           holds for the trivial reason")
       (is (= 1 (count (snapshot-ids dir)))
           "an unchanged tree pins ONE snapshot however often it is scanned;
            four identical scans used to leave four snapshots")
