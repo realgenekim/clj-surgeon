@@ -1,0 +1,378 @@
+(ns ^{:lane :fast} clj-surgeon.ns-isolation-test
+  "The six runtime purity witnesses on one per-namespace snapshot fixture --
+   TEST-ISO-002, 003, 004, 005, 007, 010.
+
+   EVERY WITNESS HERE IS REACHABLE WITHOUT COMMITTING THE VIOLATION IT
+   DETECTS. That is the whole reason `clj-surgeon.ns-isolation` splits the
+   probe from the fold: a witness for `a child process leaked` that had to
+   spawn a child process would be a battery test, would cost a cold JVM, and
+   would put the exact defect it hunts INTO the fast lane. Instead the probe's
+   output shape is a plain map, and each witness plants the `after` map a real
+   violation would have produced and asserts the exact typed refusal.
+
+   THAT IS NOT THE WHOLE PROOF, AND THIS DOCSTRING SAYS SO RATHER THAN LETTING
+   A READER ASSUME IT. A planted map proves the FOLD. It cannot prove the
+   PROBE sees what it claims to see -- `own-listeners` could return an empty
+   map forever and every witness below would still be green. The probe is
+   proved two other ways: `the-fixture-catches-a-real-write-...` drives a real
+   file through the real probe end to end, and the round-four record carries
+   the planted-violation runs on an archive copy of the tree, where a
+   throwaway namespace really does spawn, really does bind, and really does
+   leak, and the lane really does refuse. A witness that can only go red at
+   authoring time is not a ratchet (the marker-audit lesson)."
+  (:require
+   [clj-surgeon.ns-isolation :as iso]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
+
+(def ^:private subject 'clj-surgeon.planted-test)
+
+(defn- empty-snapshot
+  "A snapshot in which nothing is happening: every probe is empty and the
+   clock has not moved. Each witness below perturbs exactly ONE key, so a
+   failure names the resource that was perturbed and never a neighbour."
+  []
+  {:instant-ns 0
+   :tmp-entries {}
+   :target-entries {}
+   :worktree {}
+   :listeners {}
+   :var-roots {}
+   :globals {}
+   :threads {}
+   :processes {}})
+
+(defn- messages [vs] (mapv iso/message vs))
+
+(defn- of-intent [vs id] (filterv #(= id (:intent %)) vs))
+
+;; ---------------------------------------------------------------------------
+;; TEST-ISO-002 -- process spawn
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-002
+(deftest a-child-process-fails-the-namespace-by-pid-and-command-line
+  (let [before (empty-snapshot)
+        after (assoc (empty-snapshot) :processes
+                     {4242 "/usr/bin/env bb test/run_all.clj"})
+        vs (iso/violations subject before after)
+        proc (of-intent vs "TEST-ISO-002")]
+    (testing "the spawn is refused, once, naming the namespace"
+      (is (= 1 (count proc)))
+      (is (= subject (:namespace (first proc))))
+      (is (= "process spawn" (:resource (first proc)))))
+    (testing "the refusal carries the PID and the COMMAND LINE, not just a count"
+      (let [m (iso/message (first proc))]
+        (is (str/includes? m "4242"))
+        (is (str/includes? m "bb test/run_all.clj")
+            (str "the refusal must name what was spawned, or the reader has to "
+                 "go find it themselves: " m))))
+    (testing "a child that was ALREADY running is not attributed to this namespace"
+      (let [pre (assoc (empty-snapshot) :processes {4242 "an inherited child"})]
+        (is (empty? (of-intent (iso/violations subject pre after) "TEST-ISO-002")))))))
+
+;; ---------------------------------------------------------------------------
+;; TEST-ISO-003 -- writes
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-003
+(deftest a-write-outside-the-namespaces-own-tmp-subdir-fails-with-the-path
+  (let [own (iso/namespace-tmp-dir-name subject)
+        before (empty-snapshot)]
+    (testing "the namespace's OWN subdir appearing is not a violation"
+      (is (empty? (of-intent (iso/violations subject before
+                                             (assoc (empty-snapshot) :tmp-entries {own 1}))
+                             "TEST-ISO-003"))))
+    (testing "any other new top-level temp entry is refused, by name"
+      (let [vs (of-intent (iso/violations subject before
+                                          (assoc (empty-snapshot) :tmp-entries
+                                                 {"scratch-9f2" 1}))
+                          "TEST-ISO-003")]
+        (is (= 1 (count vs)))
+        (is (= "temp root" (:resource (first vs))))
+        (is (str/includes? (iso/message (first vs)) "scratch-9f2"))
+        (is (str/includes? (iso/message (first vs)) own)
+            "the refusal must name the subdir the namespace was allowed to use")))
+    (testing "a write into target/ is refused -- it is shared by every lane on this checkout"
+      (let [vs (of-intent (iso/violations subject before
+                                          (assoc (empty-snapshot) :target-entries
+                                                 {"census-receipt.edn" 1}))
+                          "TEST-ISO-003")]
+        (is (= 1 (count vs)))
+        (is (= "target/" (:resource (first vs))))
+        (is (str/includes? (iso/message (first vs)) "target/census-receipt.edn"))))
+    (testing "the working tree is watched in all three directions"
+      (let [base (assoc (empty-snapshot) :worktree {"src/a.clj" [10 1] "src/b.clj" [10 1]})
+            after (assoc (empty-snapshot) :worktree {"src/a.clj" [99 2] "src/c.clj" [1 1]})
+            ms (messages (of-intent (iso/violations subject base after) "TEST-ISO-003"))]
+        (is (= 3 (count ms)) (pr-str ms))
+        (is (some #(str/includes? % "src/c.clj was created") ms))
+        (is (some #(str/includes? % "src/b.clj was deleted") ms))
+        (is (some #(str/includes? % "src/a.clj was modified") ms))))))
+
+;; @spec TEST-ISO-003
+(deftest the-fixture-catches-a-real-write-outside-the-namespaces-own-subdir
+  ;; THE PROBE, END TO END, WITH NO PLANTED MAP. This is the witness that the
+  ;; observation half is not a stub: a real file is created under the real run
+  ;; temp root through the real `probe`, and the real fold names its real path.
+  ;; It is fast-lane-safe because a file is not a child process, a socket or a
+  ;; thread -- the other five probes cannot be proved this cheaply, which is
+  ;; why the archive-copy planted runs exist.
+  (let [repo (System/getProperty "user.dir")
+        own (iso/namespace-tmp-dir subject)
+        stray (io/file (iso/tmp-root) "nsiso-stray-probe-witness")]
+    (try
+      (let [before (iso/probe repo)
+            _ (spit (io/file own "inside.txt") "allowed")
+            _ (.mkdirs stray)
+            after (iso/probe-after repo)
+            vs (of-intent (iso/violations subject before after) "TEST-ISO-003")]
+        (testing "the stray directory is named"
+          (is (some #(str/includes? % "nsiso-stray-probe-witness") (messages vs))
+              (str "the real probe did not see a real write under "
+                   (.getPath (iso/tmp-root)) "; observed violations: "
+                   (pr-str (messages vs)))))
+        (testing "the namespace's own subdir is NOT named"
+          (is (not-any? #(str/includes? % (str "temp root: " (iso/namespace-tmp-dir-name subject) " "))
+                        (messages vs)))))
+      (finally
+        (doseq [^java.io.File f [(io/file own "inside.txt") stray own]]
+          (when (.exists f) (.delete f)))))))
+
+;; ---------------------------------------------------------------------------
+;; TEST-ISO-004 -- ports and listeners
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-004
+(deftest a-leaked-listener-fails-naming-the-port-and-whether-it-was-allocated
+  (let [before (empty-snapshot)
+        after (assoc (empty-snapshot) :listeners {77771 8173})]
+    (testing "a listener with no ledger entry is refused as a FIXED port"
+      (let [vs (of-intent (iso/violations subject before after {}) "TEST-ISO-004")
+            m (iso/message (first vs))]
+        (is (= 1 (count vs)))
+        (is (= "listening socket" (:resource (first vs))))
+        (is (str/includes? m "8173"))
+        (is (str/includes? m "NOT allocated through the port-0 allocator")
+            (str "the refusal must distinguish a leaked allocation from a fixed "
+                 "port literal -- they have different remedies: " m))))
+    (testing "a listener the allocator HANDED OUT is refused as a leak with an owner"
+      (let [vs (of-intent (iso/violations subject before after
+                                          {:ledger {[subject 1] 8173}})
+                          "TEST-ISO-004")]
+        (is (str/includes? (iso/message (first vs))
+                           "allocated through the port-0 allocator and never closed"))))
+    (testing "a listener that was already open is not attributed to this namespace"
+      (is (empty? (of-intent (iso/violations subject after after) "TEST-ISO-004"))))))
+
+;; @spec TEST-ISO-004
+(deftest the-port-allocator-hands-out-ephemeral-ports-and-records-every-one
+  (let [p (iso/allocate-port! subject)]
+    (testing "the port is real and ephemeral, never a literal"
+      (is (pos? p))
+      (is (> p 1024) (str "allocated " p ", which is a privileged port")))
+    (testing "the allocation is in the ledger, so a later leak has an owner"
+      (is (contains? (set (vals @iso/allocated-ports)) p)))))
+
+;; ---------------------------------------------------------------------------
+;; TEST-ISO-005 -- global mutation leaks
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-005
+(deftest a-leaked-with-redefs-fails-naming-the-var
+  (let [before (assoc (empty-snapshot) :var-roots {'clj-surgeon.edit/apply-change 111})
+        after (assoc (empty-snapshot) :var-roots {'clj-surgeon.edit/apply-change 222})
+        vs (of-intent (iso/violations subject before after) "TEST-ISO-005")]
+    (is (= 1 (count vs)))
+    (is (= "var root" (:resource (first vs))))
+    (is (str/includes? (iso/message (first vs)) "#'clj-surgeon.edit/apply-change"))
+    (is (str/includes? (iso/message (first vs)) "with-redefs or alter-var-root leaked"))))
+
+;; @spec TEST-ISO-005
+(deftest a-mutated-global-atom-fails-unless-it-is-declared-mutable-with-a-reason
+  (let [before (assoc (empty-snapshot) :globals {'clj-surgeon.cache/entries 1})
+        after (assoc (empty-snapshot) :globals {'clj-surgeon.cache/entries 2})]
+    (testing "an undeclared global that moved is refused, naming the remedy"
+      (let [vs (of-intent (iso/violations subject before after) "TEST-ISO-005")]
+        (is (= 1 (count vs)))
+        (is (= "global container" (:resource (first vs))))
+        (is (str/includes? (iso/message (first vs)) "mutable-global-allowlist"))))
+    (testing "a DECLARED mutable container is allowed"
+      (is (empty? (of-intent (iso/violations subject before after
+                                             {:allowlist '#{clj-surgeon.cache/entries}})
+                             "TEST-ISO-005"))))))
+
+;; @spec TEST-ISO-005
+(deftest the-allowlist-cannot-exempt-a-leaked-var-root
+  ;; THE EXEMPTION HAS A CEILING, AND THE CEILING IS TESTED. An allowlist that
+  ;; can cover every class it is adjacent to is not an allowlist, it is an off
+  ;; switch -- and the first person under deadline will use it as one. A
+  ;; leaked var root has no legitimate form, so naming it here must not help.
+  (let [before (assoc (empty-snapshot) :var-roots {'clj-surgeon.edit/apply-change 111})
+        after (assoc (empty-snapshot) :var-roots {'clj-surgeon.edit/apply-change 222})
+        vs (of-intent (iso/violations subject before after
+                                      {:allowlist '#{clj-surgeon.edit/apply-change}})
+                      "TEST-ISO-005")]
+    (is (= 1 (count vs))
+        "naming a var in the mutable-global allowlist must NOT exempt its root being swapped")))
+
+;; ---------------------------------------------------------------------------
+;; TEST-ISO-007 -- time budgets
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-007
+(deftest a-namespace-over-its-budget-fails-with-its-wall
+  (let [ms->ns (fn [ms] (* ms 1000000))
+        before (empty-snapshot)
+        after (assoc (empty-snapshot) :instant-ns (ms->ns 9000))]
+    (testing "over the default budget, refused with the measured wall AND the budget"
+      (let [vs (of-intent (iso/violations subject before after) "TEST-ISO-007")
+            m (iso/message (first vs))]
+        (is (= 1 (count vs)))
+        (is (str/includes? m "9000 ms"))
+        (is (str/includes? m (str iso/default-namespace-budget-ms " ms")))
+        (is (str/includes? m "namespace-budget-overrides")
+            (str "a budget refusal must print the remedy or it reads as "
+                 "`your test is slow, good luck`: " m))))
+    (testing "EXACTLY AT the budget passes and one ms past it refuses"
+      ;; The ceiling witness shape: at the limit succeeds, one unit past it
+      ;; refuses. An assertion on a number far from the boundary cannot tell a
+      ;; correct `>` from an off-by-one `>=`.
+      (let [at (assoc (empty-snapshot) :instant-ns (ms->ns iso/default-namespace-budget-ms))
+            past (assoc (empty-snapshot) :instant-ns (ms->ns (inc iso/default-namespace-budget-ms)))]
+        (is (empty? (of-intent (iso/violations subject before at) "TEST-ISO-007")))
+        (is (= 1 (count (of-intent (iso/violations subject before past) "TEST-ISO-007"))))))
+    (testing "a declared override raises the ceiling for that namespace only"
+      (is (empty? (of-intent (iso/violations subject before after
+                                             {:overrides {subject 20000}})
+                             "TEST-ISO-007")))
+      (is (seq (of-intent (iso/violations 'clj-surgeon.other-test before after
+                                          {:overrides {subject 20000}})
+                          "TEST-ISO-007"))))))
+
+;; @spec TEST-ISO-007
+(deftest the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays
+  (testing "the fast lane's ceiling is the 60 s the partition exists to buy"
+    (is (= 60000 (get iso/lane-budget-ms :fast))))
+  (testing "at the ceiling passes; past it refuses, naming the lane and both numbers"
+    (is (nil? (iso/lane-budget-violation :fast 60000)))
+    (let [m (iso/message (iso/lane-budget-violation :fast 60001))]
+      (is (str/includes? m "fast lane took 60001 ms"))
+      (is (str/includes? m "60000 ms"))))
+  (testing "an unbudgeted lane is not silently unbounded -- it is simply not this witness's subject"
+    (is (nil? (iso/lane-budget-violation :no-such-lane 999999999)))))
+
+;; ---------------------------------------------------------------------------
+;; TEST-ISO-010 -- thread and executor leaks
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-010
+(deftest a-leaked-non-daemon-thread-fails-naming-it
+  (let [before (empty-snapshot)
+        after (assoc (empty-snapshot) :threads {91 "clj-surgeon-census-pool-3"})
+        vs (of-intent (iso/violations subject before after) "TEST-ISO-010")
+        m (iso/message (first vs))]
+    (is (= 1 (count vs)))
+    (is (= "non-daemon thread" (:resource (first vs))))
+    (is (str/includes? m "clj-surgeon-census-pool-3"))
+    (is (str/includes? m "keeps the JVM from exiting")
+        (str "the refusal must say why a leaked non-daemon thread matters, "
+             "because 0 failures plus a hung runner reads as a CI fault: " m))))
+
+;; @spec TEST-ISO-010
+(deftest the-thread-probe-sees-this-jvms-real-threads
+  ;; The probe half, cheaply: this suite is itself running on a live
+  ;; non-daemon thread, so an empty result would be a stubbed probe.
+  (let [t (iso/live-non-daemon-threads)]
+    (is (seq t) "live-non-daemon-threads returned nothing while this test was running on one")
+    (is (every? string? (vals t)))))
+
+;; ---------------------------------------------------------------------------
+;; The receipt shape, across all six
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-002
+;; @spec TEST-ISO-003
+;; @spec TEST-ISO-004
+;; @spec TEST-ISO-005
+;; @spec TEST-ISO-007
+;; @spec TEST-ISO-010
+(deftest every-violation-names-its-intent-its-namespace-and-its-resource
+  ;; Delivery invariant 20: a receipt that does not name its subject and its
+  ;; evidence source is `:unverified`, never a finding. Six intents fire at
+  ;; once here, so the shape is checked on the whole family rather than on the
+  ;; one that happened to be written last.
+  (let [before (empty-snapshot)
+        after {:instant-ns (* 60000 1000000)
+               :tmp-entries {"stray" 1}
+               :target-entries {"out" 1}
+               :worktree {"README.md" [1 1]}
+               :listeners {5 9999}
+               :var-roots {}
+               :globals {}
+               :threads {7 "leaked"}
+               :processes {9 "/bin/sh -c make"}}
+        vs (iso/violations subject before after)]
+    (testing "all five detectable-from-this-map intents fired"
+      (is (= #{"TEST-ISO-002" "TEST-ISO-003" "TEST-ISO-004" "TEST-ISO-007" "TEST-ISO-010"}
+             (set (map :intent vs)))))
+    (doseq [v vs]
+      (is (= subject (:namespace v)) (pr-str v))
+      (is (string? (:resource v)) (pr-str v))
+      (is (str/starts-with? (iso/message v) (:intent v)) (iso/message v))
+      (is (str/includes? (iso/message v) (str subject)) (iso/message v)))))
+
+;; @spec TEST-ISO-002
+;; @spec TEST-ISO-003
+;; @spec TEST-ISO-004
+;; @spec TEST-ISO-005
+;; @spec TEST-ISO-007
+;; @spec TEST-ISO-010
+(deftest a-clean-namespace-produces-no-violations-at-all
+  ;; The other half of the ceiling: a witness that fires on everything is a
+  ;; witness nobody keeps. A real snapshot pair taken back to back around no
+  ;; work at all must be silent -- including its OWN probing, which is the
+  ;; ordering guarantee `probe`/`probe-after` exist to give.
+  (let [repo (System/getProperty "user.dir")
+        before (iso/probe repo)
+        after (iso/probe-after repo)
+        vs (iso/violations subject before after)]
+    (is (empty? vs)
+        (str "the fixture accuses a namespace that did nothing; the probe is "
+             "observing its own work: " (pr-str (messages vs))))))
+
+;; ---------------------------------------------------------------------------
+;; The fixture's REACH, pinned
+;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-002
+;; @spec TEST-ISO-003
+;; @spec TEST-ISO-004
+;; @spec TEST-ISO-005
+;; @spec TEST-ISO-007
+;; @spec TEST-ISO-010
+(deftest each-lane-is-held-only-to-the-rules-that-lane-can-keep
+  ;; What is NOT checked has to be visible without inferring it from silence.
+  ;; The battery lane exists to launch cold child JVMs; holding it to
+  ;; TEST-ISO-002 would make the witness fire on the lane's definition, and a
+  ;; witness that fires on correct behaviour is one somebody deletes.
+  (testing "the fast lane is held to all six -- they ARE the fast lane's rules"
+    (is (= #{"TEST-ISO-002" "TEST-ISO-003" "TEST-ISO-004" "TEST-ISO-005"
+             "TEST-ISO-007" "TEST-ISO-010"}
+           (get iso/enforced-intents-by-lane :fast))))
+  (testing "the integration lane keeps no-child-process, the budget and thread leaks"
+    (is (= #{"TEST-ISO-002" "TEST-ISO-007" "TEST-ISO-010"}
+           (get iso/enforced-intents-by-lane :integration))))
+  (testing "the battery lane keeps only the budget"
+    (is (= #{"TEST-ISO-007"} (get iso/enforced-intents-by-lane :battery))))
+  (testing "filtering DROPS the rule but never invents one"
+    (let [vs [{:intent "TEST-ISO-003" :namespace subject :resource "temp root" :detail "x"}
+              {:intent "TEST-ISO-007" :namespace subject :resource "time budget" :detail "y"}]]
+      (is (= 1 (count (iso/enforced :integration vs))))
+      (is (= "TEST-ISO-007" (:intent (first (iso/enforced :integration vs)))))
+      (is (= 2 (count (iso/enforced :fast vs))))
+      (is (empty? (iso/enforced :no-such-lane vs))
+          "an unknown lane must enforce NOTHING rather than everything")))
+  (testing "every lane in the manifest's lane list has a declared reach"
+    (is (= #{:fast :integration :battery} (set (keys iso/enforced-intents-by-lane))))))

@@ -18,8 +18,11 @@ required), `[x]` implemented (implementation and test witnesses required),
 `[D]` deferred.
 
 Round two builds 001, 006 and 009 plus the two race fixes round one measured.
-002-005, 007, 008, 010-012 are FILED and are round three's work; they are
-listed here with `[ ]` so the family is one document rather than a memory.
+Round FOUR builds the six RUNTIME purity witnesses -- 002, 003, 004, 005, 007
+and 010 -- on ONE per-namespace snapshot fixture
+(`clj-surgeon.ns-isolation`, driven by `clj-surgeon.mcp-test-runner`).
+008, 011 and 012 remain FILED and are listed with `[ ]` so the family is one
+document rather than a memory.
 
 ## Round two -- implemented
 
@@ -151,25 +154,106 @@ listed here with `[ ]` so the family is one document rather than a memory.
   *Witness:* `clj-surgeon.mcp-process-test` under
   `dev/experiments/contention_witness.sh`, 3/3 all-green at load 22-31.
 
-## Round three -- filed
+## Round four -- the six runtime purity witnesses, implemented
 
-- [ ] **TEST-ISO-002**: A fast-lane test shall spawn no process, witnessed at
-  runtime by a `ProcessHandle.current().descendants()` diff around each
-  namespace. (A source scan corroborates today and is explicitly NOT the
-  proof: it reads a spelling and a helper in another namespace defeats it.)
-- [ ] **TEST-ISO-003**: A fast-lane test shall write only inside its own
-  tmpdir subtree, witnessed by a diff of the temp root, `target/`, and
-  `git status --porcelain` around each namespace, failing with the path.
-- [ ] **TEST-ISO-004**: No fixed ports; every server start through a port-0
-  allocator with a ledger, witnessed by a listener diff per namespace.
-- [ ] **TEST-ISO-005**: No global mutation leaks; every project var root and
-  known global atom snapshotted around each namespace, failing by name.
-- [ ] **TEST-ISO-007**: A per-namespace and per-lane time budget, the timing
-  reporter failing a namespace over budget with its wall.
+ONE mechanism carries all six: `clj-surgeon.ns-isolation/probe` takes a
+snapshot of every watched resource, `clj-surgeon.mcp-test-runner` runs each
+namespace between a pair of them, and `clj-surgeon.ns-isolation/violations` --
+a PURE function of (namespace, before, after, opts) -- turns the difference
+into typed refusals. The probe emits FACTS and the fold emits VERDICTS, which
+is what makes every refusal below reachable from a fast-lane witness without
+committing the violation it detects.
+
+Which lane is held to which rule is DATA, in
+`clj-surgeon.ns-isolation/enforced-intents-by-lane`, and pinned by
+`.../each-lane-is-held-only-to-the-rules-that-lane-can-keep`: the fast lane is
+held to all six; the integration lane to 002, 007 and 010 (binding an
+ephemeral port and writing a per-test workspace are what put a namespace in
+it); the battery lane to 007 alone (it exists to launch cold child JVMs).
+
+- [x] **TEST-ISO-002**: A fast-lane test shall spawn no process. Every
+  namespace shall run between a `ProcessHandle.current().descendants()` diff,
+  and a descendant alive after a namespace that did not exist before it shall
+  be a typed refusal naming the namespace, the PID and the CHILD'S COMMAND
+  LINE. The source scan corroborates and is explicitly NOT the proof: it reads
+  a spelling, and a helper in another namespace defeats it.
+  *Witness:* `clj-surgeon.ns-isolation-test/a-child-process-fails-the-namespace-by-pid-and-command-line`,
+  `.../every-violation-names-its-intent-its-namespace-and-its-resource`.
+
+- [x] **TEST-ISO-003**: A fast-lane test shall write only inside its own
+  subdirectory of `java.io.tmpdir`, witnessed by a diff of the run's temp
+  root, of `target/`, and of the repository working tree around each
+  namespace, failing with the PATH. A new top-level temp entry shall be
+  allowed only when it is the running namespace's own allocated subdir
+  (`clj-surgeon.ns-isolation/namespace-tmp-dir-name`). The working-tree check
+  shall be performed IN-PROCESS rather than by `git status`, because a witness
+  that spawns a child to prove no child was spawned is blind to its own
+  subject.
+  *Witness:* `clj-surgeon.ns-isolation-test/a-write-outside-the-namespaces-own-tmp-subdir-fails-with-the-path`,
+  `.../the-fixture-catches-a-real-write-outside-the-namespaces-own-subdir`
+  (the real probe, end to end, with no planted map).
+
+- [x] **TEST-ISO-004**: No fixed ports. Every server start shall go through
+  the port-0 allocator (`clj-surgeon.ns-isolation/allocate-port!`), which
+  records every allocation in a ledger, and a socket THIS JVM is still
+  listening on after a namespace that it was not listening on before shall be
+  a typed refusal naming the PORT and saying which of the two failures it is:
+  an allocation that leaked (it is in the ledger) or a fixed port literal (it
+  is not). The listener scan shall be restricted to sockets this process owns,
+  read from `/proc/self/fd`, so that another seat's listener on a shared box
+  can never fail this lane.
+  *Witness:* `clj-surgeon.ns-isolation-test/a-leaked-listener-fails-naming-the-port-and-whether-it-was-allocated`,
+  `.../the-port-allocator-hands-out-ephemeral-ports-and-records-every-one`.
+
+- [x] **TEST-ISO-005**: No global mutation leaks. Every var interned in a
+  loaded `clj-surgeon.*` namespace shall have its ROOT OBJECT IDENTITY
+  snapshotted around each namespace, and a root that changed shall fail naming
+  the var -- that is a `with-redefs` or `alter-var-root` that escaped its
+  scope, and it shall NOT be exemptible by any allowlist. Separately, the
+  VALUE held by an atom, ref or volatile a var's root IS shall be snapshotted,
+  and a change shall fail naming the var unless it is declared in
+  `clj-surgeon.ns-isolation/mutable-global-allowlist` WITH its reason. Roots
+  shall be read with `getRawRoot` and never `deref`, so that observing a
+  `delay` or a `promise` cannot realise it.
+  *Witness:* `clj-surgeon.ns-isolation-test/a-leaked-with-redefs-fails-naming-the-var`,
+  `.../a-mutated-global-atom-fails-unless-it-is-declared-mutable-with-a-reason`,
+  `.../the-allowlist-cannot-exempt-a-leaked-var-root`.
+
+- [x] **TEST-ISO-007**: A time budget per namespace AND per lane. A namespace
+  over its budget shall fail with its measured WALL, its budget, and the
+  remedy; a namespace may raise its own ceiling only through a declared entry
+  in `clj-surgeon.ns-isolation/namespace-budget-overrides`. The LANE total
+  shall have its own budget -- the fast lane's is the 60 s the partition
+  exists to buy -- because 38 namespaces each inside an 8 s ceiling can still
+  sum to five minutes, and the sum is the number the fleet pays.
+  *Witness:* `clj-surgeon.ns-isolation-test/a-namespace-over-its-budget-fails-with-its-wall`
+  (at the ceiling passes, one ms past it refuses),
+  `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
+
+- [x] **TEST-ISO-010**: No thread or executor leaks. The live NON-DAEMON
+  thread set shall be snapshotted around each namespace and a thread alive
+  afterwards that was not alive before shall fail naming its id and its name.
+  Non-daemon specifically: a leaked non-daemon thread is the one that keeps
+  the JVM from exiting, which is how a suite reporting 0 failures still hangs
+  a runner until its timeout.
+  *Witness:* `clj-surgeon.ns-isolation-test/a-leaked-non-daemon-thread-fails-naming-it`,
+  `.../the-thread-probe-sees-this-jvms-real-threads`.
+
+**The family's own ceiling, witnessed once for all six** (an id of its own was
+deliberately NOT minted: the property belongs to every rule above, and a
+separate id would let one of them be repaired while the others quietly lost
+it). The fixture shall never accuse a namespace that did nothing -- a snapshot
+pair taken back to back around no work at all produces zero violations,
+including from the fixture's OWN probing, which is why the process set is
+captured LAST on the way in and FIRST on the way out. A witness that fires on
+correct behaviour is one somebody deletes.
+*Witness:* `clj-surgeon.ns-isolation-test/a-clean-namespace-produces-no-violations-at-all`,
+`.../each-lane-is-held-only-to-the-rules-that-lane-can-keep`.
+
+## Round three -- still filed
+
 - [ ] **TEST-ISO-008**: Order independence -- shuffled namespace order with a
   printed seed, two seeds per gate, a one-seed failure reproducible from it.
-- [ ] **TEST-ISO-010**: No thread or executor leaks (live non-daemon thread
-  count around each namespace).
 - [ ] **TEST-ISO-011**: No sleeps or polls in the fast lane outside one
   sanctioned wait helper.
 - [ ] **TEST-ISO-012**: No two fast-lane namespaces share a mutable resource

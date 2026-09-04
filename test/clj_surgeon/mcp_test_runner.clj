@@ -13,9 +13,72 @@
    this suite as a child with a private `-Djava.io.tmpdir`."
   (:require
    [clj-surgeon.lane-manifest :as lm]
+   [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.string :as str]
-   [clojure.test :refer [run-tests]]))
+   [clojure.test :as t]))
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-002 @spec TEST-ISO-003 @spec TEST-ISO-004
+;; @spec TEST-ISO-005 @spec TEST-ISO-007 @spec TEST-ISO-010
+;;
+;; THE PER-NAMESPACE SNAPSHOT FIXTURE. One mechanism, six witnesses.
+;;
+;; `run-tests` runs the whole lane inside one pair of parentheses, which makes
+;; every resource question a question about the LANE: something spawned a
+;; child, something left a port open, something took too long. That is the
+;; wrong grain -- a run-level answer tells you the suite is dirty and leaves
+;; you to bisect 38 namespaces to find out which one. Running `test-ns` one at
+;; a time with a probe on each side attributes every leak to the namespace
+;; that produced it, by name, in the same run that found it.
+;;
+;; KNOWN REACH, stated rather than left to be discovered: namespaces are
+;; `require`d BEFORE the first window opens, because TEST-ISO-001's metadata
+;; refusal has to be able to refuse the whole run before any test executes.
+;; A side effect at LOAD time -- a top-level `def` that binds a socket -- is
+;; therefore outside every window and invisible to these six. The lane-level
+;; temp ratchet still sees its leavings; nothing here sees its act.
+;; ---------------------------------------------------------------------------
+
+(defn run-namespace-with-snapshot
+  "Runs ONE namespace between two probes. Returns its `clojure.test` counters,
+   its wall, and the violations its lane is held to."
+  [n repo-root]
+  (let [before (iso/probe repo-root)
+        counters (t/test-ns n)
+        after (iso/probe-after repo-root)]
+    {:namespace n
+     :counters counters
+     :elapsed-ms (quot (- (:instant-ns after) (:instant-ns before)) 1000000)
+     :violations (iso/enforced (lm/lane-of n)
+                               (iso/violations n before after
+                                               {:ledger @iso/allocated-ports}))}))
+
+(defn lane-budget-violations
+  "@spec TEST-ISO-007 -- the per-LANE ceiling, over the namespaces that
+   actually ran. Reported separately from the per-namespace budgets because it
+   is a different claim: every namespace can be inside its own budget while
+   the lane the fleet waits on is minutes long."
+  [runs]
+  (->> (group-by (comp lm/lane-of :namespace) runs)
+       (keep (fn [[lane rs]]
+               (iso/lane-budget-violation lane (reduce + (map :elapsed-ms rs)))))
+       vec))
+
+(defn report-isolation!
+  "Prints every violation as a typed line and returns how many there were.
+   A refusal nobody hears is indistinguishable from silent data loss
+   (delivery invariant 17), so this prints to *err*, prints a COUNT even when
+   the count is zero, and the count is what the exit code carries."
+  [runs]
+  (let [vs (into (vec (mapcat :violations runs)) (lane-budget-violations runs))]
+    (binding [*out* *err*]
+      (if (seq vs)
+        (do (println (format "\nTEST-ISOLATION: %d violation(s) -- the suite's own purity rules, per namespace:" (count vs)))
+            (doseq [v vs] (println "  " (iso/message v))))
+        (println (format "\ntest-isolation: 0 violations across %d namespace(s) (TEST-ISO-002/003/004/005/007/010)"
+                         (count runs)))))
+    (count vs)))
 
 (defn lane-namespaces
   "Resolves `lanes` (a seq of lane keywords) -- or, when `explicit` is
@@ -141,6 +204,10 @@
             (System/exit 96))
         tmp-root root
         tmp-before (tmp-leak/tmp-entries)
-        result (apply run-tests namespaces)
+        repo-root (System/getProperty "user.dir")
+        runs (mapv #(run-namespace-with-snapshot % repo-root) namespaces)
+        result (apply merge-with + (map :counters runs))
+        _ (t/do-report (assoc result :type :summary))
+        iso-fail (report-isolation! runs)
         leak-fail (tmp-leak/report-and-sweep-leak! tmp-root tmp-before)]
-    (System/exit (+ (:fail result) (:error result) leak-fail))))
+    (System/exit (+ (:fail result) (:error result) iso-fail leak-fail))))
