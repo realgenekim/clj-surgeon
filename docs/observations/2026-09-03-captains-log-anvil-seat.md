@@ -1805,3 +1805,5 @@ never hardlink (shared inodes are exactly the aliasing this code is careless abo
 edit (Files/copy COPY_ATTRIBUTES + NOFOLLOW_LINKS + a typed refusal for any destination outside the root) with RED
 witnesses that reproduce the truncation and the mode loss, plus the four non-blocking items. Opaque non-Clojure files
 (the G2 ask) wait for r19: safety first.
+
+## 21:51Z — usage watch: tools "admit_clojure_patch": 52 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:48Z load 14.50 ; === rc 0 end 21:51Z)
