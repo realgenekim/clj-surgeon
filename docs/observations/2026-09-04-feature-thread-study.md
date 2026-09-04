@@ -63,3 +63,39 @@ A repo-local script, `bin/feature-thread <identifier-or-route>`, in social-media
 ## 7. Committed recommendation for Gene
 
 Do not build the verb yet; the evidence from tonight says it would lose to this caller on one thread, exactly as square 3 did twice. Build the cheap thing first — the repo-local feature-thread script with named absent legs — and run E-THREAD in one evening, meter completeness and false-complete claims, not wall. The number that changes my mind is a native arm that reports four legs as the whole thread on a hidden-leg case while the relation names the fifth: two of six and the verb earns a design round, as a relation over cheap evidence with a completeness receipt, never a JavaScript parser.
+
+
+## PARKED (04:13Z) — mayor 2350Z: HOLD; Gene replied "no send to anvil!" and the mayor cannot tell which reading he means. No builders were spent (the study is prose + one $0 Sol poll). Kept as notes; nothing further until the mayor confirms. The mayor's bead is inb-cf3866; this seat's duplicate capture inb-55e00e points at it.
+
+## Appendix — Sol's independent position, verbatim (04:13Z)
+
+# Independent position: cross-language feature threads
+
+1. **Same square: square 3, with a relational output.** The new object is not five better searches; it is a declared JOIN from five independently found legs into one normalized thread, with provenance, ambiguity, and absence carried per leg. Five greps can supply the rows but do not themselves assert that those rows belong to one feature; the tool can make that join explicit. It may claim COMPLETENESS only relative to a frozen search root, five declared slot predicates, and untruncated searches—never semantic completeness across JavaScript—and “every thread touching X” is a separate scale claim that this proposal has not earned. E6-Q and E6-Q2 predict that this caller will perform the bounded join just as well by hand: native was exact on 18/18 big-file probes with three calls per run by windowing over `rg` hits, so file size and per-leg lookup do not create a product gap; those cohorts say nothing positive about semantic completeness or repo-wide thread enumeration.
+
+2. **Yes, but narrowly:** a read-only relation survives the 2026-09-02 ruling because it leaves native editing untouched, although surviving the ruling is permission to measure it, not evidence that it wins.
+
+3. **Use a RELATION over cheap, named evidence; do not add a JavaScript parser.** The inputs are identifier occurrences, exact route-string literals, repo-local role conventions, and a structurally parsed Clojure handler; each edge is labelled by which evidence supports it. A real JS parser is the scope trap: it begins a second language kernel and still cannot prove framework-level routing, generated wiring, or runtime registration. The cheap relation must downgrade to `ambiguous` or `partial` for aliased/renamed imports, computed or dynamic routes, template strings with interpolation, re-exports, indirect dispatch tables, generated code, macro/build-time code, and tests that reach the behavior without repeating either seed. The worse trap would be calling that cheap relation semantically complete; its honest maximum is **convention-complete over an enumerated search**.
+
+4. **Refusal/receipt contract.** The public text must contain every structured leaf except an explicit frozen exclusion set—the night's text ⊇ structured rule—and a summary may never hide a partial result. This is the ten-line shape:
+
+```text
+receipt: feature-thread/v1
+query: {seed, workspace_root, include_globs, exclude_globs, convention_version}
+menu_caller: {state: evidence|absent|ambiguous, search_id: menu, hits: [file:line+excerpt_hash]}
+js_function: {state: evidence|absent|ambiguous, search_id: js, hits: [file:line+excerpt_hash]}
+http_route: {state: evidence|absent|ambiguous, search_id: route, hits: [file:line+excerpt_hash]}
+clojure_handler: {state: evidence|absent|ambiguous, search_id: clj, hits: [file:line+form+source_hash]}
+tests: {state: evidence|absent|ambiguous, search_id: tests, hits: [file:line+excerpt_hash]}
+searches: {menu: exact_query, js: exact_query, route: exact_query, clj: exact_query, tests: exact_query, all_untruncated: bool}
+complete: true iff all five states=evidence, all searches ran untruncated, and unresolved_candidates=[]
+status: complete|partial|ambiguous; missing: [slot...]; unresolved_candidates: [...]; next_call: executable_search_or_null
+```
+
+A four-of-five thread is `complete:false`, `status:partial`, and names the missing slot plus its executed zero-hit search; it is never rendered as “thread found.” Even `complete:true` means only that the five-slot convention was satisfied inside the declared scope.
+
+5. **The repo-local `bin/feature-thread <id>` script captures most of the possible value, but only as an experimental instrument.** Five fixed `rg` queries, a stable stitched printout, hashes, truncation detection, and typed zero-hit rows cost tens of lines and no parser, server surface, or new language ownership; a skill merely reminds an agent to do what E6-Q2 shows it already does, while shipping nothing is preferable to enshrining heuristics. Gene's tiebreak should keep the script repo-local and out of Surgeon: this is exactly a constellation of searches, and “the constellation is never the product” forbids promoting it unless measurement proves the joined receipt removes a caller decision.
+
+6. **One-evening experiment: FT-SMW, in `social-media-writer` pinned and attested before arm 1.** Use three interleaved cells: **N**, unrestricted native search with no helper; **S**, mandated `bin/feature-thread`; **F**, the same helper available and described but optional. Run **n=3 per cell (9 isolated sessions)**; each session answers two counterbalanced fixtures: the real `formatDraft` ↔ `/api/transform/format` feature and a frozen real-repo-derived four-of-five variant with one leg removed, so false completeness is observable. The hard gate is exact agreement with a frozen human-validated five-slot oracle, correct `partial` on the ablation, valid file/line hashes, and zero omitted/extra owners; the load-immune primary meter is watcher-counted model returns from prompt to final receipt, with source-tool calls, bytes returned, duplicate searches, and F adoption as secondaries—no wall claim. Prediction: N **3/3 exact** on both fixtures, median **2 source calls and 3 returns**; S **3/3 exact**, **1 source call and 3 returns** (zero returns removed); F adoption **0/3**, matching the 0/19 free-choice prior, with F still 3/3 exact natively. Withdraw the product if N is 3/3 exact and S removes fewer than one median watcher-counted return, if F adopts in at most 1/3, or if either helper arm emits even one false `complete`; advance only if S removes at least one return in at least 2/3 matched sessions, F adopts in at least 2/3 without duplicate `rg`, and all 18 receipts pass the oracle.
+
+7. **Do not build cross-language feature threads into clj-surgeon.** Build the disposable SMW script only to run FT-SMW, then keep it repo-local if humans like it; neither a JS parser nor a generic MCP relation is warranted by a caller that already joined the real feature immediately with `rg`. The number that changes my mind is **one full watcher-counted model return removed in at least 2/3 matched sessions**, with optional adoption at least 2/3 and zero false-complete receipts.

@@ -1188,3 +1188,7 @@ The composition record's honest line: "no System/exit outside -main" is NOT lite
 ## 04:05Z — mayor 2340Z (received 03:59Z): Gene's feature-thread study — filed inb-55e00e, study written (docs/observations/2026-09-04-feature-thread-study.md), Sol's independent position running; Gene asked "Did you get latest from mayor on use case ls tree?" — answered yes with the position
 
 Verdict in one line: not a new square — square 3 plus a completeness receipt; a verb would lose on one thread (E6-Q ×2); build the repo-local `bin/feature-thread` script with named ABSENT legs first, run E-THREAD on social-media-writer, and only a measured false-complete rate in native earns a verb design (relation over cheap evidence, never a JS parser).
+
+## 04:13Z — mayor 2350Z: HOLD on the feature-thread study (Gene: "no send to anvil!", ambiguous). Parked; Sol's position appended to the doc as notes; no builders spent
+
+What existed at the hold: the study doc (prose, my position), Sol's independent position ($0), the inbox capture. Nothing else started, nothing to unwind. The mayor's durable capture is inb-cf3866; mine (inb-55e00e) is a duplicate that now points at his. Gene's own message to this seat ("Did you get latest from mayor on use case ls tree?") reads as wanting the seat to have it, but the mayor holds the relay and the seat honours the hold.
