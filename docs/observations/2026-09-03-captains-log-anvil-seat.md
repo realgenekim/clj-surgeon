@@ -1793,3 +1793,15 @@ independent machine is for. One escalation for Gene: the nightly is dormant unti
 ## 21:27Z default-branch flip: seat identity lacks admin (404 on PATCH); request filed for the mayor in the merge queue doc; Gene can also flip it in Settings → Branches
 
 ## 21:29Z SMW landing contract MERGED into realgenekim/social-media-writer main (d5b1ba53; Gene "a: go"): .beads/.local_version untracked, bd as a five-line chain at the top of CLAUDE.md; branch deleted; new replay base smw-base2 @ d5b1ba53 (smw-base @ 2df99c98 kept for comparability; T5 runs on base2)
+
+## 21:50Z admit gate r17 (Opus): NO-GO — the overlay copy escapes its root and truncates files outside the workspace
+
+Security-boundary class (memory: security-boundary-review-before-merge): six lines added in round sixteen follow
+symlinks and compute destinations from canonical paths, so a symlink out of the workspace makes the copy open the real
+inode for read and write and truncate it — in the two modes that promise no write. Not on the trunk, not imminent
+(NO-GO), so no cord; recorded here loudly. Same loop: modes and mtimes lost (the G3 finding, confirmed with a control);
+and the "tail" of a failing command is its head, unflagged. The reviewer's ruling on the overlay: keep the byte copy,
+never hardlink (shared inodes are exactly the aliasing this code is careless about). Round 18 builds the fix as one
+edit (Files/copy COPY_ATTRIBUTES + NOFOLLOW_LINKS + a typed refusal for any destination outside the root) with RED
+witnesses that reproduce the truncation and the mode loss, plus the four non-blocking items. Opaque non-Clojure files
+(the G2 ask) wait for r19: safety first.
