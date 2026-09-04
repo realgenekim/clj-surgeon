@@ -1697,3 +1697,13 @@ Docs on bridge/suite-spike: 2026-09-04-suite-spike-round1{,-timing,-classificati
 ## 18:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
 
 ## 18:53Z — usage watch (untimed run started 18:50Z at load 20.6): tools "admit_clojure_patch": 1 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; full JSON /var/tmp/forge/usage-untimed.log)
+
+## 19:15Z MEM-003 r8 built (cb14686c); the composition with the landed census is red; decided option (i)
+
+Both parents green, the merge 11 failures 3 errors, identical twice: two lanes that never disagreed on text disagree
+on an invariant — the census publishes a clock-derived field outside the measured block, and the measured-clock
+ratchet landed after the census did. Not a defect in either lane; a composition the queue did not model. Decided here
+(consequential, reversible, no external users of the trunk): the census adapts — phases read through `measured`,
+published inside the block, per TIME-004; CENSUS-013 still satisfied. Reason it is not Gene's: it moves no product
+behaviour, only the partition of an existing field on an unreleased trunk; reversal is one commit. Round nine on the
+MEM-003 branch; the 8 reader_eval_fence failures (changed launcher refusal prose) get a separate look in the same round.
