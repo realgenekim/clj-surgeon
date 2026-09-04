@@ -1911,7 +1911,10 @@
         (testing "and the text names the exact continuation to send"
           (is (str/includes? text "next call: inspect_clojure")
               "the continuation names the tool")
-          (is (str/includes? text "limit=16384")
+          ;; @spec MCP-OP-STUDY-045
+          ;; Spelled as the verbatim executable request, not as prose: the
+          ;; `<key>=<value>` clause of MCP-OP-STUDY-036 is superseded.
+          (is (str/includes? text "\"limit\":16384")
               "the continuation names the raised limit")))))
   (with-tmp-project
     #(build-toy-project! % 90)

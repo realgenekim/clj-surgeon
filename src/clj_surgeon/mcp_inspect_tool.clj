@@ -942,28 +942,26 @@
     (if facts (str structural "\n\n" facts) structural)))
 
 ;; @spec MCP-OP-STUDY-036
-(def ^:private ls-tree-continuation-argument-order
-  "The order a continuation's arguments are spelled in the text block. A map's
-  iteration order is not a contract, and a caller retyping a continuation
-  needs the same line every time."
-  [:mode :dir :grep :ns_grep :format :limit :max_files])
-
-;; @spec MCP-OP-STUDY-036
+;; @spec MCP-OP-STUDY-045
 (defn- ls-tree-continuation-line
   "The continuation spelled for a client that reads only text.
 
   `next_call` is structured data. A text-only client sees `structuredContent`
   never, so a receipt that carries its continuation only there tells such a
-  caller that it was truncated and nothing about what to send instead."
+  caller that it was truncated and nothing about what to send instead.
+
+  It is spelled as the VERBATIM executable request — the tool, then the
+  compact JSON argument object — identically to the typed path in
+  `mcp-inspect/continuation-line`. Field evidence (Sol O2 round-2 review,
+  section 4): this rendered `mode=ls-tree dir=. format=text limit=16384`,
+  which is neither a JSON tool-argument object nor a shell command, so it was
+  retypeable guidance while the typed modes published something a caller
+  could paste. The fixed argument order the prose form existed for is now the
+  JSON object's own key order, which the receipt already fixes."
   [result]
   (when-let [call (:next_call result)]
-    (let [arguments (:arguments call)]
-      (str "→ next call: " (:tool call) " "
-           (str/join " "
-                     (keep (fn [key]
-                             (when (contains? arguments key)
-                               (str (name key) "=" (get arguments key))))
-                           ls-tree-continuation-argument-order))))))
+    (str "→ next call: " (:tool call) " "
+         (json/generate-string (inspect/json-data (:arguments call))))))
 
 ;; @spec MCP-OP-STUDY-036
 (defn- ls-tree-payload-text
