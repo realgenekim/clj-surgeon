@@ -171,6 +171,8 @@
    :lock_scope :none
    :verification_status :unverified
    :verification_reasons []
+   ;; @spec MCP-OP-ADMIT-123
+   :detectors_not_run []
    :verification_complete false
    :source-unchanged true
    :next_call nil})
@@ -742,6 +744,49 @@
     ;; @spec MCP-OP-ADMIT-118
     :focused-test-profile-has-no-command})
 
+;; @spec MCP-OP-ADMIT-124
+(def unverifiable-lint-error-types
+  "Analyzer failures that describe a check which could not run.
+
+  MCP-OP-ADMIT-107 already says a focused runner that produced no result is
+  not half a verification. The analyzer had no such rule, so a dead analyzer
+  beside a live suite published `partial` -- one of the two requested checks
+  produced a usable result -- when the check that carries this gate's
+  substance had produced nothing at all. `no-clojure-files` is not here: a
+  patch with nothing to analyze is a legitimate empty reading, not a failure."
+  #{:clj-kondo-unavailable
+    :clj-kondo-executable-unavailable
+    :clj-kondo-admission-unavailable
+    :clj-kondo-admission-timeout
+    :clj-kondo-pressure-deferred
+    ;; @spec MCP-OP-ADMIT-121
+    :analyzer-output-truncated
+    :process-interrupted})
+
+;; @spec MCP-OP-ADMIT-123
+(defn detectors-not-run
+  "Name every requested detector that produced no reading at all.
+
+  `verification_status` says that something did not run. It does not say
+  what, and a reader scoring `ok`, `hazards` and one summary line can finish
+  without ever learning that the substantive half was silent. That is the
+  shape the field replay had: `ok` true, `hazards` all class note, an empty
+  blocking set, and an analyzer that never executed."
+  [verify lint tests]
+  (let [requested? (= "focused" verify)
+        reason (fn [value fallback]
+                 (if requested?
+                   (or (:error-type value) (:reason value) fallback)
+                   :verification-not-requested))]
+    (cond-> []
+      (not (true? (:ran lint)))
+      (conj {:detector (or (:detector lint) "clj-kondo")
+             :reason (reason lint :analyzer-unverified)})
+
+      (not (true? (:ran tests)))
+      (conj {:detector "focused-tests"
+             :reason (reason tests :no-test-evidence)}))))
+
 ;; @spec MCP-OP-ADMIT-082
 (defn verification-status
   "Fold the two checks into one word a caller can act on.
@@ -755,7 +800,10 @@
     {:status :unverified :reasons [:verification-not-requested]}
     (let [lint-ok (and (:ran lint) (not (false? (:ok lint))))
           tests-ok (:ok evidence)
-          unverifiable (contains? unverifiable-test-reasons (:reason evidence))
+          ;; @spec MCP-OP-ADMIT-124
+          unverifiable (or (contains? unverifiable-test-reasons (:reason evidence))
+                           (contains? unverifiable-lint-error-types
+                                      (:error-type lint)))
           reasons (cond-> []
                     (not lint-ok) (conj (or (:error-type lint)
                                             (:reason lint)
@@ -829,6 +877,8 @@
             tests-blocking (and (:ran tests)
                                 (pos? (long (or (:failed tests) 0))))]
         {:lint_delta lint
+         ;; @spec MCP-OP-ADMIT-123
+         :detectors_not_run (detectors-not-run verify lint tests)
          :tests (cond-> tests
                   (not (:ok evidence)) (assoc :reason (:reason evidence))
                   (some? (:exit evidence)) (assoc :runner_exit (:exit evidence))
@@ -1457,6 +1507,10 @@
                                      :verification_reasons
                                      [:verification-not-requested]
                                      :verification_complete false
+                                     ;; @spec MCP-OP-ADMIT-123
+                                     :detectors_not_run
+                                     (detectors-not-run verify {:ran false}
+                                                        {:ran false})
                                      :tests {:ran false :passed 0 :failed 0
                                              :skipped 0 :namespaces []
                                              :profile_absent
@@ -1716,6 +1770,25 @@
 ;; MCP surface
 ;; ---------------------------------------------------------------------------
 
+;; @spec MCP-OP-ADMIT-123
+(defn- detector-note
+  "The text block's copy of `detectors_not_run`, verbatim.
+
+  A text block that is a strict subset of structuredContent is a receipt that
+  reads clean to every consumer who sees only the text -- which is most of
+  them. Whatever structure names here, the text names too."
+  [result]
+  (let [absent (:detectors_not_run result)]
+    (if (seq absent)
+      (str "\ndetectors that did not run: "
+           (str/join ", "
+                     (map (fn [{:keys [detector reason]}]
+                            (str detector " (" (name reason) ")"))
+                          absent))
+           "\nthis receipt reports what was inspected; with a detector silent"
+           " it is not a clean bill of health")
+      "")))
+
 (defn- summary
   [result]
   (if (:ok result)
@@ -1727,12 +1800,16 @@
          " · drift " (:byte_drift_outside_hunks result) " bytes"
          " · hazards " (count (:hazards result))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-         "\nverification_complete=" (:verification_complete result))
+         "\nverification_complete=" (:verification_complete result)
+         " verification_status="
+         (name (or (:verification_status result) :unverified))
+         (detector-note result))
     (str "admit_clojure_patch refused · " (name (or (:error-type result)
                                                     :unknown))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
          "\n" (:error result)
-         "\nsource unchanged")))
+         "\nsource unchanged"
+         (detector-note result))))
 
 (defn handle-admit-clojure-patch
   "clojure-mcp callback handler retained as a Var for hot reload."
