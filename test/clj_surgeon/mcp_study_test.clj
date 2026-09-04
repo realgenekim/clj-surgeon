@@ -3285,6 +3285,54 @@
              " reasons the source constructs that no ratchet fixture reaches: "
              (pr-str unreached)))))
 
+;; ============================================================
+;; O2 ROUND 4 — the refusal enumeration comes from the RUNTIME
+;; (Sol O2 round-3 review, sections 3 and 9)
+;; ============================================================
+;; Round three derived the reason set from the source with
+;; `(refuse! :([a-z0-9-]+)`, which sees only a LITERAL reason at a literal
+;; call site. `unique-strings!` takes its reason as an ARGUMENT and the forms
+;; validator passes `:duplicate-form`; that refusal is reachable through the
+;; public entrance and was absent from the scanned 22, so the exhaustive
+;; claim was false the day it was written. Sol's rung D — replacing a literal
+;; reason with `(identity :expected-object)` — dropped the scan from 22 to 21
+;; with the whole suite green, and the unsabotaged helper above is the same
+;; escape already present in ordinary source.
+;;
+;; A literal-shape scan is never the ratchet. The runtime is.
+
+(defn- refusal-reason-of
+  "The reason one request actually refuses with, driven through the public
+   entrance and normalized to its name."
+  [params]
+  (when-let [reason (:reason (run params))]
+    (if (keyword? reason) (name reason) (str reason))))
+
+(def ^:private helper-built-refusal
+  "A duplicate form name. The forms validator hands `:duplicate-form` to
+   `unique-strings!` as an argument, so no literal `(refuse! :duplicate-form`
+   exists anywhere in the source."
+  {"requests" [{"operation" "forms" "file" real-file
+                "forms" ["reader-cond?" "reader-cond?"]
+                "expect" {"forms" 2}}]
+   "expect" {"requests" 1 "files" 1}})
+
+;; @spec MCP-OP-STUDY-046
+(deftest a-refusal-reason-built-through-a-helper-is-in-the-ratchet
+  (let [reachable (refusal-reason-of helper-built-refusal)
+        scanned (constructed-refusal-reasons)
+        driven (into (sorted-set)
+                     (keep (fn [[_ params]] (refusal-reason-of params))
+                           refusal-ratchet-cases))]
+    (is (= "duplicate-form" reachable)
+        "the public entrance reaches a refusal whose reason is an argument")
+    (is (contains? scanned reachable)
+        (str "the literal `(refuse! :reason` scan misses a reason passed to a "
+             "helper; it found " (count scanned) ": " (pr-str (vec scanned))))
+    (is (contains? driven reachable)
+        (str "no ratchet fixture drives it; the ratchet drives "
+             (count driven) " reasons"))))
+
 ;; @spec MCP-OP-STUDY-046
 (deftest a-refusal-cause-is-bounded-and-still-travels
   (let [synthetic (fn [cause]
