@@ -4362,3 +4362,69 @@
           (is (= ["ρίζα/three.clj"] (:files scan)) (pr-str scan))))
       (finally
         (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; a mention site is what the READER reads
+
+;; @spec MCP-OP-ALIAS-034
+(deftest a-reader-discarded-string-is-not-a-mention-site
+  ;; Round-twelve review finding 5: `string-literal-lines` descends every
+  ;; rewrite-clj node and does not stop at `:uneval`, although the migration
+  ;; walker itself stops there at alias_migration.clj:424. Over the six shapes
+  ;; a string can take:
+  ;;
+  ;;   sites => ["src/shapes.clj:3" "src/shapes.clj:4"
+  ;;             "src/shapes.clj:5" "src/shapes.clj:6"]
+  ;;
+  ;; line 5 is `#_ "acid.fanout.store/find-event"`, which the reader DROPS —
+  ;;
+  ;;   (read-string "[#_\"old.store/find-event\" :sentinel]") => [:sentinel]
+  ;;
+  ;; MCP-OP-ALIAS-034 says a string literal is what the READER says one is,
+  ;; and publishes the count as EXACT. A discarded form is not read, so it is
+  ;; not a site.
+  ;;
+  ;; `(comment …)` goes the OTHER way and stays a site. `comment` is an
+  ;; ordinary macro: the reader READS its body and produces the string
+  ;; literal; only evaluation discards it. The distinction the requirement
+  ;; draws is the reader's, not the evaluator's — and it is the useful one,
+  ;; because a commented-out call naming the retired var is exactly the stale
+  ;; work an operator must go and look at, while a discarded form is text the
+  ;; reader never built.
+  (let [needle (str fixture/from-lib "/" fixture/from-var)
+        source (str "(ns shapes)\n"
+                    "(def s \"" needle "\")\n"
+                    "(comment \"" needle "\")\n"
+                    "#_ \"" needle "\"\n"
+                    "(defn f \"" needle "\" [] 1)\n"
+                    "(def r #\"" needle "\")\n"
+                    "; " needle "\n")
+        sites (planner/string-mentions needle
+                                       [{:file "src/shapes.clj" :source source}])]
+    (testing "the reader's own answer, on the same six shapes"
+      (is (= [:sentinel] (read-string (str "[#_\"" needle "\" :sentinel]")))
+          "the reader kept a discarded form, and this witness is wrong")
+      (is (= ["src/shapes.clj:2" "src/shapes.clj:3" "src/shapes.clj:5"] sites)
+          (str "a reader-discarded string was counted as a mention site: "
+               (pr-str sites))))
+    (testing "a discarded form nested inside live code is still discarded"
+      (is (= []
+             (planner/string-mentions
+               needle
+               [{:file "src/n.clj"
+                 :source (str "(ns n)\n(def v [#_ \"" needle "\" :keep])\n")}]))
+          "a discard inside a live vector was counted"))
+    (testing "a discarded FORM containing the string is discarded whole"
+      (is (= []
+             (planner/string-mentions
+               needle
+               [{:file "src/d.clj"
+                 :source (str "(ns d)\n#_ (def s \"" needle "\")\n")}]))
+          "a discarded def carrying the string was counted"))
+    (testing "the comment form and the docstring are still sites"
+      (is (= ["src/c.clj:2"]
+             (planner/string-mentions
+               needle
+               [{:file "src/c.clj"
+                 :source (str "(ns c)\n(comment \"" needle "\")\n")}]))
+          "the reader reads a comment form's body and this dropped it"))))
