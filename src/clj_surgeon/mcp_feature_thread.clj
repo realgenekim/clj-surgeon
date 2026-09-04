@@ -284,6 +284,12 @@
   [root extra-skips globs]
   (let [root-file (io/file root)
         root-path (.getCanonicalPath root-file)
+        ;; @spec MCP-OP-THREAD-033
+        ;; The separator is the whole containment test. Without it a sibling
+        ;; `<root>-evil` passes the prefix check, and a symlink pointing at it
+        ;; yields `evil/stolen.clj` -- a file outside the root reported as one
+        ;; inside it (round-three review, 3.5).
+        root-prefix (str root-path java.io.File/separator)
         acc (volatile! [])
         overflow (volatile! false)]
     (letfn [(walk [^java.io.File dir]
@@ -294,9 +300,9 @@
                       (.isDirectory f) (when-not (skip-dir? f extra-skips) (walk f))
                       (.isFile f)
                       (let [abs (.getCanonicalPath f)]
-                        (when (str/starts-with? abs root-path)
+                        (when (str/starts-with? abs root-prefix)
                           (let [relative (str/replace
-                                           (subs abs (inc (count root-path)))
+                                           (subs abs (count root-prefix))
                                            "\\" "/")]
                             (when (or (empty? globs)
                                       (matches-any-glob? relative globs))
@@ -311,7 +317,10 @@
                    max-scanned-files " files; narrow scope.paths")
        :limits {:max_scanned_files max-scanned-files}
        :remedy "Pass scope.paths naming the directories the thread lives in."}
-      {:ok true :paths (vec (sort @acc))})))
+      ;; @spec MCP-OP-THREAD-033
+      ;; De-duplicated: a symlink to a directory inside the tree canonicalises
+      ;; to the same file and would otherwise be walked, read and searched twice.
+      {:ok true :paths (vec (sort (distinct @acc)))})))
 
 (defn- under-scope?
   [relative paths]

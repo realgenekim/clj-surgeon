@@ -217,3 +217,10 @@ run as a test inside `make mcp-test`) enforces both halves.
   comment as a comment mention exactly as it already treats `;` and `//`, so
   such a hit is CANDIDATE with a comment reason and can never make a leg FOUND
   or a thread COMPLETE.
+
+- [x] **MCP-OP-THREAD-033**: The walk is confined and each file appears once.
+  When `feature_thread` walks a workspace, containment shall be tested against
+  the root plus a path separator, so a sibling directory whose name merely
+  extends the root's is outside it, and the candidate list shall be
+  de-duplicated so a symlink to a directory inside the tree cannot make one
+  file be read and searched more than once.
