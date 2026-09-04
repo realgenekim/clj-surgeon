@@ -1124,8 +1124,10 @@
         (is (:ok result))
         (is (true? (:committed result)))
         (is (= :admit-patch! (:operation result)))
-        (is (= "unbound" (:pre_image_binding result))
-            "a commit that carried no preview binding says so on the receipt")
+        ;; @spec MCP-OP-ADMIT-155
+        (is (= "derived" (:pre_image_binding result))
+            (str "a commit that carried no caller digests is still fenced: "
+                 "the gate froze and re-read the pre-image itself"))
         (is (str/includes? (slurp (io/file root "src/app/core.clj"))
                            "(fnil inc 0)"))
         (is (str/includes? (slurp (io/file root "src/app/util.clj"))
@@ -1560,7 +1562,11 @@
           (is (false? (:ok result)))
           (is (= :verification-failed (:error-type result)))
           (is (= core-source (slurp (io/file root "src/app/core.clj"))))
-          (is (= "preview" (get-in result [:next_call :arguments :mode])))))
+          ;; @spec MCP-OP-ADMIT-157
+          (is (= "propose" (get-in result [:next_call :arguments :mode]))
+              (str "the follow-up is the loop's next hop: propose runs the "
+                   "same checks and returns the failing lines without "
+                   "refusing, where preview refuses again"))))
       (testing "a runner that exits zero without running tests is not evidence"
         (write-sources! root (assoc base-sources
                                     "test/app/core_test.clj"
@@ -2868,8 +2874,9 @@
         (is (:ok result) (pr-str (:error result)))
         (is (true? (:committed result)))
         (is (= [:add :update :delete] (mapv :operation (:files result))))
-        (is (= "unbound" (:pre_image_binding result))
-            "a mixed payload still has pre-images to bind")
+        ;; @spec MCP-OP-ADMIT-155
+        (is (= "derived" (:pre_image_binding result))
+            "a mixed payload still has pre-images the gate bound itself")
         (is (= ["src/app/clock.clj::app.clock" "src/app/clock.clj::now"]
                (get-in result [:owners :added])))
         (is (= ["src/app/core.clj::handle-tick"]
@@ -3168,7 +3175,11 @@
           (is (false? (:committed result)))
           (is (false? (:mutation_attempted result)))
           (is (true? (:source-unchanged result)))
-          (is (= "preview" (get-in result [:next_call :arguments :mode])))
+          ;; @spec MCP-OP-ADMIT-157
+          (is (= "propose" (get-in result [:next_call :arguments :mode]))
+              (str "the follow-up is the loop's next hop: propose runs the "
+                   "same checks and returns the failing lines without "
+                   "refusing, where preview refuses again"))
           (is (= :verification-incomplete
                  (get-in result [:next_call :blocked_by])))
           (is (str/includes? (:error result) "no-test-evidence"))
@@ -6531,9 +6542,20 @@
   both sides of that bound. Round four's review measured `preview ok` for
   \"a 300-character basename\" and was reading a name of 300 characters rather
   than a stem of 300; at 255 the file is created and at 256 it is not, which
-  is what both readings were seeing."
+  is what both readings were seeing.
+
+  `inline-verify-workspace-too-large` and `inline-verify-overlay-unavailable`
+  are inline-verification RESULT reasons, the same class as
+  `clj-kondo-unavailable` above: a requested check could not run, so they
+  surface as `tests.reason`, a `verification_reasons` entry and a
+  `detectors_not_run` reason, while the top-level kind stays
+  `verification-incomplete`. Both are enumerated by `unverifiable-test-reasons`
+  and the ceiling one is driven through the entrance by
+  `an-overlay-past-the-ceiling-is-a-named-reason-not-a-silent-green`."
   #{"analyzer-output-truncated"
     "clj-kondo-unavailable"
+    "inline-verify-overlay-unavailable"
+    "inline-verify-workspace-too-large"
     "invalid-compiled-transaction"
     "invalid-source-path"
     "invalid-target-path"
@@ -7731,3 +7753,222 @@
           (is (false? (:committed result)))
           (is (= core-source (slurp (io/file root "src/app/core.clj")))))
         (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-155
+(deftest the-harness-own-patch-shape-needs-no-caller-digests
+  (let [v4a (str "*** Begin Patch\n"
+                 "*** Update File: src/app/core.clj\n"
+                 "@@\n"
+                 "-  (update state :ticks inc))\n"
+                 "+  (update state :ticks (fnil inc 0)))\n"
+                 "*** End Patch\n")
+        git-shape (str "diff --git a/src/app/core.clj b/src/app/core.clj\n"
+                       "index 1111111..2222222 100644\n"
+                       "--- a/src/app/core.clj\n"
+                       "+++ b/src/app/core.clj\n"
+                       "@@ -4,7 +4,7 @@\n"
+                       " \n"
+                       " (defn handle-tick\n"
+                       "   [state]\n"
+                       "-  (update state :ticks inc))\n"
+                       "+  (update state :ticks (fnil inc 0)))\n"
+                       " \n"
+                       " (defn label\n"
+                       "   [state]\n")]
+    (doseq [[label patch] [["V4A" v4a] ["diff --git" git-shape]]]
+      (testing (str label " admits with zero digests supplied")
+        (let [root (temp-dir)]
+          (try
+            (write-sources! root base-sources)
+            (let [result (admit/execute-request!
+                           (stub-config root)
+                           {:patch patch :mode "commit" :verify "focused"
+                            :allow_partial true})]
+              (is (:ok result) (pr-str (:error result)))
+              (is (true? (:committed result)))
+              (is (= "derived" (:pre_image_binding result))
+                  (str "the gate froze and re-read the pre-image itself; "
+                       "`unbound` read as no protection and cost the field "
+                       "agent four to five minutes of digest arithmetic"))
+              (is (str/includes? (slurp (io/file root "src/app/core.clj"))
+                                 "(fnil inc 0)")))
+            (finally (delete-tree! root)))))))
+  (testing "a tree that moves under a digest-free commit still refuses by name"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [drifted (str core-source "\n;; a competing seat\n")
+              result (admit/execute-request!
+                       (assoc (stub-config root)
+                              :admit-before-commit!
+                              (fn [] (spit (io/file root "src/app/core.clj")
+                                           drifted)))
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "focused" :allow_partial true})]
+          (is (false? (:ok result)))
+          (is (= :source-hash-mismatch (:error-type result)))
+          (is (true? (:source-unchanged result)))
+          (is (= ["src/app/core.clj"] (mapv :file (:drifted result)))
+              "the typed stale-snapshot refusal names the file that moved")
+          (is (str/includes? (str (:error result)) "src/app/core.clj"))
+          (is (= drifted (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-156
+(deftest a-failing-verification-carries-the-failing-commands-own-lines
+  (testing "an inline command that fails hands back its exit code and lines"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [assertion "FAIL in (handle-tick-test) expected 1 actual 2"
+              result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands [["sh" "-c"
+                                             (str "echo '" assertion "' >&2;"
+                                                  " exit 3")]]}})]
+          (is (false? (:ok result)))
+          (is (= :verification-failed (:error-type result)))
+          (is (= 3 (:failing_command_exit result)))
+          (is (str/includes? (str (:failing_command_output_tail result))
+                             assertion))
+          (is (str/includes? (str (:error result)) assertion)
+              "the failing assertion's own line is in the refusal sentence")
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))
+          ;; @spec MCP-OP-ADMIT-134
+          (let [config-atom (deref #'admit/runtime-config)
+                previous @config-atom
+                captured (atom nil)]
+            (try
+              (reset! config-atom (stub-config root {:admit-test-runner nil}))
+              (admit/handle-admit-clojure-patch
+                nil
+                {"patch" clean-multi-file-patch
+                 "mode" "commit"
+                 "verify" {"commands" [["sh" "-c"
+                                        (str "echo '" assertion "' >&2;"
+                                             " exit 3")]]}}
+                (fn [content _error? _result]
+                  (reset! captured (str (first content)))))
+              (is (str/includes? (str @captured) assertion)
+                  "text face spells what structuredContent carries")
+              (finally (reset! config-atom previous)))))
+        (finally (delete-tree! root)))))
+  (testing "a repository-declared runner that FAILS also carries its lines"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root (assoc base-sources
+                                    "test/app/core_test.clj"
+                                    "(ns app.core-test)\n"))
+        (let [assertion "FAIL in (core-test) expected :a actual :b"
+              command ["sh" "-c"
+                       (str "echo '" assertion "' >&2;"
+                            " printf '{\"app.core-test\" {:tests 1"
+                            " :failures 1 :errors 0}}' > \"$2\"; exit 1")
+                       "focused-runner" "{snapshot}" "{report}"]
+              result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil
+                                          :focused-test {:command command}})
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "focused"})]
+          (is (false? (:ok result)))
+          (is (= :verification-failed (:error-type result)))
+          (is (str/includes? (str (:failing_command_output_tail result))
+                             assertion))
+          (is (str/includes? (str (:error result)) assertion))
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-157
+(deftest propose-runs-the-verification-writes-nothing-and-never-refuses-for-it
+  (let [tree-hash (fn [root]
+                    (mapv (fn [file] [(.getPath file) (slurp file)])
+                          (sort-by #(.getPath %)
+                                   (filter #(.isFile %) (file-seq root)))))]
+    (testing "a failing verification is a FIELD in propose, not a refusal"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root base-sources)
+          (let [before (tree-hash root)
+                result (admit/execute-request!
+                         (stub-config root {:admit-test-runner nil})
+                         {:patch clean-multi-file-patch
+                          :mode "propose"
+                          :verify {:commands [["sh" "-c"
+                                               "echo BROKEN >&2; exit 7"]]}})]
+            (is (true? (:ok result)) (pr-str (:error result)))
+            (is (= :admit-patch-proposed (:operation result)))
+            (is (= "propose" (:mode result)))
+            (is (false? (:verify_ok result)))
+            (is (false? (:committed result)))
+            (is (false? (:mutation_attempted result)))
+            (is (= 7 (:failing_command_exit result)))
+            (is (str/includes? (str (:failing_command_output_tail result))
+                               "BROKEN"))
+            (is (= before (tree-hash root))
+                "propose wrote nothing: the tree is byte-identical")
+            (is (= "commit" (get-in result [:next_call :arguments :mode]))
+                "the loop's next hop is named on the receipt"))
+          (finally (delete-tree! root)))))
+    (testing "a passing verification proposes without writing either"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root base-sources)
+          (let [before (tree-hash root)
+                result (admit/execute-request!
+                         (stub-config root {:admit-test-runner nil})
+                         {:patch clean-multi-file-patch
+                          :mode "propose"
+                          :verify {:commands ["true"]}})]
+            (is (true? (:ok result)) (pr-str (:error result)))
+            (is (= :admit-patch-proposed (:operation result)))
+            (is (true? (:verify_ok result)))
+            (is (false? (:committed result)))
+            (is (= before (tree-hash root))))
+          (finally (delete-tree! root)))))))
+
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-155
+;; @spec MCP-OP-ADMIT-157
+(deftest the-tool-description-answers-a-naive-readers-next-call
+  (let [description admit/admit-tool-description]
+    (testing "it stays inside the catalog's description budget"
+      (is (<= (count description) 2600)
+          (str "description is " (count description) " characters")))
+    (doseq [[what fragment]
+            [["the patch is the harness's own text" "apply_patch"]
+             ["both grammars" "*** Begin Patch"]
+             ["and the git one" "diff --git"]
+             ["digests are never required" "never compute digests"]
+             ["the derived binding" "pre_image_binding: derived"]
+             ["the propose loop" "propose"]
+             ["the loop is spelled out" "read the failing lines"]
+             ["inline verify is spelled as JSON" "\"commands\""]
+             ["with a real example" "make test"]
+             ["the venue is stated" "with your patch"]
+             ["a failing command blocks the write" "blocks the write"]]]
+      (testing what
+        (is (str/includes? description fragment))))))
+
+;; @spec MCP-OP-ADMIT-153
+(deftest an-overlay-past-the-ceiling-is-a-named-reason-not-a-silent-green
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (with-redefs [admit/inline-overlay-max-files 0]
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode "commit"
+                        :verify {:commands ["true"]}})]
+          (is (false? (:ok result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (= :inline-verify-workspace-too-large
+                 (get-in result [:tests :reason]))
+              "the ceiling is a NAMED reason, never a check quietly skipped")
+          (is (false? (:verification_complete result)))
+          (is (str/includes? (str (get-in result [:tests :overlay_error]))
+                             "ceiling"))
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
+      (finally (delete-tree! root)))))

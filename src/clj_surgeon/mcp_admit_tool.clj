@@ -49,25 +49,45 @@
   "Receipt collections that grow with the patch and may be trimmed to fit."
   [:hazards :files])
 
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-155
+;; @spec MCP-OP-ADMIT-157
 (def admit-tool-description
   (str
-    "Admit one natively authored unified diff and return a single receipt. "
-    "Pass the exact patch text you would give apply_patch. The gate applies it "
-    "to a frozen in-memory snapshot, then reports the change as form identity: "
-    "which top-level owners changed, added, or vanished; which bytes moved with "
-    "no structural reason; which comments, metadata, reader conditionals, or "
-    "#_ discards were disturbed; and typed hazards a line patcher cannot see "
-    "(unreadable post image, duplicate top-level definition however it is "
-    "wrapped, a lost ns require, an edit inside an opaque code-shaped string). "
-    "mode=preview is the default and never writes. verify=focused runs the "
-    "clj-kondo finding delta and the focused tests against that snapshot "
-    "BEFORE any write; blocking findings or failing tests write nothing. "
-    "mode=commit then writes every changed file in one atomic compare-and-swap "
-    "transaction. Copy expect_pre_sha256 from a preview's next_call to bind the "
-    "commit to the bytes the preview inspected; a commit whose files moved "
-    "since refuses. verification_complete is true only when the analyzer ran "
-    "clean and the focused runner produced attributable test evidence. "
-    "One call replaces the re-read, the git diff, and the focused test run."))
+    "Admit one natively authored patch and return a single receipt. "
+    "PATCH: paste the exact text you would give apply_patch -- either the "
+    "*** Begin Patch/*** End Patch grammar or a plain unified diff (diff "
+    "--git and git's extended headers are accepted). Nothing else is "
+    "required: the gate freezes every file the patch touches, derives the "
+    "pre-image itself, and re-reads all of them under an exclusive write lock "
+    "immediately before writing, so a tree that moves refuses with "
+    "source-hash-mismatch naming the file (pre_image_binding: derived). "
+    "Send expect_pre_sha256 only to ALSO assert the bytes an earlier preview "
+    "showed you (pre_image_binding: bound) -- never compute digests just to "
+    "call this tool. "
+    "MODE: propose runs every check in the snapshot, writes nothing, and does "
+    "NOT refuse on a failing check -- it returns verify_ok:false plus the "
+    "failing command's exit code and last 40 lines, so your loop is propose "
+    "-> read the failing lines -> fix -> commit, inside the gate. preview is "
+    "the default and is the same reading, except a failed check IS a refusal. "
+    "commit writes every changed file in one atomic compare-and-swap "
+    "transaction, and only on a complete verification. "
+    "VERIFY: \"focused\" uses this repository's .clj-surgeon/focused-test.edn "
+    "profile; \"none\" checks nothing and can never commit; or pass your OWN "
+    "commands and no profile is needed at all -- verify: {\"commands\": "
+    "[\"make test\", \"npx jest\"]} (optional \"cwd\", \"timeout_ms\"). Each "
+    "command runs, in order, inside a copy of this workspace with your patch "
+    "already applied, and the receipt names it, its exit code and its last "
+    "lines; a non-zero exit stops the sequence and blocks the write. "
+    "REPORT: the change as form identity -- which top-level owners changed, "
+    "added or vanished; which bytes moved with no structural reason; which "
+    "comments, metadata, reader conditionals or #_ discards were disturbed; "
+    "and typed hazards a line patcher cannot see (unreadable post image, "
+    "duplicate top-level definition however it is wrapped, a lost ns require, "
+    "an edit inside an opaque code-shaped string). verification_complete is "
+    "true only when the analyzer ran clean and the checks you asked for "
+    "actually produced a result. "
+    "One call replaces the re-read, the git diff, and the test run."))
 
 (def admit-tool-schema
   {:type "object"
@@ -76,8 +96,20 @@
    {"workspace_root" {:type "string"}
     ;; A soft note for callers; the enforced limit is UTF-8 bytes.
     "patch" {:type "string" :maxLength max-patch-bytes}
-    "mode" {:type "string" :enum ["preview" "commit"]}
-    "verify" {:type "string" :enum ["focused" "none"]}
+    ;; @spec MCP-OP-ADMIT-157
+    "mode" {:type "string" :enum ["preview" "propose" "commit"]}
+    ;; @spec MCP-OP-ADMIT-153
+    "verify" {:oneOf
+              [{:type "string" :enum ["focused" "none"]}
+               {:type "object"
+                :properties
+                {"commands" {:type "array"
+                             :items {:type ["string" "array"]}
+                             :minItems 1
+                             :maxItems 8}
+                 "profile_from_receipt" {:type "array"}
+                 "cwd" {:type "string"}
+                 "timeout_ms" {:type "number"}}}]}
     ;; @spec MCP-OP-ADMIT-106
     "allow_partial" {:type "boolean"}
     "expect_pre_sha256" {:type "object"
@@ -154,13 +186,19 @@
   ;; whose legal values this gate declares, and a next_call proposing the
   ;; unusable value that just refused is neither sendable nor an affordance.
   (cond-> {:tool "admit_clojure_patch"
-           :arguments (cond-> {:mode (if (contains? #{"preview" "commit"} mode)
+           ;; @spec MCP-OP-ADMIT-153
+           ;; @spec MCP-OP-ADMIT-157
+           :arguments (cond-> {:mode (if (contains? #{"preview" "propose"
+                                                      "commit"} mode)
                                        mode
                                        "preview")
-                               :verify (if (contains? #{"focused" "none"}
-                                                      verify)
+                               :verify (cond
+                                         (contains? #{"focused" "none"} verify)
                                          verify
-                                         "focused")}
+                                         ;; An inline plan IS a sendable
+                                         ;; verify value, so it travels whole.
+                                         (map? verify) verify
+                                         :else "focused")}
                         workspace-root (assoc :workspace_root workspace-root)
                         (seq expect-pre) (assoc :expect_pre_sha256 expect-pre))
            :patch_field "patch"
@@ -216,6 +254,11 @@
    ;; parsed, no-op and hazard -- where no detector was ever consulted.
    :detectors_not_run nil
    :verification_complete false
+   ;; @spec MCP-OP-ADMIT-157
+   ;; The verification's own verdict as a FIELD, so `propose` can publish a
+   ;; failing check on a receipt that is not a refusal. `nil` is the third
+   ;; state and the seed: no verification was run at all.
+   :verify_ok nil
    :source-unchanged true
    :next_call nil})
 
@@ -816,6 +859,331 @@
         (subs tail (- (count tail) runner-tail-chars))
         tail))))
 
+;; ---------------------------------------------------------------------------
+;; Inline verification -- the caller's own commands, run in the gate's snapshot
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-153
+(def inline-tail-lines
+  "How many of a PASSING inline command's last lines the receipt carries."
+  20)
+
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-156
+(def inline-failure-tail-lines
+  "How many of a FAILING inline command's last lines the receipt carries.
+
+  A failure is the only output a reader has to act on, so it gets the wider
+  window. A pass gets enough to prove which command ran."
+  40)
+
+(def ^:private inline-tail-chars 6000)
+
+;; @spec MCP-OP-ADMIT-153
+(def inline-default-timeout-ms 300000)
+
+;; @spec MCP-OP-ADMIT-153
+(def inline-max-commands 8)
+
+;; @spec MCP-OP-ADMIT-153
+(def inline-overlay-max-files
+  "The overlay ceiling, in files. A tree larger than this is refused by name
+  rather than copied: an unbounded copy is a wall cost the caller cannot see."
+  20000)
+
+;; @spec MCP-OP-ADMIT-153
+(def inline-overlay-max-bytes 268435456)
+
+;; @spec MCP-OP-ADMIT-153
+(def inline-overlay-skipped-directories
+  "Directory names the overlay never copies.
+
+  `.git` is the whole of it, and deliberately so: excluding `target`,
+  `node_modules` or a build cache would break the very commands a caller
+  sends. A command whose verification needs git history is out of scope and
+  the receipt says the overlay is not a clone."
+  #{".git"})
+
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-156
+(defn inline-output-tail
+  "The last `lines` lines of one command's merged output, verbatim."
+  [output lines]
+  (when (string? output)
+    (let [tail (str/join "\n" (take-last lines (str/split-lines output)))]
+      (if (< inline-tail-chars (count tail))
+        (subs tail (- (count tail) inline-tail-chars))
+        tail))))
+
+;; @spec MCP-OP-ADMIT-153
+(defn inline-command-argv
+  "One caller command as argv.
+
+  A string is a shell line, because that is the spelling a receipt's verify
+  rows and a project's README both use (`TMPDIR=... make runtests-unit`), and
+  refusing it would send the caller back to hand-splitting argv. A vector is
+  exec'd as given, with no shell between the caller and the process."
+  [command]
+  (cond
+    (string? command) ["sh" "-c" command]
+    (and (sequential? command)
+         (seq command)
+         (every? string? command)) (vec command)
+    :else nil))
+
+;; @spec MCP-OP-ADMIT-153
+(defn- receipt-rows->commands
+  "The commands carried by a `feature_thread` receipt's verify rows.
+
+  A row is a string, or a map naming its command under `command`/`:command`
+  (`argv` is accepted too, because that is the other spelling the receipts
+  use). Anything else is passed through untouched so the shape validator --
+  not this reader -- publishes the refusal."
+  [rows]
+  (when (sequential? rows)
+    (mapv (fn [row]
+            (if (map? row)
+              (or (:command row) (get row "command")
+                  (:argv row) (get row "argv")
+                  row)
+              row))
+          rows)))
+
+;; @spec MCP-OP-ADMIT-153
+(defn normalize-verify
+  "One `verify` argument as a mode word plus, for `inline`, its command plan.
+
+  Returns `{:mode \"focused\"|\"none\"|\"inline\" ...}` or `{:error <sentence>}`.
+  The caller's spelling never reaches a receipt from here; the error sentence
+  quotes it through `bounded-caller-spelling` at the call site."
+  [verify]
+  (cond
+    (nil? verify) {:mode "focused"}
+    (string? verify) (if (contains? #{"focused" "none"} verify)
+                       {:mode verify}
+                       {:error :not-a-vocabulary})
+    (map? verify)
+    (let [raw (or (:commands verify) (get verify "commands")
+                  (receipt-rows->commands
+                    (or (:profile_from_receipt verify)
+                        (get verify "profile_from_receipt")
+                        (:profile-from-receipt verify))))
+          cwd (or (:cwd verify) (get verify "cwd"))
+          timeout (or (:timeout_ms verify) (get verify "timeout_ms"))
+          argvs (when (sequential? raw) (mapv inline-command-argv raw))]
+      (cond
+        (not (sequential? raw))
+        {:error (str "verify object must carry a non-empty \"commands\" array"
+                     " (or \"profile_from_receipt\" rows that name commands)")}
+
+        (empty? raw)
+        {:error "verify \"commands\" must name at least one command"}
+
+        (< inline-max-commands (count raw))
+        {:error (str "verify \"commands\" may name at most "
+                     inline-max-commands " commands; this call sent "
+                     (count raw))}
+
+        (some nil? argvs)
+        {:error (str "every verify command must be a shell line or a"
+                     " non-empty array of strings; command "
+                     (inc (long (count (take-while some? argvs))))
+                     " is neither")}
+
+        (and (some? cwd)
+             (or (not (string? cwd))
+                 (str/starts-with? cwd "/")
+                 (str/includes? cwd "..")))
+        {:error (str "verify \"cwd\" must be a relative path inside the"
+                     " snapshot, with no parent segments")}
+
+        (and (some? timeout) (not (number? timeout)))
+        {:error "verify \"timeout_ms\" must be a number"}
+
+        :else
+        {:mode "inline"
+         :commands (vec raw)
+         :argvs argvs
+         :cwd cwd
+         :timeout-ms (long (or timeout inline-default-timeout-ms))}))
+
+    :else {:error :not-a-vocabulary}))
+
+;; @spec MCP-OP-ADMIT-153
+(defn- overlay-source-files
+  "Every file the overlay would copy, with a running byte count.
+
+  Stops the moment either ceiling is passed, so an oversized tree costs a walk
+  rather than a copy."
+  [^java.io.File root]
+  (loop [pending [root] files [] bytes 0]
+    (cond
+      (or (< inline-overlay-max-files (count files))
+          (< inline-overlay-max-bytes bytes))
+      {:over-ceiling true :files (count files) :bytes bytes}
+
+      (empty? pending) {:files files :bytes bytes}
+
+      :else
+      (let [^java.io.File current (peek pending)
+            rest-pending (pop pending)]
+        (cond
+          (not (.exists current)) (recur rest-pending files bytes)
+
+          (.isDirectory current)
+          (if (and (not= current root)
+                   (contains? inline-overlay-skipped-directories
+                              (.getName current)))
+            (recur rest-pending files bytes)
+            (recur (into rest-pending (or (seq (.listFiles current)) []))
+                   files bytes))
+
+          :else (recur rest-pending (conj files current)
+                       (+ bytes (.length current))))))))
+
+;; @spec MCP-OP-ADMIT-153
+(defn overlay-snapshot!
+  "The workspace as this patch would leave it, in a directory of its own.
+
+  The profile path can run in the workspace root because its command is told
+  where the snapshot is and puts it first on a classpath. An inline command is
+  the caller's own sentence -- `make test` -- and has no such seam, so the only
+  honest venue for it is a tree that already contains the post-images. A green
+  from a command run in the unpatched workspace would be a green about bytes
+  the gate is not about to write, which is the failure mode this whole gate
+  exists to prevent.
+
+  Returns `{:ok true :root <File>}` or a typed refusal map."
+  [project-root images]
+  (let [source-root (io/file (str project-root))
+        walk (overlay-source-files source-root)]
+    (if (:over-ceiling walk)
+      {:ok false
+       :error-type :inline-verify-workspace-too-large
+       :error (str "inline verification copies the workspace into a snapshot"
+                   " and this tree passes the ceiling of "
+                   inline-overlay-max-files " files / "
+                   inline-overlay-max-bytes " bytes; run the commands"
+                   " yourself, or declare a focused-test profile whose"
+                   " command is pointed at {snapshot}")}
+      (let [root (temp-tree! "clj-surgeon-admit-overlay")
+            source-path (.toPath (.getCanonicalFile source-root))]
+        (doseq [^java.io.File file (:files walk)]
+          (let [relative (str (.relativize source-path
+                                           (.toPath (.getCanonicalFile file))))
+                target (io/file root relative)]
+            (.mkdirs (.getParentFile target))
+            (io/copy file target)))
+        (doseq [{:keys [file operation post]} images]
+          (let [target (io/file root file)]
+            (if (= :delete operation)
+              (.delete target)
+              (do (.mkdirs (.getParentFile target))
+                  (spit target post)))))
+        {:ok true :root root :files (count (:files walk))
+         :bytes (:bytes walk)}))))
+
+;; @spec MCP-OP-ADMIT-153
+;; @spec MCP-OP-ADMIT-156
+(defn run-inline-commands!
+  "Run the caller's commands in the overlay, in order, and report every one.
+
+  A non-zero exit stops the sequence: the commands are a conjunction, and
+  running the rest buys noise rather than evidence. Every command that did not
+  run is still NAMED on the receipt, because a row that is missing and a row
+  that was skipped read identically to a caller counting rows."
+  [{:keys [commands argvs cwd timeout-ms]} overlay-root]
+  (let [venue (if cwd (io/file overlay-root cwd) (io/file overlay-root))]
+    (loop [index 0 rows [] failed nil]
+      (cond
+        (or failed (= index (count argvs)))
+        (let [remaining (mapv (fn [i]
+                                {:command (nth commands i)
+                                 :argv (nth argvs i)
+                                 :status "not-run-after-failure"})
+                              (range index (count argvs)))]
+          {:rows (into rows remaining)
+           :failed failed
+           :cwd (.getPath venue)})
+
+        :else
+        (let [argv (nth argvs index)
+              {:keys [finished? exit output elapsed_ms]}
+              (change-buffer/run-process! (.getPath venue) argv
+                                          (long (or timeout-ms
+                                                    inline-default-timeout-ms)))
+              ok? (and (boolean finished?) (zero? (long (or exit 0))))
+              row {:command (nth commands index)
+                   :argv argv
+                   :exit exit
+                   :finished (boolean finished?)
+                   :status (cond ok? "passed"
+                                 (not finished?) "did-not-finish"
+                                 :else "failed")
+                   :elapsed_ms elapsed_ms
+                   :output_tail (inline-output-tail
+                                  output
+                                  (if ok?
+                                    inline-tail-lines
+                                    inline-failure-tail-lines))}]
+          (recur (inc index) (conj rows row)
+                 (when-not ok?
+                   {:index index
+                    :command (nth commands index)
+                    :argv argv
+                    :exit exit
+                    :finished (boolean finished?)})))))))
+
+;; @spec MCP-OP-ADMIT-153
+(defn inline-test-runner
+  "The inline verification, shaped like the focused runner's return value."
+  [spec overlay]
+  (if-not (:ok overlay)
+    ;; @spec MCP-OP-ADMIT-153
+    ;; The overlay's own kind travels as the REASON, the way an analyzer's
+    ;; failure does: the top-level kind stays `verification-incomplete`,
+    ;; because what happened is that a requested check could not run.
+    {:ran false
+     :reason (or (:error-type overlay) :inline-verify-overlay-unavailable)
+     :verify_mode "inline"
+     :overlay_error (:error overlay)
+     :namespaces []}
+    (let [{:keys [rows failed cwd]} (run-inline-commands! spec (:root overlay))]
+      (cond-> {:ran true
+               :verify_mode "inline"
+               :commands rows
+               :command_cwd cwd
+               :overlay_files (:files overlay)
+               :exit (:exit failed)
+               :exit-ok (nil? failed)
+               :namespaces []}
+        failed (merge {:reason (if (:finished failed)
+                                 :inline-verify-command-failed
+                                 :inline-verify-command-did-not-finish)
+                       :failed_command (:command failed)
+                       :failed_command_argv (:argv failed)
+                       :runner_exit (:exit failed)
+                       ;; @spec MCP-OP-ADMIT-156
+                       :runner_output_tail (:output_tail
+                                             (nth rows (:index failed)))})))))
+
+;; @spec MCP-OP-ADMIT-153
+(defn inline-evidence
+  "Whether an inline verification may be counted as verification.
+
+  The evidence class is the caller's own exit codes, named as such. It is a
+  weaker class than `namespace-report` -- nothing here proves a suite ran --
+  and the receipt says so rather than borrowing the stronger word: the caller
+  chose the commands, the receipt quotes them, and a reader can see what was
+  believed."
+  [tests]
+  (cond
+    (not (:ran tests)) {:ok false :reason (or (:reason tests)
+                                              :inline-verify-not-run)}
+    (some? (:reason tests)) {:ok false :reason (:reason tests)
+                             :exit (:exit tests)}
+    :else {:ok true :evidence :inline-command-exit}))
+
 ;; @spec MCP-OP-ADMIT-041
 ;; @spec MCP-OP-ADMIT-068
 ;; @spec MCP-OP-ADMIT-080
@@ -920,7 +1288,16 @@
                   :passed (- (reduce + 0 (map :tests (vals rows)))
                              (reduce + 0 (map #(+ (:failures %) (:errors %))
                                               (vals rows))))
-                  :skipped 0}))))))
+                  :skipped 0})
+          ;; @spec MCP-OP-ADMIT-156
+          ;; A suite that RAN and failed used to publish its counts and throw
+          ;; its own words away: the tail was attached only where the report
+          ;; was missing. The failing assertion's line is the fact the caller
+          ;; needs, and it is already in hand here.
+          (and rows (pos? (long (reduce + 0 (map #(+ (:failures %) (:errors %))
+                                                 (vals rows))))))
+          (merge {:runner_exit exit
+                  :runner_output_tail (runner-output-tail output)}))))))
 
 ;; @spec MCP-OP-ADMIT-044
 ;; @spec MCP-OP-ADMIT-080
@@ -975,6 +1352,12 @@
   #{:verification-runner-failed :report-file-absent
     ;; @spec MCP-OP-ADMIT-111
     :focused-namespace-missing
+    ;; @spec MCP-OP-ADMIT-153
+    ;; The overlay could not be built, so no command ever ran. That is a
+    ;; check that did not happen, never half a verification.
+    :inline-verify-overlay-unavailable
+    :inline-verify-workspace-too-large
+    :inline-verify-not-run
     ;; @spec MCP-OP-ADMIT-118
     :focused-test-profile-has-no-command})
 
@@ -1032,10 +1415,18 @@
     :reading? (true? (:ran lint))
     :clean? (analyzer-clean-reading? lint)
     :reason (or (:error-type lint) (:reason lint) :analyzer-unverified)}
-   {:detector "focused-tests"
-    :reading? (or (true? (:ok evidence)) (= :tests-failed (:reason evidence)))
-    :clean? (true? (:ok evidence))
-    :reason (or (:reason evidence) :no-test-evidence)}])
+   ;; @spec MCP-OP-ADMIT-153
+   ;; An inline run's detector is named for what it actually is: the caller's
+   ;; own commands and their exit codes. Publishing it as `focused-tests`
+   ;; would let a reader believe a suite was attributed when none was.
+   (let [inline? (= "inline" (:verify_mode evidence))
+         failed-kinds #{:tests-failed :inline-verify-command-failed
+                        :inline-verify-command-did-not-finish}]
+     {:detector (if inline? "inline-commands" "focused-tests")
+      :reading? (or (true? (:ok evidence))
+                    (contains? failed-kinds (:reason evidence)))
+      :clean? (true? (:ok evidence))
+      :reason (or (:reason evidence) :no-test-evidence)})])
 
 ;; @spec MCP-OP-ADMIT-123
 ;; @spec MCP-OP-ADMIT-125
@@ -1048,7 +1439,8 @@
   shape the field replay had: `ok` true, `hazards` all class note, an empty
   blocking set, and an analyzer that never executed."
   [verify verdicts]
-  (if (not= "focused" verify)
+  ;; @spec MCP-OP-ADMIT-153
+  (if-not (contains? #{"focused" "inline"} verify)
     (mapv (fn [{:keys [detector]}]
             {:detector detector :reason :verification-not-requested})
           verdicts)
@@ -1066,7 +1458,8 @@
   nothing at all could be checked. Those deserve different reactions, so the
   receipt says which of the requested checks produced a usable result."
   [verify lint evidence]
-  (if (not= "focused" verify)
+  ;; @spec MCP-OP-ADMIT-153
+  (if-not (contains? #{"focused" "inline"} verify)
     {:status :unverified :reasons [:verification-not-requested]}
     (let [;; @spec MCP-OP-ADMIT-125
           lint-ok (analyzer-clean-reading? lint)
@@ -1101,7 +1494,7 @@
 ;; @spec MCP-OP-ADMIT-082
 (defn- verify-snapshot!
   "Run every requested check against the snapshot, before anything is written."
-  [config images verify]
+  [config images verify verify-spec]
   (let [clojure-images (filterv #(and (= "clojure" (file-kind (:file %)))
                                       (not= :delete (:operation %)))
                                 images)
@@ -1128,12 +1521,27 @@
                             ;; directly at the only place that can see it.
                             :profile_absent (nil? profile)}
         lint (lint-runner config clojure-images)
+        inline? (= "inline" verify)
+        ;; @spec MCP-OP-ADMIT-153
+        ;; An inline command is the caller's own sentence and has no seam to
+        ;; be told where a partial snapshot is, so its venue is a full overlay
+        ;; of the workspace with the post-images written over it.
+        overlay (when inline?
+                  (try
+                    (overlay-snapshot! (:project-root config) images)
+                    (catch Exception error
+                      {:ok false
+                       :error-type :inline-verify-overlay-unavailable
+                       :error (or (.getMessage error)
+                                  (.getName (class error)))})))
         snapshot (temp-tree! "clj-surgeon-admit-snapshot")]
     (try
       (materialize! snapshot
                     (remove #(= :delete (:operation %)) images)
                     :post)
-      (let [tests (if (seq (:missing plan))
+      (let [tests (if inline?
+                    (inline-test-runner verify-spec overlay)
+                    (if (seq (:missing plan))
                     ;; @spec MCP-OP-ADMIT-111
                     ;; The tree named a suite that is not in the tree. Running
                     ;; the runner here buys an opaque exit code; refusing here
@@ -1143,18 +1551,25 @@
                      :missing_focused_namespaces (:missing plan)
                      :namespaces namespaces}
                     (test-runner config {:namespaces namespaces
-                                         :snapshot-root (.getPath snapshot)}))
+                                         :snapshot-root (.getPath snapshot)})))
             tests (merge {:ran false :passed 0 :failed 0 :skipped 0
                           :tests-run 0 :namespaces namespaces}
+                         (if inline? {} profile-provenance)
                          tests
-                         profile-provenance)
-            evidence (test-evidence tests namespaces)
+                         (when inline? {:profile_absent (nil? profile)}))
+            evidence (if inline?
+                       ;; @spec MCP-OP-ADMIT-153
+                       (assoc (inline-evidence tests) :verify_mode "inline")
+                       (test-evidence tests namespaces))
             ;; @spec MCP-OP-ADMIT-125
             verdicts (detector-verdicts lint evidence)
             {:keys [status reasons]} (verification-status verify lint evidence)
             lint-blocking (and (:ran lint) (false? (:ok lint)))
-            tests-blocking (and (:ran tests)
-                                (pos? (long (or (:failed tests) 0))))]
+            tests-blocking (if inline?
+                             ;; @spec MCP-OP-ADMIT-153
+                             (and (:ran tests) (false? (:exit-ok tests)))
+                             (and (:ran tests)
+                                  (pos? (long (or (:failed tests) 0)))))]
         {:lint_delta lint
          ;; @spec MCP-OP-ADMIT-123
          :detectors_not_run (detectors-not-run verify verdicts)
@@ -1167,10 +1582,14 @@
          :verification_complete (= :complete status)
          ::blocking (cond
                       lint-blocking :blocking-lint-findings
-                      tests-blocking :focused-tests-failed
+                      tests-blocking (if inline?
+                                       :inline-verify-command-failed
+                                       :focused-tests-failed)
                       :else nil)})
       (finally
-        (delete-tree! snapshot)))))
+        (delete-tree! snapshot)
+        ;; @spec MCP-OP-ADMIT-153
+        (when (:root overlay) (delete-tree! (:root overlay)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Execution
@@ -1598,12 +2017,75 @@
           ;; The same predicate `verification_status` and `detectors_not_run`
           ;; use, so the three cannot disagree about what ran.
           analyzer-read? (analyzer-clean-reading? (:lint_delta verification))]
+      ;; @spec MCP-OP-ADMIT-153
+      ;; The waiver exists for a tree that CANNOT produce test evidence. An
+      ;; inline call is a caller that supplied the check itself, so there is
+      ;; always a check that could run and the honest-absence case never
+      ;; applies -- a failing inline command must never be waivable.
       (when-not (and allow-partial?
                      (= "focused" verify)
                      (= :partial (:verification_status verification))
                      profile-absent?
                      analyzer-read?)
         reason))))
+
+;; @spec MCP-OP-ADMIT-154
+(def inline-verify-affordance
+  "The ONE call that supplies a missing profile, spelled as a caller sends it."
+  (str "admit_clojure_patch {\"mode\": \"commit\", \"verify\": {\"commands\":"
+       " [\"make test\"]}, \"patch\": \"…\"}"))
+
+;; @spec MCP-OP-ADMIT-154
+(defn verification-incomplete-error
+  "Why this commit stopped, in words the caller can act on.
+
+  A remedy that names an internal state -- `repair no-focused-test-profile` --
+  is not a remedy: it names something an agent cannot reach from inside a
+  task. When the state IS the absent profile, the sentence leads with that
+  fact and hands over the exact call that fixes it in one hop."
+  [verification reason]
+  (let [status (name (:verification_status verification))
+        reasons (str/join ", " (map name (:verification_reasons verification)))]
+    (if (= :no-focused-test-profile reason)
+      (str "this workspace has no verification profile, so the gate could run"
+           " no check of its own and wrote nothing. Supply your own commands"
+           " in the same call -- they run inside the gate's snapshot and their"
+           " exit codes and last lines come back on this receipt: "
+           inline-verify-affordance
+           ". Use mode propose first to read the result without a write.")
+      (str "Verification did not complete (" status ": " reasons
+           "); nothing was written. Run mode preview to see the same receipt"
+           " without a write, and repair " (name reason)
+           " before committing."))))
+
+;; @spec MCP-OP-ADMIT-156
+(defn verification-failure-detail
+  "The failing command's own exit code and last lines, for the refusal.
+
+  A refusal that says only `focused-tests-failed` hands a reader a category
+  and a dead end. The failing assertion's line is the one fact that makes the
+  next edit possible; the gate already holds it, and discarding it is what
+  sends the caller back outside the gate to run the suite again."
+  [verification]
+  (let [tests (:tests verification)
+        exit (or (:runner_exit tests) (:exit tests))
+        tail (:runner_output_tail tests)
+        command (or (:failed_command tests) (:command_argv tests))]
+    (cond-> {}
+      (some? exit) (assoc :failing_command_exit exit)
+      (some? command) (assoc :failing_command command)
+      (not (str/blank? (str tail))) (assoc :failing_command_output_tail tail))))
+
+;; @spec MCP-OP-ADMIT-156
+(defn- verification-failed-error
+  [blocked verification suffix]
+  (let [{:keys [failing_command_exit failing_command_output_tail]}
+        (verification-failure-detail verification)]
+    (str "Snapshot verification failed (" (name blocked) ")" suffix
+         (when (some? failing_command_exit)
+           (str "; the command exited " failing_command_exit))
+         (when failing_command_output_tail
+           (str "; its last lines were:\n" failing_command_output_tail)))))
 
 (defn- execute-in-context!
   [config {:keys [patch mode verify expect_pre_sha256 allow_partial]}
@@ -1615,28 +2097,41 @@
         ;; receipt. `context` is what `refusal` merges into
         ;; `(empty-receipt (:mode context))`, so an unvalidated mode here is
         ;; a caller writing an identity key of every refusal below.
-        mode (if (contains? #{"preview" "commit"} requested-mode)
+        ;; @spec MCP-OP-ADMIT-157
+        mode (if (contains? #{"preview" "propose" "commit"} requested-mode)
                requested-mode
                "preview")
-        verify (if (contains? #{"focused" "none"} requested-verify)
-                 requested-verify
-                 "focused")
+        ;; @spec MCP-OP-ADMIT-153
+        verify-spec (normalize-verify (when (some? verify) verify))
+        verify (or (:mode verify-spec) "focused")
         context {:mode mode :workspace-root workspace-root
-                 :patch patch :verify verify}]
+                 :patch patch
+                 ;; @spec MCP-OP-ADMIT-153
+                 ;; A follow-up call must be SENDABLE, so an inline plan
+                 ;; travels to `next-call` as the object the caller sent
+                 ;; rather than as the word `inline`, which is a receipt
+                 ;; vocabulary and not a request one.
+                 :verify (if (= "inline" verify) requested-verify verify)}]
     (cond
       ;; @spec MCP-OP-ADMIT-140
       ;; FIRST, before the patch is even looked at: a mode outside the enum is
       ;; a typed refusal naming the field, quoting the value cut to a bounded
       ;; spelling, and carrying the DEFAULT mode in the receipt it publishes.
-      (not (contains? #{"preview" "commit"} requested-mode))
+      (not (contains? #{"preview" "propose" "commit"} requested-mode))
       (refusal context :invalid-admit-request
-               (str "mode must be preview or commit; this call sent "
+               (str "mode must be preview, propose or commit; this call sent "
                     (bounded-caller-spelling requested-mode)))
 
-      (not (contains? #{"focused" "none"} requested-verify))
+      ;; @spec MCP-OP-ADMIT-153
+      (= :not-a-vocabulary (:error verify-spec))
       (refusal context :invalid-admit-request
-               (str "verify must be focused or none; this call sent "
+               (str "verify must be focused, none, or an object naming your"
+                    " own commands -- {\"commands\": [\"make test\"]};"
+                    " this call sent "
                     (bounded-caller-spelling requested-verify)))
+
+      (:error verify-spec)
+      (refusal context :invalid-admit-request (:error verify-spec))
 
       (not (and (string? patch) (not (str/blank? patch))))
       (refusal context :invalid-patch
@@ -1760,12 +2255,27 @@
                                                         [file pre])))
                                                (:hashes report))
                               context (assoc context :expect-pre expect-pre)
+                              ;; @spec MCP-OP-ADMIT-155
+                              ;; `unbound` was a lie of omission. The gate
+                              ;; freezes every touched file itself and
+                              ;; re-reads all of them under exclusive write
+                              ;; authority immediately before the write, so a
+                              ;; commit with no caller digests is already
+                              ;; fenced against a tree that moved -- and the
+                              ;; word `unbound` read as NO PROTECTION, which
+                              ;; is what sent a field agent to spend four to
+                              ;; five minutes computing whole-file digests for
+                              ;; eight files before its first call. `bound`
+                              ;; keeps its stronger meaning: it also covers
+                              ;; the interval BEFORE this call, between the
+                              ;; preview the caller read and this commit,
+                              ;; which the gate cannot observe for itself.
                               base-binding (cond
                                              ;; Nothing existed to bind to.
                                              (every? #(= :add (:operation %))
                                                      images) "created"
                                              (seq expect_pre_sha256) "bound"
-                                             :else "unbound")
+                                             :else "derived")
                               no-op? (every? #(= (:pre %) (:post %)) images)
                               blocking (form-identity/refusal-hazards
                                          (:hazards report))
@@ -1830,8 +2340,8 @@
                             ;; blocks the commit; a check that could not run
                             ;; does not block it, but never reads as complete.
                             (let [verification
-                                  (if (= "focused" verify)
-                                    (verify-snapshot! config images verify)
+                                  (if (contains? #{"focused" "inline"} verify)
+                                    (verify-snapshot! config images verify verify-spec)
                                     ;; @spec MCP-OP-ADMIT-119
                                     {:verification_status :unverified
                                      :verification_reasons
@@ -1851,18 +2361,44 @@
                                   blocked (::blocking verification)
                                   verification (dissoc verification ::blocking)]
                               (cond
+                                ;; @spec MCP-OP-ADMIT-157
+                                ;; `propose` is the loop: run the same checks
+                                ;; in the same snapshot, publish the same
+                                ;; receipt, write nothing, and do NOT convert
+                                ;; a failing check into a refusal -- the
+                                ;; verdict is a field, so the caller can read
+                                ;; the failing lines and send the fix without
+                                ;; having to distinguish a refused call from a
+                                ;; broken one.
+                                (= "propose" mode)
+                                (merge base verification
+                                       (verification-failure-detail
+                                         verification)
+                                       {:ok true
+                                        :operation :admit-patch-proposed
+                                        :committed false
+                                        :mutation_attempted false
+                                        :source-unchanged true
+                                        :verify_ok (nil? blocked)
+                                        :next_call (next-call context
+                                                              "commit" nil)})
+
                                 (and blocked (= "commit" mode))
                                 (merge base verification
+                                       ;; @spec MCP-OP-ADMIT-156
+                                       (verification-failure-detail
+                                         verification)
                                        {:ok false
                                         :operation :admit-patch-refused
                                         :committed false
                                         :mutation_attempted false
                                         :source-unchanged true
+                                        :verify_ok false
                                         :error-type :verification-failed
-                                        :error (str "Snapshot verification failed ("
-                                                    (name blocked)
-                                                    "); nothing was written")
-                                        :next_call (next-call context "preview"
+                                        :error (verification-failed-error
+                                                 blocked verification
+                                                 "; nothing was written")
+                                        :next_call (next-call context "propose"
                                                               blocked)})
 
                                 ;; @spec MCP-OP-ADMIT-105
@@ -1881,44 +2417,49 @@
                                           :committed false
                                           :mutation_attempted false
                                           :source-unchanged true
+                                          :verify_ok false
                                           :error-type :verification-incomplete
+                                          ;; @spec MCP-OP-ADMIT-154
                                           :error
-                                          (str "Verification did not complete ("
-                                               (name (:verification_status
-                                                       verification))
-                                               ": "
-                                               (str/join ", "
-                                                         (map name
-                                                              (:verification_reasons
-                                                                verification)))
-                                               "); nothing was written. Run "
-                                               "mode preview to see the same "
-                                               "receipt without a write, and "
-                                               "repair "
-                                               (name reason)
-                                               " before committing.")
+                                          (verification-incomplete-error
+                                            verification reason)
                                           ;; @spec MCP-OP-ADMIT-120
+                                          ;; @spec MCP-OP-ADMIT-154
                                           ;; Propose the verify that can lift
                                           ;; this, not the one that just
-                                          ;; failed to.
+                                          ;; failed to. Where the profile is
+                                          ;; the missing thing, the only
+                                          ;; verify that can lift it is the
+                                          ;; caller's own commands.
                                           :next_call
-                                          (next-call (assoc context
-                                                            :verify "focused")
-                                                     "preview"
-                                                     :verification-incomplete)}))
+                                          (next-call
+                                            (assoc context :verify
+                                                   (if (= :no-focused-test-profile
+                                                          reason)
+                                                     {:commands
+                                                      ["<your project's test command, e.g. make test>"]}
+                                                     "focused"))
+                                            "propose"
+                                            :verification-incomplete)}))
 
                                 (= "preview" mode)
                                 (merge base verification
                                        {:operation :admit-patch-preview
+                                        :verify_ok (nil? blocked)
                                         :next_call (next-call context "commit" nil)}
                                        (when blocked
-                                         {:ok false
-                                          :operation :admit-patch-refused
-                                          :error-type :verification-failed
-                                          :error (str "Snapshot verification failed ("
-                                                      (name blocked) ")")
-                                          :next_call (next-call context "preview"
-                                                                blocked)}))
+                                         (merge
+                                           ;; @spec MCP-OP-ADMIT-156
+                                           (verification-failure-detail
+                                             verification)
+                                           {:ok false
+                                            :operation :admit-patch-refused
+                                            :error-type :verification-failed
+                                            :error (verification-failed-error
+                                                     blocked verification "")
+                                            :next_call (next-call
+                                                         context "propose"
+                                                         blocked)})))
 
                                 :else
                                 (do
@@ -1954,6 +2495,8 @@
                                                               :committed true
                                                               :mutation_attempted true
                                                               :source-unchanged false
+                                                              ;; @spec MCP-OP-ADMIT-157
+                                                              :verify_ok (nil? blocked)
                                                               :lock_scope scope
                                                               :next_call nil})
                                                 lock-path
