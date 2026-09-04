@@ -1143,3 +1143,113 @@
           (thread! fixture-root {:subject (apply str (repeat ft/max-subject-chars \z))})]
       (is (not= "feature-thread-subject-too-long" (:error_type structured))
           "a subject exactly at the ceiling is admitted"))))
+
+;; ---------------------------------------------------------------------------
+;; ROUND FOUR -- B3: the automatic implementation leg must be WALKED over its
+;; own globs, its N/A reason must name the seed it is about, and a leg that was
+;; never scanned must never be silently dropped from the denominator.
+;; ---------------------------------------------------------------------------
+
+(defn- write-file!
+  [^java.io.File root relative ^String content]
+  (let [f (io/file root relative)]
+    (.mkdirs (.getParentFile f))
+    (spit f content)
+    f))
+
+(defn- lines-of
+  [^java.io.File root relative]
+  (str/split (slurp (io/file root relative)) #"\n" -1))
+
+(def ^:private mechanical-format-range
+  "`(defn mechanical-format …)` in the fixture handler, 1-based inclusive."
+  [81 132])
+
+(defn- mechanical-format-source
+  [^java.io.File root]
+  (let [ls (lines-of root "src/writer/handlers/transform.clj")
+        [from to] mechanical-format-range]
+    (str/join "\n" (subvec (vec ls) (dec from) to))))
+
+(defn- move-implementation-out-of-scope!
+  "Move `(defn mechanical-format …)` verbatim into src/writer/other/dup.clj --
+  still under src/, still .clj, still matched by the automatic leg's own
+  `src/**/*.clj`, and outside EVERY glob the convention set declares."
+  [^java.io.File root]
+  (let [body (mechanical-format-source root)
+        ls (vec (lines-of root "src/writer/handlers/transform.clj"))
+        [from to] mechanical-format-range]
+    (write-file! root "src/writer/handlers/transform.clj"
+                 (str/join "\n" (concat (subvec ls 0 (dec from)) (subvec ls to))))
+    (write-file! root "src/writer/other/dup.clj"
+                 (str "(ns writer.other.dup)\n\n" body "\n"))))
+
+;; @spec MCP-OP-THREAD-028
+(deftest the-automatic-implementation-leg-is-scanned-over-its-own-globs
+  (testing "a definition a seed names, outside every DECLARED glob, is found"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-falsefx")]
+      (try
+        (move-implementation-out-of-scope! scratch)
+        (is (str/includes? (slurp (io/file scratch "src/writer/other/dup.clj"))
+                           "(defn mechanical-format")
+            "precondition: the definition really is in the out-of-scope file")
+        (is (not (str/includes?
+                   (slurp (io/file scratch "src/writer/handlers/transform.clj"))
+                   "(defn mechanical-format"))
+            "precondition: it is no longer in any declared leg's file")
+        (let [{:keys [text structured]} (thread! (.getPath scratch))
+              impl (leg structured "implementation")]
+          (is (= "FOUND" (:status impl))
+              (str "the implementation leg reported " (:status impl)
+                   " while the definition sat unread in src/writer/other/dup.clj"))
+          (is (= "src/writer/other/dup.clj" (:file impl)))
+          (is (str/includes? text "src/writer/other/dup.clj")
+              "the receipt never names the file that holds the definition")
+          (is (not (str/includes? text "COMPLETE (5 of 5)"))
+              "COMPLETE with the definition leg uncounted is a false green")
+          (is (= "COMPLETE (6 of 6)" (:status structured))))
+        (finally (delete-tree! scratch))))))
+
+;; @spec MCP-OP-THREAD-029
+(deftest two-definitions-of-one-seed-are-both-named
+  (testing "the second owner of a seed's name is reported, not silently dropped"
+    (let [scratch (scratch-copy! fixture-root "feature-thread-twodef")]
+      (try
+        (write-file! scratch "src/writer/other/dup.clj"
+                     (str "(ns writer.other.dup)\n\n"
+                          (mechanical-format-source scratch) "\n"))
+        (let [{:keys [text structured]} (thread! (.getPath scratch))
+              impl (leg structured "implementation")
+              named (set (concat [(:file impl)] (map :file (:also impl))))]
+          (is (= "FOUND" (:status impl)))
+          (is (contains? named "src/writer/other/dup.clj")
+              (str "the receipt names only " named
+                   " -- the second definition of the seed is unmentioned"))
+          (is (str/includes? text "src/writer/other/dup.clj")))
+        (finally (delete-tree! scratch))))))
+
+;; @spec MCP-OP-THREAD-030
+(deftest an-uncounted-implementation-leg-says-which-seed-and-whether-it-was-scanned
+  (testing "the N/A reason names the SEED it is about, never an unrelated leg"
+    (let [{:keys [structured]} (call! {:subject "formatDraft"
+                                       :config smw-conventions
+                                       :scope {:workspace_root fixture-root}})
+          impl (leg structured "implementation")]
+      (is (= "N/A" (:status impl)))
+      (is (str/includes? (:reason impl) "formatDraft")
+          (str "the reason does not name the seed it is about: " (:reason impl)))))
+
+  (testing "a leg whose globs were never walked is UNSCANNED and IS counted"
+    (let [conv (ft/normalize-conventions smw-conventions "test")
+          conventions (:conventions conv)
+          auto (ft/implementation-leg conventions)
+          cache (ft/make-cache fixture-root)
+          resolved (ft/resolve-implementation
+                     cache [] {:identifiers ["mechanical-format"] :routes []}
+                     auto [] [])]
+      (is (= "UNSCANNED" (:status resolved))
+          (str "a leg whose globs " (:globs auto)
+               " were not in the walk reported " (:status resolved)))
+      (is (str/includes? (str (:reason resolved)) "src/**/*.clj"))
+      (is (false? (:complete (ft/thread-status [{:id "a" :status "FOUND"} resolved])))
+          "an UNSCANNED leg must never be dropped from the denominator"))))

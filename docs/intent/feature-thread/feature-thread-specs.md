@@ -185,3 +185,21 @@ run as a test inside `make mcp-test`) enforces both halves.
   longer than `max-subject-chars`, or `also` carries more than `max-also-seeds`
   seeds or a seed longer than `max-subject-chars`, clj-surgeon shall refuse
   before reading any file, naming the field and the ceiling.
+
+- [x] **MCP-OP-THREAD-028**: The automatic leg is scanned over its own globs.
+  When `feature_thread` bounds its workspace walk, it shall union the automatic
+  `implementation` leg's globs into the candidate set BEFORE the walk, so that
+  leg can find a definition in a file no declared leg selected.
+
+- [x] **MCP-OP-THREAD-029**: An uncounted leg names its seed and its scope.
+  When the automatic `implementation` leg is not counted, clj-surgeon shall
+  report `N/A` only when a search really ran and found nothing new — naming the
+  SEED whose definition is already a leg, never an unrelated leg's range — and
+  shall report `UNSCANNED`, COUNTED toward the leg status, whenever the leg's
+  globs were not part of the walk.
+
+- [x] **MCP-OP-THREAD-030**: A printed search is a search that ran. When
+  `feature_thread` renders a leg's `found by:`/`searched:` line, the command
+  shall reproduce the candidate set the verb actually searched, including any
+  `scope.paths` narrowing, so a caller pasting it into a shell cannot get an
+  answer the receipt does not have.
