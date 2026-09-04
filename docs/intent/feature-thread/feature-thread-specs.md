@@ -255,3 +255,11 @@ run as a test inside `make mcp-test`) enforces both halves.
   anything else is not a read), `js_posts` (the keys of the object literal the
   script sends), `agree?`, and, when they disagree, `only_in_js` and
   `only_in_handler` so the caller knows which side to edit.
+
+- [x] **MCP-OP-THREAD-038**: The receipt proves the negatives too. When
+  `feature_thread` returns, it shall carry `absent`: every seed identifier and
+  every `probe` identifier with no definition-shaped hit and no occurrence
+  OUTSIDE a comment, each with the rendered search that says so and the reason
+  (no occurrence at all, or every occurrence commented), so a reader never has
+  to run `rg` to prove a negative. `probe` is admitted like any other field,
+  with a ceiling of `max-probe-identifiers`.

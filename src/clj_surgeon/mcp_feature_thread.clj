@@ -179,6 +179,14 @@
   "Most `also` seeds accepted in one request."
   32)
 
+(def max-probe-identifiers
+  "Most `probe` identifiers accepted in one request.
+
+  Each one costs a scan of the whole candidate set, so this is a real ceiling
+  and not decoration: it is smaller than `max-also-seeds` because a probe buys
+  a single yes/no where a seed buys a whole leg."
+  16)
+
 (def max-verify-rows
   "Verify rows returned for one tests primary."
   4)
@@ -2026,6 +2034,34 @@
                     " a typed refusal, never a retry")}
       (verify-row cache legs))))
 
+;; @spec MCP-OP-THREAD-038
+(defn negative-evidence
+  "The identifiers that are NOT in this tree, each with the search that says so.
+
+  A receipt that names only what it found leaves the reader to prove the
+  negative themselves -- `rg -i dequote` over the whole tree -- which is the
+  call this verb exists to save. So the absences are first-class: every seed
+  identifier and every `probe` identifier that has no definition-shaped hit and
+  no occurrence OUTSIDE a comment is reported here, with the rendered search.
+
+  An absence with no search behind it is an opinion, so the search is not
+  optional. `probe` exists because the question a reader most wants answered is
+  usually about a name that is NOT one of the seeds."
+  [cache paths globs identifiers]
+  (->> (distinct (remove str/blank? identifiers))
+       (keep (fn [ident]
+               (let [regex (quote-literal ident)
+                     {:keys [hits]} (scan cache paths globs regex)
+                     live (remove :in_comment hits)]
+                 (when (empty? live)
+                   {:identifier ident
+                    :searched (render-search globs ["identifier" regex])
+                    :reason (if (seq hits)
+                              (str "every occurrence is inside a comment ("
+                                   (count hits) " of them)")
+                              "no occurrence anywhere in the candidate set")}))))
+       vec))
+
 ;; @spec MCP-OP-THREAD-025
 (defn next-call
   "The call that can actually BIND what this receipt asserts.
@@ -2526,6 +2562,13 @@
                                    (:verify rules))))
                (str "\n  verify none · " (:verify_reason rules)))
              "\nassert " (:assert rules)
+             ;; @spec MCP-OP-THREAD-038
+             (when (seq (:absent result))
+               (str "\n  absent "
+                    (str/join "\n  absent "
+                              (map #(str (:identifier %) " — " (:reason %)
+                                         "\n    searched: " (:searched %))
+                                   (:absent result)))))
              (when-let [n (:next_call result)]
                (str "\nnext_call " (:tool n) " expect_pre_sha256="
                     (str/join " " (map (fn [[f sha]] (str f ":" sha))
@@ -2782,7 +2825,7 @@
 
 (def allowed-fields
   #{:subject :also :scope :config :budget_bytes :include_bodies :mode :mirror
-    :axis :workspace_root})
+    :axis :workspace_root :probe})
 
 (defn- refuse
   [error-type message extra]
@@ -2847,7 +2890,38 @@
                :remedy (str "Every seed is an identifier or a route, at most "
                             max-subject-chars " characters.")})
 
-      (and (some? scope) (not (map? scope)))
+        ;; @spec MCP-OP-THREAD-038
+      (and (some? (:probe params))
+           (not (and (sequential? (:probe params))
+                     (every? #(and (string? %) (seq (str/trim %))) (:probe params)))))
+      (refuse "feature-thread-invalid-probe"
+              "probe must be an array of non-blank identifiers to rule in or out"
+              {:field "probe"
+               :remedy "Pass probe as a vector of strings, or omit it."})
+
+      ;; @spec MCP-OP-THREAD-038
+      (and (sequential? (:probe params))
+           (> (count (:probe params)) max-probe-identifiers))
+      (refuse "feature-thread-probe-too-many"
+              (str "probe carries " (count (:probe params)) " identifiers,"
+                   " above the ceiling of " max-probe-identifiers)
+              {:max_probe_identifiers max-probe-identifiers
+               :field "probe"
+               :remedy (str "Pass at most " max-probe-identifiers
+                            " probe identifiers.")})
+
+      ;; @spec MCP-OP-THREAD-027
+      (and (sequential? (:probe params))
+           (some #(> (count %) max-subject-chars) (:probe params)))
+      (refuse "feature-thread-probe-identifier-too-long"
+              (str "a probe identifier is longer than the ceiling of "
+                   max-subject-chars " characters")
+              {:max_subject_chars max-subject-chars
+               :field "probe"
+               :remedy (str "Every probe identifier is at most "
+                            max-subject-chars " characters.")})
+
+    (and (some? scope) (not (map? scope)))
       (refuse "feature-thread-invalid-scope"
               "scope must be an object with optional workspace_root and paths"
               {:remedy "Pass scope as {\"workspace_root\": ..., \"paths\": [...]}."})
@@ -2925,7 +2999,8 @@
         admission (admit normalized)]
     (if-not (:ok admission)
       admission
-      (let [{:keys [subject also scope budget_bytes include_bodies mode mirror axis]}
+      (let [{:keys [subject also scope budget_bytes include_bodies mode mirror axis
+                    probe]}
             normalized
             root (or (:workspace_root scope)
                      (:workspace_root normalized)
@@ -3005,6 +3080,11 @@
                                 :sibling sibling
                                 :rules rules
                                 :next_call (next-call cache legs)
+                                ;; @spec MCP-OP-THREAD-038
+                                :absent (negative-evidence
+                                          cache paths candidate-globs
+                                          (concat (:identifiers seeds)
+                                                  (or probe [])))
                                 :elided []}
                                status)
                         [_ fitted] (fit-to-budget base budget)]
@@ -3054,6 +3134,12 @@
                                  " by. A value beginning with / is a route.")}
     "also" {:type "array" :items {:type "string" :minLength 1}
             :description "Additional identifier or route seeds for the same thread."}
+    "probe" {:type "array" :items {:type "string" :minLength 1}
+             :description (str "Extra identifiers to rule IN or OUT. Any that"
+                               " have no occurrence outside a comment are"
+                               " reported in `absent` with the search that says"
+                               " so, so a reader never has to run rg to prove a"
+                               " negative.")}
     "scope" {:type "object"
              :additionalProperties false
              :properties {"workspace_root" {:type "string" :minLength 1}
@@ -3099,6 +3185,7 @@
     "elided" {:type "array" :items {:type "object"}}
     "budget_bytes" {:type "integer"}
     "would_be_text_bytes" {:type "integer"}
+    "absent" {:type "array" :items {:type "object"}}
     "receipt_bytes" {:type "integer"}
     "workspace_root" {:type "string"}
     "error_type" {:type "string"}
