@@ -4985,9 +4985,16 @@
 ;; removed, so `"a\n\nb"` and `"a\nb"` rendered byte-identically at one
 ;; pointer.
 (deftest a-rendered-line-is-a-single-line-by-construction
-  (let [control-chars #(or (str/includes? % "\n")
-                           (str/includes? % "\r")
-                           (str/includes? % "\t"))
+  ;; @spec MCP-OP-STUDY-053 — the CLASS, not the three characters that were
+  ;; named first. A line is whatever a splitter of the published text calls a
+  ;; line, and `java.util.regex`'s `\R` — the Unicode line-boundary class —
+  ;; breaks on the vertical tab, the form feed, NEL (U+0085) and the Unicode
+  ;; LINE and PARAGRAPH separators (U+2028, U+2029) as well as on `\n` and
+  ;; `\r`. Field evidence (Sol O2 round-9 review, 2026-09-04, section 2):
+  ;; U+2028 and U+2029 were left RAW, so `text-line-index` saw one line where
+  ;; a Unicode-aware splitter saw two.
+  (let [splitting "\n\r\t\u000B\u000C\u0085\u2028\u2029"
+        control-chars #(boolean (some (set splitting) %))
         cases {"a newline in a pointer" {"bad\nkey" "the-distinctive-pointer-value"}
                "a carriage return in a pointer" {"bad\rkey" "the-distinctive-pointer-value"}
                "a tab in a pointer" {"bad\tkey" "the-distinctive-pointer-value"}
@@ -4996,7 +5003,29 @@
                "a tab in a value" {:key "the-distinctive-value\tcolumn"}
                "a value that is only whitespace" {:key "   \n\t  "}
                "every control character at once"
-               {"bad\nkey\ttoo" "the-distinctive-value\r\nwrapped"}}]
+               {"bad\nkey\ttoo" "the-distinctive-value\r\nwrapped"}
+               "a Unicode line separator in a pointer"
+               {"bad\u2028key" "the-distinctive-pointer-value"}
+               "a Unicode paragraph separator in a pointer"
+               {"bad\u2029key" "the-distinctive-pointer-value"}
+               "a next-line character in a pointer"
+               {"bad\u0085key" "the-distinctive-pointer-value"}
+               "a vertical tab in a pointer"
+               {"bad\u000Bkey" "the-distinctive-pointer-value"}
+               "a form feed in a pointer"
+               {"bad\u000Ckey" "the-distinctive-pointer-value"}
+               "a Unicode line separator in a value"
+               {:key "the-distinctive-value\u2028second-line"}
+               "a Unicode paragraph separator in a value"
+               {:key "the-distinctive-value\u2029second-line"}
+               "a next-line character in a value"
+               {:key "the-distinctive-value\u0085second-line"}
+               "a vertical tab in a value"
+               {:key "the-distinctive-value\u000Bcolumn"}
+               "a form feed in a value"
+               {:key "the-distinctive-value\u000Cpage"}
+               "every line boundary at once"
+               {"bad\u2028key\u0085too" "the-distinctive-value\u2029wrapped"}}]
     (doseq [[label result] (sort cases)]
       (testing label
         ;; 1. Every leaf renders EXACTLY ONE line, and that line holds no
@@ -5008,7 +5037,15 @@
                      " lines: " (pr-str lines)))
             (is (not (control-chars (first lines)))
                 (str "leaf " (pr-str path) " rendered a line carrying a raw "
-                     "control character: " (pr-str (first lines))))))
+                     "control character: " (pr-str (first lines))))
+            ;; And the line a UNICODE-AWARE splitter finds is the same line.
+            ;; `clojure.string/split-lines` breaks only on `\n` and `\r\n`;
+            ;; the published text is read by whatever the caller has.
+            (is (= 1 (count (str/split (first lines) #"\R" -1)))
+                (str "leaf " (pr-str path) " rendered a line a Unicode line "
+                     "splitter breaks into "
+                     (count (str/split (first lines) #"\R" -1))
+                     " lines: " (pr-str (first lines))))))
         ;; 2. The complete rendering carries every leaf, and the audit of the
         ;;    text it published agrees with what it declared.
         (let [block (inspect/fact-block "" result inspect/unbounded-evidence)
@@ -5043,6 +5080,26 @@
     (is (not= (inspect/leaf-lines [:key] "the-distinctive-value\n\ntail")
               (inspect/leaf-lines [:key] "the-distinctive-value\ntail"))
         "a blank line inside a value made no difference to its rendering")
+    ;; @spec MCP-OP-STUDY-053 — and the VALUE side is INJECTIVE over the whole
+    ;; boundary class, not only over `\n`. Field evidence (Sol O2 round-9
+    ;; review, 2026-09-04, section 2): `\r\n`, `\n`, `\r` and a literal
+    ;; backslash-`n` already mapped to four distinct lines, but U+2028 and
+    ;; U+2029 rendered RAW — so two values differing only in which Unicode
+    ;; separator they carry could not be told apart by a reader counting
+    ;; lines, and the escape was not decodable back to the value it spelled.
+    (let [values ["a\r\nb" "a\nb" "a\rb" "a\\nb" "a\tb" "a\\tb"
+                  "a\u000Bb" "a\u000Cb" "a\u0085b" "a\u2028b" "a\u2029b"
+                  "a\\u2028b" "ab"]
+          lines (mapv (fn [v] (first (inspect/leaf-lines [:k] v))) values)
+          duplicates (->> (map vector values lines)
+                          (group-by second)
+                          (filter (fn [[_ group]] (> (count group) 1)))
+                          vec)]
+      (is (= (count values) (count (set lines)))
+          (str "distinct values rendered one line — " (pr-str duplicates)))
+      (is (empty? (filter #(some (set splitting) %) lines))
+          (str "a rendered value line carries a raw line boundary: "
+               (pr-str (vec (filter #(some (set splitting) %) lines))))))
     ;; 5. The reviewer's exact public case: the text claimed to have rendered
     ;;    everything while holding an uncarried, undeclared leaf.
     (let [result {"bad\nkey" "the-distinctive-pointer-value"}
