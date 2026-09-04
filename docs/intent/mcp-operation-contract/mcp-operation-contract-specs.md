@@ -231,7 +231,7 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-ASYNC-003` | Positional order distinguishes the two clocks without labels. | Equal rounded values ; reordered summary details; localized surrounding prose. |
 | `MCP-OP-ASYNC-004` | Fabricate `measured.job_elapsed_ms: 0` when no owned execution was observed. | Unknown ID ; expired record; wrong workspace; refusal before execution. |
 | `MCP-OP-ASYNC-005` | Merge fields from two job reads to return the newest possible answer. | Pending-to-complete race ; completion-to-expiration race; retry during lookup. |
-| `MCP-OP-COVERAGE-001` | A hand-written list of today's four tools is equivalent to the live registry. | Added tool ; renamed tool; deleted tool; alternate registration path. |
+| `MCP-OP-COVERAGE-001` | A hand-written list of today's five tools is equivalent to the live registry. | Added tool ; renamed tool; deleted tool; alternate registration path. |
 | `MCP-OP-COVERAGE-002` | One happy path and one refusal prove every public mode, or tests may declare the same incomplete mode list they witness. | Inspect read, prepared basis, pending/completed verification ; transform preview/commit; edit verification modes. |
 | `MCP-OP-TRACE-001` | An active-gap spec can land without a red witness because its implementation has not started. | Missing direct test ; test exists without annotation; deferred intent. |
 | `MCP-OP-TRACE-002` | A plausible-looking annotation may introduce a new intent without design review. | Typo ; retired ID; ID from another leaf; code-only or test-only invention. |

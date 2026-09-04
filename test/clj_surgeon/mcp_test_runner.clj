@@ -2,8 +2,12 @@
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.admit-patch-test]
+   [clj-surgeon.census-pool-test]
    [clj-surgeon.core-discovery-test]
    [clj-surgeon.mcp-alias-migration-test]
+   [clj-surgeon.mcp-relation-census-launcher-test]
+   [clj-surgeon.reader-eval-fence-test]
+   [clj-surgeon.mcp-relation-census-round20-test]
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-combinable-transaction-test]
@@ -31,6 +35,7 @@
    [clj-surgeon.mcp-program-tool-test]
    [clj-surgeon.mcp-read-request-normalization-test]
    [clj-surgeon.mcp-recovery-test]
+   [clj-surgeon.mcp-relation-census-test]
    [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
@@ -64,8 +69,12 @@
         result
         (run-tests
           'clj-surgeon.admit-patch-test
+          'clj-surgeon.census-pool-test
           'clj-surgeon.core-discovery-test
           'clj-surgeon.mcp-alias-migration-test
+          'clj-surgeon.mcp-relation-census-launcher-test
+          'clj-surgeon.reader-eval-fence-test
+          'clj-surgeon.mcp-relation-census-round20-test
           'clj-surgeon.mcp-contract-test
           'clj-surgeon.mcp-create-files-test
           'clj-surgeon.mcp-extraction-test
@@ -86,6 +95,7 @@
           'clj-surgeon.mcp-operation-registry-test
           'clj-surgeon.mcp-operation-test
           'clj-surgeon.mcp-recovery-test
+          'clj-surgeon.mcp-relation-census-test
           'clj-surgeon.mcp-paths-test
           'clj-surgeon.mcp-process-test
           'clj-surgeon.mcp-prepared-request-test

@@ -30,6 +30,15 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.measured :as measured]
+   ;; `clojure.edn`, and NOT `clojure.core/read-string`, at every site in this
+   ;; namespace that reads a file back. These files are the tool's OWN journal,
+   ;; lock and sidecar records, so the caller cannot name them today — and
+   ;; "today" is a statement about the current call graph, which is exactly
+   ;; the argument round twenty made about `parse-val` and round twenty-one
+   ;; refuted one frame over at `core/extract-source-paths`. A reader that
+   ;; honours `*read-eval*` over a file on disk is the class; the enumeration
+   ;; of who can write that file is the subset. See MCP-OP-SHELL-ARGV-005.
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -475,7 +484,7 @@
 
 (defn- read-holder
   [^File lock]
-  (try (read-string (slurp lock)) (catch Exception _ {})))
+  (try (edn/read-string (slurp lock)) (catch Exception _ {})))
 
 (defn- lock-broken-line
   "The typed receipt line a broken lock leaves behind."
@@ -509,7 +518,7 @@
   [^File lock]
   (let [content (try (slurp lock) (catch Exception _ nil))]
     {:holder (if content
-               (try (read-string content) (catch Exception _ {}))
+               (try (edn/read-string content) (catch Exception _ {}))
                {})
      :content content
      :content-sha256 (when content (sha256-string content))
@@ -650,7 +659,7 @@
   [^File side]
   (when (.isFile side)
     (try
-      (let [m (read-string (slurp side))
+      (let [m (edn/read-string (slurp side))
             v (:broken-at-ms m)]
         (cond
           (number? v) (long v)
@@ -879,7 +888,7 @@
   [^File tomb]
   (let [^File side (broken-at-file tomb)]
     (when (.isFile side)
-      (try (:phase (read-string (slurp side))) (catch Exception _ nil)))))
+      (try (:phase (edn/read-string (slurp side))) (catch Exception _ nil)))))
 
 (defn- evidence-stat
   "The size and the age basis of one piece of break evidence, from ONE stat,
@@ -2579,7 +2588,7 @@
   [file]
   (let [f (io/file file)]
     (when (.isFile f)
-      (try (read-string (slurp f)) (catch Exception _ nil)))))
+      (try (edn/read-string (slurp f)) (catch Exception _ nil)))))
 
 (defn- journal-dir
   ^File [workspace-root txid state-home]
@@ -2977,7 +2986,7 @@
                                      (let [state (io/file d "state.edn")]
                                        (or (not (.isFile state))
                                            (not (contains? #{:committed :rolled-back}
-                                                           (:status (read-string (slurp state)))))))))
+                                                           (:status (edn/read-string (slurp state)))))))))
                               (.listFiles dir)))
          results (mapv (fn [^File d]
                          (let [result (restore-from-journal!

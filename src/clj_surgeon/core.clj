@@ -11,6 +11,7 @@
    [babashka.fs :as fs]
    [babashka.process]
    [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.census-discovery :as census-discovery]
    [clj-surgeon.cljc.analyze :as cljc-analyze]
    [clj-surgeon.cljc.merge :as cljc-merge]
    [clj-surgeon.cljc.require-ops :as cljc-req]
@@ -26,6 +27,7 @@
    [clj-surgeon.outline :as outline]
    [clj-surgeon.measured :as measured]
    [clj-surgeon.parse-admission :as admission]
+   [clj-surgeon.relation-census :as relation-census]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.result-budget :as budget]
    [clj-surgeon.show-form :as show-form]
@@ -285,13 +287,215 @@
                     (or (:source-paths m) ["src"]))
     ["src"]))
 
+;; @spec MCP-OP-SHELL-ARGV-005
+;; @spec MCP-OP-SHELL-ARGV-004
+(declare max-argument-nesting-depth scanned-nesting-depth)
+
+;; @spec MCP-OP-SHELL-ARGV-007
+(defn- refuse-over-nested-build-file!
+  "Apply the CLI's own nesting ceiling to a build file's bytes, before reading.
+
+   The gap round twenty-two disclosed and the round-23 review reproduced. Argv
+   is bounded by `refuse-over-nested!` at 256 levels; the build file this op
+   DISCOVERS under the caller's `:dir` was read with no depth bound at all, so
+   a 10,001-deep `:paths` overflowed the reader's stack and left through
+   `-main`'s last-resort `catch Throwable` at both launchers.
+
+   Why close a gap the review ruled non-blocking: that exit is the LAST RESORT,
+   and its own docstring says it exists because `max-argument-nesting-depth` is
+   a guess about which `Error` a caller can reach. Taking it on an input that
+   can be MEASURED before it is read is using the airbag as a brake. And a
+   ceiling enforced on argv but not on a file the same op reads is not a
+   ceiling, it is one code path's habit — the identical argument
+   MCP-OP-SHELL-ARGV-004 made about the READER at this same site.
+
+   The same ceiling and the same scanner as argv, deliberately: a second
+   number here would be a second thing to keep in step, and
+   `scanned-nesting-depth` already measures without a reader, which is the
+   whole requirement (a reader deep enough to measure the input is a reader
+   deep enough to overflow on it).
+
+   It names the build FILE and not the file's bytes. The argv refusal carries
+   `:value` because there the caller's argument IS the subject; here the
+   subject is a file the caller can look at, its name is the actionable fact,
+   and 20 KB of nested brackets is not information."
+  [build-file ^String text]
+  (let [measured (scanned-nesting-depth text)]
+    (when (> measured max-argument-nesting-depth)
+      (throw (ex-info
+               (str "the build file " (str (fs/file-name build-file))
+                    " nests at least " measured " deep, past the "
+                    max-argument-nesting-depth "-level ceiling; it is refused "
+                    "unread, because a reader deep enough to measure it is a "
+                    "reader deep enough to overflow")
+               {:error-type :build-file-nesting-too-deep
+                :build-file (str (fs/file-name build-file))
+                :ceiling max-argument-nesting-depth
+                :measured measured})))))
+
 (defn- extract-source-paths
-  "I/O wrapper: read a build file and return its source paths."
+  "I/O wrapper: read a build file AS DATA and return its source paths.
+
+   `edn/read-string`, NOT `clojure.core/read-string`, and the difference is a
+   class rather than a nicety — the same class round twenty closed one frame
+   over at `core/parse-val`, and Opus's round-twenty-one BLOCKING finding
+   is that it survived HERE, in the entrance the round-twenty enumeration did
+   not walk.
+
+   `clojure.core/read-string` honours `*read-eval*`, which defaults to true,
+   so the reader EVALUATES `#=(…)` in the file it is reading. The file is a
+   `deps.edn` / `bb.edn` / `project.clj` DISCOVERED UNDER THE DIRECTORY THE
+   CALLER NAMED, so the caller does not even need to control argv text:
+   controlling a directory is enough. Demonstrated at both real launchers at
+   0a91e720 under the ordinary invocation:
+
+     $ cat $FX/evil-tree/deps.edn
+     {:paths #=(clojure.core/spit \"$FX/PWNED-LSTREE.txt\" \"…\")}
+     $ clj-surgeon :op :ls-tree :dir $FX/evil-tree
+     EXIT=0
+     src/a.clj  1 lines, 0 forms
+     $ cat $FX/PWNED-LSTREE.txt
+     READER EVAL EXECUTED via :op :ls-tree :dir
+
+   Exit 0, a green receipt, nothing printed. The `catch` below does not help
+   and never did: the evaluation happens INSIDE the reader, before any value
+   is returned, so the catch swallows the evidence rather than the effect.
+
+   A build file is data this op looks ONE key up in. `edn/read-string` reads
+   every shape `source-paths-from-config` was written for — the `deps.edn` and
+   `bb.edn` maps, and the `project.clj` list whose `:source-paths` is looked up
+   positionally — and refuses `#=`, arbitrary tagged literals and every other
+   reader escape. A `project.clj` that genuinely needs code reading (an
+   unquote, say) now throws and falls back to [\"src\"], which is the same
+   answer this fn already gave for an unreadable build file; that is a refusal
+   to guess, not a regression, and it is the argument for refusing such a file
+   rather than for `*read-eval*`."
   [build-file]
-  (try
-    (source-paths-from-config (str (fs/file-name build-file))
-                              (read-string (slurp (str build-file))))
-    (catch Exception _e ["src"])))
+  (let [text (try (slurp (str build-file)) (catch Exception _e nil))]
+    ;; @spec MCP-OP-SHELL-ARGV-007
+    ;; OUTSIDE the try below, and that placement is the requirement rather
+    ;; than a detail. The `["src"]` fallback is the right answer for a build
+    ;; file this tool cannot PARSE; it is the wrong answer for one it is
+    ;; REFUSING, because a caller told nothing cannot tell a build file that
+    ;; was ignored from one that was never read. Swallowing this refusal into
+    ;; the fallback would convert a typed refusal into a silent default —
+    ;; which is the shape of defect this whole round is about.
+    (when text (refuse-over-nested-build-file! build-file text))
+    (try
+      (source-paths-from-config (str (fs/file-name build-file))
+                                (edn/read-string text))
+      (catch Exception _e ["src"]))))
+
+;; @spec MCP-OP-SHELL-ARGV-006
+(defn- fenced-source-paths
+  "The subset of one build file's source paths this op may actually walk,
+   with a COUNT of the entries it refused.
+
+   Returns `{:paths [entry …] :refused n :refused-entries [spelling …]}`.
+
+   Round-23 review finding 3. Round twenty-one closed the READER half of this
+   vector — the build file is read as data now, so `#=` is inert — and left
+   the CONFIGURATION half open: the `:paths` the file names were used both
+   UNVALIDATED and UNFENCED. `{:paths [\"../outside\"]}` and
+   `{:paths [\"/any/absolute/tree\"]}` each directed `:op :ls-tree` to
+   enumerate and print an arbitrary tree — 80 files, 2,499 forms, every
+   namespace, every require and every def name with its line range — at exit
+   0, at both real launchers, from a directory whose only power the caller
+   had was to write a file in it. Same op, same frame, same premise as the
+   reader half: controlling a directory is enough.
+
+   Two checks, in this order, and both matter:
+
+   - a STRING check, because nothing performed one. `{:paths [[\"src\"] 42]}`
+     went straight to `io/file`, where the jvm launcher and bb produced two
+     different failures for one input (the review's §2 parity divergence, the
+     tell that pointed at this finding).
+
+   - a RESOLVE-then-FENCE check, on the REAL path and never on the spelling.
+     `..` and an absolute entry are the same escape reached by two spellings,
+     a symlink is a third, and a predicate over the text catches none of
+     them. This is `census-discovery`'s own fence, called rather than
+     re-implemented: the census verb driven against the identical hostile
+     fixture reported `files-scanned 1` precisely because that predicate held
+     there, and a second fence written beside a working one is how two fences
+     come to disagree.
+
+   The refusal names the entry AS THE CALLER SPELLED IT and never the tree it
+   resolved to: the target is a fact about the box, the spelling is the fact
+   about the request, and a refusal that publishes the target hands over the
+   very path it just declined to read. The count is returned rather than
+   swallowed because a tree whose build file names one escaping path and one
+   legitimate one must not be reported as complete — a completeness claim
+   over a walk that left the caller's tree is the defect this fence exists to
+   stop, wearing a green receipt."
+  [root src-paths]
+  (let [^java.nio.file.Path canonical (census-discovery/canonical-root (str root))
+        ;; The root NOT link-resolved, for the lexical half to compare against.
+        ;; Each check must compare like with like, and the first draft did not:
+        ;; it measured a lexically-normalised ENTRY against the link-RESOLVED
+        ;; root, so a caller whose `:dir` was a symlink had `link/src` tested
+        ;; against `target/` and every ordinary `{:paths [\"src\"]}` was refused.
+        ;; `core_discovery_test/a-symlinked-root-is-descended-just-like-its-target`
+        ;; caught it: the whole scan came back `0 files` with one refused entry
+        ;; spelled `\"src\"`. That is the declared round-19 rule — the workspace
+        ;; is the RESOLVED tree, so a link to a real tree IS that tree — broken
+        ;; by a fence that mixed the two frames of reference.
+        ^java.nio.file.Path lexical-root
+        (try (.normalize (.toAbsolutePath ^java.nio.file.Path (fs/path (str root))))
+             (catch Throwable _ nil))]
+    (reduce
+      (fn [acc entry]
+        (if-not (string? entry)
+          (-> acc
+              (update :refused inc)
+              (update :refused-entries conj (pr-str entry)))
+          (let [;; RESOLVED THE WAY THE WALKER RESOLVES, and this is the whole
+                ;; correctness argument. The first draft of this fence joined
+                ;; with `java.io.File.(parent, child)`, which CONCATENATES an
+                ;; absolute child onto the parent and yields a path that does
+                ;; not exist — so the fence saw an unresolvable entry, waved
+                ;; it through, and `find-clj-files` then resolved the same
+                ;; text with `fs/path`, where an absolute component REPLACES
+                ;; the root. The absolute plant walked straight past the fence
+                ;; that was written to stop it. A fence that resolves its
+                ;; subject differently from the consumer is not a fence; it is
+                ;; a second opinion about a different path.
+                resolved (try (.normalize (.toAbsolutePath
+                                            ^java.nio.file.Path (fs/path root entry)))
+                              (catch Throwable _ nil))
+                ;; Links resolved too, when the entry exists. Lexical
+                ;; normalisation alone cannot see `src -> /elsewhere`.
+                real (when resolved
+                       (try (.toRealPath resolved
+                                         (make-array java.nio.file.LinkOption 0))
+                            (catch Throwable _ nil)))
+                escapes?
+                (cond
+                  ;; A root that does not resolve has no fence to apply; the
+                  ;; entrance already refuses that :dir upstream.
+                  (or (nil? canonical) (nil? lexical-root)) false
+                  (nil? resolved) true
+
+                  ;; LEXICAL: the normalised entry against the UNRESOLVED root.
+                  ;; Catches `..` and an absolute entry, including one naming a
+                  ;; tree that does not exist yet — which the real-path check
+                  ;; cannot see at all, and which the caller can create between
+                  ;; this scan and the next.
+                  (not (census-discovery/inside-root? lexical-root resolved)) true
+
+                  ;; REAL: the link-resolved entry against the link-resolved
+                  ;; root. Catches `src -> /elsewhere`, which the lexical check
+                  ;; cannot see.
+                  (and real (not (census-discovery/inside-root? canonical real))) true
+
+                  :else false)]
+            (if escapes?
+              (-> acc
+                  (update :refused inc)
+                  (update :refused-entries conj (pr-str entry)))
+              (update acc :paths conj entry)))))
+      {:paths [] :refused 0 :refused-entries []}
+      src-paths)))
 
 ;; @spec MCP-OP-SHELL-ARGV-003
 (defn- find-clj-files
@@ -392,7 +596,9 @@
       (->> by-root
            (map (fn [[root files]]
                   (let [build-file (first files)
-                        src-paths (extract-source-paths build-file)
+                        ;; @spec MCP-OP-SHELL-ARGV-006
+                        fenced (fenced-source-paths root (extract-source-paths build-file))
+                        src-paths (:paths fenced)
                         root-path (fs/path root)
                         clj-files (->> src-paths
                                        (mapcat #(find-clj-files (fs/path root %)))
@@ -401,8 +607,19 @@
                                        vec)]
                     {:name (str (fs/file-name root-path))
                      :root (str root-path)
+                     :refused-source-paths (:refused fenced)
+                     :refused-source-path-entries (:refused-entries fenced)
                      :files clj-files})))
-           (remove #(empty? (:files %)))
+           ;; @spec MCP-OP-SHELL-ARGV-006
+           ;; A project is dropped when it has no files AND refused nothing.
+           ;; Keeping the one that refused everything is the whole point: the
+           ;; reviewer's plant names ONE escaping path, so dropping it here
+           ;; sends the op to "No Clojure files found under <the directory
+           ;; you named>" and exit 1 — a completeness claim over a walk that
+           ;; was fenced, with the fence itself invisible. The refusal has to
+           ;; survive discovery to be reported by it.
+           (remove #(and (empty? (:files %))
+                         (zero? (or (:refused-source-paths %) 0))))
            (sort-by :name)
            vec)
       ;; No build files — fallback to recursive scan
@@ -635,6 +852,22 @@
                                (or args-str "")))))
     (str lines)))
 
+(defn- source-path-refusals
+  "Every fenced-out `:paths` entry across the discovered projects, as spelled.
+
+   @spec MCP-OP-SHELL-ARGV-006. Shaped exactly like `admission-refusals`,
+   which is this repository's settled answer to the same question: a skip
+   must be NAMED and COUNTED, never silent. The alternative here is worse
+   than silence — a build file naming one escaping path and one legitimate
+   one produces a receipt that looks complete over a tree half of which was
+   declined, and a build file naming ONLY escaping paths produces `No Clojure
+   files found under <the directory you named>`, a completeness claim about a
+   walk that never happened."
+  [projects]
+  (vec (for [p projects
+             entry (:refused-source-path-entries p)]
+         {:project (:name p) :entry entry})))
+
 (defn format-ls-tree-text
   "Pure: format ls-tree results as compact text for LLM/human scanning.
    Expects projects with :outlines already computed."
@@ -660,6 +893,19 @@
     ;; A refused file is a named, counted skip — never a silent one and never a
     ;; dead scan. Nothing is appended when nothing was refused, so an ordinary
     ;; scan's output is byte-identical to before this control existed.
+    ;; @spec MCP-OP-SHELL-ARGV-006
+    ;; Named and counted, on the same terms as the admission block below and
+    ;; for the same reason. The ENTRY is printed as the caller spelled it and
+    ;; the tree it resolved to is not printed at all: publishing the target
+    ;; would hand over the very path this fence just declined to read.
+    (let [escaping (source-path-refusals projects)]
+      (when (seq escaping)
+        (.append sb (format "── source_paths_outside_project: %d entr%s\n"
+                            (count escaping)
+                            (if (= 1 (count escaping)) "y" "ies")))
+        (doseq [{:keys [project entry]} escaping]
+          (.append sb (format "   %s  %s  refused: it resolves outside the project root\n"
+                              project entry)))))
     (let [refused (admission-refusals projects dir)]
       (when (seq refused)
         (.append sb (format "── parser_admission_refused: %d file(s)\n"
@@ -726,10 +972,18 @@
         ;; and a regression shows up on ORDINARY scans, which are ~100% of
         ;; production runs and were 0% of the runs that printed the number. A
         ;; gauge wired to the rare branch is a gauge nobody will see move.
+        ;; @spec MCP-OP-SHELL-ARGV-006
+        escaping (source-path-refusals projects)
         receipt (cond-> {:resources (scan-resources projects)}
                   (seq refused)
                   (assoc :parser_admission_refused
-                         {:count (count refused) :files refused}))]
+                         {:count (count refused) :files refused})
+                  ;; Named and counted here too, and carrying only the
+                  ;; SPELLING. Conditional for the same reason the admission
+                  ;; key is: an ordinary scan's receipt is unchanged.
+                  (seq escaping)
+                  (assoc :source_paths_outside_project
+                         {:count (count escaping) :entries escaping}))]
     (conj entries {:receipt receipt})))
 
 
@@ -1000,14 +1254,31 @@
         (->> (or build-hits [])
              (map (fn [bf]
                     (let [root (str (fs/parent (fs/path bf)))
-                          src-paths (extract-source-paths bf)
+                          ;; @spec MCP-OP-SHELL-ARGV-006
+                          ;; The grep fast path reads the same build files
+                          ;; through the same extractor, so it inherits the
+                          ;; same defect and needs the same fence. A fence at
+                          ;; one of two call sites is not a fence, it is that
+                          ;; call site's habit — and `:grep` is one argument
+                          ;; away for the caller who just planted the file.
+                          fenced (fenced-source-paths root (extract-source-paths bf))
+                          src-paths (:paths fenced)
                           clj-files (->> src-paths
-                                         (mapcat #(find-clj-files (str root "/" %)))
+                                         ;; @spec MCP-OP-SHELL-ARGV-006
+                                         ;; `fs/path`, not string concatenation,
+                                         ;; so this call site resolves an entry
+                                         ;; EXACTLY as the fence just did. Two
+                                         ;; resolvers over one string is how the
+                                         ;; absolute plant walked past the first
+                                         ;; draft of that fence.
+                                         (mapcat #(find-clj-files (fs/path root %)))
                                          (remove nil?)
                                          sort
                                          vec)]
                       {:name (str (fs/file-name (fs/path root)))
                        :root root
+                       :refused-source-paths (:refused fenced)
+                       :refused-source-path-entries (:refused-entries fenced)
                        :files clj-files})))
              (remove #(empty? (:files %))))
 
@@ -1034,6 +1305,1054 @@
     (->> (concat build-projects src-projects)
          (sort-by :name)
          vec)))
+
+;; @spec MCP-OP-CENSUS-032
+(defn census-root
+  "The CANONICAL workspace root the CLI census walks.
+
+   The tool resolves its project root through `mcp-paths/real-root` before it
+   walks anything. The CLI only absolutized, so `:dir` naming a symlink to a
+   workspace handed the walk a link; the walk correctly does not follow links,
+   visited nothing, and reported `no-fold-arms-found` on a tree the tool
+   censused. Canonicalising here is what makes the two entrances answer the
+   same question."
+  [dir]
+  (.getCanonicalPath (java.io.File. (str (fs/absolutize (or dir "."))))))
+
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-024
+;; @spec MCP-OP-CENSUS-014
+(defn- denied-ancestor
+  "The nearest EXISTING ancestor directory of `path` this process may neither
+   read nor traverse, or nil.
+
+   Sol's round-fifteen item 9. `fs/exists?` is false of a readable file under a
+   `chmod 000` parent, because the stat cannot get through the parent — so the
+   entrance answered `:file-not-found`, \"name a source that exists\", about a
+   file that is right there. That is the `file-not-found`/`file-not-readable`
+   confusion commit 1038893 was written to end, reproduced by moving the
+   permission bit one directory up. The two remedies differ, so the two answers
+   must, and the refusal has to name the DIRECTORY whose bit must change rather
+   than the file whose bits are already fine."
+  [path]
+  (loop [dir (fs/parent (fs/absolutize path))]
+    (when dir
+      (cond
+        (not (fs/exists? dir))
+        (recur (fs/parent dir))
+
+        ;; Opus's round-seventeen item 3. The docstring said "ancestor
+        ;; DIRECTORY" and the code never asked. A mode-644 regular FILE is
+        ;; readable and not executable, so it passed the permission test by
+        ;; accident, and `src/app/afile.clj/x.clj` — an ordinary source file in
+        ;; a path prefix, which is ENOTDIR and not a permission problem at all
+        ;; — was published as a denied directory: a refusal stating a falsehood
+        ;; and carrying a remedy that cannot be followed, because the file is
+        ;; already readable and making it more readable changes nothing. The
+        ;; tool answered `not-found` for the same observation, which is the
+        ;; only cross-entrance cause disagreement the ten-shape parity
+        ;; enumeration found.
+        (not (fs/directory? dir))
+        nil
+
+        (not (and (fs/readable? dir) (fs/executable? dir)))
+        (str dir)
+
+        :else nil))))
+
+;; @spec MCP-OP-CENSUS-018
+;; @spec MCP-OP-CENSUS-035
+(defn census-workspace
+  "The tree a CLI census is over, canonical, or the TYPED REFUSAL it earns.
+
+   NEVER nil. Opus's round-nineteen item 2, blocking: this fn returned nil for
+   every exception, `escaping-source` opened with `(when workspace …)`, and a
+   nil workspace therefore answered \"not escaping\" for every path — not
+   merely absent, but affirmatively reporting a containment it never tested.
+   An unresolvable `:dir` is an ordinary operator typo and was enough to reach
+   it: `:dir <typo> :file <link leaving the tree>` READ the target and
+   published `{:ok true, :files-scanned 1, :read-complete true}` — a
+   completeness claim over a tree the request never named, with a GREEN
+   receipt, while the MCP entrance refused the identical request
+   `invalid-workspace-root`.
+
+   So a workspace that does not resolve is a REFUSAL, never a licence to read,
+   and the nil state is made unrepresentable rather than handled. The name is
+   the one the other entrance already publishes, because this is one
+   observation and the two entrances disagreeing about it is the defect class
+   this whole fence exists to close.
+
+   Sol's round-eighteen item 2, blocking. Every read this op performs is now
+   confined to this one answer, and the answer has to exist before the fence
+   can ask its containment question at all.
+
+   The workspace is the tree THE REQUEST NAMED:
+
+   - `:dir` when the request gives one — the same `census-root` the walk is
+     confined to, so a named `:file` and a walked member are measured against
+     one fence and cannot disagree;
+   - the `:file` ITSELF when the request names only a file, because a request
+     that names one source is a census over exactly that source. Its workspace
+     is the location the caller typed with every link ABOVE the final component
+     resolved: the parent chain is the box's business, the final component is
+     the request's. A link at that final component therefore leaves the
+     one-file workspace, and is refused — which is the honest answer, since
+     there is no tree in the request for the target to be inside of.
+
+   Returns a `java.nio.file.Path`, never a string, because containment is a
+   path-prefix question and `startsWith` on strings answers a different one
+   (`/a/bc` starts with `/a/b`)."
+  [dir file]
+  (or (try
+        (if (and (nil? dir) (string? file) (not (str/blank? file)))
+          (let [named (.toPath (java.io.File. (str (fs/absolutize file))))
+                parent (.getParent named)]
+            (when parent
+              (.resolve (.toRealPath parent
+                                     (make-array java.nio.file.LinkOption 0))
+                        (.getFileName named))))
+          (let [^java.nio.file.Path real
+                (.toRealPath (.toPath (java.io.File. (census-root dir)))
+                             (make-array java.nio.file.LinkOption 0))]
+            ;; Opus's round-twenty-one item 3. `toRealPath` succeeds on a
+            ;; regular FILE, so "is there a tree here at all" was never
+            ;; asked, and `:dir <a file>` produced
+            ;; `{:error-type :no-fold-arms-found, :files-scanned 0}` — the
+            ;; shape of a COMPLETENESS CLAIM over a tree that was never a
+            ;; tree, while the MCP entrance refused the identical request
+            ;; `invalid-workspace-root` and this same launcher refused it
+            ;; `workspace-root-not-a-directory` one op over, under
+            ;; `:ls-tree`. One entrance disagreeing with the other is the
+            ;; class this fence exists to close; one entrance disagreeing
+            ;; with ITSELF is that class with the excuse removed.
+            ;;
+            ;; A workspace is a TREE. `existing-directory?` is not reused
+            ;; here deliberately: that predicate asks about the caller's
+            ;; string, and the question at this point is about the path the
+            ;; caller's string RESOLVED to, which is what every later fence
+            ;; measures against.
+            (when (.isDirectory (.toFile real)) real)))
+        (catch Exception _ nil))
+      {:error-type :invalid-workspace-root
+       :error (str relation-census/workspace-root-token " is not an existing "
+                   "directory, so there is no tree for this census to be over "
+                   "and no fence a source could be inside of")}))
+
+(defn resolved-workspace
+  "The `java.nio.file.Path` in a `census-workspace` answer, or nil for a refusal.
+
+   One predicate, so \"did the workspace resolve\" is asked the same way at
+   every site rather than by each site's idea of what a workspace looks like."
+  [workspace]
+  (when (instance? java.nio.file.Path workspace) workspace))
+
+;; @spec MCP-OP-CENSUS-018
+(defn escaping-source
+  "The REAL path of `path`, when it resolves outside `workspace`; else nil.
+
+   `toRealPath` resolves EVERY link in the path, so a chain, an absolute
+   target and a link into a sibling workspace are one question with one answer
+   — a containment test that stops after one hop passes all three, which is
+   why the witness drives all three.
+
+   Returns the real path so the caller can decide what to say about it; what
+   the caller must NOT do is publish it. The target is a fact about the box,
+   the link is the fact about the request, and MCP-OP-CENSUS-014 has said since
+   round sixteen which of those a refusal may name."
+  [workspace path]
+  ;; Opus's round-nineteen item 2, blocking. This opened `(when workspace …)`,
+  ;; so a workspace that did not resolve was answered \"contained\" — a fence
+  ;; reporting a test it never ran. The nil state is not handled here, it is
+  ;; REFUSED: a caller that has not resolved its workspace has no containment
+  ;; question to ask, and a guard returning nil in this position would
+  ;; reproduce the defect exactly.
+  (let [^java.nio.file.Path resolved (resolved-workspace workspace)]
+    (when-not resolved
+      (throw (ex-info (str "a containment question was asked with no resolved "
+                           "workspace; the workspace must be refused before "
+                           "any path is measured against it")
+                      {:error-type :census-fence-misuse})))
+    ;; `IOException` and not `Exception`, and NOT to nil: between the fence's
+    ;; existence check and this call the filesystem may change, and a path
+    ;; that no longer resolves is MISSING — which the caller publishes as
+    ;; `:not-found`, the cause the other entrance publishes for it. Silence
+    ;; here would be the fail-open again, one frame down.
+    (let [real (try (.toRealPath (.toPath (java.io.File. (str path)))
+                                 (make-array java.nio.file.LinkOption 0))
+                    (catch java.io.IOException _ ::unresolvable))]
+      (cond
+        (= ::unresolvable real) ::unresolvable
+        (.startsWith ^java.nio.file.Path real resolved) nil
+        :else real))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-018
+;; @spec MCP-OP-CENSUS-019
+(defn census-source-refusal
+  "THE ONE FENCE every path this op reads passes through, before any open.
+
+   nil when the path may be opened; otherwise the typed refusal it earns, the
+   cause, and — when a directory in the path is what may not be read — that
+   directory.
+
+   Sol's round-fifteen items 1, 2, 5 and 7, blocking. Round fourteen asked the
+   readability question in the `:file` branch of the entrance and nowhere else,
+   so the `:dir` WALK — the ordinary invocation — still handed every path the
+   discovery kernel found straight to `slurp`:
+
+     :dir <tree with a chmod-000 source>
+       {:error \"…/denied.clj (Permission denied)\", :error-type :invalid-arguments}
+
+   untyped, no anchor, no remedy, and `:invalid-arguments` is in neither
+   declared refusal set, so both enumeration witnesses were blind to it. A rule
+   that lives in one branch is a rule the other branches break.
+
+   It asks the SAME questions, in the same order, that `mcp-paths/
+   resolve-source-path` asks at the other entrance, because the two entrances
+   answering one tree differently is the defect class this closes:
+
+   - existence FIRST, and when the answer is \"not there\", whether an ancestor
+     directory is what this process may not read;
+   - REGULARITY next, FOLLOWING links, so a FIFO, a socket, or a directory
+     named `*.clj` is refused BEFORE any open. `fs/readable?` is true of a
+     named pipe and `slurp` blocks on one forever with no writer: one FIFO
+     anywhere under `:dir` wedged the census for thirty seconds with zero bytes
+     on stdout and no diagnostic. Asked AFTER existence so a path that is not
+     there is still reported as missing;
+   - READABILITY last, so a directory is reported as a directory rather than as
+     a permission problem, and before anything opens it.
+
+   Sol's round-eighteen item 2, blocking: CONTAINMENT, asked between existence
+   and regularity, exactly where `mcp-paths/resolve-source-path` asks it. This
+   fence had no containment question at all, so a `:file` naming a link under
+   the workspace published the bytes of the file it pointed at outside the
+   workspace — while the walk, one branch over, counted the identical link
+   `skipped-outside-root` and read nothing. After existence, because a link
+   that resolves to nothing is missing and not an escape; before regularity,
+   because what a path outside the workspace IS is not this census's business
+   to report."
+  [workspace path]
+  (let [given (str path)
+        absolute (str (fs/absolutize given))
+        ;; DELAYED, so the ordering below is the ordering that runs: the
+        ;; containment question is asked after existence and never before it.
+        escape (delay (escaping-source workspace absolute))]
+    (cond
+      ;; Sol's round-eighteen item 3, and the only LEXICAL question this fence
+      ;; asks: a path that is not a Clojure source is not a source this census
+      ;; can read, whatever the filesystem says about it. First, because the
+      ;; tool asks it first — `relative-source-path?` refuses before it stats
+      ;; anything — and the two entrances answering one path differently is
+      ;; the defect class this fence exists to close.
+      (not (relation-census/named-source-extension? given))
+      {:error-type :file-not-a-source-path
+       :cause :not-a-relative-source-path
+       :error (str given " is not a Clojure source path: a censused source "
+                   "carries one of "
+                   (str/join ", " (sort relation-census/named-source-extensions))
+                   " as its extension")}
+
+      (not (fs/exists? absolute))
+      (if-let [parent (denied-ancestor absolute)]
+        {:error-type :file-not-readable
+         :cause :parent-denied
+         :parent parent
+         :error (str given " cannot be read: the directory " parent
+                     " may not be read by this process")}
+        ;; `:not-found` is published here for the reason every other branch of
+        ;; this fence publishes a cause: the two entrances name their refusals
+        ;; from different sets by design, so the CAUSE is the only field a
+        ;; witness can compare across them — and Opus's round-sixteen item 2
+        ;; found them disagreeing about a symlink loop and a name too long,
+        ;; which `fs/exists?` reports here as "not there" and the tool reported
+        ;; as unreadable with the exception text attached.
+        {:error-type :file-not-found
+         :cause :not-found
+         :error (str given " does not exist")})
+
+      ;; The link is named as the request spelled it; the TARGET is never
+      ;; named, here or in the remedy. MCP-OP-CENSUS-014: a refusal that
+      ;; publishes where a link points has told the caller a fact about the
+      ;; box in the course of refusing to tell them one.
+      ;; Opus's round-nineteen item 2, blocking, asked HERE — after existence,
+      ;; before containment and before any open. A workspace that did not
+      ;; resolve is not a workspace this path can be inside of, and the fence
+      ;; fails CLOSED rather than answering a question it cannot ask.
+      (nil? (resolved-workspace workspace))
+      workspace
+
+      ;; The path resolved a moment ago and does not now: it is MISSING, and
+      ;; missing is the cause both entrances publish for it.
+      (= ::unresolvable @escape)
+      {:error-type :file-not-found
+       :cause :not-found
+       :error (str given " does not exist")}
+
+      @escape
+      {:error-type :file-outside-workspace
+       :cause :outside-project
+       :error (str given " resolves outside the workspace this census is "
+                   "over, so reading it would answer about a tree the "
+                   "request did not name")}
+
+      (not (fs/regular-file? absolute))
+      {:error-type :file-not-a-regular-file
+       :cause :not-a-regular-file
+       :error (str given " is not a regular file")}
+
+      (not (fs/readable? absolute))
+      {:error-type :file-not-readable
+       :cause :permission-denied
+       :error (str given " exists but cannot be read")})))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn census-read-refusal
+  "A read that failed AFTER the fence admitted the path, as a fence refusal.
+
+   Opus's round-sixteen NO-GO items 1 and 3, blocking. Round sixteen gave the
+   MCP reader this catch (`mcp-relation-census/read-failure-refusal`) and left
+   this entrance's reader a bare `(slurp p)`, so the identical mode-flip storm
+   answered at the two entrances differently:
+
+     MCP  {:OK 14502, \"unreadable-source-path\" 5498}
+     CLI  {:file-not-readable 16523, :census-adapter-failure 1623, :OK 1854}
+
+   and each of those 1,623 carried round fourteen's REJECTED receipt —
+   `census-adapter-failure`, `exhausted` false, and a resource-exhaustion
+   remedy telling a request that named ONE file to point `:dir` at a directory
+   it knows is smaller. That is the sentence the round-fifteen fix was written
+   under, recurring with the entrances swapped: a rule that lives in one branch
+   is a rule the other branches break.
+
+   The fence answering does not end the question. Between the check and the
+   read the filesystem may change, and it does — a mode flipped by another
+   process, an ordinary editor's atomic save. The two are the SAME fact to a
+   continuation, a name the next call must not carry, so they answer alike:
+   the type the fence gives a path it may not read, and a cause that says the
+   read is what failed rather than the check.
+
+   The exception's own MESSAGE is not published, for the reason
+   MCP-OP-CENSUS-014 states globally: `FileNotFoundException` renders as
+   \"<absolute path> (Permission denied)\", and a refusal that leaks the
+   server's absolute root tells the caller a fact about the box instead of a
+   fact about their request."
+  [given ^Throwable error]
+  {:error-type :file-not-readable
+   :cause :read-failed-after-fence
+   :error (str given " passed the fence and then could not be read; its mode "
+               "or its existence changed under the census ("
+               (.getName (class error)) ")")})
+
+;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-028
+;; @spec MCP-OP-CENSUS-032
+(defn census-sources
+  "Project-relative {:file :source} inputs that define fold arms.
+
+   Discovery is the shared `census-discovery` kernel — the same walk the MCP
+   tool runs, with the same canonical root, the same root confinement, the
+   same skip-directory pruning, the same byte cap and the same ceiling. The
+   CLI keeps no walk of its own: a rule that lives in one entrance is a rule
+   the other entrance breaks.
+
+   `declared?` also collects the top-level names of the files that define no
+   arms — a door commonly lives in a helper namespace that defines none — and
+   drops their text."
+  ([dir file] (census-sources dir file {}))
+  ([dir file {:keys [declared?]}]
+   (let [discovered (when-not file (census-discovery/discover (census-root dir)))
+         root (or (:root discovered) (census-root dir))
+         ;; The tree every read below is confined to. For a walk it is the
+         ;; canonical root the kernel already walked; for a `:file` request it
+         ;; is what the request named. ONE answer, computed once, handed to
+         ;; the fence on every member — a containment rule that lives in one
+         ;; branch is a rule the other branches break, which is precisely how
+         ;; the walk came to be confined and the `:file` branch not.
+         workspace (census-workspace dir file)
+         relative #(str (fs/relativize root %))
+         paths (if file
+                 [(str (fs/absolutize file))]
+                 (mapv #(str root "/" %) (:files discovered)))]
+     (cond
+       (and file (> (fs/size (first paths)) relation-census/max-source-bytes))
+       {:oversized (relative (first paths))}
+
+       ;; Both bounds are answered before a single source is read, and the
+       ;; walk's own figures travel with the refusal: what it skipped and what
+       ;; it collapsed are facts about the tree, not decorations on a success.
+       (:walk-exceeded? discovered)
+       {:walk-exceeded? true
+        :entries-observed (:entries-observed discovered)
+        :entries-yielded (:entries-yielded discovered)
+        :discovered discovered
+        :scanned 0
+        :oversized-skipped (vec (:oversized discovered))
+        :skipped-outside-root (:skipped-outside-root discovered 0)
+        :duplicates (:duplicates discovered 0)}
+
+       (:exceeded? discovered)
+       {:exceeded? true
+        :observed (:observed discovered)
+        :discovered discovered
+        :scanned 0
+        :oversized-skipped (vec (:oversized discovered))
+        :skipped-outside-root (:skipped-outside-root discovered 0)
+        :duplicates (:duplicates discovered 0)}
+
+       ;; A subtree the walk could not ENTER, decided after both bounds and
+       ;; before anything is read — the same position, and for the same
+       ;; reason, as a member the fence refuses. Opus's round-sixteen item 4.
+       (seq (:unreadable-directories discovered))
+       {:unreadable-directory (first (:unreadable-directories discovered))
+        :unreadable-directories (vec (:unreadable-directories discovered))
+        :discovered discovered
+        :scanned 0
+        :oversized-skipped (vec (:oversized discovered))
+        :skipped-outside-root (:skipped-outside-root discovered 0)
+        :duplicates (:duplicates discovered 0)}
+
+       :else
+       (let [;; WHERE the path came from, decided once. A `:file` request IS
+             ;; the request, so the refusal names it exactly as the caller
+             ;; spelled it and no narrowing exists; a walk member is named
+             ;; project-relative and there is no request to narrow. The MCP
+             ;; entrance decides the same two provenances from `requested`.
+             from-request? (boolean file)
+             shown (fn [p] (if from-request? (str file) (relative p)))
+             provenance (if from-request? :request :walk)]
+         (reduce
+           (fn [acc p]
+             ;; The fence, on EVERY member, before the open. Stopping at the
+             ;; first refusable path is what the MCP entrance's `collect-inputs`
+             ;; does, for the same reason: nothing after it can be trusted
+             ;; either, and the refusal names the one the walk tripped on.
+             (if-let [refused (census-source-refusal workspace p)]
+               (reduced (assoc acc :unreadable
+                               (assoc refused
+                                      :file (shown p)
+                                      :provenance provenance)))
+               ;; The typed catch at the READ. Opus's round-sixteen items 1
+               ;; and 3: the fence has answered, and between that answer and
+               ;; this open the filesystem may change. `IOException` and not
+               ;; `Throwable`, exactly as `collect-inputs` catches it: an
+               ;; exhaustion is a different fact and keeps its own answer at
+               ;; the op's catch-all.
+               (let [read (try {:source (slurp p)}
+                               (catch java.io.IOException error
+                                 {:unreadable error}))]
+                 (if-let [error (:unreadable read)]
+                   (reduced (assoc acc :unreadable
+                                   (assoc (census-read-refusal (shown p) error)
+                                          :file (shown p)
+                                          :provenance provenance)))
+                   (let [source (:source read)
+                         acc (update acc :scanned inc)]
+                     (if (relation-census/defines-arms? source)
+                       (update acc :inputs conj {:file (relative p)
+                                                 :source source})
+                       (cond-> acc
+                         declared?
+                         (update :declared into
+                                 (relation-census/source-declared-names
+                                   source)))))))))
+           {:scanned 0
+            :inputs []
+            :declared #{}
+            :oversized-skipped (vec (:oversized discovered))
+            :skipped-outside-root (:skipped-outside-root discovered 0)
+            :duplicates (:duplicates discovered 0)}
+           paths))))))
+
+;; @spec MCP-OP-CENSUS-021
+;; @spec MCP-OP-CENSUS-031
+(defn census-plan-pool
+  "The plan-phase map-fn and the pool that will actually run it.
+
+   The CLI is a babashka tool and claypoole is a JVM dependency, so the bounded
+   pool is resolved at run time: on the JVM the plan phase runs on census_pool's
+   shutdown-bound pool, and under babashka, where that namespace cannot load,
+   it runs serially. Either way the receipt reports the pool that ran, never the
+   pool that was asked for."
+  [requested]
+  (let [size (if requested (relation-census/effective-pool-size requested) 1)
+        pooled (when (> size 1)
+                 (try
+                   (when-let [pooled-map (requiring-resolve
+                                           'clj-surgeon.census-pool/pooled-map)]
+                     (pooled-map size))
+                   (catch Throwable _ nil)))]
+    (if pooled
+      {:map-fn pooled :pool-size size}
+      {:map-fn map :pool-size 1})))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn- census-crash-refusal
+  "A Throwable that escaped the census, as a DECLARED typed refusal.
+
+   Sol's round-fifteen review, NO-GO item 3. `:invalid-arguments` — the type
+   the launcher's catch-all stamps on anything that reaches it — is in neither
+   `cli-refusal-types` nor `mcp-refusal-types`, so every witness pinned to
+   those sets was green over an entire class of answers this op can give. That
+   is the general form of the `:dir` defect rather than the defect itself: the
+   declared enumeration described a SUBSET of what the op emits, and the next
+   escape would have had the same signature.
+
+   The two names are the ones the MCP entrance already publishes for these two
+   cases, because a throw is not a different KIND of event at the two
+   entrances. It gets NO continuation, for the reason `exhaustion-refusal`
+   gives at the tool: every continuation this op hands back is computed from
+   the walk's own aggregates, and a walk that threw is exactly the case in
+   which those were lost with it.
+
+   `VirtualMachineError` is tested by NAME rather than with `instance?`,
+   because a class literal is resolved when this namespace is analysed and
+   babashka's runtime does not carry that class."
+  [opts ^Throwable error]
+  (let [exhausted? (boolean
+                     (some #(= "java.lang.VirtualMachineError" (.getName ^Class %))
+                           (supers (class error))))
+        anchor (try (relation-census/cli-anchor opts) (catch Throwable _ nil))]
+    (cond-> {:ok false
+             :error-type (if exhausted?
+                           :census-resource-exhausted
+                           :census-adapter-failure)
+             :error (str (if exhausted?
+                           "The census exhausted a runtime resource: "
+                           "The census failed: ")
+                         (.getName (class error))
+                         (when-let [message (.getMessage error)]
+                           (str " " message)))
+             :exhausted exhausted?
+             :files-read 0
+             :read-complete false
+             :remedy (str "The census stopped part-way through, so the walk's "
+                          "own aggregates were lost with it and this refusal "
+                          "can compute no narrower command: point :dir at a "
+                          "directory you know is smaller, or census one :file "
+                          "at a time, and retry.")}
+      anchor (assoc :anchor anchor))))
+
+;; @spec MCP-OP-CENSUS-015
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-021
+(defn- run-relation-census*
+  "The census op body. Every exit from it is a receipt or a typed refusal;
+   `run-relation-census` is what guarantees that for the exits it does not
+   plan."
+  [{:keys [dir file doors threads] :as opts}]
+  (let [doors-arg doors
+        ;; The SAME pure pass the entrance (`run`) runs ahead of its config
+        ;; load, called again here so an in-process caller of this op
+        ;; function gets the identical refusal without going through the CLI
+        ;; dispatch. Pure, so running it twice costs nothing and cannot
+        ;; differ. It is handed the WHOLE request, not one field of it: Sol's
+        ;; round-ten item 4 was that this call passed `{:threads threads}`
+        ;; and the validator destructured `{:keys [threads]}`, so every other
+        ;; malformed shape reached the filesystem first.
+        shape-refusal (relation-census/validate-cli-request-shape opts)
+        ;; The workspace the caller named, computed once, by the SAME pure
+        ;; function the shape pass uses. Sol's round-eleven item 2, blocking:
+        ;; round ten anchored the shape refusals and left the post-scan ones
+        ;; spelling their own command, so an undefined door — a question only
+        ;; the scan can answer — still handed back the literal `:dir .` and
+        ;; replaying it censused the replay's cwd. A rule that lives in one
+        ;; branch is a rule the other branches break, so every refusal below
+        ;; carries this anchor, and every continuation below is built by
+        ;; `relation-census/cli-continuation`, which renders it shell-safe.
+        anchor (relation-census/cli-anchor opts)
+        continue-with (fn [fix] (relation-census/cli-continuation anchor fix))
+        ;; The remedy that REPLACES a continuation too large to send, from
+        ;; the one place that knows what it measured. Sol's round-twelve
+        ;; item 3: the wording was spelled out at three sites and named the
+        ;; bound without naming the value it compared against.
+        overflow-remedy (fn [fix]
+                          (relation-census/cli-continuation-overflow-remedy
+                            anchor fix))
+        ;; A continuation that NARROWS to a subtree still goes through the one
+        ;; builder: the subtree is just a different anchor, made absolute the
+        ;; same way, so a narrowing can no more be relative — or unquoted —
+        ;; than a retry can.
+        narrow-to (fn [path]
+                    (relation-census/cli-continuation
+                      (relation-census/cli-anchor {:dir path}) :none))
+        ;; A refusal offers exactly one of a continuation and a remedy
+        ;; (MCP-OP-CENSUS-014): a null continuation is not a smaller promise
+        ;; than a real one, it is a field the caller must interpret.
+        or-remedy (fn [continuation remedy]
+                    (or continuation {:remedy remedy}))
+        pool (when (some? threads) (relation-census/coerce-pool-size threads))
+        parsed-doors (if doors
+                       (relation-census/parse-doors
+                         (str/split (str doors) #",") nil)
+                       relation-census/default-doors)
+        want-declared? (boolean doors)
+        ;; The entrance's own fence call, DELAYED: MCP-OP-CENSUS-016 requires
+        ;; the shape pass to touch nothing, and a `let` binding is forced
+        ;; before the first `cond` branch is tested.
+        ;; The workspace, resolved ONCE per request and DELAYED, because
+        ;; MCP-OP-CENSUS-016 requires the shape pass above to touch nothing
+        ;; and resolving a root is a filesystem question.
+        workspace (delay (census-workspace dir file))
+        named-refusal (delay (when (string? file)
+                               (census-source-refusal @workspace file)))
+        scan (delay (census-sources dir file {:declared? want-declared?}))
+        ;; ONE fact bundle, published by EVERY receipt shape below that got as
+        ;; far as a scan — success, no-fold-arms-found and every refusal. The
+        ;; MCP tool builds its own from the same kernel, so the two entrances
+        ;; cannot publish different evidence for one tree. Forced only inside
+        ;; a branch that has already forced the scan; the bounds refusals
+        ;; above it never walk anything.
+        facts #(relation-census/discovery-facts
+                 {:files-scanned (:scanned @scan)
+                  :skipped-outside-root (:skipped-outside-root @scan 0)
+                  :duplicates (:duplicates @scan 0)
+                  :oversized (:oversized-skipped @scan)}
+                 :kebab)]
+    (cond
+      (some? shape-refusal)
+      shape-refusal
+
+      (map? parsed-doors)
+      (merge
+        {:ok false
+         :error-type :unknown-door-symbol
+         :error (str "Unknown identity door " (:invalid parsed-doors) ": "
+                     (:why parsed-doors))
+         :door (:invalid parsed-doors)
+         :known-doors (vec (sort (map str relation-census/default-doors)))
+         :anchor anchor}
+        (or-remedy (continue-with :doors) (overflow-remedy :doors)))
+
+      ;; @spec MCP-OP-CENSUS-018
+      ;; Opus's round-nineteen item 2, blocking. A `:dir` THE CALLER GAVE that
+      ;; does not resolve is refused HERE, at the entrance, before any path is
+      ;; measured and before anything is read — parity with the MCP entrance,
+      ;; which has refused this as `invalid-workspace-root` since it shipped.
+      ;;
+      ;; Guarded on `(some? dir)` deliberately. When the request names only a
+      ;; `:file`, the workspace IS that file, so a workspace that does not
+      ;; resolve means the FILE does not resolve, and the honest answer is the
+      ;; fence's `:file-not-found` — which is what the ten-shape parity
+      ;; enumeration asserts for a missing file, a symlink loop and a name too
+      ;; long. Refusing those as a bad workspace would be a second name for
+      ;; one observation, which is the defect this branch exists to close.
+      (and (some? dir) (nil? (resolved-workspace @workspace)))
+      (merge
+        {:ok false
+         :anchor anchor}
+        @workspace
+        {:remedy (str relation-census/workspace-root-token
+                      " is not an existing directory, so nothing about it can "
+                      "be narrowed and no source can be inside it: name a "
+                      "directory that exists with :dir, or name one source to "
+                      "census with :file.")})
+
+      ;; @spec MCP-OP-CENSUS-014
+      ;; The FIRST filesystem question this op asks about a NAMED source, and
+      ;; it is asked HERE, at the entrance, before `@scan` is forced. Sol's round-thirteen item 7:
+      ;; a `:file` that does not exist reached `census-sources`, which stats
+      ;; the named path with `fs/size` before anything had asked whether it
+      ;; was there, and the `java.nio.file.NoSuchFileException` surfaced
+      ;; through the launcher as a bare `:invalid-arguments` whose entire
+      ;; payload was the path — no type to branch on, no anchor, no remedy.
+      ;; Round fourteen added the readability question beside it, and Sol's
+      ;; round-fifteen items 1/2/5/7 found the ANSWER living in this branch
+      ;; alone while the `:dir` walk three frames down still read whatever it
+      ;; was handed. So the questions moved into `census-source-refusal`, the
+      ;; one fence BOTH the named `:file` and every walk-discovered member now
+      ;; pass through, and this branch is that fence applied to the one path
+      ;; the caller named.
+      ;;
+      ;; It cannot live in the pure shape pass: existence is a filesystem
+      ;; question and MCP-OP-CENSUS-016 requires that pass to touch nothing.
+      ;;
+      ;; No continuation, and that is the honest answer: the file this op was
+      ;; given IS the request, so the request minus it is not a request.
+      ;;
+      ;; The refusals are separately NAMED rather than one name carrying a
+      ;; cause, because their remedies differ — "name a source that exists"
+      ;; against "the source is there, fix what may read it" against "that
+      ;; path is not a file at all" — and a caller who must read a second
+      ;; field to learn which remedy applies has been handed a branch dressed
+      ;; as a type. The enumeration witness drives on the type NAME, so a
+      ;; distinct name is also what makes each impossible to ship unexercised.
+      ;; `:cause` is carried BESIDE the name, never instead of it: it
+      ;; distinguishes the file's own bit from a parent directory's, which is
+      ;; a fact about what to fix and not a second remedy.
+      (some? @named-refusal)
+      (let [{:keys [error-type error cause parent]} @named-refusal]
+        (cond-> {:ok false
+                 :error-type error-type
+                 :anchor anchor
+                 :error error
+                 :file file
+                 :remedy
+                 (case error-type
+                   :file-not-found
+                   (str file " does not exist, and the one source this op was "
+                        "given IS the request, so the request minus it is not "
+                        "a request and no narrower command can be computed: "
+                        "name a source that exists with :file, or point :dir "
+                        "at a directory to census its tree.")
+
+                   ;; Sol's round-eighteen item 2. The remedy names the LINK
+                   ;; and the two things the caller can do about it, and never
+                   ;; where the link points: a refusal that publishes the
+                   ;; target has told the caller a fact about the box in the
+                   ;; course of refusing to tell them one.
+                   :file-not-a-source-path
+                   (str file " is not a Clojure source path, and the one "
+                        "source this op was given IS the request, so the "
+                        "request minus it is not a request and no narrower "
+                        "command can be computed: name a "
+                        (str/join ", " (sort relation-census/named-source-extensions))
+                        " source with :file, or point :dir at a directory to "
+                        "census its tree.")
+
+                   :file-outside-workspace
+                   (str file " resolves outside the workspace this census is "
+                        "over, and a census is a completeness claim about a "
+                        "named tree, so reading it would answer about a tree "
+                        "the request did not name and no narrower command can "
+                        "be computed: name the tree that source really lives "
+                        "in with :dir, or name a source whose real path stays "
+                        "inside the tree you are censusing.")
+
+                   :file-not-a-regular-file
+                   (str file " is not a regular file — a directory, a named "
+                        "pipe or a socket carrying a source name is refused "
+                        "before it is opened, because reading one blocks or "
+                        "fails rather than yielding a source — and the one "
+                        "source this op was given IS the request, so no "
+                        "narrower command can be computed: name a regular "
+                        "file with :file, or point :dir at a directory to "
+                        "census its tree.")
+
+                   (if (= :parent-denied cause)
+                     (str file " is there, and the directory " parent
+                          " is what this process may not read, so the file "
+                          "cannot be reached; the one source this op was "
+                          "given IS the request, so the request minus it is "
+                          "not a request and no narrower command can be "
+                          "computed: make " parent " readable, name a "
+                          "reachable source with :file, or point :dir at a "
+                          "directory to census its tree.")
+                     (str file " exists but this process may not read it, and "
+                          "the one source this op was given IS the request, "
+                          "so the request minus it is not a request and no "
+                          "narrower command can be computed: make the file "
+                          "readable, name a readable source with :file, or "
+                          "point :dir at a directory to census its tree.")))}
+          cause (assoc :cause cause)
+          parent (assoc :parent parent)))
+
+      (:oversized @scan)
+      {:ok false
+       :error-type :source-too-large
+       :anchor anchor
+       :error (str (:oversized @scan) " is larger than "
+                   relation-census/max-source-bytes " bytes")
+       :file (:oversized @scan)
+       :maximum relation-census/max-source-bytes
+       ;; The op was given ONE named :file. The request minus it is not a
+       ;; request, so no narrower command can be computed and the refusal says
+       ;; so rather than captioning the argument the caller must supply.
+       :remedy (str (:oversized @scan) " is the one source this op was given "
+                    "and it is larger than " relation-census/max-source-bytes
+                    " bytes, so no narrower command can be computed: name a "
+                    "source under the byte cap with :file, or point :dir at a "
+                    "directory, where an oversized source is skipped and "
+                    "counted instead of refused.")}
+
+      ;; The entry bound: the ceiling bounds what the census READS, this one
+      ;; bounds what the walk COSTS, and a tree of non-sources trips only this.
+      (:walk-exceeded? @scan)
+      (let [discovered (:discovered @scan)
+            narrower (census-discovery/entry-narrowing-subtree discovered)
+            continuation (when narrower
+                           (narrow-to (str (:root discovered) "/" narrower)))]
+        (merge
+          {:ok false
+           :error-type :too-many-walk-entries
+           :error (str "This directory holds more than "
+                       relation-census/max-walk-entries
+                       " filesystem entries ("
+                       (:entries-observed @scan)
+                       " visited before the walk stopped). The census visits "
+                       "at most " relation-census/max-walk-entries
+                       " entries and will not report a truncated tree as a "
+                       "complete census")
+           :maximum relation-census/max-walk-entries
+           :fits relation-census/max-walk-entries
+           :observed (:entries-observed @scan)
+           :observed-at-least true
+           :entries-yielded (:entries-yielded @scan)
+           :files-read 0
+           :read-complete false
+           :anchor anchor}
+          ;; A null continuation is not a smaller promise than a real one; the
+          ;; refusal offers exactly one of a next-command and a remedy.
+          (or-remedy
+            continuation
+            (str "The walk stopped at the entry bound, so every count it "
+                 "observed is a lower bound and no subtree it finished "
+                 "walking is known to fit; point :dir at a directory you know "
+                 "is smaller, or census one :file at a time."))
+          (facts)))
+
+      ;; The same ceiling semantics as the MCP entrance: a tree the census may
+      ;; not finish is refused with nothing read, never truncated into success,
+      ;; and the continuation is COMPUTED from the walk's own per-directory
+      ;; aggregates rather than described in prose the caller cannot run.
+      (:exceeded? @scan)
+      (let [discovered (:discovered @scan)
+            narrower (census-discovery/narrowing-subtree discovered)
+            continuation (when narrower
+                           (narrow-to (str (:root discovered) "/" narrower)))]
+        (merge
+          {:ok false
+           :error-type :too-many-candidate-files
+           :error (str "This directory holds more than "
+                       relation-census/max-scanned-files
+                       " candidate Clojure sources (" (:observed @scan)
+                       " seen before the walk stopped). The census reads at "
+                       "most " relation-census/max-scanned-files
+                       " and will not report a truncated tree as a complete "
+                       "census")
+           :maximum relation-census/max-scanned-files
+           :fits relation-census/max-scanned-files
+           :observed (:observed @scan)
+           :observed-at-least true
+           :files-read 0
+           :read-complete false
+           :anchor anchor}
+          (or-remedy
+            continuation
+            (str "The walk stopped at the ceiling, so every count it observed "
+                 "is a lower bound and no subtree it finished walking is "
+                 "known to fit; point :dir at a directory you know is "
+                 "smaller, or census one :file at a time."))
+          (facts)))
+
+      ;; @spec MCP-OP-CENSUS-014
+      ;; A member the WALK discovered that the fence refuses. It is decided
+      ;; after both bounds, exactly as the tool decides it — a tree the census
+      ;; may not finish is refused before anything is read — and it answers
+      ;; the way the tool answers the same tree: typed, naming the member by
+      ;; its project-relative path, with the walk's own figures, and with a
+      ;; remedy rather than a continuation. There is no continuation to
+      ;; compute: the path came from the WALK and not from the request, so
+      ;; there is no request to narrow.
+      ;; @spec MCP-OP-CENSUS-014
+      ;; @spec MCP-OP-CENSUS-018
+      ;; A subtree the walk could not ENTER. Opus's round-sixteen item 4: this
+      ;; was swallowed with `:continue` and no counter, so a `chmod 000`
+      ;; directory holding a thousand arms was invisible and the receipt still
+      ;; said `read-complete true` — while ONE unreadable FILE refused the
+      ;; whole census. A census is a completeness claim; a subtree the walk
+      ;; could not enter falsifies it exactly as an unreadable member does, so
+      ;; it earns the same type, and its own cause because what must change is
+      ;; a bit on a DIRECTORY. No continuation: the path came from the walk.
+      (:unreadable-directory @scan)
+      ;; Opus's round-seventeen item 5, the CLI half of the identical defect:
+      ;; a root the walk cannot enter is recorded walk-relative as `""` and
+      ;; interpolated into three sentences. Same function as the tool, so the
+      ;; two entrances cannot drift apart on what they call the root.
+      ;; Sol's round-eighteen item 4: this remedy named the same subject twice
+      ;; in one sentence, once by the token and once by the server's absolute
+      ;; path. The root has ONE name; the absolute path is in `:anchor`, which
+      ;; is where a reader checks their request and where a replay reads it.
+      (let [directory (relation-census/shown-directory
+                        (:unreadable-directory @scan))]
+        (merge
+          {:ok false
+           :error-type :file-not-readable
+           :cause :directory-denied
+           :anchor anchor
+           :directory directory
+           :error (str "the directory " directory
+                       " may not be read or traversed by this process, so "
+                       "this census cannot claim to have read the tree")
+           :remedy (str directory " came from the workspace walk, not from "
+                        "the request, so there is no request to narrow and no "
+                        "narrower command can be computed: "
+                        (relation-census/directory-repair-phrase directory)
+                        ", remove it, or name the sources to census with "
+                        ":file. A census is a completeness claim, and a "
+                        "subtree this process may not enter cannot be counted "
+                        "as read.")}
+          (facts)))
+
+      ;; The remedy is chosen by PROVENANCE, not by the type. Opus's
+      ;; round-sixteen item 1: a read that failed after the fence on the ONE
+      ;; source a `:file` request named reached this branch, and the walk's
+      ;; wording told a one-file request that the path "came from the
+      ;; workspace walk" and to remove or repair it — a remedy about a tree the
+      ;; caller never asked for. A `:file` request IS the request, so it earns
+      ;; the same wording every other named-source refusal above earns.
+      (:unreadable @scan)
+      ;; Sol's round-eighteen item 4, the same class one branch over: the
+      ;; walk-provenance wording named the root absolutely. The subject here is
+      ;; a MEMBER, named project-relative, so the tree it is under is named by
+      ;; the root's one name.
+      (let [{:keys [error-type error cause parent file provenance]}
+            (:unreadable @scan)]
+        (cond-> (merge
+                  {:ok false
+                   :error-type error-type
+                   :anchor anchor
+                   :error error
+                   :file file
+                   :remedy
+                   (if (= :request provenance)
+                     (str file " passed the fence and then could not be read "
+                          "— its mode or its existence changed under the "
+                          "census — and the one source this op was given IS "
+                          "the request, so the request minus it is not a "
+                          "request and no narrower command can be computed: "
+                          "make " file " readable and stable, name another "
+                          "readable regular file with :file, or point :dir at "
+                          "a directory to census its tree.")
+                     (str file " came from the workspace walk, not from the "
+                          "request, so there is no request to narrow and no "
+                          "narrower command can be computed: remove or repair "
+                          "it under " relation-census/workspace-root-token
+                          (when parent
+                            (str " (the directory " parent
+                                 " is what this process may not read)"))
+                          (when (= :read-failed-after-fence cause)
+                            (str " (it passed the fence and then could not be "
+                                 "read; its mode or its existence changed "
+                                 "under the census)"))
+                          ", or name a readable regular file with :file."))}
+                  (facts))
+          cause (assoc :cause cause)
+          parent (assoc :parent parent)))
+
+      :else
+      (let [inputs (:inputs @scan)
+            doors parsed-doors]
+        (if (empty? inputs)
+          (merge
+            {:ok false
+             :error-type :no-fold-arms-found
+             :error "No file defines defmethod fold-event arms"
+             :dir (census-root dir)
+             :anchor anchor
+             ;; Nothing was found, so there is no subtree to narrow to and no
+             ;; command to compute: the refusal names what it scanned instead
+             ;; of captioning the directory the caller was supposed to pick.
+             ;; Sol's round-eighteen item 4. `:dir` above carries the
+             ;; absolute root, which is the field a reader checks and a replay
+             ;; reads; the SENTENCE uses the root's one name.
+             :remedy (str "Nothing under "
+                          relation-census/workspace-root-token
+                          " defines defmethod fold-event arms ("
+                          (:scanned @scan) " file(s) scanned), so no narrower "
+                          "command can be computed: point :dir at a directory "
+                          "whose sources define fold arms, or name one with "
+                          ":file.")}
+            (facts))
+          (let [threads (when pool (:size pool))
+                {:keys [map-fn pool-size]} (census-plan-pool threads)
+                result (relation-census/plan
+                         {:inputs inputs
+                          :doors doors
+                          :map-fn map-fn})
+                confirmed (when (and want-declared? (:ok result))
+                            (relation-census/parse-doors
+                              (str/split (str doors-arg) #",")
+                              (into (:declared @scan #{}) (:declared result))))]
+            (cond
+              ;; A per-file refusal from the plan phase — an unparseable
+              ;; source, or a worker that threw. It names the file it failed
+              ;; on, which is not a narrower REQUEST: the tree minus one
+              ;; source is not expressible in this grammar. So it carries the
+              ;; anchor and a remedy, and no continuation at all.
+              (not (:ok result))
+              (merge result
+                     {:anchor anchor
+                      :remedy (str (:file result)
+                                   " could not be censused, and a request "
+                                   "cannot name a tree minus one source, so "
+                                   "no narrower command can be computed: fix "
+                                   "that source, or census a directory that "
+                                   "excludes it with :dir.")})
+
+              ;; Whether a door is DEFINED can only be answered once the scan
+              ;; has been parsed: confirm it against the plan's own :declared
+              ;; plus the names read from the files that define no arms.
+              (map? confirmed)
+              (merge
+                {:ok false
+                 :error-type :unknown-door-symbol
+                 :error (str "Unknown identity door " (:invalid confirmed) ": "
+                             (:why confirmed))
+                 :door (:invalid confirmed)
+                 :known-doors (vec (sort (map str relation-census/default-doors)))
+                 :anchor anchor}
+                ;; Sol's round-eleven item 2, exactly here: this branch spelled
+                ;; `:dir .` and the replay censused the replay's cwd.
+                (or-remedy (continue-with :doors) (overflow-remedy :doors))
+                (facts))
+
+              :else
+              (let [unrecognised (relation-census/unrecognised-summary
+                                   (:unrecognised result) 5)
+                    skipped (:oversized-skipped @scan)]
+                (-> result
+                    (dissoc :all-sites :declared :unrecognised)
+                    ;; The discovery facts are the SAME facts every refusal
+                    ;; above publishes, through the same kernel the tool uses.
+                    (merge (facts))
+                    (assoc :read-complete (empty? skipped)
+                           :pool-size pool-size
+                           :pool-size-requested (when (and threads
+                                                          (> threads pool-size))
+                                                  threads)
+                           :unrecognised-calls unrecognised
+                           :raw (filterv #(= :raw (:class %)) (:all-sites result))
+                           :guarded (filterv #(= :guarded (:class %)) (:all-sites result))
+                           :unknown (filterv #(= :unknown (:class %)) (:all-sites result))
+                           :next-action
+                           (cond
+                             (pos? (get-in result [:counts :raw] 0))
+                             "review the raw sites: each is a collection write in a fold arm with no dominating recognised guard"
+                             (pos? (get-in result [:counts :unknown] 0))
+                             "review the unknown sites: this census version declines to decide them"
+                             (pos? (:count unrecognised 0))
+                             (str "no site is unguarded, but " (:count unrecognised)
+                                  " call(s) inside arms are not modelled by this census version ("
+                                  (str/join ", " (take 3 (map :call (:examples unrecognised))))
+                                  "): a write behind one of them is not a site here")
+                             :else "none")))))))))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-017
+(defn run-relation-census
+  "Census collection writes inside fold arms. Reads only; writes nothing.
+
+   The one entrance, and the one place a Throwable from the census path is
+   turned into a DECLARED refusal. Nothing below may reach the launcher's
+   catch-all: a refusal typed `:invalid-arguments` is a refusal no enumeration
+   witness can see."
+  [opts]
+  (let [result (try
+                 (run-relation-census* opts)
+                 (catch Throwable error
+                   (census-crash-refusal opts error)))]
+    ;; Opus's round-sixteen item 7. Applied HERE, at the op's last step,
+    ;; rather than at the sites that build the strings: a bound enforced at
+    ;; some of a namespace's construction sites is not a bound, it is those
+    ;; sites' habit. A receipt is not touched — it carries its own 4,096-byte
+    ;; cap and its own trimming rules — and neither is a continuation, which
+    ;; is short by construction and whose truncation would name a DIFFERENT
+    ;; file rather than fail.
+    (if (false? (:ok result))
+      (relation-census/bound-refusal result)
+      result)))
 
 ;; @spec MCP-OP-SHELL-ARGV-002
 (defn ls-tree-root-refusal
@@ -1701,6 +3020,27 @@
                        :examples  ["clj-surgeon :op :ls-extract :file src/my/ns.clj :form rebuild!"]
                        :category  :read}
 
+    :relation-census  {:handler   run-relation-census
+                       ;; Pure request-shape validation the ENTRANCE runs
+                       ;; before it loads project aliases: MCP-OP-CENSUS-016
+                       ;; says a malformed request refuses before any
+                       ;; filesystem work, and config discovery is filesystem
+                       ;; work.
+                       :shape     #'relation-census/validate-cli-request-shape
+                       :aliases   [:census]
+                       :desc      "Classify every collection write inside defmethod fold-event arms"
+                       :args      {:dir     {:desc "Root directory to scan (default: .)"}
+                                   :file    {:desc "Census exactly one file instead of scanning"}
+                                   :doors   {:desc "Comma-separated identity doors (default: conj-once,cons-once,upsert-by,conj-distinct-by,cons-distinct-by)"}
+                                   :threads {:desc "Plan-phase parallelism; changes elapsed time, never the answer"}}
+                       :workflow  ["A :raw site is the vulnerability: a write with no dominating recognised guard."
+                                   "An :unknown site is review work this version declines to decide; :reason names why."
+                                   "The census locates review work. It never proves idempotency and is not an enforcement gate."]
+                       :examples  ["clj-surgeon :op :relation-census :dir ."
+                                   "clj-surgeon :op :relation-census :file src/app/folds.clj"
+                                   "clj-surgeon :op :relation-census :dir . :threads 8"]
+                       :category  :read}
+
     :ls-tree          {:handler   run-ls-tree
                        :aliases   [:tree :map :outline-tree]
                        :desc      "Map namespaces across a directory tree"
@@ -2034,12 +3374,40 @@
       (throw (ex-info "Provide exactly one of :spec or :spec-file"
                       {:error-type :missing-spec-input})))))
 
-(defn run [{:keys [op] :as opts}]
+;; @spec MCP-OP-CENSUS-014
+(defn- print-launcher-refusal!
+  "THE ONE PLACE the LAUNCHER's own refusals are printed, and bounded.
+
+   Sol's round-eighteen item 1, blocking. `run-relation-census` bounds the op's
+   exits and `mcp-relation-census/entrance-bounded` bounds the tool's, and the
+   launcher — which is the public CLI entrance, the thing an operator actually
+   types — bounded nothing: `parse-args` throws BEFORE dispatch, so a repeated
+   10,001-character `:doors` reached the catch-all below and was printed
+   verbatim, twice in `:values` and once in the message, 20,228 bytes with no
+   truncation marker.
+
+   The bound is a property of the EXIT, not of the op. `census/bound-refusal`
+   is the same function the op's last step uses, for the reason its own
+   docstring gives: a bound enforced at some of the sites is not a bound, it is
+   those sites' habit, and the habit does not travel to the site added next
+   round. So there is ONE printing site for a launcher refusal, and it is
+   bounded; the names it can print are declared in
+   `census/launcher-refusal-types` and enumerated by a witness that drives both
+   real launchers as subprocesses.
+
+   Returns the bounded map, because `-main`'s exit code is decided from it."
+  [refusal]
+  (let [bounded (relation-census/bound-refusal refusal)]
+    (pp/pprint bounded)
+    bounded))
+
+(defn- run-op
+  "Dispatch one shape-validated request. Loads project aliases first."
+  [canonical {:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
     (forms/init-from-file! anchor))
-  (let [canonical (resolve-op op)
-        opts (if (or (#{:change :change!} canonical)
+  (let [opts (if (or (#{:change :change!} canonical)
                      (and (= :show-form canonical)
                           (or (contains? opts :spec)
                               (contains? opts :spec-file))))
@@ -2083,24 +3451,185 @@
                     :error-type :unknown-operation
                     :usage "clj-surgeon :op :help"}
                    opts))]
-    (if (string? result) (println result) (pp/pprint result))
+    (cond
+      (string? result) (println result)
+      ;; Round nineteen. THIS branch is a LAUNCHER refusal, not an op's: it is
+      ;; about the `:op` in the request, and no op ran. So it leaves through
+      ;; the launcher's one bounded exit, exactly as its `--help` twin does.
+      ;; Every other result here is an op's own — a receipt or a typed op
+      ;; refusal — and is printed untouched, because a bound belongs at the
+      ;; exit that OWNS the answer and this function does not own theirs.
+      (= :unknown-operation (:error-type result)) (print-launcher-refusal! result)
+      :else (pp/pprint result))
     result))
+
+(defn run [{:keys [op] :as opts}]
+  (let [canonical (resolve-op op)
+        ;; The op's PURE request-shape pass, ahead of every filesystem call
+        ;; this entrance makes — `run-op`'s config load included. Sol's
+        ;; round-nine finding was that ordering: `bb … :threads
+        ;; not-a-number` refused only after this entrance had stat'ed the
+        ;; workspace, read its `.clj-surgeon.edn`, and walked the ancestor
+        ;; chain. "Before any filesystem work" (MCP-OP-CENSUS-016) has to
+        ;; mean the entrance, not just the op body; the round-eight witness
+        ;; instrumented the op body and was blind to exactly this frame.
+        shape-refusal (when-let [shape (:shape (get ops-registry canonical))]
+                        (shape opts))]
+    (if shape-refusal
+      ;; Opus's round-seventeen item 1, blocking, the CLI half. This branch
+      ;; RETURNS the op's pure shape refusal without ever entering the op, so
+      ;; the bound `run-relation-census` applies at its own last step never saw
+      ;; it: `:threads <10,001 a's>` printed a 10,514-byte refusal with a
+      ;; 10,054-character field and no truncation marker, and so did an
+      ;; unknown argument whose NAME was that long, and a `:dir` that did not
+      ;; decode.
+      ;;
+      ;; The same one function the op's exit uses, at THIS exit, because this
+      ;; is an exit — that is the whole content of the rule. `:relation-census`
+      ;; is the only op that declares a `:shape` pass, so nothing else changes
+      ;; shape here; an op that declares one later inherits the bound rather
+      ;; than rediscovering this defect.
+      (let [bounded (relation-census/bound-refusal shape-refusal)]
+        (pp/pprint bounded)
+        bounded)
+      (run-op canonical opts))))
+
+(def max-argument-nesting-depth
+  "How deeply one CLI argument may nest before it is refused unread.
+
+   Opus's round-twenty-one item 4. `edn/read-string` is recursive, so a
+   10,001-deep nested argument overflowed the reader's stack and left both
+   real launchers as an untyped `StackOverflowError` — an `Error`, which
+   `-main`'s `catch Exception` never saw. Nothing was evaluated and no caller
+   value was published unbounded, which is why the reviewer ruled it
+   non-blocking; what it broke is the claim that every refusal the launcher
+   prints leaves through ONE bounded exit, because a raw stack trace is a
+   refusal no enumeration can drive.
+
+   256, and the number is a CEILING rather than a measurement of what the
+   reader survives: every argument this CLI accepts is a path, a keyword, a
+   flat list of door symbols or a one-level map, so a legitimate request is
+   two or three deep and the ceiling is three orders of magnitude of slack.
+   A bound set where the stack happens to give out would move with the JVM,
+   the platform and the thread; a bound set where the REQUESTS are is a
+   property of the tool."
+  256)
+
+(def ^:private opening-delimiters
+  "The three characters that open a nesting level in EDN."
+  #{\[ \{ \(})
+
+(def ^:private closing-delimiters
+  "The three characters that close one."
+  #{\] \} \)})
+
+(defn- scanned-nesting-depth
+  "The deepest run of open delimiters in `s`, measured WITHOUT a reader.
+
+   Character scanning, deliberately: the whole point is to answer \"is this
+   too deep to read\" before anything recursive touches it, and a reader that
+   throws on depth has already used the stack it was supposed to protect.
+
+   EDN strings and character literals are skipped, so a path or a door name
+   containing a bracket is not counted as nesting. It stops as soon as the
+   ceiling is exceeded, so the scan is bounded by the answer rather than by
+   the argument."
+  [^String s]
+  (let [n (.length s)]
+    (loop [i 0 depth 0 deepest 0 in-string? false escaped? false]
+      (if (or (>= i n) (> deepest max-argument-nesting-depth))
+        deepest
+        (let [c (.charAt s i)]
+          (cond
+            in-string?
+            (recur (inc i) depth deepest
+                   (not (and (not escaped?) (= c \")))
+                   (and (not escaped?) (= c \\)))
+
+            (= c \") (recur (inc i) depth deepest true false)
+
+            ;; A character literal: `\\[` is a bracket the caller wrote, not a
+            ;; delimiter, so the next character is consumed whatever it is.
+            (= c \\) (recur (+ i 2) depth deepest false false)
+
+            (opening-delimiters c)
+            (let [d (inc depth)] (recur (inc i) d (max deepest d) false false))
+
+            (closing-delimiters c)
+            (recur (inc i) (dec depth) deepest false false)
+
+            :else (recur (inc i) depth deepest false false)))))))
+
+;; @spec MCP-OP-CENSUS-034
+(defn- refuse-over-nested!
+  "Throw the DECLARED launcher refusal when one argument nests past the
+   ceiling. Named separately from `parse-val` so the two branches that read
+   cannot drift into checking different things."
+  [^String s]
+  (let [measured (scanned-nesting-depth s)]
+    (when (> measured max-argument-nesting-depth)
+      (throw (ex-info
+               (str "an argument nests at least " measured
+                    " deep, past the " max-argument-nesting-depth
+                    "-level ceiling; it is refused unread, because a reader "
+                    "deep enough to measure it is a reader deep enough to "
+                    "overflow")
+               {:error-type :argument-nesting-too-deep
+                :ceiling max-argument-nesting-depth
+                :measured measured
+                :value s})))))
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.
-   Pure: string in, value out."
+   Pure: string in, value out.
+
+   `edn/read-string`, NOT `clojure.core/read-string`, and the difference is a
+   class rather than a nicety. `clojure.core/read-string` honours `*read-eval*`,
+   which defaults to true, so the reader EVALUATES `#=(…)` in caller text —
+   demonstrated at this branch's tip through the real JVM launcher:
+
+     $ clj-surgeon :op :relation-census :dir .
+         :doors '[#=(clojure.core/println \"PWNED-ARBITRARY-EVAL\")]'
+     PWNED-ARBITRARY-EVAL
+     {:ok false, :error-type :doors-not-a-string, …}
+
+   The evaluation happened while the op was REFUSING the argument, which is
+   the tell: the reader ran before any validation could. argv is usually the
+   operator's own shell, so the blast radius is small in the ordinary case —
+   but it is not always the operator's: a wrapper, a config-driven runner or
+   an agent composing argv from a request turns a value into code, and \"the
+   caller could have run it anyway\" is an argument about the ordinary case
+   made about the one that is not.
+
+   `edn/read-string` reads the data these two branches were written for —
+   vectors, maps, sets, keywords, symbols, strings and numbers — and refuses
+   `#=`, arbitrary tagged literals and every other reader escape. A value it
+   cannot read throws, and the launcher publishes the same bounded
+   `:invalid-arguments` it already publishes for a token that does not parse."
   [s]
   (cond
     (= s "true") true
     (= s "false") false
     (.startsWith s ":") (keyword (subs s 1))
-    (.startsWith s "[") (read-string s)  ;; parse EDN vectors after shell unquoting
-    (.startsWith s "{") (read-string s)  ;; parse EDN maps
+    (.startsWith s "[") (do (refuse-over-nested! s) (edn/read-string s))
+    (.startsWith s "{") (do (refuse-over-nested! s) (edn/read-string s))
     :else s))
 
 (defn parse-args
   "Parse CLI arg strings into an opts map.
-   Pure: string sequence in, map out."
+   Pure: string sequence in, map out.
+
+   A REPEATED flag is refused, naming it. Sol's round-eleven item 7: this fn
+   built its map with `(into {})`, so `:file one.clj :file two.clj` collapsed
+   last-one-wins and the census reported `:ok true` over `two.clj` alone —
+   the caller asked about two sources and got a receipt claiming completeness
+   about one. That is the failure MCP-OP-CENSUS-019 already names for an
+   argument the op does not accept, in a different disguise: an argument
+   silently DROPPED tells the caller a bound was applied that never existed,
+   and here the drop is invisible in the receipt as well. No op in this CLI
+   has a repeatable flag, so a repeat is a malformed request rather than a
+   list, and the refusal is generic for the same reason the collapse was: this
+   fn builds the map before anything knows which op it is for."
   [args]
   (let [help-flags #{"--help" "-h"}
         has-help?  (some help-flags args)
@@ -2108,13 +3637,78 @@
     (when (odd? (count kv-args))
       (throw (ex-info "Arguments must be key-value pairs"
                       {:error-type :invalid-arguments})))
-    (cond-> (->> kv-args
-                 (partition 2)
-                 (map (fn [[k v]]
-                        (let [key (keyword (subs k 1))]
-                          [key (if (#{:match :with :contains :query :expr :expect} key) v (parse-val v))])))
-                 (into {}))
-      has-help? (assoc :help true))))
+    (let [pairs (->> kv-args
+                     (partition 2)
+                     (mapv (fn [[k v]]
+                             (let [key (keyword (subs k 1))]
+                               [key (if (#{:match :with :contains :query :expr :expect} key) v (parse-val v))]))))
+          repeated (->> (map first pairs)
+                        frequencies
+                        (filter (fn [[_ n]] (> n 1)))
+                        (map first)
+                        (sort-by name)
+                        first)]
+      (when repeated
+        (let [flag (str ":" (name repeated))
+              times (count (filter #(= repeated (first %)) pairs))]
+          (throw (ex-info
+                   (str flag " was given " times
+                        " times; every clj-surgeon argument is given at most "
+                        "once, and a repeated one would be silently dropped")
+                   {:error-type :duplicate-argument
+                    :argument flag
+                    :occurrences times
+                    :values (mapv second
+                                  (filter #(= repeated (first %)) pairs))}))))
+      (cond-> (into {} pairs)
+        has-help? (assoc :help true)))))
+
+;; @spec MCP-OP-CENSUS-034
+(defn launcher-throwable-refusal
+  "The LAST-RESORT refusal for anything that reaches `-main`'s outermost catch.
+
+   `Throwable`, not `Exception`, and that one word is Opus's round-twenty-one
+   item 4. A 10,001-deep nested EDN argument overflowed the reader's stack, and
+   a `StackOverflowError` is an `Error`: it walked past `catch Exception` and
+   both real launchers published a raw stack trace instead of a typed refusal.
+   A caller-controlled argument reaching an untyped stack trace is a refusal no
+   enumeration can drive, which is the round-nineteen argument about undeclared
+   names one class over.
+
+   `core/max-argument-nesting-depth` now refuses that particular input unread,
+   so no argv is expected to arrive here at all — which is exactly why this
+   exists. The depth bound is a guess about which `Error` a caller can reach;
+   this is the promise that the guess being wrong still leaves a typed,
+   bounded exit rather than a stack trace.
+
+   The name is `:invalid-arguments`, the launcher's already-declared generic,
+   whenever the `Throwable` carries none of its own: this catch sits at the end
+   of a body whose only work is turning argv into a request, so an unnamed
+   failure here is a failure about the arguments. An `Error` carries no
+   `ex-data` and often no message, so the class name is published when there is
+   nothing else to say — the caller needs to know WHAT failed, and the class is
+   the tool's own fact, not the caller's value.
+
+   Bounded by `print-launcher-refusal!` like every other launcher refusal; a
+   returned map rather than a printed one so a witness can drive it with a real
+   `StackOverflowError`, which no argv can produce once the ceiling is in
+   place."
+  [^Throwable t]
+  ;; `ex-data`, not `(instance? clojure.lang.IExceptionInfo t)`: a class
+  ;; literal is resolved when this namespace is ANALYSED and babashka's
+  ;; runtime does not carry that interface, so the literal took the bb
+  ;; launcher out at analysis time — the same lesson `census-adapter-failure`
+  ;; already records about `VirtualMachineError`. `ex-data` answers nil for
+  ;; anything that carries none, which is the question being asked.
+  (let [data (or (ex-data t) {})
+        message (.getMessage t)]
+    (merge data
+           {:error (if (and message (not (str/blank? message)))
+                     message
+                     (str "the launcher failed with "
+                          (.getName (class t))
+                          " and no message"))
+            :error-type (or (:error-type data) :invalid-arguments)})))
 
 (defn -main [& args]
   (try
@@ -2203,17 +3797,16 @@
                       op-def (get ops-registry canonical)]
                   (if op-def
                     (println (format-op-help canonical op-def))
-                    (let [error {:error (str "Unknown op: " (:op opts))
-                                 :error-type :unknown-operation}]
-                      (pp/pprint error)
-                      error)))
+                    ;; A launcher refusal like any other: the op name is the
+                    ;; caller's own string, so it is bounded at the same one
+                    ;; exit rather than printed raw.
+                    (print-launcher-refusal!
+                      {:error (str "Unknown op: " (:op opts))
+                       :error-type :unknown-operation})))
 
                 :else (run opts))))]
       (when (and (map? result) (:error result))
         (System/exit 1)))
-    (catch Exception e
-      (pp/pprint (merge (or (ex-data e) {})
-                        {:error (.getMessage e)
-                         :error-type (or (:error-type (ex-data e))
-                                         :invalid-arguments)}))
+    (catch Throwable t
+      (print-launcher-refusal! (launcher-throwable-refusal t))
       (System/exit 1))))
