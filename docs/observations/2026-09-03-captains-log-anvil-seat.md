@@ -1154,3 +1154,7 @@ The E-CALLER doc was swept into my q5z r13 commit (d9421f9) because `git add <na
 ## 03:06Z — O2 round 3 BUILT (e258519, pushed); Sol review launched; mcp_process_test flake filed (inb-61b4e9)
 
 The strict criterion is now machine-checked per mode (every structured leaf verbatim in the text; one enumerated exclusion, frozen); Sol's own r2 probe agrees on the GREEN tree. The builder's entrance witness found a defect Sol had not: the fit was measured with the clock zeroed while the publisher rendered the real one — 16 bytes over budget at exactly the boundary; closed with a constant reserve, which the r3 brief asks Sol to attack (and to check against the measured.elapsed_ms wire change on the MEM-003 landing, since the two land together on the trunk). Cost unmeasured: text doubles on small reads. Third flaky-under-load test pair tonight filed.
+
+## 03:08Z — FAN scorer backslash fix BUILT (8ed5893, pushed, RED→GREEN with a permanent self-test); Sol review launched with the retroactive question
+
+Apparatus gets the same discipline as product: the scorer that graded seven cohorts had a blind spot the verb's own round found; the fix is small, but the question that matters is retroactive — could the old scorer have produced a false PASS on any published cohort? The old behaviour failed closed (missing + extras), and no published fixture contains a backslash path; the reviewer is asked to prove both from the generator's own output rather than take my word.
