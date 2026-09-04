@@ -219,3 +219,54 @@
         (is (empty? (seq (.listFiles directory)))))
       (finally
         (delete-tree! directory)))))
+
+;; ============================================================
+;; One server, several client sessions, one root (O2 round 2)
+;; ============================================================
+;; Reviewer findings 2 and 3 (2026-09-03): the dedupe key was `workspace-key`
+;; ALONE, held in a process-lifetime atom, so `session.start` distinguished
+;; arms only when every arm got its own worktree path. Two arms in one root, or
+;; one client reconnecting, still left identical bytes — the exact failure the
+;; event was built to end. Measured: three `execute-inspect!` calls, one root,
+;; one telemetry state → `tool.call events=3, session.start events=1`.
+;; `client_run_id` would have fixed it and had NO production caller: both
+;; entrances passed `{:workspace-root project-root}` and nothing else, and the
+;; field was not part of the dedupe key, so supplying it would not have
+;; re-armed the event either.
+
+;; @spec MCP-OP-STUDY-043
+(deftest session-start-distinguishes-two-client-runs-on-one-root
+  (let [directory (temp-dir)]
+    (try
+      (let [state (telemetry/start! {:mode :metrics
+                                     :directory (.getPath directory)
+                                     :run-id "server-run"})
+            root "/tmp/arms/e6/shared"]
+        (telemetry/record-session-start!
+          state {:workspace-root root :client-run-id "arm-a"})
+        (telemetry/record-session-start!
+          state {:workspace-root root :client-run-id "arm-b"})
+        (testing "the same client run on the same root still emits once"
+          (telemetry/record-session-start!
+            state {:workspace-root root :client-run-id "arm-a"}))
+        (let [started (filterv #(= "session.start" (:event %)) (events state))]
+          (is (= 2 (count started))
+              "two client runs on one root are two sessions, not one")
+          (is (= #{"arm-a" "arm-b"} (set (map :client_run_id started))))
+          (is (= 1 (count (distinct (map :workspace_key started))))
+              "and both name the same root")))
+      (finally
+        (delete-tree! directory)))))
+
+;; @spec MCP-OP-STUDY-043
+(deftest session-start-without-a-client-run-id-still-dedupes-per-root
+  (let [directory (temp-dir)]
+    (try
+      (let [state (telemetry/start! {:mode :metrics
+                                     :directory (.getPath directory)})]
+        (telemetry/record-session-start! state {:workspace-root "/tmp/arms/e6/g1"})
+        (telemetry/record-session-start! state {:workspace-root "/tmp/arms/e6/g1"})
+        (is (= 1 (count (filterv #(= "session.start" (:event %)) (events state))))
+            "an anonymous connection is still one session per root"))
+      (finally
+        (delete-tree! directory)))))
