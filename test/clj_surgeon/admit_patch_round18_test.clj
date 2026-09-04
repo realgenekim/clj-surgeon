@@ -278,3 +278,78 @@
                  (get-in result [:tests :reason]))
               (pr-str (get-in result [:tests :reason]))))
         (finally (delete-tree-nofollow! root))))))
+
+;; @spec MCP-OP-ADMIT-156
+;; @spec MCP-OP-ADMIT-160
+(deftest output-tail-is-the-tail-of-the-output-and-says-when-it-cut
+  ;; The assertion's last token is COMPUTED by the shell rather than written
+  ;; in the command, so that neither face can pass by echoing the caller's own
+  ;; argv back: the receipt carries the command verbatim, and a witness that
+  ;; searched for a literal present in it would be vacuous.
+  (let [assertion "FAIL in (handle-tick-test) expected 1 actual 2"
+        noisy (str "i=0; while [ $i -lt 4000 ]; do"
+                   " echo \"noise line $i padding padding padding padding\";"
+                   " i=$((i+1)); done;"
+                   " echo \"FAIL in (handle-tick-test) expected 1 actual"
+                   " $((1+1))\"; exit 5")]
+    (testing "the failing assertion survives 4,000 lines of noise before it"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root base-sources)
+          (let [result (admit/execute-request!
+                         (stub-config root {:admit-test-runner nil})
+                         {:patch clean-multi-file-patch
+                          :mode "propose"
+                          :verify (inline-verify ["sh" "-c" noisy])})
+                row (first (get-in result [:tests :commands]))
+                tail (str (:output_tail row))]
+            (is (true? (:ok result)) (pr-str (:error result)))
+            (is (false? (:verify_ok result)))
+            (is (= 5 (long (:exit row))) (pr-str (dissoc row :output_tail)))
+            (is (str/ends-with? (str/trimr tail) assertion)
+                (str "output_tail must END with the command's last line."
+                     " Its first line is "
+                     (pr-str (first (str/split-lines tail)))
+                     " and its last is "
+                     (pr-str (last (str/split-lines tail)))))
+            (is (str/includes? tail assertion)
+                "the one fact that makes the next edit possible")
+            (is (true? (:output_truncated row))
+                (str "a cut output says it was cut: "
+                     (pr-str (dissoc row :output_tail))))
+            (is (and (number? (:output_bytes row))
+                     (< 12000 (long (:output_bytes row))))
+                (str "the row names how much output there was: "
+                     (pr-str (:output_bytes row))))
+            (is (and (number? (:output_omitted_bytes row))
+                     (pos? (long (:output_omitted_bytes row))))
+                (str "and how much of it the receipt omitted: "
+                     (pr-str (:output_omitted_bytes row))))
+            (is (= (long (:output_bytes row))
+                   (+ (long (:output_omitted_bytes row))
+                      (count (.getBytes tail "UTF-8"))))
+                "the omitted count and the published tail account for all of it"))
+          (finally (delete-tree-nofollow! root)))))
+    (testing "the text face spells the same tail structuredContent carries"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root base-sources)
+          (let [config-atom (deref #'admit/runtime-config)
+                previous @config-atom
+                captured (atom nil)]
+            (try
+              (reset! config-atom (stub-config root {:admit-test-runner nil}))
+              (admit/handle-admit-clojure-patch
+                nil
+                {"patch" clean-multi-file-patch
+                 "mode" "commit"
+                 "verify" {"commands" [["sh" "-c" noisy]]}}
+                (fn [content _error? _result]
+                  (reset! captured (str (first content)))))
+              (is (str/includes? (str @captured) assertion)
+                  (str "the text face carries the failing assertion, not the"
+                       " head of the noise: "
+                       (pr-str (subs (str @captured)
+                                     0 (min 400 (count (str @captured)))))))
+              (finally (reset! config-atom previous))))
+          (finally (delete-tree-nofollow! root)))))))
