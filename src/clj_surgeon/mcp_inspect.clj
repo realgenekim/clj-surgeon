@@ -1252,40 +1252,49 @@
 (defn- render-evidence
   "Render one result's rows into `allowance` characters of text.
 
-  Rows are dropped WHOLE and only from the tail, and a dropped tail is always
-  declared. Nothing here may drop evidence silently: a caller told the read is
-  terminal and handed none of the answer is worse off than one told it was
-  truncated."
+  Rows are dropped WHOLE and only from the tail, and every drop is declared.
+  A row whose BODY does not fit renders as its row line alone and is counted
+  as a dropped body, never as a row rendered whole.
+
+  Field evidence (Sol O2 round-2 review, section 2): the previous rule always
+  rendered the first row, counted it as shown, and silently omitted its body,
+  so a 10,000-character form body left the text under `1 of 1 rows` and
+  `terminal evidence · read_complete=true · next action none`. A caller told
+  the read is terminal and handed none of the answer is worse off than one
+  told the text was abridged."
   [result allowance]
   (let [items (result-evidence result)
-        total (count items)]
-    (loop [remaining items lines [] shown 0 used 0]
+        total (count items)
+        bodies-total (count (filter #(seq (:body %)) items))]
+    (loop [remaining items lines [] shown 0 bodies 0 used 0]
       (if-let [{:keys [row body]} (first remaining)]
         (let [row-line (str "    · " row)
+              row-cost (inc (count row-line))
               body-lines (when (seq body)
                            (mapv #(str "      " %) (str/split-lines body)))
-              unit (+ (count row-line) 1
-                      (reduce + 0 (map #(inc (count %)) body-lines)))]
+              body-cost (reduce + 0 (map #(inc (count %)) body-lines))]
           (cond
-            ;; Always render the first row: a result whose single row is
-            ;; larger than the whole allowance still has to say its name.
-            (zero? shown)
-            (let [with-body? (<= unit allowance)]
-              (recur (next remaining)
-                     (into [row-line] (when with-body? body-lines))
-                     1
-                     (if with-body? unit (inc (count row-line)))))
-
-            (> (+ used unit) allowance)
-            {:lines lines :shown shown :total total :abridged true}
-
-            :else
+            (<= (+ used row-cost body-cost) allowance)
             (recur (next remaining)
                    (into lines (cons row-line body-lines))
                    (inc shown)
-                   (+ used unit))))
+                   (cond-> bodies (seq body-lines) inc)
+                   (+ used row-cost body-cost))
+
+            (<= (+ used row-cost) allowance)
+            (recur (next remaining)
+                   (conj lines row-line)
+                   (inc shown)
+                   bodies
+                   (+ used row-cost))
+
+            :else
+            {:lines lines :shown shown :total total
+             :bodies bodies :bodies-total bodies-total
+             :abridged true}))
         {:lines lines :shown shown :total total
-         :abridged (< shown total)}))))
+         :bodies bodies :bodies-total bodies-total
+         :abridged (or (< shown total) (< bodies bodies-total))}))))
 
 ;; @spec MCP-OP-STUDY-041
 (defn- concise-result-block
@@ -1304,10 +1313,17 @@
                  (:lines rendered)
                  [(when (:abridged rendered)
                     (format (str "    ! text abridged · %d of %d row%s "
-                                 "rendered · the complete receipt is in "
+                                 "rendered%s · the complete receipt is in "
                                  "structuredContent.results[%s]")
                             (:shown rendered) (:total rendered)
                             (if (= 1 (:total rendered)) "" "s")
+                            (if (< (:bodies rendered) (:bodies-total rendered))
+                              (format " · %d of %d row bod%s rendered"
+                                      (:bodies rendered)
+                                      (:bodies-total rendered)
+                                      (if (= 1 (:bodies-total rendered))
+                                        "y" "ies"))
+                              "")
                             (:id result)))
                   (when (and (:abridged rendered) (not (:truncated result)))
                     (str "    → narrow the request so the whole answer fits "
@@ -1317,6 +1333,43 @@
                   (when (and (:truncated result) (:remedy result))
                     (str "    → " (:remedy result)))])))}))
 
+;; @spec MCP-OP-STUDY-040
+(defn- whole-block-prefix
+  "The longest WHOLE-BLOCK prefix of `blocks` inside `limit` characters.
+
+  Rows are dropped whole inside a block; blocks are dropped whole across
+  results. Field evidence (Sol O2 round-2 review, section 2): a 32-result
+  batch whose receipt measured 31,549 bytes was REFUSED under a 32,768 byte
+  budget, because every result claimed a 512-character floor the budget was
+  never allowed to lower — so no text rendering existed that the complete
+  public result could fit inside."
+  [blocks limit]
+  (loop [remaining blocks kept [] used 0]
+    (if-let [block (first remaining)]
+      (let [cost (inc (count (:text block)))]
+        (if (and (seq kept) (> (+ used cost) limit))
+          {:blocks kept :dropped (- (count blocks) (count kept))
+           :total (count blocks)}
+          (recur (next remaining) (conj kept block) (+ used cost))))
+      {:blocks kept :dropped 0 :total (count blocks)})))
+
+;; @spec MCP-OP-STUDY-040
+(def text-omitted-notice
+  "The text block for a receipt that leaves no room to render itself.
+
+  The last rung before a refusal: it names the tool, says this text is not
+  the receipt, and points at the place the complete receipt is."
+  (str "inspect_clojure\n"
+       "! text omitted · the complete receipt left no room to render it\n"
+       "→ the complete result is in structuredContent\n"
+       "→ read_structured_content"))
+
+;; @spec MCP-OP-STUDY-040
+(def minimum-text-block
+  "The shortest honest text block there is: the tool's own name. A receipt
+  that cannot leave room even for this is a typed refusal."
+  "inspect_clojure")
+
 ;; @spec MCP-OP-STUDY-041
 (defn concise-summary
   "Render the MCP text companion — every row the receipt carries, bounded.
@@ -1325,46 +1378,65 @@
   many of how many rows it rendered and what to send next; it never claims
   terminal evidence over evidence it dropped."
   [result]
-  (let [results (:results result)
-        forms (reduce + 0 (map #(or (:form_count %) 0) results))
-        matches (reduce + 0 (map #(or (:match_count %) 0) results))
-        allowance (max min-evidence-characters
-                       (quot (or (:text_evidence_limit result)
-                                 max-evidence-characters)
-                             (max 1 (count results))))
-        ;; A result with no rows contributes no block: `match` with zero
-        ;; matches has nothing to render, and a headline over nothing is the
-        ;; count-shaped noise this change exists to remove.
-        blocks (into [] (keep #(when (seq (result-evidence %))
-                                 (concise-result-block % allowance)))
-                     results)
-        abridged? (boolean (some :abridged blocks))
-        facts (cond-> [(plural (:request_count result) "request")
-                       (plural (:file_count result) "file")]
-                (pos? forms) (conj (plural forms "form"))
-                (pos? matches) (conj (plural matches "match")))
-        elapsed (:elapsed_ms result)]
-    (str "inspect_clojure\n"
-         "  " (str/join " · " facts) "\n\n"
-         "✓ all requests resolved\n"
-         "✓ ordered snapshot\n"
-         "✓ hashes attached\n"
-         (cond
-           (:truncated result)
-           (str "! bounded receipt · read_complete=false · next action "
-                (:next_action result) "\n")
+  (case (:text_omitted result)
+    "notice" text-omitted-notice
+    "name" minimum-text-block
+    (let [results (:results result)
+          forms (reduce + 0 (map #(or (:form_count %) 0) results))
+          matches (reduce + 0 (map #(or (:match_count %) 0) results))
+          imposed (:text_evidence_limit result)
+          limit (or imposed max-evidence-characters)
+          ;; The per-result floor is a fairness rule for the DEFAULT
+          ;; allowance. A limit the output budget imposed overrides it: a
+          ;; floor the budget cannot lower is a floor that turns a renderable
+          ;; receipt into a refusal.
+          allowance (if imposed
+                      (max 1 (quot limit (max 1 (count results))))
+                      (max min-evidence-characters
+                           (quot limit (max 1 (count results)))))
+          ;; A result with no rows contributes no block: `match` with zero
+          ;; matches has nothing to render, and a headline over nothing is the
+          ;; count-shaped noise this change exists to remove.
+          candidates (into [] (keep #(when (seq (result-evidence %))
+                                       (concise-result-block % allowance)))
+                           results)
+          kept (whole-block-prefix candidates limit)
+          blocks (:blocks kept)
+          blocks-dropped (:dropped kept)
+          abridged? (or (pos? blocks-dropped)
+                        (boolean (some :abridged blocks)))
+          facts (cond-> [(plural (:request_count result) "request")
+                         (plural (:file_count result) "file")]
+                  (pos? forms) (conj (plural forms "form"))
+                  (pos? matches) (conj (plural matches "match")))
+          elapsed (:elapsed_ms result)]
+      (str "inspect_clojure\n"
+           "  " (str/join " · " facts) "\n\n"
+           "✓ all requests resolved\n"
+           "✓ ordered snapshot\n"
+           "✓ hashes attached\n"
+           (cond
+             (:truncated result)
+             (str "! bounded receipt · read_complete=false · next action "
+                  (:next_action result) "\n")
 
-           ;; @spec MCP-OP-STUDY-041
-           ;; Never "terminal evidence · next action none" over evidence the
-           ;; text dropped: the receipt is complete, this rendering is not.
-           abridged?
-           (str "! text abridged · read_complete=true · next action "
-                "read_structured_content_or_narrow_request\n")
+             ;; @spec MCP-OP-STUDY-041
+             ;; Never "terminal evidence · next action none" over evidence the
+             ;; text dropped: the receipt is complete, this rendering is not.
+             abridged?
+             (str "! text abridged · read_complete=true · next action "
+                  "read_structured_content_or_narrow_request\n")
 
-           :else
-           "✓ terminal evidence · read_complete=true · next action none\n")
-         (when (seq blocks)
-           (str "\n" (str/join "\n" (map :text blocks)) "\n"))
-         "  " (format "%,d" (long (:source_character_count result)))
-         " source characters · "
-         (mcp-operation/format-elapsed-ms elapsed))))
+             :else
+             "✓ terminal evidence · read_complete=true · next action none\n")
+           (when (pos? blocks-dropped)
+             (format (str "! text abridged · %d of %d result block%s "
+                          "rendered · the complete receipt is in "
+                          "structuredContent.results\n")
+                     (- (:total kept) blocks-dropped) (:total kept)
+                     (if (= 1 (:total kept)) "" "s")))
+           (when (seq blocks)
+             (str "\n" (str/join "\n" (map :text blocks)) "\n"))
+           "  " (format "%,d" (long (:source_character_count result)))
+           " source characters · "
+           (mcp-operation/format-elapsed-ms elapsed)))))

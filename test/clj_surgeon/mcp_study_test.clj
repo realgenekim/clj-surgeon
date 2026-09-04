@@ -2655,10 +2655,14 @@
               :request_count 0 :file_count 0
               :source_character_count 0 :results [] :padding ""}
         pad (fn [n] (assoc base :padding (apply str (repeat n "x"))))
-        exact (pad (- inspect-tool/max-public-result-bytes (public-bytes base)))
+        ;; The bound a fitted result is measured against is the declared
+        ;; budget less `publish-reserve`: the fit measures with the clock
+        ;; stopped at zero and the publisher renders the real elapsed time
+        ;; into both the text block and `structuredContent`.
+        exact (pad (- inspect-tool/max-fitted-result-bytes (public-bytes base)))
         over (update exact :padding str "x")]
     (testing "at the bound the result passes through unchanged"
-      (is (= inspect-tool/max-public-result-bytes (public-bytes exact)))
+      (is (= inspect-tool/max-fitted-result-bytes (public-bytes exact)))
       (is (= exact (inspect-tool/fit-public-result exact))))
     (testing "one byte over is a bounded TEXT, not a refusal"
       (is (>= inspect-tool/max-public-result-bytes (structured-bytes over))

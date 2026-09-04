@@ -1048,10 +1048,22 @@
            (when (:abridged block)
              (str "→ lower limit, narrow dir, or add a grep pattern so the "
                   "complete result fits the public output budget"))
-           (if (:truncated result)
+           ;; @spec MCP-OP-STUDY-040
+           ;; One line, one claim. Field evidence (Sol O2 round-2 review,
+           ;; section 2): this block printed `! text abridged · 97 of 200
+           ;; rows rendered` and `✓ complete tree · read_complete=true`
+           ;; together, so a text-only caller was told in one breath that
+           ;; rows had been dropped and that it held the complete tree.
+           (cond
+             (:truncated result)
              (format "! bounded receipt · %d file%s omitted · read_complete=false"
                      (:omitted result)
                      (if (= 1 (:omitted result)) "" "s"))
+
+             (:abridged block)
+             "! receipt complete · read_complete=true · this text is not"
+
+             :else
              "✓ complete tree · read_complete=true")
            (ls-tree-continuation-line result)
            (when (and (:truncated result) (:remedy result))
@@ -1710,6 +1722,13 @@
   text carries what the receipt carries, while the renderer is private."
   [result]
   (cond
+    ;; @spec MCP-OP-STUDY-040
+    ;; The last two rungs of the fit ladder, before any mode dispatch: a
+    ;; receipt that leaves no room to render itself still names the tool and
+    ;; points at the receipt, in every mode.
+    (= "notice" (:text_omitted result)) inspect/text-omitted-notice
+    (= "name" (:text_omitted result)) inspect/minimum-text-block
+
     (and (= "verification-job" (:mode result)) (:status result))
     (verification-job-summary result)
 
@@ -1794,10 +1813,22 @@
 ;; @spec MCP-OP-PREP-REQ-006
 
 ;; @spec MCP-OP-STUDY-040
-(def ^:private text-budget-reserve
-  "Bytes held back from the text allowance for the JSON envelope, the
-  abridgement notice, and the difference between characters and UTF-8 bytes."
-  1024)
+(def publish-reserve
+  "Bytes held back from the budget while FITTING, because the rendering
+  measured here is not byte-identical to the rendering published later.
+
+  `fit-public-result` measures with `elapsed_ms` zeroed — the clock has not
+  stopped yet — while `mcp-operation/invoke!` publishes the same result with
+  the real elapsed time in both the text block and `structuredContent`. A
+  candidate accepted at exactly the budget therefore ships over it. Measured
+  at the read entrance on a 78-file tree: 32,784 published bytes against a
+  32,768 byte budget, a 16-byte overshoot no pure-function witness could see."
+  64)
+
+(def max-fitted-result-bytes
+  "The budget a fitted result is measured against: the declared public budget
+  less the reserve the published rendering will spend."
+  (- max-public-result-bytes publish-reserve))
 
 ;; @spec MCP-OP-STUDY-040
 (defn- public-budget-refusal
@@ -1828,39 +1859,56 @@
 (defn fit-public-result
   "Bound the complete public MCP result — TEXT BLOCK INCLUDED — by the budget.
 
-  Field evidence (O2 re-review, 2026-09-03): rendering a receipt's rows into
-  `content[0].text` is the fix for a text-only caller and it roughly DOUBLES
-  the result on the wire. `ls-tree dir=src grep=defn limit=16384` measured
-  34,042 bytes against a declared 32,768, and the enforcement covered three
-  modes, so the overshoot was silent. A budget only three modes obey is a
-  number in a docstring.
-
-  The text is bounded FIRST, because the rows are a rendering of evidence the
+  The TEXT is bounded first, because the rows are a rendering of evidence the
   caller already has in `structuredContent`, and a typed truncation keeps an
-  answer where a refusal returns none. A receipt whose structured content
-  alone crosses the budget is a typed refusal, because nothing about the text
-  can save it."
+  answer where a refusal returns none. The search is a BISECTION over the
+  evidence allowance down to zero, and below zero rows it falls through two
+  further rungs — a notice naming where the receipt is, then the tool's own
+  name — so a receipt that fits is never refused for want of a rendering.
+
+  A refusal is reached only when `structuredContent` ALONE, plus the
+  fifteen-byte tool identity the text must always carry, crosses the budget:
+  at that point no rendering choice can help.
+
+  Field evidence (Sol O2 round-2 review, section 2): the previous
+  implementation halved a reserved allowance four times and then refused. One
+  byte over the budget, with a receipt of 32,558 bytes under a 32,768 byte
+  budget, it returned `inspect-output-limit`; a 32-result batch whose receipt
+  measured 31,549 bytes was refused at every payload size, because
+  `min-evidence-characters` held a 512-character floor per result that the
+  budget was never allowed to lower."
   [raw-result]
   (let [measure (fn [result]
                   (mcp-result-byte-count
                     (inspect-summary (assoc result :elapsed_ms 0.0))
                     result))
         required (measure raw-result)]
-    (if (<= required max-public-result-bytes)
+    (if (<= required max-fitted-result-bytes)
       raw-result
-      (let [structured-bytes (mcp-result-byte-count "" raw-result)
-            headroom (- max-public-result-bytes structured-bytes
-                        text-budget-reserve)]
-        (loop [limit headroom attempts 4]
-          (cond
-            (or (not (pos? limit)) (zero? attempts))
-            (public-budget-refusal raw-result required)
-
-            :else
-            (let [candidate (assoc raw-result :text_evidence_limit limit)]
-              (if (<= (measure candidate) max-public-result-bytes)
-                candidate
-                (recur (quot limit 2) (dec attempts))))))))))
+      (let [fits? (fn [candidate]
+                    (<= (measure candidate) max-fitted-result-bytes))
+            structured-bytes (mcp-result-byte-count "" raw-result)
+            with-limit (fn [n] (assoc raw-result :text_evidence_limit n))
+            ;; The largest whole-row rendering that fits, found by bisection
+            ;; and accepted only on a MEASUREMENT of the candidate itself.
+            best (loop [low 0
+                        high (max 0 (- max-fitted-result-bytes
+                                       structured-bytes))
+                        best nil]
+                   (if (> low high)
+                     best
+                     (let [mid (quot (+ low high) 2)
+                           candidate (with-limit mid)]
+                       (if (fits? candidate)
+                         (recur (inc mid) high candidate)
+                         (recur low (dec mid) best)))))
+            notice (assoc raw-result :text_omitted "notice")
+            named (assoc raw-result :text_omitted "name")]
+        (cond
+          best best
+          (fits? notice) notice
+          (fits? named) named
+          :else (public-budget-refusal raw-result required))))))
 
 (defn enforce-result-budget
   "Bound the complete public MCP result — its text block included."
