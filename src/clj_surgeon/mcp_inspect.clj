@@ -693,55 +693,117 @@
 
 ;; @spec MCP-OP-STUDY-044
 ;; @spec MCP-OP-STUDY-040
+(def max-named-dropped-labels
+  "How many dropped leaves the `dropped:` line NAMES before it counts the rest.
+
+  A line that names one label per dropped leaf is not a bounded rendering — it
+  GROWS as the allowance shrinks. Field evidence (Opus O2 round-4 review,
+  2026-09-04, sections 2 and 3): on a two-file `outline` batch over this
+  repository's own sources that line reached 14,732 characters at 406 dropped
+  labels and 22,142 at 606, outside any allowance, so the WHOLE rendering grew
+  as the budget tightened; `fits?` stopped being monotone, and the fit
+  abandoned a rendering that fit with 9,251 bytes to spare.
+
+  Eight pointers are enough to start reading the receipt back with and short
+  enough to charge. The count carries the rest, and `:dropped-labels` still
+  carries every pointer to a caller that walks the block."
+  8)
+
+;; @spec MCP-OP-STUDY-044
+(defn dropped-line
+  "`  dropped: a, b, c (+N more)` — the BOUNDED naming of dropped leaves.
+
+  Bounded by construction: at most `max-named-dropped-labels` pointers, then a
+  count. A naming whose length is the number of things it names cannot be paid
+  for out of the allowance those things were dropped from."
+  [labels]
+  (let [named (vec (take max-named-dropped-labels labels))
+        remaining (- (count labels) (count named))]
+    (str "  dropped: "
+         (str/join ", " named)
+         (when (pos? remaining) (format " (+%d more)" remaining)))))
+
+;; @spec MCP-OP-STUDY-044
+(defn fact-section-header
+  "`  receipt facts · 3 of 9 rendered · …` — the section's own count line."
+  [shown total dropped?]
+  (format "  receipt facts · %d of %d rendered%s"
+          shown total
+          (if dropped? " · the complete receipt is in structuredContent" "")))
+
+;; @spec MCP-OP-STUDY-044
+;; @spec MCP-OP-STUDY-040
 (defn fact-block
   "The bounded receipt-fact section, whether any fact was dropped, and WHICH.
 
+  EVERY character the section renders is charged against `budget`: the fact
+  lines, the count header, and the bounded `dropped:` line. That is what makes
+  the allowance an allowance — lowering it can only SHRINK the rendering — and
+  it is the property every search over the allowance rests on.
+
   Facts are dropped WHOLE and only from the tail, exactly as rows are: the
   same bound governs both, because both are the receipt. The JSON pointer of
-  every dropped fact is carried out, so the rendering can name it: a caller
-  who is told that six of twelve facts are elsewhere, and not which six, has
-  to diff the receipt against the text to find out."
+  every dropped fact is carried out, so a caller that walks the block can name
+  them all even though the rendering names the first few and counts the rest.
+
+  Field evidence (Opus O2 round-4 review, 2026-09-04, sections 2 and 3): round
+  four charged the fact LINES and left the header and the `dropped:` line
+  outside the allowance, so at allowance 0 the rendering was 22,785 characters
+  — LARGER than at allowance 9,434 — and `fit-public-result` searched a
+  `fits?` that was not monotone, found nothing, and published a 151-character
+  notice for an ordinary two-file `outline` batch."
   [structural-text result budget]
-  (let [entries (receipt-fact-entries structural-text result)
-        total (count entries)]
-    (loop [remaining entries kept [] used 0]
-      (if-let [entry (first remaining)]
-        (let [cost (inc (count (:line entry)))]
-          (if (> (+ used cost) budget)
-            {:lines (mapv :line kept)
-             :shown (count kept)
-             :total total
-             :dropped true
-             :dropped-labels (mapv :label remaining)}
-            (recur (next remaining) (conj kept entry) (+ used cost))))
-        {:lines (mapv :line kept)
-         :shown (count kept)
-         :total total
-         :dropped false
-         :dropped-labels []}))))
+  (let [entries (vec (receipt-fact-entries structural-text result))
+        total (count entries)
+        labels (mapv :label entries)
+        ;; Prefix sums so the descent below costs one comparison per step: a
+        ;; section rendered per candidate would be quadratic in the fact
+        ;; count, and the fit evaluates dozens of candidates.
+        prefix (vec (reductions + 0 (map #(inc (count (:line %))) entries)))
+        section-length
+        (fn [shown]
+          (let [dropped? (< shown total)]
+            (+ (count (fact-section-header shown total dropped?))
+               (if dropped?
+                 (inc (count (dropped-line (subvec labels shown))))
+                 0)
+               (nth prefix shown))))
+        shown (loop [n total]
+                (if (or (zero? n) (<= (section-length n) budget))
+                  n
+                  (recur (dec n))))
+        dropped? (< shown total)
+        section (when (or (pos? shown) dropped?)
+                  (str/join
+                    "\n"
+                    (concat
+                      [(fact-section-header shown total dropped?)]
+                      (when dropped? [(dropped-line (subvec labels shown))])
+                      (map :line (subvec entries 0 shown)))))]
+    {:lines (mapv :line (subvec entries 0 shown))
+     :shown shown
+     :total total
+     :dropped dropped?
+     :dropped-labels (subvec labels shown)
+     ;; The section is rendered HERE because this is where it was charged. A
+     ;; section assembled elsewhere out of these pieces would be a second
+     ;; rendering, and the budget would have been spent on the other one.
+     :section (when (and section (<= (count section) budget)) section)}))
 
 ;; @spec MCP-OP-STUDY-044
 (defn fact-section
   "The rendered receipt-fact section, or nil when the structural rendering
-  already carried every leaf.
+  already carried every leaf, or when the allowance cannot pay for even the
+  count line.
 
   An elision NAMES what it dropped. `receipt facts · 3 of 9 rendered` tells a
-  caller that six leaves are missing; `dropped: error, path, …` tells it
-  which, which is the difference between knowing where to look and having to
-  reconstruct the receipt to find out."
+  caller that six leaves are missing; `dropped: error, path, … (+4 more)`
+  tells it which to look for first, which is the difference between knowing
+  where to look and having to reconstruct the receipt to find out. This
+  returns exactly the characters `fact-block` measured — never a second
+  rendering assembled after the measurement."
   [block]
-  (when (or (seq (:lines block)) (:dropped block))
-    (str/join
-      "\n"
-      (concat
-        [(format "  receipt facts · %d of %d rendered%s"
-                 (:shown block) (:total block)
-                 (if (:dropped block)
-                   " · the complete receipt is in structuredContent"
-                   ""))]
-        (when (:dropped block)
-          [(str "  dropped: " (str/join ", " (:dropped-labels block)))])
-        (:lines block)))))
+  (:section block))
 
 (defn- kernel-refusal
   [request index result]

@@ -1954,6 +1954,17 @@
     (:mode result) (assoc :mode (:mode result))))
 
 ;; @spec MCP-OP-STUDY-040
+(def public-fit-samples
+  "How many evidence allowances the fit MEASURES per pass.
+
+  The fit runs only when the complete rendering overshoots the budget, so this
+  buys correctness on the rare path with dozens of renderings rather than a
+  dozen. Two passes of this many — a coarse sweep of the whole band and one
+  refinement around its winner — cost about sixty-six measurements and depend
+  on no ordering property of `fits?` at all."
+  32)
+
+;; @spec MCP-OP-STUDY-040
 (defn fit-public-result
   "Bound the complete public MCP result — TEXT BLOCK INCLUDED — by the budget.
 
@@ -1994,23 +2005,48 @@
                     (<= (measure candidate) max-fitted-result-bytes))
             structured-bytes (mcp-result-byte-count "" raw-result)
             with-limit (fn [n] (assoc raw-result :text_evidence_limit n))
-            ;; The largest whole-row rendering that fits, found by bisection
-            ;; and accepted only on a MEASUREMENT of the candidate itself.
-            best (loop [low 0
-                        high (max 0 (- max-fitted-result-bytes
-                                       structured-bytes))
-                        best nil]
-                   (if (> low high)
-                     best
-                     (let [mid (quot (+ low high) 2)
-                           candidate (with-limit mid)]
-                       (if (fits? candidate)
-                         (recur (inc mid) high candidate)
-                         (recur low (dec mid) best)))))
+            ceiling (max 0 (- max-fitted-result-bytes structured-bytes))
+            ;; @spec MCP-OP-STUDY-040
+            ;; A SCAN, not a bisection. Bisection answers "the largest
+            ;; allowance that fits" only where `fits?` is monotone, and it
+            ;; answers it by discarding half the band on one probe — so a
+            ;; single allowance that renders badly condemns every allowance
+            ;; below it. Round four's unbudgeted `dropped:` line made the
+            ;; rendering grow as the allowance fell; the first probe missed,
+            ;; the search recurred into the half that could never fit, and an
+            ;; ordinary two-file batch published 151 characters with 9,251
+            ;; bytes unspent (Opus O2 round-4 review, sections 2 and 3).
+            ;; `fact-block` now charges every rendered byte, so the rendering
+            ;; does shrink with the allowance — and this search no longer
+            ;; DEPENDS on that being true: every candidate is measured, and
+            ;; the winner is the measured candidate that carries the most.
+            scan (fn [low high]
+                   (let [step (max 1 (quot (- high low) public-fit-samples))
+                         points (distinct (concat (range low (inc high) step)
+                                                  [high]))]
+                     (reduce
+                       (fn [best point]
+                         (let [candidate (with-limit point)
+                               measured (measure candidate)]
+                           (if (and (<= measured max-fitted-result-bytes)
+                                    (or (nil? best) (> measured (:bytes best))))
+                             {:bytes measured :limit point :result candidate}
+                             best)))
+                       nil
+                       points)))
+            coarse (scan 0 ceiling)
+            step (max 1 (quot ceiling public-fit-samples))
+            ;; One refinement pass between the coarse winner's neighbours, so
+            ;; the published rendering is within a fraction of a step of the
+            ;; best the band holds rather than within a whole step of it.
+            refined (when coarse
+                      (scan (max 0 (- (:limit coarse) step))
+                            (min ceiling (+ (:limit coarse) step))))
+            best (last (sort-by :bytes (remove nil? [coarse refined])))
             notice (assoc raw-result :text_omitted "notice")
             named (assoc raw-result :text_omitted "name")]
         (cond
-          best best
+          best (:result best)
           (fits? notice) notice
           (fits? named) named
           :else (public-budget-refusal raw-result required))))))
