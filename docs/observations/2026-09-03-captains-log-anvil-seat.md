@@ -1482,3 +1482,4 @@ The round-four verb on social-media-writer: COMPLETE (6 of 6) in 1.86 s over 240
 ## 12:13Z — T3 gates verified: JS_EXIT=0 CLJ_EXIT=0  (twelve arms verified green).
 ## 12:23Z — T3b: 18 raw (T3 pair 19/18); MEM-003 r6: Sol's filter refused (24th); Opus.
 ## 12:23Z — T3b gates verified (JS_EXIT=0 CLJ_EXIT=0 ); its one pre-write read was the peers the structured cap elided — round five's item, now measured twice (T3: 0 reads; T3b: 1, the peers). Thirteen arms verified green.
+## 12:24Z — round-five spec for feature_thread written from the T3 pair (peers under the cap; the structured face stops duplicating bodies; test-alias mapping; the digest sentence).
