@@ -41,19 +41,24 @@ run_probe() {
   cat "$out_file"
 }
 
-# Like run_probe, but with extra flags for the probe's own JVM (used to hand
-# it a java.io.tmpdir it must not trust).
-# usage: run_probe_flags <label> <flags> [env assignments...]
+# Like run_probe, but with extra flags for the probe's own JVM and extra args
+# for the probe itself.
+# usage: run_probe_flags <label> "<jvm flags>" "<probe args>" [env assignments...]
 run_probe_flags() {
-  label=$1; flags=$2; shift 2
+  label=$1; flags=$2; pargs=$3; shift 3
   out_file="$FX/$label.out"
   set +e
   # shellcheck disable=SC2086
-  env "$@" java $flags -cp "$CP" clojure.main -m "$PROBE" >"$out_file" 2>&1
+  env "$@" java $flags -cp "$CP" clojure.main -m "$PROBE" $pargs >"$out_file" 2>&1
   PROBE_EXIT=$?
   set -e
   echo "--- $label (exit=$PROBE_EXIT) ---"
   cat "$out_file"
+}
+
+# The value of `<field>=` on the PROBE line for `<role>`.
+probe_field() {
+  sed -n "s/^PROBE role=$2 .*$3=\\(.*\\)$/\\1/p" "$FX/$1.out" | head -1
 }
 
 # A PATH shim whose `findmnt` always fails, reproducing the review's arm B:
@@ -120,7 +125,7 @@ DECOY="$FX/decoy-base"
 mkdir -p "$DECOY/other-seat-precious-fixture"
 echo hi >"$DECOY/other-seat-file.txt"
 
-run_probe_flags sentinel-decoy "-Djava.io.tmpdir=$DECOY" \
+run_probe_flags sentinel-decoy "-Djava.io.tmpdir=$DECOY" "" \
   TMPDIR="$DECOY" CLJ_SURGEON_TMPDIR_REEXEC=1
 [ "$PROBE_EXIT" -eq 97 ] || fail "4a: an unowned sentinel must exit 97, got $PROBE_EXIT"
 [ -d "$DECOY/other-seat-precious-fixture" ] \
@@ -130,10 +135,37 @@ run_probe_flags sentinel-decoy "-Djava.io.tmpdir=$DECOY" \
 
 # A sentinel that names a DIFFERENT root than this process actually got is
 # equally untrustworthy.
-run_probe_flags sentinel-mismatch "-Djava.io.tmpdir=$DECOY" \
+run_probe_flags sentinel-mismatch "-Djava.io.tmpdir=$DECOY" "" \
   TMPDIR="$DECOY" CLJ_SURGEON_TMPDIR_REEXEC="$FX/some-other-root"
 [ "$PROBE_EXIT" -eq 97 ] || fail "4b: a mismatched sentinel must exit 97, got $PROBE_EXIT"
 [ -d "$DECOY/other-seat-precious-fixture" ] \
   || fail "4b: another tenant's directory was DELETED by the sweep"
+
+# ============================================================
+# MCP-OP-TMPHYG-006: the re-exec preserves the parent's launch
+# ============================================================
+
+# The parent's JVM flags. `make mcp-test` pins the suite at -Xmx512m; round
+# one rebuilt the child as a bare `java -cp ... clojure.main` and the suite
+# silently ran at the box default (7.8 GB) while the heap-config gate — which
+# only reads `make -n` TEXT — stayed green.
+run_probe_flags heap-args "-Xmx317m" "alpha beta" TMPDIR="$FX/realdisk"
+[ "$PROBE_EXIT" -eq 0 ] || fail "6: probe exit $PROBE_EXIT"
+parent_mb=$(probe_field heap-args parent max-mb)
+child_mb=$(probe_field heap-args child max-mb)
+parent_mb=${parent_mb%% *}
+child_mb=${child_mb%% *}
+[ -n "$parent_mb" ] && [ -n "$child_mb" ] || fail "6: could not read max-mb from the probe"
+[ "$parent_mb" -lt 1000 ] || fail "6: the parent's own -Xmx317m did not take (max-mb=$parent_mb)"
+[ "$child_mb" = "$parent_mb" ] \
+  || fail "6a: the re-exec discarded the parent's heap ceiling: parent=$parent_mb MB child=$child_mb MB"
+
+# The parent's argv. Harmless today (both runners ignore args) but a silent
+# arg sink: the day a runner takes a test selector it vanishes with no error.
+parent_args=$(probe_field heap-args parent args)
+child_args=$(probe_field heap-args child args)
+[ "$parent_args" = '["alpha" "beta"]' ] || fail "6: parent argv not seen: $parent_args"
+[ "$child_args" = "$parent_args" ] \
+  || fail "6b: the re-exec dropped the test-selection args: parent=$parent_args child=$child_args"
 
 echo "tmp-leak ratchet witness passed"
