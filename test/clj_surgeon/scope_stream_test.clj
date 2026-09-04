@@ -14,9 +14,31 @@
    (java.lang.ref WeakReference)
    (java.nio.file Files LinkOption Path Paths)))
 
+;; @spec TEST-ISO-003
 (defn- temp-root
+  "Fixtures live under THIS NAMESPACE'S OWN subdir of the run's private
+   `java.io.tmpdir`, and nowhere else.
+
+   It used to root them at `$CLJ_SURGEON_MEMORY_TMP` or, absent that, the
+   literal `/home/forge/tmp` -- a seat-absolute path, in a `:fast` namespace,
+   outside the throwaway root TEST-ISO-006 launches the lane on. Round three
+   found it while fixing something else and wrote it down so it would not be
+   found a third time.
+
+   It is worth naming exactly why the runtime witnesses did NOT catch it,
+   because that is the more useful half: TEST-ISO-003 diffs the run's temp
+   root, `target/`, and the working tree, and `/home/forge/tmp` is none of
+   the three. A write to a seat-absolute path outside every watched subject
+   is invisible to a witness watching subjects -- the same shape as a
+   source scan that cannot see a call naming nothing. The witness that
+   closes this class is the one that removes the ability: fixtures are taken
+   from `java.io.tmpdir`, which the lane runner has already replaced with a
+   throwaway, so a fast-lane fixture CANNOT be written to the seat's real
+   filesystem. Each fixture is deleted by the test that made it; if one ever
+   is not, it is now a TEST-ISO-003 refusal naming the directory, instead of
+   an anonymous entry accumulating in a seat directory nobody sweeps."
   [label]
-  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP") "/home/forge/tmp")
+  (let [dir (io/file (System/getProperty "java.io.tmpdir")
                      (str "clj-surgeon-scope-" label "-" (System/currentTimeMillis)
                           "-" (long (rand 1000000))))]
     (.mkdirs dir)
