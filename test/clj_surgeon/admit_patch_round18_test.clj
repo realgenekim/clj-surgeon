@@ -353,3 +353,171 @@
                                      0 (min 400 (count (str @captured)))))))
               (finally (reset! config-atom previous))))
           (finally (delete-tree-nofollow! root)))))))
+
+(def ^:private mixed-language-patch
+  (str clean-multi-file-patch
+       "--- a/resources/public/js/editor.js\n"
+       "+++ b/resources/public/js/editor.js\n"
+       "@@ -1,1 +1,1 @@\n"
+       "-var a = 1;\n"
+       "+var a = 2;\n"))
+
+;; @spec MCP-OP-ADMIT-161
+(deftest a-refusal-never-hands-back-the-call-that-just-refused
+  (testing "a mixed-language patch is told which files to apply natively"
+    (doseq [mode ["preview" "propose"]]
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root base-sources)
+          (let [request {:patch mixed-language-patch
+                         :mode mode
+                         :verify "focused"}
+                result (admit/execute-request!
+                         (stub-config root {:admit-test-runner nil})
+                         request)
+                next-call (:next_call result)]
+            (is (false? (:ok result)))
+            (is (= :unsupported-patch-target (:error-type result)))
+            (is (not (and (= mode (get-in next-call [:arguments :mode]))
+                          (= "focused" (get-in next-call [:arguments :verify]))
+                          (= (get-in result [:hashes :patch_sha256])
+                             (:patch_sha256 next-call))))
+                (str "mode " mode ": the follow-up IS the call that just"
+                     " refused -- same mode, same verify, same patch: "
+                     (pr-str next-call)))
+            (is (nil? (:patch_sha256 next-call))
+                (str "the follow-up cannot bind the refused patch's digest,"
+                     " because the patch is the thing that must change: "
+                     (pr-str next-call)))
+            (is (str/includes? (str (:note next-call))
+                               "resources/public/js/editor.js")
+                (str "the follow-up names the files to apply natively: "
+                     (pr-str (:note next-call))))
+            (is (and (str/includes? (str (:note next-call)) "src/app/core.clj")
+                     (str/includes? (str (:note next-call)) "src/app/util.clj"))
+                (str "and lists the files the gate WILL admit: "
+                     (pr-str (:note next-call)))))
+          (finally (delete-tree-nofollow! root))))))
+  (testing "a refusal only a different PATCH can lift says so, not resend"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [twice (str clean-multi-file-patch
+                         "--- a/src/app/core.clj\n"
+                         "+++ b/src/app/core.clj\n"
+                         "@@ -10,1 +10,1 @@\n"
+                         "-  ;; upper-case for the banner\n"
+                         "+  ;; upper case for the banner\n")
+              result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch twice :mode "preview" :verify "none"})
+              next-call (:next_call result)]
+          (is (false? (:ok result)))
+          (is (= :duplicate-patch-target (:error-type result)))
+          (is (not (and (= {:mode "preview" :verify "none"}
+                           (:arguments next-call))
+                        (= (:patch_sha256 next-call)
+                           (get-in result [:hashes :patch_sha256]))))
+              (str "byte-identical follow-up: " (pr-str next-call)))
+          (is (nil? (:patch_sha256 next-call))
+              (str "a follow-up that can only be lifted by a different patch"
+                   " does not bind the refused one: " (pr-str next-call)))
+          (is (str/includes? (str (:note next-call)) "DIFFERENT patch")
+              (pr-str (:note next-call))))
+        (finally (delete-tree-nofollow! root))))))
+
+;; @spec MCP-OP-ADMIT-161
+(deftest the-missing-profile-follow-up-is-a-call-the-gate-accepts
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [refusal (admit/execute-request!
+                      (stub-config root {:admit-test-runner nil})
+                      {:patch clean-multi-file-patch
+                       :mode "commit" :verify "focused"})
+            proposed (get-in refusal [:next_call :arguments :verify])]
+        (is (= :verification-incomplete (:error-type refusal)))
+        (is (map? proposed) (pr-str proposed))
+        (is (every? (fn [command]
+                      (and (vector? command)
+                           (every? string? command)
+                           (not-any? #(or (str/includes? % "<")
+                                          (str/includes? % ">"))
+                                     command)))
+                    (:commands proposed))
+            (str "the placeholder the gate hands back must not carry the"
+                 " metacharacters the gate itself refuses: " (pr-str proposed)))
+        (is (some? (get-in refusal [:next_call :note])))
+        (testing "a naive reader sends it back verbatim and is not refused for its shape"
+          (let [second-result (admit/execute-request!
+                                (stub-config root {:admit-test-runner nil})
+                                {:patch clean-multi-file-patch
+                                 :mode "propose"
+                                 :verify proposed})]
+            (is (not= :invalid-admit-request (:error-type second-result))
+                (str "the gate refused its own suggestion: "
+                     (pr-str (:error second-result)))))))
+      (finally (delete-tree-nofollow! root)))))
+
+;; @spec MCP-OP-ADMIT-162
+(deftest verify-ok-is-not-a-verdict-when-nothing-was-verified
+  (doseq [mode ["preview" "propose"]]
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root {:admit-test-runner nil})
+                       {:patch clean-multi-file-patch
+                        :mode mode :verify "none"})]
+          (is (true? (:ok result)) (pr-str (:error result)))
+          (is (contains? result :verify_ok))
+          (is (nil? (:verify_ok result))
+              (str "mode " mode ": verify \"none\" ran no check, so there is"
+                   " no verdict to carry; true is the reading a caller acts"
+                   " on: " (pr-str (:verify_ok result))))
+          (is (false? (:verification_complete result))))
+        (finally (delete-tree-nofollow! root))))))
+
+;; @spec MCP-OP-ADMIT-162
+(deftest the-overlay-skips-the-directories-no-verify-command-needs
+  (let [noise {"node_modules/left-pad/index.js" "module.exports = 1;\n"
+               "target/classes/app.class" "x\n"
+               ".cpcache/1.cache" "x\n"
+               ".venv/lib/site.py" "x\n"
+               "dist/bundle.js" "x\n"
+               "build/out.o" "x\n"}]
+    (testing "an ordinary build tree does not count against the ceiling"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root (merge base-sources noise))
+          (let [overlay (admit/overlay-snapshot! (.getPath root) [])]
+            (is (true? (:ok overlay)) (pr-str overlay))
+            (is (= 2 (:files overlay))
+                (str "only the two sources are copied; the build directories"
+                     " are not: " (pr-str (:files overlay))))
+            (doseq [directory ["node_modules" "target" ".cpcache" ".venv"
+                               "dist" "build"]]
+              (is (not (.exists (io/file (:root overlay) directory)))
+                  (str directory " reached the overlay"))))
+          (finally (delete-tree-nofollow! root)))))
+    (testing "the exclusion list is configurable, not hardcoded"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root (merge base-sources noise))
+          (let [overlay (admit/overlay-snapshot! (.getPath root) []
+                                                 #{".git"})]
+            (is (true? (:ok overlay)) (pr-str overlay))
+            (is (= 8 (:files overlay)) (pr-str (:files overlay)))
+            (is (.exists (io/file (:root overlay) "node_modules/left-pad/index.js"))))
+          (finally (delete-tree-nofollow! root)))))))
+
+;; @spec MCP-OP-ADMIT-162
+(deftest the-fence-is-described-as-what-it-is
+  (let [text admit/admit-tool-description]
+    (is (str/includes? text "working directory")
+        "the overlay is named as a working directory")
+    (is (str/includes? text "not a filesystem sandbox")
+        "and explicitly not as containment")
+    (is (str/includes? text "setsid")
+        (str "the deadline's reach is stated honestly: a reparented child"
+             " outlives the kill"))))
