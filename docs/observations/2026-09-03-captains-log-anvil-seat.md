@@ -1807,3 +1807,78 @@ witnesses that reproduce the truncation and the mode loss, plus the four non-blo
 (the G2 ask) wait for r19: safety first.
 
 ## 21:51Z — usage watch: tools "admit_clojure_patch": 52 "inspect_clojure": 148  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:48Z load 14.50 ; === rc 0 end 21:51Z)
+
+## 21:53Z suite spike r2 (Sol): NO-GO on the orphan formatter test (a real coverage loss) + the rename sweep; round 3 launched. GN3 3× native; N5 shows the plate wall-neutral, churn gone
+
+The suite review is the kind of NO-GO that lands next round: everything structural held (lane refusals by name, both
+isolation entrances, four race stages red under contention, N=6 green), and the blocker is a test nobody ran that turns
+out to cover real behaviour. Round three wires it, sweeps the rename, refreshes the counts, merges the trunk and adds
+the battery receipt ledger with the freshness tripwire. Usage watch 21:51Z: admit_clojure_patch 52 (today's arms and
+reviews), inspect 148.
+
+## 21:54Z Mayor's heads-up: codex 0.153.3 installed user-local ahead of PATH; seat decision = PIN FOR STABILITY
+
+The mayor (at Gene's request, for the astra model) installed codex 0.153.3 at ~/.local/bin, which precedes /usr/bin
+in this seat's PATH; ~/bin/sol-yolo resolved codex through PATH. Decision: sol-yolo now invokes /usr/bin/codex (0.147.0)
+explicitly; every arm and review of the replay program stays on the version it started on; 0.153.3 is adopted at a
+clean boundary (after T5 and the current review rounds), with the version named in every arm record from then on.
+Verified which binary the in-flight arms run (see the pulse). Quota facts the mayor verified: this seat's Claude pool is
+30% remaining, resets Sep 10 19:00Z, separate from the mayor's; codex reports 2 usage-limit resets available — worth
+banking if codex gates review throughput.
+
+## 21:56Z study-ops r12 built (e24ee131): colliding wire keys refused, four specs rescued from a deleted block, a trunk `find` self-prune bug fixed; Sol r13 landing review launched
+
+## 22:03Z T5 scored: one admitted gate call, zero refusals, zero bd ceremony — but 22 turns / 13.2 min (the gate turn is 5.7 min: payload + its own suites); withdrawn; T6/T6b (receipt + contract, no gate) launched on base2
+
+## 22:05Z Astra (GPT-6) assessment reconciled: six points accepted (injected ≠ live; buckets are attribution; native adapts; integrate real tasks earlier; ledger refreshed; held-out acceptance check being built); Sol-vs-Astra pre-registered for the codex boundary; nothing rejected — docs/observations/2026-09-04-astra-review-reconciled.md
+
+## 22:08Z Gene, verbatim: "astra is in charge for 4 hours." Astra (GPT-6, pane forge-anvil:1.0) directs this seat until ~02:10Z 2026-09-05; hard rules unchanged (main frozen; never 7888/7890/7894/7895; never force push; nothing external without Gene; landings only via ~/bin/land on reviewed GO tips). Coordination file pair: /var/tmp/forge/astra-fable-coordination.md (his) and /var/tmp/forge/fable-to-astra.md (mine).
+
+## 22:12Z T6/T6b MET their pre-registration: 13/16 turns, 5.3/5.0 min, 0 pre-write reads, on the landed SMW plate — 2.3× fewer turns than same-plate native (33), wall 1.2× vs the same-hour control and 1.7× vs the morning mean; the remaining wall is the agent's own suite runs + model latency. Capacity freed to Astra.
+
+## 22:15Z MEM-003 r10 landing review (Opus): NO-GO on a one-line seam — line-at-a-time matching under whitespace-tolerant patterns; the sixth round in a row where the lesson is one rung down (a formatter wraps exactly the lines a scanner reads one at a time). Round 10 building; L cells running (live feature_thread on MVR ackReply/streamAction).
+
+## 22:30Z Held-out SMW acceptance check landed: 25 arms ACCEPT 4/4, G2 REJECT (the feature-absent arm, caught), three unchanged trees REJECT (negative controls). Every wall in the replay doc now has an independent ACCEPT beside it. Oracle shared with Astra.
+
+## 22:33Z feature_thread r12 landing review (Sol): GO — landing 508f26f5 via ~/bin/land (twelve rounds; the lane freezes after)
+
+## 22:38Z suite spike r3 built (105f4b6f): all gates green on a fresh clone, N=4 battery PASS x2, battery ledger + freshness tripwire (which caught its own false-alarm bug before landing); landing review awaits Astra's slot
+
+## 22:39Z MEM-003 r10 fix built (d0e82620; seven split plants caught; hit counts unchanged); gates + landing review await Astra's slot
+
+## 22:40Z study-ops r13 landing review (Sol) cut off by the filter after finding one blocker (wire member identified before UTF-8 serialization); Opus completion + fix await a capacity slot
+
+## 22:41Z suite spike r3 LANDING review launched (Sol, 105f4b6f) under Astra's ruling: read-only until 23:20Z, focused probes only in the 23:20–23:30 shared window, coverage comparison behind 717→150 s required
+
+## 22:51Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 154  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:48Z load 6.32 ; === rc 0 end 22:51Z)
+
+## 22:52Z CI-fixes checkpointed (49b92905): the inherited branch was red on the full suite — a typed throw escaped two map-contract callers; fixed by translation at the boundaries; remaining gates deferred. Usage watch 22:51Z: admit 59, inspect 154.
+
+## 22:54Z feature_thread LANDED (23703002) — seventh landing; the lane is FROZEN. SUSPEND-ALL executed for Astra until 23:20Z; E-THREAD runner clocks fixed per his audit; a fourth self-kill → ~/bin/kill-pattern.
+
+## 22:57Z admit gate r18 checkpointed (dcb40838): overlay escape, modes/mtimes, tail — all RED→GREEN with sabotage; full gates and the landing review wait for capacity after 23:20Z
+
+## 23:03Z Astra recovered the E-THREAD task clocks: live feature_thread on his JSON task is SLOWER than native (1.53×/1.29× medians, n=3, no queue wait); on the slot-schema prompts it replaces reads. Both preserved. Astra-native migration 52.7 s on a quiet box.
+
+## 23:13Z Astra's plan of record through 02:05Z filed (docs/observations/2026-09-04-astra-plan-for-gene-2309z.md, relayed to Gene verbatim). Schedule: my window 23:20–23:40 = suite review (resumed, focused probes, coverage comparison) + landing gates; then r4 purity witnesses (builder launched in prepare mode: no JVM outside verification windows); Astra 23:40–00:20, then alternating. His adversarial probe found a real alias_migration bug (a mixed bare :refer list loses an unrelated binding after a reported successful commit) — repair + executed review before his tool cohort. E-THREAD: 12/12 answers 5/5 by blind source grading; live tool descriptively slower on those discovery tasks.
+
+## 23:42Z suite spike r4 built (8226355b): six runtime purity witnesses in one snapshot fixture; RED on the real tree first (a /proc slurp that threw; 45 reloaded var roots; per-lane budgets); a planted violating namespace passes clojure.test and the suite refuses with nine typed violations; fast lane 34 s. Needs review after r3 lands; trunk drift conflict to merge.
+
+## 23:43Z CORRECTION of my own claim + suite r3 review NO-GO
+
+Astra, verbatim: "the speedup is real as a shorter gate, but same gate coverage was NOT preserved: 510/957 tests moved off it.
+Same total corpus is different from same pre-merge coverage." He is right and my wording was wrong wherever I said "nothing
+dropped" as if it meant the gate kept its coverage: nothing dropped from the CORPUS; the merge gate now runs 447 of 957 tests
+and the other 510 run in the battery lane at landing-and-nightly cadence. The claim that survives: the gate is faster
+because eleven launcher-driven namespaces moved off it; the discipline that makes that safe (ledger + freshness tripwire
+on the landing path, the nightly) is exactly what the review found not yet on the landing gate. Sol's r3 verdict: NO-GO on
+four blockers (above); the coverage comparison was the required deliverable and it is the finding. GitHub's default
+branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat needs re-verification when the workflow lands.
+
+## 23:43Z CORRECTION to the entry above: the GitHub API says the default branch is still `main` (`gh api repos/realgenekim/clj-surgeon --jq .default_branch` → main). My "now MCP/main (verified)" line was wrong — I wrote the sentence before reading the output. The nightly stays dormant; the mayor request stands.
+
+## 23:45Z gate r18 window run: assertions green (935/15436/0), the tmp-leak ratchet failed the lane on the builder's own witness leaks (the ratchet earning its keep); fix 09660168 unverified; gates owed for the next window
+
+## 23:48Z — usage watch DEFERRED: the collector is a JVM and a peer quiet window is open (owner=astra start=23:43Z end=00:00Z purpose=native-cleanretry-and-primary-pairs); last collector figures (22:51Z run, verbatim): tools "admit_clojure_patch": 59 "inspect_clojure": 154. Re-run in the next verification window.
+
+## 23:53Z Astra's floors and first pair (his figures, verbatim in the coordination file): native floors n=6/model on one pinned client (codex 0.153.3, 21-owner task): Sol median 134.75 s SD 26.84; Astra median 51.15 s SD 4.45 (one contaminated Sol run retained/excluded by the frozen rule). First measured Sol pair: native 117.2 s vs Surgeon 35.2 s, both 6/6, no refusal, 4 vs 7 outer actions — 3.3× at n=1, not a result; tool server startup 9.53 s separately. Astra tool arm running.

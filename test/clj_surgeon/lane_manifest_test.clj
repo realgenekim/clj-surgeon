@@ -377,17 +377,20 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 39 (count (lm/namespaces-for :fast))))
+    (is (= 40 (count (lm/namespaces-for :fast))))
     (is (= 4 (count (lm/namespaces-for :integration))))
-    (is (= 12 (count (lm/namespaces-for :battery))))
-    (is (= 55 (count lm/manifest))
+    (is (= 13 (count (lm/namespaces-for :battery))))
+    (is (= 57 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
              "battery-ledger witness, plus round four's six runtime purity "
              "witnesses in ns-isolation-test, plus round five's "
              "mcp-inspect-cold-job-test -- the one inspect-tool test that "
-             "spawns a child, moved out of a :fast namespace into :battery"))))
+             "spawns a child, moved out of a :fast namespace into :battery; "
+             "and the trunk's mcp-feature-thread-test, adopted at this merge "
+             "with its own `sed` cross-check split into "
+             "mcp-feature-thread-sed-test (:battery) for the same reason"))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -408,6 +411,8 @@
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         23 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
     clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
+    clj-surgeon.mcp-feature-thread-test    69 ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
+    clj-surgeon.mcp-feature-thread-sed-test 1 ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
     clj-surgeon.ns-isolation-test          21}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
 
@@ -420,9 +425,9 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one ..................... 64 deftests  (12+4+23+3+1+21)
+  ;;   adopted since round one .................... 134 deftests  (12+4+23+3+69+1+1+21)
   ;;                                                --------------
-  ;;   total declared by the manifest .............. 984 deftests
+  ;;   total declared by the manifest ............. 1054 deftests
   ;;
   ;; ROUND FIVE MOVED ONE TEST OUT of a round-one namespace, which is why the
   ;; first line went 921 -> 920, and it is worth saying plainly because it is
@@ -456,9 +461,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 64 adopted) (str "adopted tests: " adopted)))
+      (is (= 134 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 984 total) (str "manifest declares " total " tests"))
+      (is (= 1054 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

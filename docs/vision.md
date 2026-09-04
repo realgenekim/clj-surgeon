@@ -187,11 +187,19 @@ writing, the way parity squares are.**
 3. **A quiet box for arms** — five concurrent JVM lanes quadrupled suite times on 2026-09-04 and
    manufactured two phantom flakes; that multiplier hit both arms and was noise. Arms run serialized.
 
+(Suite correction, 2026-09-04 23:4xZ, from the independent review: the merge gate went 717 s → 150 s by MOVING 510 of 957 tests
+to a battery lane at landing-and-nightly cadence — same corpus, not same gate coverage; the discipline that makes that safe is the
+ledger + freshness tripwire on the landing path and the nightly, and the gate is not "fast AND safe" until those are enforced.)
+
 Projected from the table: 9 min → ~3 (contract) → ~2 (gate). Three to four times on wall, from two
 levers, neither of which is another feature_thread round. Withdrawal is pre-registered in
 `docs/observations/2026-09-04-feature-thread-replay-result.md` (T5): if the contract arm stays above
 12 turns the contract did not remove the ceremony; if native with the gate also drops below 12, the
 gate is the whole effect.
+
+**Attribution caveat (Astra, 2026-09-04, accepted):** a species bucket assigns the time until the next call to the current
+call, so it includes the model's thinking about whatever comes next; buckets are attribution, not additive savings
+budgets. Wall totals are the claim; buckets say where to look.
 
 **The meter from here is wall per turn species**, from the rollout's own timestamps (the script is in
 the replay doc), reported next to turns and tokens. A call count that falls while wall stands still

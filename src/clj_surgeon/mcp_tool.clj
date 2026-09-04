@@ -13,6 +13,7 @@
    [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-extraction :as extraction]
+   [clj-surgeon.mcp-feature-thread :as feature-thread]
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-operation :as mcp-operation]
@@ -191,7 +192,8 @@
     (inspect-tool/init! configured)
     (program-tool/init! configured)
     (census-tool/init! configured)
-    (admit-tool/init! configured)))
+    (admit-tool/init! configured)
+    (feature-thread/init! configured)))
 
 (defn- real-root
   ^Path [root]
@@ -1965,7 +1967,8 @@
            program-tool/transform-clojure-tool
            census-tool/relation-census-tool
            alias-migration-tool
-           admit-tool/admit-clojure-patch-tool]
+           admit-tool/admit-clojure-patch-tool
+           feature-thread/feature-thread-tool]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

@@ -316,3 +316,88 @@ opaque non-Clojure files in the same snapshot; a next_call that never repeats a 
 T5 + N5 LAUNCHED 21:43Z on smw-base2 (d5b1ba53, the merged landing contract): T5 = receipt + contract + gate as prescribed;
 N5 = native on the new plate (contract-only baseline). Pre-registration (from the T5 section above): T5 raw 5–7 predicted,
 withdrawal if T5 raw > 12 on both replicates or N5 also < 12.
+
+## GN3 / N5 results (2026-09-04 21:5xZ)
+
+| arm | base | wall | turns | MCP | .local_version churn | gates |
+|---|---|---:|---:|---:|---:|---|
+| GN3 (native + r16 gate, the gate's prescription) | 2df99c98 | 20.6 min | 50 | 9 | 1 | unit 227/712/0, js green |
+| N5 (native on the merged landing-contract plate, no gate, no receipt) | d5b1ba53 | 6.3 min | 33 | 0 | 0 | unit 227/712/0, js green |
+| NC (native, old plate, same afternoon) | 2df99c98 | 6.5 min | 30 | 0 | (n/a) | green |
+
+GN3: the gate as the write path for a NATIVE agent (no receipt) is 3× native wall; 9 MCP turns, 9 suite runs of its
+own despite the mandate, 8 write turns at 9.0 min — the agent fought the gate. N5: the landing-contract plate is wall-
+NEUTRAL for native (6.3 vs 6.5) and removed the churn exactly as designed (0 vs 1–3 turns); reads still 7. The plate's
+value is hygiene, not wall — its wall share shows only once the receipt has removed the reads (T5, running).
+
+## T5 result (2026-09-04 22:0xZ) — receipt + landing contract + r16 gate, on smw-base2
+
+| arm | wall | turns | MCP | refusals | bd turns | reads | own suite runs | feature | gates |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| T5 | 13.2 min | 22 | 1 (admitted first call) | 0 | 0 | 3 | 1 | landed, 7 files | unit 228/720/0, js green |
+| N5 (native, same plate) | 6.3 min | 33 | 0 | — | 2 | 7 | 7 | landed | green |
+| T4 (receipt, old plate, no gate) | 5.6 min | 19 | 0 | — | 6 | 0 | 3 | landed | green |
+
+WITHDRAWN on raw (22 > 12) and wall, as pre-registered. What moved: the plate removed the bd ceremony entirely (0 turns
+vs 5–6 on T3/T4); the r16 gate admitted on the first call with zero refusals (the contract fix worked). What did not:
+the gate turn cost 5.7 min over 8 turns — the payload build plus the gate's own inline verify (the two suites, ~1.5 min)
+run synchronously inside the call — so the gate replaced three 30-second suite runs with one 5-minute call. On this
+harness the gate is a correctness product (refuse a bad patch before it lands), not a wall product; the receipt + plate
+without the gate is the wall configuration. T6/T6b launched: receipt + contract, NO gate, smw-base2 — pre-registration:
+raw ≤ 15, wall ≤ 5 min, reads ≤ 1, bd turns ≤ 2; withdrawal if raw > 19 (T4's number) on both replicates.
+
+## T6 / T6b result (2026-09-04 22:1xZ) — receipt + landed plate, no gate, smw-base2 — PRE-REGISTRATION MET
+
+| arm | wall | turns | pre-write reads | bd | verify (own) | write | gates |
+|---|---:|---:|---:|---:|---:|---:|---|
+| T6 | 5.3 min | 13 | 0 | 1 (0.2 min) | 4 runs, 3.3 min | 3 | unit 229/721/0, js green |
+| T6b | 16 turns, 5.0 min | 16 | 0 | 2 (0.5 min) | 4 runs, 0.6 min | 1 | unit 242/797/0, js green |
+| N5 native, same plate, same hour | 6.3 min | 33 | 7 | 2 | 7 runs | 1 | green |
+| native, morning mean of 3 (old plate) | 9.0 min | 38 | 10–13 | ~5 | | | green |
+
+Met: raw ≤ 15 (13; T6b 16, one over), wall ≤ 5 min (5.3 / 5.0 — at the line), reads ≤ 1 (0/0), bd ≤ 2 (1/2). Withdrawal
+threshold (raw > 19 on both) not reached. Ratios: turns 2.3× fewer than same-plate native (33 → 13–16), 2.5× fewer than the
+morning native mean; wall 1.2× vs the same-hour native control, 1.7× vs the morning mean. Codex 0.147.0 on all four
+arms (pinned; the 0.153.3 install landed after these launched).
+
+What the pair says: with the receipt and the plate, the agent's decisions are at their floor — no reads before writing,
+one bd chain, three patches — and the remaining wall is (a) the suites the agent runs itself (3.3 min in T6, four runs)
+and (b) model turn latency. The gate was supposed to take (a) and instead cost more than it saved (T5). So the next
+wall lever on this harness is not a verb: it is running the repo's fast suite ONCE, or letting a cheap watcher run it,
+which the landing contract can state ("prove once: make runtests-unit && make test-js"). Astra's live-tool held-out
+arm decides whether any of this survives an unseen feature through the real MCP entrance. INJECTED receipt, as always.
+
+## Independent acceptance (2026-09-04 22:2xZ) — every arm now carries an ACCEPT/REJECT beside its wall
+
+Held-out check `/var/tmp/forge/tweezer/acceptance/check.sh <clone>` (Astra's point 6, accepted): boots the clone's app with file
+I/O disabled, DISCOVERS the route and payload shape from the clone itself, and drives four behavioural probes over HTTP —
+A1 selection transformed (dequoted AND formatted), A2 bytes outside the selection preserved (a whole-document implementation
+dies here), A3 empty selection refused with byte-identical readback, A4 the Edit menu markup carries the command. Uses no
+test, report or implementation detail from any arm. ~16 s per clone. Contract and receipts: docs/observations/2026-09-04-smw-acceptance-check.md.
+
+| verdict | clones |
+|---|---|
+| ACCEPT 4/4 (25) | N, N2, N3, NC, NS, N5, T1, T1b, T1c, T1C, T2, T3, T3b, T4, T4b, T5, T6, T6b, X, P, G, GN, GN2, GN3, G3 |
+| REJECT (4) | **G2** (suite-green, feature absent — caught), smw-base, smw-base2, smw-contract (negative controls) |
+
+So every wall number in this document belongs to a delivered feature except G2's, which was already withdrawn. From here an
+arm's row is (wall, turns, ACCEPT/REJECT), never (wall, turns, suite-green).
+
+## E-THREAD live-tool cells, scored with actual task clocks (Astra's recovery, 2026-09-04 22:59Z; my runner's queue-wait caveat withdrawn for these cells)
+
+Astra matched all twelve AN/AT sessions by rollout UUID + cwd and read task_started → task_complete: start-to-task-start was 0.7–1.7 s on all
+twelve, so NO material queue wait sat inside these walls (my runner-code warning was a real potential bias, not the explanation). Descriptive n=3,
+Sol on codex 0.147.0, box load 7–21, quality graded by the legacy grader only so far (strict grader rows pending):
+
+| thread | native (AN) task wall s | tool (AT, live feature_thread via MCP) task wall s | median ratio AT/AN | legs (legacy) |
+|---|---|---|---:|---|
+| T4 ackReply | 43.1 / 56.7 / 59.1 | 67.2 / 86.6 / 97.7 | **1.53 slower** | both 5/5 |
+| T5 streamAction | 58.7 / 61.0 / 49.4 | 71.4 / 75.6 / 75.5 | **1.29 slower** | AN 4/5, AT 5/5 |
+
+On Astra's JSON role task the agent called the verb AND kept reading (T4-AT-1: 7 calls vs AN's 3), so the live tool ADDED a turn and its
+receipt-reading cost without removing reads. On the 05Z slot-schema prompts (cells L) the same verb REPLACED the reads (2–5 calls vs native's
+4–7; T4-L-1 60 s at load 20). Two prompt styles, two results — the verb's value depends on whether the task frames the five slots so the
+receipt answers them directly. Both findings preserved; neither is a speed claim: n=3, uncontrolled load, one model, legacy grading.
+
+Astra's own hand-drive numbers, for the record: Astra-native migration of the 21-file/63-site fixture in 52.7 s (49.3 s on rep 2) on a quiet box
+with a guarded script; Sol-native 122.3 s (contaminated by load). The native floor per model is not yet established; no cross-model ratio.

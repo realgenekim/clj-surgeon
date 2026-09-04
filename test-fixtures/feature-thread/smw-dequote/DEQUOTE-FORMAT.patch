@@ -1,0 +1,411 @@
+*** Begin Patch
+*** Update File: /Users/genekim/src.local/social-media-writer/src/writer/handlers/transform.clj
+@@
+ (defn mechanical-format
+@@
+     (str (or leading "") body (or trailing ""))))
++
++(defn mechanical-format-selection
++  "Apply mechanical-format to one non-empty UTF-16 range without changing text
++   outside that range. Returns the replacement draft and the resulting range."
++  [text start end]
++  (when-not (and (string? text)
++                 (integer? start)
++                 (integer? end)
++                 (<= 0 start)
++                 (< start end)
++                 (<= end (count text)))
++    (throw (IllegalArgumentException. "Invalid Dequote/Format selection")))
++  (let [formatted (mechanical-format (subs text start end))]
++    {:draft (str (subs text 0 start) formatted (subs text end))
++     :selection-start start
++     :selection-end (+ start (count formatted))}))
+@@
+-(defn handle-format
+-  "POST /api/transform/format — one fenced, durable editor command.
+-   The visible browser snapshot and the mechanical rewrite commit together;
+-   the HTTP response carries the authoritative frame, so SSE delivery is not
+-   the acknowledgement."
++(defn handle-format
++  "POST /api/transform/format — one fenced, durable editor command.
++   With a selection, Dequote/Format rewrites only that browser-owned range;
++   without one, the existing Format Draft command rewrites the whole document.
++   The visible browser snapshot and mechanical rewrite commit together."
+   [request]
+-  (let [{:keys [sync]}
++  (let [{:keys [sync selection]}
+         (try (http/parse-json-body request) (catch Exception _ {}))]
+     (if-not (map? sync)
+       {:status 400 :body "Visible editor snapshot required"}
+-      (try
+-        (let [journal-headers (editor-journal/journal-receipt sync)
+-              before-draft (:draft sync)
++      (let [before-draft (:draft sync)
++            selection? (some? selection)
++            {:keys [start end]} selection]
++        (if (and selection?
++                 (not (and (map? selection)
++                           (string? before-draft)
++                           (integer? start)
++                           (integer? end)
++                           (<= 0 start)
++                           (< start end)
++                           (<= end (count before-draft)))))
++          {:status 400 :body "Non-empty Dequote/Format selection required"}
++          (try
++            (let [journal-headers (editor-journal/journal-receipt sync)
++              selection-result (when selection?
++                                 (mechanical-format-selection before-draft start end))
++              formatted-draft (if selection?
++                                (:draft selection-result)
++                                (mechanical-format before-draft))
+               res (editor-dispatch/fold-editor-snapshot-and-tx!
+                    sync
+                    (fn [st]
+-                     (let [formatted (mechanical-format (:draft st))]
+-                       (state/sync-draft-tx
+-                        st {:draft formatted :allow-blank-draft? true}))))
+-              frame (state/editor-frame-data (:state res))
++                     (state/sync-draft-tx
++                      st {:draft formatted-draft :allow-blank-draft? true})))
++              frame (cond-> (state/editor-frame-data (:state res))
++                      selection? (assoc :selection-start (:selection-start selection-result)
++                                        :selection-end (:selection-end selection-result)))
+               session-ack (when (editor-dispatch/book-ack-ok? (:book res))
+                             (state/save-session!))]
+@@
+-              (state/log-event! {:type "transform.format"
++              (state/log-event! {:type (if selection?
++                                         "transform.dequote-format"
++                                         "transform.format")
+                                  :before-length (count (or before-draft ""))
+                                  :after-length (count (:draft frame))
+@@
+-        (catch clojure.lang.ExceptionInfo e
+-          (let [{:keys [reason] :as conflict} (ex-data e)]
+-            (if (#{"stale-version" "stale-editor" "conflict-changed"
+-                   "invalid-editor-state" "unsettled-editor-projection"
+-                   "invalid-journal-receipt"} reason)
+-              (do
+-                (state/log-event! {:type "transform.format.rejected"
+-                                   :reason reason
+-                                   :browser-version (:browser-version conflict)
+-                                   :server-version (:server-version conflict)})
+-                ;; The browser can only PRESENT a conflict it can read: the
+-                ;; view-model is what supplies outcome, conflict-id, actions and
+-                ;; cross-document. Without it a Format 409 is undisplayable and
+-                ;; degrades to a bare refusal notification.
+-                ;; INTENT: EDITOR-CONF-005
+-                ;; @spec EDITOR-CONF-005
+-                {:status 409
+-                 :headers {"Content-Type" "application/json"}
+-                 :body (json/write-str
+-                        (assoc (editor-conflict/view-model "transform.format" conflict)
+-                               :error "Format editor conflict"
+-                               :saved false))})
+-              (throw e))))))))
++            (catch clojure.lang.ExceptionInfo e
++              (let [{:keys [reason] :as conflict} (ex-data e)]
++                (if (#{"stale-version" "stale-editor" "conflict-changed"
++                       "invalid-editor-state" "unsettled-editor-projection"
++                       "invalid-journal-receipt"} reason)
++                  (do
++                    (state/log-event! {:type "transform.format.rejected"
++                                       :reason reason
++                                       :browser-version (:browser-version conflict)
++                                       :server-version (:server-version conflict)})
++                    ;; The browser can only PRESENT a conflict it can read: the
++                    ;; view-model is what supplies outcome, conflict-id, actions and
++                    ;; cross-document. Without it a Format 409 is undisplayable and
++                    ;; degrades to a bare refusal notification.
++                    ;; INTENT: EDITOR-CONF-005
++                    ;; @spec EDITOR-CONF-005
++                    {:status 409
++                     :headers {"Content-Type" "application/json"}
++                     :body (json/write-str
++                            (assoc (editor-conflict/view-model
++                                    (if selection?
++                                      "transform.dequote-format"
++                                      "transform.format")
++                                    conflict)
++                                   :error (if selection?
++                                            "Dequote/Format editor conflict"
++                                            "Format editor conflict")
++                                   :saved false))})
++                  (throw e))))))))))
+*** Update File: /Users/genekim/src.local/social-media-writer/resources/public/js/editor-commands.js
+@@
+ async function formatDraft() {
+@@
+   }
+ }
++
++// INTENT: EDITOR-DEQUOTE-016
++// @spec EDITOR-DEQUOTE-016
++async function dequoteFormatSelection() {
++  const draftEditor = document.getElementById('draft-editor');
++  if (!draftEditor || draftEditor.selectionStart === draftEditor.selectionEnd) {
++    showNotification('Select text to Dequote/Format first.', true, 9000);
++    return false;
++  }
++  const selection = {start: draftEditor.selectionStart, end: draftEditor.selectionEnd};
++  if (!beginEditorCommand('dequote/format selection')) return false;
++  const readOnlyBeforeCommand = draftEditor.readOnly === true;
++  draftEditor.readOnly = true;
++  hideSelectionToolbar();
++  try {
++    const sync = (typeof collectDraftSync === 'function') ? collectDraftSync() : null;
++    if (!sync) {
++      showNotification('Dequote/Format blocked: the visible editor snapshot is unavailable.', true, 9000);
++      return false;
++    }
++    const response = await postJSON('/api/transform/format', {sync, selection});
++    if (response.status === 409) {
++      const raised = await raiseConflictFromResponse(response);
++      if (raised === 'shown') {
++        showNotification('DEQUOTE/FORMAT BLOCKED—visible text is preserved. Choose an action in the red banner.', true, 12000);
++      } else if (raised === 'unusable') {
++        showNotification('DEQUOTE/FORMAT REFUSED—the server rejected it and its conflict could not be displayed. Your visible text is unchanged.', true, 20000);
++      }
++      return false;
++    }
++    if (response.status !== 200) {
++      showNotification('Dequote/Format was not committed; visible text remains intact.', true, 10000);
++      return false;
++    }
++    const frame = await response.json();
++    if (!applyAuthoritativeEditorFrame(frame, 'accepted-operation')) {
++      showNotification('Dequote/Format committed, but its editor frame was invalid. Reload before editing.', true, 12000);
++      return false;
++    }
++    if (typeof acknowledgeDurableDraftJournal === 'function') {
++      acknowledgeDurableDraftJournal(response);
++    }
++    if (typeof editorCommandWasDurablySaved === 'function' &&
++        !editorCommandWasDurablySaved(response, sync)) {
++      showNotification('Dequote/Format committed, but the response carried no durable receipt for your exact text. Keep this page open and try again.', true, 15000);
++      return false;
++    }
++    const currentDraftEditor = document.getElementById('draft-editor');
++    if (currentDraftEditor && Number.isInteger(frame['selection-start']) &&
++        Number.isInteger(frame['selection-end'])) {
++      currentDraftEditor.setSelectionRange(frame['selection-start'], frame['selection-end']);
++      currentDraftEditor.focus({preventScroll: true});
++    }
++    showNotification('Dequoted, formatted, and saved.');
++    return true;
++  } catch (error) {
++    console.error('[DequoteFormatSelection]', error);
++    showNotification('Dequote/Format failed; visible text remains intact.', true, 9000);
++    return false;
++  } finally {
++    const currentDraftEditor = document.getElementById('draft-editor');
++    if (currentDraftEditor) {
++      currentDraftEditor.readOnly = readOnlyBeforeCommand ||
++        (typeof draftJournalDead === 'function' && draftJournalDead());
++    }
++    endEditorCommand();
++  }
++}
+ 
+ // Capture phase makes Transform shortcuts safe even when a later legacy
+*** Update File: /Users/genekim/src.local/social-media-writer/src/writer/views/components.clj
+@@
+            (menu-item "app-menu-edit" "List selection" "⌥L"
+                       {:onclick "bulletize()"})
++           (menu-item "app-menu-edit" "Dequote/Format" nil
++                      {:onclick "dequoteFormatSelection()"})
+            [:div.app-menu-separator {:role "separator"}]
+*** Update File: /Users/genekim/src.local/social-media-writer/AGENTS.md
+@@
+ This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
++
++For interactive development, prefer foreground `make server-dev`: it enables
++source and static-asset hot reload and keeps failures visible in the terminal.
++Use `make server-daemon` only when SMW must outlive the working shell.
+*** Update File: /Users/genekim/src.local/social-media-writer/CLAUDE.md
+@@
+ ## Server Restart Policy
+ **Use the Makefile as the only JVM and server lifecycle entrance.** Never invoke
+@@
+ configuration. If a required JVM operation has no Make target, add the target
+ before running it.
++
++For interactive development, prefer foreground `make server-dev`: it enables
++source and static-asset hot reload and keeps failures visible in the terminal.
++Use `make server-daemon` only when SMW must outlive the working shell.
+*** Update File: /Users/genekim/src.local/social-media-writer/test/writer/handlers/transform_apply_test.clj
+@@
+ (deftest format-folds-visible-book-snapshot-and-returns-authoritative-frame
+@@
+           (is (= 1 @tree-pushes)))))))
++
++(deftest dequote-format-rewrites-only-the-selected-range
++  (let [project-idx (get-in @state/app-state [:book-workshop :active-project-idx])
++        project-id "dequote-project"
++        node-id "dequote-node"
++        selected "> The best engineering organizations have always done this.\n> They make every developer more productive."
++        visible-text (str "Keep this heading.\n" selected "\nKeep this ending.")
++        start (count "Keep this heading.\n")
++        end (+ start (count selected))
++        expected-selection (transform/mechanical-format selected)
++        expected (str "Keep this heading.\n" expected-selection "\nKeep this ending.")
++        node (state/make-book-node {:id node-id :title "Dequote me" :level 0
++                                    :draft "server older text"})]
++    (swap! state/app-state
++           (fn [st]
++             (-> st
++                 (assoc :draft "server older text" :context "ctx" :leftovers "left"
++                        :state-version 40)
++                 (assoc-in [:book-workshop :projects project-idx :id] project-id)
++                 (assoc-in [:book-workshop :projects project-idx :nodes] [node])
++                 (assoc-in [:book-workshop :editing-node]
++                           {:project-id project-id :node-id node-id
++                            :project-idx project-idx :node-idx 0}))))
++    (with-redefs [sse/push-book-trees! (constantly nil)
++                  sse/push-draft-sync-conflict! (constantly nil)
++                  state/log-event! (constantly nil)]
++      (let [sync {:draft visible-text :context "ctx" :leftovers "left"
++                  :cursor-pos end :state-version 40
++                  :editor-sync-key "book-node:dequote-node"}
++            response (transform/handle-format
++                       (json-request {:sync sync :selection {:start start :end end}}))
++            frame (json/read-str (:body response) :key-fn keyword)]
++        (is (= 200 (:status response)))
++        (is (= expected (:draft frame)))
++        (is (= start (:selection-start frame)))
++        (is (= (+ start (count expected-selection)) (:selection-end frame)))
++        (is (= expected (:draft @state/app-state)))
++        (is (= expected
++               (get-in @state/app-state
++                       [:book-workshop :projects project-idx :nodes 0 :draft])))))))
++
++(deftest dequote-format-refuses-an-empty-selection
++  (let [before (:draft @state/app-state)
++        sync {:draft before :context (:context @state/app-state)
++              :leftovers (:leftovers @state/app-state)
++              :cursor-pos 0 :state-version (:state-version @state/app-state)
++              :editor-sync-key (state/editor-sync-key @state/app-state)}]
++    (is (= 400 (:status (transform/handle-format
++                         (json-request {:sync sync :selection {:start 0 :end 0}})))))
++    (is (= before (:draft @state/app-state)))))
+ 
+ (deftest format-refuses-a-stale-visible-snapshot-without-mutating-prose
+*** Update File: /Users/genekim/src.local/social-media-writer/test/js/browser_runtime_classic_script_test.js
+@@
+ test('Format applies the HTTP response frame without any SSE callback', async () => {
+@@
+   assert.equal(editor.readOnly, false);
+ });
++
++// INTENT-TEST: EDITOR-DEQUOTE-016
++test('Dequote/Format sends and restores only the selected range', async () => {
++  const source = fs.readFileSync('resources/public/js/editor-commands.js', 'utf8');
++  const posts = [];
++  const editor = {
++    value: 'keep\n> quoted\n> wrapped\nkeep',
++    selectionStart: 5,
++    selectionEnd: 24,
++    readOnly: false,
++    focused: false,
++    setSelectionRange(start, end) {
++      this.selectionStart = start;
++      this.selectionEnd = end;
++    },
++    focus() { this.focused = true; }
++  };
++  const frame = {'draft': 'keep\nquoted wrapped\nkeep', 'state-version': 8,
++                 'editor-sync-key': 'book-node:n1',
++                 'selection-start': 5, 'selection-end': 19};
++  const context = vm.createContext({
++    console,
++    window: {},
++    document: {
++      getElementById: id => id === 'draft-editor' ? editor : null,
++      addEventListener: () => {}
++    },
++    beginEditorCommand: () => true,
++    endEditorCommand: () => {},
++    hideSelectionToolbar: () => {},
++    collectDraftSync: () => ({draft: editor.value, 'state-version': 7,
++                              'editor-sync-key': 'book-node:n1'}),
++    postJSON: async (url, body) => {
++      posts.push({url, body});
++      return {status: 200, json: async () => frame};
++    },
++    applyAuthoritativeEditorFrame: received => {
++      editor.value = received.draft;
++      return true;
++    },
++    showNotification: () => {}
++  });
++  context.window = context;
++  vm.runInContext(source, context);
++
++  assert.equal(await context.dequoteFormatSelection(), true);
++  assert.equal(posts.length, 1);
++  assert.equal(posts[0].url, '/api/transform/format');
++  assert.deepEqual(posts[0].body.selection, {start: 5, end: 24});
++  assert.equal(editor.value, frame.draft);
++  assert.equal(editor.selectionStart, 5);
++  assert.equal(editor.selectionEnd, 19);
++  assert.equal(editor.focused, true);
++  assert.equal(editor.readOnly, false);
++});
++
++test('Dequote/Format refuses without a selection', async () => {
++  const source = fs.readFileSync('resources/public/js/editor-commands.js', 'utf8');
++  const posts = [];
++  const notifications = [];
++  const editor = {value: 'nothing selected', selectionStart: 4, selectionEnd: 4};
++  const context = vm.createContext({
++    console,
++    window: {},
++    document: {
++      getElementById: id => id === 'draft-editor' ? editor : null,
++      addEventListener: () => {}
++    },
++    postJSON: (...args) => posts.push(args),
++    showNotification: message => notifications.push(message),
++    beginEditorCommand: () => true,
++    endEditorCommand: () => {},
++    applyAuthoritativeEditorFrame: () => true
++  });
++  context.window = context;
++  vm.runInContext(source, context);
++
++  assert.equal(await context.dequoteFormatSelection(), false);
++  assert.equal(posts.length, 0);
++  assert.match(notifications[0], /Select text/);
++});
+ 
+ test('Make it better uses one guarded Transform instruction request', async () => {
+*** Update File: /Users/genekim/src.local/social-media-writer/test/writer/spa_lint_test.clj
+@@
+       (is (str/includes? components ":onclick \"formatDraft()\""))
++      (is (str/includes? components ":onclick \"dequoteFormatSelection()\""))
+       (is (not (str/includes? view ":onclick \"formatDraft()\""))
+           "Format should live in the Edit menu, not persistent editor chrome"))
+*** Update File: /Users/genekim/src.local/social-media-writer/docs/intent/registry.edn
+@@
+- {:id :EDITOR-BOOK-012
++ {:id :EDITOR-DEQUOTE-016
++  :status :active
++  :ears "When the reader invokes Dequote/Format with a non-empty draft selection, the application shall remove Markdown blockquote prefixes and mechanically format only that selected range, durably save the exact visible editor snapshot, and restore selection around the replacement."
++  :misreadings
++  ["Dequote/Format is another name for Format Draft — the new command is selection-scoped and text outside the range must remain byte-for-byte unchanged."
++   "No selection means format the whole document — the command must refuse visibly instead of expanding its mutation scope."
++   "A local textarea rewrite is enough — this is a manuscript edit and must use the same identity-, revision-, journal-, and durability-fenced command path as Format Draft."
++   "Dequote only strips greater-than signs — the requested operation also runs the existing mechanical formatter so wrapped quotation lines become normal prose."]
++  :boundaries
++  ["A selection containing Markdown quote markers is dequoted and reflowed."
++   "Prefix and suffix text outside the selection are unchanged."
++   "An empty or out-of-bounds selection is refused without mutation."
++   "The returned selection encloses the replacement even when formatting changes its length."
++   "A stale editor snapshot takes the existing visible conflict path."]
++  :tests [:editor-dequote-format-selected-range
++          :editor-dequote-format-empty-selection]
++  :rationale "2026-09-03 live drafting request: pasted blockquotes needed the existing dequote-and-reflow formatter, but Format Draft mutated the entire document and offered no bounded Edit-menu command."}
++
++ {:id :EDITOR-BOOK-012
+*** End Patch
