@@ -173,6 +173,34 @@
   "The file names both entrances treat as candidate Clojure sources."
   #"\.clj[cs]?$")
 
+;; @spec MCP-OP-CENSUS-019
+(def named-source-extensions
+  "The extensions a source the caller NAMES may carry, at either entrance.
+
+   Wider than `source-name-pattern`, which is what a WALK will pick up: a
+   caller may name an `.edn` source explicitly, and the tool's
+   `relative-source-path?` has admitted one since it shipped. Declared HERE, in
+   the namespace both entrances already require, so `mcp-paths` and the CLI
+   fence read one set instead of keeping two that agree until they do not."
+  #{"clj" "cljs" "cljc" "edn"})
+
+;; @spec MCP-OP-CENSUS-019
+(defn named-source-extension?
+  "True when `path` ends in an extension a NAMED source may carry.
+
+   Sol's round-eighteen item 3. The CLI's `:file` had no extension rule, so
+   `:file .../notes.txt` was read and censused while the tool refused the same
+   path lexically as `not-a-relative-source-path` — the second of the two
+   `by-design-divergences` the parity witness was carrying, and the reason the
+   round-eighteen brief's \"all ten agreeing\" was false.
+
+   Lexical and pure: it is asked before any filesystem call, exactly where the
+   tool asks it."
+  [path]
+  (let [portable (str/replace (str path) "\\" "/")
+        extension (last (str/split portable #"\."))]
+    (contains? named-source-extensions extension)))
+
 ;; @spec MCP-OP-CENSUS-016
 (defn coerce-pool-size
   "Pure pool-size kernel shared by the MCP tool and the CLI op.
@@ -839,6 +867,13 @@
     ;; CAUSE is `:outside-project`, which is the one the tool has published for
     ;; this observation since it shipped.
     :file-outside-workspace
+    ;; Sol's round-eighteen item 3. A NAMED path that is not a Clojure source
+    ;; at all. Its own name because its remedy is its own — nothing is wrong
+    ;; with the file, it is simply not the kind of thing a census reads — and
+    ;; because the tool has always refused this lexically while the CLI read
+    ;; it, which is the second of the two parity divergences round eighteen
+    ;; declared instead of closing.
+    :file-not-a-source-path
     :invalid-pool-size
     :source-too-large
     :too-many-walk-entries

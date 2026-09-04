@@ -623,6 +623,20 @@
   (let [given (str path)
         absolute (str (fs/absolutize given))]
     (cond
+      ;; Sol's round-eighteen item 3, and the only LEXICAL question this fence
+      ;; asks: a path that is not a Clojure source is not a source this census
+      ;; can read, whatever the filesystem says about it. First, because the
+      ;; tool asks it first — `relative-source-path?` refuses before it stats
+      ;; anything — and the two entrances answering one path differently is
+      ;; the defect class this fence exists to close.
+      (not (relation-census/named-source-extension? given))
+      {:error-type :file-not-a-source-path
+       :cause :not-a-relative-source-path
+       :error (str given " is not a Clojure source path: a censused source "
+                   "carries one of "
+                   (str/join ", " (sort relation-census/named-source-extensions))
+                   " as its extension")}
+
       (not (fs/exists? absolute))
       (if-let [parent (denied-ancestor absolute)]
         {:error-type :file-not-readable
@@ -1032,6 +1046,15 @@
                    ;; where the link points: a refusal that publishes the
                    ;; target has told the caller a fact about the box in the
                    ;; course of refusing to tell them one.
+                   :file-not-a-source-path
+                   (str file " is not a Clojure source path, and the one "
+                        "source this op was given IS the request, so the "
+                        "request minus it is not a request and no narrower "
+                        "command can be computed: name a "
+                        (str/join ", " (sort relation-census/named-source-extensions))
+                        " source with :file, or point :dir at a directory to "
+                        "census its tree.")
+
                    :file-outside-workspace
                    (str file " resolves outside the workspace this census is "
                         "over, and a census is a completeness claim about a "

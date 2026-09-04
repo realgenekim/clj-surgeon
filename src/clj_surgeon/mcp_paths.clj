@@ -6,7 +6,13 @@
   (:import
    (java.nio.file Files LinkOption Path Paths)))
 
-(def supported-source-extensions #{"clj" "cljs" "cljc" "edn"})
+(def supported-source-extensions
+  "The shared set, read from the one namespace both entrances require.
+
+   Sol's round-eighteen item 3: the CLI had no extension rule at all, and the
+   fix must not create a second copy of this set that agrees with this one
+   until somebody edits one of them."
+  census/named-source-extensions)
 
 (defn relative-source-path?
   "True for a portable project-relative supported Clojure source path.

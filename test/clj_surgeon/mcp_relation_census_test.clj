@@ -3192,6 +3192,9 @@
     (spit-file! (io/file (:workspace trees) "src/a/one.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/two.clj") arm-source)
     (spit-file! (io/file (:workspace trees) "src/b/three.clj") arm-source)
+    ;; Not a source, and not discovered by the walk either: the extension rule
+    ;; is what both entrances read it through.
+    (spit-file! (io/file (:workspace trees) "src/a/notes.txt") "(ns a.notes)")
     (.mkdirs (io/file (:empty-ws trees) "src"))
     (spit-file! (io/file (:broken trees) "src/app/broken.clj")
                 malformed-arm-source)
@@ -3286,6 +3289,15 @@
         :expect-anchor (str (named escaping) "/src/a/link.clj")
         :opts {:dir (named escaping)
                :file (str (named escaping) "/src/a/link.clj")}}
+       ;; Sol's round-eighteen item 3: a NAMED path that is not a Clojure
+       ;; source, enumerated so it cannot ship unexercised. The tool has always
+       ;; refused this lexically; the CLI read it.
+       {:label :file-not-a-source-path
+        :error-type :file-not-a-source-path
+        :root workspace
+        :expect-anchor (str (named workspace) "/src/a/notes.txt")
+        :opts {:dir (named workspace)
+               :file (str (named workspace) "/src/a/notes.txt")}}
        {:label :no-fold-arms-found
         :error-type :no-fold-arms-found
         :root empty-ws
