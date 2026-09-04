@@ -95,7 +95,11 @@
   measured field is what `clj-surgeon.measured-invariant-test` forbids; reading
   one tolerantly costs nothing and keeps the pre-publication checks honest."
   [result k]
-  (or (measured/field result k) (get result k)))
+  ;; @spec MCP-OP-TIME-006
+  ;; `get-in` on the well-known key rather than a `measured/field` verb: the
+  ;; round-four review's §1b took that verb as a laundering route out of an
+  ;; already-published block, and the namespace no longer offers one.
+  (or (get-in result [measured/measured-key k]) (get result k)))
 
 (defn elapsed-ms
   "The request clock of one public MCP result."

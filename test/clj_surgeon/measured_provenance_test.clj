@@ -104,7 +104,7 @@
       (is (nil? (:verification_wall_ms result))
           (str "an undeclared clock field was published beside the partition: "
                (pr-str result)))
-      (is (= 1.137065 (measured/field result :verification_wall_ms))
+      (is (= 1.137065 (get-in result [measured/measured-key :verification_wall_ms]))
           "the undeclared reading was dropped rather than relocated")
       (is (false? (contains? hashed :verification_wall_ms))
           (str "the undeclared clock field is inside the hash subject: "

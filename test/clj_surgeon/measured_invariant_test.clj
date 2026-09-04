@@ -685,6 +685,15 @@
 ;; 2. The publication boundary
 ;; ============================================================
 
+(defn- measured-field
+  "One field of `x`'s published measured block.
+
+  A test-local `get-in`, not a verb from the namespace: `measured/field` was a
+  public convenience for exactly this and the round-four review took it as a
+  laundering route out of a published block (§1b)."
+  [x k]
+  (get-in x [measured/measured-key k]))
+
 (defn- fixed-clock
   "A clock that ticks by `delta-ns` on its second read."
   [start-ns delta-ns]
@@ -711,7 +720,7 @@
           hashed (measured/hashed-channel result)]
       (is (false? (contains? hashed :elapsed_ms))
           (str "the request clock is inside the hash subject: " (pr-str hashed)))
-      (is (= 2.5 (measured/field result :elapsed_ms))
+      (is (= 2.5 (measured-field result :elapsed_ms))
           "the meter went dark; MEM-005's argument is that an unpublished cost
            is one nobody notices regressing")
       (is (= {:ok true :receipt {:stable :fact}} hashed)
@@ -731,9 +740,9 @@
       (is (= [] (measured/unpartitioned-measured-paths result))
           (str "measured fields published outside the partition: "
                (pr-str (measured/unpartitioned-measured-paths result))))
-      (is (= 12.5 (measured/field (:verification result) :elapsed_ms))
+      (is (= 12.5 (measured-field (:verification result) :elapsed_ms))
           "a nested verification clock was dropped rather than partitioned")
-      (is (= 1.5 (measured/field (get-in result [:receipt :resources]) :scan_ms))
+      (is (= 1.5 (measured-field (get-in result [:receipt :resources]) :scan_ms))
           "the ls-tree meter was dropped rather than partitioned")
       (is (= 12 (get-in result [:receipt :resources :bytes_scanned]))
           "bytes_scanned is a COUNT and stays in the hashed channel")
@@ -838,7 +847,7 @@
                   :receipt {:resources {:bytes_scanned 4096 :scan_ms 41.5}}}
           a (publish domain (fixed-clock 0 1000000))
           b (publish domain (fixed-clock 500 71000000))]
-      (is (not= (measured/field a :elapsed_ms) (measured/field b :elapsed_ms))
+      (is (not= (measured-field a :elapsed_ms) (measured-field b :elapsed_ms))
           "the two clocks ticked identically, so this proves nothing")
       (is (true? (= (pr-str (measured/hashed-channel a))
                     (pr-str (measured/hashed-channel b))))

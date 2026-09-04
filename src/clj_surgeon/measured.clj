@@ -86,6 +86,18 @@
 ;; allow-listed by the same witness: laundering a reading back into a bare
 ;; number is legitimate (a sum, a comparison, a telemetry row) and must be a
 ;; deliberate, greppable act rather than a side effect.
+;;
+;; And "one verb" is now a fact about the NAMESPACE's public surface as well as
+;; about the type. The round-four review closed the type and walked through the
+;; namespace (2026-09-04 §1): `unwrap-readings` was public, stripped tags at any
+;; depth, and called `value` internally so no caller of it ever matched the
+;; pattern; `field` handed a number back out of a published block. Both are
+;; private now, and `clj-surgeon.measured-invariant-test` PROBES this namespace
+;; by reflection — every callable public var, at every declared arity, called
+;; with a tagged reading — so a new public verb that yields a reading's number
+;; fails a witness that never had to know its name. That is the shape the
+;; round-three review asked for: a name the scanner does not know is a hole in
+;; every scanner at once, so the scanner stops depending on names.
 
 (defprotocol Launderable
   "The ONE door out of an opaque measured value.
@@ -224,12 +236,22 @@
   [started]
   (reading (/ (double (- (raw-nanos) (start-nanos started))) 1000000.0)))
 
-(defn unwrap-readings
+(defn- unwrap-readings
   "`x` with every tagged reading, at any depth, replaced by its bare number.
 
   What a measured BLOCK holds: once a value is inside the partition its
   provenance is stated by the block it lives in, and the wire carries a plain
-  JSON number rather than a nested object."
+  JSON number rather than a nested object.
+
+  PRIVATE, and that is the round-four review's blocking finding (§1). While
+  this was public it was a second laundering door at arbitrary depth that
+  called `value` internally, so no CALLER of it matched the escape-hatch
+  pattern and the reviewer walked an undeclared clock field into the parity
+  hash with every witness green. It is now reachable only from the three verbs
+  that BUILD or PARTITION a block — `measured`, `attach`, `partition-measured`
+  — which is the boundary the whole namespace exists to be.
+
+  @spec MCP-OP-TIME-006"
   [x]
   (cond
     (reading? x) (value x)
@@ -325,11 +347,6 @@
   Readings in `fields` are unwrapped: the block states the provenance."
   [x fields]
   (update x measured-key merge (unwrap-readings fields)))
-
-(defn field
-  "Read one measured field from `x`'s measured block."
-  [x k]
-  (get-in x [measured-key k]))
 
 (defn partition-measured
   "Relocate every measured value in `x` into the `:measured` block at its OWN

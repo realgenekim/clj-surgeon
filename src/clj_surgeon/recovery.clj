@@ -46,57 +46,59 @@
                                                          [:servers :clj-surgeon])
                                     :cclsp-url (get-in up-result [:servers :cclsp])})
             probe-elapsed (elapsed-ms probe-started)]
-        {:ok true
-         :operation :clj-surgeon-recover
-         :terminal-state :recovered
-         :workspace workspace
-         :agent-session-restart-required false
-         :changed {:cclsp-config (:cclsp-config-changed up-result)
-                   :codex-config (:codex-config-changed up-result)
-                   :server-restarted (:cclsp-server-restarted up-result)}
-         :proof probe-result
-         ;; @spec MCP-OP-TIME-005
-         ;; A recovery receipt is written to disk and fingerprinted; its three
-         ;; clock readings ride the partition like every other measured field.
-         ;; `unwrap-readings`, because a measured BLOCK holds bare numbers:
-         ;; once a value is inside the partition its provenance is stated by
-         ;; the block it lives in. Round three placed the tagged readings here
-         ;; unwrapped, and this receipt is pprint'd to disk and read back with
-         ;; `clojure.edn`, so the tag reached the wire as a nested object — the
-         ;; exact defect `unpartitioned-measured-paths` names for a reading
-         ;; INSIDE a block. Nothing ran that diagnostic on this receipt, and
-         ;; while the tag was a plain map the round trip still parsed.
-         measured/measured-key (measured/unwrap-readings
-                                 {:elapsed-ms {:up up-elapsed
-                                               :probe probe-elapsed
-                                               :total (elapsed-ms started)}})
-         :next-action :none})
+        ;; @spec MCP-OP-TIME-005
+        ;; @spec MCP-OP-TIME-006
+        ;; A recovery receipt is written to disk and fingerprinted; its three
+        ;; clock readings ride the partition like every other measured field,
+        ;; and they get there through `measured/attach` — the boundary verb
+        ;; that BUILDS the block. Round three placed the tagged readings here
+        ;; unwrapped, and this receipt is pprint'd to disk and read back with
+        ;; `clojure.edn`, so the tag reached the wire as a nested object; round
+        ;; four unwrapped them with `measured/unwrap-readings`, a public verb
+        ;; that turns a reading into a bare number at any depth and that no
+        ;; scan in the invariant witness had heard of (round-four review §1b —
+        ;; these were two of its counterexamples). `attach` unwraps INSIDE the
+        ;; block it is building, which is the only place a bare number belongs.
+        (measured/attach
+          {:ok true
+           :operation :clj-surgeon-recover
+           :terminal-state :recovered
+           :workspace workspace
+           :agent-session-restart-required false
+           :changed {:cclsp-config (:cclsp-config-changed up-result)
+                     :codex-config (:codex-config-changed up-result)
+                     :server-restarted (:cclsp-server-restarted up-result)}
+           :proof probe-result
+           :next-action :none}
+          {:elapsed-ms {:up up-elapsed
+                        :probe probe-elapsed
+                        :total (elapsed-ms started)}}))
       (catch Exception error
         (let [error-data (ex-data error)
               restart-required? (true? (:agent-session-restart-required error-data))
               target (io/file (or failure-receipt (failure-receipt-path workspace)))
-              receipt (merge
-                        {:ok false
-                         :operation :clj-surgeon-recover
-                         :phase (or (:phase error-data) @phase)
-                         :terminal-state (if restart-required?
-                                           :restart-required
-                                           :fallback-safe)
-                         :workspace workspace
-                         :error-type (or (:error-type error-data)
-                                         :recovery-failed)
-                         :error (.getMessage error)
-                         :agent-session-restart-required restart-required?
-                         measured/measured-key
-                         (measured/unwrap-readings
-                           {:elapsed-ms {:total (elapsed-ms started)}})
-                         :next-action (if restart-required?
-                                        :restart-agent-session-once
-                                        :report-failure-and-use-cli-fallback)}
-                        (select-keys error-data
-                                     [:capabilities :safe-route
-                                      :retained-source-anchor
-                                      :fallback-command]))
+              ;; @spec MCP-OP-TIME-006
+              receipt (measured/attach
+                        (merge
+                          {:ok false
+                           :operation :clj-surgeon-recover
+                           :phase (or (:phase error-data) @phase)
+                           :terminal-state (if restart-required?
+                                             :restart-required
+                                             :fallback-safe)
+                           :workspace workspace
+                           :error-type (or (:error-type error-data)
+                                           :recovery-failed)
+                           :error (.getMessage error)
+                           :agent-session-restart-required restart-required?
+                           :next-action (if restart-required?
+                                          :restart-agent-session-once
+                                          :report-failure-and-use-cli-fallback)}
+                          (select-keys error-data
+                                       [:capabilities :safe-route
+                                        :retained-source-anchor
+                                        :fallback-command]))
+                        {:elapsed-ms {:total (elapsed-ms started)}})
               receipt-path (write-failure-receipt! target receipt)]
           (assoc receipt
                  :failure-receipt receipt-path
