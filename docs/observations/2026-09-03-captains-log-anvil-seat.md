@@ -1325,3 +1325,7 @@ Gene's five-searches request, three seats' convergent design, one builder: a ver
 ## 06:20Z — q5z r16 built (51da9446); Sol r16 review launched
 
 The builder found a defect inside its own fix — a `future` on the non-daemon send-off pool kept the JVM alive after a looping toString — and a class inside the marker rule: a forwarding rule too narrow does not false-alarm, it silently ADDS a kind to the enumeration (139 → 140) with nothing in unscannable-sites. That second one is the enumerating-witness rule (inb-62a674) seen from the other side: the enumeration must refuse to change silently. Asked the reviewer to rule on it, and on the line-regex site discovery the builder reported and left.
+
+## 06:22Z — tmp-leak ratchet BUILT (09ebaade); Sol r1 review launched — and two facts that void part of last night's seat-level ratchet
+
+The builder found that babashka's native image ignores JAVA_TOOL_OPTIONS and TMPDIR entirely, and that a runtime System/setProperty of java.io.tmpdir does not reach Files/createTempDirectory. So the seat-level guard I installed at 05:0xZ (~/bin/suite-run exporting TMPDIR + JAVA_TOOL_OPTIONS) protects `clojure -M` but NOT `bb test/run_all.clj` — every bb suite I ran through it tonight still wrote to /tmp. Verified the corollary the hard way: the builder's first witness false-greened while 36,982 entries leaked. The repo ratchet closes it by re-exec with a literal -D; the seat guard needs the same (a bb wrapper that injects -Djava.io.tmpdir). Filed on the same inbox item.
