@@ -6,6 +6,7 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
+   [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -5087,3 +5088,101 @@
         (is (= 1 (count sites))
             (str "a kind spelled entirely at runtime, with no forwarding "
                  "marker, is not reported"))))))
+
+;; @spec MCP-OP-ALIAS-028
+;; @spec MCP-OP-ALIAS-059
+(defn- wide-kondo-stub!
+  "An executable named `clj-kondo` answering VALID EDN larger than the
+  process runner's visible byte budget.
+
+  The shape a real `clj-kondo --config {:output {:format :edn}}` answers over
+  an ordinary tree: 100 fanout namespaces produced 11,223 bytes for twenty-one
+  of them and far more for all of them, against a 12,000-byte visible cap."
+  [workspace bytes]
+  (let [script (io/file workspace "bin" "clj-kondo")
+        finding (str "{:type :unused-namespace :level :warning "
+                     ":filename \"src/x.clj\" :row 2 :col 14 "
+                     ":message \"namespace acid.fanout.util-b is required "
+                     "but never used\"}")
+        findings (apply str (repeat (max 1 (quot bytes (count finding)))
+                                    finding))]
+    (.mkdirs (.getParentFile script))
+    (spit script (str "#!/bin/bash\ncat <<'PAYLOAD'\n"
+                      "{:findings [" findings "]}\n"
+                      "PAYLOAD\n"))
+    (.setExecutable script true)
+    script))
+
+;; @spec MCP-OP-ALIAS-028
+;; @spec MCP-OP-ALIAS-059
+(deftest a-diagnostic-baseline-parses-output-larger-than-the-visible-budget
+  ;; inb-76b351, the E-CALLER cohort: `alias_migration` with `verify: "fast"`
+  ;; refused TWICE on a clean fixture, and its remedy prescribed re-sending
+  ;; the request that had just failed:
+  ;;
+  ;;   alias_migration
+  ;;     refused · invalid-diagnostic-output · 316.91 ms
+  ;;   ✓ source unchanged
+  ;;   → Verification baseline capture failed before the alias migration
+  ;;   facts · files=21 · sites=63
+  ;;   remedy · Re-send the same alias_migration request; the frozen snapshot
+  ;;            is recomputed from current source.
+  ;;
+  ;; The cause is not the tree and not clj-kondo. The baseline runs
+  ;; `clj-kondo … --config {:output {:format :edn}}` through the shared
+  ;; process runner, whose `visible-byte-limit` is 12,000 bytes; the scope
+  ;; `["src"]` selects 100 sources, the EDN document is far larger, and it
+  ;; comes back CUT mid-map:
+  ;;
+  ;;   scoped files: 100
+  ;;   ok? false  error-type :invalid-diagnostic-output
+  ;;   output tail: "…:filename \"src/acid/fanout/ns_022.clj\", :col 14,
+  ;;                 :end-col 32, :langs (), :message \"namespace acid.fa"
+  ;;
+  ;; A truncated EDN document cannot parse, so a correct analyzer answering a
+  ;; correct document is reported as invalid output — deterministically, on
+  ;; every retry, which is exactly what the field arm did.
+  (let [workspace (workspace!)]
+    (try
+      (let [script (wide-kondo-stub! workspace 40000)
+            baseline (change-buffer/capture-verification-baseline!
+                       (.getPath workspace) "wide"
+                       {"wide" [(.getPath script)]}
+                       ["src/acid/fanout/ns_000.cljc"])]
+        (is (true? (:ok baseline))
+            (str "a valid EDN diagnostic larger than the visible byte budget "
+                 "is reported as invalid output: "
+                 (pr-str (select-keys baseline [:ok :error-type]))))
+        (is (nil? (:error-type baseline))
+            (str "the baseline typed a parse failure over a complete "
+                 "document: " (pr-str (:error-type baseline)))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-028
+;; @spec MCP-OP-ALIAS-059
+(deftest a-baseline-refusal-never-prescribes-re-sending-the-same-request
+  ;; The second half of inb-76b351: the remedy told the caller to re-send the
+  ;; identical request, which reproduced the refusal, and never mentioned the
+  ;; one change that worked — dropping `verify`. A remedy may prescribe a
+  ;; retry of the SAME request only when the cause is transient and said to be
+  ;; transient; a baseline that cannot read its analyzer's answer is not.
+  (let [workspace (workspace!)]
+    (try
+      (let [script (kondo-stub! workspace)
+            result (execute! workspace
+                             {:verify "focused"}
+                             {:verification-profiles
+                              {"focused" [(.getPath script)]}})
+            remedy (str (:remedy result))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (not (str/includes? remedy "Re-send the same alias_migration"))
+            (str "the remedy prescribes re-sending the request that just "
+                 "failed, for a cause that is not transient: " remedy))
+        (is (some? (:next_call result))
+            "the refusal carries no executable correction at all")
+        (is (nil? (:verify (:next_call result)))
+            (str "the next_call re-sends the same verify value: "
+                 (pr-str (:next_call result)))))
+      (finally
+        (delete-tree! workspace)))))
