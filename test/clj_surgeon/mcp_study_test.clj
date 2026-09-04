@@ -3985,3 +3985,171 @@
                 (pr-str (:text_omitted published))))
     (is (>= (public-bytes published) (text-evidence-bytes raw best))
         "the fit publishes at least as much as a brute-force sweep found")))
+
+;; ============================================================
+;; O2 ROUND 5 — carriage is not COINCIDENCE (Opus O2 round-4 review, §4)
+;; ============================================================
+;; Round four fixed the four value-less shapes and left the predicate for
+;; every other leaf at `str/includes?`. A short spelling collides: on a real
+;; `outline` receipt `file_read_count` could be changed from 1 to 0, and
+;; `results[0].platforms[0]` from "clj" to "none", with the published text
+;; BYTE-IDENTICAL and `uncarried-leaves` reporting zero misses — the text's
+;; only "1"s meaning `request_count` and `file_count`, and its only "clj"s
+;; being file extensions. The hole is the same CLASS round three blocked on,
+;; moved from `{null, {}, [], ""}` to `{any value whose spelling occurs
+;; elsewhere in the text}`.
+;;
+;; Two properties, both stated WITHOUT inheriting the production predicate:
+;; the text DEPENDS on every leaf it claims to carry, and a leaf whose
+;; spelling is short enough to collide is distinguishable from the other
+;; values it could have held.
+
+(defn- collidable-spelling?
+  "Is this value's spelling short enough to appear in a text for a reason
+   that has nothing to do with this leaf?
+
+   WRITTEN OUT BY HAND. A witness that asks the production predicate whether
+   the production renderer got it right is one mechanism agreeing with
+   itself — the exact shape of the round-three escape this file already
+   carries a witness for."
+  [value]
+  (or (number? value)
+      (boolean? value)
+      (nil? value)
+      (and (string? value) (< (count value) 8))))
+
+(defn- map-scalar-paths
+  "Every scalar leaf reachable by a MAP KEY, as the path to it. A vector
+   element cannot be removed without changing its siblings' indices, so this
+   witness perturbs only what a receipt can be missing."
+  ([value] (map-scalar-paths value []))
+  ([value path]
+   (cond
+     (map? value)
+     (mapcat (fn [[key child]] (map-scalar-paths child (conj path key))) value)
+
+     (vector? value)
+     (mapcat (fn [[index child]] (map-scalar-paths child (conj path index)))
+             (map-indexed vector value))
+
+     (coll? value) []
+     :else [path])))
+
+(defn- rendering
+  "The published text for one result, or ::unrenderable when the renderer
+   cannot produce one at all — which is itself a dependency on the leaf that
+   was removed, and the strongest kind."
+  [result]
+  (try (inspect-tool/inspect-summary result)
+       (catch Exception _ ::unrenderable)))
+
+(defn- text-independent-leaves
+  "Every leaf whose REMOVAL leaves the published text byte-identical."
+  [result]
+  (let [text (inspect-tool/inspect-summary result)]
+    (into []
+          (keep (fn [path]
+                  ;; Only a MAP KEY can be removed: dropping a vector element
+                  ;; shifts its siblings, which is a different receipt rather
+                  ;; than the same one missing a leaf.
+                  (when (and (keyword? (last path))
+                             (not (inspect/leaf-excluded? path))
+                             ;; Scoped to the leaves the label rule promises
+                             ;; to make recoverable. A DISTINCTIVE spelling is
+                             ;; carried by its own characters under the
+                             ;; standing MCP-OP-STUDY-044 contract, and a
+                             ;; receipt that spells one fact twice cannot make
+                             ;; each copy independently removable.
+                             (collidable-spelling? (get-in result path)))
+                    (let [without (if (= 1 (count path))
+                                    (dissoc result (first path))
+                                    (update-in result (butlast path)
+                                               dissoc (last path)))]
+                      (when (= text (rendering without))
+                        [path (get-in result path)])))))
+          (map-scalar-paths result))))
+
+;; @spec MCP-OP-STUDY-044
+(deftest the-text-depends-on-every-collidable-receipt-leaf
+  ;; The dissoc-dependency audit, as a ratchet. A leaf the rendering does not
+  ;; read is a leaf the text cannot be carrying, whatever a substring test
+  ;; says about it.
+  (with-tmp-project
+    (fn [dir]
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (fs/create-dirs (str dir "/src/fixture"))
+      (spit (str dir "/src/fixture/core.clj") class-ratchet-fixture))
+    (fn [config]
+      (doseq [[operation extra] (sort class-ratchet-requests)]
+        (testing operation
+          (let [published (assoc
+                            (inspect-tool/fit-public-result
+                              (clocked
+                                (inspect-tool/execute-inspect!
+                                  config
+                                  {"requests" [(merge {"id" "r1"
+                                                       "operation" operation
+                                                       "file" "src/fixture/core.clj"}
+                                                      extra)]
+                                   "expect" {"requests" 1 "files" 1}})))
+                            :elapsed_ms 1.0)
+                independent (text-independent-leaves published)]
+            (is (true? (:ok published)) (pr-str (:error published)))
+            (is (empty? independent)
+                (str operation ": the published text does not depend on "
+                     (count independent) " receipt leaves it reports as "
+                     "carried — " (pr-str (take 6 independent))))))))))
+
+(defn- indistinguishable-leaves
+  "Every collidable leaf that some OTHER value of the same type could replace
+   without changing one byte of the published text."
+  [result]
+  (let [text (inspect-tool/inspect-summary result)
+        paths (into [] (remove inspect/leaf-excluded?) (map-scalar-paths result))
+        values (distinct (keep #(get-in result %) paths))
+        same-type? (fn [a b]
+                     (or (and (number? a) (number? b))
+                         (and (boolean? a) (boolean? b))
+                         (and (string? a) (string? b))))]
+    (into []
+          (keep (fn [path]
+                  (let [value (get-in result path)]
+                    (when (collidable-spelling? value)
+                      (when-let [decoy (first
+                                         (filter
+                                           #(= text (rendering
+                                                      (assoc-in result path %)))
+                                           (remove #(= % value)
+                                                   (filter #(same-type? value %)
+                                                           (concat [0 1 true false "clj" "none"]
+                                                                   (take 60 values))))))]
+                        [path value decoy])))))
+          paths)))
+
+;; @spec MCP-OP-STUDY-044
+(deftest a-short-spelling-is-carried-by-its-label-not-by-coincidence
+  (with-tmp-project
+    (fn [dir]
+      (spit (str dir "/deps.edn") "{:paths [\"src\"]}")
+      (fs/create-dirs (str dir "/src/fixture"))
+      (spit (str dir "/src/fixture/core.clj") class-ratchet-fixture))
+    (fn [config]
+      (doseq [[operation extra] (sort class-ratchet-requests)]
+        (testing operation
+          (let [published (assoc
+                            (inspect-tool/fit-public-result
+                              (clocked
+                                (inspect-tool/execute-inspect!
+                                  config
+                                  {"requests" [(merge {"id" "r1"
+                                                       "operation" operation
+                                                       "file" "src/fixture/core.clj"}
+                                                      extra)]
+                                   "expect" {"requests" 1 "files" 1}})))
+                            :elapsed_ms 1.0)
+                ambiguous (indistinguishable-leaves published)]
+            (is (empty? ambiguous)
+                (str operation ": " (count ambiguous)
+                     " leaves whose value another value of the same type could "
+                     "replace with a byte-identical text — "
+                     (pr-str (take 6 ambiguous))))))))))
