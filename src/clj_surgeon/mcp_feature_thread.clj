@@ -1894,6 +1894,97 @@
                                (str/join ", " files)
                                " or runs a Clojure test alias")})))))
 
+(def ^:private body-source-pattern
+  "Marks an expression as the PARSED REQUEST, not just any map."
+  #"parse-json-body|:body-params|:json-params|:form-params|:params\b|:body\b|json/read|read-json")
+
+;; @spec MCP-OP-THREAD-037
+(defn handler-reads
+  "The keys the handler takes off the parsed request body.
+
+  Three shapes, all lexical, none of them a Clojure reader: `{:keys [a b]}`
+  bound to an expression that mentions a body-parsing call, `(:k body)`, and
+  `(get body \"k\")`. The `{:keys …}` case is GUARDED by that expression --
+  without the guard `(let [{:keys [reason] :as conflict} (ex-data e)] …)` in
+  the fixture's own 409 branch reads as a request field, which would make the
+  contract row confidently wrong rather than merely thin."
+  [^String body]
+  (when body
+    (let [destructured
+          (->> (re-seq #"(?s)\{:keys\s+\[([^\]]*)\][^\}]*\}\s*(.{0,160})" body)
+               (keep (fn [[_ names tail]]
+                       (when (re-find body-source-pattern (or tail ""))
+                         names)))
+               (mapcat #(str/split (str/trim %) #"\s+")))
+          keyworded (->> (re-seq #"\(:([A-Za-z0-9_*+!?<>=-]+)\s+(?:body|params|payload|request-body)\)"
+                                 body)
+                         (map second))
+          getted (->> (re-seq #"\(get\s+(?:body|params|payload|request-body)\s+[\":]([A-Za-z0-9_*+!?<>=-]+)"
+                              body)
+                      (map second))]
+      (->> (concat destructured keyworded getted)
+           (remove str/blank?)
+           (remove #{":as" ":or" ":keys"})
+           distinct
+           sort
+           vec))))
+
+;; @spec MCP-OP-THREAD-037
+(defn js-posts
+  "The keys of the object literal the script sends with the request.
+
+  The lexed brace window already isolated the function body, so this is one
+  regex over it: the second argument of `postJSON(url, {…})` / `fetch(url,
+  {…})`, plus a `JSON.stringify({…})` payload. Shorthand (`{sync}`) and
+  `key: value` are both keys; a spread is reported as `...` rather than
+  guessed at."
+  [^String body]
+  (when body
+    (let [literals (concat
+                     (map second (re-seq #"(?:postJSON|postForm|fetch)\s*\([^,()]*,\s*\{([^{}]*)\}" body))
+                     (map second (re-seq #"JSON\.stringify\s*\(\s*\{([^{}]*)\}" body)))]
+      (->> literals
+           (mapcat #(str/split % #","))
+           (map str/trim)
+           (remove str/blank?)
+           (map (fn [item]
+                  (if (str/starts-with? item "...")
+                    "..."
+                    (-> (first (str/split item #":"))
+                        str/trim
+                        (str/replace #"^['\"]|['\"]$" "")))))
+           (remove str/blank?)
+           distinct
+           sort
+           vec))))
+
+;; @spec MCP-OP-THREAD-037
+(defn request-contract
+  "The one RELATION between the route, the handler and the script: does the set
+  of keys the browser posts match the set the handler reads?
+
+  A caller adding a field to this feature must change both sides, and the
+  transcript shows that is exactly where a thread goes wrong. `agree?` is the
+  verdict; `only_in_js` and `only_in_handler` are the actionable half, because
+  `false` alone tells nobody which side to edit. Returns nil when either side
+  is absent -- an absent leg is already reported as absent, and inventing a
+  contract over one side would be the false green this verb exists to refuse."
+  [seeds legs]
+  (let [handler (first (filter #(and (= "handler" (:leg_kind %)) (located? %)) legs))
+        js (first (filter #(and (script-path? (str (:file %))) (located? %)
+                                (not= "test" (:leg_kind %)))
+                          legs))
+        reads (handler-reads (:body handler))
+        posts (js-posts (:body js))]
+    (when (and handler js reads posts)
+      (let [r (set reads) p (set posts)]
+        {:route (first (:routes seeds))
+         :handler_reads reads
+         :js_posts posts
+         :agree? (= r p)
+         :only_in_js (vec (sort (remove r posts)))
+         :only_in_handler (vec (sort (remove p reads)))}))))
+
 ;; @spec MCP-OP-THREAD-010
 (defn build-rules
   "The wiring contract: what the handler routes through, what it refuses, the
@@ -1905,6 +1996,7 @@
         intents (vec (distinct (mapcat #(intents-in cache %) found)))
         governance (governance-rows cache paths conventions intents seeds)]
     (merge
+      (when-let [rc (request-contract seeds legs)] {:request_contract rc})
       {:durable_path (if (and handler (located? handler))
                        (namespaced-calls (:body handler))
                        [])
@@ -2342,7 +2434,16 @@
   client must never be told less than a structure-reading one."
   [result]
   (let [legs (:legs result)
-        header (str "receipt feature-thread/v2  subject=" (:subject result)
+        ;; @spec MCP-OP-THREAD-026
+        ;; `self?` renders the header with its three SELF-DESCRIBING counts
+        ;; blanked. Those digits go into the delivered header but never into
+        ;; the superset haystack, for the same reason the clock does not: a
+        ;; number the receipt prints ABOUT ITSELF is not evidence that a
+        ;; structured leaf was reported. Leaving them in made the completion
+        ;; line flip with the digit count and `measure`'s fixpoint oscillate --
+        ;; six rounds, then a declared 10084 over a delivered 10121.
+        header-for (fn [self?]
+                     (str "receipt feature-thread/v2  subject=" (:subject result)
                     (when (seq (:also_seeds result))
                       (str " also=" (str/join "," (:also_seeds result))))
                     "  root=" (:workspace_root result)
@@ -2352,12 +2453,13 @@
                     ;; reader shown `budget=32768B used=40641B ... COMPLETE`
                     ;; read a budget overrun beside a false COMPLETE. The
                     ;; budget governs the TEXT; COMPLETE is about LEGS.
-                    "  text=" (:text_bytes result) "B (budget "
+                    "  text=" (if self? (:text_bytes result) "") "B (budget "
                     (:budget_bytes result) "B)"
-                    "  structured=" (:structured_bytes result) "B (trunk cap "
-                    trunk-public-byte-budget "B)"
-                    "  total=" (:receipt_bytes result) "B"
-                    "  status=" (:status result) " — legs, not bytes")
+                    "  structured=" (if self? (:structured_bytes result) "")
+                    "B (trunk cap " trunk-public-byte-budget "B)"
+                    "  total=" (if self? (:receipt_bytes result) "") "B"
+                    "  status=" (:status result) " — legs, not bytes"))
+        header (header-for true)
         body-lines (remove nil?
                            (concat (mapcat (fn [l]
                                              (cons (leg-line l)
@@ -2385,6 +2487,15 @@
         (str "rules durable_path=" (pr-str (:durable_path rules))
              " refusal_statuses=" (pr-str (:refusal_statuses rules))
              " intents=" (pr-str (:intents rules))
+             ;; @spec MCP-OP-THREAD-037
+             (when-let [rc (:request_contract rules)]
+               (str "\n  request_contract " (:route rc)
+                    " handler_reads=" (pr-str (:handler_reads rc))
+                    " js_posts=" (pr-str (:js_posts rc))
+                    " agree?=" (:agree? rc)
+                    (when-not (:agree? rc)
+                      (str " only_in_js=" (pr-str (:only_in_js rc))
+                           " only_in_handler=" (pr-str (:only_in_handler rc))))))
              (when-let [axis (:axis rules)]
                (str "\n  axis " (:name axis)
                     " precedents=" (pr-str (:precedents axis))))
@@ -2435,11 +2546,12 @@
                                  " sha256:" (:sha256 %)
                                  " refetch=" (:refetch %))
                            elisions)
-        without-clock (str/join "\n" (remove nil?
-                                             (concat [header] body-lines
-                                                     [sibling-line rules-line]
-                                                     elision-lines)))
-        designed (str without-clock "\n" (receipt-tail (:elapsed_ms result)))]
+        after-header (remove nil? (concat body-lines [sibling-line rules-line]
+                                          elision-lines))
+        ;; The DELIVERED text carries the real counts; the HAYSTACK does not.
+        designed (str (str/join "\n" (cons header after-header))
+                      "\n" (receipt-tail (:elapsed_ms result)))
+        without-clock (str/join "\n" (cons (header-for false) after-header))]
     (ensure-superset designed
                      (dissoc result :receipt_bytes :text_bytes
                              :structured_bytes)

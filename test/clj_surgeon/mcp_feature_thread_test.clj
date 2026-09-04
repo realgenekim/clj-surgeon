@@ -1090,8 +1090,14 @@
 
 ;; @spec MCP-OP-THREAD-026
 (deftest the-receipt-byte-counts-describe-the-delivered-text
+  ;; @spec MCP-OP-THREAD-026
+  ;; Several budgets, because this has failed twice for the same reason: a
+  ;; number the receipt prints ABOUT ITSELF leaked into the superset haystack,
+  ;; so the completion line flipped with the digit count and `measure`'s
+  ;; fixpoint never settled. Once it was the clock; once it was the header's
+  ;; own byte counts, at budget 12000 only.
   (testing "text_bytes is the size of the text block the caller receives"
-    (doseq [budget [nil 32768 12000]]
+    (doseq [budget [nil 32768 20000 15000 13000 12000 11000 10240]]
       (let [{:keys [text structured]}
             (thread! fixture-root (if budget {:budget_bytes budget} {}))]
         (is (= (:text_bytes structured) (ft/utf8-bytes text))

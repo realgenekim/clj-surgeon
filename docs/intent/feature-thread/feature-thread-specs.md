@@ -247,3 +247,11 @@ run as a test inside `make mcp-test`) enforces both halves.
   `sed -n '<to+1>,<to+N>p' <file>`. It is body-class detail: it is dropped when
   the leg's body is elided, and it is the first thing cut after the sibling
   when the receipt does not fit.
+
+- [x] **MCP-OP-THREAD-037**: The two sides of one request are compared. When
+  `feature_thread` locates both a handler leg and a script leg, `rules` shall
+  carry `request_contract` naming the route, `handler_reads` (the keys the
+  handler destructures or `get`s from the PARSED REQUEST — a destructure of
+  anything else is not a read), `js_posts` (the keys of the object literal the
+  script sends), `agree?`, and, when they disagree, `only_in_js` and
+  `only_in_handler` so the caller knows which side to edit.
