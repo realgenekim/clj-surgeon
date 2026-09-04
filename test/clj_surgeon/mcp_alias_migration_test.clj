@@ -3876,3 +3876,127 @@
       (finally
         (delete-tree! workspace)
         (delete-tree! main)))))
+
+;; ---------------------------------------------------------------------------
+;; discovery is byte-faithful, and its completeness claim is witnessed
+
+(defn- backslash-tree!
+  "A workspace holding three owners, two of them spelled with a backslash.
+
+  On POSIX a backslash is an ORDINARY path character: `\\` is a legal
+  top-level directory name and `a\\b.clj` is a legal file name. Neither is a
+  separator, and a discovery that reads one as a separator loses the owner
+  under it."
+  []
+  (let [workspace (temp-dir)]
+    (write-tree! workspace
+                 {"src/a.clj" (requiring-source "a")
+                  (str "\\" "/b.clj") (requiring-source "b")
+                  (str "src/c" "\\" "d.clj") (requiring-source "c-d")})
+    workspace))
+
+(defn- independent-source-count
+  "A second walker's count of the `.clj` files under `workspace`.
+
+  Written with `file-seq` and `java.io.File`, sharing no code with the scope
+  walk, so it cannot inherit the scope walk's own path arithmetic."
+  [workspace]
+  (count (filter #(and (.isFile ^java.io.File %)
+                       (str/ends-with? (.getName ^java.io.File %) ".clj"))
+                 (file-seq (io/file workspace)))))
+
+;; @spec MCP-OP-ALIAS-060
+(deftest a-backslash-is-a-path-character-and-never-a-separator
+  ;; Round-twelve review finding 1: `relative-path` converted EVERY backslash
+  ;; in a project-relative filename into a slash, so the owner under the
+  ;; top-level directory whose name is exactly `\` was dropped from
+  ;; `scope.paths ["**"]` — and the verb then COMMITTED the one owner it could
+  ;; see under a receipt claiming complete discovery:
+  ;;
+  ;;   receipt => {:ok true, :committed true, :files 1, :sites 1}
+  ;;   normal file migrated? => true
+  ;;   backslash file still old? => true
+  ;;   scan => {:ok true, :files [src/a.clj]}
+  ;;
+  ;; A partial migration under a complete claim breaks MCP-OP-ALIAS-004's
+  ;; N-owner closure guarantee: the caller is told the fan-out is closed while
+  ;; a namespace still requires the retired lib.
+  (let [workspace (backslash-tree!)]
+    (try
+      (let [scan (alias-migration/scan-scope (.toPath workspace)
+                                             {:paths ["**"] :exclude []})]
+        (testing "the walk sees every owner the filesystem holds"
+          (is (:ok scan) (pr-str scan))
+          (is (= 3 (count (:files scan)))
+              (str "the scope walk lost a file to a backslash: "
+                   (pr-str (:files scan))))
+          (is (= #{"src/a.clj" (str "\\" "/b.clj") (str "src/c" "\\" "d.clj")}
+                 (set (:files scan)))
+              (str "the walk did not report the paths byte-faithfully: "
+                   (pr-str (:files scan))))))
+      (testing "every owner migrates, and the receipt's count is the tree's"
+        (let [captured (atom nil)
+              _ (mcp-tool/init! (config workspace (io/file workspace "receipts")))
+              _ (mcp-tool/handle-alias-migration
+                  nil
+                  (json/parse-string
+                    (json/generate-string
+                      (request workspace {:scope {:paths ["**"]}
+                                          :expect {:files 3}}))
+                    true)
+                  (fn [content error? structured]
+                    (reset! captured {:content content :error? error?
+                                      :result structured})))
+              result (:result @captured)]
+          (is (:ok result) (pr-str result))
+          (is (true? (:committed result)) (pr-str result))
+          (is (= 3 (:files result))
+              (str "the receipt claims complete discovery over "
+                   (:files result) " of 3 owners"))
+          (is (= (independent-source-count workspace) (:files result))
+              "the receipt's file count and an independent walk disagree")
+          (doseq [relative ["src/a.clj" (str "\\" "/b.clj")
+                            (str "src/c" "\\" "d.clj")]]
+            (let [migrated (slurp (io/file workspace relative))]
+              (is (str/includes? migrated "acid.fanout.store2")
+                  (str relative " was left requiring the retired lib"))
+              (is (not (str/includes? migrated "acid.fanout.store :as"))
+                  (str relative " still requires the retired lib"))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-060
+(deftest a-discovery-that-cannot-account-for-the-tree-refuses-and-writes-nothing
+  ;; The completeness claim is only as good as its witness. The scope walk
+  ;; derives one relative path string per entry; a SECOND enumeration counts
+  ;; the same scope without building a string, and the two must agree before
+  ;; any byte is written. Round twelve's defect was silent precisely because
+  ;; nothing compared the discovery against the tree.
+  (let [workspace (backslash-tree!)]
+    (try
+      (let [before (into {} (map (fn [relative]
+                                   [relative (slurp (io/file workspace relative))])
+                                 ["src/a.clj" (str "\\" "/b.clj")
+                                  (str "src/c" "\\" "d.clj")]))
+            counter (resolve
+                      'clj-surgeon.mcp-alias-migration/independent-scope-count)]
+        (is (some? counter)
+            (str "discovery publishes no independent enumeration for its "
+                 "completeness claim to be checked against"))
+        (when counter
+          (let [result (with-redefs-fn {counter (fn [& _] 99)}
+                         #(execute! workspace {:scope {:paths ["**"]}
+                                               :expect {:files 3}}))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-discovery-incomplete" (:error_type result))
+                (pr-str result))
+            (is (= 3 (:files_considered result)) (pr-str result))
+            (is (= 99 (:files_enumerated result)) (pr-str result))
+            (is (true? (:source_unchanged result)) (pr-str result))
+            (is (false? (:mutation_attempted result)) (pr-str result))
+            (doseq [[relative source] before]
+              (is (= source (slurp (io/file workspace relative)))
+                  (str relative " was written under a discovery that did not "
+                       "account for the tree"))))))
+      (finally
+        (delete-tree! workspace)))))
