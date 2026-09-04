@@ -49,3 +49,10 @@ Independent gate re-run for X and P (seat, 08:1xZ): JS_EXIT=0 CLJ_EXIT=0 JS_EXIT
 |---|---|---|---|---|---|
 | T1b (receipt, replicate) | 22 | 2 (registry ids; intent_contract_test + test_runner — the governance/test-classification reads) | 9 | six real sites (routes @2148, transform @682, js @456, tests @96/@386, registry @557) | green — VERIFIED by the seat (JS_EXIT=0 CLJ_EXIT=0) |
 T1b reproduces T1 within two calls (24 → 22; reads 2 → 2; first patch 7 → 9). N2 still running (33 raw / 16 reads at 08:1xZ, no patch yet — already above N's 32).
+
+## Replicate N2 — finished 08:2xZ
+| arm | raw | source reads before first patch | first patch at call | patches (real) | suite runs | sites | gates |
+|---|---|---|---|---|---|---|---|
+| N2 (native, replicate) | 50 | 13 (editor-commands.js 1-480; rg formatDraft/Edit; AGENTS.md; editor-specs; editor-controller; state.clj; editor_journal; Makefile; test tree; transform_test; @spec greps) | 19 | 5 | ≥4 | the six real sites (+ Makefile, editor-design/specs docs; the clj test went into transform_test.clj) | seat re-run pending |
+
+**Paired figures at n=2 per arm (raw / reads-before-first-patch):** native 32, 50 (mean 41 / reads 10, 13); receipt 24, 22 (mean 23 / reads 2, 2). Raw ratio 1.8× at n=2 (was 1.3× at n=1); the native arm's spread (32–50) is wider than the receipt's (22–24). Discovery reads 11.5 → 2, 5.75×. Withdrawal check (Opus's R0 line: overlapping intervals at n=3 → withdraw the raw claim): intervals do not overlap at n=2; a third pair decides.
