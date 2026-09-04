@@ -1827,3 +1827,5 @@ Verified which binary the in-flight arms run (see the pulse). Quota facts the ma
 banking if codex gates review throughput.
 
 ## 21:56Z study-ops r12 built (e24ee131): colliding wire keys refused, four specs rescued from a deleted block, a trunk `find` self-prune bug fixed; Sol r13 landing review launched
+
+## 22:03Z T5 scored: one admitted gate call, zero refusals, zero bd ceremony — but 22 turns / 13.2 min (the gate turn is 5.7 min: payload + its own suites); withdrawn; T6/T6b (receipt + contract, no gate) launched on base2

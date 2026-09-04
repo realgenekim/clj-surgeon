@@ -329,3 +329,19 @@ GN3: the gate as the write path for a NATIVE agent (no receipt) is 3× native wa
 own despite the mandate, 8 write turns at 9.0 min — the agent fought the gate. N5: the landing-contract plate is wall-
 NEUTRAL for native (6.3 vs 6.5) and removed the churn exactly as designed (0 vs 1–3 turns); reads still 7. The plate's
 value is hygiene, not wall — its wall share shows only once the receipt has removed the reads (T5, running).
+
+## T5 result (2026-09-04 22:0xZ) — receipt + landing contract + r16 gate, on smw-base2
+
+| arm | wall | turns | MCP | refusals | bd turns | reads | own suite runs | feature | gates |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| T5 | 13.2 min | 22 | 1 (admitted first call) | 0 | 0 | 3 | 1 | landed, 7 files | unit 228/720/0, js green |
+| N5 (native, same plate) | 6.3 min | 33 | 0 | — | 2 | 7 | 7 | landed | green |
+| T4 (receipt, old plate, no gate) | 5.6 min | 19 | 0 | — | 6 | 0 | 3 | landed | green |
+
+WITHDRAWN on raw (22 > 12) and wall, as pre-registered. What moved: the plate removed the bd ceremony entirely (0 turns
+vs 5–6 on T3/T4); the r16 gate admitted on the first call with zero refusals (the contract fix worked). What did not:
+the gate turn cost 5.7 min over 8 turns — the payload build plus the gate's own inline verify (the two suites, ~1.5 min)
+run synchronously inside the call — so the gate replaced three 30-second suite runs with one 5-minute call. On this
+harness the gate is a correctness product (refuse a bad patch before it lands), not a wall product; the receipt + plate
+without the gate is the wall configuration. T6/T6b launched: receipt + contract, NO gate, smw-base2 — pre-registration:
+raw ≤ 15, wall ≤ 5 min, reads ≤ 1, bd turns ≤ 2; withdrawal if raw > 19 (T4's number) on both replicates.
