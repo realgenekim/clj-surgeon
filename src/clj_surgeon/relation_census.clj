@@ -831,6 +831,14 @@
     ;; file at all — and because a name is what the enumeration witness can
     ;; see.
     :file-not-a-regular-file
+    ;; Sol's round-eighteen item 2, blocking. A source the request NAMED whose
+    ;; REAL path leaves the workspace the request named. Its own name because
+    ;; its remedy is its own — nothing about the file's bits or its existence
+    ;; is wrong, and what must change is which tree the census is over — and
+    ;; because a name is what the enumeration witness can drive. The shared
+    ;; CAUSE is `:outside-project`, which is the one the tool has published for
+    ;; this observation since it shipped.
+    :file-outside-workspace
     :invalid-pool-size
     :source-too-large
     :too-many-walk-entries

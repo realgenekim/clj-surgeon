@@ -51,7 +51,13 @@
    ['clj-surgeon.mcp-relation-census-test/the-overflow-remedy-names-the-heaviest-field-it-measured :r18]
    ['clj-surgeon.mcp-relation-census-test/the-two-entrances-name-the-same-cause-for-the-same-observation :r18]
    ['clj-surgeon.mcp-relation-census-test/a-refusal-whose-subject-is-the-root-names-the-root :r18]
-   ['clj-surgeon.mcp-relation-census-test/naming-a-source-is-not-walking-a-tree :r18]])
+   ;; Round nineteen — the witnesses that close round eighteen's findings.
+   ;; `naming-a-source-is-not-walking-a-tree` is GONE from this list, and its
+   ;; removal is the deliberate edit this file exists to make visible: round
+   ;; eighteen's rule authorised a read outside the censused tree, and round
+   ;; nineteen replaced the rule rather than adding a witness beside it.
+   ['clj-surgeon.mcp-relation-census-test/no-census-reads-a-source-whose-real-path-leaves-the-workspace :r19]
+   ['clj-surgeon.mcp-relation-census-test/every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit :r19]])
 
 (defn -main [& _]
   (let [resolved (for [[sym round] battery]
