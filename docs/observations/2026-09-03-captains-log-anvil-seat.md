@@ -1693,3 +1693,5 @@ JVM lane reaches the NETWORK: prepared-wire spawns `clojure -X:clj-surgeon/mcp` 
 and writes ~/.gitlibs. Partition proposed: fast 36 (~31 s cold), integration 2, battery 11 (674 s). Round two launched
 per Gene's "B. Go": partition + lane declaration + JVM isolation + the two races fixed under contention + the 4-wide battery.
 Docs on bridge/suite-spike: 2026-09-04-suite-spike-round1{,-timing,-classification}.md (commits 34e0e82a, e97a1979, c4f69081).
+
+## 18:50Z — usage watch: collector zero/timeout — check root; last line: make: *** [Makefile:1052: study-agent-usage] Terminated
