@@ -147,6 +147,27 @@
 ;; that, and a deliberate attacker is not the threat model here — record it, do
 ;; not chase it."
 
+;; SECOND ACCEPTED RESIDUAL, declared rather than chased (round-five review
+;; §4): VALUE EQUALITY is an oracle, and now that `hashCode` is a constant it
+;; is a total one. A reading is usable as a map key and in a set, so both `=`
+;; and set membership answer the question "is the hidden number exactly x?",
+;; and ordinary code recovers the number by bisection using no measured verb at
+;; all -- only the public `measured/reading` constructor. The reviewer measured
+;; it:
+;;
+;;     --- binary-search laundering via = (ordinary code) ---
+;;     recovered by bisection: 12345.678 in 67 steps
+;;
+;; It is declared at the same tier as the `setAccessible` residual above, in
+;; the reviewer's own reasoning about that one: "nobody writes that by
+;; accident, which is exactly the round-four reasoning about `setAccessible`,
+;; and it is why I do not block on it." The alternative -- identity-only
+;; equality -- would break `(= (reading 1.5) (reading 1.5))`, which the type's
+;; own witnesses depend on and which is what makes a reading comparable in a
+;; test at all. So: the file no longer claims `value`/`-launder` are the whole
+;; surface. `=` consults the number too, deliberately, and this paragraph is
+;; the record of that decision.
+
 (deftype Reading [^:unsynchronized-mutable launderable]
   Launderable
   (-launder [_] launderable)
