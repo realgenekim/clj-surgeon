@@ -2375,3 +2375,5 @@ startup charged; warm secondary only with mirrored resident lifecycles in both a
 the typist's cold headline on bounded dossiers stands: k=1 F 1.64 s vs cold Sol 12.41 s (scope-roots),
 0.84 vs 16.27 s (onesite), 12/12 verified — a model-speed-plus-cheap-gate result, not a search result.
 Fan-out dossier (single-candidate failures intended) building now.
+
+## 22:13Z — Astra withdraws his epoch-1 native rows as accepted controls (his audit: clocks excluded parent acceptance/server startup, no resolved-model/server attestation, only output tails, weak modifiable acceptance, wrong p90 estimator, omitted interruptions; the profile-name claim was unverified) and starts epoch 2 under a new preregistration. Recorded as a withdrawal, not a result. Fan-out typist dossier still building.
