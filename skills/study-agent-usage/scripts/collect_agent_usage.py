@@ -19,6 +19,7 @@ from pathlib import Path
 # Opt-in registration for the inspected single-call wrapper contract. Never guess
 # defaults from a basename; registration requires the exact reviewed source hash.
 REGISTERED_PUBLIC_WRAPPER = None
+PUBLIC_WRAPPER_PATH = "/var/tmp/forge/astra-helper-program/acceptance/public-preflight/run_public.py"
 PUBLIC_WRAPPER_SHA256 = "8a3d8edd211bff1be34f4968e024a16e83ceef632e79af6226706b96c33bf14f"
 PUBLIC_REQUEST_HASHES = {
     "public-positive-01": "67b0eebd738176061cac00c6cd0825b4fdd0d16b5c0c6a699888fb829f91bad3",
@@ -381,7 +382,7 @@ def registered_wrapper_ops(source: str) -> list[str]:
 
 def validate_public_wrapper(path: Path) -> str:
     """Opt-in exact wrapper and request identities; no transcript-derived paths."""
-    if (not path.is_absolute() or path.is_symlink()
+    if (str(path) != PUBLIC_WRAPPER_PATH or path.is_symlink()
             or hashlib.sha256(path.read_bytes()).hexdigest() != PUBLIC_WRAPPER_SHA256):
         raise ValueError("public wrapper identity mismatch")
     for case, digest in PUBLIC_REQUEST_HASHES.items():
@@ -1765,15 +1766,21 @@ def self_test_public_wrapper() -> None:
         # No result supplied: attempted invocation cannot manufacture completion.
         REGISTERED_PUBLIC_WRAPPER = None
         assert registered_wrapper_ops(source) == []
-        with patch.object(Path, "is_absolute", return_value=True), patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "read_bytes", return_value=b"changed"):
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("copied wrapper must refuse before reading")):
             try:
-                validate_public_wrapper(Path(wrapper))
+                validate_public_wrapper(Path("/another/run_public.py"))
+                assert False, "copied wrapper path admitted"
+            except ValueError:
+                pass
+        with patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "read_bytes", return_value=b"changed"):
+            try:
+                validate_public_wrapper(Path(PUBLIC_WRAPPER_PATH))
                 assert False, "changed wrapper admitted"
             except ValueError:
                 pass
             with patch.dict(globals(), PUBLIC_WRAPPER_SHA256=hashlib.sha256(b"changed").hexdigest()):
                 try:
-                    validate_public_wrapper(Path(wrapper))
+                    validate_public_wrapper(Path(PUBLIC_WRAPPER_PATH))
                     assert False, "changed request admitted"
                 except ValueError:
                     pass
