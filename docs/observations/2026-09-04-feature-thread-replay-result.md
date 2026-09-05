@@ -401,3 +401,20 @@ receipt answers them directly. Both findings preserved; neither is a speed claim
 
 Astra's own hand-drive numbers, for the record: Astra-native migration of the 21-file/63-site fixture in 52.7 s (49.3 s on rep 2) on a quiet box
 with a guarded script; Sol-native 122.3 s (contaminated by load). The native floor per model is not yet established; no cross-model ratio.
+
+## Astra's fan-out pairs, first three per model (his figures, 2026-09-05 00:11Z; watcher task wall, ~1 s precision; tool-server startup ~10 s separate; codex 0.153.3; all six accepted 6/6)
+
+| pair | model | native s | tool s | native/tool |
+|---|---|---:|---:|---:|
+| 1 | sol | 117.2 | 35.2 | 3.33 |
+| 2 | sol | 117.7 | 39.0 | 3.02 |
+| 3 | sol | 118.0 | 31.5 | 3.75 |
+| 1 | astra | 55.3 | 45.4 | 1.22 |
+| 2 | astra | 49.7 | 50.3 | 0.99 |
+| 3 | astra | 60.1 | 42.4 | 1.42 |
+
+The seat's prediction on the record at 23:5xZ ("Astra's tool arm lands near 30–35 s and his ratio is about 1.5×; the advantage shrinks in
+proportion because the stronger model made the native side faster") — the ratio came in at 0.99–1.42 (median 1.22), slightly LOWER than
+predicted: Astra's tool arms took 42–50 s, not 30–35, i.e. the stronger model did NOT use the tool proportionally better; its orientation
+turns around one 1.3-second tool call cost about as much as its own 50-second native script. Three pairs per model remain; no claim yet.
+Astra's own reading, verbatim: "repeated direction for Sol, much smaller gains for Astra."
