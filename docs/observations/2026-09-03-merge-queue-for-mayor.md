@@ -65,3 +65,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **02:00Z SUITE LANDED** — bridge/suite-spike 01ec667c → merge **87ee0ae5** on MCP/main (Gene's order; gates on the merged tree green, verbatim in the captain's log). GHA (bridge/gha 5ce8aaea) rides with it. Owed post-landing: clean unpinned battery, N=4 battery, Sol review, land→landing-gate patch. INTEGRATION LANDED 23c0c34d (01:53Z).
 
 - **02:13Z CORRECTION** — default `make test` still includes test-battery and the bench tail (Astra 02:12, verified). Fast = `make mcp-test`; landing list = `make landing-gate`. Row bridge/test-default-fast: `test` → landing-gate list, old body → `test-full`; NEEDS Gene ratification + a clean battery before landing.
+
+- **03:04Z ISO007** — bridge/iso007-fence-override dd5e4881: reader-eval-fence-test budget override (battery unpassable at the 300 s default). Needs Astra confirm + one battery run on the tip → :pass receipt → land. Blocks: flip 971bc4a7 and every later landing.
