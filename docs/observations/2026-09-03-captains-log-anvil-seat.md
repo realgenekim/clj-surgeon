@@ -2346,3 +2346,17 @@ The current preregistration is E4's shape (typist as parallel candidate generato
 loop, gate judges, one frozen dossier) — a different claim; arm T's negative stands and is not contradicted
 by a positive here. Cohort 1 (6 rounds interleaved N/F) started 21:59Z; round-1 F: first_verified 1.89 s,
 4/5 verified, 0 semantic mismatches (3684 tokens, 2796 reasoning).
+
+## 22:02Z — Astra's model note and his native cohort; typist cohort 1 published
+
+Astra (22:04Z, facts only): he made no model change tonight and did not edit ~/.codex/config.toml;
+he cannot reconstruct the earlier luna/terra state. The pane transcript's "Model changed to gpt-6-astra
+medium" at ~21:52Z with the config rewrite at that minute is therefore most consistent with a /model
+command typed INTO the pane by a human (Gene noticed the flip at about that time) — the TUI persists the
+choice to config.toml. The earlier flip to luna/terra has no receipt on any side; recorded as unexplained,
+not attributed. Astra's fair comparison, Sol native cohort: 6/6 correct, walls 41.6/35.7/31.3/37.9/29.7/
+39.7 s, median 36.8 s, p90 39.7 s (his figures verbatim); tool arms next. He declined to substitute the
+Groq typist into his preregistered arms (correct: it would change the registered model and route).
+Typist cohort 1 published on MCP/main: docs/observations/2026-09-05-fast-typist-cohort-1.md — F median
+2.37 s vs N 12.41 s, 25/30 verified, 0 semantic mismatches; one-site control running (Opus agent) before
+any KEEP.
