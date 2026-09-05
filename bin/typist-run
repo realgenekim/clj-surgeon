@@ -1,0 +1,502 @@
+#!/usr/bin/env python3
+"""typist-run — runner for the fast-typist preregistration (2026-09-05).
+
+Two arms over ONE frozen dossier (bin/typist-dossier.md, byte-identical to both):
+
+  --arm N --runs 1   one careful author  (codex exec -m gpt-5.6-sol)
+  --arm F --k 5      five parallel typists (Groq openai/gpt-oss-120b)
+  --arm fake --k 2   the ratchet: known-good + known-bad diffs, no network
+
+Every candidate diff is applied onto its OWN fresh copy of the fixture preimage,
+then the GATE runs (the verification profile the mission ledger would resolve for
+this workspace), then an INDEPENDENT ACCEPTANCE CHECK runs (a behavioural witness
+that never loads the gate's test namespace, plus a byte-identity check of every
+untouched file against the preimage manifest).
+
+Clock: t0 is process start (startup is charged). Wall to first verified candidate
+includes queue, transport, apply, gate and acceptance.
+
+No number is ever fabricated: a missing API usage field prints `tokens=unknown`.
+"""
+
+import argparse
+import concurrent.futures as cf
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.request
+
+T0 = time.time()
+
+FX = "/var/tmp/forge/typist-fx"
+PREIMAGE = os.path.join(FX, "fixture-preimage")
+MANIFEST = os.path.join(FX, "fixture-preimage.manifest.edn")
+HERE = os.path.dirname(os.path.abspath(__file__))
+DOSSIER = os.path.join(HERE, "typist-dossier.md")
+GROQ_KEY_FILE = os.environ.get("TYPIST_GROQ_KEY_FILE", "/home/forge/secrets/groq.edn")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "openai/gpt-oss-120b"
+PROFILE = "typist-narrow"
+MUTABLE = "src/fixture/scope.clj"   # the one file the mission authorizes
+
+# --------------------------------------------------------------------------
+# the fixture preimage, materialized the way the mission tests do: a project
+# marker (deps.edn) plus the ledger's own `.clj-surgeon.edn` verification
+# profile, so `clj-surgeon.mission/configured-profiles` admits this workspace.
+
+SEED = {
+"deps.edn": '{:paths ["src" "test"]}\n',
+
+".clj-surgeon.edn": '''{:verification-profiles
+ {"typist-narrow"
+  {:commands [["bb" "-cp" "src:test" "-e"
+               "(require 'clojure.test 'fixture.scope-test) (let [r (clojure.test/run-tests 'fixture.scope-test)] (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}
+''',
+
+"src/fixture/util.clj": '''(ns fixture.util
+  "Path helpers shared by the scope expander. NOT part of this mission."
+  (:require [clojure.string :as str]))
+
+(defn normalize
+  "Trim a path and drop any trailing slash."
+  [p]
+  (str/replace (str/trim p) #"/+$" ""))
+''',
+
+"src/fixture/scope.clj": '''(ns fixture.scope
+  "Scope expansion for the helper-extraction fence."
+  (:require [fixture.util :as util]))
+
+(def default-roots
+  "The roots this workspace admits when the caller names none."
+  ["src"])
+
+(defn scope-roots
+  "The admitted roots for this scope expansion."
+  []
+  default-roots)
+
+(defn expand
+  "Every admitted root plus the caller's paths, normalised, in order."
+  [paths]
+  (vec (distinct (map util/normalize (concat (scope-roots) paths)))))
+''',
+
+"test/fixture/scope_test.clj": '''(ns fixture.scope-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [fixture.scope :as scope]))
+
+(deftest default-roots-unchanged
+  (is (= ["src"] (scope/scope-roots))))
+
+(deftest roots-opt-is-honoured
+  (testing "(:roots opts) replaces the default roots"
+    (is (= ["src" "test"] (scope/scope-roots {:roots ["src" "test"]})))
+    (is (= ["lib"] (scope/scope-roots {:roots ["lib"]})))))
+
+(deftest empty-roots-falls-back
+  (is (= ["src"] (scope/scope-roots {:roots []}))))
+
+(deftest expand-still-normalises
+  (is (= ["src" "test"] (scope/expand ["test/"]))))
+''',
+}
+
+# The independent acceptance witness. It requires ONLY fixture.scope — never the
+# gate's test namespace — so a candidate that satisfies the gate by editing the
+# tests cannot satisfy this.
+ACCEPT_EXPR = (
+    "(require 'fixture.scope) "
+    "(let [f (resolve 'fixture.scope/scope-roots)] "
+    "(assert (= [\"src\"] (f)) \"0-arity default\") "
+    "(assert (= [\"src\" \"test\"] (f {:roots [\"src\" \"test\"]})) \":roots honoured\") "
+    "(assert (= [\"lib\"] (f {:roots [\"lib\"]})) \":roots honoured (single)\") "
+    "(assert (= [\"src\"] (f {:roots []})) \"empty :roots falls back\") "
+    "(assert (= [\"src\"] (f nil)) \"nil opts falls back\") "
+    "(assert (vector? (f {:roots [\"a\"]})) \"returns a vector\") "
+    "(println \"ACCEPT-OK\"))"
+)
+
+
+def die(msg, code=1):
+    sys.stderr.write(msg + "\n")
+    sys.exit(code)
+
+
+def sha256_bytes(b):
+    return hashlib.sha256(b).hexdigest()
+
+
+def edn_str(s):
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def edn(v, indent=0):
+    pad = " " * indent
+    if isinstance(v, dict):
+        items = []
+        for k, val in v.items():
+            items.append(pad + " :" + k + " " + edn(val, indent + 2 + len(k)))
+        return "{" + "\n".join(items).lstrip() + "}"
+    if isinstance(v, (list, tuple)):
+        return "[" + "\n ".join(edn(x, indent + 1) for x in v) + "]"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if v is None:
+        return "nil"
+    if isinstance(v, str):
+        return edn_str(v)
+    if isinstance(v, float):
+        return "%.3f" % v
+    return str(v)
+
+
+# --------------------------------------------------------------------------
+# fixture
+
+def tree_files(root):
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for f in filenames:
+            p = os.path.join(dirpath, f)
+            out.append(os.path.relpath(p, root))
+    return sorted(out)
+
+
+def materialize_fixture(force=False):
+    """(Re)build the frozen preimage plus its content-hash manifest."""
+    if os.path.isdir(PREIMAGE) and not force:
+        pass
+    else:
+        shutil.rmtree(PREIMAGE, ignore_errors=True)
+        for rel, body in SEED.items():
+            p = os.path.join(PREIMAGE, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w") as fh:
+                fh.write(body)
+    man = {}
+    for rel in tree_files(PREIMAGE):
+        with open(os.path.join(PREIMAGE, rel), "rb") as fh:
+            man[rel] = sha256_bytes(fh.read())
+    with open(MANIFEST, "w") as fh:
+        fh.write("{:preimage %s\n :files\n {%s}}\n" % (
+            edn_str(PREIMAGE),
+            "\n  ".join('%s %s' % (edn_str(k), edn_str(v)) for k, v in sorted(man.items()))))
+    return man
+
+
+def resolve_gate_commands():
+    """The verification profile the ledger resolves for this workspace, read
+    from the PREIMAGE `.clj-surgeon.edn` at plan time (mission/resolve-verification
+    copies the commands once, at plan time, and the mission carries them)."""
+    r2 = subprocess.run(
+        ["bb", "-e",
+         '(require (quote [cheshire.core :as j])) '
+         '(println (j/generate-string (:commands (get (:verification-profiles '
+         '(clojure.edn/read-string (slurp ".clj-surgeon.edn"))) "%s"))))' % PROFILE],
+        cwd=PREIMAGE, capture_output=True, text=True, timeout=120)
+    if r2.returncode != 0:
+        die("typist-run: cannot serialize verification profile: %s" % r2.stderr.strip(), 5)
+    cmds = json.loads(r2.stdout.strip())
+    if not cmds:
+        die("typist-run: verification profile %r configures no commands" % PROFILE, 5)
+    return cmds
+
+
+# --------------------------------------------------------------------------
+# candidate evaluation
+
+def fresh_copy(dest):
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(PREIMAGE, dest)
+    subprocess.run(["git", "init", "-q", "."], cwd=dest, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=dest, check=True, capture_output=True)
+    subprocess.run(["git", "-c", "user.email=typist@anvil", "-c", "user.name=typist",
+                    "commit", "-qm", "preimage"], cwd=dest, check=True, capture_output=True)
+    return dest
+
+
+DIFF_START = re.compile(r"^(diff --git |--- )", re.M)
+
+
+def extract_diff(text):
+    """The unified diff inside a model response; None when there is none."""
+    if not text:
+        return None
+    t = text.replace("\r\n", "\n")
+    # strip a single fenced block if the whole diff is fenced
+    fence = re.search(r"```(?:diff|patch)?\n(.*?)```", t, re.S)
+    if fence and DIFF_START.search(fence.group(1)):
+        t = fence.group(1)
+    m = DIFF_START.search(t)
+    if not m:
+        return None
+    body = t[m.start():]
+    body = re.sub(r"\n```.*$", "\n", body, flags=re.S)
+    if not body.endswith("\n"):
+        body += "\n"
+    return body
+
+
+def apply_diff(workdir, diff_text):
+    """git apply --check then git apply. -> (ok, detail)"""
+    patch = os.path.join(workdir, ".typist.patch")
+    with open(patch, "w") as fh:
+        fh.write(diff_text)
+    for stage in (["git", "apply", "--check", "-p1", ".typist.patch"],
+                  ["git", "apply", "-p1", ".typist.patch"]):
+        r = subprocess.run(stage, cwd=workdir, capture_output=True, text=True)
+        if r.returncode != 0:
+            os.remove(patch)
+            return False, (r.stderr or r.stdout).strip()[:400]
+    os.remove(patch)
+    return True, "applied"
+
+
+def run_gate(workdir, cmds, timeout=300):
+    for cmd in cmds:
+        r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True,
+                           timeout=timeout)
+        if r.returncode != 0:
+            tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+            return False, " | ".join(tail[-4:])[:400]
+    return True, "0 failures, 0 errors"
+
+
+def run_acceptance(workdir, manifest, timeout=300):
+    """INDEPENDENT of the gate: behaviour + byte identity of untouched files."""
+    now = {}
+    for rel in tree_files(workdir):
+        if rel.startswith(".git/") or rel == ".typist.patch":
+            continue
+        with open(os.path.join(workdir, rel), "rb") as fh:
+            now[rel] = sha256_bytes(fh.read())
+    added = sorted(set(now) - set(manifest))
+    removed = sorted(set(manifest) - set(now))
+    changed = sorted(k for k in now if k in manifest and now[k] != manifest[k])
+    illegal = [k for k in changed if k != MUTABLE] + added + removed
+    if illegal:
+        return False, "files outside the mission changed: " + ",".join(illegal[:6])
+    if MUTABLE not in changed:
+        return False, "the authorized file %s is byte-identical to the preimage" % MUTABLE
+    r = subprocess.run(["bb", "-cp", "src", "-e", ACCEPT_EXPR], cwd=workdir,
+                       capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0 or "ACCEPT-OK" not in r.stdout:
+        tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+        return False, "behaviour: " + (" | ".join(tail[-3:])[:300] or "no ACCEPT-OK")
+    return True, "behaviour ok; only %s changed" % MUTABLE
+
+
+def evaluate(cand_dir, diff_text, manifest, cmds):
+    rec = {}
+    if diff_text is None:
+        rec["apply_ok"] = False
+        rec["apply_detail"] = "no unified diff in the response"
+        rec["gate_ok"] = False
+        rec["accept_ok"] = False
+        return rec
+    ok, detail = apply_diff(cand_dir, diff_text)
+    rec["apply_ok"], rec["apply_detail"] = ok, detail
+    if not ok:
+        rec["gate_ok"] = False
+        rec["accept_ok"] = False
+        return rec
+    try:
+        g_ok, g_detail = run_gate(cand_dir, cmds)
+    except subprocess.TimeoutExpired:
+        g_ok, g_detail = False, "gate timed out"
+    rec["gate_ok"], rec["gate_detail"] = g_ok, g_detail
+    try:
+        a_ok, a_detail = run_acceptance(cand_dir, manifest)
+    except subprocess.TimeoutExpired:
+        a_ok, a_detail = False, "acceptance timed out"
+    rec["accept_ok"], rec["accept_detail"] = a_ok, a_detail
+    return rec
+
+
+# --------------------------------------------------------------------------
+# arms
+
+def arm_fake(k, good, bad):
+    """Deterministic candidates: alternating known-good / known-bad diffs."""
+    out = []
+    for i in range(k):
+        path = good if i % 2 == 0 else bad
+        with open(path) as fh:
+            text = fh.read()
+        out.append({"cand": "c%d" % i, "source": path, "text": text,
+                    "response_s": time.time() - T0,
+                    "tokens": None, "error": None})
+    return out
+
+
+def arm_n(prompt, k):
+    """codex exec -m gpt-5.6-sol; stdin from /dev/null."""
+    def one(i):
+        d = None
+        scratch = fresh_copy(os.path.join(RUN_DIR, "n%d-scratch" % i))
+        cmd = ["codex", "exec", "-m", "gpt-5.6-sol",
+               "-c", 'model_reasoning_effort="medium"',
+               "--skip-git-repo-check", prompt]
+        try:
+            with open(os.devnull) as devnull:
+                r = subprocess.run(cmd, cwd=scratch, stdin=devnull,
+                                   capture_output=True, text=True, timeout=900)
+            text, err = r.stdout, (r.stderr or "").strip()[:300] if r.returncode else None
+        except Exception as e:                                   # noqa: BLE001
+            text, err = "", "codex exec failed: %s" % e
+        d = extract_diff(text)
+        if d is None:
+            # it may have edited the tree in place
+            g = subprocess.run(["git", "diff"], cwd=scratch,
+                               capture_output=True, text=True)
+            if g.stdout.strip():
+                d = g.stdout
+        return {"cand": "n%d" % i, "source": "codex exec gpt-5.6-sol",
+                "text": d, "response_s": time.time() - T0,
+                "tokens": None, "error": err}
+    with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
+        return list(ex.map(one, range(k)))
+
+
+def groq_key():
+    if not os.path.exists(GROQ_KEY_FILE):
+        die("typist-run: refusing — no Groq key at %s" % GROQ_KEY_FILE, 4)
+    with open(GROQ_KEY_FILE) as fh:
+        m = re.search(r':api-key\s+"([^"]+)"', fh.read())
+    if not m:
+        die("typist-run: refusing — no Groq key at %s" % GROQ_KEY_FILE, 4)
+    return m.group(1)
+
+
+def arm_f(prompt, k, temperature=0.7):
+    key = groq_key()          # refuses BEFORE any network call is made
+
+    def one(i):
+        body = json.dumps({"model": GROQ_MODEL,
+                           "messages": [{"role": "user", "content": prompt}],
+                           "temperature": temperature,
+                           "max_tokens": 1500}).encode()
+        req = urllib.request.Request(
+            GROQ_URL, body,
+            {"Content-Type": "application/json", "Authorization": "Bearer " + key})
+        try:
+            d = json.load(urllib.request.urlopen(req, timeout=300))
+        except Exception as e:                                   # noqa: BLE001
+            return {"cand": "f%d" % i, "source": GROQ_MODEL, "text": None,
+                    "response_s": time.time() - T0, "tokens": None,
+                    "error": "groq request failed: %s" % e}
+        u = d.get("usage") or {}
+        content = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        return {"cand": "f%d" % i, "source": GROQ_MODEL,
+                "text": extract_diff(content),
+                "raw_chars": len(content or ""),
+                "response_s": time.time() - T0,
+                "tokens": u.get("completion_tokens"),
+                "prompt_tokens": u.get("prompt_tokens"),
+                "queue_time": u.get("queue_time"),
+                "error": None}
+    with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
+        return list(ex.map(one, range(k)))
+
+
+# --------------------------------------------------------------------------
+
+def main():
+    ap = argparse.ArgumentParser(prog="typist-run", add_help=True)
+    ap.add_argument("--arm", required=True, choices=["N", "F", "fake"])
+    ap.add_argument("--runs", type=int, default=1)
+    ap.add_argument("--k", type=int, default=None)
+    ap.add_argument("--temperature", type=float, default=0.7)
+    ap.add_argument("--fake-good", default=os.path.join(HERE, "fixtures", "typist-good.diff"))
+    ap.add_argument("--fake-bad", default=os.path.join(HERE, "fixtures", "typist-bad.diff"))
+    ap.add_argument("--rebuild-fixture", action="store_true")
+    a = ap.parse_args()
+
+    if shutil.which("bb") is None:
+        die("typist-run: refusing — bb (babashka) is not on PATH; the gate cannot run", 5)
+    with open(DOSSIER) as fh:
+        prompt = fh.read()
+    dossier_sha = sha256_bytes(prompt.encode())
+
+    manifest = materialize_fixture(force=a.rebuild_fixture)
+    cmds = resolve_gate_commands()
+
+    k = a.k if a.k is not None else (1 if a.arm == "N" else 5)
+    runs = a.runs if a.arm == "N" else a.runs
+
+    exit_code = 0
+    for r_i in range(runs):
+        run_id = "%s-%d-%d" % (a.arm, int(T0), r_i)
+        global RUN_DIR
+        RUN_DIR = os.path.join(FX, run_id)
+        os.makedirs(RUN_DIR, exist_ok=True)
+
+        if a.arm == "fake":
+            cands = arm_fake(k, a.fake_good, a.fake_bad)
+        elif a.arm == "N":
+            cands = arm_n(prompt, k)
+        else:
+            cands = arm_f(prompt, k, a.temperature)
+
+        records = []
+        for c in cands:
+            cand_dir = fresh_copy(os.path.join(RUN_DIR, c["cand"]))
+            ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
+            verified = bool(ev.get("apply_ok") and ev.get("gate_ok") and ev.get("accept_ok"))
+            rec = {"cand": c["cand"], "source": c["source"],
+                   "dir": cand_dir,
+                   "response_wall_s": round(c["response_s"], 3),
+                   "tokens": c.get("tokens"),
+                   "prompt_tokens": c.get("prompt_tokens"),
+                   "queue_time_s": c.get("queue_time"),
+                   "error": c.get("error")}
+            rec.update(ev)
+            rec["verified"] = verified
+            rec["verified_wall_s"] = round(time.time() - T0, 3) if verified else None
+            rec["semantic_mismatch"] = bool(ev.get("gate_ok") and not ev.get("accept_ok"))
+            records.append(rec)
+
+        verified_walls = [r["verified_wall_s"] for r in records if r["verified"]]
+        first = min(verified_walls) if verified_walls else None
+        apply_ok = sum(1 for r in records if r.get("apply_ok"))
+        gate_ok = sum(1 for r in records if r.get("gate_ok"))
+        accept_ok = sum(1 for r in records if r.get("accept_ok"))
+        mismatch = sum(1 for r in records if r["semantic_mismatch"])
+
+        receipt = {
+            "run": run_id, "arm": a.arm, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "startup_charged" : True,
+            "t0_epoch": round(T0, 3),
+            "dossier": DOSSIER, "dossier_sha256": dossier_sha,
+            "preimage": PREIMAGE, "manifest": MANIFEST,
+            "gate_profile": PROFILE, "gate_commands": cmds,
+            "acceptance": "independent behavioural witness (fixture.scope only) + preimage byte identity",
+            "candidates": records,
+            "first_verified_s": first,
+            "semantic_mismatch": mismatch,
+        }
+        with open(os.path.join(RUN_DIR, "receipt.edn"), "w") as fh:
+            fh.write(edn(receipt) + "\n")
+
+        tok = [r["tokens"] for r in records if r["tokens"] is not None]
+        tok_s = ("tokens=%d" % sum(tok)) if tok else "tokens=unknown"
+        print("arm=%s run=%s first_verified_s=%s candidates=%d apply_ok=%d "
+              "gate_ok=%d accept_ok=%d semantic_mismatch=%d %s"
+              % (a.arm, run_id,
+                 ("%.2f" % first) if first is not None else "none",
+                 len(records), apply_ok, gate_ok, accept_ok, mismatch, tok_s))
+        if mismatch:
+            exit_code = 3
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()

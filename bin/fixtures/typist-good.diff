@@ -1,0 +1,18 @@
+diff --git a/src/fixture/scope.clj b/src/fixture/scope.clj
+index 6e6362c..2ff91fd 100644
+--- a/src/fixture/scope.clj
++++ b/src/fixture/scope.clj
+@@ -7,9 +7,10 @@
+   ["src"])
+ 
+ (defn scope-roots
+-  "The admitted roots for this scope expansion."
+-  []
+-  default-roots)
++  "The admitted roots for this scope expansion. `(:roots opts)` overrides the
++   default roots; an empty or absent `:roots` falls back to `default-roots`."
++  ([] (scope-roots nil))
++  ([opts] (vec (or (seq (:roots opts)) default-roots))))
+ 
+ (defn expand
+   "Every admitted root plus the caller's paths, normalised, in order."

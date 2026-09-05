@@ -1,0 +1,28 @@
+diff --git a/src/fixture/scope.clj b/src/fixture/scope.clj
+index 6e6362c..7c460fc 100644
+--- a/src/fixture/scope.clj
++++ b/src/fixture/scope.clj
+@@ -8,8 +8,8 @@
+ 
+ (defn scope-roots
+   "The admitted roots for this scope expansion."
+-  []
+-  default-roots)
++  ([] (scope-roots nil))
++  ([opts] (vec (or (seq (:roots opts)) default-roots))))
+ 
+ (defn expand
+   "Every admitted root plus the caller's paths, normalised, in order."
+diff --git a/src/fixture/util.clj b/src/fixture/util.clj
+index 5b30f4b..c72a4fc 100644
+--- a/src/fixture/util.clj
++++ b/src/fixture/util.clj
+@@ -2,7 +2,7 @@
+   "Path helpers shared by the scope expander. NOT part of this mission."
+   (:require [clojure.string :as str]))
+ 
+-(defn normalize
++(defn normalise
+   "Trim a path and drop any trailing slash."
+   [p]
+   (str/replace (str/trim p) #"/+$" ""))
