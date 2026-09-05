@@ -2249,3 +2249,5 @@ from agent finish to trunk: 19:41Z → 20:20Z.
 
 This closes the first production change to come out of the aperture window: the Sol caller probe's
 seven guessing round trips on request shape now end at the first refusal, which shows the shape.
+
+## 20:22Z — local install refreshed to 13c12401: CLI ~/bin/clj-surgeon + Codex/Claude skills from fe41adab (= 13c12401 + records; receipts in place); servers 7906/8171 restarted from their own worktrees at 13c12401 (`clojure -X:clj-surgeon/mcp :port N :nrepl-port :none :telemetry :full`, logs /var/tmp/forge/srvN.log). install-agent-routing not run (managed prompt blocks are a doctrine change, not an install).
