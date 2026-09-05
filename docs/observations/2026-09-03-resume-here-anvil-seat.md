@@ -525,3 +525,10 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
   Opus r17 review (Sol refused) + next_call-loop attack; study-ops r12 building (residual as refusal; STUDY-051 ACCEPTED by the seat, capped);
   CI fixes bridge/ci-findings (Opus takeover; Sonnet stalls on backgrounded suites — Opus for any brief that runs a suite).
 - Gene rulings today: wall-clock rule; "B. Go" (spike r2 = mechanism first); invest in suite/CI ("option value"); STUDY-051 delegated; SMW "a: go".
+
+## RESUME DELTA 02:00Z
+- Trunk MCP/main head = 87ee0ae5 (suite landed on Gene's order) on 23c0c34d (Astra integration). Landing one-shot ~/bin/land runs in clj-surgeon-land; being patched to call `make landing-gate`.
+- Astra (codex gpt-6-astra, pane forge-anvil:1.0) holds a logical reservation of the box after both landings; file pair /var/tmp/forge/{astra-fable-coordination,fable-to-astra}.md; nothing of mine starts a JVM without announcing there first. Opus harness r3 tip 3b640785 awaits his review (no live Opus arm).
+- Servers 7906/8171 still run the pre-suite trunk head (0dec06ea-era); restart on 87ee0ae5 once Astra clears a window. Gene wants the best stable build installed.
+- Owed: telemetry 417ed6b5, CI 49b92905, gate r18 09660168, MEM-003 d0e82620, study-ops e24ee131 — all gates held for Astra's allocation.
+- Lesson: chain waiters bind to a PID, never argv text (memory waiters-bind-to-pid-not-argv).

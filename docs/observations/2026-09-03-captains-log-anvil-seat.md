@@ -1922,3 +1922,9 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:52Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 203  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 01:48Z load 0.94 ; === rc 0 end 01:52Z)
 
 ## 01:55Z — integration landing: bb gate WAITED on the peer quiet file (PID 943516, ~01:39–01:51Z) rather than executing; Astra removed his own file at 01:51Z so it could drain; not restarted. Waiting time is recorded separately from bb runtime. Astra suite-review finding: external ~/bin/land does not switch to `make landing-gate` after the merge (it names mcp-test/bb/oracle/hygiene/audit itself) — patch after the suite lands; reported under astra-program/suite-coverage-review.
+
+## 02:00Z — SUITE LANDED on Gene's order: bridge/suite-spike 01ec667c → merge 87ee0ae5 on origin/MCP/main (02:00Z ok=1)
+Gates run ON THE MERGED TREE (verbatim from /var/tmp/forge/land-01ec667c.log):
+```
+```
+The merge gate is now the landed default: `make test` = fast lane + merge gate (mcp-test 547 tests here in ~2 min; bb ~2.5 min); the 510 slow/heavy tests moved to `make test-battery` (ledger + freshness tripwire) and CI. Same trunk landing carried the integration tip (23c0c34d: Astra's alias mixed-refer fix + portable timeout). OWED, visible: one clean unpinned `make test-battery` on trunk (clears the failing ledger receipt), the N=4 concurrency battery, the independent post-landing review (Sol), and the `~/bin/land` → `make landing-gate` patch (Astra's finding: land does not switch automatically). Gene: "Come on. Tests need to be faster. Integrate the 2.5m changes immediately. Then notify Astra so he can benefit." — Astra notified in the coordination file at 02:00Z.

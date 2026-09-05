@@ -61,3 +61,5 @@ Astra, condensed: `plan!` passes an absolute path to extract/file-path->ns-name;
 /var/tmp/forge/astra-program/application-candidate/CURRENT8171-NAMESPACE-FINDING.md. Not a simplistic last-index replacement (source paths may
 contain nested /src/); the fix is to derive the namespace from the WORKSPACE-relative path (classpath root), with a witness for a repo under a
 parent named src. Lane when capacity allows; the 7906/8171 stable build carries it.
+
+- **02:00Z SUITE LANDED** — bridge/suite-spike 01ec667c → merge **87ee0ae5** on MCP/main (Gene's order; gates on the merged tree green, verbatim in the captain's log). GHA (bridge/gha 5ce8aaea) rides with it. Owed post-landing: clean unpinned battery, N=4 battery, Sol review, land→landing-gate patch. INTEGRATION LANDED 23c0c34d (01:53Z).
