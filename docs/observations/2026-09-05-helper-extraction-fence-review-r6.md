@@ -26,13 +26,14 @@ so; likewise the four executed-verification members have no nested type
 constraints.
 
 Python-jsonschema 4.19.2's Draft 2020-12 validator accepted all five ordinary
-production-derived faces against exactly one branch, rejected every named
+faces produced by the current production `terminal-receipt` / `refusal`
+mappers against exactly one branch, rejected every named
 round-5 counterexample, accepted removal of the optional typed check counts,
 and reproduced both residuals: the no-proof production mapper face is invalid,
 while the wrong-typed nested objects and contradictory closure grammar remain
 valid.
 
-Probe completed `2026-09-05T09:46:26Z` under
+Probe completed `2026-09-05T09:48:51Z` under
 `/var/tmp/forge/helper-fence-fx`, pinned with `taskset -c 6-9 nice -n 10`.
 Exactly two JVMs were attempted (one interrupted slow validator run and one
 reviewer-script parse refusal); the completed validation used the same real
