@@ -163,3 +163,86 @@ intersection, with native tools remaining a first-class escape route.
 The bet is worth a two-hour prototype because the upside is measurable and
 narrow: if the mission route does not remove at least two model returns on the
 fan-out fixture without lowering acceptance, it has not earned another layer.
+
+## Round two: Astra answers Fable
+
+Fable's argument on `origin/MCP/main` is persuasive on the central point. The
+mission ledger is not a prettier editor. It is a durable boundary between
+model judgment and repository computation. I would use it, and I would ask Gene
+to fund a prototype. The attack is on scope and proof, not on the object itself.
+
+### 1. Is the dossier a second thing to read?
+
+Sometimes. That is the sharpest risk. A dossier that merely repeats the output
+of three `rg` calls is a tax, and a capable model will route around it. The
+dossier earns its turn only when it closes a question the model cannot cheaply
+close itself: exact owner cardinality, transitive closure, stale-source hashes,
+generated-file absences, or a proof obligation shared by many edits.
+
+The product rule should therefore be adaptive:
+
+```text
+small / known / literal       -> native tools, no mission
+wide / structural / guarded   -> mission dossier
+already-open mission          -> append evidence without reopening ceremony
+```
+
+The mission broker should expose an estimated cost and a native escape route.
+If it cannot predict at least one saved return or one avoided proof failure, it
+should recommend ceding the square. This keeps the ledger aligned with the
+Bitter Lesson: computation is general and cheap, ceremony is hand-built tax.
+
+### 2. When does lifecycle state matter?
+
+Fable is right that a single-turn edit does not need five visible states. The
+state matters at the first interruption, handoff, refusal, or review boundary.
+The v1–v7 landing loop is exactly the failure mode: each round re-derived
+context because no durable mission ID carried the evidence forward.
+
+The design should hide lifecycle ceremony on the fast path. `open` may return a
+mission ID automatically for a qualifying fan-out request; `show` should be
+optional when `apply` can consume the reviewed plan directly. The state becomes
+visible when the mission blocks, crosses a turn, or needs undo. Beads' lesson is
+not “make every edit an issue”; it is “make durable work addressable when it
+becomes durable.”
+
+### 3. Is `propose` the next square?
+
+Yes, with one correction. `propose` is mission-shaped discovery only when it
+returns a write-ready dossier, not when it is a renamed outline operation. It
+must discover owners, prove the boundary, name absences and ambiguities, bind a
+source snapshot, and estimate the transaction. A proposal that still asks the
+model to perform the same searches has not earned a new verb.
+
+The minimum useful proposal is:
+
+```clojure
+{:mission/id "M-12"
+ :state :ready
+ :snapshot {:files 11 :hash "..."}
+ :owners [{:file "src/a.clj" :form submit! :span [42 49]}]
+ :closure {:count 28 :complete? true}
+ :ambiguities []
+ :plan {:operation :thread-parameter :edits 21}
+ :proof {:expected-tests ["test/app_test.clj"]}
+ :next-action [:apply "M-12"]}
+```
+
+That is a different object from `:ls-tree`; it is also deliberately narrower
+than a natural-language architect. The model still decides whether the plan
+means the right thing.
+
+### Conviction
+
+I would use the mission tool because it follows the Bitter Lesson in the only
+way that matters here: it delegates scalable repository enumeration, hashing,
+and execution to computation while leaving meaning and scope to the model. It
+does not ask the model to learn a clever editor grammar. It gives the model a
+general object it can inspect, resume, accept, reject, or undo.
+
+I would reject the tool if its first prototype adds a new command for every
+task, requires a dossier for a one-site edit, or reports “complete” without a
+declared search boundary. The winning prototype is a thin mission ledger over
+the existing kernel. Its pass condition is the one Fable names: remove at least
+two model returns on a high-fan-out task, preserve acceptance, and show a native
+control that remains faster on the small square.
