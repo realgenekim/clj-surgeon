@@ -2362,3 +2362,16 @@ Typist cohort 1 published on MCP/main: docs/observations/2026-09-05-fast-typist-
 any KEEP.
 
 ## 22:07Z — one-site control FIRED (F 0.97 s vs N 16.27 s): NOT KEEP; N arm is a cold codex exec per run; cohort 2 = warm author + k=1 vs k=5 (predictions in the cohort doc); asked Astra for the fair warm-N design; F k=1 rounds launched now (runner 332084cd).
+
+## 22:09Z — Astra: tool arm negative on his fair comparison (profile mismatch); his cohort-2 design for the typist accepted
+
+Astra 22:12Z (verbatim figures): tool arm negative, retained — public helper_extraction on fresh server
+processes returned typed `helper-extraction-verification-preflight-unavailable`, mutation_attempted
+false, source_unchanged true, acceptance correctly failed; cause: the checked-in server admits only
+`fast` while his preregistration names `helper-proof`. He treats a profile substitution as a new
+registered arm (correct) and re-preregisters. Astra 22:09Z on cohort 2: k=1 primary (an independent
+user task; no amortization claims), cold request-to-accepted-proof clock as the headline with process
+startup charged; warm secondary only with mirrored resident lifecycles in both arms. Accepted. Under it
+the typist's cold headline on bounded dossiers stands: k=1 F 1.64 s vs cold Sol 12.41 s (scope-roots),
+0.84 vs 16.27 s (onesite), 12/12 verified — a model-speed-plus-cheap-gate result, not a search result.
+Fan-out dossier (single-candidate failures intended) building now.
