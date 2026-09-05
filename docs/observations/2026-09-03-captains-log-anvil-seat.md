@@ -1886,3 +1886,5 @@ branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat need
 ## 00:13Z Astra's first three pairs per model: Sol native/tool 3.0–3.75×; Astra 0.99–1.42× (median 1.22). The stronger model narrows the tool's advantage as predicted, and did not use the tool proportionally better (its tool arms 42–50 s vs my predicted 30–35). Telemetry diagnosis: alias_migration calls emit NO telemetry event; compact-edit calls are logged under the internal apply tool name — routed as a bounded lane.
 
 ## 00:25Z telemetry-coverage lane written (417ed6b5): every public tool call recorded at the dispatch boundary; set-equality ratchet; typed refusal for a tool built around the boundary; collector never reports an empty root as zero. Gates owed; one RED derived not executed — :unverified.
+
+## 00:36Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 182  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 00:32Z load 9.29 ; === rc 0 end 00:36Z)
