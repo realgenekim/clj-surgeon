@@ -1,0 +1,83 @@
+{
+  "classification": "four-hour helper program evidence; no new qualifying native/tool speed comparison",
+  "source05df": "05df8b6db1935b57a57b59e463b429dc4599073d",
+  "gate_source_equivalent_docs_commit": "a3caddec",
+  "schema_strictness_release_blocker": true,
+  "original_epoch": "one pre-model isolation refusal;14unstarted",
+  "clean_epoch": "one actual native actor128.1s with failed profile;14unstarted;zero accepted controls; no ratio",
+  "native_supplemental_behavior": "24pass, unchanged candidate, no retroactive in-session proof",
+  "usability": "one actual Astra publictool completion,5outeractions,2helperattempts including scope refusal;86.1swatcher descriptiveonly; independentacceptancepass",
+  "raw_evidence": {
+    "/var/tmp/forge/astra-helper-program/readiness/api-argument-size-comparison.json": "4e2f51ed66a2014fcc4ca3b92ddd8f5787e3592d90aa736f2fd5e0e847b83902",
+    "/var/tmp/forge/astra-helper-program/acceptance/public-preflight/public-positive-03/execution.json": "84b94ef011c638cd3e149ba147f9d85781073f06044f70fe9963dbb7fdfd6235",
+    "/var/tmp/forge/astra-helper-program/acceptance/public-preflight/public-rollback-03/execution.json": "75d17405369255edcecb0f7a80ca6b1b946a46598ae80a8f14482979aefe44fe",
+    "/var/tmp/forge/astra-helper-program/measurement/EPOCH2-STOP-01.json": "60f372968c8ebacc60e386c6822eedddbc89928b572df88831f484e8d2fec164",
+    "/var/tmp/forge/astra-helper-program/acceptance-review/ROOT-RULING-01.md": "23a6a37fe895a0666d9659a16d5f87f089971b9fd8ce76c8805b04630698b177",
+    "/var/tmp/forge/astra-helper-program/acceptance-review/judge-bacon-batch01.md": "aca007b9cf8d94f8db3f563e3793bf4da1701ed1ddf167628484262c5a1f5688",
+    "/var/tmp/forge/astra-helper-program/acceptance-review/judge-peirce-batch01.md": "eb715e1da73f32914bf3b97256e741a48ba9d644cddd7d19e6bcdf17dbc02a36",
+    "/var/tmp/forge/astra-helper-program/acceptance-clean/supplemental-c01/behavior/result.json": "c1356778f4a8ff6de2ceaa42fe28feea0d57f61c1c29d1be595504b2f1e1e50c",
+    "/var/tmp/forge/astra-helper-program/runs/helper-usability-01-astra-tool/exploratory/result.json": "382d4da177b19aacd5d79afdc0c6c26250769ab4256f357e401ac515b5af5273",
+    "/var/tmp/forge/astra-helper-program/runs/helper-usability-01-astra-tool/arm/run.json": "a231e24928f5ce1dd85b58e965e5f7e1620894eee7baeb78e32cbfaa622a531d",
+    "/var/tmp/forge/astra-helper-program/runs/helper-usability-01-astra-tool/arm/adapter-result.json": "94af8e1018d05b208df31b3adbd2d3c843d6bb5a1deeaa431b6052924408f4d5",
+    "/var/tmp/forge/astra-helper-program/acceptance-review/usability-01-review.md": "b01eb792942837bf1c2600e8a800f031c62e5144b108dada87169ccd4622c67c",
+    "/var/tmp/forge/astra-helper-program/usability/calls.json": "b51f935cfcd7591797b7f76b65068d7f70fa200115bac4a3b98588b6193df899",
+    "/var/tmp/forge/astra-helper-program/readiness/root-model-quota-closeout.json": "edeecb9447b4a923b2dca8b9c94d61cba8381ffde53d35331e788112519b2094",
+    "/var/tmp/forge/astra-helper-program/acceptance/public-preflight/public-positive-04/execution.json": "0ee75bfe2bf9a7ec0f282f1efa6d028c6a01dadc7a5c9fc10cbfb03bae3d33a8",
+    "/var/tmp/forge/astra-helper-program/acceptance/public-preflight/public-rollback-04/execution.json": "a1cb5a9eef29add5b6e87691b4550c823d5496fec4f1a39922fd37db69d63dd8",
+    "/var/tmp/forge/astra-helper-program/acceptance-review/public-round4-review.md": "524cd2e6eb11f8c34e9728f5da2504b00f69ef58ddc9173a5e688a1ee650b916"
+  },
+  "v4_source": "eddbe6fdc3a48832a8ab11ede48ecae90d4e14c6",
+  "v4_gates": "focused68/1137 andfast581/7299pass; Solr4GO-WITH-FIX schemaopen; v5inflight; battery/fullgatepending",
+  "v4_public04": {
+    "public-positive-04": {
+      "call_wall_s": 24.883975519100204,
+      "local_evidence_pass": true,
+      "stop_returncode": 0,
+      "sizes": {
+        "encoding": "canonical JSON: UTF-8, ensure_ascii=false, sorted keys, compact separators, finite numbers",
+        "scope": "decoded whole JSON-RPC response and result.structuredContent; excludes transport headers/SSE framing",
+        "evaluation_only": true,
+        "measurements": {
+          "structured": {
+            "bytes": 1471,
+            "max_bytes": 4096,
+            "within_threshold": true,
+            "status": "within-threshold"
+          },
+          "whole_mcp_receipt": {
+            "bytes": 2038,
+            "max_bytes": null,
+            "within_threshold": null,
+            "status": "threshold-not-supplied"
+          }
+        }
+      },
+      "independent_review": "GO bounded actual paths/schema/7negativecontrols/identity/proof/restoration/cleanup; not unrestricted schemaGO"
+    },
+    "public-rollback-04": {
+      "call_wall_s": 16.15777873597108,
+      "local_evidence_pass": true,
+      "stop_returncode": 0,
+      "sizes": {
+        "encoding": "canonical JSON: UTF-8, ensure_ascii=false, sorted keys, compact separators, finite numbers",
+        "scope": "decoded whole JSON-RPC response and result.structuredContent; excludes transport headers/SSE framing",
+        "evaluation_only": true,
+        "measurements": {
+          "structured": {
+            "bytes": 1308,
+            "max_bytes": 4096,
+            "within_threshold": true,
+            "status": "within-threshold"
+          },
+          "whole_mcp_receipt": {
+            "bytes": 2470,
+            "max_bytes": null,
+            "within_threshold": null,
+            "status": "threshold-not-supplied"
+          }
+        }
+      },
+      "independent_review": "GO bounded actual paths/schema/7negativecontrols/identity/proof/restoration/cleanup; not unrestricted schemaGO"
+    }
+  }
+}

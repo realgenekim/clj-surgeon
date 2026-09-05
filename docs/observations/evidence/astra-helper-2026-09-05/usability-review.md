@@ -1,0 +1,15 @@
+# Exploratory usability completion: GO
+
+This is one descriptive usability run on05df8b6db1935b57a57b59e463b429dc4599073d, outside the closed comparison. Quiet gate was explicitly false and concurrent Fable work permitted. No ratio, calibration floor, provider ranking or clean-cohort claim follows.
+
+Actual session metadata/turn context and adapter result bind gpt-6-astra/high. Five outer actions contain two helper attempts, not five API round trips. First request at rollout line34 uses scope.paths [src,test]; raw output line37 is typed helper-extraction-caller-outside-scope, source_unchanged/target_unchanged true, next_call null,8890.427ms. Those flags are the prewrite refusal evidence; no separate intermediate inventory was captured. The caller then supplies [src/**,test/**] at line41; output44 commits and reports24128.124ms. This is a recovered usability friction, not first-attempt success.
+
+The first typed refusal omits operation. Existing usability/calls.json leaves its outer4 typed_helper_refusals empty and observes only the later operation-bearing helper result. That is a classification blind spot, not absence of a refusal. Raw request/result pairing establishes both actual attempts. Frozen collector/app files were not changed by this audit.
+
+Output44 binds in-session proof-9eab41918bec43cf9f4abe28568435f3 to the candidate. Its recorded behavior classpath points to this candidate/src; structure passes28 callers and exact30-file footprint,24 behavior results equal baseline, and bytes remain unchanged during behavior. Current inventory retains every protected byte/type/mode and only the authorized30 sources differ. Counts6 retired/258 selected/172 retained match. After successful proof, remaining actor output is the final report, with no subsequent tool write.
+
+Distinct outer proof-92456047a02045f692505a8138cfb68c also passes, with recorded inventory stability. The actor's final statement accurately reports the extraction and successful in-transaction24-case proof; it does not claim whole-application compilation. It omits the recovered initial refusal from its short conclusion, so this audit retains that attempt explicitly rather than interpreting the conclusion as a first-attempt claim.
+
+Ready PID642068/birth203534224 and source05df bind the intended candidate and match the adapter's captured ready record; raw ready.edn hash matches. Stopped receipt reports zero survivors; parent lifecycle stop exit0 and watcher driver_group_orphans0. These are retained process-ownership facts, not a new live process sweep.
+
+Watcher run.wall_s is86.1s; adapter watch-subprocess86.614s and outer adapter89.820s are distinct envelopes. Server operation times8.890s/24.128s are nested in the task; independent outer proof6.779s and startup are separate phases. Do not add overlapping intervals or compare against the abandoned comparison's native candidate. Machine evidence: usability-01-audit.json. Only existing metadata, public call/results, final report, proof receipts and file inventories were audited; no runtime/source change.
