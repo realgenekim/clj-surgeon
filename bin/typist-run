@@ -882,13 +882,20 @@ def call_openai_chat(cfg, model, prompt, k, temperature, tag):
 
     def one(i):
         cand = "%s%d" % (tag, i)
-        body = json.dumps({"model": model,
-                           "messages": [{"role": "user", "content": prompt}],
-                           "temperature": temperature,
-                           # gpt-oss-120b is a REASONING model: reasoning tokens
-                           # are spent BEFORE any output token, so the budget has
-                           # to cover reasoning + diff, not the diff alone.
-                           "max_tokens": GROQ_MAX_TOKENS}).encode()
+        payload = {"model": model,
+                   "messages": [{"role": "user", "content": prompt}],
+                   "temperature": temperature,
+                   # gpt-oss-120b is a REASONING model: reasoning tokens
+                   # are spent BEFORE any output token, so the budget has
+                   # to cover reasoning + diff, not the diff alone.
+                   "max_tokens": GROQ_MAX_TOKENS}
+        # OpenRouter upstream pin: TYPIST_OPENROUTER_ORDER="Cerebras,Groq" routes
+        # only to those upstreams (no fallback); default routing chose slow ones.
+        order = os.environ.get("TYPIST_OPENROUTER_ORDER")
+        if order and "openrouter" in cfg["url"]:
+            payload["provider"] = {"order": [o.strip() for o in order.split(",") if o.strip()],
+                                   "allow_fallbacks": False}
+        body = json.dumps(payload).encode()
         headers = {"Content-Type": "application/json",
                    "Authorization": "Bearer " + key}
         headers.update(cfg["headers"])
