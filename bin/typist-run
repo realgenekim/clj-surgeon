@@ -870,7 +870,7 @@ def provider_key(cfg):
     if not os.path.exists(path):
         die("typist-run: refusing — no %s key at %s" % (cfg["key_label"], path), 4)
     with open(path) as fh:
-        m = re.search(r':key\s+"([^"]+)"', fh.read())
+        m = re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read())
     if not m:
         die("typist-run: refusing — no %s key at %s" % (cfg["key_label"], path), 4)
     return m.group(1)
@@ -1098,7 +1098,7 @@ def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
         ok = False
         if os.path.exists(path):
             with open(path) as fh:
-                ok = bool(re.search(r':key\s+"([^"]+)"', fh.read()))
+                ok = bool(re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read()))
         if not ok:
             blocked[p] = "no-key"
             print("bench: %s is BLOCKED — no %s key at %s; it will show refusals, "
