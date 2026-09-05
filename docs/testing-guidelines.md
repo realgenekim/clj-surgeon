@@ -274,3 +274,9 @@ The final handoff for a feature reports:
    candidates, then run `make test`.
 9. Report the completion evidence above; do not call the feature complete if a
    required layer is missing.
+
+## Benchmark fixture admission before actor dispatch
+
+Before declaring an actor benchmark ready, run the launcher's read-only admission checks against every actual prepared candidate: exact root, clean pinned HEAD, complete protected inventory, absent inherited/project client configuration, and unused run identity. Testing those checks only with synthetic fixtures does not establish that the real frozen BASE can pass them. Native controls must not inherit repository MCP connections or hooks.
+
+If admission refuses before model launch, retain the failed attempt and stop the cohort. Correct fixture metadata in an explicitly versioned epoch with new identities, preserve the original BASE and manifests, and document every changed byte class equally across routes. Rebinding an immutable proof to a new location is a metadata change that must be named and pinned; source and acceptance semantics must remain independently checkable. Never waive an isolation guard merely to obtain timings.
