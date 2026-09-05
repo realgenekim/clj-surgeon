@@ -16,7 +16,7 @@
 
 (defn- meaningful?
   [node]
-  (not (contains? #{:whitespace :newline :comma :comment} (n/tag node))))
+  (not (contains? #{:whitespace :newline :comma :comment :uneval} (n/tag node))))
 
 (defn- children
   [node]
@@ -82,12 +82,27 @@
   #{"fn" "fn*" "defn" "defn-" "defmacro" "defmethod" "definline"})
 
 (defn- binding-form-names
-  "Every simple symbol a binding form introduces, including destructuring."
+  "Names declared by a binding, excluding metadata, discards and default expressions."
   [node]
-  (into #{}
-        (comp (filter #(= :token (n/tag %)))
-              (keep simple-symbol-name))
-        (tree-seq n/inner? n/children node)))
+  ;; @spec MCP-OP-ALIAS-065
+  (let [parts (meaningful-children node)]
+    (case (n/tag node)
+      :meta (binding-form-names (last parts))
+      :token (set (keep identity [(simple-symbol-name node)]))
+      :vector (into #{} (mapcat binding-form-names) parts)
+      :map (into #{}
+                 (mapcat (fn [[key-node value-node]]
+                           (let [key-text (n/string key-node)]
+                             (cond
+                               (= ":or" key-text) #{}
+                               (= ":as" key-text) (binding-form-names value-node)
+                               (or (contains? #{":keys" ":syms" ":strs"} key-text)
+                                   (some #(str/ends-with? key-text %) ["/keys" "/syms" "/strs"]))
+                               (into #{} (keep #(some-> % token-symbol name))
+                                     (meaningful-children value-node))
+                               :else (binding-form-names key-node)))))
+                 (partition 2 parts))
+      #{})))
 
 (defn- vector-node?
   [node]
@@ -102,15 +117,10 @@
           (take-nth 2 entries))))
 
 (defn- letfn-binding-names
+  "Only function names are shared across letfn definitions, not their parameters."
   [vector-node]
   (into #{}
-        (mapcat (fn [entry]
-                  (let [parts (meaningful-children entry)]
-                    (into (if-let [name-node (first parts)]
-                            (set (keep identity [(simple-symbol-name name-node)]))
-                            #{})
-                          (mapcat binding-form-names)
-                          (filter vector-node? parts)))))
+        (keep #(some-> % meaningful-children first simple-symbol-name))
         (meaningful-children vector-node)))
 
 (defn- parameter-vectors
@@ -498,6 +508,48 @@
                               :form (n/string node)})))
             (update :unselected-sites #(or % unselected-hit?))))
 
+      ;; @spec MCP-OP-ALIAS-066
+      ;; These scopes need independent parameter/default/control-flow analysis.
+      ;; Never pretend the generic descendant walk proves their bare references.
+      (let [head (head-name node)
+            params (when (contains? function-heads head) (parameter-vectors node))
+            binding-vector (when (contains? local-binding-vector-heads head)
+                             (first (filter vector-node? (rest (meaningful-children node)))))
+            binding-forms (concat params (when binding-vector
+                                           (take-nth 2 (meaningful-children binding-vector))))
+            default? (some (fn [binding-form]
+                             (some (fn [part]
+                                     (and (= :map (n/tag part))
+                                          (some #(= ":or" (n/string %))
+                                                (take-nth 2 (meaningful-children part)))))
+                                   (tree-seq n/inner? children binding-form)))
+                           binding-forms)
+            metadata-vector? (and (or (contains? function-heads head)
+                                      (contains? local-binding-vector-heads head))
+                                  (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
+                                                                   (rest (meaningful-children node))))]
+                                    (= :meta (n/tag first-vector))))
+            potential? (some (fn [part]
+                               (when (= :token (n/tag part))
+                                 (let [facts (token-facts part context live-bare)]
+                                   (or (:rewrite facts) (:refer-hit? facts)))))
+                             (tree-seq #(and (n/inner? %) (not= :uneval (n/tag %)))
+                                       children node))]
+        (and potential?
+             (or default? metadata-vector?
+                 (and (seq live-bare)
+                      (or (contains? #{"if-let" "if-some" "as->" "for" "doseq"} head)
+                          (> (count params) 1)
+                          (and (= "fn" head)
+                               (contains? live-bare (some-> (second (meaningful-children node)) unmeta-node simple-symbol-name)))
+                          (and (= "letfn" head)
+                               (some (fn [part]
+                                       (and (vector-node? part)
+                                            (some live-bare (binding-form-names part))))
+                                     (rest (tree-seq n/inner? children node)))))))))
+      (assoc (leaf node) :indirect [{:reason :unsupported-binding-scope
+                                     :form (n/string node)}])
+
       (n/inner? node)
       (let [head (head-name node)
             introduced (form-introduced-names node)
@@ -557,8 +609,13 @@
             (if (contains? binding-positions index)
               (-> state
                   (update :nodes conj child)
-                  (update :live-bare #(reduce disj % (binding-form-names child))))
-              (accumulate state (rewrite-forms child context (:live-bare state)))))
+                  (assoc :pending-names (binding-form-names child)))
+              (let [walked (accumulate state (rewrite-forms child context (:live-bare state)))]
+                (if (meaningful? child)
+                  (-> walked
+                      (update :live-bare #(reduce disj % (:pending-names state)))
+                      (dissoc :pending-names))
+                  walked))))
           (assoc empty-walk :live-bare live-bare)
           (map-indexed vector kids))]
     (walk-result vector-node walked)))
@@ -994,10 +1051,13 @@
           {:refusal (refusal :alias-migration-indirect-reference
                              (str "An indirect reference to " from-lib " in " file
                                   " cannot be closed mechanically")
-                             {:file file
-                              :reason (name (:reason (first indirect)))
-                              :form (:form (first indirect))}
-                             (excluding-call request file))}
+                             (cond-> {:file file
+                                      :reason (name (:reason (first indirect)))
+                                      :form (:form (first indirect))}
+                               (= :unsupported-binding-scope (:reason (first indirect)))
+                               (assoc :remedy "This migration does not model this binding scope. Review and migrate its bindings and uses explicitly; no scope-changing next_call is provided."))
+                             (when-not (= :unsupported-binding-scope (:reason (first indirect)))
+                               (excluding-call request file)))}
 
           (zero? sites) nil
 
@@ -1127,10 +1187,13 @@
                   {:refusal (refusal :alias-migration-indirect-reference
                                      (str "An indirect or macro-mediated reference in "
                                           file " cannot be closed mechanically")
-                                     {:file file
-                                      :reason (name (:reason blocking))
-                                      :form (:form blocking)}
-                                     (excluding-call request file))}
+                                     (cond-> {:file file
+                                              :reason (name (:reason blocking))
+                                              :form (:form blocking)}
+                                       (= :unsupported-binding-scope (:reason blocking))
+                                       (assoc :remedy "This migration does not model this binding scope. Review and migrate its bindings and uses explicitly; no scope-changing next_call is provided."))
+                                     (when-not (= :unsupported-binding-scope (:reason blocking))
+                                       (excluding-call request file)))}
 
                   (and (zero? sites) (zero? refer-sites)) nil
 

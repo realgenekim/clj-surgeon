@@ -955,3 +955,128 @@
           (is (str/includes? migrated "[(newlib/fetch-event) (other-event)]"))
           (is (= '[example.old :refer [other-event]]
                  (first (rest (nth (n/sexpr (first (n/children (parser/parse-string-all migrated)))) 2))))))))))
+(def binding-scope-cases
+  [{:id "discard-before-binding" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [#_find-event x 1] (find-event)) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}
+   {:id "discard-before-initializer" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [x #_find-event 1] (find-event)) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}
+   {:id "discard-between-binding-pairs" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [x 1 #_find-event y 2] (find-event)) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}
+   {:id "nested-discard-does-not-shadow" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [x 1] [(let [#_find-event y 2] (find-event)) (find-event)]) (other-event)])\n(result)\n" :expected [:selected [:selected :selected] :other] :refuse? false}
+   {:id "binding-metadata-is-not-binding" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [^{:probe find-event} x 1] (find-event)) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}
+   {:id "metadata-selected-local-control" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [^:private find-event (fn [] :local)] (find-event)) (other-event)])\n(result)\n" :expected [:selected :local :other] :refuse? false}
+   {:id "destructured-selected-local-control" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [{:keys [find-event]} {:find-event (fn [] :local)}] (find-event)) (other-event)])\n(result)\n" :expected [:selected :local :other] :refuse? false}
+   {:id "destructuring-default-live-call" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [{:keys [x] :or {x (find-event)}} {}] [x (find-event)]) (other-event)])\n(result)\n" :expected [:selected [:selected :selected] :other] :refuse? true}
+   {:id "fn-argument-discard" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) ((fn [#_find-event x] (find-event)) 1) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}
+   {:id "fn-selected-argument-control" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) ((fn [find-event] (find-event)) (fn [] :local)) (other-event)])\n(result)\n" :expected [:selected :local :other] :refuse? false}
+   {:id "letfn-discard-before-local" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (letfn [#_find-event (local [] (find-event))] (local)) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}
+   {:id "letfn-selected-local-control" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (letfn [(find-event [] :local)] (find-event)) (other-event)])\n(result)\n" :expected [:selected :local :other] :refuse? false}
+   {:id "sequential-selected-initializer" :source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) (let [find-event (find-event)] find-event) (other-event)])\n(result)\n" :expected [:selected :selected :other] :refuse? false}])
+(def binding-scope-request
+  {:workspace-root "/workspace"
+   :from {:lib "shadow.old" :var "find-event"}
+   :to {:lib "shadow.new" :var "fetch-event" :alias-policy ["newlib"]}
+   :scope {:paths ["src/**"]} :expect {:files 1}})
+(defn binding-scope-candidate [source plan]
+  (reduce (fn [text {:keys [original replacement]}]
+            (str/replace-first text original replacement))
+          source (:edits (first (:files plan)))))
+(defn binding-scope-behavior [source retired?]
+  ((requiring-resolve 'sci.core/eval-string) source
+   {:namespaces {'shadow.old (cond-> {'other-event (fn [] :other)}
+                               (not retired?) (assoc 'find-event (fn [] :selected)))
+                 'shadow.new {'fetch-event (fn [] :selected)}}}))
+(deftest original-independent-fixtures-are-valid
+  (doseq [{:keys [id source expected]} binding-scope-cases]
+    (testing id (is (= expected (binding-scope-behavior source false))))))
+(deftest binding-scope-plans-preserve-behavior-or-refuse-honestly
+  (doseq [{:keys [id source expected refuse?]} binding-scope-cases]
+    (testing id
+      (let [plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
+        (if refuse?
+          (do (is (= false (:ok plan)))
+              (is (= "alias-migration-indirect-reference" (:error_type plan)))
+              (is (= "unsupported-binding-scope" (:reason plan)))
+              (is (= true (:source_unchanged plan)))
+              (is (= false (:mutation_attempted plan)))
+              (is (empty? (:files plan)))
+              (is (nil? (:next_call plan))))
+          (do (is (= true (:ok plan)) (pr-str plan))
+              (let [after (binding-scope-candidate source plan)]
+                (is (= expected (binding-scope-behavior after false)))
+                (is (= expected (binding-scope-behavior after true)))
+                (when (str/includes? source "#_find-event")
+                  (is (str/includes? after "#_find-event")))
+                (when (str/includes? source "^{:probe find-event}")
+                  (is (str/includes? after "^{:probe find-event}"))))))))))
+(deftest unsupported-binding-scopes-refuse-without-changing-authority
+  ;; @spec MCP-OP-ALIAS-066
+  (doseq [body ["(if-let [find-event nil] (find-event) (find-event))"
+                "(if-some [find-event nil] (find-event) (find-event))"
+                "(as-> (find-event) find-event find-event)"
+                "(for [x [1] :let [find-event (fn [] :local)]] (find-event))"
+                "((fn ([find-event] (find-event)) ([] (find-event))))"
+                "(letfn [(local [find-event] (find-event)) (other [] (find-event))] (other))"]]
+    (let [source (str "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) " body "])")
+          plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
+      (is (= false (:ok plan)) body)
+      (is (= "unsupported-binding-scope" (:reason plan)) body)
+      (is (= true (:source_unchanged plan)))
+      (is (empty? (:files plan)))
+      (is (nil? (:next_call plan))))))
+(deftest qualified-destructuring-defaults-refuse-without-false-success
+  ;; @spec MCP-OP-ALIAS-066
+  (let [source "(ns shadow.client (:require [shadow.old :as old]))\n(defn result [] [(old/find-event) (let [{:keys [x] :or {x (old/find-event)}} {}] x)])\n(result)"
+        plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
+    (is (= [:selected :selected] (binding-scope-behavior source false)))
+    (is (= false (:ok plan)))
+    (is (= "unsupported-binding-scope" (:reason plan)))
+    (is (nil? (:next_call plan)))
+    (is (empty? (:files plan)))))
+(deftest metadata-named-recursive-function-refuses-without-rebinding
+  ;; @spec MCP-OP-ALIAS-066
+  (let [source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) ((fn ^:private find-event [n] (if (zero? n) :local (find-event (dec n)))) 1)])\n(result)"
+        plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
+    (is (= [:selected :local] (binding-scope-behavior source false)))
+    (is (= false (:ok plan)))
+    (is (= "unsupported-binding-scope" (:reason plan)))
+    (is (nil? (:next_call plan)))
+    (is (empty? (:files plan)))))
+(deftest exact-independent-binding-boundary-witnesses
+  ;; @spec MCP-OP-ALIAS-066
+  ;; Exact independent review originals; preserve unrelated calls in the witness.
+  (doseq [[id source expected] [["qualified-only-fn-default" "(ns shadow.client (:require [shadow.old :as old]))\n(defn result [] [(old/find-event) ((fn [{:keys [x] :or {x (old/find-event)}}] x) {})])\n(result)\n" [:selected :selected]] ["metadata-named-recursive-fn" "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) ((fn ^:private find-event [n] (if (zero? n) :local (find-event (dec n)))) 1) (other-event)])\n(result)\n" [:selected :local :other]]]]
+    (testing id
+      (let [plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
+        (is (= expected (binding-scope-behavior source false)))
+        (is (= false (:ok plan)))
+        (is (= "unsupported-binding-scope" (:reason plan)))
+        (is (= true (:source_unchanged plan)))
+        (is (= false (:mutation_attempted plan)))
+        (is (nil? (:next_call plan)))
+        (is (empty? (:files plan)))))))
+(deftest metadata-parameter-vector-preserves-local-authority-or-refuses
+  (let [source "(ns shadow.client (:require [shadow.old :refer [find-event other-event]]))\n(defn result [] [(find-event) ((fn ^:private [find-event] (find-event)) (fn [] :local)) (other-event)])\n(result)\n"
+        plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
+    (is (= [:selected :local :other] (binding-scope-behavior source false)))
+    (is (= false (:ok plan)))
+    (is (= "unsupported-binding-scope" (:reason plan)))
+    (is (empty? (:files plan)))
+    (is (nil? (:next_call plan)))))
+(deftest lib-only-default-refusal-keeps-no-executable-remedy
+  (let [source "(ns shadow.client)\n(defn result [] (let [{:keys [x] :or {x (shadow.old/find-event)}} {}] x))\n(result)"
+        req (-> binding-scope-request (assoc-in [:from :var] nil) (assoc-in [:to :var] nil))
+        plan (alias-migration/plan req [{:file "src/shadow/client.clj" :source source}])]
+    (is (= :selected (binding-scope-behavior source false)))
+    (is (= "unsupported-binding-scope" (:reason plan)))
+    (is (= false (:ok plan)))
+    (is (= true (:source_unchanged plan)))
+    (is (empty? (:files plan)))
+    (is (nil? (:next_call plan)))
+    (is (not (str/includes? (:remedy plan "") "exclude")))))
+(deftest lib-only-default-bystander-is-not-migration-authority
+  (let [req (-> binding-scope-request (assoc-in [:from :var] nil) (assoc-in [:to :var] nil))
+        client "(ns shadow.client (:require [shadow.old :as old]))\n(defn result [] (old/find-event))"
+        bystander "(ns shadow.bystander)\n(defn result [] (let [{:keys [x] :or {x :untouched}} {}] x))\n(result)"
+        plan (alias-migration/plan req [{:file "src/shadow/client.clj" :source client}
+                                        {:file "src/shadow/bystander.clj" :source bystander}])]
+    (is (= :untouched (binding-scope-behavior bystander false)))
+    (is (= true (:ok plan)))
+    (is (= ["src/shadow/client.clj"] (mapv :file (:files plan))))))
