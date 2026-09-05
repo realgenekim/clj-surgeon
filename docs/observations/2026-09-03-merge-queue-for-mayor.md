@@ -52,3 +52,10 @@ This is distinct from repaired mixed-refer options. No live write / no productio
 01d9f0af; the benchmark source stays frozen. NOT merged; NOT reviewed yet. The stable build installed on 7906/8171 (MCP/main dd8f9588)
 CARRIES this defect and the mixed-refer one: alias_migration's guarantee is NOT general until both repairs land under executed review. Landing
 plan unchanged: his branch tip on his green full gate → ~/bin/land with gates on the merged tree.
+
+## KNOWN DEFECT ON THE TRUNK (01:13Z, Astra, current 8171 = MCP/main): extract's `file-path->ns-name` strips the FIRST `/src/` in an ABSOLUTE path
+Astra, condensed: `plan!` passes an absolute path to extract/file-path->ns-name; the helper strips the first "/src/", so a parent directory named src
+(/home/forge/src/…) wins over the project's src and the derived namespace is wrong on any repo that lives under ~/src (this whole box). Finding at
+/var/tmp/forge/astra-program/application-candidate/CURRENT8171-NAMESPACE-FINDING.md. Not a simplistic last-index replacement (source paths may
+contain nested /src/); the fix is to derive the namespace from the WORKSPACE-relative path (classpath root), with a witness for a repo under a
+parent named src. Lane when capacity allows; the 7906/8171 stable build carries it.
