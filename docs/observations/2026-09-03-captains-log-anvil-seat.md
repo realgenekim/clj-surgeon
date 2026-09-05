@@ -2417,3 +2417,5 @@ preconfigured fresh-process behavioural profile, mandated public verb, high-effo
 CPUs 12–13; establishes nothing about optional adoption or warm sessions. This is the first vs-native gain
 on this program's fair apparatus with startup charged, attested subjects, and a preregistered hurdle. Not
 landed (his branch; gates + review owed; mayor queue note added).
+
+## 23:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 23:48Z load 0.82 ; === rc 0 end 23:53Z)
