@@ -2360,3 +2360,5 @@ Groq typist into his preregistered arms (correct: it would change the registered
 Typist cohort 1 published on MCP/main: docs/observations/2026-09-05-fast-typist-cohort-1.md — F median
 2.37 s vs N 12.41 s, 25/30 verified, 0 semantic mismatches; one-site control running (Opus agent) before
 any KEEP.
+
+## 22:07Z — one-site control FIRED (F 0.97 s vs N 16.27 s): NOT KEEP; N arm is a cold codex exec per run; cohort 2 = warm author + k=1 vs k=5 (predictions in the cohort doc); asked Astra for the fair warm-N design; F k=1 rounds launched now (runner 332084cd).
