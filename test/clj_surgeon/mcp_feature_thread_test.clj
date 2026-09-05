@@ -1,4 +1,4 @@
-(ns ^{:lane :fast} clj-surgeon.mcp-feature-thread-test
+(ns ^{:lane :integration} clj-surgeon.mcp-feature-thread-test
   "Witnesses for the `feature_thread` verb.
 
   The NAMED TEST CASE is Gene's own request: social-media-writer,

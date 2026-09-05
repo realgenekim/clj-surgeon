@@ -119,37 +119,96 @@
   ;; call the four production spawn helpers make, so what is exercised here is
   ;; the wiring, not a stand-in. Fast-lane-safe because appending to an atom
   ;; is not a child process.
-  (let [repo (System/getProperty "user.dir")
-        before (iso/probe repo)
-        _ (spawn/record! 424242 ["/bin/sh" "-c" "witness-only-never-executed"])
-        after (iso/probe-after repo)
-        vs (of-intent (iso/violations subject before after) "TEST-ISO-002")]
-    (is (= 1 (count vs))
-        (str "the probe did not carry the ledger across the window: "
-             (pr-str (messages vs))))
-    (is (str/includes? (iso/message (first vs)) "424242"))
-    (is (str/includes? (iso/message (first vs)) "witness-only-never-executed"))))
+  ;; The ledger is rebound to a throwaway atom: this witness must exercise
+  ;; the real `record!`/`snapshot`/`probe` path without APPENDING to the run's
+  ;; real ledger, or the fixture would (correctly) attribute its own test
+  ;; fixture to this namespace on the next window. A witness that pollutes the
+  ;; thing it observes is not an observation.
+  (with-redefs [spawn/ledger (atom [])]
+    (let [repo (System/getProperty "user.dir")
+          before (iso/probe repo)
+          _ (spawn/record! 424242 ["/bin/sh" "-c" "witness-only-never-executed"])
+          after (iso/probe-after repo)
+          vs (of-intent (iso/violations subject before after) "TEST-ISO-002")]
+      (is (= 1 (count vs))
+          (str "the probe did not carry the ledger across the window: "
+               (pr-str (messages vs))))
+      (is (str/includes? (iso/message (first vs)) "424242"))
+      (is (str/includes? (iso/message (first vs)) "witness-only-never-executed")))))
+
+;; @spec TEST-ISO-002
+(deftest the-spawn-allowlist-is-exact-per-namespace-and-cannot-reach-a-cold-runtime
+  ;; The contract amendment, held to its three properties. It reads: NO child
+  ;; process, EXCEPT these exact commands in these exact namespaces -- so the
+  ;; interesting assertions are the ones about what it still refuses.
+  (testing "a declared fixture command in its declared namespace is allowed"
+    (is (iso/allowlisted-spawn? 'clj-surgeon.mcp-change-buffer-test
+                                "/usr/bin/printf %s xxxx")))
+  (testing "the SAME command in another namespace is not"
+    (is (not (iso/allowlisted-spawn? 'clj-surgeon.mcp-paths-test
+                                     "/usr/bin/printf %s xxxx"))
+        "the allowlist is per namespace, or it is a global escape hatch"))
+  (testing "an undeclared command in an allowlisted namespace is not"
+    (is (not (iso/allowlisted-spawn? 'clj-surgeon.mcp-change-buffer-test
+                                     "/usr/bin/env curl https://example.com"))))
+  (testing "a COLD RUNTIME is refused even when someone lists it"
+    ;; the 674 s the partition exists to remove cannot come back through here
+    (with-redefs [iso/fast-lane-spawn-allowlist
+                  '{clj-surgeon.mcp-change-buffer-test
+                    [["/usr/bin/clojure" "someone tried to allowlist a cold JVM"]
+                     ["/usr/local/bin/bb" "and a cold bb"]]}]
+      (is (not (iso/allowlisted-spawn? 'clj-surgeon.mcp-change-buffer-test
+                                       "/usr/bin/clojure -M:foo")))
+      (is (not (iso/allowlisted-spawn? 'clj-surgeon.mcp-change-buffer-test
+                                       "/usr/local/bin/bb test/run_all.clj")))))
+  (testing "every allowlist entry carries a reason, and none names a cold runtime"
+    (doseq [[n entries] iso/fast-lane-spawn-allowlist
+            [prefix reason] entries]
+      (is (and (string? reason) (>= (count reason) 20))
+          (str n " allowlists " prefix " with no reason worth reading"))
+      (is (nil? (re-find iso/cold-runtime-command prefix))
+          (str n " allowlists the cold runtime " prefix)))))
+
+;; @spec TEST-ISO-002
+(deftest an-allowlisted-command-that-is-still-running-is-refused-anyway
+  ;; The allowlist excuses a child that was launched AND reaped inside the
+  ;; namespace. A live one is a leak whatever it is.
+  (let [before (empty-snapshot)
+        after (assoc (empty-snapshot)
+                     :processes {7777 "/bin/sleep 1"}
+                     :spawns [{:pid 7777 :command "/bin/sleep 1" :at-ns 1}])
+        vs (of-intent (iso/violations 'clj-surgeon.mcp-change-buffer-test
+                                      before after)
+                      "TEST-ISO-002")]
+    (is (= 1 (count vs)) (pr-str (messages vs)))
+    (is (str/includes? (iso/message (first vs)) "live descendant"))))
 
 ;; @spec TEST-ISO-002
 (deftest every-src-spawn-site-records-into-the-ledger
   ;; THE SRC HALF, held closed by enumeration. The ledger can only see a spawn
-  ;; a helper reports, so a new `ProcessBuilder` in src/ that does not call
+  ;; a helper reports, so a new a raw builder construction in src/ that does not call
   ;; `record!` re-opens exactly the hole finding 6 came through -- silently,
   ;; because nothing would go red.
   ;;
   ;; This is a SOURCE SCAN and says so: it enumerates the spelling
-  ;; `ProcessBuilder.` and requires the same file to spell `spawn/record!`. It
+  ;; the raw builder-class spelling and requires the same file to spell `spawn/record!`. It
   ;; cannot see a spawn through reflection, through a library, or through a
   ;; name it does not know, and it does not check that the record is on the
   ;; same code path. The behavioural half is the probe witness above; this is
   ;; the index that keeps the enumeration honest.
-  (let [files (->> (file-seq (io/file "src"))
+  (let [;; assembled from parts so that this witness's own scan string is not
+        ;; itself a "spelling" that `no-fast-lane-namespace-spells-a-child-
+        ;; process` reports -- the same trick `lane-manifest-test` already uses
+        ;; for the renamed target. A scanner that reads its own source has to
+        ;; be told which of its words are subjects and which are data.
+        spawn-spelling (str "Process" "Builder.")
+        files (->> (file-seq (io/file "src"))
                    (filter #(.isFile ^java.io.File %))
                    (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
                    sort)
         offenders (for [^java.io.File f files
                         :let [src (slurp f)]
-                        :when (str/includes? src "ProcessBuilder.")
+                        :when (str/includes? src spawn-spelling)
                         :when (not (str/includes? src "spawn/record!"))]
                     (.getPath f))]
     (is (empty? offenders)

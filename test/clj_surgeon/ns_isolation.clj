@@ -87,8 +87,17 @@
 (def namespace-budget-overrides
   "@spec TEST-ISO-007 -- namespaces whose ceiling is not the default, each with
    the reason. An override is a DECLARED cost, reviewable at the pin, never a
-   silent raise of the default for everybody."
-  '{})
+   silent raise of the default for everybody. namespace -> ceiling in ms."
+  '{;; MEASURED 47.3 s at round five's merge of MCP/main (load ~1, cores 6-9).
+    ;; Sixty-nine deftests over the `feature_thread` verb, most of them
+    ;; building a real multi-file workspace and threading it: the cost is
+    ;; fixture construction, not a cold runtime. It is :integration rather
+    ;; than :fast for exactly that reason -- at 47 s it alone would have blown
+    ;; the fast lane's 60 s whole-lane ceiling, and it did: the lane ran
+    ;; 69 428 ms with it in. The ceiling here is ~2x the measurement, so
+    ;; contention on a shared box does not manufacture a refusal while a
+    ;; namespace that has genuinely doubled still says so.
+    clj-surgeon.mcp-feature-thread-test 90000})
 
 (def mutable-global-allowlist
   "@spec TEST-ISO-005 -- vars whose deref'd value is EXPECTED to differ across
@@ -115,7 +124,75 @@
      ;; the cclsp config lock registry: an interning table of per-path lock
      ;; objects. It only ever GROWS, by design -- two callers naming the same
      ;; path must get the same lock, which is what an interning table is for.
-     clj-surgeon.workspace-onboarding/cclsp-config-locks})
+     clj-surgeon.workspace-onboarding/cclsp-config-locks
+
+     ;; the spawn ledger (TEST-ISO-002). Append-only within a run BY DESIGN --
+     ;; recording a launch IS the mechanism, exactly like `allocated-ports`
+     ;; above, so any namespace that spawns necessarily moves it. Note the
+     ;; shape of this entry: it allows the VALUE inside the atom to move; a
+     ;; `with-redefs` that swapped the var's root would still be refused by
+     ;; `root-identity-violations`, which never reads this map.
+     clj-surgeon.spawn-ledger/ledger})
+
+(def cold-runtime-command
+  "@spec TEST-ISO-002 -- commands that are NEVER allowlistable in the fast or
+   integration lanes, whatever any allowlist says. These are the 674 s round
+   one measured: a cold JVM, a cold `bb`, a CLI of ours, the linter, `git`.
+   The rule they carry is the partition's whole reason to exist, so the
+   allowlist below is written so that it CANNOT reach them."
+  #"(?:^|/)(?:java|clojure|clj|bb|babashka|clj-kondo|git|node|npm|python3?|make)(?:\s|$)")
+
+(def fast-lane-spawn-allowlist
+  "@spec TEST-ISO-002 -- the ONLY child processes a merge-gate namespace may
+   start: namespace -> [[exact command prefix, reason] ...].
+
+   WHY THIS EXISTS, and why it is not a loosening. The round-three landing
+   review's finding 6 asked for one of two things: reclassify the offending
+   namespace, or `change the lane contract so declared isolation matches
+   execution`. Round five's spawn ledger then found that the problem was
+   larger than the one namespace the review read -- five more spawns across
+   two more `:fast` namespaces, none of them visible to any earlier control.
+
+   Two of the discovered drives were reclassified, because they belong to
+   subsystems that have a battery home: the cold-verification job
+   (`mcp-inspect-cold-job-test`) and the `sed` oracle
+   (`mcp-feature-thread-sed-test`). The rest are different in kind: the
+   command IS the subject. `run-exact-verification!` is a runner of
+   user-supplied verify commands, and a test of it that never runs one is a
+   test of a mock. Those cannot be moved without moving the boundary they
+   prove off the merge gate -- which is precisely the coverage loss the review
+   objected to.
+
+   So the contract becomes precise instead of loose. It reads: NO child
+   process, except these exact commands, in these exact namespaces, for these
+   reasons -- and anything else is refused by pid and command line. Three
+   properties keep it a ratchet rather than an escape hatch:
+
+     1. `cold-runtime-command` can never be allowlisted. A JVM, `bb`,
+        `clj-kondo` or `git` is refused even if someone lists it here, so the
+        674 s this partition exists to remove cannot come back through this
+        door.
+     2. It is a PREFIX match on the command line, per namespace. A new command
+        in an allowlisted namespace still fails by name.
+     3. A LIVE child is refused regardless -- this map only ever excuses a
+        child that was launched and reaped inside the same namespace."
+  '{clj-surgeon.mcp-change-buffer-test
+    [["/usr/bin/printf" "the verify-command runner's own boundary: a passing profile whose output exceeds the visible byte limit, proving truncation and the sha256 of the full stream"]
+     ["/usr/bin/false" "the ordinary-nonzero outcome of the same runner"]
+     ["/bin/sleep" "the timeout outcome of the same runner, at :timeout-ms 1"]]
+
+    clj-surgeon.mcp-compact-relations-test
+    [["/usr/bin/true" "the project-owned exact-verify profile actually running, so `verify exact` is proved end to end rather than mocked"]
+     ["/usr/bin/false" "the same profile failing, so a refusal is proved by the same path"]]})
+
+(defn allowlisted-spawn?
+  "@spec TEST-ISO-002 -- true when `command` is a declared fixture command for
+   `ns-sym`. A cold runtime is never allowlisted, whatever the map says."
+  [ns-sym command]
+  (let [cmd (str command)]
+    (and (not (re-find cold-runtime-command cmd))
+         (boolean (some (fn [[prefix _reason]] (str/starts-with? cmd prefix))
+                        (get fast-lane-spawn-allowlist ns-sym))))))
 
 (def enforced-intents-by-lane
   "WHICH of the six intents each lane is HELD TO, and why the answer differs.
@@ -445,7 +522,9 @@
   (let [new-pids (set/difference (set (keys (:processes after)))
                                  (set (keys (:processes before))))
         recorded (spawn/recorded-between (:spawns before) (:spawns after))
-        exited (remove (comp new-pids :pid) recorded)]
+        exited (->> recorded
+                    (remove (comp new-pids :pid))
+                    (remove #(allowlisted-spawn? ns-sym (:command %))))]
     (into
      (mapv (fn [pid]
              (violation "TEST-ISO-002" ns-sym "process spawn"
