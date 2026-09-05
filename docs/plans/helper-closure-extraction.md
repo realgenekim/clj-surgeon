@@ -13,7 +13,9 @@ preflight in `/var/tmp/forge/astra-program/application-extraction-preflight/`.
 The real application (move six public response helpers out of
 `cfp-scheduler-killer.web.http` into a new `web.response` namespace) is already
 possible through `apply_clojure_changes` with an `extraction` request. The write is
-cheap: one public call, 9.3 s, 30 files, 292 edits, committed and verified. The
+cheap: one public call, 9.3 s, 30 files, 292 edits, committed; its behavioral acceptance
+(24 helper cases, five real negatives) was an INDEPENDENT check that followed the write, not an
+in-transaction verification receipt. The
 PREPARATION is not: a 37,300-byte request encoding 85 caller changes across 28 caller
 files, derived from 22 retained MCP reads (9.0 s of call wall inside an hour-long
 envelope) plus a caller-side generator that reproduces hashes, counts, owners and a
@@ -52,9 +54,15 @@ The server derives, in this order, and refuses at the first step it cannot close
    a selected helper that calls a NON-selected private var of the source is
    `helper-extraction-private-dependency` (the decision is the caller's: select it
    too, or refuse);
-3. every caller namespace under `scope.paths` that requires `from.file`'s namespace
-   and uses at least one selected helper, under every spelling the file binds
-   (alias, `:refer`, fully qualified); an unsupported libspec grammar (prefix list,
+3. every caller namespace under `scope.paths` that uses at least one selected helper
+   under every spelling: alias, `:refer`, and FULLY QUALIFIED `ns/helper` whether or not
+   the file requires the source namespace (a fully qualified use without a require is a
+   site and gets the destination's fully qualified name);
+3b. SOURCE-LOCAL uses: a retained function in `from.file` that calls a selected helper
+   becomes a caller of the destination (the source namespace gains one require of
+   `to.lib`); a selected helper that calls a retained PUBLIC var of the source makes the
+   destination require the source, and if both directions occur the request is refused
+   `helper-extraction-cyclic-dependency`; private dependencies follow step 2; an unsupported libspec grammar (prefix list,
    `:refer :all`, reader-conditional require, `:rename`) is
    `helper-extraction-unsupported-binding`;
 4. the caller PARTITION: `moved-only` callers (every use of the old namespace is a
@@ -99,12 +107,13 @@ selectors or facts the server already knows. Draft table:
 |---|---|---|
 | `helper-extraction-ambiguous-owner` | a helper name resolves to two owners or to `declare`+`defn` | the same request with `helpers[i]` replaced by a positional owner reference |
 | `helper-extraction-private-dependency` | a selected helper calls a non-selected private var | the same request with that var added to `helpers` |
-| `helper-extraction-unsupported-binding` | a caller reaches the helper through grammar the tool cannot close | the same request with that file in `scope.exclude`, and the file named |
-| `helper-extraction-ambiguous-reference` | a bare symbol could resolve to two required namespaces | the same request with `scope.paths` narrowed |
+| `helper-extraction-unsupported-binding` | a caller reaches the helper through grammar the tool cannot close | NONE. The refusal names the file and form; the caller must make that caller supportable (by hand) and resend the same request. Excluding the caller is not offered: retiring the definitions with an unrewritten caller left behind is the failure this verb exists to prevent |
+| `helper-extraction-ambiguous-reference` | a bare symbol could resolve to two required namespaces | NONE. The refusal names the site; narrowing `scope.paths` is not offered, because a narrower scope silently leaves callers unrewritten |
 | `helper-extraction-alias-policy-exhausted` | every alias collides in one file | the same request with one more `alias_policy` entry |
-| `helper-extraction-expect-mismatch` | derived caller-file count differs from `expect.caller_files` | the same request with the derived count |
+| `helper-extraction-expect-mismatch` | derived caller-file count differs from `expect.caller_files` | the same request with the derived count, presented as a PROPOSAL the caller confirms by resending; the receipt records `expect_revised: true` with both numbers. The server never proceeds on its own count |
+| `helper-extraction-cyclic-dependency` | moving the selection would make source and destination require each other | NONE. The refusal names the two vars; the caller changes the selection |
 | `helper-extraction-target-exists` | `to.lib` already defined or its path occupied | the same request with a different `to.lib` |
-| `helper-extraction-verification-pending` | the profile could not run (provider absent, budget) | the same request with `verification.profile` set to a runnable one; the write is NOT committed |
+| `helper-extraction-verification-pending` | the named profile could not run (provider absent, budget) | NONE. Nothing is committed; the refusal names what the profile needed. A weaker profile is never suggested |
 
 Every refusal is typed in the op itself (ratchet rung 5): the bad state is
 unrepresentable, not detected afterwards.
@@ -155,7 +164,15 @@ unrepresentable, not detected afterwards.
 - HELPER-012 The receipt's `closure` field shall state the roots and the grammar over
   which closure is exact, and shall state that dynamic references are not claimed.
 - HELPER-013 If the derived caller-file count differs from `expect.caller_files`, the
-  server shall refuse `expect-mismatch` with the derived count in `next_call`.
+  server shall refuse `expect-mismatch` with the derived count in `next_call` as a
+  proposal, and shall never proceed on its own count.
+- HELPER-014 Fully qualified uses of a selected helper, with or without a require of the
+  source namespace, shall be discovered and rewritten as sites.
+- HELPER-015 Source-local uses of a selected helper by retained functions shall be
+  rewritten to the destination with one added require; a dependency in both directions
+  shall refuse `cyclic-dependency` with nothing written.
+- HELPER-016 No refusal shall offer scope narrowing, caller exclusion, or a weaker
+  verification profile as a continuation.
 
 ## What it reuses, what is new
 
@@ -179,6 +196,17 @@ namespace, registration in `mcp-tool`.
    inclusively; report request-to-accepted-proof wall, never call wall.
 4. Falsifier: if a capable native batch script plus tests remains faster after equal
    setup, the verb is kept as a quality option and is not sold as a speed route.
+
+## Revision 2 (Astra's corrections, 04:40Z, all accepted)
+
+1. No escape hatches: `unsupported-binding` and `ambiguous-reference` carry no scope-narrowing
+   or exclusion continuation (HELPER-016).
+2. No silent weakening: `expect-mismatch` proposes, never proceeds; `verification-pending`
+   never suggests a weaker profile.
+3. Fully qualified references without a require, source-local uses, and dependencies in
+   both directions are accounted for or explicitly refused (HELPER-014/015, steps 3/3b).
+4. The prior application's proof is labelled accurately: independent acceptance followed the
+   write; it was not an in-transaction verification receipt.
 
 ## Phases (each artifact to Astra before the next starts)
 
