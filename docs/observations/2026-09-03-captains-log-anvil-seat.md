@@ -2202,3 +2202,23 @@ Twenty ideas: my ten posted to Astra (mission ledger; reads that cannot fail; sc
 ## 19:29Z — SOL CALLER PROBE 2 on the fixed mission build (c627e1d8), same task, fresh workspace, only bin/mission + help: **:verified in 2m20.8s with 11 returns** (probe 1: 24 returns, 6m11s, never verified). Receipt: 6 helpers, 31 caller files, 66 sites, 33 changed files, alias histogram {response 29, resp 1}, fresh-process proof; resume → undo → 33 files read back; recursive diff vs a separately materialized PRE: empty. Where the 141 s went: eight `help` calls at ≈5 s each (cold JVM) ≈ 40 s — routed to the builder (help via bb); the rest is plan/apply JVM starts and returns. This is the first measured before/after of a usability change on the same caller and task: returns 24 → 11, wall never → 2m21s. Report on trunk: docs/observations/2026-09-05-mission-ledger-sol-caller-probe-2.md. Also launched: the owed production change (:example + :field + :decision on the boundary's own request-shape refusals, example witnessed runnable) on bridge/helper-refusal-example.
 
 ## 19:32Z — MISSION LEDGER round 6 (920502d9): help routed through bb — 5 s → 0.04 s per call (≈125×); unknown verb exits 2 without a JVM; bb and JVM help text byte-identical (witnessed). 20 tests / 283 assertions / 0 failures. Mission ledger totals for the window: six rounds, 20 witnesses, measured verbs: show 0.09 s, ready 0.03 s, help 0.04 s (bb); open/plan ≈5.7 s, apply ≈6 s (cold JVM; in-process 0.1 s / 0.3 s); Sol as caller: 24 returns/never → 11 returns/2m21s.
+
+## 19:45Z — boundary :example refusals built; Sol fence review r1 running
+
+The Opus agent finished the production change from Sol's caller probe (seven guessing round trips on
+request shape): every closed-field refusal of helper_extraction now carries `:field`, `:decision`, and
+a runnable `:example` witnessed to PLAN OK on the fixture tree; schema allows the three fields as
+optional; manifest pin 48→51 with reason inline. Ran 582 tests, 7306 assertions, 0 failures (make
+mcp-test). Branch bridge/helper-refusal-example tip c5e8be8f, pushed. Sol fence review r1 started
+19:45:06Z (pid 1262105, verdict docs/observations/refexample-r1.md in the fence worktree).
+
+Two agent deviations accepted: the example's scope is [\"src/**\"] (the runnable requirement beat the
+brief's literal) and it omits workspace_root (the one field a literal could not tell the truth about;
+the witness binds it to the materialized root). Two findings: (a) make mcp-test PROBES port 7890 in its
+preamble (cclsp readiness), which conflicts with the seat's never-7890 rule — a probe, not a start, but
+it must be made skippable; filed below. (b) fence-run refused on two stray untracked SOL-REPORT files at
+the fence root left by the thread-parameter typist; cleanup widened to `git clean -qfd` on the whole
+scratch worktree (the fence worktree is scratch by definition), stray files parked under
+/var/tmp/forge/fence-stray.
+
+Landing path per the obviously-better ruling: Sol GO → Astra confirm → ~/bin/land.
