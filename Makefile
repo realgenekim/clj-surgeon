@@ -1123,6 +1123,12 @@ analyzer-contract-target-self-test:
 	@sh test/analyzer_contract_target_test.sh
 
 test:
+	@# @spec TEST-ISO-001
+	@# The default is the landing gate (Gene 2026-09-05: "Tests need to be faster. Integrate
+	@# the 2.5m changes immediately"). The full run, battery and bench tail included, is `test-full`.
+	$(MAKE) --no-print-directory landing-gate
+
+test-full:
 	$(MAKE) --no-print-directory check-clj-surgeon-skill-mirrors
 	$(MAKE) --no-print-directory repository-hygiene
 	$(MAKE) --no-print-directory test-bb
