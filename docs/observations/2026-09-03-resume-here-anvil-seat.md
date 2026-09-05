@@ -534,3 +534,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - Lesson: chain waiters bind to a PID, never argv text (memory waiters-bind-to-pid-not-argv).
 
 - 02:13Z: default `make test` is still the FULL run (battery + tail); fast lane = `make mcp-test`; landing list = `make landing-gate`. Do not tell Gene "faster by default" until bridge/test-default-fast lands (needs his ratification + green battery-fresh).
+
+- 02:45Z: 7906 PID 2164551 / 8171 PID 2164553 on trunk b8249bc5 (cores 6–9). Battery running (battery-clean-0243.log). Flip tip 971bc4a7 awaits Astra confirm → land. Then telemetry gates on the lane. Read docs/observations/2026-09-05-astra-next-api-advice.md (Astra's API direction).
