@@ -19,6 +19,6 @@ The service view records only four successful inspect calls (three forms, one ou
 
 This hour was implementation/verification work, not actor adoption evidence. C01 launched after this window. No new collector run, process tests, model calls or benchmark packet construction occurred for this note. The JSON companion pins the original collector and exact quality receipts.
 
-Counting receipt: `/var/tmp/forge/astra-helper-program/hour-3-agent-usage.json`. Supplement: `/var/tmp/forge/astra-helper-program/usage-evidence/hour-3-ethnography.json`.
+Counting receipt: `/var/tmp/forge/astra-helper-program/hour-3-agent-usage.json`. Supplement: `/var/tmp/forge/astra-helper-program/usage-evidence/hour-3-public-supplement.json`.
 
 <!-- agent-usage-window-end: 2026-09-05T07:55:58Z -->
