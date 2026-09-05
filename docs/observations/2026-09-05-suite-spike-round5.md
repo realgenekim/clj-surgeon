@@ -108,6 +108,77 @@ scale.
 enumerating the `ProcessBuilder.` spelling, and its own comment says it is a
 spelling check, not a proof.
 
+## What the ledger found that the review did not
+
+The first live run of the ledger refused **six** spawns, not one. Verbatim from
+`make test-fast`:
+
+```
+TEST-ISO-002 VIOLATION in clj-surgeon.mcp-change-buffer-test -- process spawn:
+pid 3536417 was launched by this namespace through a repository spawn helper
+and has already exited, so no live-descendant snapshot can see it:
+/usr/bin/printf %s xxxx…
+   … /usr/bin/false
+   … /bin/sleep 1
+TEST-ISO-002 VIOLATION in clj-surgeon.mcp-compact-relations-test …
+   /usr/bin/true … /usr/bin/true … /usr/bin/false
+TEST-ISO-007 VIOLATION in clj-surgeon.mcp-feature-thread-test -- time budget:
+ran for 47333 ms, over its 8000 ms budget
+TEST-ISO-007 VIOLATION in :fast -- lane time budget: the fast lane took
+69428 ms, over its 60000 ms budget
+```
+
+`make mcp-test` then found five more in the integration lane
+(`mcp-http-server-test`, `mcp-tool-test`). **The review read one file and found
+one; the ledger reads execution and found eleven.** That is the argument for
+records-of-execution over source scans and state snapshots, made by the
+apparatus rather than asserted.
+
+**The remedy is chosen by what the command IS**, and both of the review's two
+options are used:
+
+- Two drives belong to subsystems with a battery home, so they were
+  reclassified: the cold-verification job and the `sed` oracle.
+- The rest are cases where the command is the **subject**.
+  `run-exact-verification!` is a runner of user-supplied verify commands, and a
+  test of it that never runs one is a test of a mock. Moving those moves the
+  boundary they prove off the merge gate — the exact coverage loss the review
+  objected to.
+
+So the contract was made **precise rather than loosened**. `:fast` now reads:
+no child process, *except these exact commands, in these exact namespaces, for
+these reasons* (`ns-isolation/fast-lane-spawn-allowlist`). Three properties keep
+it a ratchet rather than an escape hatch, each with a witness:
+
+1. `cold-runtime-command` — `java|clojure|clj|bb|babashka|clj-kondo|git|node|npm|python|make` — **can never be allowlisted**, so the 674 s the partition removes cannot return through this door. One witness plants a cold JVM *in* the allowlist and asserts it is still refused.
+2. Matching is **per namespace, on a command prefix**: the same command in another namespace fails, and a new command in an allowlisted namespace fails by name.
+3. A **live** child is refused regardless — the allowlist only ever excuses a child launched and reaped inside the same namespace.
+
+`mcp-feature-thread-test` moved `:fast` → `:integration` with a declared 90 s
+ceiling and the measurement at the pin (47.3 s; it alone blew the fast lane's
+60 s whole-lane budget). It stays on `make mcp-test`: **no gate coverage lost.**
+
+### A real defect in round four's own witness
+
+TEST-ISO-010 attributed `clojure-agent-send-off-pool-N` — Clojure's global
+cached pool behind `send-off`/`future`, non-daemon by design with a 60 s
+keep-alive — to whichever namespace was running when it grew. Measured on this
+branch: the same thread was blamed on `workspace-onboarding-test` on one run,
+on `mcp-tool-test` on the next, and on nobody on a third. **A witness whose
+verdict moves with the weather is not a ratchet; it is a thing people re-run
+until it is green**, and that habit costs more than the check is worth. The pool
+is exempted by name with the reason; a namespace's *own* non-daemon thread is
+still refused by id and name, which the new witness asserts as its second half.
+
+### Three self-inflicted defects, all one class
+
+A scanner that reads its own text as its subject. The sleep census matched its
+own regex literal and a docstring *citing* the fixed sleep it replaced; the src
+spawn scan matched the scan string in the witness performing it; the probe
+witness appended its own fixture to the real ledger, which the fixture then
+correctly reported against it. **Prose about a defect is not the defect, and an
+observer that pollutes what it observes is not an observation.**
+
 ## Finding 3 (BLOCKING) — confirmed closed, with a class-level pin
 
 Round four's tmpdir fix holds. A scan of all 40 `:fast` namespaces finds only
@@ -152,3 +223,75 @@ Pins re-derived on the merged result: **57 namespaces (40 fast, 4 integration,
 deletion does not, and only one of them passes that equality. Disk/manifest/ns
 metadata cross-check on the merged tree: on-disk 108, unaccounted 0, phantom 0,
 metadata mismatches 0.
+
+## Gates run
+
+All in the shared verification period from 00:27Z, one at a time, each as
+`taskset -c 6-9 ~/bin/suite-run <cmd>` (the peer lead's suite held cores 2–5).
+No timing claim is made from any of them.
+
+| gate | start | 1-min load | result |
+|---|---|---|---|
+| `make test-fast` | 00:33Z | 7.83 | **RC=0** — Ran 406 tests / 3811 assertions, 0 failures, 0 errors; `test-isolation: 0 violations across 39 namespace(s)` |
+| `make mcp-test` | 00:39Z | 4.14 | **RC=0** — Ran 547 tests / 6847 assertions, 0 failures, 0 errors; oracle `pass`; `test-isolation: 0 violations across 44 namespace(s)` |
+| `make test-bb` | 00:42Z | 4.95 | **RC=0** — Ran 840 tests / 6921 assertions, 0 failures, 0 errors |
+| `make repository-hygiene` | 00:45Z | 2.85 | **RC=0** — `no machine-local build cache is tracked at any depth` |
+| intent audit | 00:45Z | 2.78 | **RC=0** — `{:ok true, … :violations []}` |
+| `make test-battery` | 00:45Z | ~5 | **RC≠0 — 3 failures.** See below. |
+| `make suite-concurrency-battery N=4` | — | — | **not run**, on the coordinator's instruction: four clones would spill past this lane. |
+
+`git merge-tree --write-tree HEAD a74d8407` → `dc895292…`, exit 0, no conflict.
+
+## The battery FAILED, and the landing gate refuses — which is the tripwire working
+
+```
+Ran 512 tests containing 11008 assertions.
+3 failures, 0 errors.
+TEST-ISO-007 VIOLATION in clj-surgeon.reader-eval-fence-test -- time budget:
+ran for 466850 ms, over its 300000 ms budget
+```
+
+Receipt appended, verbatim:
+
+```clojure
+{:sha "c79227d0…", :started "2026-09-05T00:45:49Z", :wall_s 710, :verdict :fail, :host "anvil-server"}
+```
+
+and `make battery-fresh` therefore says:
+
+```
+battery-fresh: REFUSED (last-run-failed) -- the newest battery receipt FAILED:
+sha c79227d0…, wall 710s, verdict :fail. A failing gate is not a fresh gate.
+```
+
+**So `make landing-gate` refuses this tip, correctly, and that refusal is left
+standing.** The ledger is append-only and records the failure; nothing here
+re-runs until green.
+
+All three failures are in one trunk-owned test,
+`mcp-relation-census-test/pool-size-one-and-pool-size-n-agree-byte-for-byte`,
+and the first has a **proven environmental cause — this round's own core
+pinning**:
+
+```
+expected: (= 8 (:pool_size parallel))
+  actual: (not (= 8 4))
+```
+
+`relation-census/effective-pool-size` is
+`(max 1 (min requested (.availableProcessors (Runtime/getRuntime))))`, and
+`taskset -c 6-9 nproc` → **4** against `nproc` → **16**. A request for 8 is
+clamped to 4, and the test asserts the request comes back unchanged. The two
+byte-parity assertions compare a pool-1 census with that pool-4 census, and the
+budget overrun on `reader-eval-fence-test` (466 s against 300 s) is the same
+four-core constraint on a lane whose ceiling was measured on sixteen.
+
+**This is the `ambient-state-is-an-invisible-precondition` class**: a gate whose
+verdict depends on a property of the machine that nothing in the gate declares.
+Not asserted as harmless — a same-pinning reproduction on the trunk tip
+(`a74d8407`, git-archive copy) was launched to attribute it, and none of the
+failures is in code this round touched.
+
+**GATE OWED: a clean `make test-battery`, in a window without four-core
+pinning.** Until it produces a `:pass` receipt, `make landing-gate` refuses, and
+that is the correct state for this tip.
