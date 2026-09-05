@@ -28,6 +28,10 @@
 set -uo pipefail
 
 die() { echo "OPUS-ARM REFUSED: $*" >&2; exit 2; }
+mono() { cut -d' ' -f1 /proc/uptime; }
+
+# Astra's adapter-result timing fields begin at the ADAPTER's start, not the driver's.
+adapter_start=$(mono); adapter_load_start=$(cat /proc/loadavg)
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -44,6 +48,10 @@ PROJECTS_ROOT=${CLAUDE_PROJECTS_ROOT:-$HOME/.claude/projects}
 CALLER=${OPUS_CALLER_BIN:-claude}
 MODEL=${OPUS_MODEL:-claude-opus-5}
 MAX_WALL=${OPUS_MAX_WALL:-900}
+# SAME-CORES DOCTRINE, inherited from Astra's cohort: the caller, its MCP server and
+# any profile check all run pinned to the same two cores he pins.
+CPUS=${OPUS_CPUS:-12,13}
+TASKSET=${OPUS_TASKSET:-/usr/bin/taskset}
 
 CELL=${1:-}; REP=${2:-}
 [ -n "$CELL" ] && [ -n "$REP" ] || { echo "usage: run-opus-arm.sh <N|T|O> <rep>" >&2; exit 64; }
@@ -52,10 +60,14 @@ case "$CELL" in N|T|O) ;; *) die "unknown cell '$CELL' (want N, T or O)";; esac
 
 # ---- the run gate: nothing launches, and nothing is contacted, without allocation --
 [ "${RUNTIME_ALLOWED:-0}" = 1 ] || die "RUNTIME_ALLOWED is not 1 — this harness is preparation-only until runtime is allocated"
-Q=/var/tmp/forge/quiet-window.md
-if [ -f "$Q" ] && ! grep -q "owner=${SLOT_OWNER:-fable}" "$Q"; then
-  die "quiet window held by another agent: $(head -1 "$Q")"
-fi
+# THE QUIET WINDOW IS OWNED, NOT MERELY ABSENT.  Astra's arms run under an owned
+# window on pinned cores; an arm that runs while a peer's JVM suite drains is a
+# contaminated observation.  calibrate.sh opens one window per arm with `set -o
+# noclobber` and removes it afterwards; a hand-run arm must do the same.
+Q=${OPUS_QUIET_WINDOW:-/var/tmp/forge/quiet-window.md}
+OWNER=${SLOT_OWNER:-fable}
+[ -f "$Q" ] || die "no quiet window at $Q — an arm runs inside an OWNED window (calibrate.sh opens one per arm)"
+grep -q "owner=$OWNER" "$Q" || die "quiet window is held by another agent: $(head -1 "$Q")"
 
 ID="opus-$CELL-$REP"
 A="$ARMS_ROOT/$ID"
@@ -88,6 +100,21 @@ else
 fi
 [ -f "$BASE_PROMPT" ] || die "frozen prompt missing: $BASE_PROMPT"
 
+# A tool/optional arm carries SERVER READY EVIDENCE, and it is validated by Astra's own
+# adapter predicate (astra_policy.py imports his adapter.py after checking its sha and
+# calls validate_ready + pid_listens directly).  The parent owns start/stop; the arm
+# owns attestation -- exactly his contract.
+READY=${OPUS_READY:-}
+SERVER_SHA=${OPUS_SERVER_SHA:-}
+if [ "$CELL" != N ]; then
+  [ -n "$READY" ] && [ -f "$READY" ] || die "cell $CELL requires OPUS_READY (the parent's server ready JSON)"
+  [ -n "$SERVER_SHA" ] || die "cell $CELL requires OPUS_SERVER_SHA"
+elif [ -n "$READY$SERVER_SHA" ]; then
+  die "native arm cannot carry server evidence"
+fi
+
+[[ $CPUS =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || die "invalid CPU list '$CPUS'"
+[ -x "$TASKSET" ] || die "taskset not executable at $TASKSET — the same-cores doctrine cannot be honoured"
 CALLER_BIN=$(command -v "$CALLER") || die "caller '$CALLER' not on PATH"
 CLI_VERSION=$("$CALLER_BIN" --version 2>&1 | head -1) || die "cannot read caller version"
 
@@ -111,6 +138,14 @@ echo "$FIXTURE_SHA" > "$A/base.sha"
 # guard snapshot of the bytes the task may not touch
 ( cd "$WT" && find test bin/fan-test -type f -print0 | sort -z | xargs -0 sha256sum ) > "$A/guard-before.txt"
 
+# ---- server attestation, through Astra's reviewed predicate --------------------
+if [ "$CELL" != N ]; then
+  if ! python3 "${OPUS_POLICY_BIN:-$HERE/astra_policy.py}" validate-ready --ready "$READY" --url "$MCP_URL" \
+        --server-sha "$SERVER_SHA" --worktree "$WT" > "$A/server-ready.json" 2>"$A/server-ready.err"; then
+    die "server ready evidence rejected: $(head -1 "$A/server-ready.err")"
+  fi
+fi
+
 # ---- compose the prompt: frozen cell text + the identical caller stanza ------------
 {
   cat "$BASE_PROMPT"
@@ -133,7 +168,7 @@ SID=$(cat /proc/sys/kernel/random/uuid)
 ESCAPED=$(printf '%s' "$(readlink -m "$WT")" | sed 's#[^A-Za-z0-9]#-#g')
 SESSION_FILE="$PROJECTS_ROOT/$ESCAPED/$SID.jsonl"
 
-DRIVER_CMD=("$CALLER_BIN" -p --model "$MODEL" --dangerously-skip-permissions
+DRIVER_CMD=("$TASKSET" -c "$CPUS" "$CALLER_BIN" -p --model "$MODEL" --dangerously-skip-permissions
             --session-id "$SID" --output-format stream-json --verbose
             --add-dir "$WT" "${MCP_ARGS[@]}"
             --disallowedTools Task Skill ToolSearch WebFetch WebSearch SendMessage
@@ -142,7 +177,6 @@ DRIVER_CMD=("$CALLER_BIN" -p --model "$MODEL" --dangerously-skip-permissions
 printf '%s\n' "${DRIVER_CMD[@]}" > "$A/command.txt"
 
 # ---- launch ----------------------------------------------------------------------
-mono() { cut -d' ' -f1 /proc/uptime; }
 load_start=$(cat /proc/loadavg)
 mono_start=$(mono); epoch_start=$(date -u +%s.%N); utc_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -197,6 +231,14 @@ python3 "$HERE/extract_attribution.py" \
   > "$A/attribution.log" 2>&1
 attrib_rc=$?
 
+# canonical byte identity, his additional diagnostic (never the acceptance itself)
+CANON="$ORACLE_FIX/canonical-$ORACLE_N"
+if [ -d "$CANON/src" ] && diff -rq "$CANON/src" "$WT/src" >/dev/null 2>&1; then
+  canonical_src_match=true
+else
+  canonical_src_match=false
+fi
+
 # ---- Astra's SAME six-check acceptance oracle, read-only against the clone --------
 FAN_BASE="$FIXTURE_SHA" bash "$ORACLE" "$WT" "$ORACLE_N" "$ORACLE_FIX" > "$A/oracle.log" 2>&1
 oracle_rc=$?
@@ -209,7 +251,13 @@ OPUS_SESSION_FILE="$SESSION_FILE" OPUS_SESSION_BOUND="$session_bound" \
 OPUS_SESSION_SHA="$session_sha" OPUS_DRIVER_RC="$driver_rc" OPUS_ATTRIB_RC="$attrib_rc" \
 OPUS_GUARD="$guard_match" OPUS_ORACLE_PATH="$ORACLE" OPUS_ORACLE_SHA="$ORACLE_SHA" \
 OPUS_ORACLE_FIXDIR="$ORACLE_FIX" OPUS_ORACLE_RC="$oracle_rc" OPUS_VERDICT="$oracle_verdict" \
-OPUS_MODEL_REQ="$MODEL" OPUS_ARMJSON="$A/arm.json" \
+OPUS_MODEL_REQ="$MODEL" OPUS_ARMJSON="$A/arm.json" OPUS_ARMDIR="$A" \
+OPUS_CPUS="$CPUS" OPUS_PROMPT_PATH="$A/prompt.txt" OPUS_WT="$WT" \
+OPUS_SERVER_SHA_V="$SERVER_SHA" OPUS_READY_V="$READY" OPUS_HERE="$HERE" \
+OPUS_ADAPTER_START="$adapter_start" OPUS_ADAPTER_LOAD_START="$adapter_load_start" \
+OPUS_DRIVER_START="$mono_start" OPUS_DRIVER_END="$mono_end" \
+OPUS_LOAD_START="$load_start" OPUS_LOAD_END="$load_end" OPUS_UTC_START="$utc_start" \
+OPUS_CANONICAL_MATCH="$canonical_src_match" \
 python3 "$HERE/write_arm_json.py"
 
 echo "--- $ID rc=$driver_rc wall=$(grep task_wall_s "$A/task-wall.txt" | cut -d= -f2)s session_bound=$session_bound oracle_rc=$oracle_rc"

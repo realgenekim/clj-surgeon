@@ -5,6 +5,17 @@ Written 2026-09-05T01:04:32Z by forge-anvil, on `bridge/opus-caller-harness` (ti
 been spent.** Everything below describes an instrument that refuses to run until
 `RUNTIME_ALLOWED=1` is set by the program owner.
 
+> **Round two, 2026-09-05T01:18:02Z.** Astra rejected round one's roster. This document is
+> amended in place; the superseded 15-arm proposal is preserved in
+> "Superseded: the 15-arm proposal" at the end, because a roster that was argued and
+> rejected is part of the record, not an embarrassment to delete. Six changes: the
+> roster is **21 arms** with six *additional* natives in matched pairs; the caller,
+> its server and any profile check run **pinned to cores 12,13 inside an owned quiet
+> window**; his **server-lifecycle and measurement policy are imported and called**
+> rather than re-implemented; the resolved model comes from the transcript and the
+> **command alias is never the model claim**; and **N-1 alone is the instrument
+> preflight** once runtime is allocated.
+
 ## What this is, and what it is not
 
 Astra's fanout cohort asks one question — *does the caller model change the native
@@ -37,6 +48,7 @@ use**, so a harness run against a changed input refuses instead of producing a n
 Composed per arm and written verbatim to `<arm>/command.txt`. From the T-cell dry run:
 
 ```
+/usr/bin/taskset -c 12,13 \
 claude -p --model claude-opus-5 --dangerously-skip-permissions \
   --session-id <uuid chosen by the harness> \
   --output-format stream-json --verbose \
@@ -98,6 +110,14 @@ This is the piece that has no counterpart in the codex adapter and had to be bui
    not exactly the requested one; a model set that does not match the requested model.
    The caller's own summary is never a counting or correctness authority for anything.
 
+**The command alias is never the model claim.** `--model claude-opus-5` is a *request*;
+what a receipt may assert is `models_in_transcript`, read out of the session file the
+CLI itself wrote, together with the session binding that proves the file belongs to this
+run. `adapter-result.json`'s `resolved_model` therefore points at that field rather than
+restating the flag, and a transcript whose model set does not match the request is a
+typed `:unverified` (rc 3), not a footnote. This is the meter rule applied to identity:
+the thing we asked for is not evidence of the thing that ran.
+
 Correctness is never read from the transcript at all. It comes from Astra's oracle,
 run read-only against the clone **after** the diff is staged, with its verdict line
 copied verbatim into `arm.json` and its full output kept in `oracle.log`.
@@ -109,9 +129,13 @@ copied verbatim into `arm.json` and its full output kept in `oracle.log`.
 | `codex exec` with a pinned binary + vendor hash | `claude -p`, CLI version recorded per arm | different caller; that is the whole point of the flank |
 | rollout at `$CODEX_HOME/…`, session bound via `session_meta` | session transcript at `~/.claude/projects/<escaped-cwd>/<sid>.jsonl`, session **chosen** via `--session-id` | the two CLIs keep their transcripts in different places and shapes |
 | `--ignore-user-config --ignore-rules`; refuses a project `.codex` | `--strict-mcp-config` + an explicit `--disallowedTools` roster | the Claude equivalents of "no ambient configuration reaches the arm" |
-| `taskset -c 12,13` CPU pinning, `-Xmx512m` | not pinned; one arm at a time through `slot -t` | CPU pinning is his cohort's frozen factor. **Opus arms are therefore not wall-comparable to his Sol/Astra arms**; they are comparable to *each other*, N against T, which is the only ratio this flank may quote. |
-| his own `watch.py`/`score.py` meters | not used | those are frozen instruments of his cohort; reusing them would mean editing them for a second stream shape. The wall, load and call counts here are computed independently and the oracle is shared. |
-| two models, six matched N/T pairs each | one model, 6 N + 6 T + 3 O (see the plan) | budget — stated in the plan file, not hidden |
+| `taskset -c 12,13` CPU pinning | **the same cores 12,13**, for the caller, its server and the task's own profile checks, inside an owned quiet window | round two: same-cores doctrine, so a cross-caller reader is looking at the same silicon. Even so this flank quotes **only its own N-against-T ratio**; a cross-caller ratio is not this cohort's to make. |
+| `-Xmx512m` on the driver's JVM env | not set by the harness | the Claude caller is not a JVM; the task's own `bb`/`clojure` invocations come from the frozen prompt |
+| his `validate_ready` / `pid_listens` / `snapshot` attestation | **imported from his `adapter.py` and called**, after verifying its sha; one narrow substitution (the port band) recorded in every receipt | round two: reuse a reviewed control, never re-implement it |
+| his server start/stop, parent-owned, arm-attested | same split; `calibrate.sh` starts/stops (reusing his `stop-server.sh` and its pid+start-ticks+boot-id proof), the arm attests | his contract, unchanged |
+| his `attest.json` / `adapter-result.json` fields | **carried field for field**, `timing` block entire; caller-specific keys renamed, unrun instruments present and null | a field under his name means the same quantity measured the same way |
+| his `watch.py` / `score.py` stream scorers | not used | those parse a codex rollout. A Claude transcript is a different shape, so running them would mean *editing* a frozen instrument — the one thing reuse must not require. The quantities they produce are re-derived here under his field names, and the acceptance oracle is literally his. |
+| two models, six matched N/T pairs each after six native calibrations | one model, **6 calibration natives + 6 matched pairs + 3 adoption = 21 arms** | round two: his roster, not a budget-trimmed one |
 | n/a | **cell O**, the tool merely available | the optional-adoption cell, run last, never a speed cell |
 
 **The prompt composition, stated exactly.** Every cell is the frozen file *verbatim*,
@@ -125,25 +149,113 @@ his **common** text (which has no TOOLING paragraph at all) plus
 asked or expected to use it." Measured composed sizes against the real frozen prompts:
 N 2,811 B, T 3,478 B, O 3,053 B.
 
-## The order (`calibrate.sh plan` → `plan-opus-cohort.txt`)
+## The order (`calibrate.sh plan` → `plan-opus-cohort.txt`) — 21 arms
 
-Block A: six native calibrations, `N-1 … N-6`, before any comparison, no favourable
-run selected as the baseline. Block B: six tool arms, `T-1 … T-6`. Block D last:
-three optional-adoption arms, `O-1 … O-3`. Every arm goes through `~/bin/slot -t`
-(refuses above 1-minute load 10, honours the shared quiet window, one of the box-wide
-slots shared with Astra). `calibrate.sh run` refuses without `RUNTIME_ALLOWED=1`.
+| block | arms | cells |
+|---|---|---|
+| A calibration | 6 | `N-1 … N-6` — six native migrations before any comparison |
+| B matched pairs | 12 | `N-7 … N-12` with `T-1 … T-6`, **balanced interleave**: `N,T / T,N / N,T / T,N / N,T / T,N` |
+| C adoption | 3 | `O-1 … O-3`, **last**, and never a speed cell |
+| **total** | **21** | |
 
-**The one deviation from his pre-registration, stated plainly:** his design runs six
-matched N/T *pairs* after calibration, costing six further native arms. Here Block A's
-six natives serve as the native controls for Block B, and the later drift-protecting
-natives are Block C (`N-7 … N-9`), **off unless `DRIFT=1`**. With `DRIFT=0` this
-cohort is exploratory on drift and must say so; a speed claim needs `DRIFT=1` and the
-extra three arms.
+Block B's natives are **six more natives**. Block A is *not* reused as Block B's
+control: they are the later natives that protect against drift after calibration,
+exactly as Astra's pre-registration requires, and the pairs alternate which cell leads
+so neither systematically occupies the warmer or cooler half of a pair.
+
+**The first arm, `N-1`, is the instrument preflight, and it runs alone.** The 66
+fake-caller tests prove the *harness*; they never call a model, never start a server,
+never run the real oracle. `N-1` is the first evidence that a live Claude session
+binds, that the transcript names a resolved model, and that the six checks run against
+a real tree. `calibrate.sh run` **halts after it** unless
+`OPUS_CONTINUE_AFTER_PREFLIGHT=1`; read its receipt and the pool meter before arm 2.
 
 Astra's stopping rules are inherited verbatim into the plan file: a 900-second arm is a
 failed task, not a missing observation; a failed arm is recorded and **not** replaced by
 a rerun; an instrument-invalid run gets a fresh rep number; two identical tool refusals
-stop Block B for a contract investigation.
+stop Block B for a contract investigation; an arm that runs through load > 10 is
+preserved as a contaminated observation and excluded from a clean-wall claim, never
+deleted.
+
+## Same cores, and an owned quiet window
+
+Astra pins his Sol and Astra arms to cores **12,13**. This flank pins the same two, for
+the caller, for its MCP server, and for any profile check the task itself runs
+(`bin/fan-test` and `test/load_all.clj` are named with `taskset -c 12,13` inside the
+frozen prompt's fan-proof profile, so they inherit it from the task, not from us). The
+launched command line begins `/usr/bin/taskset -c 12,13 …` and the affinity is recorded
+in every receipt; a malformed CPU list or a missing `taskset` is a refusal, not a
+silently unpinned arm.
+
+**The window is owned, not merely absent.** `calibrate.sh` creates
+`/var/tmp/forge/quiet-window.md` with `set -o noclobber` as `owner=fable` for each
+arm's duration and removes it afterwards, including on interrupt (`trap … EXIT INT
+TERM`). `noclobber` is what makes it a *claim*: a peer's existing window is a refusal,
+never an overwrite. And `run-opus-arm.sh` independently refuses unless an owned window
+is present — so a hand-run arm cannot skip the doctrine, and neither can a future
+script that forgets it.
+
+## Reusing his policy instead of duplicating it
+
+`bench/opus-caller/astra_policy.py` **imports his adapter as a module** —
+`/var/tmp/forge/astra-program/repo/bench/astra/adapter.py`, sha
+`8f6c909ffe25836a3599a2eec45f5da5a35d3fdc94541356c4778b440372b449`, **verified before
+the import**, `main()` never reached — and calls his predicates directly:
+
+* `validate_ready` — the whole server-ready attestation: healthz bound to the MCP port,
+  expected `mcp_url` / `server_sha` / `project_root`, a positive integer pid, the
+  healthz **response bytes** hashed and compared, and the functional-readiness fields
+  (`ok`, `server`, `tool_runtime`, `tool_registry`).
+* `pid_listens` — "this pid owns that listener", read out of `/proc`.
+* `snapshot`, `digest`, `file_digest` — his hashing and his protected-tree inventory,
+  including its symlink refusal.
+
+**The one substitution, deliberate and narrow:** his `validate_url` requires ports
+8300–8339, his cohort's band, which this flank is forbidden to contact at all. So the
+module rebinds *only* `validate_url` to a band-substituted copy of his own predicate —
+same scheme, same loopback host, same rejection of credentials/query/fragment,
+band 8340–8379 — before calling `validate_ready`. Nothing on disk is modified; the
+rebinding lives in one process, and every receipt records both his adapter's sha and
+the substituted band, so a reader can see exactly what was and was not his.
+
+**Server lifecycle follows his contract, which is a split one:** the *parent* owns
+start and stop, the *arm* owns attestation. `calibrate.sh` starts one server per arm
+from a pinned checkout, bound to that arm's worktree, on that arm's port, under the same
+`taskset`; records `pid + start-ticks + boot id` so cleanup can prove authorship; waits
+for healthz; and writes `ready.json` in **his field shape**. Stopping reuses his own
+`bench/anvil-arms/stop-server.sh`, which signals only a process whose pid, start time
+and boot id all still match. The arm then validates that evidence through his
+`validate_ready`. Nothing here is a second implementation of a reviewed control.
+
+**Measurement policy is carried under his field names**, which is the point:
+`attest.json` is his `attest` record field for field (including
+`correctness: "pending-independent-acceptance"`), and `adapter-result.json` is his
+`run()` result field for field, `timing` block entire —
+`adapter_start_monotonic_s`, `watch_start_monotonic_s`, `watch_end_monotonic_s`,
+`preparation_wall_s`, `watch_subprocess_wall_s`, `adapter_load_start`,
+`watch_load_start`, `watch_load_end`, `lock_wait_included`, `adapter_wall_s`,
+`adapter_load_end`, and `adapter_wall_scope` spelled out as
+`"prepare-through-freeze-and-attestation; excludes scorer"`. A field carried under his
+name means the **same quantity measured the same way**. Where a quantity cannot be the
+same for a Claude caller it is **renamed, never silently redefined**:
+`codex_version` / `codex_sha256` / `codex_vendor_*` become
+`caller_version` / `caller_path` / `caller_sha256`. And the keys naming instruments
+this flank does not run — `watch_sha256`, `score_sha256`, `make_targets_sha256` — are
+**present and null**, so their absence is a statement rather than an oversight.
+
+## Same base, same prompts, same oracle, same proof obligations
+
+Unchanged from round one and re-affirmed here: the same fixture at
+`92fdf5d1545af934ff14250d39cef41c400e5df8`, his prompt files verbatim, his
+`rescore-FAN.sh` sha-checked before every invocation, and therefore **the same six
+proof obligations the prompt itself names** — exact changed file set, form-tree
+equality modulo whitespace with protected syntax intact, protected literal hashes, 100
+namespaces loading, 21 behavioural tests with zero failures, and no residual reference
+or alias collision. The frozen `verified21` prompts additionally name the fan-proof
+profile's two commands (`taskset -c 12,13 bb test/load_all.clj` and
+`taskset -c 12,13 bash bin/fan-test`) and forbid weakening verification in response to
+a refusal; that text reaches the Opus caller unmodified. Canonical byte identity is
+carried as `canonical_src_match`, his additional **diagnostic** — never the acceptance.
 
 ## Headroom — what a cohort costs, and what is still unmeasured
 
@@ -172,21 +284,22 @@ Opus over Sonnet** on conversation volume.
 
 | cell | est. tokens/arm | arms | est. total |
 |---|---|---|---|
-| N | ~415k | 6 | ~2.5M |
-| T | ~65k (round to 100k) | 6 | ~0.6M |
+| N | ~415k | **12** (6 calibration + 6 pair) | ~5.0M |
+| T | ~65k, rounded to 100k | 6 | ~0.6M |
 | O | ~415k (assume it behaves like N) | 3 | ~1.25M |
-| | | **15** | **≈ 4.3M tokens** |
+| | | **21** | **≈ 6.8M tokens** |
 
 **Every figure in that table is an estimate and none of it is a pool percentage.** The
 token→pool conversion is exactly what nobody on this box can compute, so the
-recommendation is procedural, not arithmetic: **run `N-1` alone, read the pool at the
-console before and after, and let that one arm price the other fourteen.** If one
-native arm costs more than ~2% of the remaining pool, the 15-arm cohort does not fit
-in 30% and the budget must be cut before Block A finishes, not after.
+recommendation is procedural, not arithmetic: **`N-1` is the preflight, it runs alone,
+and it prices the other twenty.** Read the console meter before and after it. If one
+native arm costs more than ~1.4% of the remaining pool, 21 arms do not fit in 30% — and
+that must be discovered at arm 1, not at arm 15. `calibrate.sh run` halts after `N-1`
+by default precisely so that reading has to happen.
 
 ## Evidence that the instrument works
 
-`bash bench/opus-caller/test_run_opus_arm.sh` — **38 passed, 0 failed**, with no
+`bash bench/opus-caller/test_run_opus_arm.sh` — **66 passed, 0 failed**, with no
 model, no JVM and no server: a fake `claude` first on PATH writes a synthetic session
 transcript and makes one real edit; a stub oracle stands in for `rescore-FAN.sh`. It
 witnesses the reused-identity refusal (and that the existing arm is byte-untouched),
@@ -197,9 +310,18 @@ of the transcript, the staged diff and untracked-file record, the guard on prote
 bytes, the monotonic wall and load, and the oracle being invoked against the clone
 with its verdict recorded verbatim.
 
-A second dry run drove the same fake caller against the **real** frozen fixture and the
-**real** frozen prompts (stub oracle only) as `opus-{N,T,O}-900`; those arm
-directories carry a `DRY-RUN.txt` marker and rep 9xx is never a measured arm.
+Dry runs drove the same fake caller against the **real** frozen fixture and the
+**real** frozen prompts (stub oracle only): `opus-{N,T,O}-900` in round one and
+`opus-{N,T}-901` in round two, the latter confirming the `taskset -c 12,13` line, the
+owned-window requirement, the stub-attested server evidence, and a complete
+`adapter-result.json` `timing` block. Those arm directories carry a `DRY-RUN.txt`
+marker; **rep 9xx is never a measured arm.**
+
+**What these tests are not.** They are 66 witnesses about a harness, run with a fake
+caller, a stub oracle and a stub attestation. They are not live readiness. Nothing here
+has yet proved that a real `claude -p` session binds, that the resolved model is what
+was asked for, that a real MCP server passes his `validate_ready`, or that the six
+checks pass on a tree an Opus caller actually edited. That is `N-1`'s job.
 
 ## Scratch
 
@@ -207,3 +329,35 @@ Arms live only under `/var/tmp/forge/opus-arms/<id>/`. The test's scratch lives 
 under `/var/tmp/forge/opuscaller-fx` and is removed when the test suite is not
 running. Nothing is written to `/tmp` (RAM tmpfs on this box) and nothing is written
 under `/var/tmp/forge/astra-program`.
+
+## Superseded: the 15-arm proposal (round one, rejected)
+
+Round one proposed **15 arms**: `N-1 … N-6` as calibration, `T-1 … T-6` as the
+comparison, `O-1 … O-3` last, with Block A's six natives serving as Block B's native
+controls and the later drift-protecting natives held behind a `DRIFT=1` switch that was
+off by default. The stated reason was budget: the seat's Claude weekly pool.
+
+**Astra rejected it, and he was right.** Reusing the calibration natives as the pair
+controls is exactly the drift exposure his pre-registration exists to close — the
+natives that matter are the ones run *contemporaneously with* the tool arms, after any
+warm-up or scheduler drift has had time to appear. A switch that defaults a control off
+is not a control; it is a control-shaped option, and options default to whatever is
+cheapest at 2am. The saving was six arms; the cost was the only comparison the cohort
+is for.
+
+Two further round-one positions also fell, and both are worth naming because each was a
+plausible-sounding shortcut:
+
+* **"CPU pinning is his cohort's frozen factor, so this flank need not pin."** True as
+  far as it goes and wrong in effect: leaving the Opus arms unpinned meant they were not
+  comparable to *anything*, including each other, whenever the box was busy. The fix is
+  cheaper than the argument — pin the same two cores.
+* **"His `watch.py`/`score.py` parse a codex rollout, so this flank computes its own
+  quantities."** The parsers genuinely cannot be reused. But that was allowed to justify
+  a parallel *policy*, which is a different thing: the attestation predicates, the
+  server-lifecycle contract and the receipt field names were all reusable and are now
+  reused. The rule this cohort takes away: **a parser that cannot be shared is not a
+  licence to re-decide the policy it implements.**
+
+The 15-arm plan is preserved here because a roster that was argued and rejected is part
+of the record. It is not the plan; `plan-opus-cohort.txt` is, and it says 21.

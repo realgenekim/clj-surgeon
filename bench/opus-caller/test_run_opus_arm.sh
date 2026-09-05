@@ -79,6 +79,18 @@ exit 0
 CEOF
 chmod +x "$FX/bin/claude"
 
+# an owned quiet window (the harness refuses without one) and a stub policy validator
+# standing in for astra_policy.py, which needs a LIVE server to attest
+printf 'owner=fable arm=test opened=now\n' > "$FX/quiet-window.md"
+cat > "$FX/bin/stub-policy.py" <<'PEOF'
+import json, os, sys
+ready = json.load(open(sys.argv[sys.argv.index("--ready") + 1]))
+if os.environ.get("STUB_POLICY_REFUSE"):
+    print("ASTRA-POLICY REFUSED: stubbed refusal", file=sys.stderr); sys.exit(2)
+print(json.dumps({"ready": ready, "policy_source": "STUB"}))
+PEOF
+printf '{"mcp_url":"x","port_pid":1,"server_cwd":"/x"}\n' > "$FX/ready.json"
+
 export PATH="$FX/bin:$PATH"
 export OPUSCALLER_FX="$FX"
 export CLAUDE_PROJECTS_ROOT="$FX/projects"
@@ -88,8 +100,14 @@ export OPUS_PROMPT_DIR="$FX/prompts"
 export OPUS_ORACLE="$FX/bin/stub-oracle.sh" OPUS_ORACLE_SHA256="$ORACLE_SHA"
 export OPUS_ORACLE_FIX="$FX/oracle" OPUS_ARMS_ROOT="$ARMS"
 export OPUS_MAX_WALL=60
+export OPUS_QUIET_WINDOW="$FX/quiet-window.md"
+export OPUS_POLICY_BIN="$FX/bin/stub-policy.py"
+export OPUS_READY="$FX/ready.json" OPUS_SERVER_SHA=0123456789012345678901234567890123456789
 
-run() { bash "$HERE/run-opus-arm.sh" "$@" > "$FX/last.out" 2>&1; echo $?; }
+# N arms carry no server evidence; T/O arms do (his contract, enforced both ways)
+run()  { env -u OPUS_READY -u OPUS_SERVER_SHA -u OPUS_MCP_URL \
+             bash "$HERE/run-opus-arm.sh" "$@" > "$FX/last.out" 2>&1; echo $?; }
+runt() { bash "$HERE/run-opus-arm.sh" "$@" > "$FX/last.out" 2>&1; echo $?; }
 
 echo "== 1. a native arm end to end =="
 rc=$(run N 1); A="$ARMS/opus-N-1"
@@ -130,19 +148,22 @@ check "exit 2" "$rc" 2
 grep -q 'oracle sha mismatch' "$FX/last.out" && ok "refusal names the oracle" || bad "wrong refusal: $(head -1 "$FX/last.out")"
 
 echo "== 5. a tool arm's MCP URL must be loopback in this cohort's own band =="
-rc=$(OPUS_MCP_URL=http://127.0.0.1:8300/mcp run T 1)
+rc=$(OPUS_MCP_URL=http://127.0.0.1:8300/mcp runt T 1)
 check "exit 2 for a forbidden-band port" "$rc" 2
 grep -q '8340-8379' "$FX/last.out" && ok "refusal names the band" || bad "wrong refusal: $(head -1 "$FX/last.out")"
-rc=$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp run T 2); B="$ARMS/opus-T-2"
+rc=$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp runt T 2); B="$ARMS/opus-T-2"
 check "a well-formed tool arm runs" "$rc" 0
 check "the MCP binding is written per arm" "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["mcpServers"]["clj-surgeon"]["url"])' "$B/mcp.json")" "http://127.0.0.1:8341/mcp"
 grep -q 'mcp__clj-surgeon__alias_migration' "$B/prompt.txt" && ok "T prompt names the tool by its Claude name" || bad "T prompt lacks the tool name"
 grep -q 'FROZEN PROMPT fanout-tool' "$B/prompt.txt" && ok "T prompt is built on the frozen tool text" || bad "T prompt is not the frozen text"
-rc=$(run N 4)
-check "a native arm may not carry an MCP URL" "$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp run N 5)" 2
+check "a native arm may not carry an MCP URL" "$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp runt N 5)" 2
+check "a tool arm without server evidence is refused" "$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp env -u OPUS_READY bash "$HERE/run-opus-arm.sh" T 7 >"$FX/last.out" 2>&1; echo $?)" 2
+grep -q 'requires OPUS_READY' "$FX/last.out" && ok "refusal names the missing ready evidence" || bad "wrong refusal: $(head -1 "$FX/last.out")"
+check "rejected server evidence stops the arm" "$(STUB_POLICY_REFUSE=1 OPUS_MCP_URL=http://127.0.0.1:8341/mcp runt T 8)" 2
+grep -q 'server ready evidence rejected' "$FX/last.out" && ok "refusal names the attestation" || bad "wrong refusal: $(head -1 "$FX/last.out")"
 
 echo "== 6. the optional-adoption cell attaches the tool without a mandate =="
-rc=$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp run O 1); C="$ARMS/opus-O-1"
+rc=$(OPUS_MCP_URL=http://127.0.0.1:8341/mcp runt O 1); C="$ARMS/opus-O-1"
 check "exit 0" "$rc" 0
 grep -q 'FROZEN PROMPT fanout-common' "$C/prompt.txt" && ok "O prompt is built on the frozen COMMON text" || bad "O prompt is not the common text"
 grep -q 'not asked or expected to use it' "$C/prompt.txt" && ok "O prompt carries no mandate" || bad "O prompt lacks the neutral stanza"
@@ -152,6 +173,41 @@ echo "== 7. no run happens without an allocation =="
 rc=$(RUNTIME_ALLOWED=0 run N 9)
 check "exit 2" "$rc" 2
 grep -q 'RUNTIME_ALLOWED' "$FX/last.out" && ok "refusal names the gate" || bad "wrong refusal: $(head -1 "$FX/last.out")"
+
+echo "== 8. the same-cores doctrine and the owned quiet window =="
+grep -q '^/usr/bin/taskset$' "$A/command.txt" && ok "the caller is launched under taskset" || bad "no taskset in command.txt"
+grep -q '^12,13$' "$A/command.txt" && ok "pinned to cores 12,13" || bad "wrong cores: $(sed -n 2p "$A/command.txt")"
+check "affinity recorded in the receipt" "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["cpu_affinity"])' "$A/arm.json")" "taskset -c 12,13"
+mv "$FX/quiet-window.md" "$FX/qw.bak"
+check "no window at all is refused" "$(run N 6)" 2
+grep -q 'no quiet window' "$FX/last.out" && ok "refusal names the missing window" || bad "wrong refusal: $(head -1 "$FX/last.out")"
+printf 'owner=someone-else\n' > "$FX/quiet-window.md"
+check "a peer's window is refused" "$(run N 7)" 2
+grep -q 'held by another agent' "$FX/last.out" && ok "refusal names the peer" || bad "wrong refusal: $(head -1 "$FX/last.out")"
+mv "$FX/qw.bak" "$FX/quiet-window.md"
+
+echo "== 9. Astra's field names are carried, not paraphrased =="
+for f in attest.json adapter-result.json; do
+  [ -s "$A/$f" ] && ok "$f written" || bad "$f missing"
+done
+check "attest carries his correctness placeholder" "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["correctness"])' "$A/attest.json")" pending-independent-acceptance
+check "attest names the instruments it does NOT run" "$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(all(k in d and d[k] is None for k in ("watch_sha256","score_sha256","make_targets_sha256")))' "$A/attest.json")" True
+check "his timing block is present in full" "$(python3 -c 'import json,sys;t=json.load(open(sys.argv[1]))["timing"];print(all(k in t for k in ("adapter_start_monotonic_s","watch_start_monotonic_s","watch_end_monotonic_s","preparation_wall_s","watch_subprocess_wall_s","adapter_load_start","watch_load_start","watch_load_end","lock_wait_included","adapter_wall_s","adapter_load_end","adapter_wall_scope")))' "$A/adapter-result.json")" True
+check "his wall scope is spelled out" "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["timing"]["adapter_wall_scope"])' "$A/adapter-result.json")" "prepare-through-freeze-and-attestation; excludes scorer"
+python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["resolved_model"])' "$A/adapter-result.json" | grep -q 'alias is never the model claim' && ok "the alias is not offered as the model claim" || bad "resolved_model claims the alias"
+
+echo "== 10. the plan is the 21-arm roster the lead ruled =="
+bash "$HERE/calibrate.sh" plan "$FX/plan.txt" >/dev/null
+check "21 arms" "$(grep -c '^ ' "$FX/plan.txt")" 21
+check "6 tool arms" "$(awk '$2=="T"' "$FX/plan.txt" | wc -l)" 6
+check "12 native arms" "$(awk '$2=="N"' "$FX/plan.txt" | wc -l)" 12
+check "3 adoption arms" "$(awk '$2=="O"' "$FX/plan.txt" | wc -l)" 3
+check "the last three arms are the adoption cell" "$(grep '^ ' "$FX/plan.txt" | tail -3 | awk '{print $2}' | tr -d '\n')" OOO
+check "the first six are calibration natives" "$(grep '^ ' "$FX/plan.txt" | head -6 | awk '{print $2}' | tr -d '\n')" NNNNNN
+check "block B alternates which cell leads" "$(grep '^ ' "$FX/plan.txt" | sed -n '7,18p' | awk '{print $2}' | tr -d '\n')" NTTNNTTNNTTN
+grep -q 'N-1, is the instrument preflight' "$FX/plan.txt" && ok "the plan names N-1 as the preflight" || bad "no preflight clause"
+grep -q 'alias is NEVER the model claim' "$FX/plan.txt" && ok "the plan says the alias is not the model claim" || bad "no alias clause"
+check "calibrate run still refuses without an allocation" "$(bash "$HERE/calibrate.sh" run >"$FX/last.out" 2>&1; echo $?)" 2
 
 echo
 echo "test_run_opus_arm: $PASS passed, $FAIL failed"
