@@ -49,3 +49,28 @@ Raw log: 2026-09-05-fast-typist-fanout-cerebras-k5.log; all 30 candidates routed
 | N, cold Sol (gpt-5.6-sol), one process per round | 5/6 | 20.96 22.66 26.66 27.77 42.63 | 26.66 | 42.63 | 5/6 |
 
 Cold vs cold, startup charged both sides, same dossier bytes, same gate, same acceptance: five fast candidates on Cerebras reach a verified three-file fan-out change in a median 1.95 s, every round; one cold Sol author in 26.66 s, five rounds of six. 13.7x on wall. The caveats from the cohort doc all still apply (five-file fixture, bb gate, no warm-Sol comparison, no real-repo claim).
+
+## Spark rows (23:38–23:40Z, after the usage-limit reset) — the three-provider table
+
+Bench receipts: 2026-09-05-fast-typist-bench-<epoch>.edn (two files, onesite and fanout; Groq rerun alongside as the interleaved control).
+
+| dossier | provider | rounds verified | first-verified wall, sorted (s) | median | max | median response wall |
+|---|---|---|---|---|---|---|
+| onesite | spark (gpt-5.3-codex-spark, effort low, one `codex exec` per call) | 4/6 | 5.75 7.41 7.53 12.86 | **7.47** | 12.86 | 6.71 |
+| onesite | groq (control) | 6/6 | 0.48 0.70 0.78 0.83 0.89 0.98 | 0.80 | 0.98 | 0.77 |
+| fanout | spark | **5/6** | 4.66 7.11 11.83 13.47 17.48 | **11.83** | 17.48 | 11.92 |
+| fanout | groq (control) | 1/6 | 5.25 | 5.25 | 5.25 | 4.31 |
+
+Prediction on record (22:2xZ): Spark 5–10 s on bounded dossiers, startup-dominated; falsifier = Spark median under 3 s on onesite. Observed 7.47 s: prediction held, falsifier not met. The fastest-sampling model is the slowest typist by wall on this harness because every call is a fresh Codex process (~3.5 s floor measured separately) plus its own reasoning at effort low.
+
+The finding that was NOT predicted: Spark is the most RELIABLE single candidate on the fan-out dossier — 5/6 rounds against gpt-oss-120b's 1/6 in the same minutes (pooled gpt-oss single-candidate rate on fanout tonight 14/42 ≈ 33%). Spark's mistakes are fewer; its wall is ~7x Groq's and ~7x Cerebras's k=5. So the axes separate: gpt-oss on Cerebras/Groq is the fast, unreliable typist that needs k>1 and a gate; Spark is the slower, more reliable typist that needs neither on this dossier. Which wins a real task depends on gate cost: at a millisecond gate, five Cerebras candidates (1.95 s, 6/6) beat one Spark (11.8 s, 5/6); at a gate costing tens of seconds per candidate, Spark's reliability would win back the difference.
+
+## Three-provider summary, wall to verified (medians, k=1 unless noted)
+
+| dossier | Cerebras via OpenRouter (pinned) | Groq | Spark | OpenRouter default routing | cold Sol (reference) |
+|---|---|---|---|---|---|
+| onesite | 0.52 s (6/6) | 0.72–0.85 s (5–6/6) | 7.47 s (4/6) | 3.24 s (5/6) | 16.27 s (6/6) |
+| fanout, k=1 | 1.63 s (3/6) | 5.1–6.5 s (1–4/6) | 11.83 s (5/6) | 44.66 s (2/6) | 26.66 s (5/6) |
+| fanout, k=5 | 1.95 s (6/6) | 5.54 s (6/6) | not run | not run | — |
+
+Gene's question answered: fastest typist by wall = gpt-oss-120b on Cerebras, pinned through OpenRouter; then Groq; Spark last, by an order of magnitude, because of the per-call process. Most reliable single candidate = Spark.

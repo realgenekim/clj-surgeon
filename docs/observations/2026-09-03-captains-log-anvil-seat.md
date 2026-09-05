@@ -2402,3 +2402,18 @@ session. Falsifier: Spark k=1 median under 3 s on the one-site dossier.
 ## 22:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:51Z load 1.30 ; === rc 0 end 22:56Z)
 
 ## 22:57Z — friction ledger: helper_extraction refused twice with the same reason (preflight-unavailable, profile helper-proof not admitted) → inbox item inb-a9b30e. Filing needed a seat fix: `clj` on this box wants rlwrap; ~/bin/clj shim execs clojure; maven-w/maven-r now prepend ~/bin to PATH.
+
+## 23:41Z — Spark rows in (prediction held: 7.47 s onesite; falsifier not met); Spark the most reliable single candidate on fan-out (5/6 vs gpt-oss 1/6); ASTRA EPOCH 2 COMPLETE: Sol tool 45.4 s vs Sol native 105.6 s, paired 2.50x, clears his two-SD hurdle
+
+Astra's epoch 2 (astra/fair-profile-epoch2; report docs/observations/2026-09-05-astra-fair-profile-epoch2-result.md
+on his branch; receipts /var/tmp/forge/astra-fair2-data-fx), his figures verbatim: 36 runs, all 6/6 correct;
+Sol native variance controls median 117.11 s (p90 141.98); Sol native paired 105.61 s (134.22); Sol tool
+(one public helper_extraction call each, zero refusals) 45.44 s (49.50); Astra native controls 45.03 s
+(54.40); Astra native paired 45.18 s (55.95); Astra tool 35.02 s (37.13). Median paired ratios Sol 2.50x,
+Astra 1.30x. Registered two-SD hurdle: Sol saving 63.52 s vs hurdle 29.08 s — clears (a gain on this
+bounded fixture); Astra saving 10.13 s vs hurdle 11.69 s — does not clear (favorable observation, not a
+gain). Conditions he names: three known selected helpers, 21 homogeneous callers, 42 moved references,
+preconfigured fresh-process behavioural profile, mandated public verb, high-effort Codex 0.153.3 subjects,
+CPUs 12–13; establishes nothing about optional adoption or warm sessions. This is the first vs-native gain
+on this program's fair apparatus with startup charged, attested subjects, and a preregistered hurdle. Not
+landed (his branch; gates + review owed; mayor queue note added).

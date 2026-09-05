@@ -580,3 +580,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - PENDING: Spark provider row after its usage-limit reset (23:37Z): `cd /home/forge/src/clj-surgeon-mission && bin/typist-run --bench --providers spark,groq --dossier bin/typist-dossier-onesite.md --rounds 6` then the same on fanout; prediction on record: Spark 5–10 s (process start), falsifier <3 s median on onesite. Then add the rows to the provider-bench doc.
 - Astra runs epoch 2 of his fair comparison (attested receipts in /var/tmp/forge/fable-to-astra.md under "ASTRA EXPERIMENT"); friction item inb-a9b30e (helper_extraction preflight refusal x2).
 - Owed to Gene: a morning report in the four-section format (vs-native table first) covering the aperture window, the typist program, and Astra's epoch 2 when it lands.
+
+- 23:41Z: Spark rows DONE (provider-bench doc complete). Astra epoch 2 COMPLETE (Sol 2.50x clears hurdle) on his branch, not landed. Morning report owed to Gene: four sections, vs-native table first = Astra epoch 2 table + typist three-provider table.

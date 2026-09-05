@@ -1,0 +1,404 @@
+{:bench true
+ :at "2026-09-05T23:38:58Z"
+ :mission "onesite"
+ :dossier "/home/forge/src/clj-surgeon-mission/bin/typist-dossier-onesite.md"
+ :dossier_sha256 "c7b003024bf8cd32f3fb88147c760f228bfdc50a4f5227fec39dfe530caa5afb"
+ :preimage "/var/tmp/forge/typist-fx/fixture-preimage-onesite"
+ :gate_profile "typist-onesite"
+ :gate_commands [["bb"
+ "-cp"
+ "src:test"
+ "-e"
+ "(require 'clojure.test 'fixture.util-test) (let [r (clojure.test/run-tests 'fixture.util-test)] (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]
+ :rounds 6
+ :k 1
+ :interleaved true
+ :rows [{:provider "spark"
+        :model "gpt-5.3-codex-spark"
+        :rounds 6
+        :verified 4
+        :first_verified_s [5.750
+ 7.410
+ 7.530
+ 12.860]
+        :median_first_verified_s 7.470
+        :max_first_verified_s 12.860
+        :median_response_wall_s 6.713
+        :median_completion_tok_s nil
+        :refusals 0
+        :upstreams []}
+ {:provider "groq"
+        :model "openai/gpt-oss-120b"
+        :rounds 6
+        :verified 6
+        :first_verified_s [0.480
+ 0.700
+ 0.780
+ 0.830
+ 0.890
+ 0.980]
+        :median_first_verified_s 0.805
+        :max_first_verified_s 0.980
+        :median_response_wall_s 0.766
+        :median_completion_tok_s 479.340
+        :refusals 0
+        :upstreams []}]
+ :candidates [{:cand "spark-r0-0"
+              :source "codex exec gpt-5.3-codex-spark"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r0/spark-r0-0"
+              :response_wall_s 7.380
+              :call_wall_s 7.350
+              :upstream nil
+              :refusal nil
+              :finish_reason nil
+              :tokens nil
+              :reasoning_tokens nil
+              :reasoning_chars nil
+              :raw_chars 266
+              :prompt_tokens nil
+              :refusal_evidence nil
+              :completion_time_s nil
+              :queue_time_s nil
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: corrupt patch at line 10); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 7.408
+              :semantic_mismatch false
+              :round 0
+              :provider "spark"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r0"}
+ {:cand "spark-r1-0"
+              :source "codex exec gpt-5.3-codex-spark"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r1/spark-r1-0"
+              :response_wall_s 14.208
+              :call_wall_s 6.075
+              :upstream nil
+              :refusal nil
+              :finish_reason nil
+              :tokens nil
+              :reasoning_tokens nil
+              :reasoning_chars nil
+              :raw_chars 409
+              :prompt_tokens nil
+              :refusal_evidence nil
+              :completion_time_s nil
+              :queue_time_s nil
+              :error nil
+              :apply_ok false
+              :apply_detail "git refused (error: patch failed: src/fixture/util.clj:1
+error: src/fixture/util.clj: patch does not apply); anchor: no match in src/fixture/util.clj"
+              :applier nil
+              :gate_ok false
+              :accept_ok false
+              :verified false
+              :verified_wall_s nil
+              :semantic_mismatch false
+              :round 1
+              :provider "spark"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r1"}
+ {:cand "spark-r2-0"
+              :source "codex exec gpt-5.3-codex-spark"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r2/spark-r2-0"
+              :response_wall_s 19.953
+              :call_wall_s 4.882
+              :upstream nil
+              :refusal nil
+              :finish_reason nil
+              :tokens nil
+              :reasoning_tokens nil
+              :reasoning_chars nil
+              :raw_chars 237
+              :prompt_tokens nil
+              :refusal_evidence nil
+              :completion_time_s nil
+              :queue_time_s nil
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: corrupt patch at line 9); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok false
+              :gate_detail "----- Stack trace -------------------------------------------------------------- | fixture.util-test    - /var/tmp/forge/typist-fx/bench-1788651489-spark-r2/spark-r2-0/test/fixture/util_test.clj:2:3 | clojure.core/require - clojure/core.clj:6070:1 | user                 - NO_SOURCE_PATH:1:1"
+              :accept_ok false
+              :accept_detail "behaviour: ----- Stack trace -------------------------------------------------------------- | clojure.core/require - clojure/core.clj:6070:1 | user                 - NO_SOURCE_PATH:1:1"
+              :verified false
+              :verified_wall_s nil
+              :semantic_mismatch false
+              :round 2
+              :provider "spark"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r2"}
+ {:cand "spark-r3-0"
+              :source "codex exec gpt-5.3-codex-spark"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r3/spark-r3-0"
+              :response_wall_s 28.473
+              :call_wall_s 7.476
+              :upstream nil
+              :refusal nil
+              :finish_reason nil
+              :tokens nil
+              :reasoning_tokens nil
+              :reasoning_chars nil
+              :raw_chars 268
+              :prompt_tokens nil
+              :refusal_evidence nil
+              :completion_time_s nil
+              :queue_time_s nil
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: corrupt patch at line 11); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 7.529
+              :semantic_mismatch false
+              :round 3
+              :provider "spark"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r3"}
+ {:cand "spark-r4-0"
+              :source "codex exec gpt-5.3-codex-spark"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r4/spark-r4-0"
+              :response_wall_s 35.112
+              :call_wall_s 5.698
+              :upstream nil
+              :refusal nil
+              :finish_reason nil
+              :tokens nil
+              :reasoning_tokens nil
+              :reasoning_chars nil
+              :raw_chars 166
+              :prompt_tokens nil
+              :refusal_evidence nil
+              :completion_time_s nil
+              :queue_time_s nil
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 5.748
+              :semantic_mismatch false
+              :round 4
+              :provider "spark"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r4"}
+ {:cand "spark-r5-0"
+              :source "codex exec gpt-5.3-codex-spark"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r5/spark-r5-0"
+              :response_wall_s 48.455
+              :call_wall_s 12.808
+              :upstream nil
+              :refusal nil
+              :finish_reason nil
+              :tokens nil
+              :reasoning_tokens nil
+              :reasoning_chars nil
+              :raw_chars 236
+              :prompt_tokens nil
+              :refusal_evidence nil
+              :completion_time_s nil
+              :queue_time_s nil
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: corrupt patch at line 9); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 12.864
+              :semantic_mismatch false
+              :round 5
+              :provider "spark"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-spark-r5"}
+ {:cand "groq-r0-0"
+              :source "openai/gpt-oss-120b"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r0/groq-r0-0"
+              :response_wall_s 8.078
+              :call_wall_s 0.658
+              :upstream nil
+              :refusal nil
+              :finish_reason "stop"
+              :tokens 289
+              :reasoning_tokens 228
+              :reasoning_chars 837
+              :raw_chars 165
+              :prompt_tokens 1578
+              :refusal_evidence nil
+              :completion_time_s 0.601
+              :queue_time_s 0.006
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 0.698
+              :semantic_mismatch false
+              :round 0
+              :provider "groq"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r0"}
+ {:cand "groq-r1-0"
+              :source "openai/gpt-oss-120b"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r1/groq-r1-0"
+              :response_wall_s 15.018
+              :call_wall_s 0.791
+              :upstream nil
+              :refusal nil
+              :finish_reason "stop"
+              :tokens 263
+              :reasoning_tokens 224
+              :reasoning_chars 810
+              :raw_chars 70
+              :prompt_tokens 1322
+              :refusal_evidence nil
+              :completion_time_s 0.762
+              :queue_time_s 0.005
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 0.830
+              :semantic_mismatch false
+              :round 1
+              :provider "groq"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r1"}
+ {:cand "groq-r2-0"
+              :source "openai/gpt-oss-120b"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r2/groq-r2-0"
+              :response_wall_s 20.942
+              :call_wall_s 0.942
+              :upstream nil
+              :refusal nil
+              :finish_reason "stop"
+              :tokens 350
+              :reasoning_tokens 289
+              :reasoning_chars 1043
+              :raw_chars 165
+              :prompt_tokens 1578
+              :refusal_evidence nil
+              :completion_time_s 0.892
+              :queue_time_s 0.006
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 0.984
+              :semantic_mismatch false
+              :round 2
+              :provider "groq"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r2"}
+ {:cand "groq-r3-0"
+              :source "openai/gpt-oss-120b"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r3/groq-r3-0"
+              :response_wall_s 29.362
+              :call_wall_s 0.849
+              :upstream nil
+              :refusal nil
+              :finish_reason "stop"
+              :tokens 361
+              :reasoning_tokens 300
+              :reasoning_chars 1083
+              :raw_chars 165
+              :prompt_tokens 810
+              :refusal_evidence nil
+              :completion_time_s 0.750
+              :queue_time_s 0.037
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 0.888
+              :semantic_mismatch false
+              :round 3
+              :provider "groq"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r3"}
+ {:cand "groq-r4-0"
+              :source "openai/gpt-oss-120b"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r4/groq-r4-0"
+              :response_wall_s 35.592
+              :call_wall_s 0.444
+              :upstream nil
+              :refusal nil
+              :finish_reason "stop"
+              :tokens 184
+              :reasoning_tokens 123
+              :reasoning_chars 474
+              :raw_chars 165
+              :prompt_tokens 1322
+              :refusal_evidence nil
+              :completion_time_s 0.382
+              :queue_time_s 0.038
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 0.485
+              :semantic_mismatch false
+              :round 4
+              :provider "groq"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r4"}
+ {:cand "groq-r5-0"
+              :source "openai/gpt-oss-120b"
+              :dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r5/groq-r5-0"
+              :response_wall_s 49.237
+              :call_wall_s 0.741
+              :upstream nil
+              :refusal nil
+              :finish_reason "stop"
+              :tokens 317
+              :reasoning_tokens 256
+              :reasoning_chars 919
+              :raw_chars 165
+              :prompt_tokens 810
+              :refusal_evidence nil
+              :completion_time_s 0.664
+              :queue_time_s 0.005
+              :error nil
+              :apply_ok true
+              :apply_detail "git refused (error: No valid patches in input (allow with \"--allow-empty\")); anchored: 1 file block(s)"
+              :applier "anchored"
+              :gate_ok true
+              :gate_detail "0 failures, 0 errors"
+              :accept_ok true
+              :accept_detail "behaviour ok; only src/fixture/util.clj changed"
+              :verified true
+              :verified_wall_s 0.782
+              :semantic_mismatch false
+              :round 5
+              :provider "groq"
+              :run_dir "/var/tmp/forge/typist-fx/bench-1788651489-groq-r5"}]}
