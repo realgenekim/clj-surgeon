@@ -630,9 +630,9 @@ def apply_anchored(workdir, diff_text):
             hits = [j for j in range(len(cur) - len(old) + 1)
                     if cur[j:j + len(old)] == old]
             if not hits:
-                return False, "anchor: no match"
+                return False, "anchor: no match in " + b["path"]
             if len(hits) > 1:
-                return False, "anchor: ambiguous (%d)" % len(hits)
+                return False, "anchor: ambiguous (%d) in %s" % (len(hits), b["path"])
             j = hits[0]
             cur = cur[:j] + new + cur[j + len(old):]
         staged[full] = "\n".join(cur)
