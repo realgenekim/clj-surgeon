@@ -2331,3 +2331,18 @@ mission ledger's accepted edit form should be that, not line-numbered unified di
 running in the background.
 
 ## 21:58Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:54Z load 2.64 ; === rc 0 end 21:58Z)
+
+## 22:00Z — prior art reconciled before scoring: arm T (2026-09-02) vs the current typist preregistration; Gene's FYI on the battle-tested client
+
+Gene: "there is code to call gpt-oss via groq in mcp server somewhere; that is somewhat battle tested…
+when found, tell astra." Search (rg over ~/src bounded; gh code search over realgenekim; git grep across
+clj-surgeon remote refs): no Groq gpt-oss client in clj-surgeon; the battle-tested typist is the bridge's
+~/bin/typist on Buster (OpenRouter gpt-oss-120b; receipt 04:48Z, 2026-09-02); the only Groq code on this
+box is the voice remote's Whisper client. Told Astra, with the Groq traps.
+Reconciliation: arm T put the typist INSIDE a Sol-driven whole task (Sol decides, typist types mechanical
+parts) — 409 s vs native 191 s, 44 model actions; tech-tree: "MULTIPLIER only, behind the gate on
+fan-out"; planned E4/T2 = "intent by the strong model, hunks by the typist, verification by the gate".
+The current preregistration is E4's shape (typist as parallel candidate generator, no strong model in the
+loop, gate judges, one frozen dossier) — a different claim; arm T's negative stands and is not contradicted
+by a positive here. Cohort 1 (6 rounds interleaved N/F) started 21:59Z; round-1 F: first_verified 1.89 s,
+4/5 verified, 0 semantic mismatches (3684 tokens, 2796 reasoning).
