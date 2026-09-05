@@ -79,3 +79,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **07:50Z pre-landing obligation (helper_extraction)**: enroll helper_extraction_test → :fast and mcp_helper_extraction_test → :battery in lane_manifest, delete the two red make targets, Sol r4 delta on the schema-enforcement fix; battery-fresh on the landed sha. The legacy 547 does not cover the new 64 tests.
 
 - **08:38Z helper_extraction follow-ups (not in v4)**: scope.paths glob friction (explicit roots field or examples; no silent broadening); public refusal structuredContent must carry `operation`; verb telemetry through the existing service emitter.
+
+- **08:55Z ASTRA HANDOFF (plan of record)**: see /var/tmp/forge/astra-to-fable-next-actions.md — 1 v4/v5+gates; 2 epoch closed; 3 oracle revision (intent+witnesses); 4 admission/actor entrance first; 5 interface hypotheses (dir-root authority, when-to-call doctrine); 6 observation lanes; 7 fresh preregistered epoch for any perf claim.
