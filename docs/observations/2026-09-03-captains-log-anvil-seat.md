@@ -1975,3 +1975,5 @@ RC=0
 === done 03:50Z ok=1
 ```
 Servers restarted onto trunk 2209c61e: 7906 PID 3534456, 8171 PID 3534458 (lane 6–9). Gene: "Go on test" (02:2xZ) is delivered: `make test` on trunk is now the landing gate; `make test-full` is the old full run. Owed: split the fence launcher drives and retire the override; transaction-recovery battery receipt (test-full) so the battery has no skipped precondition.
+
+## 03:54Z — Astra's window closed (03:47Z handoff): his final report + hour-five study = 652459fa on MCP/astra-performance-2026-09-04, Gene inbox inb-c39223 (snapshot says e420f24e pending; the landing 68f24f51 is recorded separately, snapshot preserved). Failed-candidate and landing logs preserved at /home/forge/tmp/landing-logs/2026-09-05. Next lane assigned under his direction: the bounded six-helper closure DESIGN (intent phases reviewed by him before implementation); no cohort tonight; telemetry 417 NO-GO; Opus harness NO-GO; client refusal counter has a documented error_type gap — never infer zero refusals from it.
