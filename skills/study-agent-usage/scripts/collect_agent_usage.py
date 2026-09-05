@@ -8,12 +8,18 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 import tempfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+# Opt-in registration for the inspected single-call wrapper contract. Never guess
+# defaults from a basename; registration requires the exact reviewed source hash.
+REGISTERED_MCP_READ_WRAPPER = None
+MCP_READ_WRAPPER_SHA256 = "41b083aaab9598b17bf62e6c1e578bfd509dd3a7e05998ba7cb7037456fad44b"
 
 SCHEMA = "clj-surgeon.agent-usage-ethnography.v6"
 # Registered client server names, not guesses from arbitrary tool/gateway text.
@@ -305,6 +311,60 @@ def js_tool_methods(source: str) -> set[str]:
     return methods
 
 
+def registered_wrapper_ops(source: str) -> list[str]:
+    """Literal JSON-string cmd at a real tools.exec_command call, exact argv only.
+
+    Counts invocation attempts, not successful RPCs. Shell composition, dynamic
+    JS, unknown interpreter options, and arbitrary Python wrappers stay unknown.
+    """
+    if not REGISTERED_MCP_READ_WRAPPER:
+        return []
+    operations = []
+    # Skip quoted JS text and comments before accepting a call-shaped token.
+    token = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`|//[^\n]*|/\*.*?\*/|tools\.exec_command\s*\(', re.S)
+    decoder = json.JSONDecoder()
+    for match in token.finditer(source):
+        if not match.group().startswith("tools.exec_command"):
+            continue
+        tail = source[match.end():]
+        prefix = re.match(r'\s*\{\s*(?:"cmd"|cmd)\s*:\s*', tail)
+        if not prefix:
+            continue
+        try:
+            command, end = decoder.raw_decode(tail[prefix.end():])
+        except ValueError:
+            continue
+        if not isinstance(command, str) or not re.match(r'\s*[,}]', tail[prefix.end()+end:]):
+            continue
+        if any(c in command for c in "\n;|&<>`$"):
+            continue
+        try:
+            argv = shlex.split(command)
+        except ValueError:
+            continue
+        if len(argv) < 5 or argv[0] not in {"python3", "/usr/bin/python3"} or argv[1] != REGISTERED_MCP_READ_WRAPPER:
+            continue
+        rest = argv[2:]
+        positional, options = [], {}
+        valid = True
+        while rest:
+            value, *rest = rest
+            if value.startswith("-"):
+                if value not in {"--tool", "--port", "--receipt"} or value in options or not rest:
+                    valid = False
+                    break
+                options[value], *rest = rest
+            else:
+                positional.append(value)
+        tool = options.get("--tool", "inspect_clojure")
+        port = options.get("--port", "8171")
+        if (valid and len(positional) == 1 and options.get("--receipt")
+                and tool in {"inspect_clojure", "relation_census", "feature_thread"}
+                and port.isdecimal() and (int(port) == 8171 or 8300 <= int(port) <= 8339)):
+            operations.append(tool)
+    return operations
+
+
 def distribution(values: list[int]) -> dict:
     ordered = sorted(values)
     if not ordered:
@@ -339,6 +399,7 @@ def route_kinds(text: str, action: str) -> list[str]:
     kinds = set()
     matches = list(SURGEON_RE.finditer(text))
     ops = {match.group(1) or ":help" for match in matches}
+    wrapper_ops = registered_wrapper_ops(text)
     nested_methods = js_tool_methods(text)
     surgeon_methods = {
         method for method in nested_methods
@@ -361,6 +422,10 @@ def route_kinds(text: str, action: str) -> list[str]:
         kinds.add("surgeon-read")
     if any(method.endswith(("__apply_clojure_changes", "__alias_migration")) for method in surgeon_methods):
         kinds.add("surgeon-apply")
+    if set(wrapper_ops) & {"inspect_clojure", "relation_census"}:
+        kinds.add("surgeon-read")
+    if "feature_thread" in wrapper_ops:
+        kinds.add("surgeon-plan")
     if cclsp_methods:
         kinds.add("semantic-read")
     has_clojure_path = bool(CLJ_PATH_RE.search(text))
@@ -835,6 +900,7 @@ def record_time(session: dict, timestamp: datetime) -> None:
 
 def record_tool_text(session: dict, text: str, action: str, scan_commands: bool = True) -> None:
     matches = list(SURGEON_RE.finditer(text)) if scan_commands else []
+    wrapper_ops = registered_wrapper_ops(text)
     nested_methods = js_tool_methods(text)
     surgeon_methods = sorted(
         method for method in nested_methods
@@ -845,9 +911,11 @@ def record_tool_text(session: dict, text: str, action: str, scan_commands: bool 
     )
     for method in cclsp_methods:
         session["cclsp_methods"][method.rsplit("__", 1)[-1]] += 1
-    if matches or surgeon_methods:
+    if matches or surgeon_methods or wrapper_ops:
         session["clj_surgeon_tool_actions"] += 1
-        session["clj_surgeon_calls"] += len(matches) + len(surgeon_methods)
+        session["clj_surgeon_calls"] += len(matches) + len(surgeon_methods) + len(wrapper_ops)
+        for operation in wrapper_ops:
+            session["clj_surgeon_ops"][operation] += 1
         for match in matches:
             session["clj_surgeon_ops"][match.group(1) or ":help"] += 1
         for method in surgeon_methods:
@@ -981,8 +1049,9 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                 method for method in tool_methods
                 if method.startswith("mcp__")
             }
-            surgeon_action = bool(SURGEON_RE.search(command_text) or surgeon_methods)
-            surgeon_call_count = len(SURGEON_RE.findall(command_text)) + len(surgeon_methods)
+            wrapper_ops = registered_wrapper_ops(command_text)
+            surgeon_action = bool(SURGEON_RE.search(command_text) or surgeon_methods or wrapper_ops)
+            surgeon_call_count = len(SURGEON_RE.findall(command_text)) + len(surgeon_methods) + len(wrapper_ops)
             native_apply_patch = "tools.apply_patch" in tool_input and bool(CLJ_PATH_RE.search(tool_input)) and not surgeon_action
             if current_turn:
                 current_turn["clj_surgeon_calls"] += surgeon_call_count
@@ -1604,7 +1673,38 @@ def self_test_registered_surgeon_alias() -> None:
         assert route_kinds('await tools.mcp__unrelated__alias_migration({});', "exec") == []
 
 
+def self_test_registered_mcp_read_wrapper() -> None:
+    global REGISTERED_MCP_READ_WRAPPER
+    previous = REGISTERED_MCP_READ_WRAPPER
+    REGISTERED_MCP_READ_WRAPPER = "/registered/mcp_read.py"
+    def invocation(command):
+        return "text(await tools.exec_command({cmd:" + json.dumps(command) + "}));"
+    try:
+        command = "python3 /registered/mcp_read.py args.json --receipt receipt.json"
+        source = invocation(command)
+        assert registered_wrapper_ops(source) == ["inspect_clojure"]
+        assert registered_wrapper_ops(source + source) == ["inspect_clojure"] * 2
+        assert route_kinds(source, "shell") == ["surgeon-read"]
+        session = empty_session("codex", Path("fixture.jsonl"))
+        record_tool_text(session, source, "shell")
+        assert session["clj_surgeon_calls"] == 1
+        assert session["clj_surgeon_ops"] == {"inspect_clojure": 1}
+        for bad in ["cat /registered/mcp_read.py", "echo " + command,
+                    command + "; echo done", command + " --tool alias_migration",
+                    command.replace("/registered/", "/unregistered/"),
+                    command + " --port 7890", command + " --receipt duplicate"]:
+            assert registered_wrapper_ops(invocation(bad)) == []
+        for bad in ["const note=" + json.dumps(source), "// " + source,
+                    "/* " + source + " */", "tools.exec_command({cmd: variable})"]:
+            assert registered_wrapper_ops(bad) == []
+        REGISTERED_MCP_READ_WRAPPER = None
+        assert registered_wrapper_ops(source) == []
+    finally:
+        REGISTERED_MCP_READ_WRAPPER = previous
+
+
 def self_test() -> int:
+    self_test_registered_mcp_read_wrapper()
     self_test_registered_surgeon_alias()
     assert [
         match.group(1)
@@ -2342,6 +2442,7 @@ def self_test() -> int:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument("--registered-mcp-read-wrapper", help="Opt in to exact inspected mcp_read.py contract; source hash must match")
     result.add_argument("--since", help="ISO-8601 lower bound; defaults to newest observation marker")
     result.add_argument("--until", help="ISO-8601 upper bound; defaults to current UTC time")
     result.add_argument("--observations-root", default="docs/observations")
@@ -2670,6 +2771,12 @@ def render_event_clock_receipt(
 
 def main() -> int:
     args = parser().parse_args()
+    global REGISTERED_MCP_READ_WRAPPER
+    if args.registered_mcp_read_wrapper:
+        wrapper = Path(args.registered_mcp_read_wrapper)
+        if not wrapper.is_absolute() or wrapper.is_symlink() or hashlib.sha256(wrapper.read_bytes()).hexdigest() != MCP_READ_WRAPPER_SHA256:
+            raise SystemExit("registered wrapper identity mismatch")
+        REGISTERED_MCP_READ_WRAPPER = str(wrapper)
     if args.self_test:
         return self_test()
     if args.render_read_chains:
@@ -2689,6 +2796,8 @@ def main() -> int:
         ))
         return 0
     receipt = collect(args)
+    if REGISTERED_MCP_READ_WRAPPER:
+        receipt["wrapper_coverage"] = {"contract": "mcp-read-single-call-v1", "source_sha256": MCP_READ_WRAPPER_SHA256, "semantics": "literal invocation attempts, not RPC success or direct tool wall; unresolved wrappers omitted"}
     receipt_path = Path(args.receipt_out).expanduser() if args.receipt_out else default_receipt_path(receipt)
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
