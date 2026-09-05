@@ -29,7 +29,7 @@ awaiting its witness; registration lands in the same change as the RED witnesses
 - [ ] **MCP-OP-HELPER-021**: If a supported reference to a selected owner exists outside `scope.paths`, then clj-surgeon shall refuse with `helper-extraction-caller-outside-scope`, so that definitions are never retired with a caller left behind.
 - [ ] **MCP-OP-HELPER-015**: Source-local uses of a selected owner by retained source functions shall be lowered by the extraction machinery's own source rewrite against one immutable snapshot, and the source file shall be counted once in the footprint.
 - [ ] **MCP-OP-HELPER-007**: When choosing a caller's alias, clj-surgeon shall select the first `alias_policy` entry colliding with nothing bound in that file, and shall refuse with `helper-extraction-alias-policy-exhausted` otherwise.
-- [ ] **MCP-OP-HELPER-013**: If `expect.caller_files` is supplied and differs from the derived count, then clj-surgeon shall refuse with `helper-extraction-expect-mismatch` reporting both counts.
+- [ ] **MCP-OP-HELPER-013**: If `expect.caller_files` is supplied and differs from the derived count of EXTERNAL caller files (the source is not a caller), then clj-surgeon shall refuse with `helper-extraction-expect-mismatch` reporting both counts under that definition.
 
 - [ ] **MCP-OP-HELPER-023**: If a bare symbol could resolve to a selected owner through two required namespaces, then clj-surgeon shall refuse with `helper-extraction-ambiguous-reference` naming the file, symbol and candidates.
 - [ ] **MCP-OP-HELPER-024**: If `to.lib` is already defined or its path is occupied, then clj-surgeon shall refuse with `helper-extraction-target-exists` naming the path.
@@ -44,7 +44,7 @@ awaiting its witness; registration lands in the same change as the RED witnesses
 
 # #Receipt and Continuations
 
-- [ ] **MCP-OP-HELPER-009**: The receipt shall contain counts and histograms only, never a file list; per-caller detail shall be written to `details_path`.
+- [ ] **MCP-OP-HELPER-009**: The receipt shall contain counts and histograms only, never a file list — `caller_files` (external callers), `source_file`, `changed_files` (callers + source + destination), `sites`, `retained_sites`, the partition map and the alias histogram; per-caller detail shall be written to `details_path` in the kernel's local-state receipt directory, never inside the workspace, and the pure planner shall carry no `details_path` of its own.
 - [ ] **MCP-OP-HELPER-010**: A refusal shall carry `next_call` only when a schema-valid, scope-preserving, non-identical continuation is mechanically known; otherwise it shall carry bounded evidence, the one unresolved decision, and `next_call null`.
 - [ ] **MCP-OP-HELPER-016**: No refusal shall offer scope narrowing, caller exclusion, an invented alias or destination, or a weaker verification profile as a continuation.
 - [ ] **MCP-OP-HELPER-012**: The receipt's `closure` field shall state the roots and the grammar over which closure is exact and shall state that dynamic references are not claimed.

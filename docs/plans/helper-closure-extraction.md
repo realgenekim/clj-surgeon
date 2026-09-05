@@ -50,7 +50,7 @@ is constant in the number of callers: no per-file, per-owner or per-site table, 
 ```json
 {"ok": true, "operation": "helper_extraction", "committed": true, "kernel_status": "committed",
  "helpers": 6, "source_retired": 6, "destination_created": true,
- "caller_files": 28,
+ "caller_files": 28, "source_file": 1, "changed_files": 30,
  "partition": {"moved_only": 8, "mixed": 20, "qualified_only": 0, "untouched": 3},
  "sites": 258, "retained_sites": 172, "alias_histogram": {"response": 28},
  "verification": {"profile": "helper-proof", "status": "checks-completed",
