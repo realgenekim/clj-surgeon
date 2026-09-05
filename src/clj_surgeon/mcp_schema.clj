@@ -833,7 +833,16 @@
                 "ok" true
                 "committed" true
                 "source_unchanged" false
-                "destination_created" true}
+                "destination_created" true
+                "source_file" 1}
+    :objects {"verification"
+              {:required ["status" "profile" "ok" "fresh_process"]}
+              "closure"
+              {:required ["roots" "authorized_paths" "grammar"
+                          "dynamic_references" "pruned_symlinks"]
+               :constants {"dynamic_references" "not-claimed"}}
+              "partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+    :exactly-one [["details_path" "details_unavailable"]]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "source_unchanged" "destination_created"
                "undo_receipt" "receipt_hash"
@@ -852,10 +861,19 @@
                 "restored" true
                 "source_unchanged" true
                 "destination_created" false
-                "source_retired" 0}
+                "source_retired" 0
+                "source_file" 1}
     :objects {"restoration_read_back"
               {:required ["files" "aggregate_sha256" "manifest_in"]
-               :constants {"manifest_in" "details_path"}}}
+               :constants {"manifest_in" "details_path"}}
+              "verification"
+              {:required ["status" "profile" "ok" "fresh_process"]}
+              "closure"
+              {:required ["roots" "authorized_paths" "grammar"
+                          "dynamic_references" "pruned_symlinks"]
+               :constants {"dynamic_references" "not-claimed"}}
+              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+    :exactly-one [["details_path" "details_unavailable"]]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "destination_created"
                "source_retired" "restored_file_count" "restoration_read_back"
@@ -875,10 +893,19 @@
                 "restored" true
                 "source_unchanged" true
                 "destination_created" false
-                "source_retired" 0}
+                "source_retired" 0
+                "source_file" 1}
     :objects {"restoration_read_back"
               {:required ["files" "aggregate_sha256" "manifest_in"]
-               :constants {"manifest_in" "details_path"}}}
+               :constants {"manifest_in" "details_path"}}
+              "verification"
+              {:required ["status" "profile" "ok" "fresh_process"]}
+              "closure"
+              {:required ["roots" "authorized_paths" "grammar"
+                          "dynamic_references" "pruned_symlinks"]
+               :constants {"dynamic_references" "not-claimed"}}
+              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+    :exactly-one [["details_path" "details_unavailable"]]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "destination_created"
                "source_retired" "restored_file_count" "restoration_read_back"
@@ -897,9 +924,18 @@
                 "committed" false
                 "restored" false
                 "source_unchanged" false
+                "source_file" 1
                 "source_retired_unknown" "the rollback did not verify, so how many owners the source still defines is not known from this receipt; read recovery_required"}
     :objects {"recovery_required"
-              {:required ["receipt" "reason" "recovery"]}}
+              {:required ["receipt" "reason" "recovery"]}
+              "verification"
+              {:required ["status" "profile" "ok" "fresh_process"]}
+              "closure"
+              {:required ["roots" "authorized_paths" "grammar"
+                          "dynamic_references" "pruned_symlinks"]
+               :constants {"dynamic_references" "not-claimed"}}
+              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+    :exactly-one [["details_path" "details_unavailable"]]
     :absent ["source_retired"]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "files" "recovery_required"
@@ -921,7 +957,8 @@
                 "next_call" nil}
     :absent ["status"]
     :required ["ok" "elapsed_ms" "operation" "error_type" "error" "next_call"
-               "source_unchanged" "mutation_attempted" "write_authority"]}])
+               "source_unchanged" "committed"
+               "mutation_attempted" "write_authority"]}])
 
 (defn- receipt-variant->schema
   "One matrix row as one JSON-Schema branch.
@@ -933,7 +970,7 @@
   generalization is written out rather than reached for. The mapping has no
   judgement in it: the matrix above is the whole assertion, and nothing is
   added here that a reader of the matrix would not expect."
-  [{:keys [title description constants absent required objects]}]
+  [{:keys [title description constants absent required objects exactly-one]}]
   (cond-> {:title title
            :description description
            :properties (merge
@@ -963,6 +1000,21 @@
     ;; reverse-engineer. A witness that must reconstruct an assertion from the
     ;; schema's output is a witness that stops covering the next subkey.
     (seq objects) (assoc :objects objects)
+    ;; @spec MCP-OP-HELPER-009
+    ;; EXACTLY ONE of a group. A terminal receipt points at its external detail
+    ;; artifact or says the artifact is not there; carrying both is two answers
+    ;; to one question, and carrying neither is the silent absence a caller
+    ;; reads as nothing-more-to-see.
+    (seq exactly-one)
+    (assoc :allOf (mapv (fn [group]
+                          {:anyOf (mapv (fn [field]
+                                          {:required [field]
+                                           :not {:anyOf
+                                                 (mapv (fn [other] {:required [other]})
+                                                       (remove #{field} group))}})
+                                        group)})
+                        exactly-one)
+           :exactly-one (vec exactly-one))
     (seq absent) (assoc :not {:anyOf (mapv (fn [field] {:required [field]})
                                            absent)})))
 

@@ -289,7 +289,11 @@
              :closure {:roots fixture/admitted-roots
                        :authorized_paths fixture/scope-paths
                        :grammar "supported-libspecs-only"
-                       :dynamic_references "not-claimed"}
+                       :dynamic_references "not-claimed"
+                       ;; finding 7's fix: symlinks a walk produces are pruned,
+                       ;; and the receipt says how many rather than leaving the
+                       ;; reader to wonder whether any were silently read
+                       :pruned_symlinks 0}
              :destination_lib fixture/dest-lib}
    :partition fixture/canonical-receipt-partition})
 
@@ -326,7 +330,8 @@
    ;; no production path emits -- a fixture that agrees with nothing.
    :recovery_required {:receipt "/local/state/undo-77.edn"
                        :reason "read-back mismatch"
-                       :recovery {:ok false :error "restore did not verify"}}})
+                       :recovery {:ok false :error "restore did not verify"}}
+   :details_path "/local/state/helper-extraction-detail.edn"})
 
 (def ^:private completion-shaped-counts
   "Receipt fields that assert the extraction ACTUALLY HAPPENED.
@@ -1352,6 +1357,31 @@
 ;; injected kernel facts, so what is validated is a receipt this server can
 ;; actually emit rather than a literal written to satisfy its own assertion.
 
+(defn- disposition-alternatives
+  "The `exactly one of these` alternatives a branch declares, normalized to
+  `[{:required [field]} ...]`.
+
+  Accepts the declarative row (`:exactly-one-of`, either field names or
+  `{:required [...]}` maps) and the compiled JSON-Schema form (`:oneOf`), and
+  REFUSES anything else rather than quietly treating it as no constraint."
+  [branch]
+  (when-let [row (:exactly-one branch)]
+    (mapcat (fn [group]
+              (mapv (fn [alternative]
+                      (cond
+                        (string? alternative) {:required [alternative]}
+                        (and (map? alternative) (seq (:required alternative)))
+                        {:required (vec (:required alternative))}
+                        :else
+                        (throw (ex-info
+                                (str "an exactly-one alternative this witness "
+                                     "cannot read; teach it rather than let "
+                                     "the constraint go unchecked")
+                                {:branch (:title branch)
+                                 :alternative alternative}))))
+                    group))
+            row)))
+
 (defn- schema-check
   "Validate `receipt` against one `:oneOf` branch. Returns nil when valid, or a
   keyword naming the first violation.
@@ -1361,7 +1391,8 @@
   unknown keyword would pass a receipt it never checked, which is the same
   false green this suite exists to catch."
   [branch receipt]
-  (let [known #{:title :description :properties :required :not :objects}]
+  (let [known #{:title :description :properties :required :not :objects
+                :exactly-one :allOf}]
     (when-let [unknown (seq (remove known (keys branch)))]
       (throw (ex-info (str "the schema matrix grew a construct this witness "
                            "does not validate; teach it or the branch goes "
@@ -1372,6 +1403,26 @@
    (when-let [forbidden (get-in branch [:not :required])]
      (when (every? #(contains? receipt (keyword %)) forbidden)
        :forbidden-field-present))
+   ;; the compiled `:allOf` form of the same rule. It is checked through the
+   ;; declarative `:exactly-one` row below rather than twice; what matters is
+   ;; that a branch carrying `:allOf` and NO `:exactly-one` never slips past
+   ;; unvalidated.
+   (when (and (seq (:allOf branch)) (empty? (:exactly-one branch)))
+     (throw (ex-info (str "a branch carries the compiled :allOf form with no "
+                          ":exactly-one row to read it from")
+                     {:branch (:title branch)})))
+   ;; EXACTLY ONE OF, e.g. a terminal face carries `details_path` or
+   ;; `details_unavailable` and never both: an absent artifact is said out loud
+   ;; rather than left as a missing path, because a caller reads silence as
+   ;; nothing-more-to-see, and BOTH would be the receipt contradicting itself
+   ;; about whether the detail exists.
+   (when-let [alternatives (disposition-alternatives branch)]
+     (let [satisfied (count (filter (fn [alternative]
+                                      (every? #(contains? receipt (keyword %))
+                                              (:required alternative)))
+                                    alternatives))]
+       (when-not (= 1 satisfied)
+         (if (zero? satisfied) :no-disposition :more-than-one-disposition))))
    ;; :not {:anyOf [{:required [f]} ...]} -- the compiled `:absent` row, e.g.
    ;; rollback-failed must not carry source_retired at all, because how much of
    ;; the source is still defined is genuinely not knowable from that receipt
@@ -1492,6 +1543,7 @@
      :next_call nil
      :source_unchanged true
      :target_unchanged true
+     :committed false
      :mutation_attempted false
      :write_authority false
      :decision "whether to select that var too"
@@ -1700,3 +1752,78 @@
                  (pr-str result))))
       (testing "and the tree is byte-identical afterwards"
         (assert-restored! outcome)))))
+
+;; ---------------------------------------------------------------------------
+;; the DISPOSITION pair, and the shapes an empty map would satisfy
+;;
+;; Two more ways a declared field can be present and useless: a face that
+;; permits both `details_path` and `details_unavailable` says nothing about
+;; whether the detail exists, and an object field whose required subkeys are
+;; declared but never checked against an EMPTY map is satisfied by `{}`. Both
+;; are generated from the matrix, so a new disposition pair or object row is
+;; covered without an edit.
+
+;; @spec MCP-OP-HELPER-009
+;; @spec MCP-OP-HELPER-020
+(deftest exactly-one-disposition-holds-on-every-face-that-declares-a-pair
+  (let [rows (for [branch (:oneOf mcp-schema/helper-extraction-output-schema)
+                   :let [alternatives (disposition-alternatives branch)]
+                   :when alternatives]
+               [branch alternatives])]
+    (is (seq rows)
+        "no face declares an exactly-one-of pair. A terminal receipt must say
+         either where the detail went or that it could not be written: leaving
+         both optional lets a receipt be silent about the difference, and a
+         caller reads silence as nothing-more-to-see.")
+    (doseq [[branch alternatives] rows]
+      (testing (:title branch)
+        (let [receipt (exemplar (:title branch))
+              fields (mapv (comp keyword first :required) alternatives)]
+          (is (nil? (schema-check branch receipt))
+              (str "the exemplar satisfies exactly one disposition: "
+                   (pr-str (select-keys receipt fields))))
+          (testing "BOTH present is a receipt contradicting itself"
+            (is (some? (schema-check
+                        branch
+                        (reduce (fn [acc field] (assoc acc field "either"))
+                                receipt fields)))
+                (str "a receipt carrying every one of " (pr-str fields)
+                     " claims the detail both went somewhere and could not be "
+                     "written")))
+          (testing "NEITHER present says nothing at all"
+            (is (some? (schema-check branch (apply dissoc receipt fields)))
+                (str "a receipt carrying none of " (pr-str fields)
+                     " leaves the reader to guess"))))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest an-empty-map-never-satisfies-a-declared-object-shape
+  (doseq [[branch field spec] (object-rows)]
+    (testing (str (:title branch) " / " field)
+      (let [receipt (exemplar (:title branch))]
+        (is (some? (schema-check branch (assoc receipt (keyword field) {})))
+            (str field " is declared with required subkeys "
+                 (pr-str (vec (:required spec)))
+                 ", so an EMPTY map must not satisfy it. `{}` passing here is "
+                 "finding 11 exactly: the schema says the field is present and "
+                 "the caller gets nothing."))))))
+
+;; @spec MCP-OP-HELPER-015
+(deftest a-pinned-count-is-rejected-in-both-directions
+  (testing "the generated const witness contradicts a pinned number by
+            incrementing it, which catches a missing check but not an
+            off-by-one that only guards one side. Any count pinned to a
+            constant is probed BELOW it as well."
+    (doseq [branch (:oneOf mcp-schema/helper-extraction-output-schema)
+            [field constraint] (:properties branch)
+            :when (and (contains? constraint :const)
+                       (number? (:const constraint)))]
+      (let [receipt (exemplar (:title branch))
+            pinned (:const constraint)]
+        (testing (str (:title branch) " / " field " pinned to " pinned)
+          (doseq [wrong [(dec pinned) (inc pinned)]]
+            (is (some? (schema-check branch (assoc receipt (keyword field) wrong)))
+                (str field " is pinned to " pinned "; " wrong
+                     " must not validate. source_file is the one this exists "
+                     "for: the source is counted ONCE however many "
+                     "source-local uses it carries, so both 0 and 2 are "
+                     "wrong and for different reasons."))))))))
