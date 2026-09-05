@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The mission ledger's entrance. PROTOTYPE (2026-09-05).
+#
+# Mirrors the production launcher's shape: one JVM, one -m, EDN on stdin for
+# structured arguments. It deliberately does not register an op in
+# core/ops-registry -- a prototype that edits the production dispatch table has
+# to be reviewed as a production change.
+#
+#   bin/mission propose --spec-file -   < spec.edn
+#   bin/mission show  M-1 --workspace /path/to/workspace
+#   bin/mission apply M-1 --workspace /path/to/workspace --spec-file profiles.edn
+#   bin/mission undo  M-1 --workspace /path/to/workspace
+#   bin/mission ready     --workspace /path/to/workspace
+#   bin/mission list      --workspace /path/to/workspace
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# NOTE: helper_extraction reaches mcp-hot-verify, which requires nrepl, so the
+# entrance needs the mcp alias's deps. The PURE core (clj-surgeon.mission) has
+# no such dependency and loads under babashka on its own.
+exec clojure -M:clj-surgeon/mcp -m clj-surgeon.mission-cli "$@"
