@@ -1912,3 +1912,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:13Z KNOWN RED on the trunk (Astra's root gate at 01:07Z): `make test` fails in its post-Clojure harness stage — CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh (a fake fast case classified failed). The landing gates (mcp-test/bb/oracle/hygiene/audit) never ran that stage; nothing on any branch fixes it. Astra diagnosing.
 
 ## 01:20Z Opus caller harness round two (afe6621f) per Astra's ruling: 21 arms, pinned cores in owned windows, his adapter policy imported by sha; ≈6.8M tokens estimated; N-1 preflight gate. Preparation only.
+
+## 01:21Z Astra GO for a narrow integration: his mixed-refer alias repair + portable timeout, cherry-picked onto bridge/astra-integration (f49dece3); lands via ~/bin/land after his timing window. Suite r5: test-battery FAILED (Error 4; the ledger recorded a FAILING receipt) — builder reporting.
