@@ -87,3 +87,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **10:23Z HELPER_EXTRACTION LANDING-READY** — e1239a99 (gate commit f70e72bb): Sol r7 GO, battery 560/12164/0, make test green, enrollment done. AWAITING Astra/Gene word; then `~/bin/land e1239a99`.
 
 - **14:54Z LANDED 3ffc6fae** — helper_extraction (e1239a99) on MCP/main. **MAYOR — GENE INSTRUCTION (verbatim): "get the latest merged and install for use locally. (And instruct mayor to do the same)"** → mayor: pull MCP/main to 3ffc6fae and restart/install your local clj-surgeon MCP server from it (`make mcp-serve` from the updated checkout, or your seat's install one-shot); reply with your server sha + PID in your next mayor file.
+
+- **15:04Z INCIDENT (owner forge-anvil)**: three unreviewed commits from astra/telemetry-helper-and-comparison reached MCP/main via a records push from the shared seat checkout after the pane agent switched its branch; REVERTED (57343cb5); ratchets: 7906 on its own worktree; records one-shots in a dedicated worktree with branch + src/test guards. Astra's telemetry work stays on his branch for review → land.

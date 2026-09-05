@@ -564,3 +564,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## RESUME DELTA 14:54Z
 - helper_extraction LANDED: MCP/main = 3ffc6fae (merge 3ffc6fae). Servers 7906 PID 3937847 / 8171 PID 3937849 on it. Astra tasked (Gene 14:5xZ): telemetry blind spot fix + 4-hour fair replicated comparison (his handoff item 7); WATCH: his pane shows gpt-5.6-luna now. Mayor instructed via the queue doc + /tmp/anvil-to-mayor.txt to pull+install 3ffc6fae. Next: relay Astra's ack/plan; hold my lane quiet during his timed arms; follow-ups per the handoff.
+
+- 15:04Z: RECORDS NOW LIVE IN /home/forge/src/clj-surgeon-records (branch records/MCP-main tracking origin/MCP/main); NEVER commit/push from /home/forge/src/clj-surgeon (shared with the pane agent, who switches its branch). 7906 runs from clj-surgeon-srv7906; 8171 from clj-surgeon-srv8171. Trunk head after the revert: 57343cb5.
