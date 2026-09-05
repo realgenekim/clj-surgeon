@@ -1059,6 +1059,13 @@ test:
 outline:
 	bb -m clj-surgeon.core :op :outline :file $(FILE)
 
+# @spec MCP-OP-TELCOV-005
+# @spec MCP-OP-TELCOV-006
+# The receipt reports Surgeon MCP usage per public tool name, per telemetry
+# session id, and per telemetry root -- read from the events themselves, never
+# inferred from launcher process names -- names every root it read, states its
+# window, and reports a present-but-empty root as "no files under <root>"
+# rather than as a measured zero.
 study-agent-usage:
 	@python3 skills/study-agent-usage/scripts/collect_agent_usage.py --pretty $(AGENT_USAGE_ARGS)
 

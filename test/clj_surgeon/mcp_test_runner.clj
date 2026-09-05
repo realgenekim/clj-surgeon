@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.admit-patch-test]
+   [clj-surgeon.agent-usage-collector-test]
    [clj-surgeon.census-pool-test]
    [clj-surgeon.core-discovery-test]
    [clj-surgeon.mcp-alias-migration-test]
@@ -106,6 +107,7 @@
           'clj-surgeon.mcp-program-tool-test
           'clj-surgeon.mcp-read-request-normalization-test
           'clj-surgeon.mcp-schema-test
+          'clj-surgeon.agent-usage-collector-test
           'clj-surgeon.mcp-telemetry-coverage-test
           'clj-surgeon.mcp-telemetry-test
           'clj-surgeon.mcp-tool-test

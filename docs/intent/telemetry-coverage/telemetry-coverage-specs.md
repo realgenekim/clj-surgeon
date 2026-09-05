@@ -32,3 +32,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   dispatch boundary and therefore recorded nowhere — clj-surgeon shall refuse
   to build that tool, naming the tool and the remedy, rather than serving it
   with silent telemetry.
+
+- [x] **MCP-OP-TELCOV-005**: When the agent-usage collector reports Surgeon
+  MCP usage, it shall report call counts per public tool name, per telemetry
+  session id, and per telemetry ROOT, and shall print every root it read in
+  the receipt, rather than inferring ownership from launcher process names.
+
+- [x] **MCP-OP-TELCOV-006**: While a scanned telemetry root exists but holds
+  no telemetry files, the collector shall report that root as `no files under
+  <root>` rather than as zero calls; and every Surgeon telemetry receipt shall
+  state the explicit window it covers.
