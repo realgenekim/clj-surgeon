@@ -48,3 +48,18 @@ Prediction recorded above: k=1 median 1.5–2.5 s with a lower per-candidate ver
 k=1 is FASTER than k=5 and lost nothing: 12/12 single candidates verified (prediction of a lower rate: wrong). So on these two dossiers five parallel candidates buy no first-verified time (they cost it: parallel requests and serial gating add ~0.1–0.7 s) and no reliability that a single candidate lacked. The "search under a cheap verifier" mechanism is not what produced the cohort-1 result; the result is a fast model (≈480 tok/s) plus a millisecond gate against a cold-process author. Search can only pay when single-candidate reliability is materially below 1, which these dossiers do not exercise; that is a fixture-difficulty limitation, and the next dossier must be one where a single candidate fails often (the retained f0 defect class, a multi-hunk fan-out, or a real-repo file).
 
 Standing: NOT KEEP for the search claim; a bounded-dossier speed claim is real but only against a cold author; the warm-author N arm (cohort 2) decides whether any of it survives against Sol.
+
+## Fan-out dossier (22:13–22:15Z) — parallel search buys the answer where single candidates fail
+
+Third mission `fanout`: rename `normalize` → `normalize-path` across three files (definition + five call sites) and thread a `:strict?` option through two paths; two traps (a docstring example and a string literal that must NOT change); 6 hunks; bb gate of 7 tests / 19 assertions in ~0.3 s; acceptance requires every authorized file changed and no other. Built without seeing results; not tuned afterwards. Raw log: 2026-09-05-fast-typist-fanout-1.log; retained candidates under /var/tmp/forge/typist-fx/F-fanout-*.
+
+| arm | rounds verified | first-verified wall, sorted (s) | median | max | per-candidate verified | tokens/run (completion) |
+|---|---|---|---|---|---|---|
+| F k=1 | **2/6** | 3.87 5.66 | 4.77 | 5.66 | 2/6 (33%) | 1.7–2.7k |
+| F k=5 | **6/6** | 4.98 5.29 5.44 5.63 5.66 6.50 | 5.54 | 6.50 | 15/30 (50%) | 10.2–11.4k |
+
+Semantic mismatches 0, refusals 0. Pooled single-candidate rate 17/36 = 47%, inside the 40–70% band the dossier was designed for. Five parallel candidates cost ~0.8 s of median wall and ~6x tokens and turned 2/6 rounds into 6/6. So the search mechanism is real exactly where the prereg said it would be: where a single candidate's reliability is materially below 1. On the easy dossiers it bought nothing; here it is the difference between an answer and none.
+
+Failure signatures (19 retained failures): 13 never applied — the model over-escaped quotes in context lines (`\"/\"` where the file holds `"/"`), so no verbatim anchor matched and the applier refused (correctly; no repair); 4 applied but missed a call site, so the tree failed to compile at the gate; 2 other. Runner gap to fix before the next cohort: the "anchor: no match" refusal does not name the file block.
+
+Cold Sol (arm N) on this dossier: running now for the cold headline; k=5 is the typist arm to compare, with k=1 reported beside it.
