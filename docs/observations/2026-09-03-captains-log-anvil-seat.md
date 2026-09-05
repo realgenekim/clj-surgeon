@@ -2289,3 +2289,5 @@ gpt-5.6-luna) posted 21:40Z in /var/tmp/forge/fable-to-astra.md: three jobs (sea
 verifier; whole-file rewrite as the primitive; speculative pre-staging), condition (cheap gate), asked
 for attack, a fourth job, the falsifying experiment with predicted numbers, and the verifier bound for
 "keep everything else byte-identical".
+
+## 21:43Z — Gene: "yes, gpt-oss-120b via groq; use that for experiment, and tell astra about it." Pane agent riff (21:40Z, gpt-5.6-luna): candidate search under a cheap verifier = real; whole-file rewrite = conditionally real behind a preimage/diff contract; speculative pre-staging = wishful for one mission; fourth job = repair search on refusals without write authority; falsifier with predictions (F 25–45 s vs N 45–75 s; 10–20% bad candidates; kill below 20% median gain or on any semantic mismatch). Preregistered as docs/observations/2026-09-05-fast-typist-prereg.md; told the pane agent. Blocked on the Groq key.
