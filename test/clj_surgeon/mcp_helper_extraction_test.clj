@@ -289,7 +289,8 @@
              :closure {:roots fixture/admitted-roots
                        :authorized_paths fixture/scope-paths
                        :grammar "supported-libspecs-only"
-                       :dynamic_references "not-claimed"}}
+                       :dynamic_references "not-claimed"}
+             :destination_lib fixture/dest-lib}
    :partition fixture/canonical-receipt-partition})
 
 (def ^:private profile-result
@@ -319,7 +320,13 @@
   {:status :rollback-failed
    :restored false
    :unrestored_files ["src/acid/web/http.clj"]
-   :recovery_required {:journal "txn-77" :reason "read-back mismatch"}})
+   ;; the shape `finish-failure!` actually builds: the receipt to invert by
+   ;; hand, why the automatic inverse did not verify, and the kernel's own
+   ;; recovery result. An earlier version named the first key :journal, which
+   ;; no production path emits -- a fixture that agrees with nothing.
+   :recovery_required {:receipt "/local/state/undo-77.edn"
+                       :reason "read-back mismatch"
+                       :recovery {:ok false :error "restore did not verify"}}})
 
 (def ^:private completion-shaped-counts
   "Receipt fields that assert the extraction ACTUALLY HAPPENED.
@@ -1354,7 +1361,7 @@
   unknown keyword would pass a receipt it never checked, which is the same
   false green this suite exists to catch."
   [branch receipt]
-  (let [known #{:title :description :properties :required :not}]
+  (let [known #{:title :description :properties :required :not :objects}]
     (when-let [unknown (seq (remove known (keys branch)))]
       (throw (ex-info (str "the schema matrix grew a construct this witness "
                            "does not validate; teach it or the branch goes "
@@ -1364,6 +1371,15 @@
    ;; :not {:required [...]} -- the refusal branch's "carries no status"
    (when-let [forbidden (get-in branch [:not :required])]
      (when (every? #(contains? receipt (keyword %)) forbidden)
+       :forbidden-field-present))
+   ;; :not {:anyOf [{:required [f]} ...]} -- the compiled `:absent` row, e.g.
+   ;; rollback-failed must not carry source_retired at all, because how much of
+   ;; the source is still defined is genuinely not knowable from that receipt
+   (when-let [alternatives (get-in branch [:not :anyOf])]
+     (when (some (fn [alternative]
+                   (every? #(contains? receipt (keyword %))
+                           (:required alternative)))
+                 alternatives)
        :forbidden-field-present))
    (some (fn [field]
            (when-not (contains? receipt (keyword field)) :missing-required))
@@ -1379,7 +1395,32 @@
                (and (:enum constraint)
                     (not (contains? (set (:enum constraint)) value))) :enum-mismatch
                :else nil)))
-         (:properties branch))))
+         (:properties branch))
+   ;; @spec MCP-OP-HELPER-020 -- the NESTED shapes. Sol's r4 kept finding 11
+   ;; open because a declared object field said `{:type "object"}` and nothing
+   ;; more: `recovery_required {}` satisfied it, and a receipt naming a
+   ;; recovery authority with no receipt, reason or recovery inside it is the
+   ;; field's whole purpose missing while the schema says present.
+   (some (fn [[field spec]]
+           (let [known-sub #{:required :constants :description}]
+             (when-let [unknown (seq (remove known-sub (keys spec)))]
+               (throw (ex-info (str "the :objects row grew a construct this "
+                                    "witness does not validate")
+                               {:field field :unknown (vec unknown)
+                                :branch (:title branch)}))))
+           (let [nested (get receipt (keyword field))]
+             (when (contains? receipt (keyword field))
+               (or (when-not (map? nested) :object-not-a-map)
+                   (some (fn [sub]
+                           (when-not (contains? nested (keyword sub))
+                             :missing-required-subkey))
+                         (:required spec))
+                   (some (fn [[sub pinned]]
+                           (when (and (contains? nested (keyword sub))
+                                      (not= pinned (get nested (keyword sub))))
+                             :sub-const-mismatch))
+                         (:constants spec))))))
+         (:objects branch))))
 
 (defn- valid-against
   "Every branch title `receipt` validates against."
@@ -1451,6 +1492,8 @@
      :next_call nil
      :source_unchanged true
      :target_unchanged true
+     :mutation_attempted false
+     :write_authority false
      :decision "whether to select that var too"
      :elapsed_ms 3.0}))
 
@@ -1515,3 +1558,145 @@
         "a committed receipt naming an undo document without the hash that
          binds it is an inverse nobody can prove they are applying to the
          right transaction")))
+
+;; ---------------------------------------------------------------------------
+;; the NESTED shapes (Sol r4 kept finding 11 open on these)
+;;
+;; A declared `{:type "object"}` says a field is a map and nothing else, so
+;; `recovery_required {}` satisfied the schema while carrying none of the
+;; authority a human has to act on. The matrix's `:objects` row states each
+;; object field's required subkeys and pinned sub-constants; the two witnesses
+;; below are GENERATED from that row, so a subkey added to the schema is
+;; covered on the next run rather than when someone remembers.
+
+(defn- object-rows
+  "`[[branch field spec] ...]` for every declared object shape in the matrix."
+  []
+  (for [branch (:oneOf mcp-schema/helper-extraction-output-schema)
+        [field spec] (:objects branch)]
+    [branch field spec]))
+
+;; @spec MCP-OP-HELPER-020
+(deftest the-matrix-declares-the-shape-of-every-object-field-it-requires
+  (testing "an object field that is required but shapeless is finding 11: the
+            schema says present, and present is not what the caller needs"
+    (is (seq (object-rows))
+        "the :objects row is where nested shape is stated; an empty one means
+         every declared object is still just {:type \"object\"}")
+    (doseq [[branch field spec] (object-rows)]
+      (testing (str (:title branch) " / " field)
+        (is (seq (:required spec))
+            (str field " is declared as an object with no required subkeys, "
+                 "so an empty map satisfies it"))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest removing-any-required-subkey-invalidates-its-object
+  (doseq [[branch field spec] (object-rows)]
+    (let [receipt (exemplar (:title branch))]
+      (testing (str (:title branch) " / " field)
+        (is (contains? receipt (keyword field))
+            (str "the exemplar must actually carry " field " or the removals "
+                 "below prove nothing"))
+        (doseq [sub (:required spec)]
+          (testing (str "without " sub)
+            (is (some? (schema-check
+                        branch
+                        (update receipt (keyword field) dissoc (keyword sub))))
+                (str sub " is declared required inside " field " on the "
+                     (:title branch) " face; a receipt missing it must not "
+                     "validate. If this fails, the subkey is required in name "
+                     "only -- exactly the gap that kept finding 11 open."))))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest contradicting-any-pinned-subconstant-invalidates-its-object
+  (doseq [[branch field spec] (object-rows)
+          [sub pinned] (:constants spec)]
+    (let [receipt (exemplar (:title branch))
+          contradiction (cond
+                          (boolean? pinned) (not pinned)
+                          (number? pinned) (inc pinned)
+                          :else (str pinned "-contradicted"))]
+      (testing (str (:title branch) " / " field " / " sub)
+        (is (some? (schema-check
+                    branch
+                    (assoc-in receipt [(keyword field) (keyword sub)]
+                              contradiction)))
+            (str sub " inside " field " is pinned to " (pr-str pinned)
+                 "; " (pr-str contradiction) " must not validate. "
+                 "restoration_read_back's manifest_in is the one that matters "
+                 "most: it is the pointer that makes the O(1) receipt honest "
+                 "about where the per-file evidence went."))))))
+
+;; ---------------------------------------------------------------------------
+;; the refusal on the REAL public path
+;;
+;; Every refusal witness above reaches the boundary through `mcp-helper/plan`
+;; or `execute!`. This one goes through the registered tool map's `:tool-fn` --
+;; the exact entry the MCP server dispatches to -- because the normalization a
+;; refusal envelope needs is applied on that path and nowhere else. A refusal
+;; that is well-formed one function call below the wire is not a well-formed
+;; refusal.
+
+(defn- registered-tool-fn
+  []
+  (let [tool (some #(when (= "helper_extraction" (:name %)) %)
+                   (mcp-tool/tools-for-profile :full))]
+    (is (some? tool) "helper_extraction is registered in the full profile")
+    (:tool-fn tool)))
+
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-021
+(deftest a-refusal-on-the-registered-public-path-is-a-complete-envelope
+  (testing "scope.paths given as DIRECTORY NAMES rather than globs authorizes
+            no file, so every discovered caller is outside the write
+            authorization and the request refuses. What matters here is not the
+            refusal -- other witnesses prove that -- but that the receipt an
+            agent receives from the REGISTERED entry is a complete envelope and
+            that the tree is untouched."
+    (let [outcome
+          (with-materialized-happy-tree
+           "public-refusal"
+           (fn [root]
+        (let [receipt-dir (io/file tmp-root (str "pub-receipts-" (System/nanoTime)))
+              captured (atom nil)]
+          (try
+            (.mkdirs receipt-dir)
+            (mcp-tool/init! {:project-root (str root)
+                             :receipt-dir (str receipt-dir)
+                             :verification-profiles configured-profiles})
+            ((registered-tool-fn)
+             nil
+             (json/parse-string
+              (json/generate-string
+               (fixture/request {:workspace_root (str root)
+                                 :scope {:paths ["src" "test"]}
+                                 :verification {:profile "helper-proof"}}))
+              true)
+             (fn [content error? structured]
+               (reset! captured {:content content :error? error?
+                                 :result structured})))
+            @captured
+            (finally
+              (mcp-tool/init! nil)
+              (delete-tree! receipt-dir))))))
+          {:keys [error? result]} (:result outcome)]
+      (is (true? error?))
+      (is (= "helper-extraction-caller-outside-scope" (:error_type result))
+          (pr-str result))
+      (testing "the envelope is complete"
+        (is (= "helper_extraction" (:operation result)))
+        (is (false? (:mutation_attempted result))
+            "nothing was staged, and the receipt says so in a FIELD rather than
+             leaving the reader to infer it from an absence")
+        (is (false? (:write_authority result))
+            "and no write authority was ever taken")
+        (is (true? (:source_unchanged result)))
+        (is (contains? result :next_call))
+        (is (nil? (:next_call result))))
+      (testing "it validates against exactly the refusal branch"
+        (is (= #{"refusal"} (valid-against result))
+            (str "the receipt an agent actually receives must satisfy the "
+                 "registered output schema, and exactly one face of it: "
+                 (pr-str result))))
+      (testing "and the tree is byte-identical afterwards"
+        (assert-restored! outcome)))))

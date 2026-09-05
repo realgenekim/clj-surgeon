@@ -1979,6 +1979,7 @@
           :error message
           :next_call nil
           :source_unchanged true
+          :committed false
           :mutation_attempted false
           :write_authority false}
          evidence))
@@ -2063,13 +2064,18 @@
                ;; a workspace-routing refusal is a helper_extraction refusal
                ;; and wears the same envelope; the router's own cause and
                ;; remedy travel verbatim inside it
-               (merge (helper-extraction-refusal
+               ;; @spec MCP-OP-HELPER-010
+               ;; through the boundary's own normalizer as well, so a routing
+               ;; refusal wears exactly the envelope every other pre-write
+               ;; refusal wears
+               (helper-extraction/normalize-refusal
+                (merge (helper-extraction-refusal
                         (or (some-> (:error_type routed) name)
                             (some-> (:error-type routed) name)
                             "invalid-workspace-root")
                         (or (:error routed) "The workspace root could not be resolved")
                         {})
-                      (dissoc routed :ok :next_call))
+                      (dissoc routed :ok :next_call)))
                ;; the same receipt-directory derivation alias_migration uses:
                ;; the routed workspace's own LOCAL-STATE directory, outside the
                ;; tree this verb mutates

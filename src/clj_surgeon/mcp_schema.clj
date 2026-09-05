@@ -730,6 +730,7 @@
   |------------------------|-----------|---------------------|----------------------|-----------------|---------|
   | ok                     | =true R   | =false R            | =false R             | =false R        | =false R |
   | elapsed_ms             | R         | R                   | R                    | R               | R       |
+  | operation              | =\"helper_extraction\" R (all five faces) ||||
   | status                 | =\"committed\" R | =\"verification-failed\" R | =\"verification-timeout\" R | =\"rollback-failed\" R | ABSENT |
   | kernel_status          | =\"committed\" R | =\"verification-failed\" R | =\"verification-timeout\" R | =\"rollback-failed\" R | -   |
   | committed              | =true R   | =false R            | =false R             | =false R        | =false  |
@@ -752,6 +753,30 @@
   | error_type             | -         | -                   | -                    | -               | R       |
   | error                  | -         | -                   | -                    | -               | R       |
   | next_call              | -         | -                   | -                    | -               | =null R |
+  | mutation_attempted     | -         | -                   | -                    | -               | =false R |
+  | write_authority        | -         | -                   | -                    | -               | =false R |
+  | source_retired_unknown | -         | -                   | -                    | =SENTENCE R     | -       |
+  | helpers                | R         | R                   | R                    | R               | -       |
+  | source_file            | R         | R                   | R                    | R               | -       |
+  | closure                | R         | R                   | R                    | R               | -       |
+  | destination_lib        | R         | R                   | R                    | R               | -       |
+  | changed_files          | R         | -                   | -                    | -               | -       |
+  | retained_sites         | R         | -                   | -                    | -               | -       |
+  | alias_histogram        | R         | -                   | -                    | -               | -       |
+  | partition              | R         | -                   | -                    | -               | -       |
+  | planned_caller_files   | -         | R                   | R                    | R               | -       |
+  | planned_changed_files  | -         | R                   | R                    | R               | -       |
+  | planned_sites          | -         | R                   | R                    | R               | -       |
+  | planned_retained_sites | -         | R                   | R                    | R               | -       |
+  | planned_alias_histogram| -         | R                   | R                    | R               | -       |
+  | planned_partition      | -         | R                   | R                    | R               | -       |
+
+  NESTED SHAPES (`:objects`), asserted wherever the field appears:
+
+  | field                 | required subkeys                     | pinned |
+  |-----------------------|--------------------------------------|--------|
+  | restoration_read_back | files, aggregate_sha256, manifest_in | manifest_in = \"details_path\" |
+  | recovery_required     | receipt, reason, recovery            | -      |
 
   R = required · =x = pinned to that constant · ABSENT = must not be present ·
   - = permitted but not asserted by this face.
@@ -772,26 +797,55 @@
     `source_retired`, because how much of the source is still retired is
     genuinely unknown and must not be answered with a number in either
     direction; `source_retired_unknown` carries that instead.
-  * the refusal face pins `source_unchanged` true and `committed` false: a
-    refusal is raised before anything is staged, so a refusal claiming changed
-    bytes or a commit describes a write that never happened."
+  * the refusal face pins `source_unchanged` true and `committed` false, and
+    requires `mutation_attempted` and `write_authority` pinned false: a refusal
+    is raised before anything is staged, so a refusal claiming changed bytes, a
+    commit, an attempted mutation or write authority describes a write that
+    never happened.
+  * `operation` is pinned on EVERY face. It is the one field naming which verb
+    published the receipt, and a receipt that validates here while naming
+    another operation is one this schema has no business blessing.
+  * `verification` is required on all four TERMINAL faces, rollback-failed
+    included: `terminal-receipt` always emits the typed verification map, and
+    `{status \"unknown\"}` with no counts is itself the honest answer when
+    there is no profile result. Its absence would mean the mapper was bypassed.
+  * `source_retired_unknown` is PINNED to the mapper's one fixed sentence
+    rather than merely typed. A stable code emitted by the mapper is the better
+    shape and was offered; it would mean editing `mcp-helper-extraction`, and
+    this round is schema-only. Pinning the sentence is the assertion available
+    here — when the mapper gains a code, this const moves to it.
+  * the plan projections are stated PER FACE because `plan-counts` projects
+    them per face: `committed` carries the mutation counts under their plain
+    names, every non-committed terminal face carries the same numbers under
+    `planned_*`, and `helpers`, `source_file`, `closure` and `destination_lib`
+    are unprefixed on both because they describe the request and the discovery
+    rather than a completed write.
+
+  THE NESTED SHAPES are asserted because a `recovery_required` of the wrong
+  shape is a recovery authority a human cannot act on, and a
+  `restoration_read_back` without its aggregate is the O(N) manifest this
+  receipt exists to keep out."
   [{:title "committed"
     :description "The proof completed and the write stands. The plan's counts describe the tree as it now is, and undo_receipt plus receipt_hash are the authority this write can be inverted from."
-    :constants {"status" "committed"
+    :constants {"operation" "helper_extraction"
+                "status" "committed"
                 "kernel_status" "committed"
                 "ok" true
                 "committed" true
                 "source_unchanged" false
                 "destination_created" true}
-    :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+    :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "source_unchanged" "destination_created"
                "undo_receipt" "receipt_hash"
                "helpers" "source_retired" "caller_files" "sites"
+               "source_file" "changed_files" "retained_sites"
+               "alias_histogram" "partition" "closure" "destination_lib"
                "verification"]}
 
    {:title "verification-failed"
     :description "The proof did not pass and the kernel's inverse restored every protected byte. Nothing was retired: source_retired is the actual 0, and what the plan WOULD have done is under planned_*."
-    :constants {"status" "verification-failed"
+    :constants {"operation" "helper_extraction"
+                "status" "verification-failed"
                 "kernel_status" "verification-failed"
                 "ok" false
                 "committed" false
@@ -799,14 +853,22 @@
                 "source_unchanged" true
                 "destination_created" false
                 "source_retired" 0}
-    :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+    :objects {"restoration_read_back"
+              {:required ["files" "aggregate_sha256" "manifest_in"]
+               :constants {"manifest_in" "details_path"}}}
+    :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "destination_created"
-               "source_retired" "planned_source_retired"
-               "restored_file_count" "restoration_read_back" "verification"]}
+               "source_retired" "restored_file_count" "restoration_read_back"
+               "helpers" "source_file" "closure" "destination_lib"
+               "planned_source_retired" "planned_caller_files"
+               "planned_changed_files" "planned_sites" "planned_retained_sites"
+               "planned_alias_histogram" "planned_partition"
+               "verification"]}
 
    {:title "verification-timeout"
     :description "The proof did not return inside its profile's timeout and the kernel's inverse restored every protected byte. Identical obligations to verification-failed: a timeout is a proof that did not complete, never one that passed."
-    :constants {"status" "verification-timeout"
+    :constants {"operation" "helper_extraction"
+                "status" "verification-timeout"
                 "kernel_status" "verification-timeout"
                 "ok" false
                 "committed" false
@@ -814,33 +876,52 @@
                 "source_unchanged" true
                 "destination_created" false
                 "source_retired" 0}
-    :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+    :objects {"restoration_read_back"
+              {:required ["files" "aggregate_sha256" "manifest_in"]
+               :constants {"manifest_in" "details_path"}}}
+    :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "destination_created"
-               "source_retired" "planned_source_retired"
-               "restored_file_count" "restoration_read_back" "verification"]}
+               "source_retired" "restored_file_count" "restoration_read_back"
+               "helpers" "source_file" "closure" "destination_lib"
+               "planned_source_retired" "planned_caller_files"
+               "planned_changed_files" "planned_sites" "planned_retained_sites"
+               "planned_alias_histogram" "planned_partition"
+               "verification"]}
 
    {:title "rollback-failed"
     :description "The inverse did NOT verify. The one face that keeps linear evidence, because a human has to act on it: files names what could not be restored, recovery_required carries the kernel's recovery authority, and the retirement is stated as unknown rather than as a number in either direction."
-    :constants {"status" "rollback-failed"
+    :constants {"operation" "helper_extraction"
+                "status" "rollback-failed"
                 "kernel_status" "rollback-failed"
                 "ok" false
                 "committed" false
                 "restored" false
-                "source_unchanged" false}
+                "source_unchanged" false
+                "source_retired_unknown" "the rollback did not verify, so how many owners the source still defines is not known from this receipt; read recovery_required"}
+    :objects {"recovery_required"
+              {:required ["receipt" "reason" "recovery"]}}
     :absent ["source_retired"]
-    :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+    :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "files" "recovery_required"
-               "source_retired_unknown" "planned_source_retired"]}
+               "source_retired_unknown"
+               "helpers" "source_file" "closure" "destination_lib"
+               "planned_source_retired" "planned_caller_files"
+               "planned_changed_files" "planned_sites" "planned_retained_sites"
+               "planned_alias_histogram" "planned_partition"
+               "verification"]}
 
    {:title "refusal"
     :description "A typed refusal. No terminal state was reached, so there is no status: the receipt carries the error_type, the cause, the one unresolved decision, and next_call — null in v1, always, because no refusal has a mechanically composable continuation."
-    :constants {"ok" false
+    :constants {"operation" "helper_extraction"
+                "ok" false
                 "committed" false
                 "source_unchanged" true
+                "mutation_attempted" false
+                "write_authority" false
                 "next_call" nil}
     :absent ["status"]
-    :required ["ok" "elapsed_ms" "error_type" "error" "next_call"
-               "source_unchanged"]}])
+    :required ["ok" "elapsed_ms" "operation" "error_type" "error" "next_call"
+               "source_unchanged" "mutation_attempted" "write_authority"]}])
 
 (defn- receipt-variant->schema
   "One matrix row as one JSON-Schema branch.
@@ -852,13 +933,36 @@
   generalization is written out rather than reached for. The mapping has no
   judgement in it: the matrix above is the whole assertion, and nothing is
   added here that a reader of the matrix would not expect."
-  [{:keys [title description constants absent required]}]
+  [{:keys [title description constants absent required objects]}]
   (cond-> {:title title
            :description description
-           :properties (into {}
-                             (map (fn [[field value]] [field {:const value}]))
-                             constants)
+           :properties (merge
+                         (into {}
+                               (map (fn [[field value]] [field {:const value}]))
+                               constants)
+                         ;; nested shapes: a field whose VALUE is an object
+                         ;; with its own required subkeys and pinned subvalues
+                         (into {}
+                               (map (fn [[field shape]]
+                                      [field
+                                       (cond-> {:type "object"
+                                                :required (vec (:required shape))}
+                                         (seq (:constants shape))
+                                         (assoc :properties
+                                                (into {}
+                                                      (map (fn [[sub value]]
+                                                             [sub {:const value}]))
+                                                      (:constants shape))))]))
+                               objects))
            :required (vec required)}
+    ;; the declared shapes travel ON the branch as well as into its
+    ;; `:properties`. JSON Schema 2020-12 ignores keywords it does not know, so
+    ;; this changes no validation — what it buys is that the branch still SAYS
+    ;; which of its fields are objects with required subkeys, in one readable
+    ;; row, instead of only in a `:properties` entry a generator would have to
+    ;; reverse-engineer. A witness that must reconstruct an assertion from the
+    ;; schema's output is a witness that stops covering the next subkey.
+    (seq objects) (assoc :objects objects)
     (seq absent) (assoc :not {:anyOf (mapv (fn [field] {:required [field]})
                                            absent)})))
 

@@ -73,9 +73,39 @@
            :error message
            :next_call nil
            :source_unchanged true
+           :committed false
            :mutation_attempted false
            :write_authority false}
           evidence)))
+
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-016
+(defn normalize-refusal
+  "Put ONE closed envelope around a refusal this namespace did not build.
+
+  The pure planner mints its own refusals — all twelve v1 types — and they
+  carry `error_type`, the evidence and the one unresolved decision, but not the
+  fields that say what happened to the CALLER'S TREE. A real public
+  `tools/call` that refused `helper-extraction-caller-outside-scope` returned
+  structuredContent with no `operation`, no `mutation_attempted` and no
+  `write_authority`: a caller reading that receipt could not tell a refusal
+  that touched nothing from one that tried and rolled back, and the schema's
+  refusal variant described a shape the wire was not emitting.
+
+  Every pre-write refusal goes through here — planner, preflight, scan,
+  destination, workspace — so the envelope is a property of the BOUNDARY rather
+  than of whoever happened to mint the refusal. The incoming map wins on every
+  field it carries, because its evidence is the part this function must not
+  touch; only the envelope fields it lacks are supplied, and `ok`/`next_call`
+  are re-asserted because a refusal is never ok and v1 has no continuation."
+  [result]
+  (-> (merge {:operation operation
+              :source_unchanged true
+              :committed false
+              :mutation_attempted false
+              :write_authority false}
+             result)
+      (assoc :ok false :next_call nil)))
 
 ;; ---------------------------------------------------------------------------
 ;; request validation
@@ -636,7 +666,7 @@
 ;; @spec MCP-OP-HELPER-005
 ;; @spec MCP-OP-HELPER-012
 ;; @spec MCP-OP-HELPER-021
-(defn plan
+(defn- plan*
   "Read the tree under `workspace_root`, confine it, and plan one extraction.
 
   Discovery runs over every ADMITTED root; `scope.paths` supplies the
@@ -648,7 +678,7 @@
   unusable verification authority is knowable from the request and the profile
   registry alone, and answering it after the walk would make the refusal depend
   on the state of a tree this call was never going to write."
-  ([params] (plan params nil))
+  ([params] (plan* params nil))
   ([params profiles]
   (let [validated (validate-request params)]
     (if-not (:ok validated)
@@ -728,6 +758,25 @@
                                      ;; from, or drift between the two commits
                                      ;; silently over a stale plan
                                      :sources (into {} (map (juxt :path :source)) sources)))))))))))))))))))))
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-016
+(defn plan
+  "One helper-extraction plan, or ONE typed refusal in the closed envelope.
+
+  `plan*` does the work and refuses in whatever shape the refusing layer mints
+  — the pure planner's twelve types included. This is the seam where every one
+  of them becomes the same public object, so the refusal the wire carries and
+  the refusal variant the output schema declares are the same thing. It is a
+  boundary responsibility and not the planner's: the planner cannot know what
+  happened to a tree it never touched."
+  ([params] (plan params nil))
+  ([params profiles]
+   (let [result (plan* params profiles)]
+     (if (:ok result)
+       result
+       (normalize-refusal result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; the terminal states and the terminal receipt
