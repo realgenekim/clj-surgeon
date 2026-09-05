@@ -17,4 +17,13 @@ cd "$(dirname "$0")/.."
 # NOTE: helper_extraction reaches mcp-hot-verify, which requires nrepl, so the
 # entrance needs the mcp alias's deps. The PURE core (clj-surgeon.mission) has
 # no such dependency and loads under babashka on its own.
+# READ VERBS GO TO BABASHKA. They touch only clj-surgeon.mission, which is
+# babashka-safe on purpose; routing them through the JVM costs ~6 s of start and
+# loading for ~1 ms of work. Writes stay on the JVM: they reach a planner and a
+# guarded transaction kernel.
+case "${1:-}" in
+  show|list|ready|blocked)
+    exec bb --classpath src bin/mission-read.clj "$@" ;;
+esac
+
 exec clojure -M:clj-surgeon/mcp -m clj-surgeon.mission-cli "$@"

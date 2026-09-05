@@ -15,8 +15,10 @@
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-cli :as cli]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.java.shell]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
@@ -175,6 +177,70 @@
         (is (str/starts-with? (first lines) "ID "))
         (is (every? #(< (count %) 120) lines))))))
 
+(deftest the-ledger-dir-mirrors-the-production-state-dir
+  (testing "@bb-read-path. The babashka reader computes the ledger location
+            itself so it never loads the JVM boundary. That is a SECOND
+            SPELLING of where state lives, and a second spelling that drifts
+            makes a reader report an empty ledger instead of an error — the
+            worst possible failure for a `what is in flight` verb. Pin them."
+    (let [home (str (io/file tmp-root (str "ledger-home-" (System/nanoTime))))
+          ws (io/file tmp-root (str "ledger-ws-" (System/nanoTime)))]
+      (try
+        (.mkdirs ws)
+        (is (= (workspace/state-dir (str ws) home)
+               (mission/workspace-state-dir (str ws) home))
+            "the pure mirror and clj-surgeon.mcp-workspace/state-dir agree")
+        (finally (delete-tree! ws) (delete-tree! (io/file home)))))))
+
+(deftest a-moved-tree-refuses-before-any-write
+  (testing "@stale-resume. A snapshot is a claim about a tree. `drift` names
+            exactly which of the planned files no longer hash to what the plan
+            froze, and the refusal it earns says nothing was written."
+    (let [sources {"/a.clj" "(ns a)" "/b.clj" "(ns b)" "/c.clj" "(ns c)"}
+          snap (mission/snapshot sources)
+          unmoved (fn [path] (get sources path))
+          moved (fn [path] (if (= "/b.clj" path) "(ns b) ;; edited" (get sources path)))
+          gone (fn [path] (when-not (= "/c.clj" path) (get sources path)))]
+      (is (= 3 (:files snap)))
+      (is (:clean? (mission/drift snap unmoved)) "an unmoved tree is clean")
+      (testing "one edited file is NAMED"
+        (let [d (mission/drift snap moved)]
+          (is (false? (:clean? d)))
+          (is (= ["/b.clj"] (:changed d)))
+          (let [r (mission/stale-refusal "M-1" snap d)]
+            (is (mission/refused? r))
+            (is (= "mission-snapshot-stale" (:error_type r)))
+            (is (= ["/b.clj"] (:changed_files r)))
+            (is (false? (:mutation_attempted r)))
+            (is (true? (:source_unchanged r)))
+            (is (= [:plan "M-1"] (:next-action r))
+                "and it offers the one continuation that can help"))))
+      (testing "a DELETED planned file is drift too, not a clean read"
+        (is (= ["/c.clj"] (:changed (mission/drift snap gone))))))))
+
+(deftest the-tool-says-cede-to-native-when-it-cannot-earn-its-return
+  (testing "@native-escape. A mission costs the caller two returns; a native
+            edit costs one. When the dossier cannot predict a saved return —
+            one owner, one site, no proof obligation — the tool must say so."
+    (let [tiny (mission/recommend {:caller_files 1 :sites 1} false)
+          tiny-proved (mission/recommend {:caller_files 1 :sites 1} true)
+          fixture-sized (mission/recommend {:caller_files 31 :sites 66} true)]
+      (is (= :native (:recommendation tiny)))
+      (is (string? (:because tiny)) "and it says why, in the caller's terms")
+      (is (= :mission (:recommendation tiny-proved))
+          "a proof obligation is itself a saved return: the caller would have
+           to satisfy it by hand")
+      (is (= :mission (:recommendation fixture-sized))))))
+
+(deftest next-action-is-data-and-never-a-prescription-the-ledger-cannot-honour
+  (is (= [:plan "M-1"] (mission/next-action {:id "M-1" :state :proposed})))
+  (is (= [:apply "M-1"] (mission/next-action {:id "M-1" :state :ready})))
+  (is (= [:resume "M-1"] (mission/next-action {:id "M-1" :state :verified})))
+  (is (nil? (mission/next-action {:id "M-1" :state :blocked}))
+      "a blocked mission's next action belongs to a human, and inventing
+       [:apply id] for it would be a prescription with no continuation")
+  (is (nil? (mission/next-action {:id "M-1" :state :undone}))))
+
 ;; ---------------------------------------------------------------------------
 ;; the end-to-end half
 ;;
@@ -242,6 +308,12 @@
                        (pr-str (:decision proposed))))
               (is (nil? (:decision proposed)))
               (is (= 6 (get-in proposed [:dossier :owners :helpers])))
+              (is (= :mission (:recommendation proposed))
+                  "@native-escape: 31 caller files under a proof obligation is
+                   a return this tool earns")
+              (is (= [:apply "M-1"] (:next-action proposed)))
+              (is (pos? (get-in proposed [:snapshot :files]))
+                  "@stale-resume: the plan's frozen bytes are snapshotted")
               (is (pos? (get-in proposed [:dossier :footprint :changed_files])))
               (is (= pre (tree-on-disk root (keys pre)))
                   "PROPOSE WRITES NO BYTES to the workspace")))
@@ -251,14 +323,42 @@
               (is (= :ready (:state shown)))
               (is (= request (:intent shown))
                   "the intent is stored verbatim, so the dossier can be recomputed")
-              (is (= [{:from nil :to "proposed" :event "propose"}
-                      {:from "proposed" :to "ready" :event "propose"}]
+              (is (= [{:from nil :to "proposed" :event "open"}
+                      {:from "proposed" :to "ready" :event "plan"}]
                      (mapv #(dissoc % :at) (:history shown))))))
 
           (testing "READY — the mission is listed as movable by a machine"
             (let [{:keys [ready]} (cli/ready base)]
               (is (= [{:id "M-1" :state "ready" :waiting_on "apply" :question nil}]
                      ready))))
+
+          (testing "@stale-resume — a tree that MOVED refuses before any write"
+            (let [snap (:snapshot (cli/show (assoc base :id "M-1")))
+                  ;; a real planned owner, taken from the mission's own
+                  ;; snapshot rather than guessed from the fixture's layout
+                  victim (io/file (first (sort (keys (:by-file snap)))))
+                  original (slurp victim)]
+              (spit victim (str original "\n;; someone edited this\n"))
+              (let [refused (cli/apply! (assoc base :id "M-1"))]
+                (is (mission/refused? refused))
+                (is (= "mission-snapshot-stale" (:error_type refused)))
+                (is (= [(str victim)] (:changed_files refused))
+                    "and it NAMES the file that moved")
+                (is (false? (:mutation_attempted refused)))
+                (is (= :ready (:state (cli/show (assoc base :id "M-1"))))
+                    "the mission did not leave :ready: nothing was staged"))
+              (spit victim original)
+              (is (= pre (tree-on-disk root (keys pre)))
+                  "the tree is back where the plan left it")))
+
+          (testing "the bb READ path renders exactly what the JVM path does"
+            (let [out (:out (clojure.java.shell/sh
+                             "bb" "--classpath" "src" "bin/mission-read.clj"
+                             "show" "M-1" "--workspace" (str root)
+                             "--state-home" (str state-home)
+                             :dir "."))]
+              (is (= (cli/show (assoc base :id "M-1")) (edn/read-string out))
+                  "one object, two entrances")))
 
           (testing "APPLY — the guarded transaction runs and the receipt lands
                     INSIDE the mission file"
@@ -277,14 +377,15 @@
                   (is (= "committed" (get-in back [:receipt :status])))
                   (is (str/includes? raw ":undo {:receipt"))))))
 
-          (testing "UNDO — the inverse verifies and every byte comes back"
-            (let [undone (cli/undo! (assoc base :id "M-1"))]
+          (testing "RESUME — one verb moves it from wherever it is; on a
+                    :verified mission that means the inverse"
+            (let [undone (cli/resume (assoc base :id "M-1"))]
               (is (= :undone (:state undone)))
               (is (true? (get-in undone [:undo :verified :whole-files])))
               (is (= pre (tree-on-disk root (keys pre)))
                   "the workspace is byte-identical to where it started")
-              (testing "and a second undo refuses instead of running again"
-                (let [again (cli/undo! (assoc base :id "M-1"))]
+              (testing "and a second resume refuses instead of running again"
+                (let [again (cli/resume (assoc base :id "M-1"))]
                   (is (mission/refused? again))
                   (is (= "mission-illegal-transition" (:error_type again)))))))
 

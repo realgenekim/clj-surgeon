@@ -85,10 +85,12 @@
     missions))
 
 (defn- save!
+  "Stamp the one executable next move, write, and refresh the index."
   [state-dir m]
-  (mission/write-mission! state-dir m)
-  (ledger-of state-dir)
-  m)
+  (let [m (assoc m :next-action (mission/next-action m))]
+    (mission/write-mission! state-dir m)
+    (ledger-of state-dir)
+    m))
 
 ;; ---------------------------------------------------------------------------
 ;; the six verbs
@@ -96,7 +98,7 @@
 (defn propose!
   "One bounded intent in, one mission id and its dossier out. NO BYTES WRITTEN
    to the workspace: the only file this touches is the mission's own EDN."
-  [{:keys [verb request profiles state-home]}]
+  [{:keys [verb request profiles state-home question]}]
   (if-not (contains? verbs verb)
     (mission/refusal "unknown-verb"
                      (str "No mission verb named " (pr-str verb) ".")
@@ -105,16 +107,28 @@
     (let [state-dir (state-dir-for (:workspace_root request) state-home)
           id (mission/next-id state-dir)
           plan ((get-in verbs [verb :plan]) request profiles)
-          {:keys [dossier decision state]} (mission/dossier plan)
-          created (mission/advance nil :proposed "propose"
+          {:keys [dossier decision state recommendation]} (mission/dossier plan request)
+          created (mission/advance nil :proposed "open"
                                    {:at (now) :id id :verb verb
                                     :created_at (now)
+                                    ;; the bounded intent as the caller said it,
+                                    ;; and the three facts that bound it
+                                    :question question
+                                    :root (:workspace_root request)
+                                    :scope (:scope request)
                                     :intent request})]
       (if (mission/refused? created)
         created
-        (let [classified (mission/advance created state "propose"
+        (let [classified (mission/advance created state "plan"
                                           (cond-> {:at (now) :updated_at (now)
                                                    :dossier dossier}
+                                            recommendation (merge recommendation)
+                                            ;; @stale-resume: the snapshot is
+                                            ;; taken from the plan's OWN frozen
+                                            ;; bytes, never a second read
+                                            (:ok plan)
+                                            (assoc :snapshot
+                                                   (mission/snapshot (:sources plan)))
                                             decision (assoc :decision decision)))]
           (if (mission/refused? classified)
             classified
@@ -138,6 +152,23 @@
     {:ok true :operation "mission"
      :ready (mission/ready-missions (ledger-of state-dir))}))
 
+(defn- read-if-present
+  [path]
+  (let [f (io/file path)] (when (.isFile f) (slurp f))))
+
+(defn stale?
+  "@stale-resume. Whether the tree has moved under this mission's plan.
+
+  Returns the typed refusal, or nil when the snapshot still holds. Called
+  BEFORE anything is staged: the kernel's own frozen-source gate would catch
+  the same drift at commit time and refuse correctly, but only after the caller
+  has paid for a transaction, and its refusal does not name the files."
+  [m]
+  (when-let [snap (:snapshot m)]
+    (let [drifted (mission/drift snap read-if-present)]
+      (when-not (:clean? drifted)
+        (mission/stale-refusal (:id m) snap drifted)))))
+
 (defn apply!
   "Run the mission's guarded transaction and its proof, and record the terminal
    receipt INTO the mission. `:applied` is written before the transaction and
@@ -148,7 +179,11 @@
         m (mission/read-mission state-dir id)]
     (if (mission/refused? m)
       m
-      (let [staged (mission/advance m :applied "apply" {:at (now) :updated_at (now)})]
+      (or
+       ;; @stale-resume: nothing is staged, nothing is written, and the refusal
+       ;; names the files that moved.
+       (stale? m)
+       (let [staged (mission/advance m :applied "apply" {:at (now) :updated_at (now)})]
         (if (mission/refused? staged)
           staged
           (let [_ (save! state-dir staged)
@@ -167,7 +202,7 @@
                                                     :receipt_hash (:receipt_hash receipt)})))]
             (if (mission/refused? terminal)
               terminal
-              (save! state-dir terminal))))))))
+              (save! state-dir terminal)))))))))
 
 (defn undo!
   "Invert one verified mission through the receipt its own apply published."
@@ -207,12 +242,46 @@
 ;; ---------------------------------------------------------------------------
 ;; entrance
 
+(defn resume
+  "ONE verb for 'move this mission from wherever it is'.
+
+  Astra's convergence: `continue` and `undo` are the same question asked of
+  different states, and a caller holding an id should not have to know which
+  one it is in. The mission's `:next-action` is the authority, so the ledger —
+  not the caller — decides what resuming means:
+
+    :ready     -> apply    (the guarded transaction, behind the stale gate)
+    :verified  -> undo     (the inverse, from the receipt apply published)
+    :applied   -> REFUSE   a write was attempted and nobody recorded the
+                           outcome. Resuming that automatically is exactly the
+                           auto-remediation that must never mutate a delivery
+                           chain without a second predicate.
+    otherwise  -> the typed illegal-transition refusal, which names what is
+                  legal from here."
+  [{:keys [id workspace state-home] :as opts}]
+  (let [m (mission/read-mission (state-dir-for workspace state-home) id)]
+    (cond
+      (mission/refused? m) m
+      (= :ready (:state m)) (apply! opts)
+      (= :verified (:state m)) (undo! opts)
+      (= :applied (:state m))
+      (mission/refusal "resume-needs-a-human"
+                       (str "Mission " id " is :applied: a write was attempted "
+                            "and no terminal receipt was recorded. Resuming it "
+                            "automatically could double-apply or invert a "
+                            "transaction nobody has confirmed.")
+                       {:id id :state "applied"
+                        :next-action nil
+                        :decision "what the interrupted transaction left standing"})
+      :else (mission/advance m :applied "resume" {:at (now)}))))
+
 (def usage
   (str "Usage: bin/mission <verb> [args]\n\n"
-       "  propose --spec-file -        one bounded intent (EDN on stdin) -> id + dossier\n"
+       "  open|plan --spec-file -      one bounded intent (EDN on stdin) -> id + dossier\n"
        "  show    <id> --workspace R   the whole mission object\n"
        "  apply   <id> --workspace R   run the guarded transaction + proof\n"
-       "  undo    <id> --workspace R   invert a verified mission\n"
+       "  resume  <id> --workspace R   move it from wherever it is (apply or undo)\n"
+       "  undo    <id> --workspace R   the explicit inverse\n"
        "  ready        --workspace R   missions waiting on exactly one move\n"
        "  list         --workspace R   the human index\n\n"
        "The propose spec is {:verb \"helper_extraction\" :request {...}\n"
@@ -228,13 +297,19 @@
                      :profiles (:profiles spec)
                      :receipt-dir (:receipt-dir flags)
                      :id (first positional)}
-                    (select-keys spec [:verb :request :profiles]))
+                    (select-keys spec [:verb :question :request :profiles]))
         result (case verb
-                 "propose" (propose! opts)
+                 ;; `open` and `plan` are one call in this prototype: proposing
+                 ;; a bounded intent IS computing its dossier. Astra's two-step
+                 ;; (state the question, then plan it) is a real split this
+                 ;; prototype does not implement; both names reach the same fn
+                 ;; so the vocabulary is already the converged one.
+                 ("open" "plan" "propose") (propose! opts)
                  "show" (show opts)
                  "apply" (apply! opts)
+                 "resume" (resume opts)
                  "undo" (undo! opts)
-                 "ready" (ready opts)
+                 ("ready" "blocked") (ready opts)
                  "list" (list-missions opts)
                  (do (println usage) {:ok true}))]
     (when (map? result) (pp/pprint result))

@@ -127,6 +127,12 @@
 ;; in-memory counter — is the authority, and a mission ledger copied to another
 ;; machine keeps its ids.
 
+(defn sha256
+  [^String text]
+  (let [digest (.digest (java.security.MessageDigest/getInstance "SHA-256")
+                        (.getBytes text "UTF-8"))]
+    (apply str (map #(format "%02x" (bit-and 0xff (int %))) digest))))
+
 (defn missions-dir
   "The missions directory under one workspace's local-state dir."
   [state-dir]
@@ -159,13 +165,34 @@
   (let [highest (reduce max 0 (keep id-number (mission-ids state-dir)))]
     (str "M-" (inc highest))))
 
+(defn workspace-state-dir
+  "The ledger directory for one workspace, computed WITHOUT loading the JVM
+  boundary.
+
+  This MIRRORS `clj-surgeon.mcp-workspace/state-dir` — `.getCanonicalFile` on
+  the root, SHA-256 of that path, under `<home>/.local/state/clj-surgeon/
+  workspaces/`. A second source of truth for where state lives is exactly how a
+  reader silently reads an EMPTY ledger and reports nothing in flight, so the
+  two are pinned together by a witness rather than by this comment.
+
+  It exists so the READ verbs can run under babashka. Measured on this box: a
+  JVM entrance costs ~6 s of start and namespace loading before it does 1 ms of
+  work, and `show`/`list`/`ready` are the verbs an agent calls most."
+  [workspace-root state-home]
+  (let [canonical (.getCanonicalPath (io/file workspace-root))]
+    (str (io/file (or state-home (System/getProperty "user.home"))
+                  ".local" "state" "clj-surgeon" "workspaces"
+                  (sha256 canonical)))))
+
 (defn write-mission!
   "Write one mission as pretty, human-diffable EDN. Key order is fixed so a
    `git diff` of a ledger shows the change and not a rehash."
   [state-dir mission]
   (let [file (io/file (mission-file state-dir (:id mission)))
         ordered (concat [:id :state :verb :created_at :updated_at]
-                        [:intent :dossier :decision :receipt :undo :history])
+                        [:question :root :scope :intent :recommendation :because
+                         :snapshot :dossier :decision :plan :proof :receipt
+                         :undo :next-action :history])
         body (str "{"
                   (str/join "\n "
                             (for [k ordered :when (contains? mission k)]
@@ -223,12 +250,6 @@
 ;; deliberate exception to the bounded-receipt rule: this is the mission's own
 ;; durable state, not a wire receipt, and a drift refusal that cannot say WHICH
 ;; file drifted sends the caller back to re-plan blind.
-
-(defn sha256
-  [^String text]
-  (let [digest (.digest (java.security.MessageDigest/getInstance "SHA-256")
-                        (.getBytes text "UTF-8"))]
-    (apply str (map #(format "%02x" (bit-and 0xff (int %))) digest))))
 
 (defn snapshot
   "`{:files n :hash aggregate :by-file {path sha}}` over the frozen bytes a plan
