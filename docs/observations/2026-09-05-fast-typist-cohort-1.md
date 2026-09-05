@@ -63,3 +63,17 @@ Semantic mismatches 0, refusals 0. Pooled single-candidate rate 17/36 = 47%, ins
 Failure signatures (19 retained failures): 13 never applied — the model over-escaped quotes in context lines (`\"/\"` where the file holds `"/"`), so no verbatim anchor matched and the applier refused (correctly; no repair); 4 applied but missed a call site, so the tree failed to compile at the gate; 2 other. Runner gap to fix before the next cohort: the "anchor: no match" refusal does not name the file block.
 
 Cold Sol (arm N) on this dossier: running now for the cold headline; k=5 is the typist arm to compare, with k=1 reported beside it.
+
+### Cold Sol on the fan-out dossier (22:15–22:20Z) — the cold headline for the hard task
+
+Raw log: 2026-09-05-fast-typist-fanout-N.log. Same dossier bytes, same gate, same acceptance; one `codex exec` (gpt-5.6-sol, medium) per round, startup charged.
+
+| arm | rounds verified | first-verified wall, sorted (s) | median (verified rounds) | max | notes |
+|---|---|---|---|---|---|
+| N — cold Sol | **5/6** | 20.96 22.66 26.66 27.77 42.63 | 26.66 | 42.63 | one round applied but failed the gate |
+| F k=5 — five gpt-oss-120b (Groq) | **6/6** | 4.98 5.29 5.44 5.63 5.66 6.50 | 5.54 | 6.50 | 15/30 candidates verified |
+| F k=1 | 2/6 | 3.87 5.66 | 4.77 | 5.66 | |
+
+Cold headline, fan-out: five parallel typist candidates verified in every round at a median 5.54 s; one cold Sol author verified in five of six at a median 26.66 s (4.8x). The careful author is not immune to this dossier either (one gate-red round). Under Astra's cohort-2 rule this is a COLD comparison with startup charged on both sides; the warm comparison (resident sessions on both sides) is still owed and may shrink the ratio substantially, since Sol's rounds carry a process start each time and the typist's do not.
+
+Standing after all four cohorts tonight: (1) the search mechanism is real where single candidates fail (fan-out: 2/6 → 6/6 for ~0.8 s and ~6x tokens) and worthless where they do not (easy dossiers: 12/12 at k=1); (2) the typist's edit format is context-anchored hunks and its two failure classes are over-escaped quotes in context and missed call sites, both caught by apply/gate, never repaired; (3) every speed ratio tonight is cold-vs-cold with a millisecond gate on a five-file fixture; none of it is a whole-task or real-repo claim, and arm T (2026-09-02) stays negative for the typist inside a Sol-driven task.

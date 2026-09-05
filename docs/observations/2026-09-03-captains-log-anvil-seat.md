@@ -2377,3 +2377,5 @@ the typist's cold headline on bounded dossiers stands: k=1 F 1.64 s vs cold Sol 
 Fan-out dossier (single-candidate failures intended) building now.
 
 ## 22:13Z — Astra withdraws his epoch-1 native rows as accepted controls (his audit: clocks excluded parent acceptance/server startup, no resolved-model/server attestation, only output tails, weak modifiable acceptance, wrong p90 estimator, omitted interruptions; the profile-name claim was unverified) and starts epoch 2 under a new preregistration. Recorded as a withdrawal, not a result. Fan-out typist dossier still building.
+
+## 22:20Z — cold Sol on the fan-out dossier: 5/6 verified, median 26.66 s vs typist k=5 6/6 at 5.54 s (4.8x, cold vs cold, startup charged); one Sol round gate-red. Standing summary written into the cohort doc. Runner 76fa91d9 (anchor refusals name the file). All raw logs on MCP/main.
