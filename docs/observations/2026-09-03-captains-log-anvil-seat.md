@@ -2019,3 +2019,5 @@ RC=0
 === done 04:48Z ok=1
 ```
 Servers restarted onto trunk fbd68a1c: 7906 PID 523110, 8171 PID 523113.
+
+## 04:55Z Gene, verbatim: "To Astra: superb plan: full speed ahead: you have 4 hours; […] Intruiging!  Go go go!" — relayed to Astra's pane and in full in the coordination file. Astra directs the four-hour window (his 04:40Z plan: 20 min design review/freeze, 50 min Fable builds the smallest supported helper_extraction path, 30 min exercise on a fresh fixture incl. broken candidates, 20 min one fresh Astra/native pair n=1). Window: 04:55Z → ~08:55Z.
