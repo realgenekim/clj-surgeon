@@ -87,3 +87,23 @@ receipt_hash, elapsed_ms. Never a file list.
 
 Dynamic references, macro-generated calls, strings, `resolve`; whole-application compilation;
 any speed result. Those are measured, not claimed (plan §"Measurement plan and falsifier").
+
+## Verification profile and evidence contract (boundary; Astra 05:23Z)
+
+- The admitted profile comes from the EXISTING verification-profile configuration path, e.g.
+  `{:verification-profiles {"helper-proof" {:commands [["/usr/bin/python3" "/var/tmp/forge/astra-helper-program/acceptance/proof.py"]]}}}`
+  run synchronously in the candidate cwd. Admission is derived from that existing path
+  (synchronous external command, rollback-capable); no new fixture-only capability flag is
+  introduced by accident, and any truly needed flag is declared before public preflight.
+- The proof's stdout JSON (`status`, `profile`, `behavior_cases`, `caller_files`,
+  `selected_sites`, `retained_sites`, `changed_files`, `application_compile_claim`,
+  `evidence_id`) is a trusted task-specific verifier, not a universal schema. The boundary
+  publishes only evidence actually available: it retains the command exit and output, copies
+  typed fields when the profile emits them, and reports `unavailable` for a profile without
+  typed coverage. It never substitutes fixture constants; the exact provider output and the
+  emitted `evidence_id` stay auditable in the receipt detail. No formatter or network command is
+  auto-added to a profile.
+- Self-recursive multi-arity helpers (an arity delegating to another by the helper's own name)
+  are ordinary owners on the happy path: one owner, no dependency edge, shape preserved.
+- Pure and boundary witnesses live in separate namespaces (`helper-extraction-test`, pure,
+  Babashka-runnable; `mcp-helper-extraction-test`, JVM boundary), sharing one fixture.
