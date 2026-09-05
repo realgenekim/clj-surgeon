@@ -98,15 +98,16 @@
     ;; contention on a shared box does not manufacture a refusal while a
     ;; namespace that has genuinely doubled still says so.
     clj-surgeon.mcp-feature-thread-test 90000
-    ;; MEASURED 494 s in CI (suite-spike spec, 2026-09-04: "reader-eval-fence-test =
-    ;; 494 of CI's 521 s") and 466.9 s on 2026-09-05 02:43Z (battery lane, cores 6-9,
-    ;; contended by a peer full gate). About twenty launcher drives of the reader
-    ;; eval fence, each a real child JVM: the cost is process spawn, not a slow
-    ;; assertion. The :battery default of 300 s landed (TEST-ISO-007) AFTER the last
-    ;; passing battery receipt, so at the default this namespace fails the battery
-    ;; by construction -- which blocked every landing on 2026-09-05. Ceiling here is
-    ;; ~2x the CI measurement, the same rule as the entry above. OWED: split the
-    ;; launcher drives into matrix cells (the spec's own plan) and retire this line.
+    ;; MEASURED: 464.9 s in the suite spike's round one (local, load 5.18, 19-22 JVMs),
+    ;; 466.9 s on 2026-09-05 02:43Z (battery lane, cores 6-9, peer full gate on the
+    ;; same host), and 494 s reported by the CI run (secondary; its load is not
+    ;; recorded). About twenty launcher drives of the reader eval fence, each a
+    ;; real child JVM: the cost is process spawn, not a slow assertion. The
+    ;; :battery default of 300 s landed (TEST-ISO-007) after the last passing
+    ;; battery receipt, and every measured run of this namespace since is over it,
+    ;; so this is a declared measured-baseline exception: ceiling ~2x the largest
+    ;; measurement, the same rule as the entry above. OWED: split the launcher
+    ;; drives into matrix cells (the spec's own plan) and retire this line.
     clj-surgeon.reader-eval-fence-test 1000000})
 
 (def mutable-global-allowlist
