@@ -200,6 +200,23 @@ For every reported production failure:
 5. Assert the recommended remedy succeeds end to end when that remedy is part
    of the public contract.
 
+### Prove that a rollback test reached mutation
+
+A test claiming recovery after a write must first witness the staged future
+state. Keep project markers, profile declarations and other admission
+preconditions in the fixture. At the injected failure seam, assert that the
+real commit ran and that the intended bytes or destination exist; then assert
+the terminal recovery state and complete protected inventory against PRE.
+An original-equals-original comparison alone cannot establish rollback.
+
+Exercise exceptions at commit entry and after commit separately from a verifier
+that returns failure. Assert that each injected seam actually fires, so an
+earlier refusal cannot make the test green. Preserve the failing old-code
+execution with its source identity. This rule follows the Astra/Fable helper
+extraction incident on 2026-09-05: missing project markers let purported
+exception-restoration tests pass without staging any changes; an independent
+real-project probe exposed the unsafe commit-exception path.
+
 ### CLI and mutation contracts
 
 For a new CLI operation, option, or alias, test:

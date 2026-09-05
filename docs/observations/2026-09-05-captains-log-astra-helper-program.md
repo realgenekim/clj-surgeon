@@ -68,7 +68,7 @@ Read-only planner consumes 375 source/test files (4,692,427 bytes) without a cal
 
 Root replays original initializer and shadow control plus Java import probe on stable helper8e1e7cab / alias74365b22: selected initializer rewritten correctly, local shadow preserved, imported-class candidate loads and equals original. The independent concrete planner NO-GO findings are closed on those bytes. Raw evidence `repair-replay/result.json`; per-arity and later-binding coverage additionally passes the builder gate.
 
-Approved retaining the existing extraction engine after Fable demonstrated that the ordinary edit transaction engine does not carry extraction. Required on-disk exception witnesses already restore source; terminal mapping remains under repair. No workspace locking claim is made without evidence. Current candidate estimate 07:00 UTC. All 15 baseline copies are verified and ready; 30.147 seconds preparation, no model or proof dispatch.
+Approved retaining the existing extraction engine after Fable demonstrated that the ordinary edit transaction engine does not carry extraction. The builder then reported that on-disk exception witnesses restored source; **that claim was withdrawn at07:02**: those fixture trees lacked a project marker and never staged a write. Terminal mapping was also under repair. The later independent public ordinary-proof-failure rollback is separate valid evidence. No workspace locking claim is made without evidence. Current candidate estimate 07:00 UTC. All 15 baseline copies are verified and ready; 30.147 seconds preparation, no model or proof dispatch.
 
 ## 06:42Z — Astra: first complete public extraction from compact intent
 
@@ -95,3 +95,9 @@ Completed 05:55:58–06:55:58 UTC study, independently checked by Peirce. Counti
 Default service roots contain four successful inspections (192 ms total, 34,392 characters). Each owned public01 server telemetry directory has only a server.start event, no helper tool.call: a real product emission gap, not evidence of zero usage. Root has exact client RPC+observer proof evidence for both calls and has assigned existing-emitter follow-up outside the correctness critical path. Raw eight refusal-text actions are not eight adjudicated production failures; the reviewer reads/exercises failure text. No reliability rate or native efficiency claim follows from those counts.
 
 Latest measured quota at06:49:51 UTC:18% weekly headroom remaining; no secondary window reported. Final source fixes and required gates remain on Fable lane6–9, with preflight02 ready on12–13. Measurement starts only after final correctness GO and quiet allocation.
+
+## 07:05Z — Astra: rollback test false green withdrawn at its earlier claim
+
+Fable reports that test-owner rounds6–7 used trees without a project marker, so the claimed exception rollback tests never staged anything. This withdraws the earlier builder-derived restoration claim in this log at06:16; that paragraph now carries the correction. Sol used a real project and reproduced commit-then-throw leaving source changed, so its NO-GO remains authoritative for ee03. Ordinary real-application proof-failure rollback01 remains valid and is not conflated with commit exceptions.
+
+New boundary witnesses assert that the injected commit seam fires before checking restoration. Fable reports BEFORE28 tests/561 assertions/54 failures, AFTER30 tests/586 assertions/zero failures or errors on the corrected worktree. These are builder reports awaiting frozen-source independent replay and final gates; no new public call or model trial has run. Rule reinforced: a rollback test must independently witness the staged future state or commit entry, then the restoration, not merely compare an unchanged original tree.
