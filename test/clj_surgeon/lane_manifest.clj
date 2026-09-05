@@ -188,6 +188,9 @@
    'clj-surgeon.memory.oom-reproduction-test
    "transaction-kernel memory witness -- `make memory-red-kernel`, exclusive suite.lock"
 
+   'clj-surgeon.thread-parameter-test
+   "bounded prototype, outside every JVM lane -- `make thread-parameter-red`"
+
    'clj-surgeon.worktree-lifecycle-prune-test
    "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"
 
