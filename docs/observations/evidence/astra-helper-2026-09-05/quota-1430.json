@@ -1,0 +1,26 @@
+{
+  "observed_at": "2026-09-05T14:35:57.826Z",
+  "source": "/home/forge/.codex/sessions/2026/09/04/rollout-2026-09-04T21-56-42-01a06e6c-8bff-7cc3-8402-14d16b3eca60.jsonl",
+  "rate_limits": {
+    "limit_id": "codex",
+    "limit_name": null,
+    "primary": {
+      "used_percent": 90.0,
+      "window_minutes": 10080,
+      "resets_at": 1788786616
+    },
+    "secondary": null,
+    "credits": {
+      "has_credits": false,
+      "unlimited": false,
+      "balance": "0"
+    },
+    "individual_limit": null,
+    "spend_control_reached": null,
+    "plan_type": "pro",
+    "rate_limit_reached_type": null
+  },
+  "weekly_remaining_percent": 10.0,
+  "reset_utc": "2026-09-07T13:10:16+00:00",
+  "remaining_tokens": null
+}

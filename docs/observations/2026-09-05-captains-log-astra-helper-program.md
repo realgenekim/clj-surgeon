@@ -173,3 +173,8 @@ Both local quality paths pass oneddbe6fd. Positive04:24.884s wholeclientRPC,406 
 08:55Z actor dispatch cutoff reached. No new actor/benchmark row will start. All ownedpublic/usabilityservers are stopped. Root now publishes the four-hour report and handoff; Fable's already-running newbattery/Sol/fullgate sequence remains pending and can finish under its existing allocation. Publicmain frozen.
 
 Independent public04 review GO: both actualliveoutputsvalidate and7negativecontrolsreject; profile/PIDbirth/candidatebinding, exactrestoration27paths/26hashes+aggregate, bothcleanupandparents0/zerosurvivors. SeparateSolr4remainsGO-WITH-FIX: additionalproductioninvariantsandnestedshapesnotfullyenforced. Fablev5inflight. RootnoticedSolrawmapperassumptionsneedactualpublicpre-write-refusalvalidation: usabilitycall4omitsoperation/mutation_attempted/write_authority. Senturgentcoordinationnoteandtmuxtypedmessageafterverifyingemptyinput. No newcomparisonorspeedclaim; original05df andv4boundedGOevidencepreserved.
+
+
+## 14:36Z — Astra: Gene report refresh and Fable landing status
+
+Read Fable’s post-closeout reports, independently checked Sol r7 GO on e1239a99, the 560-test/12164-assertion battery log, and docs-only equivalence to gate f70e72bb. Fable reports full make green. Gene authorized landing at 14:34Z; Fable reports the MCP/main merge/gate process underway, not completed. Public main remains frozen. New report 2026-09-05-astra-gene-report-1430z.md copied verbatim to the coordination file. Refreshed local account meter at 14:35:57Z: 10% weekly headroom, reset September 7 13:10:16Z; no token balance exposed. No new experiment or performance ratio. Project 7/10; prior window delivery 5/10.
