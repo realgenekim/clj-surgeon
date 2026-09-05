@@ -734,19 +734,35 @@
                                 (get-in request [:from :file])
                                 (get-in planned [:plan :destination :lib])
                                 (get-in planned [:plan :destination :file]))
-                              (-> planned
-                                  ;; @spec MCP-OP-HELPER-012
-                                  ;; the closure receipt states the roots the
-                                  ;; walk ACTUALLY admitted, not a fixed pair
-                                  (assoc-in [:receipt :closure :roots] roots)
-                                  (assoc-in [:receipt :closure :pruned_symlinks]
-                                            (count (:pruned walked)))
+                              (let [;; @spec MCP-OP-HELPER-012
+                                    ;; ONE enriched receipt, built once and
+                                    ;; used everywhere it is published.
+                                    ;;
+                                    ;; It used to be built by two `assoc-in`s
+                                    ;; inside a `->` and then COPIED to
+                                    ;; `[:plan :receipt]` from `(:receipt
+                                    ;; planned)` — the outer binding, which the
+                                    ;; thread had not touched. So the copy the
+                                    ;; terminal mapper actually reads was the
+                                    ;; planner's untouched receipt: its closure
+                                    ;; carried the planner's fixed `["src"
+                                    ;; "test"]` instead of the roots this walk
+                                    ;; admitted, and no `pruned_symlinks` at
+                                    ;; all. Every exemplar looked right because
+                                    ;; the FIXTURE supplied the field the
+                                    ;; production path was dropping.
+                                    enriched (-> (:receipt planned)
+                                                 (assoc-in [:closure :roots] roots)
+                                                 (assoc-in [:closure :pruned_symlinks]
+                                                           (count (:pruned walked))))]
+                                (-> planned
+                                  (assoc :receipt enriched)
                                   ;; the planner's own O(1) receipt travels WITH
                                   ;; the plan: as a SIBLING key it never reached
                                   ;; the terminal mapper at all, which is why the
                                   ;; wire receipt printed null helpers, null
                                   ;; caller files and null sites
-                                  (assoc-in [:plan :receipt] (:receipt planned))
+                                  (assoc-in [:plan :receipt] enriched)
                                   (assoc
                                      :roots roots
                                      :pruned_symlinks (vec (:pruned walked))
@@ -757,7 +773,7 @@
                                      ;; to see the bytes the plan was derived
                                      ;; from, or drift between the two commits
                                      ;; silently over a stale plan
-                                     :sources (into {} (map (juxt :path :source)) sources)))))))))))))))))))))
+                                     :sources (into {} (map (juxt :path :source)) sources))))))))))))))))))))))
 
 ;; @spec MCP-OP-HELPER-001
 ;; @spec MCP-OP-HELPER-010
@@ -813,12 +829,44 @@
 (defn- verification-face
   "The receipt's typed verification map, copied from evidence that exists.
 
-  With no profile result — nil, or an empty map — this claims NOTHING: status
-  `unknown`, no counts, no `ok`, no `fresh_process`. Manufacturing a zero here
-  would report an unexecuted check as a completed one."
+  THE FACE HAS TWO SHAPES, and both are honest:
+
+  * EXECUTED — a profile ran and answered: `status` says what the checks did,
+    `profile` names the one that ran, `ok` and `fresh_process` are facts about
+    that execution, and the typed counts appear ONLY where the profile actually
+    printed them.
+  * NOT-RUN — the proof never completed, because the step THREW. `status` is
+    `unknown`, `profile` is the profile that was asked for, `ok` is false and
+    `fresh_process` is false — both facts, not defaults — and `reason` says
+    what stopped it. No counts, ever: an unexecuted check must never be
+    implied (MCP-OP-HELPER-022).
+
+  The two share one required set — `status`, `profile`, `ok`, `fresh_process` —
+  so a terminal receipt declares the same obligations whichever way its proof
+  ended. That matters: the boundary's throw path used to hand this function
+  `nil` and publish `{status \"unknown\"}` alone, a face the output schema
+  correctly rejected, which made an honest production receipt unrepresentable.
+  The fix is that the boundary now says WHICH profile did not run rather than
+  saying nothing at all.
+
+  With genuinely no evidence — nil, or an empty map — this still claims
+  NOTHING. That answer is mapper-internal: `execute!` always knows the profile
+  it asked for, so no published receipt takes this branch."
   [verification]
-  (if-not (and (map? verification) (seq verification))
+  (cond
+    (not (and (map? verification) (seq verification)))
     {:status "unknown"}
+
+    ;; @spec MCP-OP-HELPER-022
+    ;; the not-run face: named, complete, and carrying no counts
+    (:not_run verification)
+    (cond-> {:status "unknown"
+             :profile (:profile verification)
+             :ok false
+             :fresh_process false}
+      (:reason verification) (assoc :reason (:reason verification)))
+
+    :else
     (let [backed? (compiled-claim-backed? verification)
           ok? (and (true? (:ok verification)) backed?)]
       (cond-> {:status (cond (not backed?) "unbacked-claim"
@@ -1468,9 +1516,25 @@
                           ;; a throw is a proof that did not complete, and an
                           ;; incomplete proof may never leave a commit standing
                           (catch Throwable error
-                            (finish-failure! :verification-failed nil
-                                             (or (.getMessage error)
-                                                 (.getName (class error))))))))))))))))))
+                            ;; @spec MCP-OP-HELPER-022
+                            ;; a throw is a proof that did not complete, and the
+                            ;; receipt says WHICH proof did not complete. Handing
+                            ;; the mapper `nil` here published a verification
+                            ;; face carrying only `status unknown` — honest, but
+                            ;; so thin that the caller could not tell which
+                            ;; profile was asked for, and thin enough that the
+                            ;; output schema rejected it.
+                            (let [message (or (.getMessage error)
+                                              (.getName (class error)))]
+                              (finish-failure!
+                                :verification-failed
+                                {:not_run true
+                                 :profile profile-name
+                                 :ok false
+                                 :fresh_process false
+                                 :reason (str "the verification step did not"
+                                              " complete: " message)}
+                                message))))))))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; registration

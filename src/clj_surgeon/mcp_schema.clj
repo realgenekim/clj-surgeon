@@ -836,12 +836,42 @@
                 "destination_created" true
                 "source_file" 1}
     :objects {"verification"
-              {:required ["status" "profile" "ok" "fresh_process"]}
+              {:required ["status" "profile" "ok" "fresh_process"]
+               :types {"status" {:type "string"} "profile" {:type "string"}
+                       "ok" {:type "boolean"} "fresh_process" {:type "boolean"} "reason" {:type "string"}
+                       "structural_callers" {:type "integer" :minimum 0} "helper_behaviors" {:type "integer" :minimum 0}
+                       "compiled_callers" {:type "integer" :minimum 0}}
+               ;; @spec MCP-OP-HELPER-022
+               ;; the face has TWO shapes and they are discriminated by
+               ;; `status`. Sharing one required set makes the honest not-run
+               ;; face representable; without these alternatives it would also
+               ;; make a not-run face carrying `structural_callers 28`
+               ;; representable, which is the invented evidence 022 exists to
+               ;; forbid. No code path emits that today — and "no code path
+               ;; emits it" is the argument every one of these rounds has
+               ;; rejected, so it is closed here instead.
+               :alternatives
+               [{:title "executed"
+                 :required ["status"]
+                 :properties {"status" {:enum ["checks-completed" "checks-failed"
+                                               "unbacked-claim"]}}}
+                {:title "not-run"
+                 :required ["status" "ok" "fresh_process" "reason"]
+                 :properties {"status" {:const "unknown"}
+                              "ok" {:const false}
+                              "fresh_process" {:const false}}
+                 :forbidden ["structural_callers" "helper_behaviors"
+                             "compiled_callers"]}]}
               "closure"
               {:required ["roots" "authorized_paths" "grammar"
                           "dynamic_references" "pruned_symlinks"]
-               :constants {"dynamic_references" "not-claimed"}}
-              "partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+               :constants {"dynamic_references" "not-claimed"
+                           "grammar" "supported-libspecs-only"}
+               :types {"roots" {:type "array" :items {:type "string"}} "authorized_paths" {:type "array" :items {:type "string"}}
+                       "pruned_symlinks" {:type "integer" :minimum 0}}}
+              "partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]
+               :types {"moved_only" {:type "integer" :minimum 0} "mixed" {:type "integer" :minimum 0}
+                       "qualified_only" {:type "integer" :minimum 0} "untouched" {:type "integer" :minimum 0}}}}
     :exactly-one [["details_path" "details_unavailable"]]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "source_unchanged" "destination_created"
@@ -865,14 +895,45 @@
                 "source_file" 1}
     :objects {"restoration_read_back"
               {:required ["files" "aggregate_sha256" "manifest_in"]
-               :constants {"manifest_in" "details_path"}}
+               :constants {"manifest_in" "details_path"}
+               :types {"files" {:type "integer" :minimum 0} "aggregate_sha256" {:type "string"}}}
               "verification"
-              {:required ["status" "profile" "ok" "fresh_process"]}
+              {:required ["status" "profile" "ok" "fresh_process"]
+               :types {"status" {:type "string"} "profile" {:type "string"}
+                       "ok" {:type "boolean"} "fresh_process" {:type "boolean"} "reason" {:type "string"}
+                       "structural_callers" {:type "integer" :minimum 0} "helper_behaviors" {:type "integer" :minimum 0}
+                       "compiled_callers" {:type "integer" :minimum 0}}
+               ;; @spec MCP-OP-HELPER-022
+               ;; the face has TWO shapes and they are discriminated by
+               ;; `status`. Sharing one required set makes the honest not-run
+               ;; face representable; without these alternatives it would also
+               ;; make a not-run face carrying `structural_callers 28`
+               ;; representable, which is the invented evidence 022 exists to
+               ;; forbid. No code path emits that today — and "no code path
+               ;; emits it" is the argument every one of these rounds has
+               ;; rejected, so it is closed here instead.
+               :alternatives
+               [{:title "executed"
+                 :required ["status"]
+                 :properties {"status" {:enum ["checks-completed" "checks-failed"
+                                               "unbacked-claim"]}}}
+                {:title "not-run"
+                 :required ["status" "ok" "fresh_process" "reason"]
+                 :properties {"status" {:const "unknown"}
+                              "ok" {:const false}
+                              "fresh_process" {:const false}}
+                 :forbidden ["structural_callers" "helper_behaviors"
+                             "compiled_callers"]}]}
               "closure"
               {:required ["roots" "authorized_paths" "grammar"
                           "dynamic_references" "pruned_symlinks"]
-               :constants {"dynamic_references" "not-claimed"}}
-              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+               :constants {"dynamic_references" "not-claimed"
+                           "grammar" "supported-libspecs-only"}
+               :types {"roots" {:type "array" :items {:type "string"}} "authorized_paths" {:type "array" :items {:type "string"}}
+                       "pruned_symlinks" {:type "integer" :minimum 0}}}
+              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]
+               :types {"moved_only" {:type "integer" :minimum 0} "mixed" {:type "integer" :minimum 0}
+                       "qualified_only" {:type "integer" :minimum 0} "untouched" {:type "integer" :minimum 0}}}}
     :exactly-one [["details_path" "details_unavailable"]]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "destination_created"
@@ -897,14 +958,45 @@
                 "source_file" 1}
     :objects {"restoration_read_back"
               {:required ["files" "aggregate_sha256" "manifest_in"]
-               :constants {"manifest_in" "details_path"}}
+               :constants {"manifest_in" "details_path"}
+               :types {"files" {:type "integer" :minimum 0} "aggregate_sha256" {:type "string"}}}
               "verification"
-              {:required ["status" "profile" "ok" "fresh_process"]}
+              {:required ["status" "profile" "ok" "fresh_process"]
+               :types {"status" {:type "string"} "profile" {:type "string"}
+                       "ok" {:type "boolean"} "fresh_process" {:type "boolean"} "reason" {:type "string"}
+                       "structural_callers" {:type "integer" :minimum 0} "helper_behaviors" {:type "integer" :minimum 0}
+                       "compiled_callers" {:type "integer" :minimum 0}}
+               ;; @spec MCP-OP-HELPER-022
+               ;; the face has TWO shapes and they are discriminated by
+               ;; `status`. Sharing one required set makes the honest not-run
+               ;; face representable; without these alternatives it would also
+               ;; make a not-run face carrying `structural_callers 28`
+               ;; representable, which is the invented evidence 022 exists to
+               ;; forbid. No code path emits that today — and "no code path
+               ;; emits it" is the argument every one of these rounds has
+               ;; rejected, so it is closed here instead.
+               :alternatives
+               [{:title "executed"
+                 :required ["status"]
+                 :properties {"status" {:enum ["checks-completed" "checks-failed"
+                                               "unbacked-claim"]}}}
+                {:title "not-run"
+                 :required ["status" "ok" "fresh_process" "reason"]
+                 :properties {"status" {:const "unknown"}
+                              "ok" {:const false}
+                              "fresh_process" {:const false}}
+                 :forbidden ["structural_callers" "helper_behaviors"
+                             "compiled_callers"]}]}
               "closure"
               {:required ["roots" "authorized_paths" "grammar"
                           "dynamic_references" "pruned_symlinks"]
-               :constants {"dynamic_references" "not-claimed"}}
-              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+               :constants {"dynamic_references" "not-claimed"
+                           "grammar" "supported-libspecs-only"}
+               :types {"roots" {:type "array" :items {:type "string"}} "authorized_paths" {:type "array" :items {:type "string"}}
+                       "pruned_symlinks" {:type "integer" :minimum 0}}}
+              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]
+               :types {"moved_only" {:type "integer" :minimum 0} "mixed" {:type "integer" :minimum 0}
+                       "qualified_only" {:type "integer" :minimum 0} "untouched" {:type "integer" :minimum 0}}}}
     :exactly-one [["details_path" "details_unavailable"]]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
                "restored" "source_unchanged" "destination_created"
@@ -927,14 +1019,46 @@
                 "source_file" 1
                 "source_retired_unknown" "the rollback did not verify, so how many owners the source still defines is not known from this receipt; read recovery_required"}
     :objects {"recovery_required"
-              {:required ["receipt" "reason" "recovery"]}
+              {:required ["receipt" "reason" "recovery"]
+               :types {"receipt" {:type "string"} "reason" {:type "string"}
+                       "recovery" {:type "object"}}}
               "verification"
-              {:required ["status" "profile" "ok" "fresh_process"]}
+              {:required ["status" "profile" "ok" "fresh_process"]
+               :types {"status" {:type "string"} "profile" {:type "string"}
+                       "ok" {:type "boolean"} "fresh_process" {:type "boolean"} "reason" {:type "string"}
+                       "structural_callers" {:type "integer" :minimum 0} "helper_behaviors" {:type "integer" :minimum 0}
+                       "compiled_callers" {:type "integer" :minimum 0}}
+               ;; @spec MCP-OP-HELPER-022
+               ;; the face has TWO shapes and they are discriminated by
+               ;; `status`. Sharing one required set makes the honest not-run
+               ;; face representable; without these alternatives it would also
+               ;; make a not-run face carrying `structural_callers 28`
+               ;; representable, which is the invented evidence 022 exists to
+               ;; forbid. No code path emits that today — and "no code path
+               ;; emits it" is the argument every one of these rounds has
+               ;; rejected, so it is closed here instead.
+               :alternatives
+               [{:title "executed"
+                 :required ["status"]
+                 :properties {"status" {:enum ["checks-completed" "checks-failed"
+                                               "unbacked-claim"]}}}
+                {:title "not-run"
+                 :required ["status" "ok" "fresh_process" "reason"]
+                 :properties {"status" {:const "unknown"}
+                              "ok" {:const false}
+                              "fresh_process" {:const false}}
+                 :forbidden ["structural_callers" "helper_behaviors"
+                             "compiled_callers"]}]}
               "closure"
               {:required ["roots" "authorized_paths" "grammar"
                           "dynamic_references" "pruned_symlinks"]
-               :constants {"dynamic_references" "not-claimed"}}
-              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]}}
+               :constants {"dynamic_references" "not-claimed"
+                           "grammar" "supported-libspecs-only"}
+               :types {"roots" {:type "array" :items {:type "string"}} "authorized_paths" {:type "array" :items {:type "string"}}
+                       "pruned_symlinks" {:type "integer" :minimum 0}}}
+              "planned_partition" {:required ["moved_only" "mixed" "qualified_only" "untouched"]
+               :types {"moved_only" {:type "integer" :minimum 0} "mixed" {:type "integer" :minimum 0}
+                       "qualified_only" {:type "integer" :minimum 0} "untouched" {:type "integer" :minimum 0}}}}
     :exactly-one [["details_path" "details_unavailable"]]
     :absent ["source_retired"]
     :required ["ok" "elapsed_ms" "operation" "status" "kernel_status" "committed"
@@ -984,12 +1108,32 @@
                                       [field
                                        (cond-> {:type "object"
                                                 :required (vec (:required shape))}
-                                         (seq (:constants shape))
+                                         (seq (:alternatives shape))
+                                         (assoc :oneOf
+                                                (mapv
+                                                  (fn [alternative]
+                                                    (cond-> (select-keys
+                                                              alternative
+                                                              [:title :required :properties])
+                                                      (seq (:forbidden alternative))
+                                                      (assoc :not
+                                                             {:anyOf
+                                                              (mapv (fn [f] {:required [f]})
+                                                                    (:forbidden alternative))})))
+                                                  (:alternatives shape)))
+
+                                         (or (seq (:constants shape))
+                                             (seq (:types shape)))
                                          (assoc :properties
-                                                (into {}
-                                                      (map (fn [[sub value]]
-                                                             [sub {:const value}]))
-                                                      (:constants shape))))]))
+                                                ;; a pinned CONSTANT already
+                                                ;; fixes the value, so it wins
+                                                ;; over the looser type
+                                                (merge
+                                                  (:types shape)
+                                                  (into {}
+                                                        (map (fn [[sub value]]
+                                                               [sub {:const value}]))
+                                                        (:constants shape)))))]))
                                objects))
            :required (vec required)}
     ;; the declared shapes travel ON the branch as well as into its

@@ -1382,6 +1382,62 @@
                     group))
             row)))
 
+(def ^:private declared-types
+  "field -> the JSON type(s) the schema declares for it, from the OUTER
+  properties map. The per-branch rows state requiredness and constants; the
+  types live once, above them, and apply wherever the field appears."
+  (into {}
+        (keep (fn [[field spec]]
+                (when-let [declared (:type spec)] [field declared])))
+        (:properties mcp-schema/helper-extraction-output-schema)))
+
+(defn- type-ok?
+  [declared value]
+  (let [types (if (coll? declared) (set declared) #{declared})]
+    (boolean
+     (some (fn [t]
+             (case t
+               "integer" (integer? value)
+               "number" (number? value)
+               "boolean" (boolean? value)
+               "string" (string? value)
+               "object" (map? value)
+               "array" (sequential? value)
+               "null" (nil? value)
+               ;; an unknown type name must not read as satisfied
+               (throw (ex-info "a JSON type this witness cannot check"
+                               {:type t}))))
+           types))))
+
+(defn- wrong-typed-value
+  "A value of a type the field does not declare."
+  [declared]
+  (let [types (if (coll? declared) (set declared) #{declared})]
+    (cond
+      (not (contains? types "string")) "not-of-the-declared-type"
+      (not (contains? types "integer")) 42
+      (not (contains? types "boolean")) true
+      :else {})))
+
+(defn- alternative-satisfied?
+  "Does `nested` wear this face of an object that declares alternatives?
+
+  Required subkeys present, every pinned const and enum honoured, and NO
+  forbidden subkey present -- the last is what stops a not-run verification
+  smuggling in the typed counts of a proof that never ran."
+  [alternative nested]
+  (and (every? #(contains? nested (keyword %)) (:required alternative))
+       (every? (fn [[sub constraint]]
+                 (let [present? (contains? nested (keyword sub))
+                       value (get nested (keyword sub))]
+                   (cond
+                     (not present?) (not (contains? constraint :const))
+                     (contains? constraint :const) (= (:const constraint) value)
+                     (:enum constraint) (contains? (set (:enum constraint)) value)
+                     :else true)))
+               (:properties alternative))
+       (not-any? #(contains? nested (keyword %)) (:forbidden alternative))))
+
 (defn- schema-check
   "Validate `receipt` against one `:oneOf` branch. Returns nil when valid, or a
   keyword naming the first violation.
@@ -1435,6 +1491,14 @@
    (some (fn [field]
            (when-not (contains? receipt (keyword field)) :missing-required))
          (:required branch))
+   ;; the declared TYPE of every field the receipt actually carries. A count
+   ;; that arrives as a string reads fine in a log and breaks the first caller
+   ;; that does arithmetic on it.
+   (some (fn [[field declared]]
+           (when (and (contains? receipt (keyword field))
+                      (not (type-ok? declared (get receipt (keyword field)))))
+             :type-mismatch))
+         declared-types)
    (some (fn [[field constraint]]
            (let [present? (contains? receipt (keyword field))
                  value (get receipt (keyword field))]
@@ -1453,7 +1517,8 @@
    ;; recovery authority with no receipt, reason or recovery inside it is the
    ;; field's whole purpose missing while the schema says present.
    (some (fn [[field spec]]
-           (let [known-sub #{:required :constants :description}]
+           (let [known-sub #{:required :constants :types :alternatives
+                             :forbidden :description}]
              (when-let [unknown (seq (remove known-sub (keys spec)))]
                (throw (ex-info (str "the :objects row grew a construct this "
                                     "witness does not validate")
@@ -1470,7 +1535,28 @@
                            (when (and (contains? nested (keyword sub))
                                       (not= pinned (get nested (keyword sub))))
                              :sub-const-mismatch))
-                         (:constants spec))))))
+                         (:constants spec))
+                   ;; a typed SUBKEY, e.g. closure.pruned_symlinks is an
+                   ;; integer: the outer type map cannot reach inside an object
+                   (some (fn [[sub constraint]]
+                           (when (and (contains? nested (keyword sub))
+                                      (not (type-ok? (:type constraint)
+                                                     (get nested (keyword sub)))))
+                             :sub-type-mismatch))
+                         (:types spec))
+                   ;; ALTERNATIVES: the object itself wears one of several
+                   ;; faces, discriminated on a field of its own. `verification`
+                   ;; is either an EXECUTED proof with its typed counts, or a
+                   ;; NOT-RUN answer that forbids them -- and a receipt that
+                   ;; satisfies neither is the bare `{:status "unknown"}` face
+                   ;; that must never reach the wire.
+                   (when-let [alternatives (:alternatives spec)]
+                     (let [satisfied (filter #(alternative-satisfied? % nested)
+                                             alternatives)]
+                       (when-not (= 1 (count satisfied))
+                         (if (zero? (count satisfied))
+                           :no-alternative-satisfied
+                           :more-than-one-alternative))))))))
          (:objects branch))))
 
 (defn- valid-against
@@ -1827,3 +1913,189 @@
                      "for: the source is counted ONCE however many "
                      "source-local uses it carries, so both 0 and 2 are "
                      "wrong and for different reasons."))))))))
+
+;; ---------------------------------------------------------------------------
+;; the THROW path, and declared types
+;;
+;; Sol r6: `finish-failure!` is reached with `proof nil` when a Throwable ends
+;; a staged transaction before the profile ever answered, and the mapper emits
+;; `verification {:status "unknown"}` for it. That is a real production face,
+;; and the matrix rejects it. The exemplar below is built from production
+;; `terminal-receipt` with exactly those kernel facts and NO profile result, so
+;; the schema is measured against a receipt the server actually publishes
+;; rather than against one the witness was able to construct.
+
+(defn- bare-unknown-receipt
+  "The mapper's answer when it is handed NO profile result at all.
+
+  v7 documents this as UNPUBLISHABLE: `execute!` always knows which profile was
+  requested, so a verification that names none never leaves the boundary. It is
+  kept here as a NEGATIVE -- the shape the schema must refuse -- so it cannot
+  reach the wire silently if some future path forgets to say why the proof did
+  not run."
+  []
+  (assoc (mcp-helper/terminal-receipt
+          {:kernel (assoc restored-exemplar-kernel :status :verification-failed)
+           :verification nil
+           :plan fixture-plan})
+         :elapsed_ms 41.0))
+
+;; @spec MCP-OP-HELPER-022
+(deftest the-bare-unknown-verification-face-can-never-reach-the-wire
+  (testing "a verification that says only `unknown` says nothing a caller can
+            act on: not which profile, not whether a process started, not why.
+            The schema must refuse it outright."
+    (let [receipt (bare-unknown-receipt)]
+      (is (= "unknown" (get-in receipt [:verification :status])))
+      (is (empty? (valid-against receipt))
+          (str "the bare unknown face must validate against NO branch: "
+               (pr-str (:verification receipt)))))))
+
+;; @spec MCP-OP-HELPER-020
+;; @spec MCP-OP-HELPER-022
+(deftest the-real-throw-path-receipt-is-a-declared-face
+  (testing "the production path: a Throwable from the proof step ends a STAGED
+            transaction, the kernel rolls back, and the receipt reports a
+            not-run verification that still names the profile and the reason.
+            Driven through execute! with an injected `:run-proof!` rather than
+            hand-built, so what the schema is measured against is what the
+            server publishes."
+    (let [outcome (with-materialized-happy-tree
+                    "throw-path-face"
+                    (fn [root]
+                      (mcp-helper/execute!
+                       {:verification-profiles configured-profiles
+                        :run-proof! (fn [& _]
+                                      (throw (ex-info "proof exploded" {})))}
+                       (fixture/request
+                        {:workspace_root root
+                         :verification {:profile "helper-proof"}}))))
+          receipt (:result outcome)
+          verification (:verification receipt)]
+      (is (= "verification-failed" (:status receipt)) (pr-str receipt))
+      (testing "the verification wears the NOT-RUN face, completely"
+        (is (= "unknown" (:status verification)) (pr-str verification))
+        (is (= "helper-proof" (:profile verification))
+            "it names the profile that was requested; execute! always knows it")
+        (is (false? (:ok verification)))
+        (is (false? (:fresh_process verification))
+            "no child process ran, and the receipt says so rather than omitting it")
+        (is (some? (:reason verification))
+            "and it says WHY the proof did not run")
+        (is (not-any? #(contains? verification %)
+                      [:structural_callers :helper_behaviors :compiled_callers])
+            "carrying no typed count of a proof that never happened"))
+      (testing "and every declared object row is complete on the REAL receipt"
+        (doseq [[field spec] (:objects (branch-named "verification-failed"))
+                :let [nested (get receipt (keyword field))]]
+          (testing field
+            (is (some? nested))
+            (is (empty? (remove #(contains? (or nested {}) (keyword %))
+                                (:required spec)))
+                (str field " is missing "
+                     (pr-str (vec (remove #(contains? (or nested {}) (keyword %))
+                                          (:required spec))))
+                     " on the receipt execute! actually publishes. The mapper "
+                     "exemplars carry it because the fixture plan supplies it; "
+                     "only a production-path receipt can show that the real "
+                     "path does not.")))))
+      (is (= #{"verification-failed"} (valid-against receipt))
+          (str "and the whole receipt validates against exactly one branch: "
+               (pr-str (valid-against receipt)))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest every-declared-type-is-enforced
+  (testing "a field declared `integer` that arrives as a string reads fine in a
+            log and breaks the first caller that does arithmetic on it"
+    (is (seq declared-types) "the schema declares types at all")
+    (doseq [branch (:oneOf mcp-schema/helper-extraction-output-schema)
+            :let [receipt (exemplar (:title branch))]
+            [field declared] declared-types
+            :when (contains? receipt (keyword field))]
+      (testing (str (:title branch) " / " field " : " (pr-str declared))
+        (let [wrong (wrong-typed-value declared)]
+          (is (some? (schema-check branch (assoc receipt (keyword field) wrong)))
+              (str field " is declared " (pr-str declared) "; "
+                   (pr-str wrong) " must not validate")))))))
+
+;; @spec MCP-OP-HELPER-012
+(deftest the-closure-grammar-cannot-be-contradicted
+  (testing "`closure.grammar` is the sentence the receipt uses to bound its own
+            claim. A receipt that says it closed over a grammar it did not is
+            worse than one that says nothing, because it stops the reader
+            asking."
+    (doseq [branch (:oneOf mcp-schema/helper-extraction-output-schema)
+            :let [spec (get-in branch [:objects "closure"])]
+            :when spec
+            [sub pinned] (:constants spec)]
+      (testing (str (:title branch) " / closure." sub)
+        (is (some? (schema-check
+                    branch
+                    (assoc-in (exemplar (:title branch))
+                              [:closure (keyword sub)]
+                              (str pinned "-but-not-really"))))
+            (str "closure." sub " is pinned to " (pr-str pinned)))))))
+
+;; ---------------------------------------------------------------------------
+;; the nested types and the alternative faces
+
+;; @spec MCP-OP-HELPER-020
+(deftest every-typed-subkey-is-enforced
+  (testing "the outer type map cannot reach inside an object, so a subkey's
+            declared type is only real if the nested row checks it"
+    (let [rows (for [[branch field spec] (object-rows)
+                     [sub constraint] (:types spec)]
+                 [branch field sub constraint])]
+      (is (seq rows) "object rows declare subkey types at all")
+      (doseq [[branch field sub constraint] rows]
+        (testing (str (:title branch) " / " field "." sub)
+          (let [receipt (exemplar (:title branch))
+                wrong (wrong-typed-value (:type constraint))]
+            (when (contains? (get receipt (keyword field)) (keyword sub))
+              (is (some? (schema-check
+                          branch
+                          (assoc-in receipt [(keyword field) (keyword sub)] wrong)))
+                  (str field "." sub " is declared " (pr-str (:type constraint))
+                       "; " (pr-str wrong) " must not validate")))))))))
+
+;; @spec MCP-OP-HELPER-022
+(deftest a-not-run-verification-may-not-carry-the-counts-of-a-proof
+  (testing "the counts are the proof's OUTPUT. A verification that did not run
+            and still reports structural_callers is claiming coverage it never
+            measured -- the false green in its purest form."
+    (let [rows (for [[branch field spec] (object-rows)
+                     alternative (:alternatives spec)
+                     :when (seq (:forbidden alternative))
+                     forbidden (:forbidden alternative)]
+                 [branch field alternative forbidden])]
+      (is (seq rows) "some alternative forbids fields")
+      (doseq [[branch field alternative forbidden] rows]
+        (testing (str (:title branch) " / " field " / " (:title alternative)
+                      " + " forbidden)
+          ;; put the object into its forbidding face, then smuggle the field in
+          (let [face (merge {:status "unknown" :ok false :fresh_process false
+                             :reason "the proof did not run"}
+                            (into {} (map (fn [[k v]] [(keyword k) (:const v)]))
+                                  (:properties alternative)))
+                receipt (assoc (exemplar (:title branch)) (keyword field)
+                               (assoc face (keyword forbidden) 28))]
+            (is (some? (schema-check branch receipt))
+                (str forbidden " is forbidden on the " (:title alternative)
+                     " face of " field "; a receipt carrying it must not "
+                     "validate"))))))))
+
+;; @spec MCP-OP-HELPER-022
+(deftest an-executed-verification-may-not-wear-the-not-run-status
+  (testing "the two faces are discriminated on status, so a proof that ran and
+            reports `unknown` satisfies neither and is refused"
+    (doseq [[branch field spec] (object-rows)
+            :when (seq (:alternatives spec))
+            :let [receipt (exemplar (:title branch))]
+            :when (contains? receipt (keyword field))]
+      (testing (str (:title branch) " / " field)
+        (is (some? (schema-check
+                    branch
+                    (assoc-in receipt [(keyword field) :status] "unknown")))
+            (str "an executed " field " relabelled `unknown` keeps its typed "
+                 "counts, which the not-run face forbids, and loses the enum "
+                 "the executed face requires: it must satisfy neither"))))))
