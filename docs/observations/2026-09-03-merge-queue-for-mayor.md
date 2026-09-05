@@ -81,3 +81,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **08:38Z helper_extraction follow-ups (not in v4)**: scope.paths glob friction (explicit roots field or examples; no silent broadening); public refusal structuredContent must carry `operation`; verb telemetry through the existing service emitter.
 
 - **08:55Z ASTRA HANDOFF (plan of record)**: see /var/tmp/forge/astra-to-fable-next-actions.md — 1 v4/v5+gates; 2 epoch closed; 3 oracle revision (intent+witnesses); 4 admission/actor entrance first; 5 interface hypotheses (dir-root authority, when-to-call doctrine); 6 observation lanes; 7 fresh preregistered epoch for any perf claim.
+
+- **09:23Z HELPER_EXTRACTION landing pre-conditions (Astra closeout)**: exact sha + Sol GO (not GO-WITH-FIX) + battery on that sha + make test on its gate commit incl. the real wire pre-write-refusal witness → THEN request the landing decision from Astra/Gene. No automatic landing. Astra report: MCP/astra-helper-performance-2026-09-05 @ 5c5f3306, inbox inb-b4f0db.
