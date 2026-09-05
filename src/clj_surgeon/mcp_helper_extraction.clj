@@ -818,20 +818,78 @@
   [read-back]
   (sha256 (pr-str (into (sorted-map) (or read-back {})))))
 
+(def mutation-claim-counts
+  "The plan-derived counts that ASSERT A COMPLETED MUTATION.
+
+  Each one is a sentence about the tree as it now stands: how many owners the
+  source no longer defines, how many callers were rewritten, how many sites
+  changed, which aliases the write installed. After a proven rollback every one
+  of them is false, and a receipt that carries `source_retired 6` beside
+  `restored true` and `source_unchanged true` contradicts itself in the same
+  object — measured on a real negative run that restored all 27 staged files
+  and still reported a retirement.
+
+  NOT here, deliberately: `helpers` (how many the REQUEST selected),
+  `source_file` (the extraction subject: 1), `closure` (what the walk covered)
+  and `destination_lib`. Those are facts about the request and the discovery,
+  true whatever the write did, and prefixing them would say the request itself
+  was hypothetical."
+  [:source_retired :caller_files :changed_files :sites :retained_sites
+   :alias_histogram :partition])
+
+(defn- planned-key
+  [field]
+  (keyword (str "planned_" (name field))))
+
+;; @spec MCP-OP-HELPER-009
+;; @spec MCP-OP-HELPER-020
 (defn- plan-counts
-  "The O(1) counts the plan already derived, folded in without recomputation."
-  [plan]
-  (let [receipt (:receipt plan)]
-    (cond-> {}
-      (map? receipt) (merge (select-keys receipt
-                                         [:helpers :source_retired :caller_files
-                                          :sites :retained_sites :alias_histogram
-                                          :partition :closure]))
-      (map? (:counts plan)) (assoc :counts (:counts plan))
-      (some? (:partition plan)) (assoc :partition (:partition plan))
-      (coll? (:helpers plan)) (assoc :helpers (count (:helpers plan)))
-      (map? (:destination plan)) (assoc :destination_lib
-                                        (get-in plan [:destination :lib])))))
+  "The O(1) counts the plan derived, projected onto the state the tree is IN.
+
+  `outcome` is the terminal fact the kernel reported, and it decides whether a
+  count is an assertion or a description:
+
+    :committed   the write stands, so the plan's counts describe the tree.
+    :restored    the inverse verified, so nothing was retired, rewritten or
+                 aliased: the plan's counts move to `planned_*` and
+                 `source_retired` is the ACTUAL zero.
+    :unrestored  the inverse did not verify, so how much of the source is
+                 retired is genuinely NOT KNOWN — it is stated as unknown and
+                 never as a number, in either direction.
+    :unknown     no terminal evidence at all: the plan's counts are published
+                 as planned and nothing is claimed about the tree."
+  [plan outcome]
+  (let [receipt (:receipt plan)
+        facts (cond-> {}
+                (map? receipt) (merge (select-keys receipt
+                                                   [:helpers :source_file :closure
+                                                    :source_retired :caller_files
+                                                    :changed_files :sites
+                                                    :retained_sites :alias_histogram
+                                                    :partition]))
+                (map? (:counts plan)) (assoc :counts (:counts plan))
+                (some? (:partition plan)) (assoc :partition (:partition plan))
+                (coll? (:helpers plan)) (assoc :helpers (count (:helpers plan)))
+                (map? (:destination plan)) (assoc :destination_lib
+                                                  (get-in plan [:destination :lib])))]
+    (if (= :committed outcome)
+      facts
+      (let [claims (select-keys facts mutation-claim-counts)
+            described (into {}
+                            (map (fn [[field value]] [(planned-key field) value]))
+                            claims)]
+        (merge (apply dissoc facts mutation-claim-counts)
+               described
+               (case outcome
+                 ;; the one terminal retirement number a proven restoration
+                 ;; entitles this receipt to state
+                 :restored {:source_retired 0}
+                 :unrestored {:source_retired_unknown
+                              (str "the rollback did not verify, so how many"
+                                   " owners the source still defines is not"
+                                   " known from this receipt; read"
+                                   " recovery_required")}
+                 {}))))))
 
 ;; @spec MCP-OP-HELPER-009
 ;; @spec MCP-OP-HELPER-020
@@ -850,11 +908,17 @@
   (let [kernel (or kernel {})
         status (:status kernel)
         committed? (= :committed status)
-        restored (when (contains? kernel :restored) (boolean (:restored kernel)))]
+        restored (when (contains? kernel :restored) (boolean (:restored kernel)))
+        ;; @spec MCP-OP-HELPER-020
+        ;; which sentences this receipt is entitled to say about the tree
+        outcome (cond committed? :committed
+                      (true? restored) :restored
+                      (false? restored) :unrestored
+                      :else :unknown)]
     (cond-> (merge {:operation operation
                     :status (if status (name status) "unknown")
                     :verification (verification-face verification)}
-                   (plan-counts plan))
+                   (plan-counts plan outcome))
       (some? status) (assoc :kernel_status (name status)
                             :committed committed?)
       (some? status) (assoc :ok (boolean committed?))

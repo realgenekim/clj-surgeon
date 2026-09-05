@@ -304,6 +304,31 @@
    :unrestored_files ["src/acid/web/http.clj"]
    :recovery_required {:journal "txn-77" :reason "read-back mismatch"}})
 
+(def ^:private completion-shaped-counts
+  "Receipt fields that assert the extraction ACTUALLY HAPPENED.
+
+  A restored receipt describes a write that was undone, so none of these may
+  carry a positive number: a reader scanning `source_retired 6` next to
+  `restored true` reads a partial extraction where there is none, and a fleet
+  counting retirements would double-count a rollback as work done. An attempted
+  count is a fact about the PLAN, and belongs under a `planned_` key where its
+  tense is visible in the name."
+  [:source_retired :sites :retained_sites])
+
+(defn- assert-no-completion-claim!
+  "Nothing in `receipt` may claim completed work when the write was restored."
+  [receipt]
+  (is (contains? #{0 nil} (:source_retired receipt))
+      (str "a restored receipt retired nothing: " (pr-str (:source_retired receipt))))
+  (is (not (true? (:destination_created receipt)))
+      "and created no destination")
+  (doseq [field completion-shaped-counts]
+    (let [value (get receipt field)]
+      (is (or (nil? value) (and (number? value) (zero? value)))
+          (str field " is success-shaped and must be 0 or absent on a restored "
+               "receipt; an attempted count belongs under planned_"
+               (name field) ". Found: " (pr-str value))))))
+
 ;; @spec MCP-OP-HELPER-020
 (deftest the-four-terminal-states-are-distinct
   (is (= #{:committed :verification-failed :verification-timeout :rollback-failed}
@@ -347,7 +372,11 @@
           "it names the files the kernel could not restore")
       (is (= (:recovery_required rollback-failed-kernel)
              (:recovery_required receipt))
-          "the kernel's recovery-required evidence is carried through"))))
+          "the kernel's recovery-required evidence is carried through")
+      (is (contains? #{0 nil} (:source_retired receipt))
+          (str "a rollback that did not complete knows even less about what "
+               "was retired than one that did, so it may never report a "
+               "positive count: " (pr-str (:source_retired receipt)))))))
 
 ;; @spec MCP-OP-HELPER-020
 ;; @spec MCP-OP-HELPER-022
@@ -500,6 +529,7 @@
       (is (not (true? (:committed receipt))) "never committed")
       (is (not (true? (:ok receipt))))
       (is (true? (:restored receipt)) "the receipt reports the restoration")
+      (assert-no-completion-claim! receipt)
       (is (true? (:source_unchanged receipt))
           "and claims unchanged only because the rollback verified")
       (is (contains? #{"verification-failed" "verification-timeout"}
@@ -648,8 +678,22 @@
       (finally (delete-tree! root)))))
 
 (defn- real-commit!
+  "The PRODUCTION kernel commit Var that `execute!` itself defaults to.
+
+  It is `clj-surgeon.mcp-extraction/commit!`. An earlier version of this witness
+  resolved `clj-surgeon.extract/commit!`, which does not exist: `requiring-resolve`
+  returned nil, the wrapper invoked nil, `execute!` caught THAT throw, and the
+  witness passed with a restored-looking receipt for a tree no kernel had ever
+  written. It proved nothing and said it proved the critical finding. Callers
+  must fail loudly rather than inherit a nil."
   []
-  (requiring-resolve 'clj-surgeon.extract/commit!))
+  (let [resolved (requiring-resolve 'clj-surgeon.mcp-extraction/commit!)]
+    (when-not resolved
+      (throw (ex-info (str "the production kernel commit Var did not resolve; "
+                           "this witness cannot inject a post-commit throw and "
+                           "must not report a result")
+                      {:var 'clj-surgeon.mcp-extraction/commit!})))
+    resolved))
 
 (def ^:private mini-tree
   "The reviewer's finding-4 tree: a source file whose PATH does not end in its
@@ -670,25 +714,46 @@
             commit step, and the boundary must expose one -- a throw AFTER a
             real commit cannot be witnessed any other way without redefining a
             production var."
-    (let [injected (atom false)
+    (let [;; what the wrapper OBSERVED between the real commit and the throw.
+          ;; Without it the witness cannot tell a post-commit throw from a
+          ;; pre-commit one, and a rollback of nothing looks like a rollback.
+          observed (atom nil)
+          resolve-error (atom nil)
+          commit-var (try (real-commit!)
+                          (catch Throwable error (reset! resolve-error error) nil))
+          source-pre (some #(when (= fixture/source-file (:file %)) (:pre %))
+                           (fixture/files :happy))
           outcome (with-materialized-happy-tree
                     "post-commit-throw"
                     (fn [root]
                       (try
                         (mcp-helper/execute!
                          {:verification-profiles configured-profiles
-                          :commit! (fn [compiled]
-                                     (reset! injected true)
-                                     (let [result ((real-commit!) compiled)]
-                                       (throw (ex-info
-                                               "injected throw after kernel commit"
-                                               {:kernel-ok (:ok result)}))))}
+                          :commit!
+                          (fn [compiled]
+                            (let [result (commit-var compiled)
+                                  destination (io/file root fixture/dest-file)
+                                  source (io/file root fixture/source-file)]
+                              ;; the kernel really wrote, and we can see it
+                              (reset! observed
+                                      {:kernel-ok (boolean (:ok result))
+                                       :destination-exists (.isFile destination)
+                                       :source-changed
+                                       (and (.isFile source)
+                                            (not= (fixture/sha256 source-pre)
+                                                  (fixture/sha256 (slurp source))))})
+                              (throw (ex-info "injected throw after kernel commit"
+                                              {:kernel-ok (:ok result)}))))}
                          (fixture/request
                           {:workspace_root root
                            :verification {:profile "helper-proof"}}))
                         (catch Throwable error
                           {::threw true ::message (.getMessage error)}))))
-          receipt (:result outcome)]
+          receipt (:result outcome)
+          injected (atom (some? @observed))]
+      (is (nil? @resolve-error)
+          (str "the production kernel commit Var must resolve: "
+               (some-> @resolve-error .getMessage)))
       ;; without this, an execute! that IGNORES the seam commits normally and
       ;; the restoration assertions below fail for a reason that has nothing to
       ;; do with the finding. A witness that cannot tell "not injected" from
@@ -697,6 +762,15 @@
           "the `:commit!` seam is not exposed by execute!, so the post-commit
            throw could not be injected at all. Everything below is unmeasured
            until the boundary accepts this seam.")
+      (testing "and the throw really was AFTER a real write, observed from
+                inside the wrapper before it threw"
+        (is (true? (:kernel-ok @observed))
+            (str "the real kernel returned success: " (pr-str @observed)))
+        (is (true? (:destination-exists @observed))
+            "the destination existed on disk at that moment")
+        (is (true? (:source-changed @observed))
+            "and the source no longer hashed to its pre-image, so there was
+             something for the rollback below to undo"))
       (is (not (::threw receipt))
           (str "a Throwable after the kernel commit must never escape the "
                "boundary: " (pr-str receipt)))
@@ -1140,6 +1214,8 @@
               (testing "the receipt is BOUNDED: no per-file lists on the wire"
                 (is (not (contains? result :restored_files))
                     "the restored-file manifest is not a wire field")
+                (when (true? (:restored result))
+                  (assert-no-completion-claim! result))
                 (let [evidence (:restoration_read_back result)]
                   (when (some? evidence)
                     (is (not (and (map? evidence)

@@ -712,9 +712,10 @@
 
   Counts and histograms only; never a file list. The verification map is TYPED
   — the executed profile and its three named checks — and never a bare coverage
-  integer. `ok` is the only universally required property: a PRE-STAGING refusal
-  is answered before the request clock has anything to report, so requiring
-  `elapsed_ms` of it would declare a field the honest refusal does not carry.
+  integer. `ok` and `elapsed_ms` are required on every published face; the rest
+  is stated PER VARIANT in `:oneOf` below, so a caller validating a receipt
+  learns which fields that particular face guarantees rather than reading this
+  docstring and hoping.
 
   THE FIVE FACES, and what each one must carry:
 
@@ -802,5 +803,97 @@
                                 :description "Per-caller detail and the restoration manifest, published under the kernel's local-state receipt directory — never inside the workspace."}
                 "undo_receipt" {:type "string"
                                 :description "committed ONLY: the kernel receipt this write can be inverted from."}
-                "receipt_hash" {:type "string"}}
-   :required ["ok" "elapsed_ms"]})
+                "receipt_hash" {:type "string"}
+                "details_unavailable"
+                {:type "string"
+                 :description "Stated when the external detail artifact could not be written. An absent artifact is said out loud rather than left as a missing path, because a caller reads silence as nothing-more-to-see."}
+                "source_retired_unknown"
+                {:type "string"
+                 :description "rollback-failed ONLY: how many owners the source still defines is not knowable from this receipt, stated as unknown rather than as a number in either direction."}
+                "planned_source_retired" {:type "integer" :minimum 0}
+                "planned_caller_files" {:type "integer" :minimum 0}
+                "planned_changed_files" {:type "integer" :minimum 0}
+                "planned_sites" {:type "integer" :minimum 0}
+                "planned_retained_sites" {:type "integer" :minimum 0}
+                "planned_alias_histogram" {:type "object"}
+                "planned_partition"
+                {:type "object"
+                 :description "Every count that ASSERTS a completed mutation moves under planned_* the moment the write does not stand: after a verified rollback nothing was retired, rewritten or aliased, and a plan number left under its plain name would contradict restored true in the same object."}}
+   :required ["ok" "elapsed_ms"]
+
+   ;; @spec MCP-OP-HELPER-020
+   ;; THE FIVE VARIANTS, DISCRIMINATED. The prose above says which fields each
+   ;; face carries; this says it in the SCHEMA, so a caller validating a
+   ;; receipt learns which fields it may rely on instead of reading a
+   ;; docstring. Discrimination is by `status`: every TERMINAL receipt carries
+   ;; exactly one of the four states and no refusal carries `status` at all, so
+   ;; the branches are disjoint and `oneOf` is exact rather than a menu.
+   ;;
+   ;; `elapsed_ms` is required in EVERY branch. `mcp-operation/invoke!`'s
+   ;; finalizer stamps it on every published result, refusals included, so a
+   ;; variant that made it optional would describe a receipt this server never
+   ;; emits.
+   ;;
+   ;; NOT a branch: the `status "unknown"` value `terminal-receipt` answers for
+   ;; empty input. That is a MAPPER-internal honesty state and never a
+   ;; published receipt — every `execute!` path returns one of the five below —
+   ;; so admitting it here would declare a face the wire does not have.
+   :oneOf
+   [{:title "committed"
+     :description "The proof completed and the write stands. The plan's counts describe the tree as it now is, and undo_receipt is the authority this write can be inverted from."
+     :properties {"status" {:const "committed"}
+                  "ok" {:const true}
+                  "committed" {:const true}
+                  "source_unchanged" {:const false}
+                  "destination_created" {:const true}}
+     :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+                "source_unchanged" "destination_created" "undo_receipt"
+                "helpers" "source_retired" "caller_files" "sites"
+                "verification"]}
+
+    {:title "verification-failed"
+     :description "The proof did not pass and the kernel's inverse restored every protected byte. Nothing was retired: source_retired is the actual 0, and what the plan WOULD have done is under planned_*."
+     :properties {"status" {:const "verification-failed"}
+                  "ok" {:const false}
+                  "committed" {:const false}
+                  "restored" {:const true}
+                  "source_unchanged" {:const true}
+                  "destination_created" {:const false}
+                  "source_retired" {:const 0}}
+     :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+                "restored" "source_unchanged" "destination_created"
+                "source_retired" "planned_source_retired"
+                "restored_file_count" "restoration_read_back" "verification"]}
+
+    {:title "verification-timeout"
+     :description "The proof did not return inside its profile's timeout and the kernel's inverse restored every protected byte. Identical obligations to verification-failed: a timeout is a proof that did not complete, never one that passed."
+     :properties {"status" {:const "verification-timeout"}
+                  "ok" {:const false}
+                  "committed" {:const false}
+                  "restored" {:const true}
+                  "source_unchanged" {:const true}
+                  "destination_created" {:const false}
+                  "source_retired" {:const 0}}
+     :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+                "restored" "source_unchanged" "destination_created"
+                "source_retired" "planned_source_retired"
+                "restored_file_count" "restoration_read_back" "verification"]}
+
+    {:title "rollback-failed"
+     :description "The inverse did NOT verify. The one face that keeps linear evidence, because a human has to act on it: files names what could not be restored, recovery_required carries the kernel's recovery authority, and the retirement is stated as unknown."
+     :properties {"status" {:const "rollback-failed"}
+                  "ok" {:const false}
+                  "committed" {:const false}
+                  "restored" {:const false}
+                  "source_unchanged" {:const false}}
+     :required ["ok" "elapsed_ms" "status" "kernel_status" "committed"
+                "restored" "source_unchanged" "files" "recovery_required"
+                "source_retired_unknown"]}
+
+    {:title "refusal"
+     :description "A typed refusal. No terminal state was reached, so there is no status: the receipt carries the error_type, the cause, the one unresolved decision, and next_call — null in v1, always, because no refusal has a mechanically composable continuation."
+     :not {:required ["status"]}
+     :properties {"ok" {:const false}
+                  "next_call" {:type "null"}}
+     :required ["ok" "elapsed_ms" "error_type" "error" "next_call"
+                "source_unchanged"]}]})
