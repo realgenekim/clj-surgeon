@@ -71,3 +71,17 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **03:53Z LANDED 68f24f51** — candidate 0305: flip (bridge/test-default-fast 1fe16056), ISO-007 override (bridge/iso007-fence-override 322a63f1 incl. :pass receipt), Astra binding series c188d5a3/e6808fca/40e5fa5a, collector 29b8466d. Rows FLIP/ISO007/ASTRA-BINDING/COLLECTOR: LANDED. Servers on 2209c61e.
 
 - **04:53Z LANDED 6ef3de2b** — bridge/test-owns-recovery-battery (ADMIT-150; recovery battery back in the default recipe). Battery ledger has a :pass receipt with zero skips. Servers on fbd68a1c.
+
+- **06:44Z HELPER_EXTRACTION** — bridge/helper-extraction-impl: candidate ee03b49a = real public one-call success (Astra, 406-byte request, 30 files, proof pass) but Sol fence r1 NO-GO (11 findings, 1 critical rollback gap). Round 3 fixes + witnesses in flight; re-freeze as new sha; landing only after fence GO + Astra public proof on the new sha. Never lands without battery-fresh.
+
+- **07:38Z ratchet owed (no bd db in this clone)**: one shared expected-tool-list Var for the five test sites that hardcode the MCP tool list (mcp_server_test, mcp_http_server_test ×3, admit_patch_test:582, mcp_operation_registry_test catalog).
+
+- **07:50Z pre-landing obligation (helper_extraction)**: enroll helper_extraction_test → :fast and mcp_helper_extraction_test → :battery in lane_manifest, delete the two red make targets, Sol r4 delta on the schema-enforcement fix; battery-fresh on the landed sha. The legacy 547 does not cover the new 64 tests.
+
+- **08:38Z helper_extraction follow-ups (not in v4)**: scope.paths glob friction (explicit roots field or examples; no silent broadening); public refusal structuredContent must carry `operation`; verb telemetry through the existing service emitter.
+
+- **08:55Z ASTRA HANDOFF (plan of record)**: see /var/tmp/forge/astra-to-fable-next-actions.md — 1 v4/v5+gates; 2 epoch closed; 3 oracle revision (intent+witnesses); 4 admission/actor entrance first; 5 interface hypotheses (dir-root authority, when-to-call doctrine); 6 observation lanes; 7 fresh preregistered epoch for any perf claim.
+
+- **09:23Z HELPER_EXTRACTION landing pre-conditions (Astra closeout)**: exact sha + Sol GO (not GO-WITH-FIX) + battery on that sha + make test on its gate commit incl. the real wire pre-write-refusal witness → THEN request the landing decision from Astra/Gene. No automatic landing. Astra report: MCP/astra-helper-performance-2026-09-05 @ 5c5f3306, inbox inb-b4f0db.
+
+- **10:23Z HELPER_EXTRACTION LANDING-READY** — e1239a99 (gate commit f70e72bb): Sol r7 GO, battery 560/12164/0, make test green, enrollment done. AWAITING Astra/Gene word; then `~/bin/land e1239a99`.
