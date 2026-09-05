@@ -2392,3 +2392,5 @@ gpt-oss-120b ~1–2.5 s wall at ~480 tok/s (measured tonight); OpenRouter gpt-os
 the upstream it routes to (Cerebras or Groq). Expected winner on wall for bounded dossiers: the API
 providers; Spark only wins if a task needs more than ~5k output tokens or the harness keeps a warm
 session. Falsifier: Spark k=1 median under 3 s on the one-site dossier.
+
+## 22:34Z — Gene: wall clock is what matters, codex startup is a fact of life; "do we have code that ensures codex cli doesn't read unnecessary skill files, to minimize start up?" Measured: `codex exec -m gpt-5.6-sol` (effort low, "reply ok") bare 3.71/3.51 s vs lean (`--ignore-user-config --ephemeral -c project_doc_max_bytes=0`) 4.21/3.51 s — no measurable difference; this seat's ~/.codex/config.toml declares zero mcp_servers (the usual startup tax), user AGENTS.md is 2.6 KB, one skill (clj-surgeon). The ~3.5 s floor is the CLI plus one model round trip; nothing left to strip here. The typist runner already runs codex in a scratch fixture copy with no AGENTS.md. Wrappers pass --skip-git-repo-check only. Mayor may send code; watching /tmp/mayor-*.txt.
