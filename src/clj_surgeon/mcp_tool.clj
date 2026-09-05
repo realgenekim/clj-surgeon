@@ -15,6 +15,7 @@
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-feature-thread :as feature-thread]
    [clj-surgeon.mcp-formatter :as formatter]
+   [clj-surgeon.mcp-helper-extraction :as helper-extraction]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -1948,6 +1949,148 @@
    :summarize alias-migration-summary
    :tool-fn #'handle-alias-migration})
 
+  ;; -------------------------------------------------------------------------
+  ;; helper_extraction
+  ;;
+  ;; The registration half of `clj-surgeon.mcp-helper-extraction`. The handler
+  ;; and the summarizer live HERE, with `handle-alias-migration` and
+  ;; `alias-migration-summary`, because they need the three things this layer
+  ;; owns: `resolve-verification-config` (one function, both callers), the
+  ;; workspace router's own receipt directory, and the refusal-envelope
+  ;; renderers. The verb's own boundary namespace supplies everything else.
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-009
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-020
+;; @spec MCP-OP-HELPER-022
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-016
+(defn helper-extraction-refusal
+  "One helper_extraction refusal in the closed envelope this verb publishes.
+
+  `next_call nil` is EXPLICIT rather than omitted: v1 has no mechanically
+  composable continuation, and a refusal that simply lacks the key cannot be
+  told apart from one that lost it."
+  [error-type message evidence]
+  (merge {:ok false
+          :operation "helper_extraction"
+          :error_type error-type
+          :error message
+          :next_call nil
+          :source_unchanged true
+          :committed false
+          :mutation_attempted false
+          :write_authority false}
+         evidence))
+
+(defn helper-extraction-summary
+  "One compact visible summary whose length is constant in the caller count.
+
+  The committed block is gated on the receipt's own `:committed`, so the visible
+  check marks and the structured receipt can never disagree; the refusal face
+  uses the same envelope rules alias_migration does, so every discriminating
+  fact the structured receipt carries is also in the text."
+  [result]
+  (if (and (:ok result) (true? (:committed result)))
+    (let [verification (:verification result)]
+      (format (str "helper_extraction\n"
+                   "  %s helpers \u00b7 %s caller files \u00b7 %s sites \u00b7 aliases %s \u00b7 %s\n\n"
+                   "\u2713 one atomic transaction committed\n"
+                   "\u2713 proof %s in a fresh process \u00b7 %s\n"
+                   "\u2713 terminal evidence \u00b7 per-caller detail at %s")
+              (:helpers result) (:caller_files result) (:sites result)
+              (pr-str (:alias_histogram result))
+              (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+              (pr-str (:profile verification))
+              (pr-str (select-keys verification
+                                   [:status :structural_callers :helper_behaviors
+                                    :compiled_callers]))
+              (:details_path result)))
+    (bounded-refusal-text
+      (str/join
+       "\n"
+       (remove
+        nil?
+        [(format (str "helper_extraction\n"
+                      "  refused \u00b7 %s \u00b7 %s\n\n"
+                      "%s")
+                 (or (:error_type result) (:status result) "unknown-error")
+                 (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+                 (if (or (:source_unchanged result) (:source-unchanged result))
+                   "\u2713 source unchanged"
+                   "\u26a0 source state requires structured receipt review"))
+         ;; @spec MCP-OP-HELPER-010
+         ;; @spec MCP-OP-HELPER-016
+         ;; NO generic retry prescription. When `next_call` is nil there is no
+         ;; mechanically known correction, and "correct the request and retry
+         ;; once" tells a caller to do the one thing that reproduces the
+         ;; outcome — measured on a real verification-failed receipt whose
+         ;; next_call was null and whose text said exactly that. The cause is
+         ;; what is known; the absence of a continuation is stated by
+         ;; `rendered-next-call` on the line below.
+         (when-let [cause (or (:error result) (:remedy result))]
+           (str "\u2192 " cause))
+         (refusal-fact-line result)
+         (when-let [remedy (:remedy result)]
+           (str "remedy \u00b7 " remedy))
+         (rendered-next-call result)])))))
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-008
+;; @spec MCP-OP-HELPER-011
+(defn handle-helper-extraction
+  "Stable callback that plans, stages, proves, and publishes one O(1) receipt."
+  [_exchange params callback]
+  (mcp-operation/invoke!
+    {:execute
+     (fn []
+       (let [normalized (json/parse-string (json/generate-string params) true)]
+         (if-not @runtime-config
+           ;; @spec MCP-OP-HELPER-010
+           ;; every refusal this handler emits carries the closed envelope,
+           ;; `next_call nil` included. A refusal that merely omits next_call
+           ;; is indistinguishable, to a caller reading either face, from one
+           ;; whose continuation was dropped on the way out.
+           (helper-extraction-refusal
+             "server-not-initialized"
+             "helper_extraction server is not initialized"
+             {:remedy "Restart the configured clj-surgeon MCP server."})
+           (let [workspace-router (or (:workspace-router @runtime-config)
+                                      (workspace/router @runtime-config))
+                 routed (workspace/resolve-request workspace-router normalized)]
+             (if-not (:ok routed)
+               ;; @spec MCP-OP-HELPER-010
+               ;; a workspace-routing refusal is a helper_extraction refusal
+               ;; and wears the same envelope; the router's own cause and
+               ;; remedy travel verbatim inside it
+               ;; @spec MCP-OP-HELPER-010
+               ;; through the boundary's own normalizer as well, so a routing
+               ;; refusal wears exactly the envelope every other pre-write
+               ;; refusal wears
+               (helper-extraction/normalize-refusal
+                (merge (helper-extraction-refusal
+                        (or (some-> (:error_type routed) name)
+                            (some-> (:error-type routed) name)
+                            "invalid-workspace-root")
+                        (or (:error routed) "The workspace root could not be resolved")
+                        {})
+                      (dissoc routed :ok :next_call)))
+               ;; the same receipt-directory derivation alias_migration uses:
+               ;; the routed workspace's own LOCAL-STATE directory, outside the
+               ;; tree this verb mutates
+               (let [routed-config (resolve-verification-config (:config routed))
+                     receipt-dir (str (or (:receipt-dir routed-config)
+                                          (default-receipt-dir
+                                            (:project-root routed-config))))]
+                 (assoc (helper-extraction/execute!
+                          (assoc routed-config :receipt-dir receipt-dir)
+                          (assoc (:params routed)
+                                 :workspace_root (:workspace-root routed)))
+                        :workspace_root (:workspace-root routed))))))))
+     :summarize helper-extraction-summary
+     :callback callback}))
+
 (def clj-change-tool
   {:id :clj-change
    :name "apply_clojure_changes"
@@ -1967,6 +2110,7 @@
            program-tool/transform-clojure-tool
            census-tool/relation-census-tool
            alias-migration-tool
+           (helper-extraction/tool)
            admit-tool/admit-clojure-patch-tool
            feature-thread/feature-thread-tool]
     :edit [edit-clojure-tool]
