@@ -1,0 +1,24 @@
+# Astra ethnography: fifth hour and a client classifier repair
+
+<!-- agent-usage-window-end: 2026-09-05T03:05:00Z -->
+
+Window: September 5 02:05–03:05 UTC, September 4 19:05–20:05 PDT. The original receipt was collected once after the window using explicit bounds and /var/tmp/forge/astra-program/servers as the service root. A confirmed client classifier field failure led to one identical-bounds recollection with reviewed code 29b8466d. The reporting authority is usage-hour-5-corrected.json; the original usage-hour-5.json remains retained as superseded evidence, not added to these counts. Corrected collection time: 2026-09-05T03:18:03.671680Z. Both statuses are ok, which alone does not establish classification completeness.
+
+| Provider | Sessions | Clojure-relevant | Recognized Surgeon calls | Native read actions | Native patch actions | Verification actions |
+|---|---:|---:|---:|---:|---:|---:|
+| Codex |17|16|10 alias_migration|36|1|9|
+| Claude |1|1|0 recognized|4|0 recorded|6|
+
+The actual registered MCP name was surgeon. The old classifier recognized clj-surgeon/clj_surgeon function prefixes and only clj-surgeon completed items, so it dropped these direct calls and clocks and excluded eight relevant sessions. Alias migration also defaulted to planning in the canonical completed-item path. The repair explicitly recognizes three known registered names and classifies alias_migration as application. It does not infer arbitrary HTTP gateways. Faithful RED tests preceded the fix; complete collector selftest, the exact Make selftest, and 14 independent canonical parity/privacy/clock checks pass. The independent checks cover unknown and similar server names, quoted/comment-only mentions, wrong-turn clocks, completed-only events and direct/result double counting.
+
+The corrected client action wall contains 10 observations, 14.860 seconds total, median 1.338 seconds, maximum 2.755 seconds. Completed-item application clocks separately total 14.709 seconds; these are different recorded boundaries, not a discrepancy to average away. Codex recorded model-reasoning items total 434.367 seconds across the provider population, not one elapsed task. Outer action totals and complete turns across parallel sessions cannot be summed into program elapsed time.
+
+Important remaining outcome limitation: the corrected receipt still reports zero refusal actions. That is NOT refusal-free behavior. Independent row 09 audit proves one unknown-verification-profile refusal, followed by recovery. The client result parser recognizes EDN :error/:error-type and JSON error-type, but misses the actual public JSON error_type in this response's text-block envelope. The completed item also records failed/isErrortrue; that status does not feed the aggregate refusal counter. This is an identified, unrepaired parser gap. No manual count was inserted into the receipt and no second recollection was performed. See client-classifier-evidence/REFUSAL-VISIBILITY-NOTE.md and the independent optional-adoption ledger.
+
+The service section is unchanged by the client repair: nine starts and zero tool events under the explicitly selected root. The pinned da7 emitter omits alias migration, while the separate public-wire replay and application server use other run directories. Zero events therefore does not mean zero calls. Python HTTP gateway semantics also remain invisible to the client classifier. Repeated identical methods within one outer script can collapse under the existing unique-method policy; the measured one-call witnesses here avoid that ambiguity.
+
+Root reviewed Fable's held telemetry collector separately. A faithful mixed legacy/modern, multi-session/multi-root probe confirmed that its global dispatch preference drops a legacy session even while per-session totals retain it. Raw service session identifiers also require privacy correction. That branch remains NO-GO; the ten recovered client calls are not credited to its server emitter. Evidence: client-classifier-evidence/fable-adverse/ and FABLE-RECONCILIATION.md.
+
+This study supplies route visibility, not a native speed comparison. The independent watcher and acceptance ledgers remain the primary performance/correctness authorities. The next falsifiable monitor improvements are structured typed-refusal parsing with success/source-text negatives, per-epoch service-event accounting whose aggregates reconcile, and hashed service identities. Historical records must retain their instrumentation epoch.
+
+Receipt hashes: original c4ef878258bf22d4afd25b97b0003900ef9995fd1337562d6ce3c64a264e75fb; corrected 5ffe7fddb89e6e152f15d64efd27d3014e30244883e406d7ccb94daf00877979. Reviewed collector SHA bb78455bddbdff7924553da2628377e85ecde3abc65671b110d05aae6497351f, commit 29b8466dce404d88d5dc157ee75a71a4d5bc3b6e. Local receipt root: /var/tmp/forge/astra-program/.

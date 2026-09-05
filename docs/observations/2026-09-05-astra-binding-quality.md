@@ -1,6 +1,6 @@
 # Astra: binding-aware alias migration quality
 
-Recorded 2026-09-05T02:52:57.426620+00:00. Candidate branch MCP/astra-binding-discard-2026-09-05, exact clean source46e6941803a8359dfadcf30cff7600ad7cc303ff. This is bounded quality evidence; the full candidate gate is still running at this checkpoint, and integration is not approved yet.
+Recorded 2026-09-05T02:52:57.426620+00:00. Candidate branch MCP/astra-binding-discard-2026-09-05, exact clean source46e6941803a8359dfadcf30cff7600ad7cc303ff. This is bounded quality evidence. The subsequent annotation-only candidate 40e5fa5a passed its complete full gate; earlier checkpoints below retain their original outcomes. Working-trunk integration still requires merged-tree gates.
 
 The repair treats reader-discarded syntax as absent from binding positions, respects sequential binding initializer scope, and distinguishes supported local binding forms from unsupported defaults and parameter metadata. Unsupported scope that may contain the selected reference refuses without editing or offering an executable remedy that could silently exclude the affected file. Ordinary supported cases still migrate. The behavior matrix includes bystander defaults that contain no selected reference, metadata on local bindings, metadata body vectors, letfn locals and nested discards.
 
@@ -12,7 +12,18 @@ The first actual wire attempt is preserved as an apparatus failure: the tool wro
 
 The outer round2 execution records0.315s baseline,10.138s startup,1.317s wire phase,0.415s stop. These quality-run intervals overlap other tests and have no native comparator; they support no speed ratio. The wire phase includes multiple calls and behavior checks, not one atomic ten-case transaction.
 
-Full-suite result will be appended once the exact46e candidate invocation finishes. Its physical affinity is cores2–5 with ActiveProcessorCount8 and a private disk-backed temporary directory, matching the previously diagnosed baseline census test requirement. The original four-core failure remains documented; no source test was waived or changed to hide it.
+The full-suite sequence and its exact candidate identities are recorded below. Its physical affinity is cores2–5 with ActiveProcessorCount8 and a private disk-backed temporary directory, matching the previously diagnosed baseline census test requirement. The original four-core failure remains documented; no source test was waived or changed to hide it.
 
 ## 2026-09-05T02:58:36.634721+00:00 — Astra full-gate hold
 The candidate full invocation reports BB859tests/7335assertions and analyzer6/25 passing, followed by MCP919tests/15214assertions with one failure: repository-operation-intent-contract-is-coherent expected audit-current-repository :ok. Integration remains HOLD while the exact discrepancy is diagnosed. The public-wire subset remains valid evidence but does not replace this failing audit.
+
+## 2026-09-05T03:34:12.719957+00:00 — Astra full candidate gate PASS
+
+Commit40e5fa5ac1b1c4cacbb67287da95bb7eaabe0d31 adds only the missing @spec65 comment to its existing witness. Independent review confirms unchanged production bytes, assertions, fixture/spec/audit behavior, and test linkage. The cheap intent audit passed first, followed by the complete original make test recipe:859BBtests/7335assertions,6analyzer tests/25assertions,919MCPtests/15214assertions, and all remaining postchecks/selftests/evidence tail. Return0 at2026-09-05T03:19:08.150346Z;1076.9996seconds quality wall. Source worktree clean. Receipt: /var/tmp/forge/astra-program/verification-binding40-active8/result.json and completion.md. No native speed comparison follows from this full-suite wall.
+
+Public wire remains historically bound to46e and identical production SHA1c4b; it is not relabeled as a new40e execution. Fable is assembling the reviewed binding series with the approved test-default/budget changes and independently reviewed client collector fix for one merged-tree gate. Publicmain remains frozen.
+
+
+## Astra — 2026-09-05 03:47 UTC: merged integration is pending
+
+Binding candidate 40e5fa5a passed its original complete full gate, but combined candidate 0c846748 (merged tree be976e0d) did not land: MCP 547 tests/6847 assertions passed; BB 859/7337 had one failure in cli-contract-is-versioned-edn-with-typed-exits. Oracle, hygiene, audit and battery-fresh passed. Fable diagnosed the test-full help capitalization mismatch and corrected it in 1fe16056. Fresh candidate e420f24e began a single landing gate at 03:46 UTC; no success is inferred before its receipt. Raw failed log: /var/tmp/forge/land-0c846748.log. Public main remains frozen. Fable owns the remaining gate and subsequent bounded six-helper closure design. Telemetry 417 remains held; no further model cohort was allocated. Root experiment runtimes are drained. Final Gene report records this snapshot.
