@@ -246,3 +246,86 @@ declared search boundary. The winning prototype is a thin mission ledger over
 the existing kernel. Its pass condition is the one Fable names: remove at least
 two model returns on a high-fan-out task, preserve acceptance, and show a native
 control that remains faster on the small square.
+
+## Ten mission ideas from Astra
+
+These are deliberately different shapes. Each has a bounded proof gate and a
+cheap prototype path; none deserves a product verb until it beats its native
+control.
+
+| # | mission | why it might win | first proof gate |
+|---:|---|---|---|
+| 1 | `thread-parameter` | one intent across every direct caller | exact owner count, parse, focused tests |
+| 2 | `add-require` | fan-out namespace bookkeeping | no duplicate aliases, byte/churn bound |
+| 3 | `extract-helper` | dependency closure plus move | closure complete, source-preserving diff |
+| 4 | `rename-namespace` | cross-tree identity change | all defining and referring sites accounted for |
+| 5 | `repair-declares` | remove stale declarations after movement | kondo delta and unchanged behavior |
+| 6 | `feature-thread` | join JS/Clojure evidence with named absences | five slots, no false-complete result |
+| 7 | `test-impact` | select the smallest proving suite | every changed owner covered or explicit gap |
+| 8 | `migration-plan` | sequence several safe missions | dependency DAG and resumable checkpoints |
+| 9 | `stale-resume` | continue after compaction or interruption | snapshot mismatch refuses before write |
+| 10 | `native-adjudication` | tell the model when to cede to patch/rg | predicted cost agrees with measured winner |
+
+My option-value ranking is **9, 1, 10, 6, 8, 3, 2, 7, 4, 5**. Resume and
+adjudication test the mission object itself; parameter threading and
+feature-thread test the two hardest evidence shapes; extraction, rename, and
+declare repair already have mature CLI routes and offer less uncertainty.
+
+## Fast-typing arrangement
+
+Spark/Sol should be the fast typist, never the authority. Astra (or another
+strong caller) supplies the mission question, scope, acceptance predicate, and
+stop condition. The fast model may fill a structured request or choose among
+already-proved plan alternatives. The gate then checks:
+
+```text
+frozen snapshot -> exact owner/cardinality proof -> dry-run diff
+                 -> parser/lint/test gate -> commit or rollback
+```
+
+Three caller modes are worth comparing:
+
+1. **Strong author + fast executor:** Astra states the intent; Spark emits the
+   EDN and follows the receipt.
+2. **Fast author + strong reviewer:** Spark proposes; Astra accepts, narrows, or
+   refuses before any write.
+3. **Two fast proposals + strong adjudication:** Spark and Sol independently
+   produce plans; Astra compares hashes, owners, and proof obligations.
+
+The third mode has the most option value because disagreement is evidence. It
+must be charged for both proposals, though; parallel typing is a win only when
+the adjudication prevents a costly retry or wrong edit.
+
+## Prototype batch
+
+The first batch should exercise ideas 9, 1, 6, 3, and 10. For each, run native,
+current CLI, and the mission-shaped request on the same frozen fixture. Record
+complete wall, model returns, tool calls, refusal count, source churn,
+acceptance, and resume success. Promote a shape only if every accepted arm is
+correct and it removes at least two returns or prevents a false-complete result.
+
+The 10% Codex budget should fund the comparison and the proof gate, not a large
+implementation. If the first five shapes do not show a return reduction, stop
+and keep the durable mission record as a design note. If one does, build only
+that adapter over the existing kernel.
+
+## Initial CLI dogfood
+
+After installation, three independent fast-typing probes exercised the current
+surface:
+
+- `:cat :spec-file -` read a two-owner manifest from stdin and returned one
+  hash-bound semantic receipt. This is the strongest current mission-shaped
+  primitive because the request crossed the shell as data.
+- `:deps` and `:ls-extract` on `parse-up-args` returned exact owner facts and an
+  exclusive zero-dependency extraction candidate. These are useful plan inputs,
+  but they still leave mission identity and resume state to the caller.
+- `:ls-tree :format :edn` mapped the repository successfully after the first
+  text-shaped invocation produced no immediate output while the scan completed.
+  The delayed result is a concrete reason for a mission receipt to expose
+  progress and a bounded next action instead of making the caller guess whether
+  the process is idle.
+
+These probes did not claim a speedup. They narrowed the prototype: start with a
+durable wrapper around batched `:cat`, dependency/extraction reads, and a
+resumable plan receipt; do not begin by reimplementing the structural kernel.
