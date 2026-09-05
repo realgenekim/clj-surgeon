@@ -7,6 +7,11 @@ result_dir=${CLAUDE_BENCH_RESULT_DIR:-$repo_root/bench/results/2026-08-04-claude
 deadline_seconds=${CLAUDE_BENCH_DEADLINE_SECONDS:-90}
 models=${CLAUDE_BENCH_MODELS:-fable opus}
 tasks=${CLAUDE_BENCH_TASKS:-ops-registry-xray pair-view-edit pair-view-expect-edit}
+timeout_command=$(command -v gtimeout || command -v timeout || true)
+if [ -z "$timeout_command" ]; then
+  printf '%s\n' 'Missing required command: gtimeout or timeout' >&2
+  exit 127
+fi
 
 now_ms() {
   perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1000'
@@ -37,10 +42,10 @@ bounded_exec() {
     started_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     started_ms "$started_ms" \
     deadline_seconds "$deadline" \
-    cleanup "gtimeout TERM, then KILL after 1s"
+    cleanup "$timeout_command TERM, then KILL after 1s"
 
   set +e
-  gtimeout --signal=TERM --kill-after=1 "${deadline}s" "$@" \
+  "$timeout_command" --signal=TERM --kill-after=1 "${deadline}s" "$@" \
     > "$run_dir/raw.jsonl" 2> "$run_dir/stderr.txt"
   exit_code=$?
   set -e
@@ -130,7 +135,7 @@ if [ "${CLAUDE_BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   exit 0
 fi
 
-for command_name in claude gtimeout jq bb git perl shasum rg; do
+for command_name in claude jq bb git perl shasum rg; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "Missing required command: $command_name" >&2
     exit 2
