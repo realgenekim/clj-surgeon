@@ -66,7 +66,7 @@ help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
 	@echo "  make test                      LANDING GATE (default): battery-fresh receipt + mcp-test + test-bb + hygiene"
-	@echo "  make test-full                 Run ALL tests: analyzer, recovery battery, mcp-test, test-battery, smoke, memory battery, bench tail (CI/nightly)"
+	@echo "  make test-full                 Run all tests: analyzer, recovery battery, mcp-test, test-battery, smoke, memory battery, bench tail (CI/nightly)"
 	@echo "  make test-fast                 JVM FAST lane (no child process, no port, no network)"
 	@echo "  make test-integration          JVM INTEGRATION lane (ephemeral ports, in-process servers)"
 	@echo "  make test-battery              JVM BATTERY lane (cold child JVMs; minutes-scale)"
