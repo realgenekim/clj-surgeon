@@ -31,6 +31,10 @@ awaiting its witness; registration lands in the same change as the RED witnesses
 - [ ] **MCP-OP-HELPER-007**: When choosing a caller's alias, clj-surgeon shall select the first `alias_policy` entry colliding with nothing bound in that file, and shall refuse with `helper-extraction-alias-policy-exhausted` otherwise.
 - [ ] **MCP-OP-HELPER-013**: If `expect.caller_files` is supplied and differs from the derived count, then clj-surgeon shall refuse with `helper-extraction-expect-mismatch` reporting both counts.
 
+- [ ] **MCP-OP-HELPER-023**: If a bare symbol could resolve to a selected owner through two required namespaces, then clj-surgeon shall refuse with `helper-extraction-ambiguous-reference` naming the file, symbol and candidates.
+- [ ] **MCP-OP-HELPER-024**: If `to.lib` is already defined or its path is occupied, then clj-surgeon shall refuse with `helper-extraction-target-exists` naming the path.
+- [ ] **MCP-OP-HELPER-025**: A request carrying any field outside the closed set shall refuse with `helper-extraction-unknown-field` listing `unknown_fields`.
+
 # #Transaction and Proof
 
 - [ ] **MCP-OP-HELPER-008**: The write shall be one transaction through the shared kernel entrance; on any refusal before staging no byte of any file changes.

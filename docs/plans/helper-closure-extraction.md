@@ -79,6 +79,7 @@ profile did not run is reported as 0, never implied.
 | `helper-extraction-alias-policy-exhausted` | every `alias_policy` entry collides in one file | file, collisions |
 | `helper-extraction-expect-mismatch` | `expect.caller_files` supplied and ≠ derived | `expected_caller_files`, `derived_caller_files` |
 | `helper-extraction-target-exists` | `to.lib` already defined or its path occupied | path |
+| `helper-extraction-unknown-field` | the request carries a field outside the closed set | `unknown_fields` |
 | `helper-extraction-verification-preflight-unavailable` | the profile is not synchronous, rollback-capable and runnable now | what it needed; nothing staged |
 
 A `next_call` appears only when a schema-valid, scope-preserving, non-identical continuation is

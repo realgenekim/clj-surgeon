@@ -50,6 +50,26 @@ The operation composes three existing mechanisms and adds one planner:
    states `committed`, `verification-failed` (restored), `verification-timeout` (restored),
    `rollback-failed` (`source_unchanged false`, recovery-required evidence).
 
+## Planner and boundary surfaces (the shapes the witnesses bind to)
+
+- `clj-surgeon.helper-extraction/plan` `[request sources]` → `{:ok true :plan {...} :receipt {...}}` or
+  `{:ok false :error_type "helper-extraction-…" :next_call nil …evidence}` (`error_type` is a string,
+  the repository convention). `:plan` carries `:destination {:file :source}`, `:files [{:file
+  :partition :alias :edits [{:original :replacement}]}]` and `:transactions [{:changes [{:kind
+  "extraction" …} …caller whole-form changes]}]`; `:receipt` is the O(1) success receipt minus the
+  kernel fields (`committed`, `undo_receipt`, `receipt_hash`, `elapsed_ms`).
+- `clj-surgeon.helper-extraction/refusal-types` is the closed set of v1 `error_type`s.
+- `clj-surgeon.mcp-helper-extraction` exposes `tool` (registration map), `admitted-profiles`,
+  `terminal-states`, and `terminal-receipt` (kernel result + plan → receipt with the terminal
+  state and typed verification).
+- `:refer` callers are rewritten to an alias require of the destination (as `alias_migration` does);
+  preserving `:refer` is not a v1 behavior.
+- A genuinely mutually recursive selected pair (needs `declare`) is out of v1 scope: `declare` +
+  definition of a selected name refuses `ambiguous-owner`. Selected closures are directed chains.
+- Lane registration during the RED phase: the witness namespace is `excluded` from every gate lane
+  with its own `make helper-extraction-red` target (the repository's existing pattern for
+  not-yet-implemented witnesses); it moves into the fast/integration lane in the GREEN change.
+
 ## Receipt
 
 Counts and histograms only: helpers, source_retired, destination_created, caller_files, partition
