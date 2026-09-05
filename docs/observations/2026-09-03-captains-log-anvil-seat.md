@@ -1920,3 +1920,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:43Z Gene: "Tests need to be faster. Integrate the 2.5m changes immediately." Suite landing (01ec667c) chained behind the integration landing; priority reconciled with Astra in writing (one bounded runtime inside his window; all else held; no unannounced restarts). Opus harness: Astra NO-GO, held.
 
 ## 01:52Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 203  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 01:48Z load 0.94 ; === rc 0 end 01:52Z)
+
+## 01:55Z — integration landing: bb gate WAITED on the peer quiet file (PID 943516, ~01:39–01:51Z) rather than executing; Astra removed his own file at 01:51Z so it could drain; not restarted. Waiting time is recorded separately from bb runtime. Astra suite-review finding: external ~/bin/land does not switch to `make landing-gate` after the merge (it names mcp-test/bb/oracle/hygiene/audit itself) — patch after the suite lands; reported under astra-program/suite-coverage-review.
