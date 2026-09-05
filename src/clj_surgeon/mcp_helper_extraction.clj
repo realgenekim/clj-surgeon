@@ -21,7 +21,20 @@
   of those has exactly one home in `mcp-tool`. Duplicating them here is the
   drift `resolve-verification-config`'s own docstring forbids (\"one function,
   both callers, so the two cannot drift apart again\"), so `tool` resolves them
-  by name at CALL time instead, when `mcp-tool` is loaded."
+  by name at CALL time instead, when `mcp-tool` is loaded. The same trick reads
+  the server's built-in verification profiles out of `mcp-http-server`, which
+  requires `mcp-tool`; both are DEBT, and the fix is a leaf namespace owning the
+  profile map and the refusal renderers rather than a copy of either here.
+
+  ROLLBACK AUTHORITY. This verb's write is one `extraction` change, and the
+  kernel that owns it is `clj-surgeon.mcp-extraction` — `compile-extraction`,
+  `commit!`, and the hash-fenced inverse `undo!` — the same guarded path
+  `apply_clojure_changes` takes for an extraction. `intent-transaction`'s
+  `changes` array cannot carry an extraction change today, so this is not a
+  second rollback mechanism but the repository's own. Every post-staging failure
+  or THROW exits through `finish-failure!`, which undoes through that inverse
+  and reports `rollback-failed` when the inverse does not verify; this namespace
+  never restores a byte itself."
   (:require
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
@@ -265,21 +278,6 @@
             deref)
     (catch Exception _ nil)))
 
-(def declared-profiles
-  "Profiles this VERB declares, over and above whatever the workspace configures.
-
-  `helper-proof` is the acceptance-owned proof the contract names: a structural
-  caller oracle followed by the helper behaviors, run as one external guarded
-  argv at the candidate cwd. Its ARGV is repository data, not a constant of this
-  verb — a workspace that configures `helper-proof` in
-  `.clj-surgeon.edn :verification-profiles` OVERRIDES this declaration, and the
-  declaration itself is shaped like the repository's other project-owned proof
-  (the built-in `full` profile runs `[\"make\" \"test\"]`) rather than invented
-  out of nothing. Whether the declared command can actually run HERE is a
-  separate question, answered by `runnable-command?` before anything is staged."
-  {"helper-proof" {:commands [["make" "helper-proof"]]
-                   :timeout-ms 900000}})
-
 (defn profile-capability
   "What one configured verification profile can do, or nil when v1 cannot admit it.
 
@@ -318,14 +316,30 @@
   Capability is a property of the CONFIGURED profile, derived from the same
   verification-profiles configuration every other write tool reads — never a
   fixture-only flag this verb sets for itself."
-  ([] (admitted-profiles (merge (built-in-verification-profiles)
-                                declared-profiles)))
+  ([]
+   ;; the SERVER's own built-in registry, and nothing this verb declares for
+   ;; itself. There is no source-declared `helper-proof`: the acceptance-owned
+   ;; proof is repository data and reaches this verb the way every other
+   ;; profile does, through the workspace's configured verification profiles.
+   (admitted-profiles (built-in-verification-profiles)))
   ([profiles]
-   (into (sorted-map)
-         (keep (fn [[profile-name spec]]
-                 (when-let [capability (profile-capability spec)]
-                   [profile-name capability])))
-         (or profiles {}))))
+   ;; a PURE FILTER over what was handed in: exactly those profiles this verb
+   ;; may prove a write with, and nothing this function knows from elsewhere. A
+   ;; caller asking "what does THIS configuration admit" must never be answered
+   ;; with the server's defaults. Accepts either a bare `{name spec}` map or a
+   ;; whole config map carrying `:verification-profiles`, because both are
+   ;; spellings the callers of this boundary already hold.
+   (let [profiles (if (contains? profiles :verification-profiles)
+                    (:verification-profiles profiles)
+                    profiles)]
+     (into (sorted-map)
+           (keep (fn [[profile-name spec]]
+                   ;; a profile with no command of its own can prove nothing,
+                   ;; and is therefore never admitted
+                   (when-let [capability (profile-capability spec)]
+                     (when (seq (:commands capability))
+                       [profile-name capability]))))
+           (or profiles {})))))
 
 (defn refusal-types
   "The closed set of `error_type` strings this BOUNDARY can emit.
@@ -371,11 +385,13 @@
   profile that cannot launch is a profile that cannot roll a write back."
   ([profiles profile-name] (verification-preflight profiles profile-name false))
   ([profiles profile-name check-runnable?]
-  (let [admitted (admitted-profiles (merge (built-in-verification-profiles)
-                                           declared-profiles
-                                           profiles))
+  (let [;; the workspace's own configuration wins over the server registry for
+        ;; a name both carry: a contract name the workspace gave a real command
+        ;; is that command
+        admitted (merge (admitted-profiles) (admitted-profiles profiles))
         capability (get admitted profile-name)
-        unrunnable (when (and capability check-runnable?)
+        commandless? (and capability (empty? (:commands capability)))
+        unrunnable (when (and capability check-runnable? (not commandless?))
                      (first (remove runnable-command? (:commands capability))))]
     (cond
       (nil? capability)
@@ -388,6 +404,18 @@
                          :fresh_process true}
                 :configured_profiles (vec (sort (keys (or profiles {}))))
                 :admitted_profiles (vec (keys admitted))
+                :staged false
+                :decision "which admitted profile proves this write"})
+
+      ;; a name the contract fixes that this workspace never gave a command:
+      ;; admissible in principle, unable to prove anything here
+      commandless?
+      (refusal "verification-preflight-unavailable"
+               (str "The verification profile " (pr-str profile-name)
+                    " is named by the contract but this workspace configures no"
+                    " command for it.")
+               {:profile profile-name
+                :configured_profiles (vec (sort (keys (or profiles {}))))
                 :staged false
                 :decision "which admitted profile proves this write"})
 
@@ -743,10 +771,21 @@
   [root change paths]
   (let [source (mcp-paths/resolve-source-path root (:file change))
         target (mcp-paths/resolve-new-source-path root (:to change))
-        callers (mapv (fn [caller-change]
-                        (update caller-change :in
-                                (fn [files]
-                                  (mapv #(get paths % %) files))))
+        ;; the planner speaks project-relative paths and STRING ids; the
+        ;; transaction kernel addresses canonical paths and refuses a change
+        ;; whose `:id` is not a keyword ("Change :id must be a keyword"). The
+        ;; id is minted here, positionally and deterministically, rather than
+        ;; coerced from a path — a project-relative path carries `/`, which no
+        ;; keyword name may hold, so coercion would either fail or silently
+        ;; rename the change.
+        callers (into []
+                      (map-indexed
+                        (fn [index caller-change]
+                          (-> caller-change
+                              (assoc :id (keyword "helper-extraction"
+                                                  (str "c" index)))
+                              (update :in (fn [files]
+                                            (mapv #(get paths % %) files))))))
                       (:caller_changes change))
         ignored (mapv #(mcp-paths/resolve-source-path root %)
                       (:ignored_caller_files change))
@@ -813,10 +852,14 @@
         (if preflight
           ;; nothing staged, and the receipt says so
           preflight
-          (let [capability (get (admitted-profiles
-                                  (merge (built-in-verification-profiles)
-                                         declared-profiles profiles))
+          (let [capability (get (merge (admitted-profiles)
+                                       (admitted-profiles profiles))
                                 profile-name)
+                ;; the injectable proof step. One key, one default, no behavior
+                ;; change: the production path is `run-proof!` itself, and a
+                ;; caller that supplies its own is exercising the same seam the
+                ;; boundary uses.
+                proof! (or (:run-proof! config) run-proof!)
                 root (mcp-paths/real-root (get-in (walk/keywordize-keys params)
                                                   [:workspace_root]))
                 project-root (str root)
@@ -847,8 +890,18 @@
                         started (System/nanoTime)
                         result (extraction/commit! compiled)]
                     (if-not (:ok result)
-                      (assoc result :ok false :operation operation
-                             :source_unchanged true)
+                      ;; the extraction kernel refused or restored its own
+                      ;; partial write: nothing of this transaction stands, and
+                      ;; the receipt says so as a typed refusal rather than as a
+                      ;; terminal state, because no terminal state was reached
+                      (refusal "transaction-refused"
+                               (str "The extraction kernel did not commit: "
+                                    (or (:error result)
+                                        (some-> (:error-type result) name)
+                                        "unknown"))
+                               {:kernel_error_type (some-> (:error-type result) name)
+                                :kernel_error (:error result)
+                                :decision "what the kernel refused about this transaction"})
                       ;; ONE encompassing guard from the first written byte to
                       ;; the terminal receipt. Publishing a receipt, running the
                       ;; proof and mapping the result can all THROW, and a throw
@@ -862,7 +915,12 @@
                             elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)
                             finish-failure!
                             (fn [failed-state proof cause]
-                              (let [rollback (extraction/undo! (:receipt result))
+                              (let [rollback (try (extraction/undo! (:receipt result))
+                                                   (catch Throwable undo-error
+                                                     {:ok false
+                                                      :error (or (.getMessage undo-error)
+                                                                 (.getName (class undo-error)))
+                                                      :threw true}))
                                     rolled-back? (boolean (:ok rollback))]
                                 (when rolled-back?
                                   (try (.delete (io/file receipt-file))
@@ -874,7 +932,8 @@
                                                 :restored true
                                                 :restored_files touched
                                                 :restoration_read_back
-                                                (restoration-read-back touched)
+                                                (try (restoration-read-back touched)
+                                                     (catch Throwable _ {}))
                                                 :destination_removed true
                                                 :details_path details-file
                                                 :elapsed_ms (elapsed)}
@@ -902,7 +961,7 @@
                           (file-ops/atomic-write!
                             details-file (pr-str (select-keys (:plan planned)
                                                               [:destination :files :moved])))
-                          (let [proof (run-proof! project-root profile-name capability)]
+                          (let [proof (proof! project-root profile-name capability)]
                             (if (:ok proof)
                               (terminal-receipt
                                 {:kernel {:status :committed
