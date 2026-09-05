@@ -41,6 +41,8 @@ DOSSIER = os.path.join(HERE, "typist-dossier.md")
 GROQ_KEY_FILE = os.environ.get("TYPIST_GROQ_KEY_FILE", "/home/forge/secrets/groq.edn")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "openai/gpt-oss-120b"
+GROQ_UA = "curl/8.5.0 forge-anvil-typist-run"   # urllib's default UA gets 403
+GROQ_MAX_TOKENS = 6000   # reasoning tokens are spent first; budget covers both
 PROFILE = "typist-narrow"
 MUTABLE = "src/fixture/scope.clj"   # the one file the mission authorizes
 
@@ -246,7 +248,14 @@ def extract_diff(text):
 
 
 def apply_diff(workdir, diff_text):
-    """git apply --check then git apply. -> (ok, detail)"""
+    """git apply --check then git apply. -> (ok, detail)
+
+    The candidate's bytes are RETAINED at `candidate.diff` whether it applies or
+    not: the preregistration says failed candidates are counted, never dropped,
+    and a malformed diff is the evidence for the defect class that produced it.
+    Nothing here repairs the bytes — apply, gate and acceptance do the judging."""
+    with open(os.path.join(workdir, "candidate.diff"), "w") as fh:
+        fh.write(diff_text)
     patch = os.path.join(workdir, ".typist.patch")
     with open(patch, "w") as fh:
         fh.write(diff_text)
@@ -274,7 +283,7 @@ def run_acceptance(workdir, manifest, timeout=300):
     """INDEPENDENT of the gate: behaviour + byte identity of untouched files."""
     now = {}
     for rel in tree_files(workdir):
-        if rel.startswith(".git/") or rel == ".typist.patch":
+        if rel.startswith(".git/") or rel in (".typist.patch", "candidate.diff"):
             continue
         with open(os.path.join(workdir, rel), "rb") as fh:
             now[rel] = sha256_bytes(fh.read())
@@ -370,7 +379,7 @@ def groq_key():
     if not os.path.exists(GROQ_KEY_FILE):
         die("typist-run: refusing — no Groq key at %s" % GROQ_KEY_FILE, 4)
     with open(GROQ_KEY_FILE) as fh:
-        m = re.search(r':api-key\s+"([^"]+)"', fh.read())
+        m = re.search(r':key\s+"([^"]+)"', fh.read())
     if not m:
         die("typist-run: refusing — no Groq key at %s" % GROQ_KEY_FILE, 4)
     return m.group(1)
@@ -383,10 +392,16 @@ def arm_f(prompt, k, temperature=0.7):
         body = json.dumps({"model": GROQ_MODEL,
                            "messages": [{"role": "user", "content": prompt}],
                            "temperature": temperature,
-                           "max_tokens": 1500}).encode()
+                           # gpt-oss-120b is a REASONING model: reasoning tokens
+                           # are spent BEFORE any output token, so the budget has
+                           # to cover reasoning + diff, not the diff alone.
+                           "max_tokens": GROQ_MAX_TOKENS}).encode()
         req = urllib.request.Request(
             GROQ_URL, body,
-            {"Content-Type": "application/json", "Authorization": "Bearer " + key})
+            {"Content-Type": "application/json",
+             # urllib's default User-Agent earns HTTP 403 from Groq's edge.
+             "User-Agent": GROQ_UA,
+             "Authorization": "Bearer " + key})
         try:
             d = json.load(urllib.request.urlopen(req, timeout=300))
         except Exception as e:                                   # noqa: BLE001
@@ -394,13 +409,27 @@ def arm_f(prompt, k, temperature=0.7):
                     "response_s": time.time() - T0, "tokens": None,
                     "error": "groq request failed: %s" % e}
         u = d.get("usage") or {}
-        content = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        details = u.get("completion_tokens_details") or {}
+        choice = (d.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        content = msg.get("content") or ""
+        # the reasoning trace is measured, never stored: length only.
+        reasoning_chars = len(msg.get("reasoning") or "")
+        finish = choice.get("finish_reason")
+        # `length` is a TYPED REFUSAL — the budget ran out. It is not a wrong
+        # candidate and must never be scored as one.
+        refusal = "length" if finish == "length" else None
         return {"cand": "f%d" % i, "source": GROQ_MODEL,
-                "text": extract_diff(content),
-                "raw_chars": len(content or ""),
+                "text": None if refusal else extract_diff(content),
+                "raw_chars": len(content),
+                "reasoning_chars": reasoning_chars,
+                "finish_reason": finish,
+                "refusal": refusal,
                 "response_s": time.time() - T0,
                 "tokens": u.get("completion_tokens"),
+                "reasoning_tokens": details.get("reasoning_tokens"),
                 "prompt_tokens": u.get("prompt_tokens"),
+                "completion_time_s": u.get("completion_time"),
                 "queue_time": u.get("queue_time"),
                 "error": None}
     with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
@@ -448,14 +477,30 @@ def main():
 
         records = []
         for c in cands:
-            cand_dir = fresh_copy(os.path.join(RUN_DIR, c["cand"]))
-            ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
+            refusal = c.get("refusal")
+            if refusal:
+                # A TYPED REFUSAL is not a wrong candidate: nothing is applied,
+                # nothing is gated, and it is scored in `refusals`, never as
+                # apply_ok=false. nil, not false — we did not run the check.
+                cand_dir = None
+                ev = {"apply_ok": None, "gate_ok": None, "accept_ok": None,
+                      "refusal_detail": "finish_reason=%s: the token budget ran "
+                                        "out before a complete diff" % refusal}
+            else:
+                cand_dir = fresh_copy(os.path.join(RUN_DIR, c["cand"]))
+                ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
             verified = bool(ev.get("apply_ok") and ev.get("gate_ok") and ev.get("accept_ok"))
             rec = {"cand": c["cand"], "source": c["source"],
                    "dir": cand_dir,
                    "response_wall_s": round(c["response_s"], 3),
+                   "refusal": refusal,
+                   "finish_reason": c.get("finish_reason"),
                    "tokens": c.get("tokens"),
+                   "reasoning_tokens": c.get("reasoning_tokens"),
+                   "reasoning_chars": c.get("reasoning_chars"),
+                   "raw_chars": c.get("raw_chars"),
                    "prompt_tokens": c.get("prompt_tokens"),
+                   "completion_time_s": c.get("completion_time_s"),
                    "queue_time_s": c.get("queue_time"),
                    "error": c.get("error")}
             rec.update(ev)
@@ -470,6 +515,7 @@ def main():
         gate_ok = sum(1 for r in records if r.get("gate_ok"))
         accept_ok = sum(1 for r in records if r.get("accept_ok"))
         mismatch = sum(1 for r in records if r["semantic_mismatch"])
+        refusals = sum(1 for r in records if r.get("refusal"))
 
         receipt = {
             "run": run_id, "arm": a.arm, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -482,17 +528,21 @@ def main():
             "candidates": records,
             "first_verified_s": first,
             "semantic_mismatch": mismatch,
+            "refusals": refusals,
         }
         with open(os.path.join(RUN_DIR, "receipt.edn"), "w") as fh:
             fh.write(edn(receipt) + "\n")
 
         tok = [r["tokens"] for r in records if r["tokens"] is not None]
         tok_s = ("tokens=%d" % sum(tok)) if tok else "tokens=unknown"
+        rt = [r["reasoning_tokens"] for r in records if r.get("reasoning_tokens") is not None]
+        rt_s = ("reasoning_tokens=%d" % sum(rt)) if rt else "reasoning_tokens=unknown"
         print("arm=%s run=%s first_verified_s=%s candidates=%d apply_ok=%d "
-              "gate_ok=%d accept_ok=%d semantic_mismatch=%d %s"
+              "gate_ok=%d accept_ok=%d semantic_mismatch=%d refusals=%d %s %s"
               % (a.arm, run_id,
                  ("%.2f" % first) if first is not None else "none",
-                 len(records), apply_ok, gate_ok, accept_ok, mismatch, tok_s))
+                 len(records), apply_ok, gate_ok, accept_ok, mismatch, refusals,
+                 tok_s, rt_s))
         if mismatch:
             exit_code = 3
     sys.exit(exit_code)
