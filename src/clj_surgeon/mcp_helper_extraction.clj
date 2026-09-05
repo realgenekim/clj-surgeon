@@ -125,9 +125,48 @@
   [value]
   (and (sequential? value) (seq value) (every? nonblank-string? value)))
 
+(def request-shape-example
+  "ONE complete, minimal, copy-paste-runnable request in the closed shape.
+
+  Every pre-write REQUEST-SHAPE refusal carries this. The refusals used to name
+  the offending field and its grammar in prose -- \"to must be {lib,
+  alias_policy}\" -- and a real caller (Sol, 2026-09-05) still needed SEVEN
+  refused `plan` calls to reverse-engineer the closed shape, because prose
+  names a field without showing one. A worked example costs one map and ends
+  the guessing in one round trip.
+
+  It is NOT a continuation: `next_call` stays nil (MCP-OP-HELPER-010). An
+  example is something the caller edits and resends, not something a client can
+  mechanically replay.
+
+  `workspace_root` is deliberately absent: it is optional in the input schema
+  and its only correct value is the caller's own tree, so a literal here would
+  be the one field the example could not tell the truth about."
+  {:op operation
+   :from {:file "src/acid/web/http.clj"}
+   :helpers ["html-response" "see-other" "text-response"
+             "plain-not-found" "json-response" "with-etag"]
+   :to {:lib "acid.web.response" :alias_policy ["response" "resp"]}
+   :scope {:paths ["src/**"]}
+   :verification {:profile "helper-proof"}})
+
+(defn- shape-refusal
+  "A request-shape refusal that SHOWS the shape.
+
+  Three fields beyond the message, on every one of them:
+  `field` -- the offending field path; `decision` -- which closed field carries
+  this information, in one sentence; `example` -- the complete closed request
+  above. `path` is retained because existing callers read it."
+  [suffix message path decision]
+  (refusal suffix message
+           {:path (vec path)
+            :field (str/join "." path)
+            :decision decision
+            :example request-shape-example}))
+
 (defn- invalid-request
-  [message path]
-  (refusal "invalid-request" message {:path (vec path)}))
+  [message path decision]
+  (shape-refusal "invalid-request" message path decision))
 
 ;; @spec MCP-OP-HELPER-001
 ;; @spec MCP-OP-HELPER-002
@@ -148,42 +187,50 @@
       ;; the size guarantee is enforced here, not documented: a per-file,
       ;; per-owner or per-site table has no field to arrive in
       (seq unknown)
-      (refusal "unknown-field"
-               (str "The request carries a field outside the closed set: "
-                    (str/join ", " unknown))
-               {:unknown_fields unknown
-                :closed_fields (vec (sort (map name request-fields)))
-                :decision "which of the closed request fields carries this information"})
+      (-> (refusal "unknown-field"
+                   (str "The request carries a field outside the closed set: "
+                        (str/join ", " unknown))
+                   {:unknown_fields unknown
+                    :closed_fields (vec (sort (map name request-fields)))})
+          (merge {:field (first unknown)
+                  :decision "which of the closed request fields carries this information"
+                  :example request-shape-example}))
 
       (not (and (map? from) (nonblank-string? (:file from))
                 (= #{:file} (set (keys from)))))
       (invalid-request "from must be {file}, a project-relative path"
-                       ["from"])
+                       ["from"]
+                       "from carries exactly one project-relative source path, as {file ...}")
 
       (not (mcp-paths/relative-source-path? (:file from)))
       (invalid-request "from.file must be a project-relative Clojure source path"
-                       ["from" "file"])
+                       ["from" "file"]
+                       "from.file carries the path the helpers leave, relative to the workspace root")
 
       (not (and (string-array? helpers)
                 (= (count helpers) (count (distinct helpers)))))
       (invalid-request "helpers must be one non-empty array of distinct names"
-                       ["helpers"])
+                       ["helpers"]
+                       "helpers carries the selected helper names, one array of distinct strings")
 
       (not (and (map? to) (nonblank-string? (:lib to))
                 (string-array? (:alias_policy to))
                 (= #{:lib :alias_policy} (set (keys to)))))
       (invalid-request "to must be {lib, alias_policy}; alias_policy is non-empty"
-                       ["to"])
+                       ["to"]
+                       "to carries the destination namespace as lib and the accepted aliases as alias_policy; there is no namespace field")
 
       (not (and (map? scope) (string-array? (:paths scope))
                 (= #{:paths} (set (keys scope)))))
       (invalid-request "scope.paths must be one non-empty array of glob patterns"
-                       ["scope" "paths"])
+                       ["scope" "paths"]
+                       "scope.paths carries the write-authorized globs; scope is never a bare string")
 
       (not (and (map? verification) (nonblank-string? (:profile verification))
                 (= #{:profile} (set (keys verification)))))
       (invalid-request "verification must be {profile}, naming one admitted profile"
-                       ["verification" "profile"])
+                       ["verification" "profile"]
+                       "verification carries the name of one configured, admitted profile, as {profile ...}")
 
       ;; @spec MCP-OP-HELPER-017
       (and (some? expect)
@@ -191,7 +238,8 @@
                      (= #{:caller_files} (set (keys expect)))
                      (nat-int? (:caller_files expect)))))
       (invalid-request "expect, when supplied, is {caller_files}, a non-negative integer"
-                       ["expect"])
+                       ["expect"]
+                       "expect is optional and carries only caller_files, the exact number of external caller files the plan must rewrite")
 
       :else
       {:ok true

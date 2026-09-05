@@ -416,7 +416,7 @@
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
     clj-surgeon.ns-isolation-test          24  ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
     clj-surgeon.helper-extraction-test     34  ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
-    clj-surgeon.mcp-helper-extraction-test 48}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+    clj-surgeon.mcp-helper-extraction-test 51}) ; 48 -> 51 on 2026-09-05: the three request-shape-refusal witnesses (a runnable :example, the named :field, and the enriched refusal still validating against exactly the refusal face) added after a real caller needed seven refused plan calls to reverse-engineer the closed shape; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -473,9 +473,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 221 adopted) (str "adopted tests: " adopted)))
+      (is (= 224 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1142 total) (str "manifest declares " total " tests"))
+      (is (= 1145 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
