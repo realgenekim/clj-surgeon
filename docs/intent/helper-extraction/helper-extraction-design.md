@@ -60,8 +60,13 @@ The operation composes three existing mechanisms and adds one planner:
   kernel fields (`committed`, `undo_receipt`, `receipt_hash`, `elapsed_ms`).
 - `clj-surgeon.helper-extraction/refusal-types` is the closed set of v1 `error_type`s.
 - `clj-surgeon.mcp-helper-extraction` exposes `tool` (registration map), `admitted-profiles`,
-  `terminal-states`, and `terminal-receipt` (kernel result + plan → receipt with the terminal
-  state and typed verification).
+  `terminal-states`, and `terminal-receipt`, a pure MAPPER taking one map
+  `{:kernel <kernel result> :verification <profile result> :plan <plan>}` → receipt with the
+  terminal state, `kernel_status`, and the typed verification copied from the injected profile
+  result; with empty or missing evidence it claims nothing (`status "unknown"`, no counts, no
+  `committed`/`restored`/`source_unchanged`/`fresh_process`). A boundary refusal that names a
+  kernel limitation carries `:limitation`; a compiled-caller claim carries `:compiled_evidence`
+  whose count equals `compiled_callers`.
 - `:refer` callers are rewritten to an alias require of the destination (as `alias_migration` does);
   preserving `:refer` is not a v1 behavior.
 - A genuinely mutually recursive selected pair (needs `declare`) is out of v1 scope: `declare` +
@@ -74,8 +79,9 @@ The operation composes three existing mechanisms and adds one planner:
 
 Counts and histograms only: helpers, source_retired, destination_created, caller_files, partition
 {moved_only mixed qualified_only untouched}, sites, retained_sites, alias_histogram, verification
-{profile status structural_callers helper_behaviors compiled_callers ok}, closure {roots grammar dynamic_references "not-claimed"},
-details_path, undo_receipt, receipt_hash, elapsed_ms. Never a file list.
+{profile status(checks-completed | …) structural_callers helper_behaviors compiled_callers ok}, kernel_status (the kernel's own terminal state, retained separately), closure {roots grammar dynamic_references "not-claimed"},
+details_path (inside the kernel's existing receipt-dir; no new in-workspace publisher), undo_receipt,
+receipt_hash, elapsed_ms. Never a file list.
 
 ## What it does not claim
 
