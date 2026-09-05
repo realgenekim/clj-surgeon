@@ -30,7 +30,10 @@ before merge. Never git stash in a shared repo. One agent per disjoint file set.
 line goes at the top of the repo's CLAUDE.md the day the seat exists.
 
 **Worktrees.** `~/src/clj-surgeon-<branch>` per branch from a fetched `origin/main` sha (record it);
-curtain-call under `~/src/curtaincall-cfp-<branch>`; suites via `make test-fast` / `make mcp-test`
+curtain-call under `~/src/curtaincall-cfp-<branch>`; suites via `make mcp-test` (the JVM merge
+gate: fast + integration) and `make test-bb` (the babashka corpus — it was `make test-fast`
+until 2026-09-04, and that name now means the JVM fast lane alone, so a brief written before
+that date omits the bb lane if you read it literally)
 (clj-surgeon) and `flock ~/tmp/suite.lock bin/kaocha unit` (curtain-call); 16 cores means two
 suites may run concurrently, but the cohort lock still serialises against batteries.
 

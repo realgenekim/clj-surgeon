@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-extraction-plan-test
+(ns ^{:lane :fast} clj-surgeon.mcp-extraction-plan-test
   (:require
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-extraction :as extraction]

@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-program-tool-test
+(ns ^{:lane :fast} clj-surgeon.mcp-program-tool-test
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-program-tool :as program]

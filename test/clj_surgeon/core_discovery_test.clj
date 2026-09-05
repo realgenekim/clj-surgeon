@@ -1,4 +1,4 @@
-(ns clj-surgeon.core-discovery-test
+(ns ^{:lane :battery} clj-surgeon.core-discovery-test
   "Shell-safety and NUL-delimited witnesses for project discovery.
 
    Andon pull, 2026-09-03. `clj-surgeon.core/find-build-files` interpolated the

@@ -1,4 +1,4 @@
-(ns clj-surgeon.outline-differential-test
+(ns ^{:lane :fast} clj-surgeon.outline-differential-test
   "Acceptance artifact for MCP-OP-MEM-015: the single-parse outline is
    byte-identical to the two-parse outline it replaced.
 

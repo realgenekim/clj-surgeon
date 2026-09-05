@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-http-server-test
+(ns ^{:lane :integration} clj-surgeon.mcp-http-server-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.alias-migration-fixture :as fixture]

@@ -1,6 +1,7 @@
 (ns clj-surgeon.failure-report
   "Privacy-safe, deduplicating local failure reports."
   (:require
+   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -61,6 +62,8 @@
                     (.directory (io/file directory))
                     (.redirectErrorStream true)
                     .start)
+        ;; @spec TEST-ISO-002
+        _ (spawn/record! (.pid process) command)
         output (slurp (.getInputStream process))
         exit (.waitFor process)]
     {:command command :exit exit :out output}))

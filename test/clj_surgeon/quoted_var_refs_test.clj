@@ -1,4 +1,4 @@
-(ns clj-surgeon.quoted-var-refs-test
+(ns ^{:lane :fast} clj-surgeon.quoted-var-refs-test
   (:require
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]

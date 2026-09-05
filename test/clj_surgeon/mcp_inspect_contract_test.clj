@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-inspect-contract-test
+(ns ^{:lane :fast} clj-surgeon.mcp-inspect-contract-test
   (:require
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.structural-lens :as structural-lens]

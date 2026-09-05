@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-cold-verify-test
+(ns ^{:lane :battery} clj-surgeon.mcp-cold-verify-test
   (:require
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-process :as process-env]

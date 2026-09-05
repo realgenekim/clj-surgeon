@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-relation-census-launcher-test
+(ns ^{:lane :battery} clj-surgeon.mcp-relation-census-launcher-test
   "Every relation-census witness that drives a REAL LAUNCHER as a subprocess.
 
    A namespace of its own for a reason that is a gate, not taste: the trunk's

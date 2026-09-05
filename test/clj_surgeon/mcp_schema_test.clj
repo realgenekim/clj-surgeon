@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-schema-test
+(ns ^{:lane :fast} clj-surgeon.mcp-schema-test
   (:require
    [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clj-surgeon.mcp-schema :as schema]

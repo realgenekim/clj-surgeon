@@ -28,6 +28,34 @@
     org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
    :exec-fn clj-surgeon.mcp-server/start}
 
+  ;; TEST-ISO-001: the JVM test lanes. Each alias names LANES, never
+  ;; namespaces -- `clj-surgeon.lane-manifest` is the single source of truth
+  ;; for which namespace is in which lane, and the runner refuses one that
+  ;; declares none. The extra-deps map is repeated rather than composed so
+  ;; that every alias works BARE (`clojure -M:clj-surgeon/test-fast`); an
+  ;; alias that only works when composed with another is a trap for the next
+  ;; caller, and `-M:a:b` concatenates :main-opts.
+  ;;
+  ;; :clj-surgeon/mcp-test is the MERGE GATE: fast + integration. The eleven
+  ;; battery namespaces (674 s of round one's 716 s) are deliberately not in
+  ;; it; `make test` runs `make test-battery` after.
+  ;; Paths + deps with NO :main-opts, so a caller can name its own entry
+  ;; point: `clojure -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner
+  ;; --ns clj-surgeon.foo-test`. The lane aliases below concatenate their
+  ;; :main-opts with anything on the command line, so they cannot be used for
+  ;; this.
+  :clj-surgeon/test-deps
+  {:extra-paths ["test" "dev/experiments"]
+   :extra-deps
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
+    {:git/tag "v0.2.6"
+     :git/sha "35a660b"}
+    nrepl/nrepl {:mvn/version "1.3.1"}
+    org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
+    org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}}
+
   :clj-surgeon/mcp-test
   {:extra-paths ["test" "dev/experiments"]
    :extra-deps
@@ -39,7 +67,46 @@
     nrepl/nrepl {:mvn/version "1.3.1"}
     org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
     org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
-   :main-opts ["-m" "clj-surgeon.mcp-test-runner"]}
+   :main-opts ["-m" "clj-surgeon.mcp-test-runner" "fast" "integration"]}
+
+  :clj-surgeon/test-fast
+  {:extra-paths ["test" "dev/experiments"]
+   :extra-deps
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
+    {:git/tag "v0.2.6"
+     :git/sha "35a660b"}
+    nrepl/nrepl {:mvn/version "1.3.1"}
+    org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
+    org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
+   :main-opts ["-m" "clj-surgeon.mcp-test-runner" "fast"]}
+
+  :clj-surgeon/test-integration
+  {:extra-paths ["test" "dev/experiments"]
+   :extra-deps
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
+    {:git/tag "v0.2.6"
+     :git/sha "35a660b"}
+    nrepl/nrepl {:mvn/version "1.3.1"}
+    org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
+    org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
+   :main-opts ["-m" "clj-surgeon.mcp-test-runner" "integration"]}
+
+  :clj-surgeon/test-battery
+  {:extra-paths ["test" "dev/experiments"]
+   :extra-deps
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
+    {:git/tag "v0.2.6"
+     :git/sha "35a660b"}
+    nrepl/nrepl {:mvn/version "1.3.1"}
+    org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
+    org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
+   :main-opts ["-m" "clj-surgeon.mcp-test-runner" "battery"]}
 
   :clj-surgeon/memory-test
   {:extra-paths ["test"]

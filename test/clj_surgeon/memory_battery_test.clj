@@ -640,7 +640,10 @@
 ;; @spec MCP-OP-MEM-011
 (deftest the-battery-is-not-reachable-from-the-ordinary-test-gates
   (let [targets (battery/parse-makefile-targets (makefile-text))]
-    (doseq [gate ["test" "test-fast" "mcp-test" "runtests"]]
+    ;; test-bb is here because the 2026-09-04 rename gave the babashka corpus
+    ;; a NEW target name, and a gate the battery must stay out of that nobody
+    ;; listed is a gate it can silently join.
+    (doseq [gate ["test" "test-fast" "test-bb" "mcp-test" "runtests"]]
       (testing gate
         (is (contains? targets gate))
         (is (not (contains? (battery/target-closure targets gate) "memory-battery"))

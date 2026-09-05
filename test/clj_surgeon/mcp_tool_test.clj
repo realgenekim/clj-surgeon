@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-tool-test
+(ns ^{:lane :integration} clj-surgeon.mcp-tool-test
   (:require
    [clj-surgeon.extract :as extract]
    [clj-surgeon.intent-transaction :as transaction]

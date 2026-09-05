@@ -1,9 +1,10 @@
-(ns clj-surgeon.outline-memory-test
+(ns ^{:lane :fast} clj-surgeon.outline-memory-test
   "Read-path allocation and parse-count witnesses for the outline projection.
 
    These are JVM-only witnesses: they read
    `com.sun.management.ThreadMXBean/getThreadAllocatedBytes`, which babashka's
-   `test-fast` runner cannot provide. They live in the MCP JVM suite."
+   runner (`make test-bb`) cannot provide. They live in the JVM lanes; this
+   namespace is `:fast`."
   (:require
    [clj-surgeon.outline :as outline]
    [clojure.string :as str]

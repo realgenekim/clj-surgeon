@@ -133,9 +133,11 @@ mechanism under test (`secure-tmpdir!`, `report-and-sweep-leak!`,
 `with-temp-dir`, `tracking-temp-dir-fixture`) lives in
 `test/clj_surgeon/tmp_leak_support.clj` and is required by both
 `test/run_all.clj` and `test/clj_surgeon/mcp_test_runner.clj` — the
-Makefile's `test-fast` and `mcp-test` targets are this leaf's
+Makefile's `test-bb` (the babashka corpus, `test/run_all.clj`) and
+`mcp-test` (the JVM merge gate, the lane runner) targets are this leaf's
 implementation-source witness, since the mechanism itself lives under
-`test/` rather than `src/`.
+`test/` rather than `src/`. Both names are post-2026-09-04: `test-fast` used
+to mean the babashka corpus and now means the JVM fast lane.
 
 ## Rationale
 

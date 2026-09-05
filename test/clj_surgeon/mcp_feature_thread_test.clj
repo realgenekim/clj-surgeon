@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-feature-thread-test
+(ns ^{:lane :integration} clj-surgeon.mcp-feature-thread-test
   "Witnesses for the `feature_thread` verb.
 
   The NAMED TEST CASE is Gene's own request: social-media-writer,
@@ -12,7 +12,6 @@
    [clj-surgeon.mcp-feature-thread :as ft]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
-   [clojure.java.shell]
    [clojure.set :as set]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -2945,14 +2944,12 @@
                    " prints; slice ends "
                    (pr-str (subs slice (max 0 (- (count slice) 12))))))))))
 
-  (testing "and `sed` itself agrees, for the leg the transcript read four times"
-    (let [{:keys [structured]} (thread! fixture-root {:budget_bytes 32768})
-          js (leg structured "js-function")
-          out (:out (clojure.java.shell/sh
-                      "sed" "-n" (str (:from js) "," (:to js) "p")
-                      (.getPath (io/file fixture-root (:file js)))))]
-      (is (= (ft/sha256-hex out) (:sha256 js))
-          "the published digest is not a digest of what sed prints")))
+  ;; MOVED, round five (TEST-ISO-002): the `sed` cross-check for this same
+  ;; case now lives in `clj-surgeon.mcp-feature-thread-sed-test` (:battery).
+  ;; It shells out to /usr/bin/sed, and this namespace is :fast, whose lane
+  ;; rule is "No child process". The assertion is unchanged and still runs;
+  ;; only its lane moved, so that what the manifest declares is what the
+  ;; namespace does.
 
   (testing "a range that ends at a last line with NO trailing LF"
     (let [root (io/file (str (java.nio.file.Files/createTempDirectory

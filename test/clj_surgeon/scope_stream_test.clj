@@ -1,4 +1,4 @@
-(ns clj-surgeon.scope-stream-test
+(ns ^{:lane :fast} clj-surgeon.scope-stream-test
   "Witnesses for the bounded streaming scope reader.
 
    Every ceiling witness has Sol's shape: exactly at the limit succeeds, and one
@@ -14,9 +14,31 @@
    (java.lang.ref WeakReference)
    (java.nio.file Files LinkOption Path Paths)))
 
+;; @spec TEST-ISO-003
 (defn- temp-root
+  "Fixtures live under THIS NAMESPACE'S OWN subdir of the run's private
+   `java.io.tmpdir`, and nowhere else.
+
+   It used to root them at `$CLJ_SURGEON_MEMORY_TMP` or, absent that, the
+   literal `/home/forge/tmp` -- a seat-absolute path, in a `:fast` namespace,
+   outside the throwaway root TEST-ISO-006 launches the lane on. Round three
+   found it while fixing something else and wrote it down so it would not be
+   found a third time.
+
+   It is worth naming exactly why the runtime witnesses did NOT catch it,
+   because that is the more useful half: TEST-ISO-003 diffs the run's temp
+   root, `target/`, and the working tree, and `/home/forge/tmp` is none of
+   the three. A write to a seat-absolute path outside every watched subject
+   is invisible to a witness watching subjects -- the same shape as a
+   source scan that cannot see a call naming nothing. The witness that
+   closes this class is the one that removes the ability: fixtures are taken
+   from `java.io.tmpdir`, which the lane runner has already replaced with a
+   throwaway, so a fast-lane fixture CANNOT be written to the seat's real
+   filesystem. Each fixture is deleted by the test that made it; if one ever
+   is not, it is now a TEST-ISO-003 refusal naming the directory, instead of
+   an anonymous entry accumulating in a seat directory nobody sweeps."
   [label]
-  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP") "/home/forge/tmp")
+  (let [dir (io/file (System/getProperty "java.io.tmpdir")
                      (str "clj-surgeon-scope-" label "-" (System/currentTimeMillis)
                           "-" (long (rand 1000000))))]
     (.mkdirs dir)
@@ -49,6 +71,39 @@
   (let [seen (atom [])]
     [seen (fn [entry] (swap! seen conj (:relative entry)) :planned)]))
 
+(def ^:private gc-deadline-ms
+  "The budget `await-cleared` will spend before calling a reference LEAKED.
+
+   Deliberately generous, and deliberately a DEADLINE rather than a sleep.
+   The round-two review's finding 8: this witness used to do
+   `(System/gc)` / `(Thread/sleep 100)` twice and then assert, which asserts
+   that the collector finishes inside 200 ms of wall -- a statement about the
+   BOX, not about the reader. On a loaded Anvil that is a coin flip, and a
+   fast-lane test that flakes red under load is the exact tax the lane
+   partition exists to remove.
+
+   What the contract actually says is `the reader holds no source it has
+   finished with`, and that is a REACHABILITY claim with no clock in it. A
+   genuinely leaked source is strongly reachable and will never clear, no
+   matter how long we wait; a released one clears on the first collection. So
+   the loop below returns the instant the condition holds -- typically in one
+   pass, FASTER than the old fixed 200 ms -- and only spends the deadline on
+   its way to failing. The number is a bound on patience, not a measurement."
+  10000)
+
+(defn- await-cleared
+  "Applies collection pressure until every `WeakReference` in `refs` is
+   cleared, or `gc-deadline-ms` elapses. Returns how many are still reachable
+   -- 0 is the contract."
+  [refs]
+  (let [deadline (+ (System/nanoTime) (* gc-deadline-ms 1000000))]
+    (loop []
+      (System/gc)
+      (let [reachable (count (remove #(nil? (.get ^WeakReference %)) refs))]
+        (if (or (zero? reachable) (> (System/nanoTime) deadline))
+          reachable
+          (do (Thread/sleep 10) (recur)))))))
+
 ;; ------------------------------------------------- MCP-OP-MEM-020 retention
 
 ;; @spec MCP-OP-MEM-020
@@ -72,12 +127,12 @@
           ;; invisible: the JVM is free to collect a local after its last use,
           ;; and this witness passed a deliberate whole-scope leak until the
           ;; order was fixed.
-          (System/gc)
-          (Thread/sleep 100)
-          (System/gc)
-          (Thread/sleep 100)
-          (is (every? #(nil? (.get ^WeakReference %)) @refs)
-              "every source the planner saw has been collected")
+          (let [reachable (await-cleared @refs)]
+            (is (zero? reachable)
+                (str reachable " of " (count @refs) " sources the planner saw "
+                     "are still strongly reachable after " gc-deadline-ms
+                     " ms of collection pressure -- the reader is holding "
+                     "sources it has finished with")))
           (is (:ok receipt))
           (is (= 6 (get-in receipt [:work :files-read])))
           (is (= 0 (get-in receipt [:work :receipt-records]))

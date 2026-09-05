@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-process-test
+(ns ^{:lane :battery} clj-surgeon.mcp-process-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-process :as process]
@@ -95,6 +95,68 @@
       (fn [_remaining-ms admission]
         (apply shell/sh (concat (:command admission) [:dir cwd]))))))
 
+;; ---------------------------------------------------------------------------
+;; Round one's second load-fragile namespace, and its fix.
+;;
+;; Round one found two assertions here that measure THE BOX rather than the
+;; contract: a `(wait-until 1000 ...)` for a lock file, and a 50 ms margin
+;; between "must not have finished yet" (a 0.30 s child bounded at 350 ms) and
+;; "must be under 650 ms". Running this namespace two-wide behind a 12-way CPU
+;; burner on 2026-09-04 found FOUR such sites, not two -- lines 251/252,
+;; 275/280 and 357 all failed, and the 650 ms ceiling was not even among them.
+;; The defect is a CLASS, not two instances: every rendezvous wait in this
+;; file was sized for an idle machine.
+;;
+;; The fix separates the two kinds of number that were being conflated:
+;;
+;;   A RENDEZVOUS bound answers "did the other party ever show up?". Its size
+;;   is arbitrary; only its finiteness is a requirement. It gets one generous,
+;;   named, overridable ceiling. A rendezvous wait that is short is not a
+;;   stricter test, it is a flakier one -- it asserts nothing extra when it
+;;   passes and asserts something false about the machine when it fails.
+;;
+;;   A CONTRACT bound answers "was the deadline honoured?". It stays, but it
+;;   is asserted where the contract actually lives -- `elapsed >= timeout`,
+;;   the deadline was not undercut -- and where a ceiling is genuinely needed
+;;   to discriminate (see `admission-wait-and-analyzer-share-one-deadline`),
+;;   the SIGNAL is widened rather than the tolerance narrowed.
+;; ---------------------------------------------------------------------------
+
+(def ^:private owner-hold-ms
+  "How long a test's LOCK OWNER holds admission while another party observes
+   the lock or is refused by it.
+
+   This is the one number a generous CEILING cannot rescue, and the third
+   contention run is what showed it. `direct-shell-shim-uses-the-same-host-admission`
+   started an owner that held for ONE SECOND and then waited (patiently, on a
+   15 s ceiling) to observe the lock file. At load 27 the owner's sleep
+   finished before the observation ever happened, the waiter was admitted
+   instead of refused, and the test reported `expected 75, got 0` -- calling a
+   working refusal broken. Waiting LONGER makes that worse, not better.
+
+   A rendezvous has to be WINNABLE: the window in which the other party is
+   observable must outlast the observation latency. So the owner's hold is
+   widened, and the owner is killed as soon as the observation is done rather
+   than being slept out. `CLJ_SURGEON_TEST_OWNER_HOLD_MS` widens it further."
+  (or (some-> (System/getenv "CLJ_SURGEON_TEST_OWNER_HOLD_MS") parse-long) 10000))
+
+(defn- kill-tree!
+  "Destroys `process` and everything it spawned. The owners here are shell
+   shims whose real work is a `/bin/sleep` CHILD: destroying only the shim
+   leaves that sleep running for the rest of its hold, holding nothing but
+   still costing the box."
+  [^Process process]
+  (doseq [^java.lang.ProcessHandle d (reverse (vec (.toList (.descendants (.toHandle process)))))]
+    (.destroyForcibly d))
+  (.destroyForcibly process))
+
+(def ^:private rendezvous-timeout-ms
+  "How long any wait in this namespace gives the other party to show up. One
+   second of wall is not one second of scheduling at load 27; this is 15, and
+   `CLJ_SURGEON_TEST_RENDEZVOUS_MS` widens it further on a loaded box without
+   editing a test."
+  (or (some-> (System/getenv "CLJ_SURGEON_TEST_RENDEZVOUS_MS") parse-long) 15000))
+
 (defn- wait-until [timeout-ms predicate]
   (let [deadline (+ (System/nanoTime) (* timeout-ms 1000000))]
     (loop []
@@ -156,7 +218,7 @@
                  @start
                  (binding [process/*clj-kondo-lock-path* lock-path
                            process/*clj-kondo-admission-path* admission-script]
-                   (run-admitted [analyzer "0.08"] "/tmp" 2000))))
+                   (run-admitted [analyzer "0.08"] "/tmp" rendezvous-timeout-ms))))
         a (run!)
         b (run!)]
     (deliver start true)
@@ -186,9 +248,9 @@
         owner (future
                 (binding [process/*clj-kondo-lock-path* lock-path
                           process/*clj-kondo-admission-path* admission-script]
-                  (run-admitted [analyzer "1.00"]
-                                owner-root 2000)))]
-    (is (wait-until 1000
+                  (run-admitted [analyzer (str (/ owner-hold-ms 1000.0))]
+                                owner-root (* 4 owner-hold-ms))))]
+    (is (wait-until rendezvous-timeout-ms
                     #(and (.isFile (io/file lock-path))
                           (str/includes? (slurp lock-path)
                                          owner-root))))
@@ -216,7 +278,12 @@
     (spit lock-path "{:pid 999999 :cwd \"/tmp/dead-owner\"}")
     (binding [process/*clj-kondo-lock-path* lock-path
               process/*clj-kondo-admission-path* admission-script]
-      (let [result (run-admitted [analyzer "0"] current-root 100)]
+      ;; A RENDEZVOUS budget, not a contract one: the claim under test is that
+      ;; a STALE lock file does not block admission, and a generous budget
+      ;; still discriminates -- a lock that really did own the OS lock would
+      ;; time out at 75 no matter how long the wait. 100 ms was a measurement
+      ;; of an idle box, and it read :admission-timeout at load 27.
+      (let [result (run-admitted [analyzer "0"] current-root rendezvous-timeout-ms)]
         (is (zero? (:exit result)))
         (is (= :admitted (get-in result [:admission :status])))
         (is (= (.getCanonicalPath (io/file current-root))
@@ -238,16 +305,16 @@
                  "--"
                  "/bin/sleep" "30"]
                 {})]
-    (is (wait-until 1000
+    (is (wait-until rendezvous-timeout-ms
                     #(and (.isFile (io/file lock-path))
                           (str/includes? (slurp lock-path)
                                          "owner-death-test"))))
     (.destroyForcibly owner)
-    (is (.waitFor owner 1000 java.util.concurrent.TimeUnit/MILLISECONDS))
+    (is (.waitFor owner rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))
     (binding [process/*clj-kondo-lock-path* lock-path
               process/*clj-kondo-admission-path* admission-script]
       (let [analyzer (fake-clj-kondo)
-            successor (run-admitted [analyzer "0"] "/tmp" 500)]
+            successor (run-admitted [analyzer "0"] "/tmp" rendezvous-timeout-ms)]
         (is (zero? (:exit successor)))
         (is (= :admitted (get-in successor [:admission :status])))))))
 
@@ -264,21 +331,40 @@
         _ (Files/copy (.toPath (io/file admission-script)) shim
                       (make-array java.nio.file.CopyOption 0))
         _ (.setExecutable (.toFile shim) true)
-        environment {"CLJ_SURGEON_CLJ_KONDO_REAL" "/bin/sleep"
-                     "CLJ_SURGEON_CLJ_KONDO_LOCK" lock-path
-                     "CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS" "100"
-                     "CLJ_SURGEON_PRESSURE_STATUS" test-pressure-status
-                     "CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD" "1000000"
-                     "CLJ_SURGEON_CLJ_KONDO_EVENTS" test-events-path
-                     "PATH" (System/getenv "PATH")}
-        owner (start-process "/tmp" [(str shim) "1"] environment)]
-    (is (wait-until 1000
-                    #(and (.isFile (io/file lock-path))
-                          (str/includes? (slurp lock-path) "agent-shell"))))
-    (let [waiter (start-process "/tmp" [(str shim) "0"] environment)]
-      (is (.waitFor waiter 1000 java.util.concurrent.TimeUnit/MILLISECONDS))
-      (is (= 75 (.exitValue waiter))))
-    (is (.waitFor owner 2000 java.util.concurrent.TimeUnit/MILLISECONDS))))
+        base-environment {"CLJ_SURGEON_CLJ_KONDO_REAL" "/bin/sleep"
+                          "CLJ_SURGEON_CLJ_KONDO_LOCK" lock-path
+                          "CLJ_SURGEON_PRESSURE_STATUS" test-pressure-status
+                          "CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD" "1000000"
+                          "CLJ_SURGEON_CLJ_KONDO_EVENTS" test-events-path
+                          "PATH" (System/getenv "PATH")}
+        ;; The owner and the waiter need OPPOSITE admission timeouts, and the
+        ;; original gave both the same 100 ms. That number is the WAITER's
+        ;; contract -- it must give up and exit 75 while the lock is held --
+        ;; but for the OWNER it is a race against the box: at load 31 the
+        ;; owner's own admission could not complete inside 100 ms, so it
+        ;; exited 75, never took the lock, and the waiter was then correctly
+        ;; admitted. The test read `expected 75, got 0` and blamed the
+        ;; refusal. One env var doing two opposite jobs is the defect.
+        owner-environment (assoc base-environment
+                                 "CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS"
+                                 (str rendezvous-timeout-ms))
+        waiter-environment (assoc base-environment
+                                  "CLJ_SURGEON_CLJ_KONDO_TIMEOUT_MS" "100")
+        owner (start-process "/tmp" [(str shim) (str (/ owner-hold-ms 1000.0))]
+                             owner-environment)]
+    (try
+      (is (wait-until rendezvous-timeout-ms
+                      #(and (.isFile (io/file lock-path))
+                            (str/includes? (slurp lock-path) "agent-shell"))))
+      (let [waiter (start-process "/tmp" [(str shim) "0"] waiter-environment)]
+        ;; The CONTRACT is that the waiter is REFUSED (exit 75) because the
+        ;; owner holds the lock -- not that the refusal arrives inside one
+        ;; second, and not that the owner is still holding by luck.
+        (is (.waitFor waiter rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))
+        (is (= 75 (.exitValue waiter))))
+      (finally
+        (kill-tree! owner)
+        (is (.waitFor owner rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))))))
 
 (deftest explicit-admission-skips-a-path-shadowing-shell-shim
   ;; @spec MCP-OP-ANALYZER-001
@@ -308,7 +394,7 @@
               process/*executable-path* (str shim-directory
                                              java.io.File/pathSeparator
                                              analyzer-directory)]
-      (let [result (run-admitted ["clj-kondo"] "/tmp" 500)]
+      (let [result (run-admitted ["clj-kondo"] "/tmp" rendezvous-timeout-ms)]
         (is (zero? (:exit result)))
         (is (= (.toRealPath analyzer
                             (make-array java.nio.file.LinkOption 0))
@@ -336,7 +422,7 @@
         result (process/run-bounded!
                  {:command [probe]
                   :cwd "/tmp"
-                  :timeout-ms 1000
+                  :timeout-ms rendezvous-timeout-ms
                   :stdin-text "hello\n"})]
     (is (:finished? result))
     (is (= 17 (:exit result)))
@@ -346,15 +432,45 @@
     (is (false? (:out-truncated result)))
     (is (false? (:err-truncated result)))))
 
+(def ^:private shared-deadline-hold-ms
+  "How long the lock OWNER holds admission while the subject waits for it."
+  2000)
+
+(def ^:private shared-deadline-budget-ms
+  "The subject's single budget, covering the admission wait AND the analyzer."
+  3000)
+
+(def ^:private shared-deadline-ceiling-ms
+  "The discriminating ceiling for `admission-wait-and-analyzer-share-one-deadline`.
+
+   This one number is a genuine CONTRACT bound, not a rendezvous bound, so it
+   cannot simply be made generous -- it is what distinguishes `the admission
+   wait was INSIDE the budget` (elapsed ~3000) from `it was ADDED to it`
+   (elapsed ~5000 = 2000 hold + 3000 budget). Round one's version discriminated
+   350 from 600 with a 50 ms margin, which is not a requirement, it is a
+   measurement of an idle box: under load the child either finished inside the
+   window or blew the ceiling, and the test asserted against both edges.
+
+   The fix widens the SIGNAL rather than narrowing the tolerance. The gap
+   between the two hypotheses is now 2000 ms and the ceiling sits 1000 ms
+   above one and 1000 ms below the other -- twenty times round one's margin,
+   with the discrimination intact. `CLJ_SURGEON_TEST_SHARED_DEADLINE_CEILING_MS`
+   widens it on a box where even that is not enough; it can be raised to just
+   under 5000 before the test stops discriminating anything."
+  (or (some-> (System/getenv "CLJ_SURGEON_TEST_SHARED_DEADLINE_CEILING_MS") parse-long)
+      4000))
+
 (deftest admission-wait-and-analyzer-share-one-deadline
   ;; @spec MCP-OP-ANALYZER-002
+  ;; @spec TEST-ISO-RACE-002
   (let [lock-path (temporary-lock-path)
         analyzer (fake-clj-kondo)
         owner (future
                 (binding [process/*clj-kondo-lock-path* lock-path
                           process/*clj-kondo-admission-path* admission-script]
-                  (run-admitted [analyzer "0.25"] "/tmp" 1000)))]
-    (is (wait-until 1000
+                  (run-admitted [analyzer (str (/ shared-deadline-hold-ms 1000.0))]
+                                "/tmp" rendezvous-timeout-ms)))]
+    (is (wait-until rendezvous-timeout-ms
                     #(and (.isFile (io/file lock-path))
                           (str/includes? (slurp lock-path) "clj-surgeon"))))
     (binding [process/*clj-kondo-lock-path* lock-path
@@ -363,12 +479,26 @@
               process/*maximum-normalized-load* 1000000.0
               process/*clj-kondo-events-path* test-events-path]
       (let [result (process/run-bounded!
-                     {:command [analyzer "0.30"]
+                     ;; A child that cannot possibly finish on its own, so
+                     ;; `:finished? false` is true BY CONSTRUCTION rather than
+                     ;; because the box was slow enough this time. Round one's
+                     ;; 0.30 s child against a 350 ms budget could go either
+                     ;; way under load, and did.
+                     {:command [analyzer "30"]
                       :cwd "/tmp"
-                      :timeout-ms 350})]
+                      :timeout-ms shared-deadline-budget-ms})
+            elapsed (:elapsed_ms result)]
         (is (false? (:finished? result)))
         (is (:termination-confirmed result))
-        (is (< (:elapsed_ms result) 650.0))))
+        (is (>= elapsed (double shared-deadline-budget-ms))
+            (str "elapsed " elapsed " ms is BELOW the " shared-deadline-budget-ms
+                 " ms budget -- the deadline was undercut, not honoured"))
+        (is (< elapsed (double shared-deadline-ceiling-ms))
+            (str "elapsed " elapsed " ms is at or above " shared-deadline-ceiling-ms
+                 " ms: the " shared-deadline-hold-ms " ms admission wait was ADDED "
+                 "to the " shared-deadline-budget-ms " ms budget rather than "
+                 "shared with it (two deadlines would give ~"
+                 (+ shared-deadline-hold-ms shared-deadline-budget-ms) " ms)"))))
     @owner))
 
 (deftest admission-wrapper-accepts-cold-profile-deadlines
@@ -444,10 +574,10 @@
             (System/getProperty "user.dir") scope
             (fn []
               (let [first-five (mapv (fn [_]
-                                       (run-admitted [analyzer] "/tmp" 1000))
+                                       (run-admitted [analyzer] "/tmp" rendezvous-timeout-ms))
                                      (range 5))]
                 (try
-                  (run-admitted [analyzer] "/tmp" 1000)
+                  (run-admitted [analyzer] "/tmp" rendezvous-timeout-ms)
                   (catch clojure.lang.ExceptionInfo error
                     (reset! sixth-error (ex-data error))))
                 first-five))))]
@@ -491,7 +621,7 @@
                                 "mission-one" 1 "/bin/sleep")
                               "0.15")
                         {})]
-    (is (wait-until 1000
+    (is (wait-until rendezvous-timeout-ms
                     #(and (.isFile (io/file events-path))
                           (str/includes? (slurp events-path) "mission-one"))))
     (let [interactive (start-process
@@ -499,7 +629,7 @@
                         [admission-script
                          "--lock" lock-path
                          "--priority-lock" priority-path
-                         "--timeout-ms" "2000"
+                         "--timeout-ms" (str rendezvous-timeout-ms)
                          "--entrance" "interactive"
                          "--events" events-path
                          "--pressure-status" test-pressure-status
@@ -514,7 +644,7 @@
                              "mission-two" 2 "/usr/bin/true")
                            {})]
       (doseq [process [first-mission interactive second-mission]]
-        (is (.waitFor process 3000 java.util.concurrent.TimeUnit/MILLISECONDS))
+        (is (.waitFor process rendezvous-timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS))
         (is (zero? (.exitValue process))))
       (let [entrances (->> (str/split-lines (slurp events-path))
                            (map #(json/parse-string % true))

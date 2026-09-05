@@ -1,4 +1,4 @@
-(ns clj-surgeon.repository-hygiene-test
+(ns ^{:lane :battery} clj-surgeon.repository-hygiene-test
   "Working-tree hygiene the repository itself must satisfy.
 
   A machine-local build cache carries absolute paths from whichever machine

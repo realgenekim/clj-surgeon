@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-compact-location-test
+(ns ^{:lane :fast} clj-surgeon.mcp-compact-location-test
   (:require
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]

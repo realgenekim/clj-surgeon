@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-prepared-confirmation-test
+(ns ^{:lane :fast} clj-surgeon.mcp-prepared-confirmation-test
   (:require
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]

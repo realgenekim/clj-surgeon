@@ -60,13 +60,18 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: repository-hygiene repository-hygiene-self-test test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
+.PHONY: repository-hygiene repository-hygiene-self-test test test-fast test-integration test-battery battery-fresh landing-gate test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
 	@echo "  make test                      Run all tests"
-	@echo "  make test-fast                 Run ordinary tests without a real analyzer"
+	@echo "  make test-fast                 JVM FAST lane (no child process, no port, no network)"
+	@echo "  make test-integration          JVM INTEGRATION lane (ephemeral ports, in-process servers)"
+	@echo "  make test-battery              JVM BATTERY lane (cold child JVMs; minutes-scale)"
+	@echo "  make battery-fresh             refuse if the newest battery receipt is stale"
+	@echo "  make landing-gate              THE landing gate ~/bin/land runs (battery-fresh + mcp-test + test-bb + hygiene)"
+	@echo "  make test-bb                   babashka lane (was: make test-fast, renamed 2026-09-04)"
 	@echo "  make anvil-arms-self-test      PF-5 smoke for the E3/E6 arm apparatus (fake driver)"
 	@echo "  make analyzer-contract-test    Run the serialized real-analyzer contracts"
 	@echo "  make mcp-test                  Run focused JVM MCP contract and hot-reload tests"
@@ -973,10 +978,103 @@ txn-kernel-warning-check:
 	@# passing suite. Seconds-scale, so it rides mcp-test.
 	clojure -M test/kernel_warning_check.clj
 
+# ============================================================
+# TEST-ISO-001 -- the JVM test lanes
+# ============================================================
+# Round one measured `clojure -M:clj-surgeon/mcp-test` at 716.7 s and found
+# ELEVEN namespaces that launch cold JVM/bb/CLI children are 674.0 s of it
+# (94%), while the other 36 finish 865 tests' worth of work in 20.9 s. These
+# targets are that partition. Which namespace is in which lane is declared in
+# ONE place, `test/clj_surgeon/lane_manifest.clj`, and the runner refuses a
+# namespace that declares none.
+#
+# RENAME, 2026-09-04, stated loudly because a silent one is the memory-red
+# collision all over again: `test-fast` USED TO MEAN `bb test/run_all.clj`.
+# It now means the JVM FAST LANE. The babashka lane is unchanged in content
+# and moved to `make test-bb`; `make test` runs both. Docs written before
+# this date that say "make test-fast (647 tests)" are quoting the bb lane.
 test-fast:
+	@# @spec TEST-ISO-001
+	@# @spec MCP-OP-TMPHYG-001
+	@# @spec MCP-OP-TMPHYG-002
+	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-fast
+
+test-integration:
+	@# @spec TEST-ISO-001
+	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-integration
+
+# The eleven. Minutes-scale (~674 s), deliberately OUT of the merge gate.
+#
+# Taking it out of the merge gate is the point of the partition AND the risk:
+# a gate that does not run on every merge is a gate whose ABSENCE is silent.
+# So every run appends a receipt to docs/observations/battery-ledger.edn --
+# pass or fail, one line, append-only. The RUNNER writes the file; the SEAT
+# commits it. `make battery-fresh` is the tripwire that reads it back.
+test-battery:
+	@# @spec TEST-ISO-001
+	@# @spec TEST-ISO-009a
+	@started=$$(date -u +%Y-%m-%dT%H:%M:%SZ); t0=$$(date +%s); \
+	 clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-battery; rc=$$?; \
+	 t1=$$(date +%s); verdict=pass; [ $$rc -eq 0 ] || verdict=fail; \
+	 bb test/clj_surgeon/battery_ledger.clj append \
+	    --sha "$$(git rev-parse HEAD)" --started "$$started" \
+	    --wall-s "$$((t1 - t0))" --verdict "$$verdict"; \
+	 exit $$rc
+
+# The freshness tripwire. Refuses when the newest battery receipt is older
+# than 26 h, failed, or names a commit that is not an ancestor of HEAD or is
+# more than 30 commits behind it -- and prints the exact remedy. A stale
+# nightly is a refusal, not a silence.
+battery-fresh:
+	@# @spec TEST-ISO-009b
+	@bb test/clj_surgeon/battery_ledger.clj check
+
+test-bb:
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
 	bb test/run_all.clj
+
+# ============================================================
+# TEST-ISO-009b -- THE LANDING GATE. This is the target `~/bin/land` runs.
+# ============================================================
+# The round-three landing review's finding 2, verbatim: "`make battery-fresh`
+# exists, but neither `land` nor `make mcp-test` invokes it, and `land` does
+# not run `test-battery`. Thus the eleven namespaces removed from the merge
+# gate are not mechanically required before this landing."
+#
+# That is the whole risk of the partition in one sentence. Moving 510 of 957
+# tests off `make mcp-test` is only safe if SOMETHING on the landing path
+# refuses when those tests have not run recently on this tree -- otherwise the
+# gate simply got faster by covering less, and nothing on the screen says so.
+# A tripwire that no path invokes is a diary entry, not an alarm.
+#
+# THE FRESHNESS CHECK RUNS FIRST, and it is a second of `bb`. A stale receipt
+# refuses before seven minutes of JVM, so the remedy arrives while the seat is
+# still looking at the screen.
+#
+# `~/bin/land` must run exactly this target. It is the single name to change
+# when the landing gate's contents change, so the seat tool never drifts from
+# what the repository considers a landing.
+landing-gate:
+	@# @spec TEST-ISO-009b
+	@# @spec TEST-ISO-001
+	$(MAKE) --no-print-directory battery-fresh
+	$(MAKE) --no-print-directory mcp-test
+	$(MAKE) --no-print-directory test-bb
+	$(MAKE) --no-print-directory repository-hygiene
+
+# ============================================================
+# TEST-ISO-009 -- the concurrency battery (the spike's merge gate)
+# ============================================================
+# N real `git clone`s of the tip, all running `make mcp-test` at once. Passes
+# only if ALL N are 0 failures and 0 errors. One clean copy beside one failing
+# copy is a FAILURE, never a 50% pass -- round one saw exactly that twice, and
+# a gate that averaged them would have called a scheduler race healthy.
+N ?= 4
+
+suite-concurrency-battery:
+	@# @spec TEST-ISO-009
+	@N=$(N) bash test/suite_concurrency_battery.sh
 
 # ============================================================
 # MEM-005 parser-admission red witness (heavy; NOT in make test)
@@ -1027,7 +1125,7 @@ analyzer-contract-target-self-test:
 test:
 	$(MAKE) --no-print-directory check-clj-surgeon-skill-mirrors
 	$(MAKE) --no-print-directory repository-hygiene
-	$(MAKE) --no-print-directory test-fast
+	$(MAKE) --no-print-directory test-bb
 	$(MAKE) --no-print-directory analyzer-contract-test
 	# @spec MCP-OP-ADMIT-150
 	# The lane that OWNS the recovery battery's receipt. `mcp-test` must not
@@ -1038,6 +1136,7 @@ test:
 	# the absence as a named skip and this lane drives that bucket to zero.
 	$(MAKE) --no-print-directory admit-transaction-recovery-battery
 	$(MAKE) --no-print-directory mcp-test
+	$(MAKE) --no-print-directory test-battery
 	$(MAKE) --no-print-directory mcp-smoke
 	$(MAKE) --no-print-directory memory-battery-self-test
 	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test

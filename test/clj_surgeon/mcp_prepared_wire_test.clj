@@ -1,25 +1,48 @@
-(ns clj-surgeon.mcp-prepared-wire-test
+(ns ^{:lane :battery} clj-surgeon.mcp-prepared-wire-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.test :refer [deftest is testing use-fixtures]])
   (:import
    (java.net URI)
    (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
    (java.util.concurrent TimeUnit)))
 
-(def ^:private wire-timeout-ms 30000)
+(def ^:private wire-timeout-ms
+  "How long to wait for the CHILD LAUNCHER to become ready. This is a
+   RENDEZVOUS bound, not a contract: the child is a cold `clojure -X` that
+   resolves deps and loads a Clojure runtime, and round one measured one such
+   launcher drive at 65 s at load 7 and ~4 min at load 12. Thirty seconds was
+   an idle-box number; two-wide behind a CPU burner it timed out in BOTH
+   copies (mcp_prepared_wire_test.clj:57 and :75, 2026-09-04).
+   `CLJ_SURGEON_TEST_WIRE_TIMEOUT_MS` widens it further."
+  (or (some-> (System/getenv "CLJ_SURGEON_TEST_WIRE_TIMEOUT_MS") parse-long)
+      300000))
+
+;; The workspace's deletion is owned by a FIXTURE, not by the tail of a
+;; `finally` in each test body. Round one's leak was not that the test forgot
+;; to clean up -- it cleaned up in a `finally` -- but that the cleanup was
+;; SEQUENCED AFTER a call that could throw, so a teardown exception skipped it
+;; and the tmp-leak ratchet failed the run a second time. A fixture cannot be
+;; skipped by anything the body does, which makes the leak unrepresentable
+;; rather than merely unlikely.
+(def ^:private temp-roots (atom []))
+
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
 (def ^:private original-source "(ns demo)\n(def alpha :old)\n")
 (def ^:private committed-source "(ns demo)\n(def alpha :new)\n")
 
 (defn- temp-dir
   [prefix]
-  (.toFile
-    (java.nio.file.Files/createTempDirectory
-      prefix (make-array java.nio.file.attribute.FileAttribute 0))))
+  (tmp-leak/track!
+    temp-roots
+    (.toFile
+      (java.nio.file.Files/createTempDirectory
+        prefix (make-array java.nio.file.attribute.FileAttribute 0)))))
 
 (defn- delete-tree!
   [file]
@@ -36,16 +59,48 @@
      :stderr (future (slurp (.getErrorStream process)))}))
 
 (defn- stop-child!
+  "Tears the child down and returns a TYPED RECEIPT. NEVER THROWS.
+
+   @spec TEST-ISO-RACE-001. `start-child!` slurps the child's stderr in a
+   `future`; this function closes the child's streams and destroys it, and
+   only then reads that future. `deref`'s default value covers a TIMEOUT, not
+   an EXCEPTION -- so when the destroy wins the race against the still-running
+   slurp, the future completes exceptionally and the deref RETHROWS. Round one
+   saw exactly that in 2/2 concurrent pairs, and because this call is the
+   FIRST step of the test's `finally`, the throw escaped before the workspace
+   was deleted: one error plus one leak, from one race.
+
+   A teardown step that can throw is not a teardown step. This one reports
+   what went wrong as a typed, printed fact and returns."
   [{:keys [^Process process stderr]}]
-  (when process
-    (try (.close (.getOutputStream process)) (catch Exception _))
-    (try (.close (.getInputStream process)) (catch Exception _))
-    (.destroy process)
-    (when-not (.waitFor process 5 TimeUnit/SECONDS)
-      (.destroyForcibly process)
-      (.waitFor process 5 TimeUnit/SECONDS)))
-  (when stderr
-    (deref stderr 5000 "")))
+  (let [process-refusal
+        (try
+          (when process
+            (try (.close (.getOutputStream process)) (catch Exception _))
+            (try (.close (.getInputStream process)) (catch Exception _))
+            (.destroy process)
+            (when-not (.waitFor process 5 TimeUnit/SECONDS)
+              (.destroyForcibly process)
+              (.waitFor process 5 TimeUnit/SECONDS)))
+          nil
+          (catch Throwable t
+            {:refusal :process-teardown-failed
+             :message (str (.getSimpleName (class t)) ": " (.getMessage t))}))
+        stderr-result
+        (when stderr
+          (try
+            {:stderr (deref stderr 5000 ::timed-out)}
+            (catch Throwable t
+              (let [cause (or (.getCause t) t)]
+                {:refusal :stderr-reader-failed
+                 :message (str (.getSimpleName (class cause)) ": "
+                               (.getMessage cause))}))))
+        receipt (merge {} process-refusal stderr-result)]
+    (when-let [reason (:refusal receipt)]
+      (binding [*out* *err*]
+        (println (format "prepared-wire-teardown: %s -- %s"
+                         (name reason) (:message receipt)))))
+    receipt))
 
 (defn- await!
   [predicate description]
@@ -171,6 +226,9 @@
                             {:jsonrpc "2.0"
                              :method "notifications/initialized"})
           (exercise-prepared-wire! "stdio" call! source-file)))
+      ;; Both steps run, in order, independently of the other's success:
+      ;; `stop-child!` cannot throw, and the workspace's deletion is owned by
+      ;; the :each fixture besides.
       (finally
         (stop-child! child)
         (delete-tree! project)))))
@@ -241,6 +299,9 @@
         (post-json client url session-id
                    {:jsonrpc "2.0" :method "notifications/initialized"})
         (exercise-prepared-wire! "streamable-http" call! source-file))
+      ;; Both steps run, in order, independently of the other's success:
+      ;; `stop-child!` cannot throw, and the workspace's deletion is owned by
+      ;; the :each fixture besides.
       (finally
         (stop-child! child)
         (delete-tree! project)))))
@@ -266,3 +327,56 @@
     (is (= true (:ok validated)))
     (is (= {"arguments.edits[0].to" "(def alpha :new)"}
            (:fill validated)))))
+
+;; ---------------------------------------------------------------------------
+;; Round one's teardown race, as a deterministic witness.
+;;
+;; Round one, 2/2 concurrent pairs: `java.io.IOException: Stream closed` out of
+;; `stop-child!` via `FutureTask.report`. The mechanism is that `start-child!`
+;; slurps the child's stderr in a `future`, and `stop-child!` closes the
+;; child's streams and destroys it BEFORE `(deref stderr 5000 "")`. `deref`'s
+;; default value covers a TIMEOUT, not an EXCEPTION: when the destroy wins the
+;; race against the still-running slurp, the future completes exceptionally and
+;; the deref rethrows. On a quiet box the slurp finishes first.
+;;
+;; The second-order failure is the one that cost the run: the throw escaped the
+;; test's `(finally (stop-child! child) (delete-tree! project))` BEFORE
+;; `delete-tree!` ran, the workspace survived, and the tmp-leak ratchet failed
+;; the run a second time. One error plus one leak, from one race. A cleanup
+;; step sequenced after a call that can throw is not cleanup.
+;;
+;; These two witnesses plant the exception directly rather than waiting for the
+;; scheduler, so the MECHANISM is pinned deterministically; the race itself is
+;; re-run under contention by dev/experiments/contention_witness.sh, because an
+;; example test on a quiet box is a measurement of how idle the box was.
+;; ---------------------------------------------------------------------------
+
+(defn- exploding-child
+  []
+  (let [f (future (throw (ex-info "stderr reader died" {})))]
+    (try @f (catch Throwable _ nil))
+    {:process nil :stderr f}))
+
+;; @spec TEST-ISO-RACE-001
+(deftest stop-child-reports-a-stderr-reader-failure-as-a-typed-fact
+  (let [receipt (stop-child! (exploding-child))]
+    (is (map? receipt)
+        "stop-child! must return a receipt, never throw: it runs in a finally")
+    (is (= :stderr-reader-failed (:refusal receipt))
+        (str "a stderr reader that died must be reported as a typed fact, got "
+             (pr-str receipt)))
+    (is (str/includes? (str (:message receipt)) "stderr reader died")
+        "the refusal must carry what actually went wrong")))
+
+;; @spec TEST-ISO-RACE-001
+(deftest a-teardown-failure-still-deletes-the-workspace
+  (let [project (temp-dir "prepared-wire-teardown-witness-")]
+    (try
+      :body-succeeded
+      (finally
+        (stop-child! (exploding-child))
+        (delete-tree! project)))
+    (is (not (.exists project))
+        (str "the workspace " (.getPath project) " survived a teardown whose "
+             "first step threw -- cleanup sequenced after a call that can "
+             "throw is not cleanup"))))

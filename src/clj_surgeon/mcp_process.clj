@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-process
   "Shared process environment for repository-owned formatter and verification commands."
   (:require
+   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
    [clojure.java.io :as io]
    [clojure.string :as str])
@@ -446,6 +447,10 @@
                 environment (.environment builder)
                 _ (configure-environment! environment)
                 process (.start builder)]
+            ;; @spec TEST-ISO-002 -- record the LAUNCH, not the live child. A
+            ;; short command finishes before any closing snapshot; the event
+            ;; is the only thing that survives it.
+            (spawn/record! (.pid process) (:command admission))
             (when on-start (on-start (.pid process)))
             (try
               (let [finished? (.waitFor process remaining-ms

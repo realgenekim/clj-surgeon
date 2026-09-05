@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-change-buffer-test
+(ns ^{:lane :fast} clj-surgeon.mcp-change-buffer-test
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]

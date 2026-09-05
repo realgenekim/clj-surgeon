@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-compact-edit-test
+(ns ^{:lane :fast} clj-surgeon.mcp-compact-edit-test
   (:require
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clojure.test :refer [deftest is testing]]))

@@ -1,4 +1,4 @@
-(ns clj-surgeon.mcp-prepared-request-test
+(ns ^{:lane :fast} clj-surgeon.mcp-prepared-request-test
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-contract :as contract]
