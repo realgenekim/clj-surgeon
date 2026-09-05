@@ -1964,6 +1964,25 @@
 ;; @spec MCP-OP-HELPER-010
 ;; @spec MCP-OP-HELPER-020
 ;; @spec MCP-OP-HELPER-022
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-016
+(defn helper-extraction-refusal
+  "One helper_extraction refusal in the closed envelope this verb publishes.
+
+  `next_call nil` is EXPLICIT rather than omitted: v1 has no mechanically
+  composable continuation, and a refusal that simply lacks the key cannot be
+  told apart from one that lost it."
+  [error-type message evidence]
+  (merge {:ok false
+          :operation "helper_extraction"
+          :error_type error-type
+          :error message
+          :next_call nil
+          :source_unchanged true
+          :mutation_attempted false
+          :write_authority false}
+         evidence))
+
 (defn helper-extraction-summary
   "One compact visible summary whose length is constant in the caller count.
 
@@ -2000,9 +2019,17 @@
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"
                    "\u26a0 source state requires structured receipt review"))
-         (str "\u2192 " (or (:error result)
-                            (:remedy result)
-                            "Correct the request and retry once."))
+         ;; @spec MCP-OP-HELPER-010
+         ;; @spec MCP-OP-HELPER-016
+         ;; NO generic retry prescription. When `next_call` is nil there is no
+         ;; mechanically known correction, and "correct the request and retry
+         ;; once" tells a caller to do the one thing that reproduces the
+         ;; outcome — measured on a real verification-failed receipt whose
+         ;; next_call was null and whose text said exactly that. The cause is
+         ;; what is known; the absence of a continuation is stated by
+         ;; `rendered-next-call` on the line below.
+         (when-let [cause (or (:error result) (:remedy result))]
+           (str "\u2192 " cause))
          (refusal-fact-line result)
          (when-let [remedy (:remedy result)]
            (str "remedy \u00b7 " remedy))
@@ -2019,17 +2046,30 @@
      (fn []
        (let [normalized (json/parse-string (json/generate-string params) true)]
          (if-not @runtime-config
-           {:ok false
-            :operation "helper_extraction"
-            :error_type "server-not-initialized"
-            :error "helper_extraction server is not initialized"
-            :source_unchanged true
-            :remedy "Restart the configured clj-surgeon MCP server."}
+           ;; @spec MCP-OP-HELPER-010
+           ;; every refusal this handler emits carries the closed envelope,
+           ;; `next_call nil` included. A refusal that merely omits next_call
+           ;; is indistinguishable, to a caller reading either face, from one
+           ;; whose continuation was dropped on the way out.
+           (helper-extraction-refusal
+             "server-not-initialized"
+             "helper_extraction server is not initialized"
+             {:remedy "Restart the configured clj-surgeon MCP server."})
            (let [workspace-router (or (:workspace-router @runtime-config)
                                       (workspace/router @runtime-config))
                  routed (workspace/resolve-request workspace-router normalized)]
              (if-not (:ok routed)
-               (assoc routed :operation "helper_extraction")
+               ;; @spec MCP-OP-HELPER-010
+               ;; a workspace-routing refusal is a helper_extraction refusal
+               ;; and wears the same envelope; the router's own cause and
+               ;; remedy travel verbatim inside it
+               (merge (helper-extraction-refusal
+                        (or (some-> (:error_type routed) name)
+                            (some-> (:error-type routed) name)
+                            "invalid-workspace-root")
+                        (or (:error routed) "The workspace root could not be resolved")
+                        {})
+                      (dissoc routed :ok :next_call))
                ;; the same receipt-directory derivation alias_migration uses:
                ;; the routed workspace's own LOCAL-STATE directory, outside the
                ;; tree this verb mutates

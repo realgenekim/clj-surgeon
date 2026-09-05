@@ -50,6 +50,7 @@
    [clojure.string :as str]
    [clojure.walk :as walk])
   (:import
+   (java.nio.file Files LinkOption Path)
    (java.security MessageDigest)
    (java.util UUID)))
 
@@ -198,11 +199,47 @@
           (when (string-array? roots) (vec roots)))
         (catch Exception _ nil)))))
 
+(defn- admissible-root?
+  "Whether one configured root names a directory INSIDE this workspace.
+
+  A root is admissible only as a normalized project-relative path whose real
+  location stays under the real workspace root. `../sibling`, an absolute path
+  and a symlinked relocation are all rejected here rather than admitted and
+  then quietly contributing nothing: a root the receipt calls admitted and the
+  walk never enters makes the closure evidence disagree with the admission."
+  [^Path root candidate]
+  (try
+    (and (string? candidate)
+         (not (str/blank? candidate))
+         (not (str/starts-with? candidate "/"))
+         (let [lexical (.normalize (.resolve root ^String candidate))]
+           (and (.startsWith lexical root)
+                (or (not (Files/exists lexical (into-array LinkOption [])))
+                    (let [real (.toRealPath lexical (into-array LinkOption []))]
+                      (and (.startsWith real (.toRealPath root (into-array LinkOption [])))
+                           (Files/isDirectory real (into-array LinkOption []))))))))
+    (catch Exception _ false)))
+
+;; @spec MCP-OP-HELPER-005
+;; @spec MCP-OP-HELPER-012
 (defn admitted-roots
-  "Every discovery root this workspace admits, in a stable order."
-  [project-root]
-  (vec (distinct (concat planner/admitted-roots
-                         (configured-source-roots project-root)))))
+  "Every discovery root this workspace admits, in a stable order, or a refusal.
+
+  The answer is the one the closure receipt publishes, so an inadmissible
+  configured root is a typed refusal and never a silent drop."
+  [^Path root]
+  (let [configured (configured-source-roots (str root))
+        rejected (vec (remove #(admissible-root? root %) configured))]
+    (if (seq rejected)
+      (refusal "invalid-source-root"
+               (str "`.clj-surgeon.edn :source-roots` names a root this verb"
+                    " cannot admit: " (str/join ", " (map pr-str rejected)))
+               {:rejected_source_roots rejected
+                :admitted_source_roots (vec planner/admitted-roots)
+                :decision (str "which project-relative directories inside this"
+                               " workspace are discovery roots")})
+      {:ok true
+       :roots (vec (distinct (concat planner/admitted-roots configured)))})))
 
 (defn- root-globs
   [roots]
@@ -231,12 +268,42 @@
             :scan (dissoc scan-result :ok)
             :decision "which paths this workspace's scan can enumerate"}))
 
+(defn- symlink-entry?
+  "Whether the walk's entry is itself a symbolic link, at any segment.
+
+  Both directions matter and neither is read: a link pointing OUT of the
+  workspace is an escape, and a link pointing back IN is an alias that would be
+  enumerated twice under two names."
+  [^Path root relative]
+  (try
+    (let [resolved (.normalize (.resolve root ^String relative))]
+      (loop [candidate resolved]
+        (cond
+          (or (nil? candidate) (.equals candidate root)) false
+          (Files/isSymbolicLink candidate) true
+          :else (recur (.getParent candidate)))))
+    (catch Exception _ true)))
+
+(defn- prune-symlinks
+  "The enumeration with every symlinked entry DROPPED, plus what was dropped.
+
+  Repository fence rule: a symlink a walk produces is pruned, never read and
+  never counted. Refusing the whole operation on one unrelated link under an
+  admitted root would let a single stray link deny every extraction, and
+  following it would read bytes outside the workspace; pruning does neither.
+  The dropped set is carried so the receipt can say the walk saw them."
+  [^Path root files]
+  (let [grouped (group-by #(symlink-entry? root %) files)]
+    {:files (vec (get grouped false []))
+     :pruned (vec (get grouped true []))}))
+
 (defn- read-sources
   "The frozen read: `{:file relative :source text :authorized bool}` for every
   source under the admitted roots, in scan order.
 
-  Every path is resolved through the root-confinement gate before it is read,
-  so a symlink out of the workspace refuses rather than being slurped."
+  Every path is resolved through the root-confinement gate before it is read.
+  Symlinked entries never reach this function; a path that still fails
+  confinement here is a genuine fault rather than a link, so it refuses."
   [root files authorized]
   (reduce
     (fn [acc relative]
@@ -278,36 +345,94 @@
             deref)
     (catch Exception _ nil)))
 
+(def max-profile-timeout-ms
+  "Ceiling on a configured profile's declared timeout.
+
+  A timeout is the only bound between this verb and a proof that never
+  returns, so an unbounded or absurd one is a profile this verb refuses rather
+  than a number it honours."
+  3600000)
+
+(defn- argv?
+  "One command: a non-empty vector of non-empty strings."
+  [command]
+  (and (vector? command)
+       (seq command)
+       (every? #(and (string? %) (seq %)) command)))
+
+(defn- argv-list?
+  "A non-empty vector of commands, each one an argv vector."
+  [commands]
+  (and (vector? commands) (seq commands) (every? argv? commands)))
+
 (defn profile-capability
   "What one configured verification profile can do, or nil when v1 cannot admit it.
 
   v1 admits ONLY profiles whose every check is an external command this process
-  runs and waits on:
+  runs and waits on, spelled as argv:
 
   * a `:cold` job is asynchronous — `launch!` returns `:running` and the receipt
     would say `verification_complete false`, which cannot gate a commit;
   * a `:hot` law runs inside a warm application JVM, which is precisely the
-    stale-Var false proof MCP-OP-HELPER-022 exists to forbid.
+    stale-Var false proof MCP-OP-HELPER-022 exists to forbid;
+  * a `:commands` entry that is not an argv VECTOR of non-empty strings is not a
+    command this verb can run. A profile whose `:commands` is `[\"/bin/true\"]`
+    is a vector of one STRING, not a vector of one command, and admitting it let
+    a malformed profile stage a whole extraction before ending as a timeout.
 
-  Everything admitted here is synchronous, runs in a fresh child process, and
-  fails before the kernel's rollback authority is released."
+  Shape is decided here, before anything is staged, and this function never
+  throws: an unrecognised spec is nil, which the preflight turns into a typed
+  refusal."
   [spec]
-  (cond
-    (and (vector? spec) (seq spec) (every? string? spec))
-    {:synchronous? true :rollback-capable? true :fresh-process? true
-     :commands [spec] :shape :command}
+  (try
+    (cond
+      (argv? spec)
+      {:synchronous? true :rollback-capable? true :fresh-process? true
+       :commands [spec] :shape :command}
 
-    (and (map? spec) (= #{:acceptance :timeout-ms :commands} (set (keys spec))))
-    {:synchronous? true :rollback-capable? true :fresh-process? true
-     :commands (vec (:commands spec)) :timeout-ms (:timeout-ms spec)
-     :shape :exact}
+      (not (map? spec)) nil
 
-    (and (map? spec) (seq (:commands spec))
-         (nil? (:hot spec)) (nil? (:cold spec)))
-    {:synchronous? true :rollback-capable? true :fresh-process? true
-     :commands (vec (:commands spec)) :shape :commands}
+      ;; asynchronous or warm-JVM authority: never admitted, whatever else the
+      ;; profile carries
+      (or (contains? spec :hot) (contains? spec :cold)) nil
 
-    :else nil))
+      (= #{:acceptance :timeout-ms :commands} (set (keys spec)))
+      (when (and (argv-list? (:commands spec))
+                 (integer? (:timeout-ms spec))
+                 (pos? (:timeout-ms spec))
+                 (<= (:timeout-ms spec) max-profile-timeout-ms))
+        {:synchronous? true :rollback-capable? true :fresh-process? true
+         :commands (vec (:commands spec)) :timeout-ms (:timeout-ms spec)
+         :shape :exact})
+
+      (argv-list? (:commands spec))
+      (let [timeout (:timeout-ms spec)]
+        (when (or (nil? timeout)
+                  (and (integer? timeout) (pos? timeout)
+                       (<= timeout max-profile-timeout-ms)))
+          (cond-> {:synchronous? true :rollback-capable? true :fresh-process? true
+                   :commands (vec (:commands spec)) :shape :commands}
+            timeout (assoc :timeout-ms timeout))))
+
+      :else nil)
+    (catch Throwable _ nil)))
+
+(defn- runnable-command?
+  "Whether the profile's executable IS an executable file, right now.
+
+  A resolved spelling that merely CONTAINS a slash proves nothing: an absolute
+  path to a file that does not exist passed that test and staged a whole
+  extraction that could only ever end in a launch failure. The question this
+  answers is the one MCP-OP-HELPER-011 asks — can this proof run before I write
+  — so it is answered against the filesystem, and it never throws."
+  [command]
+  (try
+    (let [resolved (str (first (change-buffer/expand-command command [])))
+          candidate (io/file resolved)]
+      (and (str/includes? resolved "/")
+           (.isFile candidate)
+           (.canExecute candidate)))
+    (catch Throwable _ false)))
 
 ;; @spec MCP-OP-HELPER-011
 (defn admitted-profiles
@@ -337,7 +462,15 @@
                    ;; a profile with no command of its own can prove nothing,
                    ;; and is therefore never admitted
                    (when-let [capability (profile-capability spec)]
-                     (when (seq (:commands capability))
+                     ;; @spec MCP-OP-HELPER-011
+                     ;; a profile with no command, or one whose executable is
+                     ;; not an executable file right now, can prove nothing and
+                     ;; is therefore not admissible. Admission is the gate: a
+                     ;; malformed or unlaunchable profile that only fails at the
+                     ;; preflight has already been called admitted once, and a
+                     ;; caller reading `admitted-profiles` would believe it.
+                     (when (and (seq (:commands capability))
+                                (every? runnable-command? (:commands capability)))
                        [profile-name capability]))))
            (or profiles {})))))
 
@@ -354,22 +487,13 @@
                               ["verification-preflight-unavailable"
                                "invalid-request"
                                "unknown-field"
+                               "invalid-source-root"
                                "workspace-unreadable"
                                "scope-unscannable"
                                "unreadable-source"
-                               "destination-not-derivable"])))))
-
-(defn- runnable-command?
-  "Whether the profile's executable can be found now, before anything is staged.
-
-  `expand-command` resolves a bare executable against the same search path the
-  child would use; a command it cannot resolve is a profile that is not
-  runnable, and MCP-OP-HELPER-011 wants that answered BEFORE the write, not as
-  a launch failure after it."
-  [command]
-  (let [resolved (first (change-buffer/expand-command command []))]
-    (or (str/includes? (str resolved) "/")
-        (.isFile (io/file (str resolved))))))
+                               "destination-not-derivable"
+                               "receipt-dir-inside-workspace"
+                               "transaction-refused"])))))
 
 ;; @spec MCP-OP-HELPER-011
 (defn verification-preflight
@@ -385,10 +509,14 @@
   profile that cannot launch is a profile that cannot roll a write back."
   ([profiles profile-name] (verification-preflight profiles profile-name false))
   ([profiles profile-name check-runnable?]
-  (let [;; the workspace's own configuration wins over the server registry for
-        ;; a name both carry: a contract name the workspace gave a real command
-        ;; is that command
-        admitted (merge (admitted-profiles) (admitted-profiles profiles))
+  (let [;; @spec MCP-OP-HELPER-011
+        ;; ONLY the routed workspace's configured profiles. The server's
+        ;; built-in registry is NOT a source of authority here: an empty or
+        ;; absent configuration admits NOTHING, and a request naming the
+        ;; built-in `fast` profile against a workspace that configures no
+        ;; profiles is refused rather than proved by a command that workspace
+        ;; never declared.
+        admitted (admitted-profiles profiles)
         capability (get admitted profile-name)
         commandless? (and capability (empty? (:commands capability)))
         unrunnable (when (and capability check-runnable? (not commandless?))
@@ -435,34 +563,74 @@
 ;; @spec MCP-OP-HELPER-001
 ;; @spec MCP-OP-HELPER-012
 
+(defn- lib-path
+  "The project-relative path a namespace name occupies under its source root."
+  [lib]
+  (str (str/replace (str/replace (str lib) "-" "_") "." "/") ".clj"))
+
+(defn- root-of
+  "The admitted source root `relative` sits under, or nil."
+  [roots relative]
+  (first (filter #(str/starts-with? (str relative) (str % "/")) roots)))
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-012
 (defn- destination-limitation
-  "A boundary refusal when the destination this seam would write is not the one
-  `to.lib` names.
+  "A boundary refusal when the destination is not an EXACT decomposition of
+  `from.file` into one admitted source root plus the namespace's own path.
 
-  The destination namespace must equal `to.lib` EXACTLY and its path must be
-  project-relative. A seam that infers a namespace by walking up to the nearest
-  ancestor directory called `src` writes `ancestor.project.src.acid.web.response`
-  for a project that happens to live under one — so if that ever becomes the
-  path taken, this names the KERNEL LIMITATION rather than passing a guessed
-  namespace through (`next_call nil`: nothing the caller can send fixes it)."
-  [dest-lib dest-file]
-  (cond
-    (str/blank? (str dest-file))
-    (refusal "destination-not-derivable"
-             (str "The destination path for " dest-lib " could not be derived"
-                  " project-relatively from from.file.")
-             {:limitation "destination-path-not-project-relative"
-              :lib dest-lib
-              :decision "which project-relative path the destination namespace occupies"})
+  The destination namespace must equal `to.lib` exactly and its path must be
+  that namespace's path under the SAME admitted root the source occupies. Two
+  ways to get this wrong, and both are refused here rather than guessed:
 
-    (or (str/starts-with? (str dest-file) "/")
-        (str/starts-with? (str dest-file) "../"))
-    (refusal "destination-not-derivable"
-             (str "The destination path for " dest-lib " is not"
-                  " project-relative: " dest-file)
-             {:limitation "destination-path-not-project-relative"
-              :lib dest-lib :file dest-file
-              :decision "which project-relative path the destination namespace occupies"})))
+  * a path walk that looks for the nearest ancestor directory called `src`
+    infers `ancestor.project.src.acid.web.response` for a project that happens
+    to live under one;
+  * a `from.file` whose path does NOT end in its own declared namespace path
+    decomposes into no root, and falling back to the empty prefix invents a
+    destination at the project root that no admitted root contains.
+
+  `next_call nil`: nothing the caller can resend fixes a tree whose file layout
+  and namespace declarations disagree."
+  [roots from-file dest-lib dest-file]
+  (let [dest-file (str dest-file)
+        source-root (root-of roots from-file)
+        expected (when source-root (str source-root "/" (lib-path dest-lib)))]
+    (cond
+      (str/blank? dest-file)
+      (refusal "destination-not-derivable"
+               (str "The destination path for " dest-lib " could not be derived"
+                    " project-relatively from from.file.")
+               {:limitation "destination-path-not-project-relative"
+                :lib dest-lib
+                :decision "which project-relative path the destination namespace occupies"})
+
+      (or (str/starts-with? dest-file "/") (str/starts-with? dest-file "../"))
+      (refusal "destination-not-derivable"
+               (str "The destination path for " dest-lib " is not"
+                    " project-relative: " dest-file)
+               {:limitation "destination-path-not-project-relative"
+                :lib dest-lib :file dest-file
+                :decision "which project-relative path the destination namespace occupies"})
+
+      (nil? source-root)
+      (refusal "destination-not-derivable"
+               (str "from.file " (pr-str from-file) " does not sit under any"
+                    " admitted source root, so the destination cannot be"
+                    " derived from the source's own root.")
+               {:limitation "source-file-outside-admitted-roots"
+                :lib dest-lib :from_file from-file :admitted_roots (vec roots)
+                :decision "which admitted source root holds this namespace"})
+
+      (not= expected dest-file)
+      (refusal "destination-not-derivable"
+               (str "The destination this seam would write, " (pr-str dest-file)
+                    ", is not " (pr-str dest-lib) "'s own path under the source's"
+                    " admitted root " (pr-str source-root) ".")
+               {:limitation "destination-not-an-exact-source-root-decomposition"
+                :lib dest-lib :file dest-file :expected_file expected
+                :source_root source-root :from_file from-file
+                :decision "which project-relative path the destination namespace occupies"}))))
 
 ;; @spec MCP-OP-HELPER-001
 ;; @spec MCP-OP-HELPER-005
@@ -508,25 +676,50 @@
                    {:workspace_root (:workspace_root request)
                     :decision "which directory this workspace is rooted at"})
           (let [root (:root root-result)
-                roots (admitted-roots (str root))
+                admitted (admitted-roots root)]
+            (if-not (:ok admitted)
+              admitted
+            (let [roots (:roots admitted)
                 discovery (scan root (root-globs roots))]
             (if-not (:ok discovery)
               (scan-refusal discovery "discovery")
               (let [authorized (scan root (get-in request [:scope :paths]))]
                 (if-not (:ok authorized)
                   (scan-refusal authorized "authorization")
-                  (let [sources (read-sources root (:files discovery)
-                                              (set (:files authorized)))]
+                  ;; @spec MCP-OP-HELPER-005
+                  ;; symlinked entries are PRUNED before the completeness and
+                  ;; read sets form, in both directions
+                  (let [walked (prune-symlinks root (:files discovery))
+                        authorized-set (set (:files (prune-symlinks
+                                                      root (:files authorized))))
+                        sources (read-sources root (:files walked)
+                                              authorized-set)]
                     (if (map? sources)
                       sources
                       (let [planned (planner/plan request (mapv #(dissoc % :path) sources))]
                         (if-not (:ok planned)
                           planned
                           (or (destination-limitation
+                                roots
+                                (get-in request [:from :file])
                                 (get-in planned [:plan :destination :lib])
                                 (get-in planned [:plan :destination :file]))
-                              (assoc planned
+                              (-> planned
+                                  ;; @spec MCP-OP-HELPER-012
+                                  ;; the closure receipt states the roots the
+                                  ;; walk ACTUALLY admitted, not a fixed pair
+                                  (assoc-in [:receipt :closure :roots] roots)
+                                  (assoc-in [:receipt :closure :pruned_symlinks]
+                                            (count (:pruned walked)))
+                                  ;; the planner's own O(1) receipt travels WITH
+                                  ;; the plan: as a SIBLING key it never reached
+                                  ;; the terminal mapper at all, which is why the
+                                  ;; wire receipt printed null helpers, null
+                                  ;; caller files and null sites
+                                  (assoc-in [:plan :receipt] (:receipt planned))
+                                  (assoc
                                      :roots roots
+                                     :pruned_symlinks (vec (:pruned walked))
                                      :paths (into {} (map (juxt :file :path)) sources)
                                      ;; the FROZEN read, carried forward by the
                                      ;; plan rather than re-slurped at write
@@ -534,7 +727,7 @@
                                      ;; to see the bytes the plan was derived
                                      ;; from, or drift between the two commits
                                      ;; silently over a stale plan
-                                     :sources (into {} (map (juxt :path :source)) sources))))))))))))))))))
+                                     :sources (into {} (map (juxt :path :source)) sources)))))))))))))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the terminal states and the terminal receipt
@@ -610,6 +803,21 @@
         ;; never be mistaken for this receipt's typed check status
         (:status verification) (assoc :proof_status (:status verification))))))
 
+(defn- sha256
+  [text]
+  (let [digest (MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" (bit-and 0xff %))
+                    (.digest digest (.getBytes ^String text "UTF-8"))))))
+
+(defn- aggregate-hash
+  "One digest over a whole `{file hash}` read-back.
+
+  Order-independent by sorting first, so the same restoration always answers
+  the same digest and two receipts can be compared without the manifest either
+  of them omits."
+  [read-back]
+  (sha256 (pr-str (into (sorted-map) (or read-back {})))))
+
 (defn- plan-counts
   "The O(1) counts the plan already derived, folded in without recomputation."
   [plan]
@@ -660,10 +868,22 @@
       (and (not (contains? kernel :destination_removed))
            (contains? kernel :destination_created))
       (assoc :destination_created (boolean (:destination_created kernel)))
+      ;; @spec MCP-OP-HELPER-009
+      ;; A VERIFIED rollback publishes constant-size evidence: how many files
+      ;; came back and one aggregate digest over the read-back, never the
+      ;; manifest. Measured: the per-file map made an otherwise identical
+      ;; verification-failed receipt grow from 282 bytes at one file to 37,029
+      ;; at a thousand. The manifest and the per-file hashes are written to
+      ;; `details_path` under local state, where a caller who needs them can
+      ;; read them.
       (contains? kernel :restoration_read_back)
-      (assoc :restoration_read_back (:restoration_read_back kernel))
+      (assoc :restoration_read_back
+             (let [read-back (:restoration_read_back kernel)]
+               {:files (count read-back)
+                :aggregate_sha256 (aggregate-hash read-back)
+                :manifest_in "details_path"}))
       (contains? kernel :restored_files)
-      (assoc :restored_files (vec (:restored_files kernel)))
+      (assoc :restored_file_count (count (:restored_files kernel)))
       ;; @spec MCP-OP-HELPER-020
       ;; a rollback that did not complete NAMES the files it could not restore
       ;; and carries the kernel's own recovery-required evidence
@@ -672,6 +892,12 @@
       (contains? kernel :recovery_required)
       (assoc :recovery_required (:recovery_required kernel))
       (contains? kernel :details_path) (assoc :details_path (:details_path kernel))
+      ;; @spec MCP-OP-HELPER-009
+      ;; an absent detail artifact is STATED. A receipt whose bounded evidence
+      ;; points at an external document must say when that document is not
+      ;; there, or the caller reads the absence as "nothing more to see".
+      (contains? kernel :details_unavailable)
+      (assoc :details_unavailable (:details_unavailable kernel))
       (contains? kernel :undo_receipt) (assoc :undo_receipt (:undo_receipt kernel))
       (contains? kernel :receipt_hash) (assoc :receipt_hash (:receipt_hash kernel))
       (contains? kernel :elapsed_ms) (assoc :elapsed_ms (:elapsed_ms kernel)))))
@@ -712,7 +938,11 @@
   manufacture a proof of a tree they no longer belong to. `fresh_process` is
   reported from the fact that a child process ran and answered, never asserted."
   [project-root profile-name capability]
-  (let [timeout (or (:timeout-ms capability) default-proof-timeout-ms)
+  ;; the cwd may arrive as a Path or a String; the process runner coerces with
+  ;; `io/file`, which has no implementation for a Path and turned a real launch
+  ;; into a launch-error that then read as "no fresh process ran"
+  (let [project-root (str project-root)
+        timeout (or (:timeout-ms capability) default-proof-timeout-ms)
         outcomes
         (reduce (fn [acc command]
                   (let [argv (change-buffer/expand-command command [])
@@ -721,7 +951,15 @@
                         outcome (assoc (select-keys process
                                                     [:exit :elapsed_ms :finished?
                                                      :output :output-bytes
-                                                     :output-sha256 :output-truncated])
+                                                     :output-sha256 :output-truncated
+                                                     :launch-error])
+                                       ;; @spec MCP-OP-HELPER-022
+                                       ;; a child that STARTED, independent of
+                                       ;; whether it finished: a timed-out proof
+                                       ;; has no exit code and did run, and
+                                       ;; deriving freshness from the exit code
+                                       ;; reported the opposite
+                                       :started? (not (true? (:launch-error process)))
                                        :command (vec argv))
                         acc (conj acc outcome)]
                     (if (and (:finished? process) (zero? (or (:exit process) 1)))
@@ -740,8 +978,16 @@
                                                    typed-check-fields
                                                    [:compiled_evidence])))
       {:profile profile-name
-       ;; a child process ran to completion and answered: that is the fact
-       :fresh_process (boolean (some :exit outcomes))
+       ;; @spec MCP-OP-HELPER-022
+       ;; a fresh child process RAN. Not "answered": a proof killed at its
+       ;; timeout started, executed, and was cut off, and reporting
+       ;; `fresh_process false` for it says the opposite of what happened.
+       ;; It is still a FACT, never a courtesy: a child that could not be
+       ;; launched at all reports false, and `cwd_exists` separates the two
+       ;; causes that otherwise print the same `Exec failed, error: 2` — a
+       ;; missing executable, and a working directory that is not there.
+       :fresh_process (boolean (some :started? outcomes))
+       :cwd_exists (.isDirectory (io/file project-root))
        :timed_out (not finished?)
        :ok ok?
        ;; the RAW evidence, retained rather than summarized into a constant
@@ -755,12 +1001,6 @@
 ;; ONE transaction carrying ONE typed `extraction` change — source retirement,
 ;; destination creation, the source-local lowering and every caller whole-form
 ;; change land or refuse together, through the extraction kernel entrance.
-
-(defn- sha256
-  [text]
-  (let [digest (MessageDigest/getInstance "SHA-256")]
-    (apply str (map #(format "%02x" (bit-and 0xff %))
-                    (.digest digest (.getBytes ^String text "UTF-8"))))))
 
 (defn- extraction-request
   "The planner's typed `extraction` change, with every path root-confined.
@@ -812,6 +1052,52 @@
                  ;; transaction writes
                  :files (+ 2 (count (distinct (mapcat :in callers))))}}})))
 
+;; @spec MCP-OP-HELPER-009
+(defn- resolve-receipt-dir
+  "Where this call publishes its undo receipt and its detail document.
+
+  The kernel's LOCAL-STATE receipt directory for this workspace is the default
+  and the only place this verb may publish. A configured directory is honoured
+  only when it stays OUT of the tree being mutated: a receipt published inside
+  the workspace is a file the extraction can retire, an undo can restore over,
+  and a caller can mistake for source. Containment is decided on REAL paths, so
+  a symlink alias pointing back into the workspace is caught with the direct
+  spelling."
+  [config project-root]
+  (let [configured (:receipt-dir config)
+        default (workspace/receipt-dir project-root)
+        real (fn [path]
+               (try (.toRealPath (.toPath (io/file (str path)))
+                                 (into-array LinkOption []))
+                    (catch Exception _
+                      ;; a directory that does not exist yet has no real path;
+                      ;; its nearest existing ancestor decides containment
+                      (loop [candidate (.getAbsoluteFile (io/file (str path)))]
+                        (cond
+                          (nil? candidate) nil
+                          (.exists candidate)
+                          (try (.toRealPath (.toPath candidate)
+                                            (into-array LinkOption []))
+                               (catch Exception _ nil))
+                          :else (recur (.getParentFile candidate)))))))]
+    (if-not configured
+      {:ok true :dir (str default)}
+      (let [workspace-real (real project-root)
+            configured-real (real configured)]
+        (if (and workspace-real configured-real
+                 (.startsWith ^Path configured-real ^Path workspace-real))
+          (refusal "receipt-dir-inside-workspace"
+                   (str "The configured receipt directory resolves inside the"
+                        " workspace this call mutates: " (str configured))
+                   {:receipt_dir (str configured)
+                    :resolved (str configured-real)
+                    :workspace_root (str project-root)
+                    :local_state_receipt_dir (str default)
+                    :staged false
+                    :decision (str "where this workspace's undo receipts and"
+                                   " per-caller detail are published")})
+          {:ok true :dir (str configured)})))))
+
 (defn- restoration-read-back
   "What is on disk after a rollback, read back rather than assumed.
 
@@ -852,14 +1138,19 @@
         (if preflight
           ;; nothing staged, and the receipt says so
           preflight
-          (let [capability (get (merge (admitted-profiles)
-                                       (admitted-profiles profiles))
-                                profile-name)
+          (let [capability (get (admitted-profiles profiles) profile-name)
                 ;; the injectable proof step. One key, one default, no behavior
                 ;; change: the production path is `run-proof!` itself, and a
                 ;; caller that supplies its own is exercising the same seam the
                 ;; boundary uses.
                 proof! (or (:run-proof! config) run-proof!)
+                ;; the kernel handoff seam. Same shape as `:run-proof!`: one
+                ;; key, one default, no behaviour change. A throw from INSIDE
+                ;; the commit — after it has written and read back every byte —
+                ;; is the one failure a boundary cannot witness without a seam
+                ;; here, and it is the failure that leaves an extraction
+                ;; standing with nobody holding the inverse.
+                commit! (or (:commit! config) extraction/commit!)
                 root (mcp-paths/real-root (get-in (walk/keywordize-keys params)
                                                   [:workspace_root]))
                 project-root (str root)
@@ -881,63 +1172,128 @@
                     compiled (extraction/compile-extraction request)]
                 (if-not (:ok compiled)
                   (assoc compiled :ok false :operation operation)
-                  (let [receipt-dir (or (:receipt-dir config)
-                                        (workspace/receipt-dir project-root))
-                        receipt-file (str (io/file receipt-dir (str (UUID/randomUUID) ".edn")))
-                        details-file (str (io/file receipt-dir
-                                                   (str "helper-extraction-"
-                                                        (UUID/randomUUID) ".edn")))
-                        started (System/nanoTime)
-                        result (extraction/commit! compiled)]
-                    (if-not (:ok result)
-                      ;; the extraction kernel refused or restored its own
-                      ;; partial write: nothing of this transaction stands, and
-                      ;; the receipt says so as a typed refusal rather than as a
-                      ;; terminal state, because no terminal state was reached
-                      (refusal "transaction-refused"
-                               (str "The extraction kernel did not commit: "
-                                    (or (:error result)
-                                        (some-> (:error-type result) name)
-                                        "unknown"))
-                               {:kernel_error_type (some-> (:error-type result) name)
-                                :kernel_error (:error result)
-                                :decision "what the kernel refused about this transaction"})
-                      ;; ONE encompassing guard from the first written byte to
-                      ;; the terminal receipt. Publishing a receipt, running the
-                      ;; proof and mapping the result can all THROW, and a throw
-                      ;; after the commit would otherwise leave the tree
-                      ;; modified with nobody rolling it back. Every exit below
-                      ;; goes through `finish-failure!`, which undoes through
-                      ;; the extraction kernel's own hash-fenced `undo!` and
-                      ;; reports `rollback-failed` when that undo does not
-                      ;; verify — this function never restores a byte itself.
-                      (let [touched (mapv :file (get-in result [:receipt :files]))
+                  (let [receipt-decision (resolve-receipt-dir config project-root)]
+                    (if-not (:ok receipt-decision)
+                      ;; nothing staged: where a receipt may be published is
+                      ;; decided before the kernel is entered
+                      receipt-decision
+                      (let [receipt-dir (:dir receipt-decision)
+                            receipt-file (str (io/file receipt-dir
+                                                       (str (UUID/randomUUID) ".edn")))
+                            details-file (str (io/file receipt-dir
+                                                       (str "helper-extraction-"
+                                                            (UUID/randomUUID) ".edn")))
+                            started (System/nanoTime)
                             elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)
+                            ;; @spec MCP-OP-HELPER-008
+                            ;; @spec MCP-OP-HELPER-020
+                            ;; THE INVERSE IS OWNED BEFORE THE FIRST BYTE IS
+                            ;; WRITTEN. `commit!` can throw AFTER it has written
+                            ;; and read back every file — a wrapper, an
+                            ;; interrupt, an OOM on the way out — and a boundary
+                            ;; that only learns the receipt from `commit!`'s
+                            ;; RETURN VALUE has no inverse in exactly that case.
+                            ;; `build-receipt` derives the same hash-fenced
+                            ;; receipt `commit!` publishes, from the same
+                            ;; compiled snapshot, so the authority to undo
+                            ;; exists before there is anything to undo.
+                            inverse-receipt (extraction/build-receipt compiled)
+                            committed (volatile! nil)
+                            originals (:original-sources compiled)
+                            created (vec (:created-files compiled))
+                            ;; the tree may already be back: `commit!`'s own
+                            ;; handler restores what it wrote before it fails,
+                            ;; and running the inverse over a restored tree
+                            ;; would refuse and report a rollback failure that
+                            ;; did not happen. So this is READ, not assumed.
+                            tree-restored?
+                            (fn []
+                              (try
+                                (and (every? (fn [[file original]]
+                                               (let [candidate (io/file (str file))]
+                                                 (and (.isFile candidate)
+                                                      (= original (slurp candidate)))))
+                                             originals)
+                                     (not-any? #(.exists (io/file (str %))) created))
+                                (catch Throwable _ false)))
+                            ;; @spec MCP-OP-HELPER-009
+                            ;; the external detail artifact carries everything
+                            ;; the bounded receipt does not: the restored-file
+                            ;; manifest, the per-file read-back, and the proof's
+                            ;; own failure evidence. When it cannot be written
+                            ;; the receipt SAYS SO — a details_path naming a
+                            ;; file that does not exist is worse than no path,
+                            ;; because the caller stops looking.
+                            publish-details!
+                            (fn [document]
+                              (try
+                                (.mkdirs (io/file receipt-dir))
+                                (file-ops/atomic-write! details-file (pr-str document))
+                                {:details_path details-file}
+                                (catch Throwable error
+                                  {:details_unavailable
+                                   (str "the detail document could not be"
+                                        " published: "
+                                        (or (.getMessage error)
+                                            (.getName (class error))))})))
                             finish-failure!
                             (fn [failed-state proof cause]
-                              (let [rollback (try (extraction/undo! (:receipt result))
-                                                   (catch Throwable undo-error
-                                                     {:ok false
-                                                      :error (or (.getMessage undo-error)
-                                                                 (.getName (class undo-error)))
-                                                      :threw true}))
-                                    rolled-back? (boolean (:ok rollback))]
+                              (let [receipt (or (:receipt @committed) inverse-receipt)
+                                    touched (mapv :file (:files receipt))
+                                    restored-already? (tree-restored?)
+                                    rollback (when-not restored-already?
+                                               (try (extraction/undo! receipt)
+                                                    (catch Throwable undo-error
+                                                      {:ok false
+                                                       :error (or (.getMessage undo-error)
+                                                                  (.getName (class undo-error)))
+                                                       :threw true})))
+                                    rolled-back? (or restored-already?
+                                                     (boolean (:ok rollback)))
+                                    read-back (when rolled-back?
+                                                (try (restoration-read-back touched)
+                                                     (catch Throwable _ {})))]
                                 (when rolled-back?
                                   (try (.delete (io/file receipt-file))
                                        (catch Exception _ nil)))
+                                ;; @spec MCP-OP-HELPER-009
+                                ;; the MANIFEST lives in the detail document;
+                                ;; the receipt carries counts and one digest
+                                (let [detail
+                                      (publish-details!
+                                        {:operation operation
+                                         :status failed-state
+                                         :restored rolled-back?
+                                         :restored_files touched
+                                         :restoration_read_back read-back
+                                         :rollback rollback
+                                         ;; the EXACT proof failure evidence,
+                                         ;; whole, out here rather than in the
+                                         ;; bounded receipt
+                                         :verification proof
+                                         :cause_error cause
+                                         :plan (select-keys (:plan planned)
+                                                            [:destination :files :moved])})]
                                 (cond->
                                   (terminal-receipt
                                     {:kernel (if rolled-back?
-                                               {:status failed-state
+                                               (merge detail
+                                                {:status failed-state
                                                 :restored true
                                                 :restored_files touched
-                                                :restoration_read_back
-                                                (try (restoration-read-back touched)
-                                                     (catch Throwable _ {}))
+                                                :restoration_read_back read-back
                                                 :destination_removed true
-                                                :details_path details-file
-                                                :elapsed_ms (elapsed)}
-                                               {:status :rollback-failed
+                                                :elapsed_ms (elapsed)})
+                                               ;; @spec MCP-OP-HELPER-020
+                                               ;; the one state that keeps the
+                                               ;; linear evidence, because a
+                                               ;; human has to act on it
+                                               ;; @spec MCP-OP-HELPER-020
+                                               ;; the recovery authority stands
+                                               ;; whether or not the external
+                                               ;; artifact could be written
+                                               (merge detail
+                                                {:status :rollback-failed
                                                 :restored false
                                                 :unrestored_files touched
                                                 :recovery_required
@@ -945,37 +1301,49 @@
                                                  :reason (or (:error rollback)
                                                              "the extraction undo did not verify")
                                                  :recovery rollback}
-                                                :details_path details-file
-                                                :elapsed_ms (elapsed)})
+                                                :elapsed_ms (elapsed)}))
                                      :verification proof
                                      :plan (:plan planned)})
-                                  cause (assoc :cause_error cause))))]
+                                  cause (assoc :cause_error cause)))))]
                         (try
-                          (.mkdirs (io/file receipt-dir))
-                          (file-ops/atomic-write! receipt-file (pr-str (:receipt result)))
-                          ;; @spec MCP-OP-HELPER-009
-                          ;; per-caller detail lives beside the undo receipt in
-                          ;; the kernel's own LOCAL-STATE receipt directory:
-                          ;; this verb publishes nothing into the workspace it
-                          ;; mutated
-                          (file-ops/atomic-write!
-                            details-file (pr-str (select-keys (:plan planned)
-                                                              [:destination :files :moved])))
-                          (let [proof (proof! project-root profile-name capability)]
-                            (if (:ok proof)
-                              (terminal-receipt
-                                {:kernel {:status :committed
-                                          :destination_created true
-                                          :undo_receipt receipt-file
-                                          :receipt_hash (:receipt-hash result)
-                                          :details_path details-file
-                                          :elapsed_ms (elapsed)}
-                                 :verification proof
-                                 :plan (:plan planned)})
-                              (finish-failure! (if (:timed_out proof)
-                                                 :verification-timeout
-                                                 :verification-failed)
-                                               proof nil)))
+                          ;; the kernel handoff is INSIDE the guard
+                          (let [result (commit! compiled)]
+                            (vreset! committed result)
+                            (if-not (:ok result)
+                              ;; the kernel refused or restored its own partial
+                              ;; write: nothing of this transaction stands, so
+                              ;; this is a typed refusal and not a terminal
+                              ;; state — no terminal state was reached
+                              (refusal "transaction-refused"
+                                       (str "The extraction kernel did not commit: "
+                                            (or (:error result)
+                                                (some-> (:error-type result) name)
+                                                "unknown"))
+                                       {:kernel_error_type (some-> (:error-type result) name)
+                                        :kernel_error (:error result)
+                                        :decision "what the kernel refused about this transaction"})
+                              (do
+                                (.mkdirs (io/file receipt-dir))
+                                (file-ops/atomic-write! receipt-file
+                                                        (pr-str (:receipt result)))
+                                (let [detail (publish-details!
+                                               (select-keys (:plan planned)
+                                                            [:destination :files :moved]))
+                                      proof (proof! project-root profile-name capability)]
+                                  (if (:ok proof)
+                                    (terminal-receipt
+                                      {:kernel (merge detail
+                                                {:status :committed
+                                                :destination_created true
+                                                :undo_receipt receipt-file
+                                                :receipt_hash (:receipt-hash result)
+                                                :elapsed_ms (elapsed)})
+                                       :verification proof
+                                       :plan (:plan planned)})
+                                    (finish-failure! (if (:timed_out proof)
+                                                       :verification-timeout
+                                                       :verification-failed)
+                                                     proof nil))))))
                           ;; a throw is a proof that did not complete, and an
                           ;; incomplete proof may never leave a commit standing
                           (catch Throwable error

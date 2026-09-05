@@ -708,29 +708,99 @@
 ;; @spec MCP-OP-HELPER-020
 ;; @spec MCP-OP-HELPER-022
 (def helper-extraction-output-schema
-  "Counts and histograms only; never a file list. The verification map is TYPED
+  "The receipt's declared shape, in all five faces it can wear.
+
+  Counts and histograms only; never a file list. The verification map is TYPED
   — the executed profile and its three named checks — and never a bare coverage
-  integer."
+  integer. `ok` is the only universally required property: a PRE-STAGING refusal
+  is answered before the request clock has anything to report, so requiring
+  `elapsed_ms` of it would declare a field the honest refusal does not carry.
+
+  THE FIVE FACES, and what each one must carry:
+
+  * `committed` — `committed true`, `kernel_status \"committed\"`,
+    `source_unchanged false`, `undo_receipt` (the RECOVERY AUTHORITY: the
+    kernel receipt this write can be inverted from), `receipt_hash`,
+    `details_path`, and the counts.
+  * `verification-failed` / `verification-timeout` — the proof did not pass and
+    the kernel's inverse RESTORED the tree: `restored true`,
+    `source_unchanged true`, `destination_created false`,
+    `restored_file_count` and an O(1) `restoration_read_back`
+    `{files, aggregate_sha256, manifest_in}` whose per-file manifest is in the
+    detail document at `details_path`, plus `cause_error` when a throw caused
+    it.
+  * `rollback-failed` — the inverse did NOT verify: `restored false`,
+    `source_unchanged false`, `files` naming what could not be restored, and
+    `recovery_required` carrying the kernel's recovery authority. This is the
+    one face that keeps linear evidence, because a human has to act on it.
+  * a typed REFUSAL — `ok false`, `error_type`, `error`, `next_call` (always
+    null in v1), `source_unchanged`, and the refusal's bounded evidence.
+
+  `elapsed_ms` IS required, on every face including a pre-staging refusal. The
+  reviewer read the raw domain map, which a refusal returns without it; the
+  PUBLISHED receipt is not that map. `mcp-operation/invoke!` closes the request
+  clock around every outcome and stamps `elapsed_ms` on all of them, and every
+  other public tool in this server declares it required for exactly that
+  reason. Declaring it optional here would make this one verb's schema disagree
+  with the receipt it actually publishes."
   {:type "object"
    :properties {"ok" {:type "boolean"}
                 "operation" {:type "string"}
-                "status" {:type "string"}
-                "kernel_status" {:type "string"}
+                "status" {:type "string"
+                          :enum ["committed" "verification-failed"
+                                 "verification-timeout" "rollback-failed"
+                                 "unknown"]
+                          :description "The terminal state. Absent on a refusal that never staged."}
+                "kernel_status" {:type "string"
+                                 :description "The transaction kernel's own outcome, retained separately from the verb's."}
                 "committed" {:type "boolean"}
-                "restored" {:type "boolean"}
-                "source_unchanged" {:type "boolean"}
+                "restored" {:type "boolean"
+                            :description "The kernel's inverse restored every protected byte. Present only when a rollback was attempted."}
+                "source_unchanged" {:type "boolean"
+                                    :description "Claimed only alongside a verified restoration; never true after rollback-failed."}
+                "restored_file_count" {:type "integer" :minimum 0
+                                       :description "How many files the verified rollback restored. The manifest is in details_path."}
+                "restoration_read_back"
+                {:type "object"
+                 :description "O(1) evidence for the restoration: file count and one aggregate digest over the read-back. The per-file manifest is in details_path."
+                 :properties {"files" {:type "integer" :minimum 0}
+                              "aggregate_sha256" {:type "string"}
+                              "manifest_in" {:type "string"}}}
+                "files" {:type "array" :items {:type "string"}
+                         :description "rollback-failed ONLY: the files the inverse could not restore."}
+                "recovery_required"
+                {:type "object"
+                 :description "rollback-failed ONLY: the kernel's recovery authority — the receipt to invert by hand and why the automatic inverse did not verify."
+                 :properties {"receipt" {:type "string"}
+                              "reason" {:type "string"}
+                              "recovery" {:type "object"}}}
+                "cause_error" {:type "string"
+                               :description "The exception that ended a staged transaction, when a throw ended it."}
+                "error_type" {:type "string"}
+                "error" {:type "string"}
+                "next_call" {:type ["object" "null"]
+                             :description "Always null in v1: no refusal has a mechanically composable continuation."}
+                "limitation" {:type "string"
+                              :description "Present when the refusal names a kernel limitation rather than a caller decision."}
+                "remedy" {:type "string"}
                 "elapsed_ms" {:type "number" :minimum 0}
                 "helpers" {:type "integer" :minimum 0}
                 "source_retired" {:type "integer" :minimum 0}
                 "destination_created" {:type "boolean"}
-                "caller_files" {:type "integer" :minimum 0}
+                "caller_files" {:type "integer" :minimum 0
+                                :description "EXTERNAL callers rewritten; the source is not a caller of itself."}
+                "source_file" {:type "integer" :minimum 0}
+                "changed_files" {:type "integer" :minimum 0}
                 "partition" {:type "object"}
                 "sites" {:type "integer" :minimum 0}
                 "retained_sites" {:type "integer" :minimum 0}
                 "alias_histogram" {:type "object"}
                 "verification" {:type "object"}
-                "closure" {:type "object"}
-                "details_path" {:type "string"}
-                "undo_receipt" {:type "string"}
+                "closure" {:type "object"
+                           :description "The roots the walk actually admitted, the grammar closure is exact over, and the explicit statement that dynamic references are not claimed."}
+                "details_path" {:type "string"
+                                :description "Per-caller detail and the restoration manifest, published under the kernel's local-state receipt directory — never inside the workspace."}
+                "undo_receipt" {:type "string"
+                                :description "committed ONLY: the kernel receipt this write can be inverted from."}
                 "receipt_hash" {:type "string"}}
    :required ["ok" "elapsed_ms"]})

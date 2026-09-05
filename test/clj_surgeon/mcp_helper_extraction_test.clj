@@ -39,6 +39,9 @@
   (:require
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-helper-extraction :as mcp-helper]
+   [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.mcp-schema :as mcp-schema]
+   [cheshire.core :as json]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str]
@@ -56,10 +59,21 @@
     (run! delete-tree! (.listFiles file)))
   (.delete file))
 
+(def ^:private project-marker
+  "A materialized fixture tree is not a PROJECT until it carries one.
+
+  Learned the hard way: without it the boundary's workspace resolution finds no
+  admitted roots, `plan` reports the source file is not among the sources it was
+  handed, and every witness downstream of it goes green for the wrong reason --
+  nothing is written, so `nothing was left behind` is trivially true. A
+  restoration witness on a tree that was never staged proves nothing at all."
+  {"deps.edn" "{:paths [\"src\"]}\n"})
+
 (defn- tree-of
-  "`{path source}` for one fixture variant at one phase (`:pre` or `:post`)."
+  "`{path source}` for one fixture variant at one phase (`:pre` or `:post`),
+  as a real project the boundary can route to."
   [variant phase]
-  (into {}
+  (into project-marker
         (keep (fn [entry] (when-let [source (get entry phase)]
                             [(:file entry) source])))
         (fixture/files variant)))
@@ -310,8 +324,14 @@
         (is (true? (:source_unchanged receipt))
             "unchanged is claimed only because the kernel restored it")
         (is (false? (:destination_created receipt)))
-        (is (= (:restoration_read_back kernel) (:restoration_read_back receipt))
-            "the read-back is carried through, not regenerated")
+        (is (some? (:restoration_read_back receipt))
+            "the read-back reaches the receipt")
+        (is (= (count (:restored_files kernel))
+               (get-in receipt [:restoration_read_back :files]))
+            "as CONSTANT-SIZE evidence of what the kernel restored -- a count
+             and an aggregate digest, never the per-file map, which would make
+             an ordinary failure receipt grow with the tree (finding 5)")
+        (is (string? (get-in receipt [:restoration_read_back :aggregate_sha256])))
         (is (false? (get-in receipt [:verification :ok]))))))
   (testing "a failed restoration is never reported as unchanged"
     (let [receipt (mcp-helper/terminal-receipt
@@ -578,10 +598,7 @@
             its path must be project-relative."
     (let [root (io/file tmp-root "src" "ancestor" "project")]
       (try
-        (doseq [[path source] (tree-of :happy :pre)]
-          (let [target (io/file root path)]
-            (io/make-parents target)
-            (spit target source)))
+        (materialize! root (tree-of :happy :pre))
         (let [result (mcp-helper/plan
                       (fixture/request {:workspace_root (str root)})
                       configured-profiles)]
@@ -603,3 +620,619 @@
                    silently or guess a namespace")
               (is (nil? (:next_call result))))))
         (finally (delete-tree! (io/file tmp-root "src")))))))
+
+;; ---------------------------------------------------------------------------
+;; THE FENCE REVIEW (Sol, r1, candidate ee03b49a) -- one witness per finding
+;;
+;; Each witness reproduces the reviewer's OWN probe rather than a paraphrase of
+;; it, so a fix is measured against the thing that actually failed. The review
+;; is docs/observations/2026-09-05-helper-extraction-fence-review-r1.md; its
+;; verdict was NO-GO on eleven executed findings, six of them merge blockers.
+;;
+;; The reviewer's closing note is the reason these live here rather than in the
+;; planner file: "the current test only checks that the result begins with the
+;; path supplied by its own test config." A witness that can only see what the
+;; test handed the code is not a fence.
+
+(defn- with-workspace
+  "Materialize `tree` under a fresh root, call `(f root)`, always clean up."
+  [label tree f]
+  (let [root (io/file tmp-root (str label "-" (System/nanoTime)))]
+    (try
+      ;; an empty tree materializes no files, and without this the directory
+      ;; never exists: a child process given it as its cwd fails to LAUNCH, and
+      ;; the witness measures its own harness instead of the product
+      (.mkdirs root)
+      (materialize! root tree)
+      (f root)
+      (finally (delete-tree! root)))))
+
+(defn- real-commit!
+  []
+  (requiring-resolve 'clj-surgeon.extract/commit!))
+
+(def ^:private mini-tree
+  "The reviewer's finding-4 tree: a source file whose PATH does not end in its
+  declared namespace path."
+  {".clj-surgeon.edn" "{:source-roots [\"lib\"]}\n"
+   "lib/odd.clj" "(ns demo.core)\n\n(defn helper [x] (inc x))\n"})
+
+;; @spec MCP-OP-HELPER-020
+(deftest finding-1-a-throw-after-a-real-kernel-commit-does-not-leave-the-write-standing
+  (testing "PROBE2 throw-after-kernel-commit => {:destination-exists true,
+            :source-equals-pre false}. `(extraction/commit! compiled)` is
+            evaluated BEFORE the try that claims to encompass the write, so the
+            first possible written byte is outside the guard that owns the
+            inverse receipt.
+
+            SEAM: a `:commit!` fn in the execute! config map, defaulting to the
+            kernel's own. `:run-proof!` already exists; there is no seam for the
+            commit step, and the boundary must expose one -- a throw AFTER a
+            real commit cannot be witnessed any other way without redefining a
+            production var."
+    (let [injected (atom false)
+          outcome (with-materialized-happy-tree
+                    "post-commit-throw"
+                    (fn [root]
+                      (try
+                        (mcp-helper/execute!
+                         {:verification-profiles configured-profiles
+                          :commit! (fn [compiled]
+                                     (reset! injected true)
+                                     (let [result ((real-commit!) compiled)]
+                                       (throw (ex-info
+                                               "injected throw after kernel commit"
+                                               {:kernel-ok (:ok result)}))))}
+                         (fixture/request
+                          {:workspace_root root
+                           :verification {:profile "helper-proof"}}))
+                        (catch Throwable error
+                          {::threw true ::message (.getMessage error)}))))
+          receipt (:result outcome)]
+      ;; without this, an execute! that IGNORES the seam commits normally and
+      ;; the restoration assertions below fail for a reason that has nothing to
+      ;; do with the finding. A witness that cannot tell "not injected" from
+      ;; "injected and lost" is not measuring the defect.
+      (is (true? @injected)
+          "the `:commit!` seam is not exposed by execute!, so the post-commit
+           throw could not be injected at all. Everything below is unmeasured
+           until the boundary accepts this seam.")
+      (is (not (::threw receipt))
+          (str "a Throwable after the kernel commit must never escape the "
+               "boundary: " (pr-str receipt)))
+      (when @injected
+        (assert-restored! outcome)
+        (is (not (true? (:committed receipt))))
+        (is (string? (:status receipt)) "it comes back as a terminal receipt")
+        (is (contains? #{"verification-failed" "verification-timeout"
+                         "rollback-failed"}
+                       (:status receipt))
+            (pr-str (:status receipt)))))))
+
+;; @spec MCP-OP-HELPER-011
+(deftest finding-2-empty-configured-authority-admits-nothing-not-even-a-built-in
+  (testing "PROBE configured-empty-builtins =>
+            {:admitted-with-no-config [\"fast\"], :selected \"fast\",
+             :preflight-with-empty-config nil}. Admission merged the server's
+            own registry into the configured map, so a workspace that
+            configures NOTHING still gated a write on the server's `fast`."
+    (is (empty? (mcp-helper/admitted-profiles {}))
+        "an empty configured map admits nothing")
+    (is (empty? (mcp-helper/admitted-profiles nil))
+        "and neither does nil")
+    (testing "`fast` is a real server profile, and it is still not admissible
+              from an empty configured authority"
+      (is (nil? (get (mcp-helper/admitted-profiles {}) "fast")))
+      (let [refusal (mcp-helper/plan
+                     (fixture/request {:verification {:profile "fast"}})
+                     {})]
+        (is (false? (:ok refusal)) (pr-str refusal))
+        (is (= "helper-extraction-verification-preflight-unavailable"
+               (:error_type refusal)))))))
+
+;; @spec MCP-OP-HELPER-011
+(deftest finding-3-malformed-and-unrunnable-profiles-refuse-before-staging
+  (testing "PROBE profile-shape-admission admitted a profile whose :commands
+            held a STRING, and the malformed profile then ran a real extraction
+            before ending as a timeout and rolling back. PROBE2
+            missing-absolute-executable-preflight => nil, i.e. no refusal."
+    (doseq [[label spec]
+            [[:string-command {:acceptance :helper :timeout-ms 10
+                               :commands ["/bin/true"]}]
+             [:nonexistent-absolute {:commands [["/nonexistent/definitely/not-here"]]}]
+             [:hot {:hot ["some.ns/law"]}]
+             [:cold {:cold ["make" "test"]}]
+             [:non-integer-timeout {:commands [["/bin/true"]] :timeout-ms "soon"}]
+             [:empty-argv {:commands [[]]}]]]
+      (testing label
+        (is (nil? (get (mcp-helper/admitted-profiles {"p" spec}) "p"))
+            "it is not an admissible profile")
+        (let [outcome (with-materialized-happy-tree
+                        (str "bad-profile-" (name label))
+                        (fn [root]
+                          (try
+                            (mcp-helper/execute!
+                             {:verification-profiles {"p" spec}}
+                             (fixture/request {:workspace_root root
+                                               :verification {:profile "p"}}))
+                            (catch Throwable error
+                              {::threw true ::message (.getMessage error)}))))
+              receipt (:result outcome)]
+          (is (not (::threw receipt))
+              (str "a malformed profile is a typed refusal, never a throw: "
+                   (pr-str receipt)))
+          (is (false? (:ok receipt)) (pr-str receipt))
+          (is (= "helper-extraction-verification-preflight-unavailable"
+                 (:error_type receipt))
+              "refused BEFORE staging")
+          (is (nil? (:next_call receipt)))
+          (is (false? (:destination-present? outcome))
+              "and nothing reached the disk")
+          (doseq [[path source] (:pre outcome)]
+            (is (= source (get (:after outcome) path))
+                (str path " must be untouched"))))))))
+
+;; @spec MCP-OP-HELPER-012
+(deftest finding-4-a-source-path-that-disagrees-with-its-namespace-refuses
+  (testing "PROBE destination-source-path-mismatch => {:ok true, :destination
+            {:file \"demo/extracted.clj\"}}. `lib/odd.clj` declares
+            `(ns demo.core)`, so no source root decomposes the path; the
+            boundary set the root prefix to \"\" and invented a destination at
+            the project root, outside the admitted source root."
+    (with-workspace
+      "dest-mismatch" mini-tree
+      (fn [root]
+        (let [result (mcp-helper/plan
+                      {:op "helper_extraction"
+                       :workspace_root (str root)
+                       :from {:file "lib/odd.clj"}
+                       :helpers ["helper"]
+                       :to {:lib "demo.extracted" :alias_policy ["ex"]}
+                       :scope {:paths ["lib/**"]}
+                       :verification {:profile "helper-proof"}}
+                      configured-profiles)]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "helper-extraction-destination-not-derivable"
+                 (:error_type result)))
+          (is (nil? (:next_call result))
+              "inventing a destination is not a continuation the server may make"))))
+    (testing "and a source whose path DOES decompose puts the destination under
+              that same admitted root"
+      (with-workspace
+        "dest-derivable"
+        {".clj-surgeon.edn" "{:source-roots [\"lib\"]}\n"
+         "lib/demo/core.clj" "(ns demo.core)\n\n(defn helper [x] (inc x))\n"}
+        (fn [root]
+          (let [result (mcp-helper/plan
+                        {:op "helper_extraction"
+                         :workspace_root (str root)
+                         :from {:file "lib/demo/core.clj"}
+                         :helpers ["helper"]
+                         :to {:lib "demo.extracted" :alias_policy ["ex"]}
+                         :scope {:paths ["lib/**"]}
+                         :verification {:profile "helper-proof"}}
+                        configured-profiles)]
+            (is (:ok result) (pr-str result))
+            (is (= "lib/demo/extracted.clj"
+                   (get-in result [:plan :destination :file]))
+                "derived from the source's own admitted root, not the project root")))))))
+
+;; @spec MCP-OP-HELPER-009
+;; @spec MCP-OP-HELPER-020
+(deftest finding-5-a-restored-failure-receipt-is-constant-size
+  (testing "PROBE failure-receipt-growth => {:n1-bytes 282, :n1000-bytes 37029,
+            :n1000-restored-files 1000, :n1000-read-back 1000}. A receipt whose
+            size tracks the number of files it restored is a file list wearing a
+            different name."
+    (let [receipt-for (fn [n]
+                        (let [files (mapv #(str "src/acid/app/f" % ".clj")
+                                          (range n))]
+                          (mcp-helper/terminal-receipt
+                           {:kernel {:status :verification-failed
+                                     :restored true
+                                     :restored_files files
+                                     :restoration_read_back
+                                     (into {} (map (fn [f] [f "sha"])) files)
+                                     :destination_removed true
+                                     :details_path "/local/state/details.edn"}
+                            :verification (assoc profile-result :ok false)
+                            :plan fixture-plan})))
+          one (receipt-for 1)
+          many (receipt-for 1000)
+          bytes-of #(count (pr-str %))]
+      (is (< (bytes-of many) (* 2 (bytes-of one)))
+          (str "the receipt must not grow with the restored-file count: "
+               {:n1 (bytes-of one) :n1000 (bytes-of many)}))
+      (is (< (bytes-of many) 4096)
+          "and it stays inside a constant bound")
+      (is (not (contains? many :restored_files))
+          "the manifest belongs in the details file, not the receipt")
+      (is (some? (:details_path many))
+          "which the receipt names once")
+      (testing "the constant-size EVIDENCE survives: a count and an aggregate"
+        (let [evidence (:restoration_read_back many)]
+          (is (= 1000 (:files evidence))
+              "how many files were restored")
+          (is (string? (:aggregate_sha256 evidence))
+              "one digest over all of them, not one entry per file")
+          (is (< (abs (- (count (pr-str evidence))
+                         (count (pr-str (:restoration_read_back one)))))
+                 16)
+              "and its printed size moves only by the digits of the count
+               itself between 1 file and 1000, never by the files"))))
+    (testing "rollback-failed keeps its explicit unrestored-file authority"
+      (let [receipt (mcp-helper/terminal-receipt
+                     {:kernel rollback-failed-kernel
+                      :verification (assoc profile-result :ok false)
+                      :plan fixture-plan})]
+        (is (seq (:files receipt)))
+        (is (some? (:recovery_required receipt)))
+        (is (false? (:source_unchanged receipt)))))))
+
+;; @spec MCP-OP-HELPER-009
+(deftest finding-6-a-receipt-directory-inside-the-workspace-is-refused
+  (testing "PROBE details-dir-inside-workspace => {:status \"committed\",
+            :inside-workspace? true}. The verb published its per-caller detail
+            INTO the tree it had just mutated."
+    (doseq [[label relative]
+            [[:direct ".local-receipts"]
+             [:nested "src/.receipts"]]]
+      (testing label
+        (let [outcome (with-materialized-happy-tree
+                        (str "receipt-inside-" (name label))
+                        (fn [root]
+                          (let [result (mcp-helper/execute!
+                                        {:verification-profiles configured-profiles
+                                         :receipt-dir (str (io/file root relative))}
+                                        (fixture/request
+                                         {:workspace_root root
+                                          :verification {:profile "helper-proof"}}))]
+                            {:result result
+                             :published (.exists (io/file root relative))})))
+              {:keys [result published]} (:result outcome)]
+          (is (false? (:ok result)) (pr-str result))
+          (is (string? (:error_type result))
+              "a typed refusal, not a committed receipt")
+          (is (not (true? (:committed result))))
+          (is (false? published)
+              "and nothing was published inside the workspace"))))))
+
+;; @spec MCP-OP-HELPER-012
+(deftest finding-7-symlinks-under-an-admitted-root-are-pruned-not-fatal
+  (testing "PROBE2 symlink-walk => {:ok false, :error_type
+            \"helper-extraction-unreadable-source\", :file \"src/escape.clj\"}.
+            Fail-closed is right for confidentiality and wrong for the fence
+            rule: symlinks a walk produces are DROPPED, and one unrelated
+            symlink under an admitted root could deny every extraction."
+    (with-workspace
+      "symlink-walk" (tree-of :happy :pre)
+      (fn [root]
+        (let [outside (io/file tmp-root (str "outside-" (System/nanoTime) ".clj"))]
+          (try
+            (spit outside "(ns escapee)\n\n(defn f [] :out)\n")
+            (java.nio.file.Files/createSymbolicLink
+             (.toPath (io/file root "src/escape.clj"))
+             (.toPath outside)
+             (make-array java.nio.file.attribute.FileAttribute 0))
+            (java.nio.file.Files/createSymbolicLink
+             (.toPath (io/file root "src/inward.clj"))
+             (.toPath (io/file root "src/acid/app/m01.clj"))
+             (make-array java.nio.file.attribute.FileAttribute 0))
+            (let [result (mcp-helper/plan
+                          (fixture/request {:workspace_root (str root)})
+                          configured-profiles)]
+              (is (:ok result)
+                  (str "an outward AND an inward symlink are both pruned, and "
+                       "the operation still succeeds: " (pr-str result)))
+              (let [planned (set (map :file (get-in result [:plan :files])))]
+                (is (not (contains? planned "src/escape.clj"))
+                    "the outward link is not counted")
+                (is (not (contains? planned "src/inward.clj"))
+                    "and neither is the inward one")))
+            (finally (.delete outside))))))))
+
+;; @spec MCP-OP-HELPER-012
+(deftest finding-8-a-traversing-configured-source-root-is-refused-explicitly
+  (testing "PROBE configured-root-traversal => {:ok true}. The outside file was
+            not enumerated, which is safe, but the boundary called the
+            traversal an ADMITTED root while the closure receipt still said
+            [\"src\" \"test\"]. Admission and closure evidence must not disagree."
+    (with-workspace
+      "root-traversal"
+      (assoc (tree-of :happy :pre)
+             ".clj-surgeon.edn" "{:source-roots [\"src\" \"../sibling\"]}\n")
+      (fn [root]
+        (let [result (mcp-helper/plan
+                      (fixture/request {:workspace_root (str root)})
+                      configured-profiles)]
+          (if (:ok result)
+            (is (not (some #(str/includes? (str %) "..")
+                           (get-in result [:receipt :closure :roots])))
+                (str "a traversing root is never reported as admitted: "
+                     (pr-str (get-in result [:receipt :closure :roots]))))
+            (do
+              (is (string? (:error_type result))
+                  "or it is refused explicitly, never silently ignored")
+              (is (nil? (:next_call result))))))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest finding-9-a-timed-out-proof-still-reports-that-a-fresh-process-ran
+  (testing "PROBE subprocess-timeout => {:timed_out true, :fresh_process false}
+            with process evidence showing the child ran for 58.1 ms. A timed-out
+            child has :exit nil, and `fresh_process` was computed from
+            `(some :exit outcomes)`, so a process that demonstrably started was
+            reported as not fresh."
+    (with-workspace
+      "proof-timeout" {}
+      (fn [root]
+        (let [proof (mcp-helper/run-proof!
+                     (str root) "slow"
+                     {:synchronous? true :rollback-capable? true
+                      :fresh-process? true
+                      :commands [["/bin/sleep" "1"]] :timeout-ms 40})]
+          (is (true? (:timed_out proof)))
+          (is (false? (:ok proof)))
+          (is (true? (:fresh_process proof))
+              (str "the child started; whether it finished is a different fact: "
+                   (pr-str (:process_evidence proof)))))))))
+
+;; @spec MCP-OP-HELPER-010
+(deftest finding-10-the-public-uninitialized-refusal-carries-next-call-nil
+  (testing "the reviewer's structural probe of `handle-helper-extraction` found
+            the server-not-initialized map has no :next_call at all. Every
+            refusal the PUBLIC handler emits goes through the closed envelope,
+            initialization and workspace routing included."
+    (let [captured (atom nil)]
+      (try
+        (mcp-tool/init! nil)
+        (mcp-tool/handle-helper-extraction
+         nil
+         (json/parse-string (json/generate-string (fixture/request)) true)
+         (fn [content error? structured]
+           (reset! captured {:content content :error? error? :result structured})))
+        (let [{:keys [error? result]} @captured]
+          (is (true? error?))
+          (is (false? (:ok result)))
+          (is (= "helper_extraction" (:operation result)))
+          (is (= "server-not-initialized" (:error_type result)))
+          (is (contains? result :next_call)
+              "the field is present and explicitly null, never merely absent")
+          (is (nil? (:next_call result)))
+          (is (true? (:source_unchanged result))))
+        (finally (mcp-tool/init! nil))))))
+
+;; @spec MCP-OP-HELPER-001
+(deftest finding-11-the-registered-output-schema-names-the-rollback-authority
+  (testing "the registered output property key set omitted `files`,
+            `recovery_required` and `cause_error` -- the three fields a
+            rollback-failed receipt exists to carry -- while requiring
+            `elapsed_ms` that a pre-staging refusal never supplies."
+    (let [schema mcp-schema/helper-extraction-output-schema
+          properties (set (keys (:properties schema)))]
+      (doseq [field ["files" "recovery_required" "cause_error"]]
+        (is (contains? properties field)
+            (str "a rollback-failed receipt carries " field
+                 ", so the schema must declare it")))
+      ;; The reviewer also read `elapsed_ms` as wrongly required. That one is
+      ;; WITHDRAWN, verified at the wire by the boundary builder:
+      ;; `mcp-operation/finalize-result` (line 39) assoc's :elapsed_ms onto
+      ;; every published result, refusals included, and
+      ;; `mcp-server-test/exposes-exactly-nine-typed-tools` requires every
+      ;; registered tool's output schema to require it. The refusal the review
+      ;; quoted was the raw domain map, not the published receipt.
+      (is (contains? (set (:required schema)) "ok")))))
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-009
+(deftest the-wire-carries-the-whole-receipt-through-the-public-tool-fn
+  (testing "Astra's wire witness: one full execute! through the PUBLIC callback,
+            asserting what an agent actually receives. A receipt that is correct
+            inside the boundary and hollow on the wire is not a receipt."
+    (with-materialized-happy-tree
+      "wire"
+      (fn [root]
+        (let [receipt-dir (io/file tmp-root (str "wire-receipts-" (System/nanoTime)))
+              captured (atom nil)]
+          (try
+            (.mkdirs receipt-dir)
+            (mcp-tool/init! {:project-root (str root)
+                             :receipt-dir (str receipt-dir)
+                             :verification-profiles configured-profiles})
+            (mcp-tool/handle-helper-extraction
+             nil
+             (json/parse-string
+              (json/generate-string
+               (fixture/request {:workspace_root (str root)
+                                 :verification {:profile "helper-proof"}}))
+              true)
+             (fn [content error? structured]
+               (reset! captured {:content content :error? error?
+                                 :result structured})))
+            (let [{:keys [content error? result]} @captured
+                  summary (str content)]
+              (is (false? error?) (pr-str result))
+              (is (:ok result) (pr-str result))
+              (is (true? (:committed result)))
+              (testing "structuredContent carries the counts at the TOP level"
+                (is (= (:helpers fixture/canonical-counts) (:helpers result)))
+                (is (= (:caller-files fixture/canonical-counts)
+                       (:caller_files result)))
+                (is (= (:sites fixture/canonical-counts) (:sites result)))
+                (is (= fixture/canonical-receipt-partition (:partition result)))
+                (is (= (:alias-histogram fixture/canonical-counts)
+                       (into (sorted-map) (:alias_histogram result))))
+                (is (map? (:closure result)))
+                (is (= fixture/admitted-roots (get-in result [:closure :roots]))))
+              (testing "with no nulls where a number or a map belongs"
+                (doseq [field [:helpers :caller_files :sites :partition
+                               :closure :alias_histogram :verification]]
+                  (is (some? (get result field))
+                      (str field " is null on the wire"))))
+              (testing "and the verification is TYPED, never a bare count"
+                (is (= "helper-proof" (get-in result [:verification :profile])))
+                (is (= "checks-completed" (get-in result [:verification :status])))
+                (is (true? (get-in result [:verification :fresh_process])))
+                (is (not (contains? (:verification result) :covered_callers))))
+              (testing "and the human-readable summary says the same numbers"
+                (doseq [needle [(str (:helpers fixture/canonical-counts))
+                                (str (:caller-files fixture/canonical-counts))
+                                (str (:sites fixture/canonical-counts))]]
+                  (is (str/includes? summary needle)
+                      (str "the content summary omits " needle ": " summary)))))
+            (finally
+              (mcp-tool/init! nil)
+              (delete-tree! receipt-dir))))))))
+
+;; ---------------------------------------------------------------------------
+;; the REAL wire, not a mapper fixture
+;;
+;; The two witnesses below drive `execute!` all the way through the public
+;; tool-fn and read what an agent actually receives. The mapper witnesses above
+;; assert that injected facts are mapped faithfully; these assert that the facts
+;; reaching the mapper are the real ones. Both are needed, and neither
+;; substitutes for the other.
+
+(def ^:private failing-proof-profiles
+  "A configured profile whose command really runs and really FAILS, so the
+  failure path is exercised end to end rather than simulated."
+  {"failing-proof" {:commands [["/bin/false"]]}})
+
+(defn- read-details
+  [details-path]
+  (when (and (string? details-path) (.isFile (io/file details-path)))
+    (slurp details-path)))
+
+;; @spec MCP-OP-HELPER-009
+;; @spec MCP-OP-HELPER-020
+(deftest a-real-failing-proof-returns-a-bounded-receipt-on-the-wire
+  (testing "the whole failure path through the PUBLIC callback: the proof runs,
+            really fails, the kernel rolls back, and what comes out on the wire
+            must be bounded no matter how many files were staged. The per-file
+            evidence lives in the external details artifact, not in the reply."
+    (with-materialized-happy-tree
+      "wire-failing-proof"
+      (fn [root]
+        (let [receipt-dir (io/file tmp-root (str "fail-receipts-" (System/nanoTime)))
+              captured (atom nil)]
+          (try
+            (.mkdirs receipt-dir)
+            (mcp-tool/init! {:project-root (str root)
+                             :receipt-dir (str receipt-dir)
+                             :verification-profiles failing-proof-profiles})
+            (mcp-tool/handle-helper-extraction
+             nil
+             (json/parse-string
+              (json/generate-string
+               (fixture/request {:workspace_root (str root)
+                                 :verification {:profile "failing-proof"}}))
+              true)
+             (fn [content error? structured]
+               (reset! captured {:content content :error? error?
+                                 :result structured})))
+            (let [{:keys [content result]} @captured
+                  rendered (str content)]
+              (is (some? result) "the callback answered")
+              (is (not (true? (:committed result)))
+                  "a failing proof never leaves a commit standing")
+              (is (contains? #{"verification-failed" "verification-timeout"}
+                             (:status result))
+                  (pr-str (:status result)))
+              (testing "the receipt is BOUNDED: no per-file lists on the wire"
+                (is (not (contains? result :restored_files))
+                    "the restored-file manifest is not a wire field")
+                (let [evidence (:restoration_read_back result)]
+                  (when (some? evidence)
+                    (is (not (and (map? evidence)
+                                  (some #(str/includes? (str %) ".clj")
+                                        (keys evidence))))
+                        "and neither are the per-file hashes")
+                    (is (some? (:aggregate_sha256 evidence))
+                        "the aggregate digest stands in for them")))
+                (is (< (count (pr-str result)) 4096)
+                    (str "the whole structured receipt stays inside a constant "
+                         "bound; " (count (pr-str result)) " bytes for a "
+                         (:changed-files fixture/canonical-counts)
+                         "-file extraction")))
+              (testing "and it prescribes nothing it cannot offer"
+                (when (nil? (:next_call result))
+                  (is (not (re-find #"(?i)retry" rendered))
+                      (str "a receipt whose next_call is nil must not tell the "
+                           "reader to retry: there is nothing to retry WITH, "
+                           "and a prescription with no continuation is how a "
+                           "caller ends up hammering a failing proof. "
+                           rendered))))
+              (testing "the per-file evidence is in the external details artifact"
+                (let [details-path (:details_path result)
+                      details (read-details details-path)]
+                  (is (string? details-path))
+                  (is (str/starts-with? (str details-path) (str receipt-dir))
+                      "under the local-state receipt directory")
+                  (is (not (str/starts-with? (str details-path) (str root)))
+                      "and never inside the workspace it mutated")
+                  (is (some? details)
+                      (str "the details artifact exists: " details-path))
+                  (when details
+                    (is (str/includes? details "src/acid/web/http.clj")
+                        "carrying the per-file evidence the receipt omits")
+                    (is (or (str/includes? details "/bin/false")
+                            (str/includes? details "failing-proof"))
+                        "and the proof's own failure output")))))
+            (finally
+              (mcp-tool/init! nil)
+              (delete-tree! receipt-dir))))))))
+
+;; @spec MCP-OP-HELPER-011
+(deftest admission-is-rooted-in-the-requests-workspace-not-the-servers
+  (testing "a server started against one workspace must not lend its own
+            verification authority to a request routed to another. The seam is
+            the router's `:workspace-context-factory`, which is how the HTTP
+            server publishes a per-workspace context in production."
+    (let [server-ws (io/file tmp-root (str "server-ws-" (System/nanoTime)))
+          request-ws (io/file tmp-root (str "request-ws-" (System/nanoTime)))
+          receipt-dir (io/file tmp-root (str "route-receipts-" (System/nanoTime)))
+          call (fn [profile]
+                 (let [captured (atom nil)]
+                   (mcp-tool/handle-helper-extraction
+                    nil
+                    (json/parse-string
+                     (json/generate-string
+                      (fixture/request {:workspace_root (str request-ws)
+                                        :verification {:profile profile}}))
+                     true)
+                    (fn [_content _error? structured] (reset! captured structured)))
+                   @captured))]
+      (try
+        (materialize! server-ws (tree-of :happy :pre))
+        (materialize! request-ws (tree-of :happy :pre))
+        (.mkdirs receipt-dir)
+        (mcp-tool/init!
+         {:project-root (str server-ws)
+          :receipt-dir (str receipt-dir)
+          ;; X: the SERVER's own authority
+          :verification-profiles {"server-only" {:commands [["/bin/true"]]}}
+          :workspace-context-factory
+          (fn [workspace-root]
+            ;; Y: the authority of the workspace the request names
+            (if (= (str workspace-root) (str request-ws))
+              {:verification-profiles {"workspace-only" {:commands [["/bin/true"]]}}}
+              {}))})
+        (testing "naming the SERVER's profile X refuses, even though the server
+                  really does have it"
+          (let [result (call "server-only")]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "helper-extraction-verification-preflight-unavailable"
+                   (:error_type result))
+                "the server's authority does not travel to another workspace")
+            (is (nil? (:next_call result)))))
+        (testing "and naming the REQUEST workspace's profile Y proceeds"
+          (let [result (call "workspace-only")]
+            (is (:ok result)
+                (str "the routed workspace's own configured profile is the one "
+                     "that governs: " (pr-str result)))
+            (is (true? (:committed result)))
+            (is (= "workspace-only" (get-in result [:verification :profile])))))
+        (finally
+          (mcp-tool/init! nil)
+          (delete-tree! server-ws)
+          (delete-tree! request-ws)
+          (delete-tree! receipt-dir))))))
