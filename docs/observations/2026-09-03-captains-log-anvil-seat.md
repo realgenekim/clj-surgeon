@@ -2222,3 +2222,5 @@ scratch worktree (the fence worktree is scratch by definition), stray files park
 /var/tmp/forge/fence-stray.
 
 Landing path per the obviously-better ruling: Sol GO → Astra confirm → ~/bin/land.
+
+## 19:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 19:51Z load 2.84 ; === rc 0 end 19:56Z)
