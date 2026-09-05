@@ -48,12 +48,12 @@ is constant in the number of callers: no per-file, per-owner or per-site table, 
 ### Success receipt (O(1))
 
 ```json
-{"ok": true, "operation": "helper_extraction", "committed": true,
+{"ok": true, "operation": "helper_extraction", "committed": true, "kernel_status": "committed",
  "helpers": 6, "source_retired": 6, "destination_created": true,
  "caller_files": 28,
  "partition": {"moved_only": 8, "mixed": 20, "qualified_only": 0, "untouched": 3},
  "sites": 258, "retained_sites": 172, "alias_histogram": {"response": 28},
- "verification": {"profile": "helper-proof", "status": "committed",
+ "verification": {"profile": "helper-proof", "status": "checks-completed",
                   "structural_callers": 28, "helper_behaviors": 24, "compiled_callers": 0,
                   "ok": true},
  "closure": {"roots": ["src", "test"], "authorized_paths": ["src/**", "test/**"],
@@ -182,7 +182,7 @@ Where this section disagrees with text above, THIS section wins. The owning inte
 - typed terminal refusal has `next_call nil`; any generated continuation validates against the closed schema and preserves scope
 - selected owner uses a retained public value in a non-head position → `retained-dependency`; retained private → `private-dependency`
 - moved→moved peer reference rewritten to the destination's symbol
-- `::ok` in a moved body → `namespace-sensitive-body` refusal (or proven-faithful rewrite with a behavior witness)
+- `::ok` in a moved body → `namespace-sensitive-body` refusal (explicit v1 refusal)
 - direct source↔target back-edge and source→third-caller→target chain: both impossible by construction under rule 3, witnessed by a fixture that would create each
 - source-local retained caller coexists with the extraction in one snapshot; footprint counts the source once
 - fully qualified no-require caller rewritten, partition `qualified-only`
