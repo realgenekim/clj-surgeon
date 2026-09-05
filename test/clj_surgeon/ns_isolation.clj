@@ -97,7 +97,17 @@
     ;; 69 428 ms with it in. The ceiling here is ~2x the measurement, so
     ;; contention on a shared box does not manufacture a refusal while a
     ;; namespace that has genuinely doubled still says so.
-    clj-surgeon.mcp-feature-thread-test 90000})
+    clj-surgeon.mcp-feature-thread-test 90000
+    ;; MEASURED 494 s in CI (suite-spike spec, 2026-09-04: "reader-eval-fence-test =
+    ;; 494 of CI's 521 s") and 466.9 s on 2026-09-05 02:43Z (battery lane, cores 6-9,
+    ;; contended by a peer full gate). About twenty launcher drives of the reader
+    ;; eval fence, each a real child JVM: the cost is process spawn, not a slow
+    ;; assertion. The :battery default of 300 s landed (TEST-ISO-007) AFTER the last
+    ;; passing battery receipt, so at the default this namespace fails the battery
+    ;; by construction -- which blocked every landing on 2026-09-05. Ceiling here is
+    ;; ~2x the CI measurement, the same rule as the entry above. OWED: split the
+    ;; launcher drives into matrix cells (the spec's own plan) and retire this line.
+    clj-surgeon.reader-eval-fence-test 1000000})
 
 (def mutable-global-allowlist
   "@spec TEST-ISO-005 -- vars whose deref'd value is EXPECTED to differ across
