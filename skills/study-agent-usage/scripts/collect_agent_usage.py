@@ -18,6 +18,13 @@ from pathlib import Path
 
 # Opt-in registration for the inspected single-call wrapper contract. Never guess
 # defaults from a basename; registration requires the exact reviewed source hash.
+REGISTERED_PUBLIC_WRAPPER = None
+PUBLIC_WRAPPER_SHA256 = "8a3d8edd211bff1be34f4968e024a16e83ceef632e79af6226706b96c33bf14f"
+PUBLIC_REQUEST_HASHES = {
+    "public-positive-01": "67b0eebd738176061cac00c6cd0825b4fdd0d16b5c0c6a699888fb829f91bad3",
+    "public-rollback-01": "cbd1d8dedc1d92caec528805db83f7cb715140be842bcfb895f8942b62e53d7c",
+}
+PUBLIC_TMPDIR = "/var/tmp/forge/astra-helper-program"
 REGISTERED_MCP_READ_WRAPPER = None
 MCP_READ_WRAPPER_SHA256 = "41b083aaab9598b17bf62e6c1e578bfd509dd3a7e05998ba7cb7037456fad44b"
 
@@ -317,7 +324,7 @@ def registered_wrapper_ops(source: str) -> list[str]:
     Counts invocation attempts, not successful RPCs. Shell composition, dynamic
     JS, unknown interpreter options, and arbitrary Python wrappers stay unknown.
     """
-    if not REGISTERED_MCP_READ_WRAPPER:
+    if not (REGISTERED_MCP_READ_WRAPPER or REGISTERED_PUBLIC_WRAPPER):
         return []
     operations = []
     # Skip quoted JS text and comments before accepting a call-shaped token.
@@ -342,6 +349,13 @@ def registered_wrapper_ops(source: str) -> list[str]:
             argv = shlex.split(command)
         except ValueError:
             continue
+        if (REGISTERED_PUBLIC_WRAPPER and len(argv) == 5
+                and argv[:2] == ["env", "TMPDIR=" + PUBLIC_TMPDIR]
+                and argv[2] in {"python3", "/usr/bin/python3"}
+                and argv[3] == REGISTERED_PUBLIC_WRAPPER
+                and argv[4] in PUBLIC_REQUEST_HASHES):
+            operations.append("helper_extraction")
+            continue
         if len(argv) < 5 or argv[0] not in {"python3", "/usr/bin/python3"} or argv[1] != REGISTERED_MCP_READ_WRAPPER:
             continue
         rest = argv[2:]
@@ -363,6 +377,21 @@ def registered_wrapper_ops(source: str) -> list[str]:
                 and port.isdecimal() and (int(port) == 8171 or 8300 <= int(port) <= 8339)):
             operations.append(tool)
     return operations
+
+
+def validate_public_wrapper(path: Path) -> str:
+    """Opt-in exact wrapper and request identities; no transcript-derived paths."""
+    if (not path.is_absolute() or path.is_symlink()
+            or hashlib.sha256(path.read_bytes()).hexdigest() != PUBLIC_WRAPPER_SHA256):
+        raise ValueError("public wrapper identity mismatch")
+    for case, digest in PUBLIC_REQUEST_HASHES.items():
+        request_path = path.parent / case / "request.json"
+        if request_path.is_symlink() or hashlib.sha256(request_path.read_bytes()).hexdigest() != digest:
+            raise ValueError("public wrapper request identity mismatch")
+        request = json.loads(request_path.read_text())
+        if request.get("method") != "tools/call" or request.get("params", {}).get("name") != "helper_extraction":
+            raise ValueError("public wrapper request operation mismatch")
+    return str(path)
 
 
 def distribution(values: list[int]) -> dict:
@@ -420,10 +449,12 @@ def route_kinds(text: str, action: str) -> list[str]:
             kinds.add("surgeon-read")
     if any(method.endswith("__inspect_clojure") for method in surgeon_methods):
         kinds.add("surgeon-read")
-    if any(method.endswith(("__apply_clojure_changes", "__alias_migration")) for method in surgeon_methods):
+    if any(method.endswith(("__apply_clojure_changes", "__alias_migration", "__helper_extraction")) for method in surgeon_methods):
         kinds.add("surgeon-apply")
     if set(wrapper_ops) & {"inspect_clojure", "relation_census"}:
         kinds.add("surgeon-read")
+    if "helper_extraction" in wrapper_ops:
+        kinds.add("surgeon-apply")
     if "feature_thread" in wrapper_ops:
         kinds.add("surgeon-plan")
     if cclsp_methods:
@@ -525,13 +556,13 @@ def completed_item_clock_sample(payload: dict) -> dict | None:
         if server in SURGEON_MCP_SERVERS:
             if tool == "inspect_clojure":
                 sample["kind"] = "surgeon-read"
-            elif tool in {"apply_clojure_changes", "edit_clojure", "alias_migration"}:
+            elif tool in {"apply_clojure_changes", "edit_clojure", "alias_migration", "helper_extraction"}:
                 sample["kind"] = "surgeon-apply"
             else:
                 sample["kind"] = "surgeon-plan"
             if tool in {
                 "apply_clojure_changes", "edit_clojure", "inspect_clojure",
-                "transform_clojure", "alias_migration"
+                "transform_clojure", "alias_migration", "helper_extraction"
             }:
                 sample["operation"] = tool
             if tool == "inspect_clojure":
@@ -1703,7 +1734,64 @@ def self_test_registered_mcp_read_wrapper() -> None:
         REGISTERED_MCP_READ_WRAPPER = previous
 
 
+def self_test_public_wrapper() -> None:
+    from unittest.mock import patch
+    global REGISTERED_PUBLIC_WRAPPER
+    previous = REGISTERED_PUBLIC_WRAPPER
+    wrapper = "/registered/run_public.py"
+    def invocation(command):
+        return "text(await tools.exec_command({cmd:" + json.dumps(command) + "}));"
+    command = "env TMPDIR=" + PUBLIC_TMPDIR + " python3 " + wrapper + " public-positive-01"
+    try:
+        REGISTERED_PUBLIC_WRAPPER = wrapper
+        for case in PUBLIC_REQUEST_HASHES:
+            assert registered_wrapper_ops(invocation(command.replace("public-positive-01", case))) == ["helper_extraction"]
+        source = invocation(command)
+        assert registered_wrapper_ops(invocation("python3 - <<'PY'\nprint('run_public.py')\nPY") + source) == ["helper_extraction"]
+        for invalid in ["cat " + wrapper, "echo " + command, command + " extra",
+                        command + "; echo done", command.replace("TMPDIR=", "OTHER="),
+                        command.replace("positive-01", "positive-02"),
+                        command.replace("run_public.py", "run_public_v2.py")]:
+            assert registered_wrapper_ops(invocation(invalid)) == []
+        for invalid in ["const note=" + json.dumps(source), "// " + source,
+                        "tools.exec_command({cmd: dynamic})"]:
+            assert registered_wrapper_ops(invalid) == []
+        assert route_kinds(source, "shell") == ["surgeon-apply"]
+        session = empty_session("codex", Path("fake.jsonl"))
+        record_tool_text(session, source, "shell")
+        assert session["clj_surgeon_calls"] == 1
+        assert session["clj_surgeon_result_actions"] == 0
+        assert session["clj_surgeon_ops"] == {"helper_extraction": 1}
+        # No result supplied: attempted invocation cannot manufacture completion.
+        REGISTERED_PUBLIC_WRAPPER = None
+        assert registered_wrapper_ops(source) == []
+        with patch.object(Path, "is_absolute", return_value=True), patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "read_bytes", return_value=b"changed"):
+            try:
+                validate_public_wrapper(Path(wrapper))
+                assert False, "changed wrapper admitted"
+            except ValueError:
+                pass
+            with patch.dict(globals(), PUBLIC_WRAPPER_SHA256=hashlib.sha256(b"changed").hexdigest()):
+                try:
+                    validate_public_wrapper(Path(wrapper))
+                    assert False, "changed request admitted"
+                except ValueError:
+                    pass
+        for server in ["surgeon", "unknown"]:
+            method = "tools.mcp__" + server + "__helper_extraction({})"
+            assert route_kinds(method, "exec") == (["surgeon-apply"] if server == "surgeon" else [])
+            assert route_kinds("const note=" + json.dumps(method), "exec") == []
+            clock = completed_item_clock_sample({"started_at_ms": 1, "completed_at_ms": 2,
+                "item": {"type": "McpToolCall", "server": server, "tool": "helper_extraction"}})
+            assert (clock.get("operation") == "helper_extraction") == (server == "surgeon")
+            if server == "surgeon":
+                assert clock["kind"] == "surgeon-apply"
+    finally:
+        REGISTERED_PUBLIC_WRAPPER = previous
+
+
 def self_test() -> int:
+    self_test_public_wrapper()
     self_test_registered_mcp_read_wrapper()
     self_test_registered_surgeon_alias()
     assert [
@@ -2442,6 +2530,7 @@ def self_test() -> int:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument("--registered-public-wrapper", help="Opt in to pinned 01 public wrapper and its two exact request files; invocation attempts only")
     result.add_argument("--registered-mcp-read-wrapper", help="Opt in to exact inspected mcp_read.py contract; source hash must match")
     result.add_argument("--since", help="ISO-8601 lower bound; defaults to newest observation marker")
     result.add_argument("--until", help="ISO-8601 upper bound; defaults to current UTC time")
@@ -2771,7 +2860,9 @@ def render_event_clock_receipt(
 
 def main() -> int:
     args = parser().parse_args()
-    global REGISTERED_MCP_READ_WRAPPER
+    global REGISTERED_MCP_READ_WRAPPER, REGISTERED_PUBLIC_WRAPPER
+    if args.registered_public_wrapper:
+        REGISTERED_PUBLIC_WRAPPER = validate_public_wrapper(Path(args.registered_public_wrapper))
     if args.registered_mcp_read_wrapper:
         wrapper = Path(args.registered_mcp_read_wrapper)
         if not wrapper.is_absolute() or wrapper.is_symlink() or hashlib.sha256(wrapper.read_bytes()).hexdigest() != MCP_READ_WRAPPER_SHA256:
@@ -2798,6 +2889,12 @@ def main() -> int:
     receipt = collect(args)
     if REGISTERED_MCP_READ_WRAPPER:
         receipt["wrapper_coverage"] = {"contract": "mcp-read-single-call-v1", "source_sha256": MCP_READ_WRAPPER_SHA256, "semantics": "literal invocation attempts, not RPC success or direct tool wall; unresolved wrappers omitted"}
+    if REGISTERED_PUBLIC_WRAPPER:
+        receipt["public_wrapper_coverage"] = {"contract": "public-01-request-pinned-v1",
+            "collector_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "source_sha256": PUBLIC_WRAPPER_SHA256,
+            "request_sha256": sorted(PUBLIC_REQUEST_HASHES.values()),
+            "semantics": "runner invocation attempts only; no completed RPC, proof success, or direct tool wall inferred"}
     receipt_path = Path(args.receipt_out).expanduser() if args.receipt_out else default_receipt_path(receipt)
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")

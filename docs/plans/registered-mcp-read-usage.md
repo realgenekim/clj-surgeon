@@ -30,3 +30,27 @@ The external fail-first witness preceded implementation; the existing paved
 self-test must pass. Recollect the identical bounds once, retain the original
 receipt as superseded, and report the corrected receipt as counting authority.
 This bounded repair does not claim complete arbitrary Python/JavaScript tracing.
+
+## Explicit public quality wrapper extension
+
+The second field failure is the two 01 public quality runner invocations.
+`--registered-public-wrapper PATH` verifies exact inspected runner SHA and both
+case request SHA identities, plus tools/call and helper_extraction request
+shape. Only the observed fixed `env TMPDIR=... python3 PATH CASE` argv is
+recognized. The 02 runner, arbitrary env settings, extra argv and unknown cases
+are excluded. Counts remain runner invocation attempts: no result, profile
+success or RPC completion is synthesized. Current file identities are not
+historical source attestation. The receipt identifies the new collector source
+SHA and registration hashes without emitting paths or request content.
+
+The helper_extraction name is a mutation in registered method route phases and
+completed MCP clocks; the operation is retained explicitly. Existing generic
+method counts and outcomes remain unchanged. A failed operation is still a
+mutation attempt, not a successful edit.
+
+The public self-test covers both IDs, preparation-plus-call versus mentions,
+invalid argv/env/case, hash mismatch refusal, no manufactured result, and direct
+MCP taxonomy. The earlier assertion-control-flow negative and read-wrapper
+compatibility tests remain required. No hour-two collection or v2 registration
+is part of this change. Retained pre-extension source remains outside the
+worktree in usage-evidence/collector-before-public-registration.py.
