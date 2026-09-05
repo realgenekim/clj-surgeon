@@ -1130,6 +1130,10 @@ test:
 	@# battery-ledger receipt; it does NOT rerun the battery), mcp-test, test-bb, repository-hygiene.
 	@# It OMITS analyzer-contract-test, the admit recovery battery, mcp-smoke, the memory battery and
 	@# the bench self-test tail. Those run in `test-full` (CI/nightly). A stale battery receipt fails here.
+	@# @spec MCP-OP-ADMIT-150
+	@# The default lane OWNS the transaction-recovery battery receipt: the fast lane counts its
+	@# absence as a named skip, and this line is what drives that bucket to zero (sub-second arms).
+	$(MAKE) --no-print-directory admit-transaction-recovery-battery
 	$(MAKE) --no-print-directory landing-gate
 
 test-full:
