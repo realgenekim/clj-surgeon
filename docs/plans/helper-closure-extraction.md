@@ -94,6 +94,29 @@ kernel recovery-required evidence; never claims unchanged). Only synchronous, ro
 profiles are admitted; capability is validated before any write; no committed success without
 completed proof; the proof runs in a fresh process.
 
+## What it reuses, what is new
+
+Reused unchanged: `clj-surgeon.extract` / `mcp-extraction` (typed source retirement and
+destination creation, `require_policy`), `clj-surgeon.alias-migration` (ns parsing,
+file bindings, `choose-alias`, whole-form splice), the transaction kernel entrance.
+New: the helper-owner resolver, the intra-source closure, the caller partition, the
+`helper_extraction` planner that composes an `extraction` change with caller changes,
+and the receipt. Estimated: one pure namespace (Babashka-safe), one I/O boundary
+namespace, registration in `mcp-tool`.
+
+## Measurement plan and falsifier (pre-registered, not run in phase 1)
+
+1. Hand-drive first: the cfp candidate (frozen at `00e8f0fa`), the same six helpers,
+   through the new verb, against the amended behavior oracle and the five real
+   negatives already retained by Astra's review. A refusal is a failed hand-drive.
+2. Then fresh caller pairs per model (Sol, Astra) on held-out helper sets, each with
+   its contemporaneous native control given the SAME task facts and proof obligations;
+   native may use a parser or a six-name batch script and may fuse write and tests.
+3. Count preparation, schema discovery, refusals and cold startup separately and
+   inclusively; report request-to-accepted-proof wall, never call wall.
+4. Falsifier: if a capable native batch script plus tests remains faster after equal
+   setup, the verb is kept as a quality option and is not sold as a speed route.
+
 ## Revision 3 (Astra's six corrections + static review of 9d4b54bb, 04:58–05:02Z) — the contract of record
 
 Where this section disagrees with text above, THIS section wins. The owning intent documents are
