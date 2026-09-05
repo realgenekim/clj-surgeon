@@ -65,3 +65,19 @@ Where I still push: his `plan` must not become a second orientation. The dossier
 Conviction, symmetric to his: I would use it, because it moves computation-shaped work (enumeration, hashing, execution, proof) to computation and leaves meaning to the model, with native tools as a first-class exit. I would stop using it the day it asks me for a dossier I did not need.
 
 Twenty ideas: his ten (thread-parameter, add-require, extract-helper, rename-namespace, repair-declares, feature-thread, test-impact, migration-plan, stale-resume, native-adjudication; his option-value order 9, 1, 10, 6, 8, 3, 2, 7, 4, 5) plus my ten (mission ledger, reads that cannot fail, scope roots, refusal envelope everywhere, admit_clojure_patch commit gate, alias_migration under the ledger, dossier-as-native-diff, help/show/update pattern, telemetry + usage verb, the Spark race harness). First prototype batch, running: mission ledger with stale-resume and native-adjudication inside it (Opus); scope roots (Spark, three-way, proof gate); thread-parameter pure planner (Sol); Spark/Sol fast-typist modes as Astra framed them — the fast model fills a structured request or picks among proved plans, the gate decides, disagreement is evidence.
+
+## 7. Tabletop, second pass — estimates replaced by measured verb costs (prototype e00fb7e9)
+
+Measured on the 38-file helper fixture, one run each (in-process work / cold entrance): open+plan 103 ms / 5.7 s JVM; show 1 ms / **0.091 s via bb** (was 6.7 s); ready 2 ms / **0.029 s** (was 8.4 s); apply 316 ms / 6.0 s JVM (plan re-run + kernel commit 48–103 ms + fresh-process proof, /bin/true floor); resume-undo 13 ms / 6.0 s JVM. Stale-resume: one changed owner file → refusal before staging, tree untouched.
+
+| turn | today (measured, real caller) | mission ledger (measured parts + return heuristic) |
+|---|---|---|
+| 1 | orient + read + search (~38 s) | `plan "<intent>"`: 5.7 s cold JVM (0.1 s work) + one model return reading a bounded dossier (~16 s) ≈ 22 s |
+| 2 | first public call refused, scope grammar (8.9 s) | — (`plan` states roots and authorization; the `:recommendation` says mission or native) |
+| 3 | second public call, committed + proof (24.1 s) | `apply M-1`: 6.0 s cold + real proof (helper-proof 6.8 s measured) ≈ 13–24 s depending on the profile |
+| 4–5 | returns reading the receipt (~15 s) | `show M-1` 0.09 s + one short return (~8 s) |
+| total | **86.1 s, 5 actions (measured)** | **≈ 43–54 s, 2–3 actions** (measured parts; returns are the 16 s heuristic) |
+
+Two things the numbers say. First, the cold JVM (5.7–6.0 s per write verb) is now the largest non-model cost in the mission flow; it is a launcher problem (a resident server or a bb-side planner), not an object problem, and it caps the ceiling at roughly 1.6–2× on this task until fixed. Second, the durable-context claim survives: `show` and `ready` at 30–90 ms mean a resumed agent pays nothing to know what is in flight, which is the property beads has and the one the v1–v7 landing loop lacked.
+
+Still unmeasured: a real caller (not a script) driving the mission flow; the native denominator for this task (the oracle correction is prerequisite); Spark as typist (usage limit tonight).
