@@ -2157,3 +2157,5 @@ Servers restarted onto trunk fbd68a1c: 7906 PID 523110, 8171 PID 523113.
 ## 16:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 16:48Z load 0.92 ; === rc 0 end 16:53Z)
 
 ## 16:53Z — usage-watch push rejections (15:53Z, 16:53Z) explained: after moving to the records worktree the tool still ran `git push origin MCP/main`, which pushes the stale LOCAL ref named MCP/main (not the checked-out records/MCP-main) → non-fast-forward rejection, nothing pushed, log line stranded until my manual push. Fixed: `git push origin HEAD:MCP/main`. Public main verified untouched (origin/main = affdfe3f, 2026-09-04).
+
+## 17:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 17:48Z load 1.62 ; === rc 0 end 17:53Z)
