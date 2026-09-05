@@ -73,3 +73,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **04:53Z LANDED 6ef3de2b** — bridge/test-owns-recovery-battery (ADMIT-150; recovery battery back in the default recipe). Battery ledger has a :pass receipt with zero skips. Servers on fbd68a1c.
 
 - **06:44Z HELPER_EXTRACTION** — bridge/helper-extraction-impl: candidate ee03b49a = real public one-call success (Astra, 406-byte request, 30 files, proof pass) but Sol fence r1 NO-GO (11 findings, 1 critical rollback gap). Round 3 fixes + witnesses in flight; re-freeze as new sha; landing only after fence GO + Astra public proof on the new sha. Never lands without battery-fresh.
+
+- **07:38Z ratchet owed (no bd db in this clone)**: one shared expected-tool-list Var for the five test sites that hardcode the MCP tool list (mcp_server_test, mcp_http_server_test ×3, admit_patch_test:582, mcp_operation_registry_test catalog).
