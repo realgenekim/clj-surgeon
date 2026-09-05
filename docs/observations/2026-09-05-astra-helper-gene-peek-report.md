@@ -50,20 +50,20 @@ The actual caller used five outer actions and two helper attempts. A directory/g
 - Admit every real fixture before declaring the harness ready: same guide, d4c8c21c.
 - Shared acceptance must permit task-valid alternatives; preserve failed evidence when correcting an oracle: same guide, 182aa54f.
 - Give both routes bounded failure predicates and an evidence handle; “fail” alone prevented diagnosis here: same guide, 182aa54f.
-- Keep startup, complete RPC clocks, wrapper attempts and missing telemetry distinct: [hour-three study](/var/tmp/forge/astra-program/repo/docs/observations/2026-09-05-astra-helper-hour-3-agent-usage.md),5e1ed51a, with its receipt-path correction in 182aa54f.
+- Keep startup, complete RPC clocks, wrapper attempts and missing telemetry distinct: [hour-three study](/var/tmp/forge/astra-program/repo/docs/observations/2026-09-05-astra-helper-hour-3-agent-usage.md), 5e1ed51a, with its receipt-path correction in 182aa54f.
 
 **7. Best news / worst news.** Best: a real LLM completed the compact public operation with an in-transaction proof and independent after-return acceptance. Worst: I did not deliver the planned replicated performance comparison. **Top win:** verified intent replaces a large edit specification. **Top loss:** preparation and oracle mistakes reached the actual actor entrance too late. I should have exercised that entrance earlier while implementation proceeded.
 
-**8. Board — September 5, Pacific time.**
+**8. Board — September 5, 1:56 a.m. Pacific, at window close.**
 
 | Lane | One next action | When |
 |---|---|---|
-| Fable product | Freeze the schema/enrolled-test candidate and finish its exact-source gates | Frozen eddbe6fd: focused 68 tests / 1,137assertions and fast 581/7299 pass; Sol r4 remains GO-WITH-FIX; v5 schema work, battery and full gate pending |
+| Fable product | Freeze v5 and finish its exact-source gates | After 2 a.m.; pending |
 | Next experiment | Version the narrow namespace/proof-diagnostic correction, then establish native controls before optimizing the tool | Next authorized cohort; current comparison closed |
 | Interface | Clarify directory versus glob authority and test whether complete requests can skip redundant discovery | Next design; no silent scope broadening |
 | Telemetry | Emit helper outcomes through the existing service emitter and cover refusal envelopes | Follow-up; collector repair branch remains review-only |
 
-Public `main` stays frozen. The actual LLM used 05df; its green full gate ran at source-equivalent docs commit a3caddec. Fable’s new eddbe6fd candidate includes stricter schema, a mapper correction and standard test-lane enrollment. Its focused/fast gates and independently reviewed public positive/rollback paths pass. Sol r4 remains GO-WITH-FIX for schema permissiveness; v5 schema work, battery and full gate are pending. It is not shipped by this report.
+Public `main` stays frozen. The actual LLM used 05df; its green full gate ran at source-equivalent docs commit a3caddec. Fable’s new eddbe6fd candidate includes stricter schema, a mapper correction and standard test-lane enrollment. Its 68 focused tests / 1,137 assertions, 581 fast tests / 7,299 assertions, and independently reviewed public positive/rollback paths pass. Sol r4 remains GO-WITH-FIX for schema permissiveness; v5 schema work, battery and full gate are pending. It is not shipped by this report.
 
 **9. Decisions waiting on Gene.** None required to continue the already authorized branch work. No merge, deployment or broader benchmark approval is requested here.
 
