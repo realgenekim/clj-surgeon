@@ -107,3 +107,16 @@ any speed result. Those are measured, not claimed (plan §"Measurement plan and 
   are ordinary owners on the happy path: one owner, no dependency edge, shape preserved.
 - Pure and boundary witnesses live in separate namespaces (`helper-extraction-test`, pure,
   Babashka-runnable; `mcp-helper-extraction-test`, JVM boundary), sharing one fixture.
+
+## Kernel and rollback authority (decision 2026-09-05 06:1xZ, builder's seam question)
+
+The `extraction` change cannot be carried by `intent-transaction/execute-request!` today: the
+repository has two guarded kernels, the edit-DSL transaction and the extraction path that
+`apply_clojure_changes` itself uses (`execute-extraction!` → `compile-extraction` → `commit!` /
+`undo!`, hash-fenced inverse). `helper_extraction` lowers through the EXTRACTION kernel; its
+rollback authority is that kernel's inverse; the boundary wraps everything from the first staged
+byte to the terminal receipt exception-complete and exits every failure through one path that
+undoes and maps the receipt. On-disk restoration witnesses (every file compared to its pre-state,
+destination absent) are the evidence, never the receipt alone. No third kernel; no built-in
+verification profile in source (admission only from configured verification-profiles; `:hot`
+and `:cold` excluded); the proof's own status word is carried as `proof_status`.
