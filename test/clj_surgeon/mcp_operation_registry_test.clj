@@ -53,6 +53,13 @@
     'clj-surgeon.admit-patch-test/a-clean-commit-writes-atomically-and-proves-read-back
     :typed-refusal
     'clj-surgeon.admit-patch-test/a-refusal-class-hazard-blocks-the-commit-and-returns-a-full-receipt}
+   "helper_extraction"
+   {:committed
+    'clj-surgeon.mcp-helper-extraction-test/a-committed-receipt-reflects-exactly-the-profile-result-it-was-given
+    :verification-failed
+    'clj-surgeon.mcp-helper-extraction-test/a-handled-failure-reports-the-restoration-the-kernel-actually-did
+    :typed-refusal
+    'clj-surgeon.helper-extraction-test/every-declared-refusal-type-is-produced-by-exactly-one-fixture}
    "feature_thread"
    {:receipt
     'clj-surgeon.mcp-feature-thread-test/t1-smw-thread-returns-six-legs-with-bodies

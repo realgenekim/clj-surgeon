@@ -83,6 +83,19 @@
                  :dir (str root))
        (finally (delete-tree! root))))))
 
+(def ^:private configured-profiles
+  "The verification profiles these witnesses configure.
+
+  THERE IS NO BUILT-IN `helper-proof`: admission comes only from the configured
+  verification-profiles path, the same one `alias_migration`'s `verify` reads,
+  so a witness that wants a runnable profile must configure one exactly as a
+  workspace would. `/bin/true` is a real synchronous command that really runs
+  and really succeeds, so a failure below is the one the witness injected and
+  never a proof that could not have passed in the first place."
+  {"helper-proof" {:commands [["/bin/true"]]}
+   "noop-proof" {:commands [["/bin/true"]]}})
+
+
 ;; ---------------------------------------------------------------------------
 ;; the fixture's own trees, proved by loading them
 
@@ -180,11 +193,23 @@
 ;; @spec MCP-OP-HELPER-025
 ;; @spec MCP-OP-HELPER-011
 (deftest only-synchronous-rollback-capable-profiles-are-admitted
-  (is (seq (mcp-helper/admitted-profiles)))
-  (is (every? (fn [profile]
-                (and (:synchronous? profile) (:rollback-capable? profile)))
-              (vals (mcp-helper/admitted-profiles)))
-      "capability is validated BEFORE writing, not discovered afterwards"))
+  (testing "capability is a property of the CONFIGURED profile. There is no
+            built-in `helper-proof`, so admission is asserted over the map a
+            workspace supplies, never over a name this verb declares itself."
+    (let [admitted (mcp-helper/admitted-profiles configured-profiles)]
+      (is (seq admitted))
+      (is (contains? admitted "helper-proof")
+          "a configured synchronous command profile is admissible")
+      (is (every? (fn [profile]
+                    (and (:synchronous? profile) (:rollback-capable? profile)))
+                  (vals admitted))
+          "capability is validated BEFORE writing, not discovered afterwards")))
+  (testing "and an asynchronous or warm-JVM profile is NOT admitted"
+    (is (empty? (mcp-helper/admitted-profiles
+                 {"cold" {:cold ["make" "test"]}
+                  "hot" {:hot ["some.ns/law"]}}))
+        "a :cold job is asynchronous and a :hot law runs in a warm JVM: both
+         are exactly the proofs MCP-OP-HELPER-011/022 refuse to gate on")))
 
 ;; @spec MCP-OP-HELPER-011
 ;; @spec MCP-OP-HELPER-016
@@ -196,7 +221,8 @@
             `helper-extraction-test/the-declared-refusal-set-is-complete`
             deliberately does not expect the planner to emit it."
     (let [result (mcp-helper/plan
-                  (fixture/request {:verification {:profile "no-such-profile"}}))]
+                  (fixture/request {:verification {:profile "no-such-profile"}})
+                  configured-profiles)]
       (is (false? (:ok result)) (pr-str result))
       (is (= "helper-extraction-verification-preflight-unavailable"
              (:error_type result)))
@@ -433,12 +459,6 @@
   (is (false? destination-present?)
       "and the destination the transaction created is gone"))
 
-(def ^:private noop-proof-profile
-  "An admitted profile whose command really runs and really succeeds, so the
-  failures below are the ones the witness injects and not a proof that could
-  never have passed."
-  {"noop-proof" {:commands [["bb" "-e" "(println \"{}\")"]]}})
-
 ;; @spec MCP-OP-HELPER-020
 (deftest a-proof-that-throws-after-staging-restores-every-byte
   (testing "an exception from the verification step is a proof that did not
@@ -449,7 +469,7 @@
                     "proof-throws"
                     (fn [root]
                       (mcp-helper/execute!
-                       {:verification-profiles noop-proof-profile
+                       {:verification-profiles configured-profiles
                         :run-proof! (fn [& _]
                                       (throw (ex-info "proof exploded" {})))}
                        (fixture/request
@@ -486,7 +506,7 @@
                         "receipt-fails"
                         (fn [root]
                           (mcp-helper/execute!
-                           {:verification-profiles noop-proof-profile
+                           {:verification-profiles configured-profiles
                             :receipt-dir (str (io/file locked "receipts"))}
                            (fixture/request
                             {:workspace_root root
@@ -512,6 +532,38 @@
           (.setWritable locked true true)
           (delete-tree! locked))))))
 
+
+;; @spec MCP-OP-HELPER-009
+(deftest the-details-path-is-published-outside-the-workspace
+  (testing "the receipt carries counts only; the per-caller detail goes to a
+            `details_path`. That path is the BOUNDARY's fact -- the pure
+            receipt names none -- and it must live in the kernel's own
+            local-state receipt directory, never inside the workspace this
+            verb just mutated."
+    (let [receipt-dir (io/file tmp-root (str "receipts-" (System/nanoTime)))
+          outcome (with-materialized-happy-tree
+                    "details-path"
+                    (fn [root]
+                      (mcp-helper/execute!
+                       {:verification-profiles configured-profiles
+                        :receipt-dir (str receipt-dir)}
+                       (fixture/request
+                        {:workspace_root root
+                         :verification {:profile "helper-proof"}}))))
+          receipt (:result outcome)
+          details (:details_path receipt)]
+      (try
+        (is (string? details)
+            (str "the boundary publishes a details_path: " (pr-str receipt)))
+        (when (string? details)
+          (is (str/starts-with? details (str receipt-dir))
+              "under the kernel receipt directory it was configured with")
+          (is (not (str/includes? details "/acid/"))
+              "and never inside the workspace tree it just mutated"))
+        (is (not (contains? receipt :files))
+            "and the receipt itself still carries no file list")
+        (finally (delete-tree! receipt-dir))))))
+
 ;; ---------------------------------------------------------------------------
 ;; the public boundary: a project that lives UNDER an ancestor named `src`
 
@@ -531,7 +583,8 @@
             (io/make-parents target)
             (spit target source)))
         (let [result (mcp-helper/plan
-                      (fixture/request {:workspace_root (str root)}))]
+                      (fixture/request {:workspace_root (str root)})
+                      configured-profiles)]
           (if (:ok result)
             (let [destination (get-in result [:plan :destination])]
               (is (= fixture/dest-lib (:lib destination))

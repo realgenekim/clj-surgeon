@@ -307,7 +307,8 @@
         "8 moved_only, 20 mixed, 1 qualified_only, 3 untouched")
     (is (= (:caller-files fixture/canonical-counts)
            (get-in plan [:receipt :caller_files]))
-        "the source is counted ONCE in the footprint (MCP-OP-HELPER-015)")))
+        "caller_files is the EXTERNAL callers only: the source is not a caller
+         of itself")))
 
 ;; @spec MCP-OP-HELPER-005
 (deftest every-declared-site-is-discovered-and-no-retained-site-is-touched
@@ -403,7 +404,11 @@
     (is (str/includes? source "[acid.web.response :as response]")
         "one require of the destination is added to the source")
     (is (= 1 (count (filter #(= fixture/source-file (:file %)) (plan-files plan))))
-        "the source is both mutation subject and caller, and appears ONCE")
+        "the source is both mutation subject and source-local caller, and
+         appears ONCE however many source-local uses it carries")
+    (is (= (:source-file fixture/canonical-counts)
+           (get-in plan [:receipt :source_file]))
+        "and it is reported as source_file, never folded into caller_files")
     (is (not-any? #(str/includes? source (str "(defn " % "\n")) fixture/helpers)
         "the definitions are RETIRED, so a passing load proves the callers
          were rewritten rather than that the old definitions survived")))
@@ -616,14 +621,28 @@
     (is (= (:helpers fixture/canonical-counts) (:helpers receipt)))
     (is (= (:source-retired fixture/canonical-counts) (:source_retired receipt)))
     (is (true? (:destination_created receipt)))
-    (is (= (:caller-files fixture/canonical-counts) (:caller_files receipt)))
+    (testing "the three file counts are distinct and none of them absorbs
+              another (Astra, 06:07)"
+      (is (= (:caller-files fixture/canonical-counts) (:caller_files receipt))
+          "EXTERNAL callers only")
+      (is (= (:source-file fixture/canonical-counts) (:source_file receipt))
+          "the source, counted once, in its own field")
+      (is (= (:changed-files fixture/canonical-counts) (:changed_files receipt))
+          "everything written: external callers + source + destination")
+      (is (= (+ (:caller_files receipt) (:source_file receipt) 1)
+             (:changed_files receipt))
+          "and the three agree with each other by construction"))
     (is (= fixture/canonical-receipt-partition (:partition receipt)))
     (is (= (:sites fixture/canonical-counts) (:sites receipt)))
     (is (= (:retained-sites fixture/canonical-counts) (:retained_sites receipt)))
     (is (= (:alias-histogram fixture/canonical-counts)
            (into (sorted-map) (:alias_histogram receipt))))
-    (is (string? (:details_path receipt))
-        "per-caller detail goes to details_path, not into the receipt")
+    (is (not (contains? receipt :details_path))
+        "the PURE receipt carries NO details_path: where the per-caller detail
+         is published is a fact about the boundary's local-state directory, and
+         a planner that named a path would be inventing one. The boundary
+         witness `mcp-helper-extraction-test/the-details-path-is-published-
+         outside-the-workspace` asserts the real one.")
     (testing "no value anywhere in the receipt is a list of files"
       (let [values (tree-seq coll? seq receipt)
             file-ish (fn [v] (and (string? v) (re-find #"\.cljc?$" v)))]

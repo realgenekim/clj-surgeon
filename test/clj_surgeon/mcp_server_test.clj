@@ -30,7 +30,7 @@
 (deftest tool-profiles-preserve-full-default-and-isolate-the-editor
   (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
           "transform_clojure" "relation_census" "alias_migration"
-          "admit_clojure_patch" "feature_thread"]
+          "helper_extraction" "admit_clojure_patch" "feature_thread"]
          (mapv :name (tool/tools-for-profile :full))))
   (is (= ["edit_clojure"]
          (mapv :name (tool/tools-for-profile :edit))))
@@ -40,12 +40,13 @@
 
 ;; @spec MCP-OP-SCHEMA-001
 ;; @spec MCP-OP-ALIAS-001
-(deftest exposes-exactly-eight-typed-tools
+;; @spec MCP-OP-HELPER-001
+(deftest exposes-exactly-nine-typed-tools
   (let [tools (server/make-tools nil ".")]
-    (is (= 8 (count tools)))
+    (is (= 9 (count tools)))
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
             "transform_clojure" "relation_census" "alias_migration"
-            "admit_clojure_patch" "feature_thread"]
+            "helper_extraction" "admit_clojure_patch" "feature_thread"]
            (mapv :name tools)))
     (doseq [{:keys [output-schema]} tools]
       (is (= {:type "number" :minimum 0}

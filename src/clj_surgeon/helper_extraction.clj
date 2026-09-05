@@ -881,16 +881,39 @@
 ;; zero and `ok` is nil until the boundary executes the profile.
 
 (defn- receipt
-  [{:keys [helpers files untouched scope-paths details-path]}]
+  "The O(1) receipt for one plan.
+
+  THREE COUNTS OF FILES, and they are deliberately not the same number:
+
+    caller_files   EXTERNAL callers only -- files OTHER THAN the source that
+                   reference a selected owner and are rewritten. The source is
+                   not a caller of itself, so it is never counted here, and
+                   `expect.caller_files` is compared against THIS number.
+    source_file    the extraction subject: 1.
+    changed_files  every file this plan writes: caller_files + source_file + the
+                   destination it creates.
+
+  `partition` is unchanged and counts CALLERS, with `untouched` the discovered
+  bystanders that gain no mutation authority. `sites` and `retained_sites` count
+  references, not files, and both include the source-local uses the extraction
+  lowers (MCP-OP-HELPER-015).
+
+  No `details_path`: where per-caller detail is written is a fact about the
+  workspace, which a pure function cannot observe. The boundary publishes the
+  real path."
+  [{:keys [helpers files untouched scope-paths]}]
   (let [by-partition (frequencies (map :partition files))
         caller-files (filter #(contains? #{"moved_only" "mixed" "qualified_only"}
                                          (:partition %))
-                             files)]
+                             files)
+        source-files (filter #(= "source" (:partition %)) files)]
     {:operation "helper_extraction"
      :helpers (count helpers)
      :source_retired (count helpers)
      :destination_created true
-     :caller_files (count files)
+     :caller_files (count caller-files)
+     :source_file (count source-files)
+     :changed_files (+ (count caller-files) (count source-files) 1)
      :partition {:moved_only (get by-partition "moved_only" 0)
                  :mixed (get by-partition "mixed" 0)
                  :qualified_only (get by-partition "qualified_only" 0)
@@ -908,8 +931,7 @@
      :closure {:roots admitted-roots
                :authorized_paths (vec scope-paths)
                :grammar "supported-libspecs-only"
-               :dynamic_references "not-claimed"}
-     :details_path details-path}))
+               :dynamic_references "not-claimed"}}))
 
 ;; ---------------------------------------------------------------------------
 ;; the transaction
@@ -984,6 +1006,12 @@
             :scope {:paths [glob]}
             :verification {:profile s}
             :expect {:caller_files n}?}      ; OPTIONAL, strict when supplied
+
+  `expect.caller_files` counts EXTERNAL callers -- files other than the source
+  that reference a selected owner. The source is the extraction subject, not a
+  caller of itself, and is never in that number; the receipt reports it
+  separately as `source_file`, and `changed_files` is the total this plan
+  writes (external callers + source + destination).
   sources: ordered vector of {:file relative-path :source text} covering every
            file under the admitted roots BEFORE the write.
 
@@ -1136,7 +1164,10 @@
                                              :owners owners}))
                              files (when-not (false? (:ok source-result))
                                      (conj (:plans choices) source-result))
-                             derived (count files)
+                             ;; @spec MCP-OP-HELPER-013
+                             ;; the external callers, on the receipt's own
+                             ;; definition: the source is not a caller of itself
+                             derived (count (:plans choices))
                              expected (get-in request [:expect :caller_files])]
                          (cond
                            (false? (:ok source-result)) source-result
@@ -1144,16 +1175,21 @@
                            ;; @spec MCP-OP-HELPER-013 MCP-OP-HELPER-017
                            (and (some? expected) (not= expected derived))
                            (refusal "expect-mismatch"
+                                    ;; the wording stays clear of the words a
+                                    ;; refusal must never offer: this names a
+                                    ;; disagreement about a count, never a
+                                    ;; smaller problem to solve instead
                                     (str "expect.caller_files does not equal the"
-                                         " derived footprint.")
-                                    "which caller-file count is correct"
+                                         " derived count of EXTERNAL caller"
+                                         " files. The source is the extraction"
+                                         " subject, not a caller of itself, so"
+                                         " it is counted as source_file.")
+                                    "which external caller-file count is correct"
                                     {:derived_caller_files derived
                                      :expected_caller_files expected})
 
                            :else
-                           (let [source-hash (sha256 (:source source-entry))
-                                 details-path (str ".clj-surgeon/helper-extraction/"
-                                                   (subs source-hash 0 16) ".edn")]
+                           (let [source-hash (sha256 (:source source-entry))]
                              {:ok true
                               :plan
                               {:destination
@@ -1181,5 +1217,4 @@
                               :receipt (receipt {:helpers helpers
                                                  :files files
                                                  :untouched untouched
-                                                 :scope-paths scope-paths
-                                                 :details-path details-path})}))))))))))))))))
+                                                 :scope-paths scope-paths})}))))))))))))))))

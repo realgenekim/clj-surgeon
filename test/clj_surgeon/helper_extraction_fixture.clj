@@ -884,16 +884,36 @@
         canonical-partition))
 
 (def canonical-counts
-  "Every O(1) number the happy receipt must carry, derived from the specs."
+  "Every O(1) number the happy receipt must carry, derived from the specs.
+
+  THE THREE FILE COUNTS ARE DISTINCT, and the distinction is the point (Astra,
+  06:07, from the real application run):
+
+    `caller-files`   EXTERNAL callers only. The source is not a caller of
+                     itself, so it is NOT in this number, and `expect
+                     .caller_files` guards this same external definition.
+    `source-file`    the source, counted once, however many source-local uses
+                     it carries (MCP-OP-HELPER-015).
+    `changed-files`  everything the transaction writes: external callers plus
+                     the source plus the destination.
+
+  Rolling them into one number is what made the earlier figure ambiguous: a
+  reader could not tell whether the source was inside it, and neither could an
+  `expect` guard."
   (let [entries (files :happy)
-        footprint (filter #(contains? #{:moved-only :mixed :qualified-only :source}
-                                      (:partition %))
-                          entries)]
+        external (filter #(contains? #{:moved-only :mixed :qualified-only}
+                                     (:partition %))
+                         entries)
+        source-files (filter #(= :source (:partition %)) entries)
+        destination-files (filter #(= :destination (:partition %)) entries)]
     {:helpers (count helpers)
      :source-retired (count helpers)
      :destination-created true
-     ;; the source is counted ONCE in the footprint (MCP-OP-HELPER-015)
-     :caller-files (count footprint)
+     :caller-files (count external)
+     :source-file (count source-files)
+     :changed-files (+ (count external)
+                       (count source-files)
+                       (count destination-files))
      :partition canonical-partition
      :sites (reduce + 0 (map :sites entries))
      :retained-sites (reduce + 0 (map :retained-sites entries))
