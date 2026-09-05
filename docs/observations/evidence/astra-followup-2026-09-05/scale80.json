@@ -1,0 +1,202 @@
+{
+  "policy": "actual bin/fan-test plus independently loadable final namespaces; no profile",
+  "rows": [
+    {
+      "identity": "scale80-r1-sol-native",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 142.1,
+      "adapter_wall_s": 142.76975667406805,
+      "outer_actions": 13,
+      "meter_tool_exec_s": 3.2,
+      "caller_test_lines": [
+        94
+      ],
+      "caller_load_lines": [
+        108
+      ],
+      "external_load": {
+        "namespaces": 100,
+        "passed": true,
+        "not_imputed_to_caller": true
+      },
+      "mcp": [],
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.1,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.41,
+          "samples": 145
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.41,
+          "samples": 147
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true
+    },
+    {
+      "identity": "scale80-r1-sol-tool",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 29.3,
+      "adapter_wall_s": 29.50838479399681,
+      "outer_actions": 4,
+      "meter_tool_exec_s": 3.0,
+      "caller_test_lines": [
+        32
+      ],
+      "caller_load_lines": [],
+      "external_load": {
+        "namespaces": 100,
+        "passed": true,
+        "not_imputed_to_caller": true
+      },
+      "mcp": [
+        {
+          "line": 23,
+          "tool": "alias_migration",
+          "verify": null,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "files": 80,
+          "sites": 240,
+          "server_elapsed_s": 2.671500896,
+          "call_duration_s": 2.732927548
+        }
+      ],
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.14,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.45,
+          "samples": 31
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.45,
+          "samples": 34
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.561284485971555,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "scale80-r1-astra-tool",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 31.6,
+      "adapter_wall_s": 32.42151679005474,
+      "outer_actions": 5,
+      "meter_tool_exec_s": 3.1,
+      "caller_test_lines": [
+        25
+      ],
+      "caller_load_lines": [
+        37
+      ],
+      "external_load": {
+        "namespaces": 100,
+        "passed": true,
+        "not_imputed_to_caller": true
+      },
+      "mcp": [
+        {
+          "line": 20,
+          "tool": "alias_migration",
+          "verify": null,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "files": 80,
+          "sites": 240,
+          "server_elapsed_s": 2.616754931,
+          "call_duration_s": 2.6601810280000002
+        }
+      ],
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.46,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.49,
+          "samples": 34
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.49,
+          "samples": 37
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.728509980021045,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "scale80-r1-astra-native",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 77.6,
+      "adapter_wall_s": 77.83216838701628,
+      "outer_actions": 6,
+      "meter_tool_exec_s": 0.6,
+      "caller_test_lines": [
+        48
+      ],
+      "caller_load_lines": [
+        48
+      ],
+      "caller_load_form": "bb -e doseq range100 require each formatted namespace; successful terminal output",
+      "external_load": {
+        "namespaces": 100,
+        "passed": true,
+        "not_imputed_to_caller": true
+      },
+      "mcp": [],
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.29,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.46,
+          "samples": 80
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.46,
+          "samples": 82
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true
+    }
+  ]
+}

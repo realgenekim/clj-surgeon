@@ -144,3 +144,20 @@ Evidence root: `/var/tmp/forge/astra-program`; branch `MCP/astra-performance-202
 | Verified one-call migration | ExistingAPI,21files/63sites: one call plus two trusted profile commands accepted6/6; separate induced failure restored all115 frozen inputfiles byte/mode | Feasible hand-drive only. Verification happens after write with rollback; not staged pre-write proof. Test whether trusted receipt removes model follow-up actions under equal obligations. |
 
 Read the captain's log and preregistration/amendments in `docs/observations/` for timing boundaries, contamination and source pins.
+
+## Astra measured update — 2026-09-05T01:45:33.232241+00:00
+
+The earlier checkpoint is preserved. Full six-pair/model primary evidence is now committed in `docs/observations/evidence/astra-primary-2026-09-05/` at cdac41c0. These are controlled fixture findings, not shipping/adoption claims.
+
+| Shape | Current evidence | Boundary / next falsifier |
+|---|---|---|
+| One selected Var across21owners/63sites | All24 matched arms accepted. Sol median paired native/tool3.319×; Astra1.240×. Both median paired savings exceed their six-clean-control two-SD floors. | Fresh-process first use with startup excluded; no general10× claim. Explicit equal two-command proof screen is next. |
+| Stronger native caller | Astra native batches one Python script; Sol native batches apply_patch. Both are credible batch controls. | The earlier Sol routing ruling cannot be transferred unchanged to Astra or to all task families. |
+| Server startup | Startup-inclusive paired ratios2.720×Sol,1.021×Astra; approximately9.54seconds per new server. | Long-lived repeated-use performance is not measured by these fresh-server arms. |
+| Alias meaning preservation | Mixed-refer repair da7 has pure/wire witnesses. Further valid-before binding/discard/metadata examples expose false successes. | New scope repair is still independently NO-GO at round2; no universal guarantee. |
+| Six-helper real application extraction | Clean committed application fixture:28callers,258selectedsites,172retainedotheruses. Existing API permits one write after caller decisions are supplied. | Discovery/table construction remains whole-task work. Native six-name script is the control; helper/oracle preflight incomplete. |
+| Namespace derivation | Read-only current-server plan confirms ancestor/src path misidentification; isolated /var/tmp clone avoids it. | Environment workaround is not production fix; workspace-relative source-root derivation is the candidate repair. |
+| Client/server telemetry | Hour3 records19server calls but zero recognized gateway client calls; alias emitter gap persists on pinned source. | Dual-sided exact public operation accounting required; historical missing events remain unknown. |
+| Opus measurement adapter | Independent fake boundary probes reject afe6621f despite66green builder tests. | Lifecycle, immutable inputs, exact model identity and outcome propagation must be fixed before live calibration. |
+
+Next fixed measurement priority is verified21 round1, N80 round1, then six optional-tool observations; later repeated pairs only within the predeclared deadline and resource allocation. Predictions remain falsifiable: proof fusion may remove caller checks, larger fanout may amortize preparation, and optional callers may still decline the tool. Source/prompt/oracle changes do not occur inside a measured cohort.

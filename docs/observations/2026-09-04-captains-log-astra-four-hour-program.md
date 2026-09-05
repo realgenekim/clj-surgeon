@@ -99,3 +99,46 @@ Hour2 collector completed once for23:05–00:05UTC. Forty recorded service calls
 ### Astra — 2026-09-05T00:46:34.619713+00:00 — gate failure and clock terminology
 
 Full gate returned2 after932.493s: MCP919tests15214assertions, three failures all in the same pool-size test (expected8, actual4 under four-core affinity, plus unstripped requested-pool metadata). The other MCP tests reported no failures. Focused environment/baseline diagnosis is pending; no green gate claim and no test waiver. Also, primary “warm” shorthand means startup-excluded fresh-process first-use, not a fully warmed long-lived JVM. Each arm’s server was distinct, so steady-state JIT/cache gains remain unmeasured.
+
+## 2026-09-05T01:36:20.499757+00:00 — Astra: recover the measurement window
+
+The prepared verification, scale and adoption screens have no model observations yet. Fable restarted integration unpinned at01:33 while the requested window was unclaimed. I have now reserved quiet ownership through02:30 and required that current integration drain, with no further gate starts. The executor latest-dispatch cutoff is being amended before observations from01:45 to02:25; the original is retained, and all task order, prompts, source and acceptance inputs remain fixed. This scheduling delay is program overhead, not tool execution or model orientation.
+
+Root review of the66-test Opus harness found concrete lifecycle and isolation defects: tool arms precreate the directory the caller refuses, startup precedes fixture creation, failed health bypasses cleanup, native configuration is not explicitly empty, and the advertised staged diff is not staged. Independent fake-only review is in progress. Live calibration remains held. This is evidence for testing real boundaries, not for adding another layer of orchestration.
+
+The application extraction plan succeeds on a clean /var/tmp clone with the expected namespace, confirming that the ancestor /src/ bug is environmental and still present in the original path. Six selected helpers can be committed with caller decisions in one write; the258 selected sites still require those decisions to be supplied. This distinction is the next API opportunity: remove mechanically derivable caller bookkeeping while preserving the model’s scope decisions. No application mutation or performance claim has been made.
+
+## 2026-09-05T01:40:48.066993+00:00 — Astra coordination failure
+
+Live agent status showed the binding repair implementer still completed at round2: queued send_message instructions had not reactivated an idle agent. I explicitly resumed it with followup_task for the independent metadata-parameter defect and root LIB/refusal questions. The summary had called it working; that was stale state, not proof of progress. This avoidable review delay belongs to program overhead. Ratchet: check live status before assuming a requested fix is running; use followup_task for completed agents.
+
+## 2026-09-05T01:51:52.948814+00:00 — Astra quiet reservation deadlock and suite coverage
+
+Confirmed integration next-stage PID943516 was waiting in suite-run on my reservation file, not running BB. Archived/removed the owner=astra reservation before any measured model existed, so the current integration can drain. Logical next-window agreement remains; actual quiet file will be claimed only after both Gene-ordered landings finish. The waiting interval is not BB runtime.
+
+Independent read-only suite assessment at01ec667c finds44namespaces in fast+integration,13battery namespaces, and a separateBB lane. Default make test includes allthose plusits tail. The external land wrapper does not automatically invoke the new landing-gate after repository merge; it still bypasses battery-fresh. Historical154.50s applies to an older42namespace447test cohort, not current44namespace547test scope or complete landingwall. Fable received the exact matrix and corrective wording. This is a useful faster feedback path with enforcement and measurement work still owed, not yet a same-coverage fullsuite speed ratio.
+
+## 2026-09-05T02:10:04.555735+00:00 — Astra: first verified-task pairs, independently accepted
+
+Independent proof audit accepted all four first verified21 arms. Sol native/tool96.7/20.0seconds; Astra50.3/19.4seconds. Each native actually ran both final-byte checks; each tool made one successful alias_migration with verify=fan-proof, checks2/pass, committedtrue and next_actionnone. Tool execution1.300/1.280seconds; outeractions5→2Sol and4→2Astra. These are single-pair exploratory observations with new explicit proof obligations, not a replicated efficiency winner or a comparison to historical primary arms. Raw startup remains separate. The next fixed N80 tranche5–8 is running.
+
+The product hypothesis has become sharper: combine the mutation with trusted exact proof so the caller can stop. Both tool callers used the terminal receipt; no repeated load/test was required to reproduce it. This is directly observed behavior, not proof that all future callers trust every receipt. Native batching was allowed and Astra used blocking checked subprocesses after its writes; no per-file strawman.
+
+The conservative audit helper initially marked valid events unknown because its synthetic status spelling used Completed while real runtime records use completed. Original unknown results are preserved; raw events were manually proved, then the helper gained actual-schema witnesses. No measurement or acceptance input changed. This is our own example of fake tests failing to reflect a real boundary, parallel to the Opus harness findings.
+
+## 2026-09-05T02:15:58.840671+00:00 — Astra: N80 screen accepted, optional choice next
+
+Independent audit accepted all four N80 arms: Sol native142.1seconds/tool29.3; Astra native77.6/tool31.6. Each executed80tests/560assertions successfully and every final100-namespace tree loaded independently. Sol tool did not execute a caller load command; the external load is not imputed to it. This screen retains the primary-style proof policy, unlike verified21’s explicittwo-command requirement. Both server readiness/source/project bindings and zero-survivor stops checked; phase load samples clean. No native-write fallback from tool and no tool refusal. Native Sol fixed an initial patch syntax error; native Astra batched its rewrite/checks. Receipt: followup-proof-audit/slice05-08/report.md. One pair/model is exploratory, with no new calibrated performance-winner claim.
+
+The fixed optional-tool tranche9–14 is now running. At02:15 remaining dispatch budget ends02:25. Resource allocation aims to finish that tranche, then verified21 rounds2/3 if the fixed cutoff permits; no additional N80 rounds are allocated in this window. This is a clock/resource choice, not a choice based on which route wins.
+
+## 2026-09-05T02:20:39.976264+00:00 — Astra optional adoption: recovered profile refusal
+
+First optional arm voluntarily adopted Surgeon. It requested verify=exact despite the frozen prompt explicitly naming fan-proof, received unknown-verification-profile with no mutation, then changed only that argument and successfully committed with both checks. Independent final proof, model/session, protected bytes and phase-load checks pass. Actual task wall39.0seconds andfourouteractions include the recovered refusal; no native fallback. This is caller error with safe recovery, not missing profile information or an instrument-invalid observation. Original batch09–14 stops after row9 as designed, with completed[] meaning no refusal-free rows—not that the model task failed.
+
+After that independent review I explicitly launched fresh remaining rows10–14. Row9 is retained and not replaced. No prompt/source/schema change is made. A second identical refusal pauses this adoption screen under the existing stopping rule. Receipt: followup-proof-audit/slice09/report.md.
+
+## 2026-09-05T02:41:12.033114+00:00 — Astra: optional adoption complete; quiet released
+Independent rows09–14 audit accepts all six final two-check proofs; Sol and Astra each voluntarily choose MCP3/3, no native fallback. Sol task walls39.0/23.0/28.9s, Astra21.8/23.9/20.6s; three observations per model, not population rates or a new native comparison. Row09 sole unknown-profile refusal recovered exact→fan-proof; it remains counted and its stop/review was retained. Frozen cutoff02:25 allowed rows01–14; rows15–30 were not allocated. All six stopped server receipts show zero survivors. Root released own quiet file only after independent audit; Fable allocated one suite lane6–9 with logical8, root binding quality/full suite2–5 and application short helper checks.
+
+Default-fast Makefile flip is approved under Gene authority, conditional on adding test-full to PHONY and correcting help, plus actual gates. Historical2.5min MCP suite is not full landing wall. First binding wire attempt baselines10/10 pass but artifact guard rejects legitimate-looking detail-manifest.edn; actual artifact contract needs review before fresh replay. No product pass inferred from this apparatus stop. Source46e69418 unchanged and full suite now running. Fourth-hour ethnography completed from one bounded receipt; Python gateway and alias-emitter gaps remain explicit.

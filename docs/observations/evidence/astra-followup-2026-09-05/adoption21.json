@@ -1,0 +1,347 @@
+{
+  "policy": "two final checks directly or synchronous fan-proof",
+  "rows": [
+    {
+      "identity": "adoption21-r1-sol-tool",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 39.0,
+      "adapter_wall_s": 39.12224821210839,
+      "outer_actions": 4,
+      "adopted": true,
+      "native_fallback": false,
+      "final_two_check_proof": {
+        "line": 32,
+        "status": "completed",
+        "verify": "fan-proof",
+        "server_elapsed_s": 1.2514321279999998,
+        "runtime_call_duration_s": 1.279552681,
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        }
+      },
+      "refusals": [
+        {
+          "line": 23,
+          "status": "failed",
+          "verify": "exact",
+          "server_elapsed_s": 0.004327962,
+          "runtime_call_duration_s": 0.054479674,
+          "error_type": "unknown-verification-profile",
+          "source_unchanged": true
+        }
+      ],
+      "no_later_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.47,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.95,
+          "samples": 41
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.95,
+          "samples": 43
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.73472074395977,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "adoption21-r1-astra-tool",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 21.8,
+      "adapter_wall_s": 22.763821186032146,
+      "outer_actions": 3,
+      "adopted": true,
+      "native_fallback": false,
+      "final_two_check_proof": {
+        "line": 25,
+        "status": "completed",
+        "verify": "fan-proof",
+        "server_elapsed_s": 1.253405678,
+        "runtime_call_duration_s": 1.3002522650000001,
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        }
+      },
+      "refusals": [],
+      "no_later_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.23,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.53,
+          "samples": 25
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.53,
+          "samples": 27
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.714885054854676,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "adoption21-r2-sol-tool",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 23.0,
+      "adapter_wall_s": 23.811264213873073,
+      "outer_actions": 2,
+      "adopted": true,
+      "native_fallback": false,
+      "final_two_check_proof": {
+        "line": 23,
+        "status": "completed",
+        "verify": "fan-proof",
+        "server_elapsed_s": 1.327864226,
+        "runtime_call_duration_s": 1.381836408,
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        }
+      },
+      "refusals": [],
+      "no_later_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.48,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.65,
+          "samples": 26
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.65,
+          "samples": 28
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.521304958034307,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "adoption21-r2-astra-tool",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 23.9,
+      "adapter_wall_s": 24.06866159895435,
+      "outer_actions": 2,
+      "adopted": true,
+      "native_fallback": false,
+      "final_two_check_proof": {
+        "line": 20,
+        "status": "completed",
+        "verify": "fan-proof",
+        "server_elapsed_s": 1.330530665,
+        "runtime_call_duration_s": 1.385551951,
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        }
+      },
+      "refusals": [],
+      "no_later_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.47,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.75,
+          "samples": 26
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.75,
+          "samples": 28
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.728424542117864,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "adoption21-r3-sol-tool",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 28.9,
+      "adapter_wall_s": 29.30268529499881,
+      "outer_actions": 3,
+      "adopted": true,
+      "native_fallback": false,
+      "final_two_check_proof": {
+        "line": 23,
+        "status": "completed",
+        "verify": "fan-proof",
+        "server_elapsed_s": 1.2627010680000001,
+        "runtime_call_duration_s": 1.317436867,
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        }
+      },
+      "refusals": [],
+      "no_later_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.28,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.6,
+          "samples": 31
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.6,
+          "samples": 34
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.532677123090252,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    },
+    {
+      "identity": "adoption21-r3-astra-tool",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 20.6,
+      "adapter_wall_s": 21.189062766032293,
+      "outer_actions": 2,
+      "adopted": true,
+      "native_fallback": false,
+      "final_two_check_proof": {
+        "line": 20,
+        "status": "completed",
+        "verify": "fan-proof",
+        "server_elapsed_s": 1.210649936,
+        "runtime_call_duration_s": 1.265011844,
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        }
+      },
+      "refusals": [],
+      "no_later_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.54,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.79,
+          "samples": 23
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.79,
+          "samples": 26
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true,
+      "lifecycle": {
+        "source_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+        "startup_wall_s": 9.524869764922187,
+        "distinct_pid_birth_verified": true,
+        "stopped_zero_survivors": true
+      }
+    }
+  ],
+  "aggregate": {
+    "gpt-5.6-sol": {
+      "n": 3,
+      "adopted": 3,
+      "accepted_final_proof": 3,
+      "refusals": 1,
+      "first_MCP_successes": 2,
+      "task_walls_s": [
+        39.0,
+        23.0,
+        28.9
+      ],
+      "median_task_wall_s": 28.9,
+      "outer_actions": [
+        4,
+        2,
+        3
+      ]
+    },
+    "gpt-6-astra": {
+      "n": 3,
+      "adopted": 3,
+      "accepted_final_proof": 3,
+      "refusals": 0,
+      "first_MCP_successes": 3,
+      "task_walls_s": [
+        21.8,
+        23.9,
+        20.6
+      ],
+      "median_task_wall_s": 21.8,
+      "outer_actions": [
+        3,
+        2,
+        2
+      ]
+    }
+  }
+}

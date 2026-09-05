@@ -1,0 +1,153 @@
+{
+  "policy": "two final checks directly or synchronous fan-proof",
+  "rows": [
+    {
+      "identity": "verified21-r1-sol-native",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 96.7,
+      "adapter_wall_s": 97.62225817004219,
+      "outer_actions": 5,
+      "meter_tool_exec_s": 0.5,
+      "proof_line": 49,
+      "proof_form": "sequential && commands",
+      "mcp": null,
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.16,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.45,
+          "samples": 99
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.45,
+          "samples": 102
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true
+    },
+    {
+      "identity": "verified21-r1-sol-tool",
+      "model": "gpt-5.6-sol",
+      "accepted": true,
+      "task_wall_s": 20.0,
+      "adapter_wall_s": 20.420458473963663,
+      "outer_actions": 2,
+      "meter_tool_exec_s": 1.4,
+      "proof_line": 23,
+      "proof_form": "synchronous fan-proof",
+      "mcp": {
+        "verify": "fan-proof",
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        },
+        "files": 21,
+        "sites": 63,
+        "server_elapsed_s": 1.300351297,
+        "runtime_call_duration_s": 1.358808499
+      },
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.44,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.45,
+          "samples": 22
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.45,
+          "samples": 25
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true
+    },
+    {
+      "identity": "verified21-r1-astra-tool",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 19.4,
+      "adapter_wall_s": 19.682995887938887,
+      "outer_actions": 2,
+      "meter_tool_exec_s": 1.4,
+      "proof_line": 19,
+      "proof_form": "synchronous fan-proof",
+      "mcp": {
+        "verify": "fan-proof",
+        "focused_test": {
+          "status": "pass",
+          "profile": "fan-proof",
+          "ok": true,
+          "checks": 2
+        },
+        "files": 21,
+        "sites": 63,
+        "server_elapsed_s": 1.280269115,
+        "runtime_call_duration_s": 1.329572652
+      },
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.54,
+          "samples": 2
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.75,
+          "samples": 22
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.75,
+          "samples": 24
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true
+    },
+    {
+      "identity": "verified21-r1-astra-native",
+      "model": "gpt-6-astra",
+      "accepted": true,
+      "task_wall_s": 50.3,
+      "adapter_wall_s": 51.313640339067206,
+      "outer_actions": 4,
+      "meter_tool_exec_s": 0.4,
+      "proof_line": 34,
+      "proof_form": "blocking subprocess.run(check=True) after writes; no subsequent writes",
+      "mcp": null,
+      "no_later_observed_mutation": true,
+      "contamination": {
+        "acceptance": {
+          "contaminated": false,
+          "maximum": 1.1,
+          "samples": 3
+        },
+        "adapter": {
+          "contaminated": false,
+          "maximum": 1.58,
+          "samples": 53
+        },
+        "verified_completion": {
+          "contaminated": false,
+          "maximum": 1.58,
+          "samples": 56
+        }
+      },
+      "binding_final_source_and_protected_state_verified": true
+    }
+  ]
+}

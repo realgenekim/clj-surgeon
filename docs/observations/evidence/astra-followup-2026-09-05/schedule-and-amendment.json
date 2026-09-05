@@ -1,0 +1,187 @@
+{
+  "observed": [
+    {
+      "index": 1,
+      "identity": "verified21-r1-sol-native",
+      "session_start_utc": "2026-09-05T02:02:54.023Z"
+    },
+    {
+      "index": 2,
+      "identity": "verified21-r1-sol-tool",
+      "session_start_utc": "2026-09-05T02:04:42.959Z"
+    },
+    {
+      "index": 3,
+      "identity": "verified21-r1-astra-tool",
+      "session_start_utc": "2026-09-05T02:05:14.603Z"
+    },
+    {
+      "index": 4,
+      "identity": "verified21-r1-astra-native",
+      "session_start_utc": "2026-09-05T02:05:35.300Z"
+    },
+    {
+      "index": 5,
+      "identity": "scale80-r1-sol-native",
+      "session_start_utc": "2026-09-05T02:08:48.560Z"
+    },
+    {
+      "index": 6,
+      "identity": "scale80-r1-sol-tool",
+      "session_start_utc": "2026-09-05T02:11:22.597Z"
+    },
+    {
+      "index": 7,
+      "identity": "scale80-r1-astra-tool",
+      "session_start_utc": "2026-09-05T02:12:03.472Z"
+    },
+    {
+      "index": 8,
+      "identity": "scale80-r1-astra-native",
+      "session_start_utc": "2026-09-05T02:12:37.191Z"
+    },
+    {
+      "index": 9,
+      "identity": "adoption21-r1-sol-tool",
+      "session_start_utc": "2026-09-05T02:16:09.012Z"
+    },
+    {
+      "index": 10,
+      "identity": "adoption21-r1-astra-tool",
+      "session_start_utc": "2026-09-05T02:20:50.144Z"
+    },
+    {
+      "index": 11,
+      "identity": "adoption21-r2-sol-tool",
+      "session_start_utc": "2026-09-05T02:21:23.940Z"
+    },
+    {
+      "index": 12,
+      "identity": "adoption21-r2-astra-tool",
+      "session_start_utc": "2026-09-05T02:21:59.089Z"
+    },
+    {
+      "index": 13,
+      "identity": "adoption21-r3-sol-tool",
+      "session_start_utc": "2026-09-05T02:22:34.201Z"
+    },
+    {
+      "index": 14,
+      "identity": "adoption21-r3-astra-tool",
+      "session_start_utc": "2026-09-05T02:23:14.291Z"
+    }
+  ],
+  "unallocated": [
+    {
+      "index": 15,
+      "identity": "verified21-r2-astra-native"
+    },
+    {
+      "index": 16,
+      "identity": "verified21-r2-astra-tool"
+    },
+    {
+      "index": 17,
+      "identity": "verified21-r2-sol-tool"
+    },
+    {
+      "index": 18,
+      "identity": "verified21-r2-sol-native"
+    },
+    {
+      "index": 19,
+      "identity": "verified21-r3-sol-native"
+    },
+    {
+      "index": 20,
+      "identity": "verified21-r3-sol-tool"
+    },
+    {
+      "index": 21,
+      "identity": "verified21-r3-astra-tool"
+    },
+    {
+      "index": 22,
+      "identity": "verified21-r3-astra-native"
+    },
+    {
+      "index": 23,
+      "identity": "scale80-r2-astra-native"
+    },
+    {
+      "index": 24,
+      "identity": "scale80-r2-astra-tool"
+    },
+    {
+      "index": 25,
+      "identity": "scale80-r2-sol-tool"
+    },
+    {
+      "index": 26,
+      "identity": "scale80-r2-sol-native"
+    },
+    {
+      "index": 27,
+      "identity": "scale80-r3-sol-native"
+    },
+    {
+      "index": 28,
+      "identity": "scale80-r3-sol-tool"
+    },
+    {
+      "index": 29,
+      "identity": "scale80-r3-astra-tool"
+    },
+    {
+      "index": 30,
+      "identity": "scale80-r3-astra-native"
+    }
+  ],
+  "cutoff_amendment_utc": "2026-09-05T01:34:52Z",
+  "original_dispatch_cutoff_utc": "2026-09-05T01:45:00Z",
+  "amended_dispatch_cutoff_utc": "2026-09-05T02:25:00Z",
+  "normal_arm_budget_s": 900,
+  "all_observed_session_starts_before_cutoff": true,
+  "batch_results": {
+    "01-04": {
+      "completed": [
+        "verified21-r1-sol-native",
+        "verified21-r1-sol-tool",
+        "verified21-r1-astra-tool",
+        "verified21-r1-astra-native"
+      ],
+      "proof_audit_required": true,
+      "task_completion_claim": false,
+      "terminal": "completed-requested-slice"
+    },
+    "05-08": {
+      "completed": [
+        "scale80-r1-sol-native",
+        "scale80-r1-sol-tool",
+        "scale80-r1-astra-tool",
+        "scale80-r1-astra-native"
+      ],
+      "proof_audit_required": true,
+      "task_completion_claim": false,
+      "terminal": "completed-requested-slice"
+    },
+    "09-14": {
+      "completed": [],
+      "proof_audit_required": true,
+      "reason": "row 9 stopped: detected-tool-refusal",
+      "terminal": "stopped"
+    },
+    "10-14": {
+      "completed": [
+        "adoption21-r1-astra-tool",
+        "adoption21-r2-sol-tool",
+        "adoption21-r2-astra-tool",
+        "adoption21-r3-sol-tool",
+        "adoption21-r3-astra-tool"
+      ],
+      "proof_audit_required": true,
+      "task_completion_claim": false,
+      "terminal": "completed-requested-slice"
+    }
+  }
+}
