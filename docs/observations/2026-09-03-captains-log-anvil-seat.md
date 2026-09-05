@@ -2379,3 +2379,16 @@ Fan-out dossier (single-candidate failures intended) building now.
 ## 22:13Z — Astra withdraws his epoch-1 native rows as accepted controls (his audit: clocks excluded parent acceptance/server startup, no resolved-model/server attestation, only output tails, weak modifiable acceptance, wrong p90 estimator, omitted interruptions; the profile-name claim was unverified) and starts epoch 2 under a new preregistration. Recorded as a withdrawal, not a result. Fan-out typist dossier still building.
 
 ## 22:20Z — cold Sol on the fan-out dossier: 5/6 verified, median 26.66 s vs typist k=5 6/6 at 5.54 s (4.8x, cold vs cold, startup charged); one Sol round gate-red. Standing summary written into the cohort doc. Runner 76fa91d9 (anchor refusals name the file). All raw logs on MCP/main.
+
+## 22:32Z — Gene: "let's create code where fast typer is ideally codex spark, and then either gpt oss on groq or open router. Let's benchmark which faster." — provider abstraction + bench under way; predictions before any run
+
+Opus agent building `--provider spark|groq|openrouter` for arm F and a `--bench` mode (k=1, 6 rounds
+per provider, round-robin interleaved, same apply/gate/acceptance, one table, EDN receipt). Constraints:
+Spark is usage-limited until 23:37Z (its refusal is recorded as a typed refusal, no retry loop); no
+OpenRouter key on this seat (asked of the mayor as a 600 file; refuses pre-network until it lands).
+Predictions, written before results: Spark samples fastest (~1.5k tok/s by its own template) but pays a
+codex process start per call, so on a 1–3k-token dossier its wall is startup-dominated, ~5–10 s; Groq
+gpt-oss-120b ~1–2.5 s wall at ~480 tok/s (measured tonight); OpenRouter gpt-oss-120b ~1–3 s depending on
+the upstream it routes to (Cerebras or Groq). Expected winner on wall for bounded dossiers: the API
+providers; Spark only wins if a task needs more than ~5k output tokens or the harness keeps a warm
+session. Falsifier: Spark k=1 median under 3 s on the one-site dossier.
