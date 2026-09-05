@@ -1916,3 +1916,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:21Z Astra GO for a narrow integration: his mixed-refer alias repair + portable timeout, cherry-picked onto bridge/astra-integration (f49dece3); lands via ~/bin/land after his timing window. Suite r5: test-battery FAILED (Error 4; the ledger recorded a FAILING receipt) — builder reporting.
 
 ## 01:24Z suite spike r5 built (01ec667c): four blockers closed; `make landing-gate` exists (battery-fresh → mcp-test → test-bb → hygiene); the spawn ledger refused eleven fast/integration spawns a pid diff could not see; the battery failed under four-core pinning on the census pool-size test (pre-existing; CI-fixes carries the assertion fix) and the tripwire refused the tip — as designed.
+
+## 01:43Z Gene: "Tests need to be faster. Integrate the 2.5m changes immediately." Suite landing (01ec667c) chained behind the integration landing; priority reconciled with Astra in writing (one bounded runtime inside his window; all else held; no unannounced restarts). Opus harness: Astra NO-GO, held.
