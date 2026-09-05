@@ -1,0 +1,25 @@
+=== round 1 arm N ===
+arm=N mission=onesite run=N-onesite-1788645835-0 first_verified_s=18.79 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 1 arm F ===
+arm=F mission=onesite run=F-onesite-1788645854-0 first_verified_s=0.94 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=1375 reasoning_tokens=1077
+=== round 2 arm N ===
+arm=N mission=onesite run=N-onesite-1788645855-0 first_verified_s=21.39 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 2 arm F ===
+arm=F mission=onesite run=F-onesite-1788645877-0 first_verified_s=0.85 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=1330 reasoning_tokens=1047
+=== round 3 arm N ===
+arm=N mission=onesite run=N-onesite-1788645878-0 first_verified_s=13.74 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 3 arm F ===
+arm=F mission=onesite run=F-onesite-1788645892-0 first_verified_s=0.98 candidates=5 apply_ok=4 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=1286 reasoning_tokens=983
+=== round 4 arm N ===
+arm=N mission=onesite run=N-onesite-1788645893-0 first_verified_s=8.22 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 4 arm F ===
+arm=F mission=onesite run=F-onesite-1788645901-0 first_verified_s=1.61 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=1698 reasoning_tokens=1406
+=== round 5 arm N ===
+arm=N mission=onesite run=N-onesite-1788645903-0 first_verified_s=20.95 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 5 arm F ===
+arm=F mission=onesite run=F-onesite-1788645924-0 first_verified_s=0.96 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=1417 reasoning_tokens=1103
+=== round 6 arm N ===
+arm=N mission=onesite run=N-onesite-1788645926-0 first_verified_s=7.79 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 6 arm F ===
+arm=F mission=onesite run=F-onesite-1788645934-0 first_verified_s=1.95 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=1925 reasoning_tokens=1649
+=== COHORT DONE ===

@@ -18,3 +18,18 @@ One caveat: the fixture is a five-file purpose-built project with a bb-scale gat
 Protocol amendment recorded before the cohort: the applier accepts context-anchored hunks (git apply first, anchored fallback, exactly one verbatim match, no whitespace repair). Without it 0/5 candidates applied in the shakedown; the model emits bare `@@` headers — the same shape as Codex apply_patch. Tool-shape finding: the accepted edit form for a typist is a context-anchored hunk, not a line-numbered diff.
 
 Not a claim about: whole tasks (arm T, 2026-09-02, remains negative for the typist inside a Sol-driven task), discovery, or verification cost.
+
+## One-site control (22:03–22:05Z) — the control fired: NOT KEEP; the apparatus needs a warm author
+
+Preregistered expectation: native/Sol wins or ties a single known-site edit; "if F wins here the gate is suspect, not the typist good." Raw log: 2026-09-05-fast-typist-onesite-1.log.
+
+| arm | runs | first-verified wall, sorted (s) | median | max | verified candidates | semantic mismatches |
+|---|---|---|---|---|---|---|
+| N — one Sol author, codex exec | 6 | 7.79 8.22 13.74 18.79 20.95 21.39 | **16.27** | 21.39 | 6/6 | 0 |
+| F — five gpt-oss-120b (Groq) | 6 | 0.85 0.94 0.96 0.98 1.61 1.95 | **0.97** | 1.95 | 29/30 | 0 |
+
+F won the control by 17x, so by the prereg's own rule the apparatus, not the typist, is under suspicion. Reading the numbers: a one-line literal change cost arm N 7.8–21.4 s, which is the cold `codex exec` process (startup, session, model call) — the N clock is dominated by harness startup, not authoring. That means cohort 1's 5x is at least partly the same artifact: both cohorts compare a cold Sol process against warm API calls. The gate itself is not suspect (the cheat diff that edits only the test goes gate-green and acceptance-red, semantic_mismatch=1, proven in the fake arm), but the comparison is not yet the one the prereg meant.
+
+Decision: NOT KEEP, NOT KILL. Cohort 2 must (a) give arm N a warm author (a resident Sol session, or charge only the model's own turn) and (b) add F with k=1, so that k=5 vs k=1 isolates the value of parallel search from the raw speed of the model. Predictions for cohort 2, recorded now: F k=1 median ≈ 1.5–2.5 s with a lower verified-rate (~75–85% per candidate); N-warm one-site ≈ 3–6 s; if N-warm on scope-roots is under 5 s, the typist's advantage on bounded dossiers is mostly model speed, not search, and the search claim is dead.
+
+Tool-shape findings that survive regardless: all 29 applying F candidates landed via the anchored applier and zero via git apply (the typist speaks context-anchored hunks); the one failure was a one-space context error the applier refused rather than repaired.
