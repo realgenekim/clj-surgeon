@@ -187,9 +187,15 @@
    "transaction-kernel memory witness -- `make memory-red-kernel`, exclusive suite.lock"
 
    'clj-surgeon.helper-extraction-test
-   "RED until the GREEN phase -- `make helper-extraction-red`; the planner and
-    boundary namespaces it witnesses do not exist yet, so it fails to LOAD and
-    must not answer for the merge gate. It moves into :fast in the GREEN change"
+   "RED until the GREEN phase -- `make helper-extraction-red`; the PURE planner
+    namespace it witnesses does not exist yet, so it fails to LOAD and must not
+    answer for the merge gate. It moves into :fast in the GREEN change"
+
+   'clj-surgeon.mcp-helper-extraction-test
+   "RED until the GREEN phase -- `make mcp-helper-extraction-red`; the BOUNDARY
+    namespace it witnesses does not exist yet. It also spawns babashka child
+    processes to prove fixture trees load, so it belongs to :battery, not the
+    merge gate, when it goes green"
 
    'clj-surgeon.worktree-lifecycle-prune-test
    "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"

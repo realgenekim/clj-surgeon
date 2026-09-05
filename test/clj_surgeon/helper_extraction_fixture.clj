@@ -14,17 +14,22 @@
   renders `:post nil`, because a refusal writes no bytes and therefore has no
   canonical post-state to compare against.
 
-    :happy                      six helpers move; source-local lowering only
+    :happy                      six helpers move; source-local lowering only,
+                                and `html-response` is MULTI-ARITY delegating
+                                to itself by name (one owner, self-reference
+                                is not a dependency)
     :private-dependency         a moved helper calls a retained `defn-`
     :retained-dependency-direct a moved helper calls a retained PUBLIC var
-    :retained-dependency-chain  the same edge, in a VALID ORIGINAL whose PRE
-                                require graph is acyclic (`static-require-graph`
-                                proves it): the source requires C, C reaches a
-                                selected helper fully qualified with no require,
-                                and the write would give C a require of the
-                                destination -- source -> C -> destination ->
-                                source. The plan refuses at the moved ->
-                                retained-public edge before that is reached.
+    :retained-dependency-chain  the same edge in the source -> C -> destination
+                                -> source shape: the source requires C, and C
+                                reaches a selected helper fully qualified. Its
+                                require graph is ACYCLIC AND ITS ORIGINAL DOES
+                                NOT LOAD -- C is compiled while the source is
+                                still loading and cannot resolve the qualified
+                                symbol. That is asserted, not assumed, and it
+                                is why an acyclic graph is not a load proof.
+                                The valid-original refusal is proved on
+                                :retained-dependency-direct instead.
     :namespace-sensitive        a moved body contains `::ok`
     :ambiguous-owner            `declare` plus `defn` of one selected name
     :unsupported-binding        a caller binds the source by prefix list
@@ -150,13 +155,18 @@
                    "  [body]\n"
                    "  {:status 200 :headers {\"content-type\" \"text/plain\"} :body body})\n")}
        {:name "with-etag" :selected? true :text with-etag-body}
+       ;; MULTI-ARITY, DELEGATING TO ITSELF BY NAME -- the real application's
+       ;; html-response shape (Astra, 05:29). It is ONE owner, its
+       ;; self-reference is not a dependency of any kind, and the extraction
+       ;; must carry the whole arity list across byte-for-byte.
        {:name "html-response" :selected? true
         :text (str "(defn html-response\n"
-                   "  [body etag]\n"
-                   "  (with-etag {:status 200\n"
-                   "              :headers {\"content-type\" \"text/html\"}\n"
-                   "              :body body}\n"
-                   "             etag))\n")}
+                   "  ([body] (html-response body nil))\n"
+                   "  ([body etag]\n"
+                   "   (with-etag {:status 200\n"
+                   "               :headers {\"content-type\" \"text/html\"}\n"
+                   "               :body body}\n"
+                   "              etag)))\n")}
        {:name "json-response" :selected? true :text json-body}
        (assoc {:name "see-other" :selected? true} :text see-other-body)
        {:name "plain-not-found" :selected? true
@@ -176,6 +186,13 @@
                         "   MCP-OP-HELPER-015 lowers through the extraction's own rewrite.\"\n"
                         "  [_request]\n"
                         "  (response/text-response \"ok\"))\n")}]))))
+
+(defn owner-text
+  "The exact bytes of one top-level owner of the source, as the fixture
+  describes it. A witness comparing the destination against this is comparing
+  against the DESCRIPTION, never against the planner's own output."
+  [variant owner-name]
+  (some #(when (= owner-name (:name %)) (:text %)) (source-owners variant)))
 
 (defn- source-requires
   [variant]
