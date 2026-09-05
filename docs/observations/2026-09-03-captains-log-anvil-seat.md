@@ -2291,3 +2291,18 @@ for attack, a fourth job, the falsifying experiment with predicted numbers, and 
 "keep everything else byte-identical".
 
 ## 21:43Z — Gene: "yes, gpt-oss-120b via groq; use that for experiment, and tell astra about it." Pane agent riff (21:40Z, gpt-5.6-luna): candidate search under a cheap verifier = real; whole-file rewrite = conditionally real behind a preimage/diff contract; speculative pre-staging = wishful for one mission; fourth job = repair search on refusals without write authority; falsifier with predictions (F 25–45 s vs N 45–75 s; 10–20% bad candidates; kill below 20% median gain or on any semantic mismatch). Preregistered as docs/observations/2026-09-05-fast-typist-prereg.md; told the pane agent. Blocked on the Groq key.
+
+## 21:49Z — UNBLOCKED: Groq key delivered; gpt-oss-120b verified at the meter from this box; first typist number
+
+Mayor delivered ~/secrets/groq.edn (600 in a 700 dir; shape {:key "…"}, NOT :api-key — the mayor's own
+correction, /tmp/mayor-groq-correction.txt) with a live receipt from the skiff and one trap: gpt-oss-120b
+on Groq is a REASONING model — reasoning is a separate response field spent FIRST, so a tight max_tokens
+returns empty content with finish_reason "length", which looks exactly like a broken key. Verified here:
+curl → HTTP 200 in 0.17 s, content "GROQ OSS OK", finish stop, reasoning_tokens 44. A second trap found
+on this box: python urllib's default User-Agent gets HTTP 403 from Groq's edge (fixed with an explicit
+User-Agent; bench script updated). Bench on the same dossier prompt used for the CPU run (348 prompt
+tokens): status ok, wall 2.73 s, completion 1282 tokens of which 859 reasoning, 481 tok/s, queue 5 ms,
+plausible diff — with a defect: every '+' line carried an extra leading space and the diff came inside a
+```diff fence. Versus gpt-oss-20b on this CPU (192 s): 70x. Both corrections and the defect class sent to
+the runner agent (arm F reads both fields, budgets 6000, records finish_reason length as a typed refusal,
+strips fences, never repairs whitespace — the gate judges).
