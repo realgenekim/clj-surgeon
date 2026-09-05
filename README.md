@@ -673,6 +673,35 @@ listens only on `127.0.0.1:7888` and records full local telemetry under
 `~/.local/state/clj-surgeon/mcp`. The job is session-persistent, not a permanent
 login item; rerun the installer after logging out or rebooting.
 
+### How telemetry works
+
+Every public tool call is recorded at ONE place: `dispatch-tool-fn` in
+`clj-surgeon.mcp-server`, the single function through which both transports
+reach a tool's callback. A tool cannot opt out, and a tool added later is
+recorded without its author doing anything — a public tool registered without
+a structured specification would bypass the boundary, so it refuses to build
+at all.
+
+One `tool.dispatch` event is appended per call — successful, refused, or
+thrown — to a private JSONL file per server session, named for the telemetry
+session id, under the telemetry directory (`--telemetry-dir`, else
+`~/.local/state/clj-surgeon/telemetry`). Each event carries the telemetry
+session id, a request id unique to that call, the **public tool name the
+caller invoked** (never the internal operation a shared handler routed to),
+the operation/mode when the request or receipt names one, monotonic start and
+finish clocks with wall milliseconds, the outcome (`ok`, `refused` with its
+typed `refusal_kind`, or `error`), and serialized payload sizes in and out.
+Metrics mode, the default, writes shape and size only — never source, paths,
+hashes, or receipts; `--telemetry full` adds the exact request and response,
+and `--telemetry off` writes nothing.
+
+`make study-agent-usage` reports that record per public tool name, per
+telemetry session id, and per telemetry ROOT, naming every root it read and
+the window it covers. A root that exists but holds no files is reported as
+`no files under <root>` — never as zero calls, because a zero that might mean
+"nothing ran" or "we looked in the wrong place" terminates investigation
+either way.
+
 The direct route uses one closed object per change:
 
 ```json
