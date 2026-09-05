@@ -239,9 +239,12 @@
   (is (= [:plan "M-1"] (mission/next-action {:id "M-1" :state :proposed})))
   (is (= [:apply "M-1"] (mission/next-action {:id "M-1" :state :ready})))
   (is (= [:resume "M-1"] (mission/next-action {:id "M-1" :state :verified})))
-  (is (nil? (mission/next-action {:id "M-1" :state :blocked}))
-      "a blocked mission's next action belongs to a human, and inventing
-       [:apply id] for it would be a prescription with no continuation")
+  (is (= [:plan "M-1"] (mission/next-action {:id "M-1" :state :blocked}))
+      "@caller-probe: a blocked mission used to return nil here. A real caller
+       reported the cost — the ledger accumulated dead missions and offered no
+       resolution — so the human move now has a verb: `plan <id> --spec-file`
+       opens the superseding mission with the narrower intent.")
+  (is (= [:plan "M-1"] (mission/next-action {:id "M-1" :state :failed})))
   (is (nil? (mission/next-action {:id "M-1" :state :undone}))))
 
 ;; ---------------------------------------------------------------------------
@@ -327,7 +330,7 @@
       (testing "`ready` lists only the mission a machine can actually start"
         (is (= ["M-1" "M-3"] (mapv :id (mission/ready-missions ms))))
         (is (= [{:id "M-2" :state "blocked" :waiting_on ["M-1"]
-                 :decision "waiting on M-1"}]
+                 :decision "waiting on M-1" :next-action nil}]
                (mission/waiting-missions ms))))
       (testing "apply refuses with a typed refusal that NAMES the ids"
         (let [refused (mission/dependency-refusal m2 index)]
@@ -356,6 +359,99 @@
       (let [orphan {:id "M-7" :state :ready :depends-on ["M-404"]}]
         (is (= ["M-404"] (mission/unmet-dependencies orphan {})))
         (is (= :blocked (mission/effective-state orphan {})))))))
+
+(deftest a-dependency-that-verified-after-the-plan-forces-a-re-plan
+  (testing "@replan-after-dependency. M-1 verifying does not make M-2 ready: it
+            makes M-2's dossier a claim about a tree M-1 has since rewritten.
+            The ledger knows that from two stamps it already has, so the caller
+            is told to re-plan instead of paying for an apply that would refuse
+            with the DOWNSTREAM hash symptom."
+    (let [m2 {:id "M-2" :state :ready :verb "helper_extraction"
+              :depends-on ["M-1"]
+              :history [{:from nil :to "proposed" :event "open" :at "2026-09-05T10:00:00Z"}
+                        {:from "proposed" :to "ready" :event "plan" :at "2026-09-05T10:00:01Z"}]}
+          m1 (fn [verified-at]
+               {:id "M-1" :state :verified
+                :history [{:from "applied" :to "verified" :event "apply"
+                           :at verified-at}]})
+          before (mission/by-id [(m1 "2026-09-05T09:00:00Z") m2])
+          after  (mission/by-id [(m1 "2026-09-05T11:00:00Z") m2])]
+
+      (testing "a dependency verified BEFORE the plan is simply met"
+        (is (empty? (mission/stale-dependencies m2 before)))
+        (is (= :ready (mission/effective-state m2 before)))
+        (is (= [:apply "M-2"] (mission/effective-next-action m2 before)))
+        (is (nil? (mission/dependency-refusal m2 before))))
+
+      (testing "a dependency verified AFTER the plan sends it back to :proposed"
+        (is (= ["M-1"] (mission/stale-dependencies m2 after)))
+        (is (= :proposed (mission/effective-state m2 after))
+            "never :ready on a stale plan")
+        (is (= :ready (:state m2)) "and the STORED state is untouched")
+        (is (= [:plan "M-2"] (mission/effective-next-action m2 after)))
+        (is (= "re-plan: M-1 changed the tree after this plan"
+               (mission/blocking-decision m2 after))))
+
+      (testing "apply refuses with the UPSTREAM reason, naming the dependency"
+        (let [refused (mission/dependency-refusal m2 after)]
+          (is (mission/refused? refused))
+          (is (= "mission-dependency-replan-required" (:error_type refused)))
+          (is (= ["M-1"] (:replanned_after refused)))
+          (is (= "2026-09-05T10:00:01Z" (:planned_at refused)))
+          (is (= ["2026-09-05T11:00:00Z"] (:dependency_verified_at refused)))
+          (is (false? (:mutation_attempted refused)))
+          (is (= [:plan "M-2"] (:next-action refused))
+              "and the continuation is the re-plan, not the apply")))
+
+      (testing "an UNMET dependency still wins: it is the earlier question"
+        (let [unmet (mission/by-id [{:id "M-1" :state :ready} m2])]
+          (is (= :blocked (mission/effective-state m2 unmet)))
+          (is (= "mission-dependency-not-verified"
+                 (:error_type (mission/dependency-refusal m2 unmet))))))
+
+      (testing "`ready` holds it back and `waiting` says what to do about it"
+        (let [ledger [(m1 "2026-09-05T11:00:00Z") m2]]
+          (is (= [] (mapv :id (mission/ready-missions ledger)))
+              "M-1 is :verified — its own next move is a resume, not a start —
+               and M-2 is held for a re-plan, so NOTHING is offered as ready")
+          (is (= [{:id "M-2" :state "proposed" :waiting_on ["M-1"]
+                   :decision "re-plan: M-1 changed the tree after this plan"
+                   :next-action [:plan "M-2"]}]
+                 (mission/waiting-missions ledger)))))
+
+      (testing "and a re-plan refreshes the stamp AND the snapshot, which is
+                what puts the mission back to :ready"
+        (let [projection {:state :ready
+                          :dossier {:planned true}
+                          :recommendation {:recommendation :mission :because "x"}
+                          :snapshot (mission/snapshot {"/a.clj" "(ns a) ;; after M-1"})}
+              refreshed (mission/replan m2 projection "2026-09-05T12:00:00Z")]
+          (is (not (mission/refused? refreshed)))
+          (is (= :ready (:state refreshed)))
+          (is (= "2026-09-05T12:00:00Z" (mission/planned-at refreshed)))
+          (is (= (:snapshot projection) (:snapshot refreshed))
+              "the snapshot is the NEW tree's, not the one M-1 invalidated")
+          (is (= {:from "ready" :to "ready" :event "plan" :at "2026-09-05T12:00:00Z"}
+                 (last (:history refreshed)))
+              "history records the re-plan; it is not a state move")
+          (let [index (mission/by-id [(m1 "2026-09-05T11:00:00Z") refreshed])]
+            (is (empty? (mission/stale-dependencies refreshed index)))
+            (is (= :ready (mission/effective-state refreshed index)))
+            (is (nil? (mission/dependency-refusal refreshed index))
+                "and apply is no longer refused"))))
+
+      (testing "a mission that already ran cannot be re-planned"
+        (let [refused (mission/replan {:id "M-2" :state :verified} {} "T")]
+          (is (= "mission-replan-illegal-state" (:error_type refused)))))
+
+      (testing "and an incomplete re-plan refuses rather than inventing a move
+                the transition table does not have"
+        (let [refused (mission/replan m2 {:state :blocked
+                                          :decision {:decision "which lib"}}
+                                      "T")]
+          (is (= "mission-replan-blocked" (:error_type refused)))
+          (is (= "which lib" (:decision refused)))
+          (is (false? (:mutation_attempted refused))))))))
 
 (deftest supersession-renders-the-whole-chain-from-either-end
   (testing "the builder's own note: answering a blocked decision means opening a
@@ -417,10 +513,147 @@
           (is (= "mission-verification-profile-not-admitted"
                  (get-in opened [:decision :error_type])))
           (is (= ["admitted"] (get-in opened [:decision :evidence :admitted_profiles])))
-          (is (nil? (:next-action opened))
-              "and its next move belongs to a human, so nothing prescribes apply")
+          (is (= [:plan "M-1"] (:next-action opened))
+              "@caller-probe: the repair verb, not silence")
           (is (nil? (mission/verification-profiles opened))
               "an unadmitted authority is never reconstituted for a proof run"))
+        (finally (delete-tree! ws) (delete-tree! (io/file home)))))))
+
+(deftest the-entrance-answers-the-caller-probes-four-dead-ends
+  (testing "@caller-probe. A real caller spent 24 returns and never reached
+            :verified. Each assertion here is one of the dead ends it hit."
+
+    (testing "OPTION ORDER — a global option before the verb is not a reason to
+              print help and exit 0, which the probe read as `it ran`"
+      (is (= {:state-home "H" :workspace "W" :positional ["plan" "M-1"]}
+             (cli/parse-flags ["--state-home" "H" "plan" "--workspace" "W" "M-1"])))
+      (is (= {:state-home "H" :workspace "W" :positional ["plan" "M-1"]}
+             (cli/parse-flags ["plan" "M-1" "--state-home" "H" "--workspace" "W"]))
+          "before or after the verb, the same call")
+      (is (= {:help true :positional ["plan"]}
+             (cli/parse-flags ["plan" "--help"]))
+          "a valueless flag is a boolean, not a swallower of the next token"))
+
+    (testing "EXIT CODE — a failed receipt is a non-zero exit; all four of the
+              probe's failed applies exited 0"
+      (is (true? (cli/failed-receipt? {:state :failed})))
+      (is (true? (cli/failed-receipt? {:receipt {:committed false}})))
+      (is (false? (cli/failed-receipt? {:state :verified
+                                        :receipt {:committed true}}))))
+
+    (testing "DISCOVERABILITY — help carries the closed shape and the profile
+              config, copy-paste, so the schema is not reverse-engineered one
+              five-second refusal at a time"
+      (let [text (cli/help-text nil)]
+        (doseq [field [":workspace_root" ":from" ":to" ":alias_policy" ":helpers"
+                       ":scope" ":paths" ":verification" ":profile"
+                       ":verification-profiles" ".clj-surgeon.edn"]]
+          (is (str/includes? text field) (str "help names " field)))
+        (is (str/includes? (cli/help-text "apply") "Exits non-zero")
+            "and one verb's help is one verb's")))
+
+    (testing "PROFILE DISCOVERY — the workspace's own config file is read, and
+              `show` says where the ledger looked"
+      (let [ws (io/file tmp-root (str "cfg-ws-" (System/nanoTime)))]
+        (try
+          (.mkdirs ws)
+          (is (= {} (mission/configured-profiles (str ws) nil))
+              "no file, no profiles — and no exception")
+          (spit (io/file ws ".clj-surgeon.edn")
+                (pr-str {:verification-profiles
+                         {"mission-proof" {:commands [["/bin/true"]]}}}))
+          (is (= {"mission-proof" {:commands [["/bin/true"]]}}
+                 (mission/configured-profiles (str ws) nil))
+              "the file the probe wrote, and four applies ignored")
+          (is (= [{:path (str (io/file ws ".clj-surgeon.edn"))
+                   :present true :readable true :profiles ["mission-proof"]}]
+                 (mission/config-sources (str ws) nil))
+              "and `show` can say WHERE it looked, so `no profile configured`
+               is distinguishable from `your profile was ignored`")
+          (is (= {"mission-proof" {:commands [["/bin/true"]]}}
+                 (cli/admitted-profiles (str ws) {}))
+              "with nothing passed in the spec at all")
+          (is (= {:commands [["/other"]]}
+                 (get (cli/admitted-profiles (str ws)
+                                             {:profiles {"mission-proof"
+                                                         {:commands [["/other"]]}}})
+                      "mission-proof"))
+              "an explicit spec still wins")
+          (testing "and a mission opened with only the workspace config resolves
+                    its authority as ADMITTED"
+            (let [home (io/file tmp-root (str "cfg-home-" (System/nanoTime)))]
+              (try
+                (is (= {:profile "mission-proof"
+                        :commands [["/bin/true"]]
+                        :hash (mission/sha256
+                               (pr-str ["mission-proof" [["/bin/true"]]]))
+                        :admitted? true}
+                       (mission/resolve-verification
+                        {:verification {:profile "mission-proof"}}
+                        (cli/admitted-profiles (str ws) {}))))
+                (finally (delete-tree! home)))))
+          (finally (delete-tree! ws)))))
+
+    (testing "ZERO-BYTE OCCUPANT — a `target-exists` against an empty file is a
+              fixture artifact, and the ledger says so in bytes"
+      (let [ws (io/file tmp-root (str "occ-ws-" (System/nanoTime)))]
+        (try
+          (.mkdirs (io/file ws "src"))
+          (spit (io/file ws "src" "response.clj") "")
+          (let [sizes (#'cli/occupant-sizes {:file "src/response.clj"} (str ws))
+                entry (val (first sizes))]
+            (is (= 1 (count sizes)))
+            (is (= 0 (:bytes entry)))
+            (is (str/includes? (:note entry) "ZERO BYTES")))
+          (finally (delete-tree! ws)))))))
+
+(deftest a-dead-mission-is-repaired-by-superseding-it
+  (testing "@caller-probe. The ledger `accumulated blocked/failed missions but
+            offered no resolution transition`. A blocked intent may never be
+            edited in place, so the repair is a NEW mission linked to the old."
+    (let [ws (io/file tmp-root (str "repair-ws-" (System/nanoTime)))
+          home (io/file tmp-root (str "repair-home-" (System/nanoTime)))
+          base {:workspace (str ws) :state-home (str home)}]
+      (try
+        (.mkdirs ws)
+        ;; M-1 blocks at plan time on an unadmitted proof authority
+        (let [blocked (cli/propose! (assoc base :verb "helper_extraction"
+                                           :request {:workspace_root (str ws)
+                                                     :verification {:profile "absent"}}))]
+          (is (= :blocked (:state blocked)))
+          (is (= [:plan "M-1"] (:next-action blocked)) "the repair verb")
+          (is (= cli/example-request (get-in blocked [:decision :example]))
+              "and the closed shape that WOULD have been accepted")
+
+          (testing "repairing it opens a NEW mission that supersedes the old"
+            (let [repaired (cli/repair!
+                            (assoc base :id "M-1" :verb "helper_extraction"
+                                   :profiles {"admitted" {:commands [["/bin/true"]]}}
+                                   :request {:workspace_root (str ws)
+                                             :verification {:profile "admitted"}}))]
+              (is (= "M-2" (:id repaired)) "a new id, not an edited intent")
+              (is (= "M-1" (:repaired repaired)))
+              (is (= ["M-1"] (:supersedes repaired)))
+              (is (= [{:id "M-2" :state (name (:state repaired))}
+                      {:id "M-1" :state "blocked"}]
+                     (get-in repaired [:dependencies :chain]))
+                  "and the chain reads from either end")))
+
+          (testing "a mission that already ran is re-planned, never superseded:
+                    its record is the only evidence of what it did"
+            (let [state-dir (cli/state-dir-for (str ws) (str home))]
+              (mission/write-mission! state-dir
+                                      {:id "M-9" :state :verified
+                                       :verb "helper_extraction"})
+              (let [refused (cli/repair! (assoc base :id "M-9"
+                                                :request {:workspace_root (str ws)}))]
+                (is (= "mission-repair-illegal-state" (:error_type refused)))
+                (is (= [:plan "M-9"] (:next-action refused))))))
+
+          (testing "and a repair with no corrected intent says what it needs"
+            (let [refused (cli/repair! (assoc base :id "M-1"))]
+              (is (= "mission-repair-needs-a-request" (:error_type refused)))
+              (is (map? (:example refused))))))
         (finally (delete-tree! ws) (delete-tree! (io/file home)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -535,7 +768,7 @@
                 (let [{:keys [ready waiting]} (cli/ready base)]
                   (is (= ["M-1"] (mapv :id ready)))
                   (is (= [{:id "M-2" :state "blocked" :waiting_on ["M-1"]
-                           :decision "waiting on M-1"}]
+                           :decision "waiting on M-1" :next-action nil}]
                          waiting))))
               (testing "and applying M-2 refuses, naming M-1, with nothing written"
                 (let [refused (cli/apply! (assoc base :id "M-2"))]
@@ -601,15 +834,50 @@
                   (is (= "committed" (get-in back [:receipt :status])))
                   (is (str/includes? raw ":undo {:receipt"))))))
 
-          (testing "@migration-plan — M-1 is :verified, so M-2 is ready NOW,
-                    with nothing written to M-2's file to make it so"
-            (let [{:keys [ready waiting]} (cli/ready base)]
-              (is (= ["M-2"] (mapv :id ready)))
-              (is (empty? waiting))
-              (is (= :ready (:effective_state (cli/show (assoc base :id "M-2")))))
+          (testing "@replan-after-dependency — M-1 verified AFTER M-2 was
+                    planned, so M-2 is NOT ready: its dossier describes a tree
+                    M-1 has since rewritten. Nothing was written to M-2 to make
+                    that true; it is two stamps the ledger already had."
+            (let [{:keys [ready waiting]} (cli/ready base)
+                  shown (cli/show (assoc base :id "M-2"))]
+              (is (= [] (mapv :id ready))
+                  "M-2 is NOT offered as ready, and M-1 has already run")
+              (is (= [{:id "M-2" :state "proposed" :waiting_on ["M-1"]
+                       :decision "re-plan: M-1 changed the tree after this plan"
+                       :next-action [:plan "M-2"]}]
+                     waiting))
+              (is (= :proposed (:effective_state shown)))
+              (is (= :ready (:state shown)) "the STORED state is untouched")
+              (is (= [:plan "M-2"] (:effective_next_action shown)))
               (is (= [{:id "M-1" :state "verified"}]
-                     (get-in (cli/show (assoc base :id "M-2"))
-                             [:dependencies :depends_on])))))
+                     (get-in shown [:dependencies :depends_on]))))
+            (testing "and apply refuses with the UPSTREAM reason, ahead of the
+                      snapshot hash gate"
+              (let [refused (cli/apply! (assoc (dissoc base :profiles) :id "M-2"))]
+                (is (= "mission-dependency-replan-required" (:error_type refused))
+                    (str "not the downstream hash symptom: " (pr-str refused)))
+                (is (= ["M-1"] (:replanned_after refused)))
+                (is (false? (:mutation_attempted refused)))
+                (is (= [:plan "M-2"] (:next-action refused)))))
+            (testing "`plan M-2` re-plans in place: no new id, no re-supplied
+                      spec, and the proof authority comes from the mission"
+              (let [replanned (cli/replan! (assoc (dissoc base :profiles) :id "M-2"))]
+                (is (= "M-2" (:id replanned))
+                    (str "no new mission was opened: " (pr-str replanned)))
+                ;; HONEST OUTCOME, pinned. M-2's intent in this witness is the
+                ;; SAME extraction as M-1's, so once M-1 retired those helpers
+                ;; the intent no longer describes anything: the re-plan refuses
+                ;; with the planner's own decision rather than inventing a
+                ;; dossier. The successful re-plan -> :ready -> apply loop is
+                ;; witnessed deterministically in
+                ;; `a-dependency-that-verified-after-the-plan-forces-a-re-plan`.
+                (is (mission/refused? replanned))
+                (is (= "mission-replan-blocked" (:error_type replanned)))
+                (is (string? (:decision replanned))
+                    "and it carries the ONE decision the planner is waiting on")
+                (is (false? (:mutation_attempted replanned)))
+                (is (= :ready (:state (cli/show (assoc base :id "M-2"))))
+                    "a refused re-plan leaves the mission exactly as it was"))))
 
           (testing "RESUME — one verb moves it from wherever it is; on a
                     :verified mission that means the inverse"

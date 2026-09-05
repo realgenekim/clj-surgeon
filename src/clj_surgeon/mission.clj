@@ -319,6 +319,52 @@
                      (when proof-obligation? ", under a proof obligation"))})))
 
 ;; ---------------------------------------------------------------------------
+;; where the proof authority is CONFIGURED
+;;
+;; @caller-probe. A real caller wrote `.clj-surgeon.edn` into the workspace with
+;; the profile the mission needed, ran four schema-valid applies, and every one
+;; died with `configured_profiles []`. The file existed. Nothing read it: the
+;; profiles map reached the boundary only from the caller's own spec, and the
+;; workspace's own configuration was never consulted by this entrance at all.
+;;
+;; The fix is not a flag. It is that the ledger LOOKS, and SAYS WHERE IT LOOKED
+;; — a caller who cannot see which files were consulted cannot tell "no profile
+;; is configured" from "your profile was ignored", and those two need opposite
+;; repairs.
+
+(def config-file-name ".clj-surgeon.edn")
+
+(defn config-sources
+  "Every place this ledger looks for `:verification-profiles`, whether each was
+   there, and what it contributed. Returned by `show` so a caller never has to
+   guess which file the tool read."
+  [workspace-root explicit-config]
+  (vec (for [path (cond-> [(str (io/file workspace-root config-file-name))]
+                    explicit-config (conj (str (io/file explicit-config))))
+             :let [file (io/file path)
+                   present (.isFile file)
+                   config (when present
+                            (try (edn/read-string (slurp file))
+                                 (catch Exception _ ::unreadable)))]]
+         (cond-> {:path path :present present}
+           (= ::unreadable config) (assoc :readable false)
+           (map? config) (assoc :readable true
+                                :profiles (vec (sort (keys (:verification-profiles config)))))))))
+
+(defn configured-profiles
+  "The `:verification-profiles` this workspace configures, merged in the order
+   `config-sources` lists them (an explicit --config wins)."
+  [workspace-root explicit-config]
+  (reduce (fn [acc {:keys [path present]}]
+            (if-not present
+              acc
+              (merge acc (:verification-profiles
+                          (try (edn/read-string (slurp (io/file path)))
+                               (catch Exception _ nil))))))
+          {}
+          (config-sources workspace-root explicit-config)))
+
+;; ---------------------------------------------------------------------------
 ;; the verification authority, resolved ONCE, at plan time
 ;;
 ;; @carry-the-proof. Field report from the first hands-on run: `apply` refused
@@ -544,18 +590,71 @@
   [mission index]
   (vec (remove #(= :verified (:state (get index %))) (:depends-on mission))))
 
+(defn- stamp-of
+  "The `:at` of the LAST history entry matching `pred`, or nil. The history is
+   the record; `:updated_at` is a summary of it and moves for reasons that are
+   not the one being asked about."
+  [mission pred]
+  (some->> (:history mission) (filter pred) last :at))
+
+(defn verified-at
+  "When this mission became `:verified` — i.e. when it last changed the tree."
+  [mission]
+  (when (= :verified (:state mission))
+    (or (stamp-of mission #(= "verified" (:to %))) (:updated_at mission))))
+
+(defn planned-at
+  "When this mission's dossier and snapshot were computed. A re-plan refreshes
+   it, which is the whole point: a plan is a claim about a tree AT A TIME."
+  [mission]
+  (or (stamp-of mission #(= "plan" (:event %))) (:updated_at mission)))
+
+(defn stale-dependencies
+  "Dependencies that reached `:verified` AFTER this mission was planned.
+
+  @replan-after-dependency. The failure this closes: M-1 verifies, M-2's
+  dependency is met, M-2 reads as `:ready` — on a dossier and a snapshot
+  computed against a tree M-1 has since rewritten. The caller then pays for an
+  apply to be told `mission-snapshot-stale`, a DOWNSTREAM symptom of an
+  UPSTREAM fact the ledger already knew. Timestamps are ISO-8601 instants, so
+  string order is time order."
+  [mission index]
+  (let [planned (planned-at mission)]
+    (if-not planned
+      []
+      (vec (for [id (:depends-on mission)
+                 :let [at (verified-at (get index id))]
+                 :when (and at (pos? (compare at planned)))]
+             id)))))
+
+(defn replan-decision
+  [stale]
+  (str "re-plan: " (str/join ", " stale) " changed the tree after this plan"))
+
+(defn effective-state
+  "The state a READER should see. Two derivations, in order:
+
+    unmet dependency        -> :blocked  (nobody can start this)
+    dependency verified
+      after this plan       -> :proposed (the plan is about a tree that moved)
+
+  Never written back: both are questions about OTHER files and both change the
+  moment one of those files does."
+  [mission index]
+  (cond
+    (and (contains? #{:proposed :ready} (:state mission))
+         (seq (unmet-dependencies mission index)))
+    :blocked
+
+    (and (= :ready (:state mission))
+         (seq (stale-dependencies mission index)))
+    :proposed
+
+    :else (:state mission)))
+
 (defn waiting-decision
   [unmet]
   (str "waiting on " (str/join ", " unmet)))
-
-(defn effective-state
-  "The state a READER should see: the stored state, unless unmet dependencies
-   block a mission that would otherwise be movable. Never written back."
-  [mission index]
-  (if (and (contains? #{:proposed :ready} (:state mission))
-           (seq (unmet-dependencies mission index)))
-    :blocked
-    (:state mission)))
 
 (defn blocking-decision
   "The ONE decision this mission is waiting on, as a string, or nil.
@@ -565,10 +664,12 @@
   of intent at open and is a different thing. Those two were spelled the same
   in round 2 and that collision is fixed here."
   [mission index]
-  (let [unmet (unmet-dependencies mission index)]
-    (if (seq unmet)
-      (waiting-decision unmet)
-      (get-in mission [:decision :decision]))))
+  (let [unmet (unmet-dependencies mission index)
+        stale (stale-dependencies mission index)]
+    (cond
+      (seq unmet) (waiting-decision unmet)
+      (and (= :ready (:state mission)) (seq stale)) (replan-decision stale)
+      :else (get-in mission [:decision :decision]))))
 
 (defn- node
   [index id]
@@ -626,8 +727,30 @@
   "The typed refusal an apply earns while a dependency is unverified, BEFORE
    anything is staged and before any byte is written."
   [mission index]
-  (let [unmet (unmet-dependencies mission index)]
-    (when (seq unmet)
+  (let [unmet (unmet-dependencies mission index)
+        stale (stale-dependencies mission index)]
+    (cond
+      (and (empty? unmet) (seq stale))
+      ;; @replan-after-dependency: named BEFORE the snapshot hash gate, so the
+      ;; caller is told the UPSTREAM reason (M-1 rewrote the tree) rather than
+      ;; the downstream symptom (37 files no longer hash).
+      (refusal "dependency-replan-required"
+               (str "Mission " (:id mission) " was planned before "
+                    (str/join ", " stale)
+                    (if (= 1 (count stale)) " changed" " changed")
+                    " the tree. Its dossier describes a tree that no longer "
+                    "exists. Nothing was written.")
+               {:id (:id mission)
+                :depends_on (vec (:depends-on mission))
+                :replanned_after stale
+                :planned_at (planned-at mission)
+                :dependency_verified_at (mapv #(verified-at (get index %)) stale)
+                :mutation_attempted false
+                :source_unchanged true
+                :next-action [:plan (:id mission)]
+                :decision (replan-decision stale)})
+
+      (seq unmet)
       (refusal "dependency-not-verified"
                (str "Mission " (:id mission) " depends on "
                     (str/join ", " (:depends-on mission)) "; "
@@ -640,7 +763,51 @@
                 :mutation_attempted false
                 :source_unchanged true
                 :next-action [:resume (first unmet)]
-                :decision (waiting-decision unmet)}))))
+                :decision (waiting-decision unmet)})
+
+      :else nil)))
+
+(defn replan
+  "Refresh one mission's DOSSIER from a new plan, in place.
+
+  Not a transition, and deliberately not `advance`: the dossier is a PROJECTION
+  (rule 3 of this namespace), and recomputing a projection is not a state move.
+  A mission that is `:ready` stays `:ready`; what changes is the tree its plan
+  is a claim about, and the `plan` history entry that stamps when.
+
+  Refuses rather than transitions when the new plan is incomplete: moving a
+  planned mission to `:blocked` is not in the table, and inventing that move
+  here would put a second setter of `:state` in the file."
+  [mission {:keys [dossier decision state recommendation snapshot]} at]
+  (cond
+    (not (contains? #{:proposed :ready} (:state mission)))
+    (refusal "replan-illegal-state"
+             (str "Only a mission that has not been applied can be re-planned; "
+                  (:id mission) " is " (pr-str (:state mission)) ".")
+             {:id (:id mission) :state (some-> (:state mission) name)
+              :decision "what to do with a mission that already ran"})
+
+    (= :blocked state)
+    (refusal "replan-blocked"
+             (str "The re-plan did not complete: " (:decision decision))
+             {:id (:id mission) :evidence decision
+              :mutation_attempted false
+              :decision (:decision decision)})
+
+    :else
+    (let [refreshed (-> mission
+                        (merge (select-keys recommendation [:recommendation :because]))
+                        (assoc :dossier dossier :updated_at at)
+                        (cond-> snapshot (assoc :snapshot snapshot))
+                        (dissoc :decision))]
+      (if (= :proposed (:state mission))
+        ;; a real move, so it goes through the one setter
+        (advance refreshed :ready "plan" {:at at})
+        ;; already :ready: nothing MOVED, only the projection was recomputed.
+        ;; `advance` would refuse :ready -> :ready and should — this is not a
+        ;; transition, and the history says so with a from = to entry.
+        (update refreshed :history (fnil conj [])
+                {:from "ready" :to "ready" :event "plan" :at at})))))
 
 ;; ---------------------------------------------------------------------------
 ;; the human index
@@ -706,7 +873,20 @@
     :ready [:apply id]
     :applied [:resume id]
     :verified [:resume id]
+    ;; @caller-probe: a dead mission USED to return nil here, on the reasoning
+    ;; that its next move belonged to a human. A caller reported the cost of
+    ;; that honesty: the ledger "accumulated blocked/failed missions but
+    ;; offered no resolution transition". The human move now has a verb —
+    ;; `plan <id> --spec-file <narrower intent>` opens the superseding mission
+    ;; — so the ledger names it instead of going quiet.
+    (:blocked :failed) [:plan id]
     nil))
+
+(defn effective-next-action
+  "The next move for the state a READER sees, not the stored one. A mission
+   whose dependency moved the tree under it is told to re-plan, not to apply."
+  [mission index]
+  (next-action {:id (:id mission) :state (effective-state mission index)}))
 
 (defn ready-missions
   "Missions that can move RIGHT NOW, and who has to move them.
@@ -722,7 +902,8 @@
          (keep (fn [m]
                  (let [state (effective-state m index)]
                    (when (and (contains? #{:ready :blocked} state)
-                              (empty? (unmet-dependencies m index)))
+                              (empty? (unmet-dependencies m index))
+                              (empty? (stale-dependencies m index)))
                      {:id (:id m)
                       :state (name state)
                       :waiting_on (if (= :blocked state) "a decision" "apply")
@@ -730,19 +911,28 @@
          vec)))
 
 (defn waiting-missions
-  "Missions held by an unverified dependency: real work, not startable yet."
+  "Missions the graph is holding: waiting on a dependency, or waiting on their
+   own re-plan because a dependency already moved the tree."
   [missions]
   (let [index (by-id missions)]
     (->> missions
          (filter map?)
          (keep (fn [m]
-                 (let [unmet (unmet-dependencies m index)]
-                   (when (and (seq unmet)
-                              (contains? #{:proposed :ready} (:state m)))
-                     {:id (:id m)
-                      :state "blocked"
-                      :waiting_on (vec unmet)
-                      :decision (waiting-decision unmet)}))))
+                 (let [unmet (unmet-dependencies m index)
+                       stale (stale-dependencies m index)]
+                   (cond
+                     (and (seq unmet) (contains? #{:proposed :ready} (:state m)))
+                     {:id (:id m) :state "blocked" :waiting_on (vec unmet)
+                      :decision (waiting-decision unmet)
+                      ;; nil on purpose: the next move belongs to the DEPENDENCY
+                      :next-action nil}
+
+                     (and (seq stale) (= :ready (:state m)))
+                     {:id (:id m) :state "proposed" :waiting_on (vec stale)
+                      :decision (replan-decision stale)
+                      :next-action [:plan (:id m)]}
+
+                     :else nil))))
          vec)))
 
 (defn show-view
@@ -759,5 +949,6 @@
       (assoc m
              :effective_state (effective-state m index)
              :decision_summary (blocking-decision m index)
+             :effective_next_action (effective-next-action m index)
              :dependencies (dependency-view m index)
              :graph (dependency-lines m index)))))

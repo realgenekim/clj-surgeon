@@ -52,13 +52,43 @@
 ;; ---------------------------------------------------------------------------
 ;; argument handling
 
-(defn- parse-flags
+(def example-request
+  "@caller-probe. THE COPY-PASTE SHAPE. The probe spent seven refusals and ~35 s
+   of JVM starts reverse-engineering this closed map one field at a time, and
+   each refusal named the field it rejected but not the shape that would have
+   been accepted. A closed schema the caller cannot see is a guessing game with
+   a five-second turn."
+  {:verb "helper_extraction"
+   :question "why this write is being made"
+   :request {:op "helper_extraction"
+             :workspace_root "/abs/path/to/workspace"
+             :from {:file "src/acid/web/http.clj"}
+             :to {:lib "acid.web.response" :alias_policy ["response" "resp"]}
+             :helpers ["html-response" "see-other" "text-response"]
+             :scope {:paths ["src/**/*.clj"]}
+             :verification {:profile "mission-proof"}}})
+
+(def example-config
+  "What `<workspace_root>/.clj-surgeon.edn` must contain for that profile to be
+   ADMITTED. `plan` and `apply` read this file themselves."
+  {:verification-profiles {"mission-proof" {:commands [["/bin/true"]]}}})
+
+(defn parse-flags
+  "@caller-probe. Global options are accepted BEFORE or AFTER the verb, and a
+   flag with no value (`--help`) is a boolean rather than a swallower of the
+   next token. The probe lost a return to `mission --state-home X plan …`,
+   which printed help and exited 0 — the worst possible answer, because it
+   looks like the tool ran."
   [args]
   (loop [[a b & more :as remaining] args acc {} positional []]
     (cond
       (empty? remaining) (assoc acc :positional positional)
+
       (str/starts-with? (str a) "--")
-      (recur more (assoc acc (keyword (subs a 2)) b) positional)
+      (if (or (nil? b) (str/starts-with? (str b) "--"))
+        (recur (rest remaining) (assoc acc (keyword (subs a 2)) true) positional)
+        (recur more (assoc acc (keyword (subs a 2)) b) positional))
+
       :else (recur (rest remaining) acc (conj positional a)))))
 
 (defn- read-spec
@@ -76,6 +106,35 @@
   home the directory hangs from; it is test isolation, not a request field."
   [workspace-root state-home]
   (workspace/state-dir workspace-root state-home))
+
+(defn admitted-profiles
+  "@caller-probe. The profiles this call may prove a write with: the
+   WORKSPACE'S OWN `.clj-surgeon.edn` first, then an explicit --config, then
+   anything the spec passed. The probe's four applies all died on
+   `configured_profiles []` while that file sat in the workspace, because this
+   entrance only ever forwarded the spec's map."
+  [workspace-root {:keys [config profiles]}]
+  (merge (mission/configured-profiles workspace-root config) profiles))
+
+(defn- occupant-sizes
+  "@caller-probe. Any file a refusal NAMES, with its size on disk.
+
+  A `target-exists` refusal against a ZERO-BYTE file is almost always a fixture
+  artifact — the probe lost four minutes to a materialization recipe that spat
+  an empty destination — and a byte count makes that obvious at a glance."
+  [refusal workspace-root]
+  (let [paths (keep (fn [k] (let [v (get refusal k)]
+                              (cond (string? v) v
+                                    (map? v) (:file v))))
+                    [:file :path :target :destination :to])]
+    (into {} (for [path paths
+                   :let [f (if (str/starts-with? path "/")
+                             (io/file path)
+                             (io/file workspace-root path))]
+                   :when (.isFile f)]
+               [(str f) {:bytes (.length f)
+                         :note (when (zero? (.length f))
+                                 "ZERO BYTES — an empty occupant is usually a fixture artifact, not real code")}]))))
 
 (defn- ledger-of
   "Read every mission and refresh the human index in one pass."
@@ -98,13 +157,14 @@
 (defn propose!
   "One bounded intent in, one mission id and its dossier out. NO BYTES WRITTEN
    to the workspace: the only file this touches is the mission's own EDN."
-  [{:keys [verb request profiles state-home question]}]
+  [{:keys [verb request state-home question] :as opts}]
   (if-not (contains? verbs verb)
     (mission/refusal "unknown-verb"
                      (str "No mission verb named " (pr-str verb) ".")
                      {:verbs (vec (sort (keys verbs)))
                       :decision "which bounded intent this mission states"})
     (let [state-dir (state-dir-for (:workspace_root request) state-home)
+          profiles (admitted-profiles (:workspace_root request) opts)
           id (mission/next-id state-dir)
           ;; @carry-the-proof: resolve the proof authority BEFORE planning. An
           ;; unadmitted profile is a decision the caller can be told about now,
@@ -118,6 +178,15 @@
                   :admitted_profiles (get-in proof-decision [:evidence :admitted_profiles])}
                  ((get-in verbs [verb :plan]) request profiles))
           {:keys [dossier decision state recommendation]} (mission/dossier plan request)
+          ;; @caller-probe: EVERY blocked mission carries the closed shape that
+          ;; would have been accepted, and the size of any file it names.
+          decision (when decision
+                     (-> decision
+                         (assoc :example example-request)
+                         (update :evidence merge
+                                 (let [occ (occupant-sizes (:evidence decision)
+                                                           (:workspace_root request))]
+                                   (when (seq occ) {:occupant occ})))))
           created (mission/advance nil :proposed "open"
                                    {:at (now) :id id :verb verb
                                     :created_at (now)
@@ -145,16 +214,91 @@
             classified
             (save! state-dir classified)))))))
 
-(defn show
-  "The mission, plus the graph around it. @migration-plan: `show` is where a
-   caller learns that M-2 is held by M-1, so the DAG is rendered here rather
-   than behind a second verb nobody would call."
-  [{:keys [id workspace state-home]}]
+(defn replan!
+  "@replan-after-dependency. Recompute one mission's dossier and snapshot
+   against the tree AS IT NOW IS, using the intent and the proof authority the
+   mission already carries. No new id, no re-supplied spec."
+  [{:keys [id workspace state-home profiles] :as opts}]
   (let [state-dir (state-dir-for workspace state-home)
         m (mission/read-mission state-dir id)]
     (if (mission/refused? m)
       m
-      (mission/show-view (mission/read-all state-dir) id))))
+      (let [request (:intent m)
+            profiles (or profiles
+                         (mission/verification-profiles m)
+                         (not-empty (admitted-profiles (:root m) opts)))
+            plan ((get-in verbs [(:verb m) :plan]) request profiles)
+            projection (assoc (mission/dossier plan request)
+                              :snapshot (when (:ok plan)
+                                          (mission/snapshot (:sources plan))))
+            replanned (mission/replan m projection (now))]
+        (if (mission/refused? replanned)
+          replanned
+          (do (save! state-dir replanned)
+              (assoc (mission/show-view (mission/read-all state-dir) id)
+             :config_sources (mission/config-sources (or workspace (:root m))
+                                                     (:config opts)))))))))
+
+(defn repair!
+  "@caller-probe. Answer a dead mission with a NARROWER one, and say so.
+
+  The probe's verdict on the ledger after a refusal: it \"accumulated
+  blocked/failed missions but offered no resolution transition, next_call, or
+  way to repair a request in place.\" A blocked intent may never be edited in
+  place — its dossier would stop describing the thing that was planned — so the
+  repair is a NEW mission linked `:supersedes` to the old one, which is exactly
+  what round 3's links exist for."
+  [{:keys [id workspace state-home request] :as opts}]
+  (let [state-dir (state-dir-for workspace state-home)
+        old (mission/read-mission state-dir id)]
+    (cond
+      (mission/refused? old) old
+
+      (not (contains? #{:blocked :failed :proposed} (:state old)))
+      (mission/refusal "repair-illegal-state"
+                       (str "Only a :blocked, :failed or :proposed mission is "
+                            "repaired by superseding it; " id " is "
+                            (pr-str (:state old))
+                            ". Use `plan " id "` to re-plan it in place.")
+                       {:id id :state (some-> (:state old) name)
+                        :next-action [:plan id]
+                        :decision "whether this mission needs a new intent or a fresh plan"})
+
+      (nil? request)
+      (mission/refusal "repair-needs-a-request"
+                       (str "Repairing " id " means stating the narrower intent: "
+                            "pass --spec-file with the corrected request.")
+                       {:id id :example example-request
+                        :decision "what the corrected intent is"})
+
+      :else
+      (let [opened (propose! (assoc opts :verb (or (:verb opts) (:verb old))))]
+        (if (mission/refused? opened)
+          opened
+          (let [missions (mission/read-all state-dir)
+                linked (mission/link opened :supersedes id
+                                     (mission/by-id missions) (now))]
+            (if (mission/refused? linked)
+              linked
+              (do (save! state-dir linked)
+                  (assoc (mission/show-view (mission/read-all state-dir) (:id linked))
+                         :repaired id
+                         :note (str (:id linked) " supersedes " id
+                                    "; the old mission keeps its record and its "
+                                    "chain is visible from either end"))))))))))
+
+(defn show
+  "The mission, plus the graph around it. @migration-plan: `show` is where a
+   caller learns that M-2 is held by M-1, so the DAG is rendered here rather
+   than behind a second verb nobody would call."
+  [{:keys [id workspace state-home] :as opts}]
+  (let [state-dir (state-dir-for workspace state-home)
+        m (mission/read-mission state-dir id)]
+    (if (mission/refused? m)
+      m
+      (assoc (mission/show-view (mission/read-all state-dir) id)
+             :config_sources (mission/config-sources (or workspace (:root m))
+                                                     (:config opts))))))
 
 (defn link!
   "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.
@@ -182,7 +326,9 @@
             (if (mission/refused? linked)
               linked
               (do (save! state-dir linked)
-                  (mission/show-view (mission/read-all state-dir) id)))))))))
+                  (assoc (mission/show-view (mission/read-all state-dir) id)
+             :config_sources (mission/config-sources (or workspace (:root m))
+                                                     (:config opts)))))))))))
 
 (defn list-missions
   [{:keys [workspace state-home]}]
@@ -245,7 +391,9 @@
                 ;; resume need only an id and a workspace. An explicitly passed
                 ;; profiles map still wins, for a caller deliberately re-proving
                 ;; under a different profile.
-                profiles (or profiles (mission/verification-profiles m))
+                profiles (or profiles
+                             (mission/verification-profiles m)
+                             (not-empty (admitted-profiles (:root m) opts)))
                 config (cond-> {:verification-profiles profiles}
                          receipt-dir (assoc :receipt-dir receipt-dir))
                 receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
@@ -334,45 +482,95 @@
                         :decision "what the interrupted transaction left standing"})
       :else (mission/advance m :applied "resume" {:at (now)}))))
 
-(def usage
-  (str "Usage: bin/mission <verb> [args]\n\n"
-       "  open|plan --spec-file -      one bounded intent (EDN on stdin) -> id + dossier\n"
-       "  show    <id> --workspace R   the whole mission object\n"
-       "  apply   <id> --workspace R   run the guarded transaction + proof\n"
-       "  resume  <id> --workspace R   move it from wherever it is (apply or undo)\n"
-       "  undo    <id> --workspace R   the explicit inverse\n"
-       "  link  <id> --depends-on <id> | --supersedes <id> --workspace R\n"
-       "  ready        --workspace R   missions waiting on exactly one move\n"
-       "  list         --workspace R   the human index\n\n"
-       "The propose spec is {:verb \"helper_extraction\" :request {...}\n"
-       "                     :profiles {\"name\" {:commands [[\"...\"]]}}}\n"
-       "Missions live in <state-dir>/missions/<id>.edn and are plain EDN.\n"))
+(def verb-help
+  {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Writes no bytes."
+   "plan"   "plan  [--spec-file <file|->] | plan <id> [--spec-file <file|->]\n    With no id: open-and-plan (same as `open`).\n    With an id: RE-plan that mission against the tree as it now is.\n    With an id AND --spec-file on a :blocked/:failed mission: open a NEW\n    mission carrying the repaired intent, linked :supersedes to the old one."
+   "show"   "show <id> --workspace R\n    The mission, its dependency DAG, its supersession chain, and the\n    config files this ledger read (:config_sources)."
+   "apply"  "apply <id> --workspace R\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
+   "resume" "resume <id> --workspace R\n    Move it from wherever it is: :ready -> apply, :verified -> undo."
+   "undo"   "undo <id> --workspace R\n    The explicit inverse, from the receipt apply published."
+   "link"   "link <id> --depends-on <id> | --supersedes <id> --workspace R\n    Order two missions. A cycle is refused before it is written."
+   "ready"  "ready --workspace R\n    :ready — what a machine can start now.\n    :waiting — real work held by a dependency or owed a re-plan."
+   "list"   "list --workspace R\n    The human index, one fixed-column line per mission."
+   "help"   "help [verb]\n    This text, or one verb's."})
+
+(defn help-text
+  [verb]
+  (str "bin/mission — the mission ledger. Global options may come BEFORE or\n"
+       "AFTER the verb: --workspace <root> --state-home <dir> --config <file>\n\n"
+       (if-let [one (get verb-help verb)]
+         (str "  " one "\n")
+         (str/join "\n" (for [[name text] (sort verb-help)]
+                          (str "  " text "\n"))))
+       "\nTHE SPEC (copy-paste, closed shape — every field below is required\n"
+       "unless marked optional; nothing else is accepted):\n\n"
+       (with-out-str (pp/pprint example-request))
+       "\nTHE PROFILE CONFIG — write this to <workspace_root>/"
+       mission/config-file-name
+       ", which\n`plan` and `apply` read themselves (`show` reports :config_sources):\n\n"
+       (with-out-str (pp/pprint example-config))
+       "\nRunnable end to end:\n"
+       "  bin/mission open  --spec-file spec.edn --state-home $H\n"
+       "  bin/mission ready --workspace $WS --state-home $H\n"
+       "  bin/mission apply M-1 --workspace $WS --state-home $H\n"
+       "  bin/mission show  M-1 --workspace $WS --state-home $H\n"))
+
+(def usage (help-text nil))
+
+(defn failed-receipt?
+  "@caller-probe. A mission whose apply produced a NON-committed receipt is a
+   failure the process must report. All four of the probe's failed applies
+   exited 0 while their receipts said `:ok false`, `:committed false`, and the
+   mission moved to `:failed` — an exit code that says success about a write
+   that did not happen is worse than no exit code at all."
+  [result]
+  (boolean (and (map? result)
+                (or (= :failed (:state result))
+                    (false? (get-in result [:receipt :committed]))))))
 
 (defn -main [& args]
-  (let [[verb & rest-args] args
-        {:keys [positional] :as flags} (parse-flags rest-args)
+  (let [{:keys [positional] :as flags} (parse-flags args)
+        verb (first positional)
         spec (read-spec (:spec-file flags))
         opts (merge {:workspace (:workspace flags)
                      :state-home (:state-home flags)
+                     :config (:config flags)
                      :profiles (:profiles spec)
+                     :spec spec
                      :receipt-dir (:receipt-dir flags)
-                     :id (first positional)}
+                     :id (second positional)}
                     (select-keys flags [:depends-on :supersedes])
-                    (select-keys spec [:verb :question :request :profiles]))
-        result (case verb
-                 ;; `open` and `plan` are one call in this prototype: proposing
-                 ;; a bounded intent IS computing its dossier. Astra's two-step
-                 ;; (state the question, then plan it) is a real split this
-                 ;; prototype does not implement; both names reach the same fn
-                 ;; so the vocabulary is already the converged one.
-                 ("open" "plan" "propose") (propose! opts)
-                 "show" (show opts)
-                 "link" (link! opts)
-                 "apply" (apply! opts)
-                 "resume" (resume opts)
-                 "undo" (undo! opts)
-                 ("ready" "blocked") (ready opts)
-                 "list" (list-missions opts)
-                 (do (println usage) {:ok true}))]
-    (when (map? result) (pp/pprint result))
-    (when (false? (:ok result)) (System/exit 1))))
+                    (select-keys spec [:verb :question :request :profiles]))]
+    (cond
+      ;; explicit help is a SUCCESS, and it is the only path that prints usage
+      (or (:help flags) (= "help" verb) (nil? verb))
+      (do (println (help-text (second positional))) (System/exit 0))
+
+      (not (contains? #{"open" "plan" "propose" "show" "apply" "resume" "undo"
+                        "link" "ready" "blocked" "list"} verb))
+      (do (binding [*out* *err*]
+            (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
+          (println (help-text nil))
+          ;; NEVER exit 0 when a verb was given: the probe read that as "ran"
+          (System/exit 2))
+
+      :else
+      (let [result (case verb
+                     ;; `plan <id>` re-plans in place; `plan <id> --spec-file`
+                     ;; on a dead mission opens its repaired successor.
+                     "plan" (cond
+                              (and (second positional) spec) (repair! opts)
+                              (second positional) (replan! opts)
+                              :else (propose! opts))
+                     ("open" "propose") (propose! opts)
+                     "show" (show opts)
+                     "apply" (apply! opts)
+                     "resume" (resume opts)
+                     "undo" (undo! opts)
+                     "link" (link! opts)
+                     ("ready" "blocked") (ready opts)
+                     "list" (list-missions opts))]
+        (when (map? result) (pp/pprint result))
+        (System/exit (cond (false? (:ok result)) 1
+                           (failed-receipt? result) 1
+                           :else 0))))))

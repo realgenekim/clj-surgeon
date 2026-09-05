@@ -30,7 +30,10 @@
     "show" (let [m (mission/read-mission state-dir (first positional))]
              (pp/pprint (if (mission/refused? m)
                           m
-                          (mission/show-view missions (first positional)))))
+                          (assoc (mission/show-view missions (first positional))
+                                 :config_sources
+                                 (mission/config-sources (:workspace flags)
+                                                         (:config flags))))))
     "list" (pp/pprint {:ok true :operation "mission"
                        :ledger (mission/missions-dir state-dir)
                        :count (count missions)
