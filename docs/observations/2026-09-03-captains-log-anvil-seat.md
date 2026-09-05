@@ -1888,3 +1888,5 @@ branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat need
 ## 00:25Z telemetry-coverage lane written (417ed6b5): every public tool call recorded at the dispatch boundary; set-equality ratchet; typed refusal for a tool built around the boundary; collector never reports an empty root as zero. Gates owed; one RED derived not executed — :unverified.
 
 ## 00:36Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 182  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 00:32Z load 9.29 ; === rc 0 end 00:36Z)
+
+## 00:37Z Astra's bitter-lesson answer filed verbatim (docs/observations/2026-09-05-astra-on-the-bitter-lesson.md); his five revisions to vision.md sentences are on the record for Gene's ruling; all 24 primary arms ended; shared verification open (his make test on cores 2–5, my lane 6–9). Usage watch 00:36Z: inspect 182, admit 59.
