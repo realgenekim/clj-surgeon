@@ -37,3 +37,15 @@ The OpenRouter key arrived (shape `{:openrouter-api-key …}`; runner accepts it
 Reading: the model is identical; the upstream decides the wall. OpenRouter's default routing lost by 4x (onesite) and 9x (fanout) because it chose slow hosts; pinned to Cerebras it beats Groq by 1.4x on the small output and 4x on the large one (the fan-out diff is ~2.5k completion tokens; 1.6 s wall implies well over 1.5k tok/s end to end, versus Groq's ~450). Hit rates are the same across providers (same model, same temperature): fanout single-candidate pooled tonight 13/36 on Groq, 5/12 on OpenRouter. So the fastest typist tonight is gpt-oss-120b on Cerebras via OpenRouter, pinned; unpinned OpenRouter is the slowest thing measured.
 
 Standing order for the harness: OpenRouter calls always carry `provider.order` with no fallback; a routed-elsewhere response is a protocol violation, not a datum. Spark row still pending (23:37Z).
+
+## Cerebras k=5 on the fan-out dossier (22:49–22:51Z) — the headline row tonight
+
+Raw log: 2026-09-05-fast-typist-fanout-cerebras-k5.log; all 30 candidates routed to Cerebras (receipts).
+
+| arm | rounds verified | first-verified wall, sorted (s) | median | max | candidates verified |
+|---|---|---|---|---|---|
+| F k=5, gpt-oss-120b on Cerebras (via OpenRouter, pinned) | **6/6** | 1.86 1.86 1.88 2.02 2.58 2.81 | **1.95** | 2.81 | 13/30 (43%) |
+| F k=5, gpt-oss-120b on Groq (earlier tonight) | 6/6 | 4.98 5.29 5.44 5.63 5.66 6.50 | 5.54 | 6.50 | 15/30 (50%) |
+| N, cold Sol (gpt-5.6-sol), one process per round | 5/6 | 20.96 22.66 26.66 27.77 42.63 | 26.66 | 42.63 | 5/6 |
+
+Cold vs cold, startup charged both sides, same dossier bytes, same gate, same acceptance: five fast candidates on Cerebras reach a verified three-file fan-out change in a median 1.95 s, every round; one cold Sol author in 26.66 s, five rounds of six. 13.7x on wall. The caveats from the cohort doc all still apply (five-file fixture, bb gate, no warm-Sol comparison, no real-repo claim).
