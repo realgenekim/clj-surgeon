@@ -42,3 +42,6 @@ Losses
 - The performance question is unchanged: a fresh preregistered epoch with six accepted native controls before any speed claim.
 
 Headroom, count-first: Astra's Codex meter 10% weekly at 14:35Z (not re-read since; Spark per-model limit exhausted until its own reset); this seat's Claude meter not readable from inside the session.
+
+## Addendum 20:21Z — the boundary :example change landed
+The production change built from Sol's probe (every request-shape refusal carries :field, :decision and a runnable :example) landed on MCP/main as 13c12401 through Sol fence GO, the pane agent's confirm, and the full landing gate. It is the one item from the window that is on trunk as product.

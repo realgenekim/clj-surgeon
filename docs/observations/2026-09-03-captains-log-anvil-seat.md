@@ -2235,3 +2235,17 @@ heading) and I pointed the pane at it at 19:58Z. Meter note: the pane's own stat
 Whatever answers under that heading is Luna unless the model is switched back; the reply will be
 labelled by the model the pane shows at the time, not by the seat's name. The 7890 hazard in
 `make mcp-test` is noted under the same heading for the seat-provider thread (inb-41c1cc).
+
+## 20:21Z — LANDED 13c12401: request-shape refusals carry :field, :decision, runnable :example
+
+bridge/helper-refusal-example tip 49af88ab (c5e8be8f + battery receipt) merged to MCP/main as 13c12401
+by ~/bin/land; gates on the merged tree all green (battery-fresh, recovery battery 3/3, mcp-test,
+bb, oracle, hygiene, intent audit; log /var/tmp/forge/land-49af88ab….log). Path: Opus build →
+make mcp-test 582/7306/0 → Sol fence r1 GO, no findings → pane agent confirm (status line
+gpt-5.6-luna; text: "I have no objection to c5e8be8f landing after Sol's GO") → land. First landing
+attempt was refused by battery-fresh (receipt 70 commits behind, limit 30); battery on the tip passed
+(563 tests / 12196 assertions / 0 failures / 699 s), receipt committed, second landing green. Total
+from agent finish to trunk: 19:41Z → 20:20Z.
+
+This closes the first production change to come out of the aperture window: the Sol caller probe's
+seven guessing round trips on request shape now end at the first refusal, which shows the shape.
