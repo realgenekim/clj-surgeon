@@ -329,3 +329,22 @@ surface:
 These probes did not claim a speedup. They narrowed the prototype: start with a
 durable wrapper around batched `:cat`, dependency/extraction reads, and a
 resumable plan receipt; do not begin by reimplementing the structural kernel.
+
+## Hands-on mission feel (2026-09-05)
+
+I ran `bin/mission` from `clj-surgeon-mission` against a fresh scratch
+workspace containing one helper and one caller. The first `propose` felt right:
+one EDN request produced `M-1`, a ready state, a snapshot hash, destination,
+owner count, footprint, and an explicit `[:apply "M-1"]` next action. `show`
+returned the same object without making me rediscover anything. The first
+`apply` refused safely because I failed to pass the verification profile; the
+receipt named the missing authority and left source bytes unchanged. Repeating
+with the same structured spec reached `:verified` in about **9.9 seconds wall**
+from first proposal through terminal receipt; the guarded kernel reported
+**22.6 ms** of operation time. The resulting source and new namespace were
+exactly inspectable, and the receipt included an undo receipt. The feel is
+already closer to Beads than to an editor: the useful unit is `M-1`, not the
+individual edit. The main friction is that `apply` must repeat enough request
+context to load profiles; a durable mission should make that impossible to
+forget. The failure was valuable: the ledger made a missing proof authority
+visible before mutation, which is precisely the bounded-mission contract.
