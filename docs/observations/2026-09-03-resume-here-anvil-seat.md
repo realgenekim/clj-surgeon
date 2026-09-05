@@ -568,3 +568,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - 15:04Z: RECORDS NOW LIVE IN /home/forge/src/clj-surgeon-records (branch records/MCP-main tracking origin/MCP/main); NEVER commit/push from /home/forge/src/clj-surgeon (shared with the pane agent, who switches its branch). 7906 runs from clj-surgeon-srv7906; 8171 from clj-surgeon-srv8171. Trunk head after the revert: 57343cb5.
 
 - 15:35Z: MCP/main = 01f66435 (Astra telemetry landed as 2b5b3d97). Servers 7906 PID 539986 / 8171 PID 539988 on it. land refuses ancestor tips/empty merges now. Astra idle after his block (telemetry + prereg delivered; no accepted comparison). Next per his handoff: oracle revision, then a fresh preregistered epoch with six accepted controls.
+
+- 16:26Z: MCP/main = 32910d14 (Astra production-readiness landed as 32910d14). Servers 7906 PID 1565316 / 8171 PID 1565318 on it; CLI/skills installed. The pane agent keeps using the shared seat checkout on its own branches — read its branch there before assuming trunk.

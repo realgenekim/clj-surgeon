@@ -91,3 +91,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **15:04Z INCIDENT (owner forge-anvil)**: three unreviewed commits from astra/telemetry-helper-and-comparison reached MCP/main via a records push from the shared seat checkout after the pane agent switched its branch; REVERTED (57343cb5); ratchets: 7906 on its own worktree; records one-shots in a dedicated worktree with branch + src/test guards. Astra's telemetry work stays on his branch for review → land.
 
 - **15:35Z LANDED 2b5b3d97** — Astra's telemetry emission for helper_extraction + wire witness + comparison prereg (Gene: "merge it in"). MAYOR: trunk head is now 01f66435 — pull and install this one (supersedes the 3ffc6fae note).
+
+- **16:26Z LANDED 32910d14** — astra/production-readiness (CLI production entrance + safety guard + skills/docs; analyzer opt-in). MAYOR: trunk head is now 32910d14 — pull and install this one (supersedes earlier notes).
