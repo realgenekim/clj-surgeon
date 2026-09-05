@@ -156,7 +156,7 @@
                             :files ["test/acid/web/http_test.clj"]})]
       (is (= :blocked state))
       (is (false? (:planned dossier)))
-      (is (= "whether test/ is in this write's scope" (:question decision)))
+      (is (= "whether test/ is in this write's scope" (:decision decision)))
       (is (= ["test/acid/web/http_test.clj"] (get-in decision [:evidence :files]))
           "the refusal's evidence travels with the decision"))))
 
@@ -164,13 +164,16 @@
   (let [missions [{:id "M-1" :state :proposed}
                   {:id "M-2" :state :ready}
                   {:id "M-3" :state :blocked
-                   :decision {:question "which path the destination occupies"}}
+                   :decision {:decision "which path the destination occupies"}}
                   {:id "M-4" :state :verified}]
         ready (mission/ready-missions missions)]
     (is (= ["M-2" "M-3"] (mapv :id ready)))
     (is (= ["apply" "a decision"] (mapv :waiting_on ready))
         "a ready mission is moved by a machine; a blocked one by a human")
-    (is (= "which path the destination occupies" (:question (second ready))))
+    (is (= "which path the destination occupies" (:decision (second ready)))
+        "ROUND-2 DEFECT: this field was spelled :question, which collided with
+         the mission's own top-level :question — the caller's statement of
+         intent at open. The blocking decision is :decision everywhere now.")
     (testing "and the index is one fixed-column line per mission"
       (let [lines (mission/index-lines missions)]
         (is (= 5 (count lines)))
@@ -240,6 +243,185 @@
       "a blocked mission's next action belongs to a human, and inventing
        [:apply id] for it would be a prescription with no continuation")
   (is (nil? (mission/next-action {:id "M-1" :state :undone}))))
+
+;; ---------------------------------------------------------------------------
+;; @migration-plan — missions that depend on missions
+
+(def ^:private ledger
+  "Three missions and no links: the base every graph witness starts from."
+  [{:id "M-1" :state :ready :verb "helper_extraction"}
+   {:id "M-2" :state :ready :verb "helper_extraction"}
+   {:id "M-3" :state :ready :verb "helper_extraction"}])
+
+(defn- index-of [missions] (mission/by-id missions))
+
+(defn- linked
+  "Apply a sequence of [from kind to] links to a ledger, asserting each one
+   lands. Returns the new ledger."
+  [missions edges]
+  (reduce (fn [ms [from kind to]]
+            (let [m (mission/link (get (index-of ms) from) kind to (index-of ms) "T")]
+              (is (not (mission/refused? m)) (str from " " kind " " to))
+              (mapv #(if (= from (:id %)) m %) ms)))
+          missions
+          edges))
+
+(deftest linking-stores-only-the-forward-edge-and-derives-the-inverse
+  (testing "one edge is one fact in one file. `dependents` and `superseded_by`
+            are COMPUTED, because two copies of one edge are two things that can
+            disagree in a directory a human may edit with an editor."
+    (let [ms (linked ledger [["M-2" :depends-on "M-1"]])
+          index (index-of ms)
+          m2 (get index "M-2")
+          m1 (get index "M-1")]
+      (is (= ["M-1"] (:depends-on m2)))
+      (is (nil? (:dependents m1)) "the inverse is NOT stored")
+      (is (= ["M-2"] (:dependents (mission/dependency-view m1 index)))
+          "and IS derived")
+      (is (= [{:id "M-1" :state "ready"}]
+             (:depends_on (mission/dependency-view m2 index)))
+          "the DAG carries ids AND states")
+      (testing "and the edge is in the mission's own history"
+        (is (= {:from "ready" :to "ready" :event "link depends-on M-1" :at "T"}
+               (last (:history m2)))))
+      (testing "linking the same edge twice is a no-op, not a second entry"
+        (let [again (mission/link m2 :depends-on "M-1" index "T2")]
+          (is (= ["M-1"] (:depends-on again)))
+          (is (= 1 (count (:history again)))))))))
+
+(deftest a-cycle-is-refused-at-link-time-and-prints-the-loop
+  (testing "adding m -> t closes a cycle exactly when t already reaches m, so
+            the check is one walk of edges that already exist and NOTHING is
+            written."
+    (let [ms (linked ledger [["M-2" :depends-on "M-1"] ["M-3" :depends-on "M-2"]])
+          index (index-of ms)
+          refused (mission/link (get index "M-1") :depends-on "M-3" index "T")]
+      (is (mission/refused? refused))
+      (is (= "mission-dependency-cycle" (:error_type refused)))
+      (is (= ["M-3" "M-2" "M-1" "M-3"] (:cycle refused))
+          "the refusal prints the loop it would have made")
+      (is (false? (:mutation_attempted refused)))
+      (is (string? (:decision refused))))
+    (testing "and a mission cannot depend on itself"
+      (let [refused (mission/link (get (index-of ledger) "M-1") :depends-on "M-1"
+                                  (index-of ledger) "T")]
+        (is (= "mission-dependency-cycle" (:error_type refused)))))
+    (testing "nor link to an id that is not in the ledger"
+      (let [refused (mission/link (get (index-of ledger) "M-1") :depends-on "M-9"
+                                  (index-of ledger) "T")]
+        (is (= "mission-unknown-id" (:error_type refused)))
+        (is (= ["M-1" "M-2" "M-3"] (:known refused)))))))
+
+(deftest an-unverified-dependency-blocks-and-a-verified-one-releases
+  (testing "@migration-plan. The blocked state is DERIVED on every read: the
+            dependent's own file never changes when its dependency lands, which
+            is the difference between one write at verify time and a fan-out
+            write to every dependent."
+    (let [ms (linked ledger [["M-2" :depends-on "M-1"]])
+          index (index-of ms)
+          m2 (get index "M-2")]
+      (is (= :ready (:state m2)) "the STORED state is untouched")
+      (is (= :blocked (mission/effective-state m2 index)) "the READ state is not")
+      (is (= ["M-1"] (mission/unmet-dependencies m2 index)))
+      (is (= "waiting on M-1" (mission/blocking-decision m2 index)))
+      (testing "`ready` lists only the mission a machine can actually start"
+        (is (= ["M-1" "M-3"] (mapv :id (mission/ready-missions ms))))
+        (is (= [{:id "M-2" :state "blocked" :waiting_on ["M-1"]
+                 :decision "waiting on M-1"}]
+               (mission/waiting-missions ms))))
+      (testing "apply refuses with a typed refusal that NAMES the ids"
+        (let [refused (mission/dependency-refusal m2 index)]
+          (is (mission/refused? refused))
+          (is (= "mission-dependency-not-verified" (:error_type refused)))
+          (is (= ["M-1"] (:unverified refused)))
+          (is (false? (:mutation_attempted refused)))
+          (is (= [:resume "M-1"] (:next-action refused)))))
+      (testing "and the index reads blocked without anything being written"
+        (is (str/includes? (nth (mission/index-lines ms) 2) "blocked"))
+        (is (str/includes? (nth (mission/index-lines ms) 2) "waiting on M-1"))))
+
+    (testing "the moment M-1 is :verified, M-2 is ready on the NEXT read"
+      (let [ms (-> (linked ledger [["M-2" :depends-on "M-1"]])
+                   (->> (mapv #(if (= "M-1" (:id %)) (assoc % :state :verified) %))))
+            index (index-of ms)
+            m2 (get index "M-2")]
+        (is (empty? (mission/unmet-dependencies m2 index)))
+        (is (= :ready (mission/effective-state m2 index)))
+        (is (nil? (mission/dependency-refusal m2 index)))
+        (is (= ["M-2" "M-3"] (mapv :id (mission/ready-missions ms))))
+        (is (empty? (mission/waiting-missions ms)))))
+
+    (testing "a dependency that is not in the ledger at all is UNMET and named,
+              never silently met"
+      (let [orphan {:id "M-7" :state :ready :depends-on ["M-404"]}]
+        (is (= ["M-404"] (mission/unmet-dependencies orphan {})))
+        (is (= :blocked (mission/effective-state orphan {})))))))
+
+(deftest supersession-renders-the-whole-chain-from-either-end
+  (testing "the builder's own note: answering a blocked decision means opening a
+            NARROWER mission, and the two have to be linked or the ledger loses
+            why the first one stopped."
+    (let [ms (linked [{:id "M-1" :state :blocked
+                       :decision {:decision "whether test/ is in scope"}}
+                      {:id "M-2" :state :blocked
+                       :decision {:decision "which destination lib"}}
+                      {:id "M-3" :state :ready}]
+                     [["M-2" :supersedes "M-1"] ["M-3" :supersedes "M-2"]])
+          index (index-of ms)
+          chain [{:id "M-3" :state "ready"}
+                 {:id "M-2" :state "blocked"}
+                 {:id "M-1" :state "blocked"}]]
+      (is (= chain (mission/supersede-chain "M-1" index))
+          "read from the OLDEST mission, the chain is the same")
+      (is (= chain (mission/supersede-chain "M-3" index))
+          "and from the newest")
+      (is (= ["M-3"] (:superseded_by (mission/dependency-view (get index "M-2") index)))
+          "derived, not stored")
+      (let [lines (mission/dependency-lines (get index "M-1") index)]
+        (is (str/includes? (str/join "\n" lines) "superseded-by<- M-2"))
+        (is (str/includes? (str/join "\n" lines) "chain: M-3 [ready] -> M-2")))
+      (testing "and a supersession cycle refuses like a dependency cycle"
+        (is (= "mission-dependency-cycle"
+               (:error_type (mission/link (get index "M-1") :supersedes "M-3"
+                                          index "T"))))))))
+
+(deftest the-index-summary-tells-the-truth-about-an-undone-mission
+  (testing "ROUND-2 DEFECT: :undone fell through to the footprint arm and
+            reported the size of a write that is no longer standing."
+    (let [undone {:id "M-1" :state :undone :verb "helper_extraction"
+                  :dossier {:footprint {:changed_files 30 :sites 41}}
+                  :undo {:verified {:whole-files true}}}
+          line (second (mission/index-lines [undone]))]
+      (is (str/includes? line "undone; tree restored"))
+      (is (str/includes? line "whole-file compare"))
+      (is (not (str/includes? line "30 files"))
+          "the write it describes is not there any more"))))
+
+(deftest an-unadmitted-proof-authority-blocks-at-plan-time-not-apply-time
+  (testing "@carry-the-proof. A mission may not reach :ready on a proof nobody
+            has admitted, and the caller must learn that at open — never after
+            paying for an apply that refuses for a reason plan already knew."
+    (let [ws (io/file tmp-root (str "proof-ws-" (System/nanoTime)))
+          home (io/file tmp-root (str "proof-home-" (System/nanoTime)))]
+      (try
+        (.mkdirs ws)
+        (let [opened (cli/propose!
+                      {:verb "helper_extraction"
+                       :workspace (str ws) :state-home (str home)
+                       :profiles {"admitted" {:commands [["/bin/true"]]}}
+                       :request {:workspace_root (str ws)
+                                 :verification {:profile "not-admitted"}}})]
+          (is (= :blocked (:state opened)))
+          (is (= false (get-in opened [:verification :admitted?])))
+          (is (str/includes? (get-in opened [:decision :decision]) "not-admitted"))
+          (is (= "mission-verification-profile-not-admitted"
+                 (get-in opened [:decision :error_type])))
+          (is (= ["admitted"] (get-in opened [:decision :evidence :admitted_profiles])))
+          (is (nil? (:next-action opened))
+              "and its next move belongs to a human, so nothing prescribes apply")
+          (is (nil? (mission/verification-profiles opened))
+              "an unadmitted authority is never reconstituted for a proof run"))
+        (finally (delete-tree! ws) (delete-tree! (io/file home)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the end-to-end half
@@ -329,8 +511,41 @@
 
           (testing "READY — the mission is listed as movable by a machine"
             (let [{:keys [ready]} (cli/ready base)]
-              (is (= [{:id "M-1" :state "ready" :waiting_on "apply" :question nil}]
+              (is (= [{:id "M-1" :state "ready" :waiting_on "apply" :decision nil}]
                      ready))))
+
+          (testing "@migration-plan — M-2 depends on M-1, and cannot start"
+            (let [second-mission (cli/propose! (assoc base :verb "helper_extraction"
+                                                      :request request))]
+              (is (= "M-2" (:id second-mission)))
+              (let [shown (cli/link! (assoc base :id "M-2" :depends-on "M-1"))]
+                (is (= ["M-1"] (:depends-on shown)))
+                (is (= :blocked (:effective_state shown))
+                    "the READ state is blocked; the stored one is untouched")
+                (is (= :ready (:state shown)))
+                (is (= "waiting on M-1" (:decision_summary shown)))
+                (is (str/includes? (str/join "\n" (:graph shown))
+                                   "depends-on   -> M-1")))
+              (testing "a cycle back the other way is refused at link time"
+                (let [refused (cli/link! (assoc base :id "M-1" :depends-on "M-2"))]
+                  (is (mission/refused? refused))
+                  (is (= "mission-dependency-cycle" (:error_type refused)))
+                  (is (= ["M-2" "M-1" "M-2"] (:cycle refused)))))
+              (testing "`ready` lists ONLY M-1; M-2 is waiting on it"
+                (let [{:keys [ready waiting]} (cli/ready base)]
+                  (is (= ["M-1"] (mapv :id ready)))
+                  (is (= [{:id "M-2" :state "blocked" :waiting_on ["M-1"]
+                           :decision "waiting on M-1"}]
+                         waiting))))
+              (testing "and applying M-2 refuses, naming M-1, with nothing written"
+                (let [refused (cli/apply! (assoc base :id "M-2"))]
+                  (is (= "mission-dependency-not-verified" (:error_type refused)))
+                  (is (= ["M-1"] (:unverified refused)))
+                  (is (false? (:mutation_attempted refused)))
+                  (is (= pre (tree-on-disk root (keys pre)))
+                      "no byte of the workspace moved")
+                  (is (= :ready (:state (cli/show (assoc base :id "M-2"))))
+                      "and M-2 did not leave :ready")))))
 
           (testing "@stale-resume — a tree that MOVED refuses before any write"
             (let [snap (:snapshot (cli/show (assoc base :id "M-1")))
@@ -362,10 +577,19 @@
 
           (testing "APPLY — the guarded transaction runs and the receipt lands
                     INSIDE the mission file"
-            (let [applied (cli/apply! (assoc base :id "M-1"))]
+            ;; @carry-the-proof: NO :profiles here. The mission carries the
+            ;; authority its own proof runs under; the field report was an
+            ;; apply refused for a profile map the caller had already supplied
+            ;; once, at open.
+            (let [applied (cli/apply! (assoc (dissoc base :profiles) :id "M-1"))]
               (is (= :verified (:state applied))
                   (str "terminal receipt: " (pr-str (:receipt applied))))
               (is (true? (get-in applied [:receipt :committed])))
+              (is (= {:profile "mission-proof" :commands [["/bin/true"]]
+                      :hash (mission/sha256 (pr-str ["mission-proof" [["/bin/true"]]]))
+                      :admitted? true}
+                     (:verification applied))
+                  "the resolved authority is IN the mission, not in the call")
               (is (= "committed" (get-in applied [:receipt :status])))
               (is (string? (get-in applied [:undo :receipt])))
               (is (not= pre (tree-on-disk root (keys pre)))
@@ -377,9 +601,19 @@
                   (is (= "committed" (get-in back [:receipt :status])))
                   (is (str/includes? raw ":undo {:receipt"))))))
 
+          (testing "@migration-plan — M-1 is :verified, so M-2 is ready NOW,
+                    with nothing written to M-2's file to make it so"
+            (let [{:keys [ready waiting]} (cli/ready base)]
+              (is (= ["M-2"] (mapv :id ready)))
+              (is (empty? waiting))
+              (is (= :ready (:effective_state (cli/show (assoc base :id "M-2")))))
+              (is (= [{:id "M-1" :state "verified"}]
+                     (get-in (cli/show (assoc base :id "M-2"))
+                             [:dependencies :depends_on])))))
+
           (testing "RESUME — one verb moves it from wherever it is; on a
                     :verified mission that means the inverse"
-            (let [undone (cli/resume (assoc base :id "M-1"))]
+            (let [undone (cli/resume (assoc (dissoc base :profiles) :id "M-1"))]
               (is (= :undone (:state undone)))
               (is (true? (get-in undone [:undo :verified :whole-files])))
               (is (= pre (tree-on-disk root (keys pre)))
@@ -391,9 +625,14 @@
 
           (testing "LIST — the human index tells the whole story in one line"
             (let [{:keys [index]} (cli/list-missions base)]
-              (is (= 2 (count index)))
+              (is (= 3 (count index)))
               (is (str/includes? (second index) "M-1"))
-              (is (str/includes? (second index) "undone")))))
+              (is (str/includes? (second index) "undone"))
+              (is (str/includes? (second index) "tree restored")
+                  "ROUND-2 DEFECT: an undone mission reported the size of a
+                   write that is no longer standing")
+              (is (str/includes? (nth index 2) "blocked")
+                  "and M-2 is blocked again the moment M-1 stops being verified"))))
         (finally
           (delete-tree! root)
           (delete-tree! state-home)

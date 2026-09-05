@@ -106,7 +106,17 @@
                       :decision "which bounded intent this mission states"})
     (let [state-dir (state-dir-for (:workspace_root request) state-home)
           id (mission/next-id state-dir)
-          plan ((get-in verbs [verb :plan]) request profiles)
+          ;; @carry-the-proof: resolve the proof authority BEFORE planning. An
+          ;; unadmitted profile is a decision the caller can be told about now,
+          ;; and planning a write that could never be proved is wasted work.
+          verification (mission/resolve-verification request profiles)
+          proof-decision (mission/verification-decision verification)
+          plan (if proof-decision
+                 {:ok false :error_type (:error_type proof-decision)
+                  :error (:because proof-decision)
+                  :decision (:decision proof-decision)
+                  :admitted_profiles (get-in proof-decision [:evidence :admitted_profiles])}
+                 ((get-in verbs [verb :plan]) request profiles))
           {:keys [dossier decision state recommendation]} (mission/dossier plan request)
           created (mission/advance nil :proposed "open"
                                    {:at (now) :id id :verb verb
@@ -116,6 +126,7 @@
                                     :question question
                                     :root (:workspace_root request)
                                     :scope (:scope request)
+                                    :verification verification
                                     :intent request})]
       (if (mission/refused? created)
         created
@@ -135,8 +146,43 @@
             (save! state-dir classified)))))))
 
 (defn show
+  "The mission, plus the graph around it. @migration-plan: `show` is where a
+   caller learns that M-2 is held by M-1, so the DAG is rendered here rather
+   than behind a second verb nobody would call."
   [{:keys [id workspace state-home]}]
-  (mission/read-mission (state-dir-for workspace state-home) id))
+  (let [state-dir (state-dir-for workspace state-home)
+        m (mission/read-mission state-dir id)]
+    (if (mission/refused? m)
+      m
+      (mission/show-view (mission/read-all state-dir) id))))
+
+(defn link!
+  "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.
+
+  The ONLY verb that edits a mission without a state transition — a link is not
+  a move, it is a fact about two missions. `advance` stays the only setter of
+  `:state`; `mission/link` appends its own history entry so the edge is still
+  in the record."
+  [{:keys [id workspace state-home] :as opts}]
+  (let [state-dir (state-dir-for workspace state-home)
+        kind (cond (:depends-on opts) :depends-on
+                   (:supersedes opts) :supersedes
+                   :else nil)
+        target (get opts kind)]
+    (if-not kind
+      (mission/refusal "link-target-missing"
+                       "A link needs --depends-on <id> or --supersedes <id>."
+                       {:id id
+                        :decision "which mission this one is ordered against"})
+      (let [missions (mission/read-all state-dir)
+            m (mission/read-mission state-dir id)]
+        (if (mission/refused? m)
+          m
+          (let [linked (mission/link m kind target (mission/by-id missions) (now))]
+            (if (mission/refused? linked)
+              linked
+              (do (save! state-dir linked)
+                  (mission/show-view (mission/read-all state-dir) id)))))))))
 
 (defn list-missions
   [{:keys [workspace state-home]}]
@@ -149,8 +195,12 @@
 (defn ready
   [{:keys [workspace state-home]}]
   (let [state-dir (state-dir-for workspace state-home)]
-    {:ok true :operation "mission"
-     :ready (mission/ready-missions (ledger-of state-dir))}))
+    (let [missions (ledger-of state-dir)]
+      {:ok true :operation "mission"
+       :ready (mission/ready-missions missions)
+       ;; @migration-plan: real work that nobody can start yet, and the id it
+       ;; is waiting on. Kept OUT of :ready on purpose.
+       :waiting (mission/waiting-missions missions)})))
 
 (defn- read-if-present
   [path]
@@ -180,6 +230,10 @@
     (if (mission/refused? m)
       m
       (or
+       ;; @migration-plan: an unverified dependency refuses FIRST — before the
+       ;; snapshot is even checked, because a stale-plan refusal would send the
+       ;; caller to re-plan against a tree its dependency has not touched yet.
+       (mission/dependency-refusal m (mission/by-id (mission/read-all state-dir)))
        ;; @stale-resume: nothing is staged, nothing is written, and the refusal
        ;; names the files that moved.
        (stale? m)
@@ -187,6 +241,11 @@
         (if (mission/refused? staged)
           staged
           (let [_ (save! state-dir staged)
+                ;; @carry-the-proof: the mission's OWN authority, so apply and
+                ;; resume need only an id and a workspace. An explicitly passed
+                ;; profiles map still wins, for a caller deliberately re-proving
+                ;; under a different profile.
+                profiles (or profiles (mission/verification-profiles m))
                 config (cond-> {:verification-profiles profiles}
                          receipt-dir (assoc :receipt-dir receipt-dir))
                 receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
@@ -282,6 +341,7 @@
        "  apply   <id> --workspace R   run the guarded transaction + proof\n"
        "  resume  <id> --workspace R   move it from wherever it is (apply or undo)\n"
        "  undo    <id> --workspace R   the explicit inverse\n"
+       "  link  <id> --depends-on <id> | --supersedes <id> --workspace R\n"
        "  ready        --workspace R   missions waiting on exactly one move\n"
        "  list         --workspace R   the human index\n\n"
        "The propose spec is {:verb \"helper_extraction\" :request {...}\n"
@@ -297,6 +357,7 @@
                      :profiles (:profiles spec)
                      :receipt-dir (:receipt-dir flags)
                      :id (first positional)}
+                    (select-keys flags [:depends-on :supersedes])
                     (select-keys spec [:verb :question :request :profiles]))
         result (case verb
                  ;; `open` and `plan` are one call in this prototype: proposing
@@ -306,6 +367,7 @@
                  ;; so the vocabulary is already the converged one.
                  ("open" "plan" "propose") (propose! opts)
                  "show" (show opts)
+                 "link" (link! opts)
                  "apply" (apply! opts)
                  "resume" (resume opts)
                  "undo" (undo! opts)

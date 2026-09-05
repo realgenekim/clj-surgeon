@@ -190,7 +190,9 @@
   [state-dir mission]
   (let [file (io/file (mission-file state-dir (:id mission)))
         ordered (concat [:id :state :verb :created_at :updated_at]
-                        [:question :root :scope :intent :recommendation :because
+                        [:question :root :scope :intent :verification
+                         :depends-on :supersedes
+                         :recommendation :because
                          :snapshot :dossier :decision :plan :proof :receipt
                          :undo :next-action :history])
         body (str "{"
@@ -317,6 +319,59 @@
                      (when proof-obligation? ", under a proof obligation"))})))
 
 ;; ---------------------------------------------------------------------------
+;; the verification authority, resolved ONCE, at plan time
+;;
+;; @carry-the-proof. Field report from the first hands-on run: `apply` refused
+;; because the caller did not re-pass the profile map it had passed at open. A
+;; durable mission that makes the caller re-supply the authority its own proof
+;; runs under is not durable — it is a receipt for a call you must still be able
+;; to reproduce. Two rules follow.
+;;
+;; 1. THE MISSION CARRIES ITS OWN PROOF AUTHORITY. The profile NAME plus the
+;;    commands it resolved to are copied into the mission at plan time, so
+;;    `apply` and `resume` need only an id and a workspace.
+;; 2. AN UNADMITTED PROFILE IS A PLAN-TIME DECISION, NOT AN APPLY-TIME REFUSAL.
+;;    A mission is never allowed to reach `:ready` on a proof nobody has
+;;    admitted: the caller learns at open, in the dossier, that the authority is
+;;    missing — never after paying for an apply.
+
+(defn resolve-verification
+  "`{:profile name :commands …}` copied from the admitted profiles, or nil when
+   the request names no proof. A named-but-unadmitted profile returns
+   `{:profile name :admitted? false …}` and the caller must block on it."
+  [request profiles]
+  (when-let [name (get-in request [:verification :profile])]
+    (if-let [admitted (get profiles name)]
+      {:profile name
+       :commands (vec (:commands admitted))
+       :hash (sha256 (pr-str [name (:commands admitted)]))
+       :admitted? true}
+      {:profile name
+       :admitted? false
+       :known (vec (sort (keys profiles)))})))
+
+(defn verification-decision
+  "The blocking decision an unadmitted proof authority earns AT PLAN TIME."
+  [verification]
+  (when (and verification (false? (:admitted? verification)))
+    {:decision (str "which admitted verification profile proves this write; "
+                    (pr-str (:profile verification)) " is not one of them")
+     :error_type "mission-verification-profile-not-admitted"
+     :because (str "The request names verification profile "
+                   (pr-str (:profile verification))
+                   ", which this workspace has not admitted. A mission may not "
+                   "reach :ready on a proof nobody has admitted.")
+     :evidence {:profile (:profile verification)
+                :admitted_profiles (:known verification)}}))
+
+(defn verification-profiles
+  "The profiles map a mission's own stored authority reconstitutes, so `apply`
+   needs only an id and a workspace."
+  [mission]
+  (when-let [{:keys [profile commands admitted?]} (:verification mission)]
+    (when admitted? {profile {:commands commands}})))
+
+;; ---------------------------------------------------------------------------
 ;; the dossier projection
 ;;
 ;; What the caller gets back from `propose` instead of bytes. Every field here
@@ -333,7 +388,7 @@
   ([plan request]
   (if-not (:ok plan)
     {:dossier {:planned false}
-     :decision {:question (:decision plan)
+     :decision {:decision (:decision plan)
                 :error_type (:error_type plan)
                 :because (:error plan)
                 :evidence (dissoc plan :ok :operation :error :error_type
@@ -368,37 +423,267 @@
        :state :ready}))))
 
 ;; ---------------------------------------------------------------------------
+;; LINKS: one mission may depend on, or supersede, another
+;;
+;; @migration-plan. A real migration is not one bounded intent, it is a partial
+;; order over several: extract the helpers, THEN retire the shim, THEN rename
+;; the namespace. The ledger has to be able to say "M-2 cannot move until M-1 is
+;; verified" without either mission's dossier lying about the tree it will meet.
+;;
+;; TWO RULES, and they are the same rule the dossier already keeps.
+;;
+;; 1. ONLY THE FORWARD EDGE IS STORED. `M-2 :depends-on ["M-1"]` and
+;;    `M-3 :supersedes ["M-2"]` live on the mission that names them; the inverse
+;;    views (`dependents`, `superseded_by`) are COMPUTED from the ledger. Two
+;;    copies of one edge is two things that can disagree, and the ledger is a
+;;    directory of files any of which a human may edit with `cat` and an editor.
+;; 2. `:blocked` BY DEPENDENCY IS DERIVED, NEVER WRITTEN. A mission's stored
+;;    state is what its own transitions made it. Whether its dependencies are
+;;    met is a question about OTHER files, and it changes the moment one of them
+;;    is verified — so it is recomputed on every read. Writing it would need a
+;;    fan-out write to every dependent at verify time, which is exactly the
+;;    derived-state-stored-twice failure this object exists to avoid.
+;;
+;; WHY A `link` VERB rather than a `:depends-on` field on `open`: it is the
+;; SMALLER change and the only one that can carry rule (2) of the lifecycle. An
+;; open-time field would still need a link verb for `:supersedes` — the answer
+;; to a blocked decision is a NEW, narrower mission, which by construction is
+;; opened AFTER the mission it supersedes and so can never be named at that
+;; mission's open. It also could not create a cycle (a fresh id is always the
+;; highest, so nothing can point back at it), which means the cycle refusal
+;; would have no site to live at. One verb covers both link kinds, both
+;; directions of the graph, and the one refusal both share.
+
+(def link-kinds
+  "The two edges one mission may carry, each stored on the mission that names
+   the other. `:depends-on` orders work; `:supersedes` records that this mission
+   is the narrower re-statement of an earlier one."
+  #{:depends-on :supersedes})
+
+(defn by-id
+  "Index a ledger by id. Unreadable rows are KEPT — a corrupt dependency must
+   read as unmet, not as absent."
+  [missions]
+  (into {} (keep (fn [m] (when (and (map? m) (:id m)) [(:id m) m]))) missions))
+
+(defn- edges
+  [index id kind]
+  (vec (get (get index id) kind [])))
+
+(defn- path-to
+  "A simple path of `kind` edges from `from` to `target`, or nil."
+  [index kind from target]
+  (loop [queue [[from]] seen #{}]
+    (when-let [[trail & more] (seq queue)]
+      (let [current (peek trail)]
+        (cond
+          (= current target) trail
+          (seen current) (recur (vec more) seen)
+          :else (recur (into (vec more)
+                             (map #(conj trail %))
+                             (edges index current kind))
+                       (conj seen current)))))))
+
+(defn link
+  "Add one `kind` edge from `mission` to `target-id`, or refuse.
+
+  Refuses a cycle BEFORE it is written: adding `m -> t` closes a cycle exactly
+  when `t` already reaches `m`, so the check is one walk of the edges already in
+  the ledger and the refusal can print the loop it would have made."
+  [mission kind target-id index at]
+  (let [id (:id mission)]
+    (cond
+      (not (contains? link-kinds kind))
+      (refusal "unknown-link-kind"
+               (str "There is no link kind named " (pr-str kind) ".")
+               {:id id :kinds (vec (sort (map name link-kinds)))
+                :decision "which link this call means: depends-on or supersedes"})
+
+      (not (contains? index target-id))
+      (refusal "unknown-id"
+               (str "No mission " target-id " in this ledger to link to.")
+               {:id id :target target-id
+                :known (vec (sort (keys index)))
+                :decision "which mission id this link points at"})
+
+      (= id target-id)
+      (refusal "dependency-cycle"
+               (str "A mission cannot " (name kind) " itself.")
+               {:id id :target target-id :cycle [id id] :kind (name kind)
+                :mutation_attempted false
+                :decision "which of two missions is the earlier one"})
+
+      (path-to index kind target-id id)
+      (let [loop-path (conj (path-to index kind target-id id) target-id)]
+        (refusal "dependency-cycle"
+                 (str "Linking " id " " (name kind) " " target-id
+                      " would close a cycle: " (str/join " -> " loop-path)
+                      ". Nothing was written.")
+                 {:id id :target target-id :kind (name kind) :cycle loop-path
+                  :mutation_attempted false
+                  :decision "which of these missions is the one that must land first"}))
+
+      :else
+      (let [existing (vec (get mission kind []))]
+        (if (some #{target-id} existing)
+          mission
+          (-> mission
+              (assoc kind (vec (sort (conj existing target-id))))
+              (update :history (fnil conj [])
+                      (cond-> {:from (some-> (:state mission) name)
+                               :to (some-> (:state mission) name)
+                               :event (str "link " (name kind) " " target-id)}
+                        at (assoc :at at)))))))))
+
+;; ---------------------------------------------------------------------------
+;; the derived half of the graph
+
+(defn unmet-dependencies
+  "The ids this mission depends on that are not `:verified` — including ids that
+   are not in the ledger at all, which are unmet AND named."
+  [mission index]
+  (vec (remove #(= :verified (:state (get index %))) (:depends-on mission))))
+
+(defn waiting-decision
+  [unmet]
+  (str "waiting on " (str/join ", " unmet)))
+
+(defn effective-state
+  "The state a READER should see: the stored state, unless unmet dependencies
+   block a mission that would otherwise be movable. Never written back."
+  [mission index]
+  (if (and (contains? #{:proposed :ready} (:state mission))
+           (seq (unmet-dependencies mission index)))
+    :blocked
+    (:state mission)))
+
+(defn blocking-decision
+  "The ONE decision this mission is waiting on, as a string, or nil.
+
+  `:decision` is the name this field carries everywhere in the repository's
+  receipts — the mission's own top-level `:question` is the caller's statement
+  of intent at open and is a different thing. Those two were spelled the same
+  in round 2 and that collision is fixed here."
+  [mission index]
+  (let [unmet (unmet-dependencies mission index)]
+    (if (seq unmet)
+      (waiting-decision unmet)
+      (get-in mission [:decision :decision]))))
+
+(defn- node
+  [index id]
+  {:id id :state (or (some-> (:state (get index id)) name) "missing")})
+
+(defn supersede-chain
+  "The whole supersession chain this mission sits in, newest first.
+
+  Walks UP to the mission nothing supersedes, then down the `:supersedes` edges,
+  so `show M-1` and `show M-3` render the same chain."
+  [id index]
+  (let [superseder (fn [i] (first (sort (for [[j m] index
+                                              :when (some #{i} (:supersedes m))] j))))
+        newest (loop [i id seen #{}]
+                 (let [up (superseder i)]
+                   (if (and up (not (seen up))) (recur up (conj seen i)) i)))]
+    (loop [i newest acc [] seen #{}]
+      (if (or (nil? i) (seen i))
+        acc
+        (recur (first (get-in index [i :supersedes]))
+               (conj acc (node index i))
+               (conj seen i))))))
+
+(defn dependency-view
+  "Both directions of both edges, plus what is unmet. All derived."
+  [mission index]
+  (let [id (:id mission)
+        unmet (unmet-dependencies mission index)]
+    {:depends_on (mapv #(node index %) (:depends-on mission))
+     :unmet unmet
+     :dependents (vec (sort (for [[j m] index :when (some #{id} (:depends-on m))] j)))
+     :supersedes (mapv #(node index %) (:supersedes mission))
+     :superseded_by (vec (sort (for [[j m] index :when (some #{id} (:supersedes m))] j)))
+     :chain (supersede-chain id index)}))
+
+(defn dependency-lines
+  "The DAG around one mission, as text a human reads without the tool."
+  [mission index]
+  (let [{:keys [depends_on unmet dependents supersedes superseded_by chain]}
+        (dependency-view mission index)]
+    (into [(format "%s [%s]" (:id mission)
+                   (name (effective-state mission index)))]
+          (concat
+           (for [n depends_on]
+             (format "  depends-on   -> %-6s [%s]%s" (:id n) (:state n)
+                     (if (some #{(:id n)} unmet) "   UNMET" "")))
+           (for [j dependents] (format "  required-by  <- %s" j))
+           (for [n supersedes]
+             (format "  supersedes   -> %-6s [%s]" (:id n) (:state n)))
+           (for [j superseded_by] (format "  superseded-by<- %s" j))
+           (when (< 1 (count chain))
+             [(str "  chain: " (str/join " -> " (map #(str (:id %) " [" (:state %) "]") chain)))])))))
+
+(defn dependency-refusal
+  "The typed refusal an apply earns while a dependency is unverified, BEFORE
+   anything is staged and before any byte is written."
+  [mission index]
+  (let [unmet (unmet-dependencies mission index)]
+    (when (seq unmet)
+      (refusal "dependency-not-verified"
+               (str "Mission " (:id mission) " depends on "
+                    (str/join ", " (:depends-on mission)) "; "
+                    (str/join ", " unmet)
+                    (if (= 1 (count unmet)) " is" " are")
+                    " not :verified. Nothing was written.")
+               {:id (:id mission)
+                :depends_on (vec (:depends-on mission))
+                :unverified unmet
+                :mutation_attempted false
+                :source_unchanged true
+                :next-action [:resume (first unmet)]
+                :decision (waiting-decision unmet)}))))
+
+;; ---------------------------------------------------------------------------
 ;; the human index
+
 ;;
 ;; One line per mission, fixed columns, no tool required to read it. This is the
 ;; `bd list` half of the usability bar: the ledger has to answer "what is in
 ;; flight" without opening seven files.
 
 (defn- one-line-summary
-  [mission]
-  (cond
-    (:error_type mission) (str (:error_type mission))
-    (= :blocked (:state mission)) (str "decision: "
-                                       (or (get-in mission [:decision :question])
-                                           "unstated"))
-    (= :verified (:state mission)) (str "verified; undo "
-                                        (or (get-in mission [:undo :receipt]) "-"))
-    (= :failed (:state mission)) (str "failed: "
-                                      (or (get-in mission [:receipt :status]) "-"))
-    :else (str (get-in mission [:dossier :footprint :changed_files] "-")
-               " files, "
-               (get-in mission [:dossier :footprint :sites] "-") " sites")))
+  [mission index]
+  (let [state (effective-state mission index)]
+    (cond
+      (:error_type mission) (str (:error_type mission))
+      (= :blocked state) (str "decision: "
+                              (or (blocking-decision mission index) "unstated"))
+      (= :verified state) (str "verified; undo "
+                               (or (get-in mission [:undo :receipt]) "-"))
+      (= :failed state) (str "failed: "
+                             (or (get-in mission [:receipt :status]) "-"))
+      ;; ROUND-2 DEFECT: :undone fell through to the footprint arm and reported
+      ;; the size of a write that is no longer standing. An inverted mission's
+      ;; one interesting fact is that the tree went back.
+      (= :undone state) (str "undone; tree restored"
+                             (when-let [v (get-in mission [:undo :verified :whole-files])]
+                               (if v " (whole-file compare)" " (UNVERIFIED restore)")))
+      :else (str (get-in mission [:dossier :footprint :changed_files] "-")
+                 " files, "
+                 (get-in mission [:dossier :footprint :sites] "-") " sites"))))
 
 (defn index-lines
-  "The human index, one line per mission."
+  "The human index, one line per mission. The STATE column shows the EFFECTIVE
+   state, so a mission held by an unverified dependency reads as blocked here
+   without that ever being written to its file."
   [missions]
-  (into ["ID     STATE      VERB                SUMMARY"]
-        (for [m missions]
-          (format "%-6s %-10s %-19s %s"
-                  (or (:id m) "?")
-                  (or (some-> (:state m) name) "?")
-                  (or (:verb m) "-")
-                  (one-line-summary m)))))
+  (let [index (by-id missions)]
+    (into ["ID     STATE      VERB                SUMMARY"]
+          (for [m missions]
+            (format "%-6s %-10s %-19s %s"
+                    (or (:id m) "?")
+                    (or (some-> (effective-state m index) name) "?")
+                    (or (:verb m) "-")
+                    (one-line-summary m index))))))
 
 (defn write-index!
   "Refresh the ledger's human index file."
@@ -424,16 +709,55 @@
     nil))
 
 (defn ready-missions
-  "Missions waiting on EXACTLY ONE decision, plus the ones ready to apply.
+  "Missions that can move RIGHT NOW, and who has to move them.
 
-  This is the `bd ready` verb: what can move right now, and who has to move it.
-  A blocked mission is listed because a human unblocks it; a ready mission is
-  listed because a machine can."
+  A dependency-blocked mission is deliberately NOT here: nobody can do anything
+  about it until its dependency lands, and a `ready` list that includes work no
+  one can start is the list an agent learns to stop reading. It appears in
+  `waiting-missions` instead, with the id it is waiting on."
   [missions]
-  (->> missions
-       (filter #(contains? #{:ready :blocked} (:state %)))
-       (mapv (fn [m]
-               {:id (:id m)
-                :state (name (:state m))
-                :waiting_on (if (= :blocked (:state m)) "a decision" "apply")
-                :question (get-in m [:decision :question])}))))
+  (let [index (by-id missions)]
+    (->> missions
+         (filter map?)
+         (keep (fn [m]
+                 (let [state (effective-state m index)]
+                   (when (and (contains? #{:ready :blocked} state)
+                              (empty? (unmet-dependencies m index)))
+                     {:id (:id m)
+                      :state (name state)
+                      :waiting_on (if (= :blocked state) "a decision" "apply")
+                      :decision (blocking-decision m index)}))))
+         vec)))
+
+(defn waiting-missions
+  "Missions held by an unverified dependency: real work, not startable yet."
+  [missions]
+  (let [index (by-id missions)]
+    (->> missions
+         (filter map?)
+         (keep (fn [m]
+                 (let [unmet (unmet-dependencies m index)]
+                   (when (and (seq unmet)
+                              (contains? #{:proposed :ready} (:state m)))
+                     {:id (:id m)
+                      :state "blocked"
+                      :waiting_on (vec unmet)
+                      :decision (waiting-decision unmet)}))))
+         vec)))
+
+(defn show-view
+  "One mission plus the graph around it: the DAG, the supersession chain, and
+   the effective state. DERIVED on every read from the ledger it is handed —
+   the mission file itself never carries any of it."
+  [missions id]
+  (let [index (by-id missions)
+        m (get index id)]
+    (if-not m
+      (refusal "unknown-id"
+               (str "No mission " id " in this ledger.")
+               {:id id :decision "which mission id this call means"})
+      (assoc m
+             :effective_state (effective-state m index)
+             :decision_summary (blocking-decision m index)
+             :dependencies (dependency-view m index)
+             :graph (dependency-lines m index)))))

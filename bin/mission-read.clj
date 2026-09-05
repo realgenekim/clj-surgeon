@@ -27,12 +27,16 @@
       state-dir (mission/workspace-state-dir (:workspace flags) (:state-home flags))
       missions (mission/read-all state-dir)]
   (case verb
-    "show" (pp/pprint (mission/read-mission state-dir (first positional)))
+    "show" (let [m (mission/read-mission state-dir (first positional))]
+             (pp/pprint (if (mission/refused? m)
+                          m
+                          (mission/show-view missions (first positional)))))
     "list" (pp/pprint {:ok true :operation "mission"
                        :ledger (mission/missions-dir state-dir)
                        :count (count missions)
                        :index (mission/index-lines missions)})
     ("ready" "blocked") (pp/pprint {:ok true :operation "mission"
-                                    :ready (mission/ready-missions missions)})
+                                    :ready (mission/ready-missions missions)
+                                    :waiting (mission/waiting-missions missions)})
     (do (println "read verbs: show <id> | list | ready|blocked  (--workspace R [--state-home H])")
         (System/exit 2))))
