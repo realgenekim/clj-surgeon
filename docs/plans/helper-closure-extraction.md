@@ -217,3 +217,75 @@ namespace, registration in `mcp-tool`.
 4. I/O boundary + kernel + registration green; `make test` (landing gate) green.
 5. Hand-drive on the cfp candidate (Astra's fixture), with his oracle.
 6. Measurement per the plan above.
+
+## Revision 3 (Astra's six corrections + static review of 9d4b54bb, 04:58–05:02Z) — the contract of record
+
+Where this section disagrees with text above, THIS section wins. The owning intent documents are
+`docs/intent/helper-extraction/helper-extraction-design.md` (HLD → LLD) and
+`helper-extraction-specs.md` (EARS registry, prefix `MCP-OP-HELPER`).
+
+1. **Continuation authority.** A refusal carries `next_call` ONLY when a schema-valid,
+   scope-preserving, non-identical continuation is mechanically known (today: none in v1). Every
+   other refusal carries bounded evidence plus the one unresolved decision and `next_call: null`.
+   Positional-owner references are REMOVED from v1: `ambiguous-owner` refuses naming the owners
+   found (line, kind). `expect_revised` and "both numbers" are REMOVED (a stateless request carries
+   no old count): `expect-mismatch` reports `derived_caller_files` and `expected_caller_files`, nothing more.
+2. **`expect.caller_files` is OPTIONAL** and absent in normal problem-to-done use; when supplied it
+   is a strict guard.
+3. **References, not only calls.** Discovery covers every supported REFERENCE to a selected owner:
+   head-position calls, first-class uses (`(map http/f xs)`, `#'http/f`, `http/f` as a value),
+   `:refer`ed bare symbols, fully qualified symbols with or without a require, and admitted `def`
+   initializers. Selected-owner BODIES are scanned for their own dependencies: a moved→moved
+   reference is rewritten to the destination's own symbol; a moved→retained-PUBLIC dependency is
+   REFUSED in v1 (`helper-extraction-retained-dependency`, conservative: no back-edge from the
+   destination into the source, so no cycle is possible through it, and no third-namespace cycle
+   can be created either, because the destination requires nothing of the source); a
+   moved→retained-PRIVATE dependency refuses `private-dependency`. Source-local uses (a retained
+   source function referencing a moved helper) are lowered by the extraction machinery's own
+   source rewrite (one require of the destination added to the source, symbols qualified), never
+   by a second overlapping caller change; the source is both mutation subject and caller and is
+   counted ONCE, against one immutable snapshot. Namespace-sensitive forms inside a moved body
+   (`::kw`, `::alias/kw`, syntax-quote, `*ns*`) are REFUSED in v1 (`helper-extraction-namespace-
+   sensitive-body`) unless the existing extraction semantics already rewrite them faithfully and a
+   behavior witness proves it; exact owner bytes never stand for semantic preservation.
+4. **One boundary for scope.** `scope.paths` is a WRITE-AUTHORIZATION subset of the project's
+   admitted discovery roots (v1: the roots are explicit and config-bound: `src`, `test`, plus
+   `.clj-surgeon.edn :source-roots` when present; no universal project discovery). Discovery runs
+   over ALL admitted roots; a supported selected reference found OUTSIDE `scope.paths` refuses
+   `helper-extraction-caller-outside-scope` (retiring shared definitions with a caller left behind
+   is the failure the verb exists to prevent). `from.file` is always in the footprint regardless of
+   roots. An UNSUPPORTED potential selected binding (prefix list, `:refer :all`, reader
+   conditional, `:rename`, `ns-resolve`/`resolve` of the source) refuses `unsupported-binding`;
+   an unrelated bystander that merely requires the source without referencing a selected owner
+   gains no mutation authority and is `untouched`. No-require fully qualified callers are their own
+   partition class `qualified-only` (rewritten to the destination's qualified symbol; no require added).
+5. **Terminal states are distinct**, and the promise matches the kernel: `verification-preflight-
+   unavailable` (profile cannot run: refused before any write; nothing staged),
+   `verification-failed` and `verification-timeout` (candidate bytes were staged, the kernel's hot
+   rollback restored every protected byte and mode and removed the destination; receipt says
+   `restored: true` with the restoration read-back), `rollback-failed` (restoration did not
+   complete: receipt says `source_unchanged: false`, names the files, and carries the kernel's
+   recovery-required evidence; it NEVER claims unchanged). Only synchronous, rollback-capable
+   profiles are admitted in v1; capability is validated before writing. No committed success
+   without completed proof. Proof = the acceptance-owned profile (Astra's, external guarded argv,
+   candidate cwd: structural oracle, then helper behaviors) run in a FRESH process, so a warm
+   namespace with stale Vars cannot manufacture a proof; the receipt claims only the coverage the
+   profile actually ran (`verification.covered_callers`).
+6. **LID phases, not custom phases.** The plan's "Phases" list is replaced by the repository's
+   scoped LID phases: intent (HLD/LLD in the design doc) → EARS registry with `[ ]` markers →
+   RED witnesses carrying the ids → GREEN implementation → landing gate. Registration happens in
+   the same change as the RED witnesses so the audit never sees an unwitnessed active gap.
+
+### RED witness inventory (Astra's minimum matrix, each one witness)
+- typed terminal refusal has `next_call nil`; any generated continuation validates against the closed schema and preserves scope
+- selected owner uses a retained public value in a non-head position → `retained-dependency`; retained private → `private-dependency`
+- moved→moved peer reference rewritten to the destination's symbol
+- `::ok` in a moved body → `namespace-sensitive-body` refusal (or proven-faithful rewrite with a behavior witness)
+- direct source↔target back-edge and source→third-caller→target chain: both impossible by construction under rule 3, witnessed by a fixture that would create each
+- source-local retained caller coexists with the extraction in one snapshot; footprint counts the source once
+- fully qualified no-require caller rewritten, partition `qualified-only`
+- supported selected reference outside `scope.paths` → `caller-outside-scope`; unsupported selected binding → `unsupported-binding`; unrelated bystander stays `untouched`
+- synchronous verification failure and timeout restore every protected byte and mode and remove the destination (`restored: true`); rollback failure reports `source_unchanged: false`
+- the proof runs in a fresh process; a warm stale Var cannot produce a false proof after retirement; `covered_callers` equals the declared caller set
+- `expect.caller_files` absent accepted; supplied and wrong → `expect-mismatch` with both derived and expected counts
+- request carrying any per-caller table → closed-field refusal; receipt carries no file list
