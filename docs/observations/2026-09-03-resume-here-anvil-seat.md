@@ -561,3 +561,6 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## RESUME DELTA 10:23Z
 - helper_extraction LANDING-READY at e1239a99 (bridge/helper-extraction-impl; gate commit f70e72bb). All gates green, Sol r7 GO. Waiting for Astra's or Gene's landing word; then `~/bin/land e1239a99 "<title>"` (runs battery-fresh first; the e1239a99 receipt is on the branch). Do NOT land without the word. Follow-ups per Astra handoff in the queue doc. Builders idle.
+
+## RESUME DELTA 14:54Z
+- helper_extraction LANDED: MCP/main = 3ffc6fae (merge 3ffc6fae). Servers 7906 PID 3937847 / 8171 PID 3937849 on it. Astra tasked (Gene 14:5xZ): telemetry blind spot fix + 4-hour fair replicated comparison (his handoff item 7); WATCH: his pane shows gpt-5.6-luna now. Mayor instructed via the queue doc + /tmp/anvil-to-mayor.txt to pull+install 3ffc6fae. Next: relay Astra's ack/plan; hold my lane quiet during his timed arms; follow-ups per the handoff.

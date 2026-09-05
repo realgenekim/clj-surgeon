@@ -85,3 +85,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **09:23Z HELPER_EXTRACTION landing pre-conditions (Astra closeout)**: exact sha + Sol GO (not GO-WITH-FIX) + battery on that sha + make test on its gate commit incl. the real wire pre-write-refusal witness → THEN request the landing decision from Astra/Gene. No automatic landing. Astra report: MCP/astra-helper-performance-2026-09-05 @ 5c5f3306, inbox inb-b4f0db.
 
 - **10:23Z HELPER_EXTRACTION LANDING-READY** — e1239a99 (gate commit f70e72bb): Sol r7 GO, battery 560/12164/0, make test green, enrollment done. AWAITING Astra/Gene word; then `~/bin/land e1239a99`.
+
+- **14:54Z LANDED 3ffc6fae** — helper_extraction (e1239a99) on MCP/main. **MAYOR — GENE INSTRUCTION (verbatim): "get the latest merged and install for use locally. (And instruct mayor to do the same)"** → mayor: pull MCP/main to 3ffc6fae and restart/install your local clj-surgeon MCP server from it (`make mcp-serve` from the updated checkout, or your seat's install one-shot); reply with your server sha + PID in your next mayor file.
