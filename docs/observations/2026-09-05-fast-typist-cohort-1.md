@@ -33,3 +33,18 @@ F won the control by 17x, so by the prereg's own rule the apparatus, not the typ
 Decision: NOT KEEP, NOT KILL. Cohort 2 must (a) give arm N a warm author (a resident Sol session, or charge only the model's own turn) and (b) add F with k=1, so that k=5 vs k=1 isolates the value of parallel search from the raw speed of the model. Predictions for cohort 2, recorded now: F k=1 median ≈ 1.5–2.5 s with a lower verified-rate (~75–85% per candidate); N-warm one-site ≈ 3–6 s; if N-warm on scope-roots is under 5 s, the typist's advantage on bounded dossiers is mostly model speed, not search, and the search claim is dead.
 
 Tool-shape findings that survive regardless: all 29 applying F candidates landed via the anchored applier and zero via git apply (the typist speaks context-anchored hunks); the one failure was a one-space context error the applier refused rather than repaired.
+
+## F with k=1 (22:08Z) — the parallel-search claim is dead on these dossiers; the speed claim is model speed plus a cheap gate
+
+Prediction recorded above: k=1 median 1.5–2.5 s with a lower per-candidate verified rate (~75–85%). Raw log: 2026-09-05-fast-typist-k1.log.
+
+| arm | mission | runs | first-verified wall, sorted (s) | median | verified |
+|---|---|---|---|---|---|
+| F k=1 | scope-roots | 6 | 1.14 1.33 1.55 1.73 1.75 2.71 | **1.64** | 6/6 |
+| F k=5 | scope-roots | 6 | (cohort 1) | 2.37 | 25/30 candidates, 6/6 runs |
+| F k=1 | onesite | 6 | 0.45 0.62 0.83 0.84 1.02 1.42 | **0.84** | 6/6 |
+| F k=5 | onesite | 6 | (control) | 0.97 | 29/30 candidates, 6/6 runs |
+
+k=1 is FASTER than k=5 and lost nothing: 12/12 single candidates verified (prediction of a lower rate: wrong). So on these two dossiers five parallel candidates buy no first-verified time (they cost it: parallel requests and serial gating add ~0.1–0.7 s) and no reliability that a single candidate lacked. The "search under a cheap verifier" mechanism is not what produced the cohort-1 result; the result is a fast model (≈480 tok/s) plus a millisecond gate against a cold-process author. Search can only pay when single-candidate reliability is materially below 1, which these dossiers do not exercise; that is a fixture-difficulty limitation, and the next dossier must be one where a single candidate fails often (the retained f0 defect class, a multi-hunk fan-out, or a real-repo file).
+
+Standing: NOT KEEP for the search claim; a bounded-dossier speed claim is real but only against a cold author; the warm-author N arm (cohort 2) decides whether any of it survives against Sol.
