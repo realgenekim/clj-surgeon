@@ -286,11 +286,31 @@ byte-parity assertions compare a pool-1 census with that pool-4 census, and the
 budget overrun on `reader-eval-fence-test` (466 s against 300 s) is the same
 four-core constraint on a lane whose ceiling was measured on sixteen.
 
+**ATTRIBUTION, MEASURED, NOT ASSERTED.** The same three assertions were driven
+on an unmodified `git archive` copy of the **trunk tip `a74d8407`**, under the
+identical `taskset -c 6-9` pinning — a tree with none of this round's changes
+in it:
+
+```
+FAIL in (pool-size-one-and-pool-size-n-agree-byte-for-byte) (mcp_relation_census_test.clj:114)
+  actual: (not (= 8 4))
+FAIL in (pool-size-one-and-pool-size-n-agree-byte-for-byte) (mcp_relation_census_test.clj:115)
+FAIL in (pool-size-one-and-pool-size-n-agree-byte-for-byte) (mcp_relation_census_test.clj:118)
+```
+
+Identical failures, identical line numbers, on the trunk. **The battery-lane
+failure is pre-existing and environmental; it is not this round's change.**
+(The same run also reported `no-machine-local-build-cache-is-tracked` — the
+known gitignored-store precondition when a hygiene test runs from an archive
+copy, and a separate artefact of the reproduction method, not of the trunk.)
+
 **This is the `ambient-state-is-an-invisible-precondition` class**: a gate whose
 verdict depends on a property of the machine that nothing in the gate declares.
-Not asserted as harmless — a same-pinning reproduction on the trunk tip
-(`a74d8407`, git-archive copy) was launched to attribute it, and none of the
-failures is in code this round touched.
+The right ratchet, for whoever owns that test, is for it to assert the
+*effective* pool size against `availableProcessors` — or to declare the core
+count as a named precondition and refuse rather than fail — instead of assuming
+that a request for 8 workers comes back as 8. That is a trunk-owned fix and is
+deliberately not made here.
 
 **GATE OWED: a clean `make test-battery`, in a window without four-core
 pinning.** Until it produces a `:pass` receipt, `make landing-gate` refuses, and
