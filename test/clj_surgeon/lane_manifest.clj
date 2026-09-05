@@ -186,6 +186,11 @@
    'clj-surgeon.memory.oom-reproduction-test
    "transaction-kernel memory witness -- `make memory-red-kernel`, exclusive suite.lock"
 
+   'clj-surgeon.helper-extraction-test
+   "RED until the GREEN phase -- `make helper-extraction-red`; the planner and
+    boundary namespaces it witnesses do not exist yet, so it fails to LOAD and
+    must not answer for the merge gate. It moves into :fast in the GREEN change"
+
    'clj-surgeon.worktree-lifecycle-prune-test
    "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"
 
