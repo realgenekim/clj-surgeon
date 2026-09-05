@@ -477,11 +477,18 @@
         result (f)]
     [result (elapsed-ms started)]))
 
+;; @spec MCP-OP-TELCOV-002
 (defn- record-result!
-  [telemetry-state request response total-start timings]
+  "Record one transaction under the PUBLIC entrance the caller invoked.
+
+  `public-operation` is edit_clojure or apply_clojure_changes; both reach this
+  handler, and naming the handler instead of the entrance is what erased every
+  compact edit from the usage record."
+  [telemetry-state public-operation request response total-start timings]
   (when telemetry-state
     (telemetry/record-call!
-      telemetry-state request response
+      telemetry-state (or public-operation "apply_clojure_changes")
+      request response
       (assoc timings :total_ms (elapsed-ms total-start))))
   response)
 
@@ -812,13 +819,13 @@
                   (contract/validate-tool-params params)))]
     (if basis?
       (record-result!
-        telemetry params
+        telemetry public-operation params
         (if (:ok validated)
           (change-buffer/apply-basis! config normalized-params)
           validated)
         total-start {:validation_ms validation-ms})
       (if-not (:ok validated)
-        (record-result! telemetry params (contract/normalize-refusal validated)
+        (record-result! telemetry public-operation params (contract/normalize-refusal validated)
                         total-start {:validation_ms validation-ms})
         (try
           (let [[prepared confinement-ms]
@@ -863,7 +870,7 @@
                         resolved)}))
                 {:keys [root resolved]} prepared]
             (if-not (:ok resolved)
-              (record-result! telemetry params
+              (record-result! telemetry public-operation params
                               (contract/normalize-refusal resolved)
                               total-start
                               {:validation_ms validation-ms
@@ -900,13 +907,13 @@
                                         "create-files-present"))]
                 (when-not (:ok classified)
                   (delete-empty-dir! directory (not existed?)))
-                (record-result! telemetry params classified total-start
+                (record-result! telemetry public-operation params classified total-start
                                 {:validation_ms validation-ms
                                  :confinement_ms confinement-ms
                                  :kernel_ms kernel-ms}))))
           (catch Exception error
             (record-result!
-              telemetry params
+              telemetry public-operation params
               {:ok false
                :error_type "mcp-adapter-failure"
                :error (.getMessage error)

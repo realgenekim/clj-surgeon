@@ -6,7 +6,6 @@
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
-   [clojure-mcp.core :as mcp-core]
    [clojure-mcp.logging :as mcp-logging]
    [clojure.java.io :as io]
    [nrepl.server :as nrepl-server])
@@ -17,6 +16,7 @@
    (io.modelcontextprotocol.spec McpSchema$CallToolResult McpSchema$ServerCapabilities McpSchema$Tool McpSchema$ToolAnnotations)
    (java.io FileDescriptor FileOutputStream PrintStream PrintWriter)
    (java.lang.management ManagementFactory)
+   (java.util UUID)
    (reactor.core.publisher Mono)))
 
 (def default-log-file
@@ -152,9 +152,56 @@
   `create-async-tool`, which reaches each tool's callback only through this
   function. Anything that must hold for EVERY public call — telemetry above
   all — belongs here, because here is the only place a tool cannot opt out of.
-  Returning `(:tool-fn tool)` unchanged is the pre-instrumentation behaviour."
+
+  What it records, once per call, under the PUBLIC tool name the caller
+  invoked: the telemetry session id, a fresh request id, the tool, the
+  operation/mode when the request or receipt names one, monotonic start and
+  finish plus wall milliseconds, the outcome (ok, refused with its typed
+  refusal kind, or error), and serialized payload sizes in and out.
+
+  Three properties are load-bearing and each has an intent:
+  - EXACTLY ONE event per call. `recorded?` is compare-and-set, so a tool that
+    publishes through its callback and then throws still yields one event.
+  - REFUSED AND THROWN CALLS COUNT. A refusal recorded nowhere is what makes an
+    hour of real work read as zero.
+  - THE PUBLIC NAME, NEVER THE INTERNAL ONE. `edit_clojure` and
+    `apply_clojure_changes` share one handler; the entrance is what the caller
+    chose and the only name a per-caller report can attribute."
   [tool]
-  (:tool-fn tool))
+  (let [public-name (:name tool)
+        handler (:tool-fn tool)]
+    (fn dispatch [exchange arguments callback]
+      (let [started-ns (System/nanoTime)
+            request-id (str (UUID/randomUUID))
+            recorded? (atom false)
+            record!
+            (fn [outcome structured]
+              (when (compare-and-set! recorded? false true)
+                (try
+                  (telemetry/record-dispatch!
+                    (telemetry/active)
+                    {:tool public-name
+                     :request-id request-id
+                     :session-key
+                     (prepared-confirmation/exchange-session-key exchange)
+                     :arguments arguments
+                     :started-ns started-ns
+                     :finished-ns (System/nanoTime)
+                     :outcome outcome
+                     :structured structured})
+                  ;; Telemetry may never change what the caller receives.
+                  (catch Throwable _ nil))))]
+        (try
+          (handler exchange arguments
+                   (fn [content error? structured]
+                     (record! (if (:ok structured) :ok :refused) structured)
+                     (callback content error? structured)))
+          (catch Throwable error
+            (record! :error
+                     {:ok false
+                      :error_type "mcp-adapter-failure"
+                      :error (.getMessage error)})
+            (throw error)))))))
 
 (defn create-structured-async-tool
   "Create one SDK-native tool with annotations and structuredContent support."
@@ -208,11 +255,25 @@
                                     json-mapper [text] true failure))))))))))]
     (McpServerFeatures$AsyncToolSpecification. mcp-tool handler)))
 
+;; @spec MCP-OP-TELCOV-004
 (defn- create-async-tool
+  "Build one SDK tool specification.
+
+  A public tool that is not `:structured?` would be built by clojure-mcp's own
+  factory and would therefore never pass `dispatch-tool-fn` — an invisible hole
+  in telemetry coverage that no test driving the boundary could see. That is a
+  registration defect, so it refuses here rather than shipping a silent gap."
   [tool]
   (if (:structured? tool)
     (create-structured-async-tool tool)
-    (mcp-core/create-async-tool tool)))
+    (throw (ex-info
+             "Public MCP tool must be structured so it passes the dispatch boundary"
+             {:error-type :unstructured-public-tool
+              :tool (:name tool)
+              :remedy (str "Give " (:name tool)
+                           " :structured? true and an :output-schema; every "
+                           "public tool call is recorded at "
+                           "mcp-server/dispatch-tool-fn.")}))))
 
 (defn- add-tool!
   [server tool]

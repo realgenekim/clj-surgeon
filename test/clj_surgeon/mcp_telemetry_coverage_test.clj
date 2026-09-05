@@ -136,3 +136,59 @@
         (mcp-tool/init! previous-config)
         (delete-tree! workspace)
         (delete-tree! telemetry-dir)))))
+
+;; @spec MCP-OP-TELCOV-002
+(deftest compact-edit-is-recorded-under-edit-clojure-not-apply
+  ;; Both public entrances share one handler. Before 2026-09-05 every
+  ;; edit_clojure transaction appeared in the record as apply_clojure_changes,
+  ;; so the compact-edit path was uncountable and the apply path was inflated.
+  (let [workspace (temp-dir "clj-surgeon-telcov-edit-workspace-")
+        telemetry-dir (temp-dir "clj-surgeon-telcov-edit-events-")
+        previous-config @runtime/tool-config]
+    (try
+      (.mkdirs (io/file workspace "src"))
+      (spit (io/file workspace "src" "probe.clj")
+            "(ns probe)\n\n(defn answer [] 42)\n")
+      (let [state (telemetry/start!
+                    {:mode :metrics
+                     :directory (.getPath telemetry-dir)
+                     :session-id (str "telcov-edit-" (UUID/randomUUID))})]
+        (mcp-tool/init! {:project-root (.getPath workspace)
+                         :receipt-dir (.getPath (io/file workspace "receipts"))
+                         :tool-profile :full
+                         :telemetry state})
+        (let [edit-tool (first (filter #(= "edit_clojure" (:name %))
+                                       (mcp-server/public-tool-registry)))]
+          ((mcp-server/dispatch-tool-fn edit-tool)
+           nil
+           {"edits" [{"file" "src/probe.clj" "from" "42" "to" "43"}]}
+           (fn [_ _ _] nil)))
+        (let [recorded (events state)
+              names (set (map :tool (remove #(= "server.start" (:event %))
+                                            recorded)))]
+          (is (contains? names "edit_clojure"))
+          (is (not (contains? names "apply_clojure_changes"))
+              (str "an edit_clojure call was recorded under an internal name: "
+                   (pr-str (sort names))))))
+      (finally
+        (mcp-tool/init! previous-config)
+        (delete-tree! workspace)
+        (delete-tree! telemetry-dir)))))
+
+;; @spec MCP-OP-TELCOV-004
+(deftest an-unstructured-public-tool-refuses-instead-of-bypassing-telemetry
+  ;; clojure-mcp's own factory builds a non-structured tool, which never passes
+  ;; dispatch-tool-fn. That hole is invisible to any witness that drives the
+  ;; boundary, so it must be impossible to register rather than merely untested.
+  (let [refusal (try
+                  (@#'mcp-server/create-async-tool
+                   {:name "silent_tool"
+                    :description "d"
+                    :schema {}
+                    :tool-fn (fn [_ _ callback] (callback [] false {:ok true}))})
+                  nil
+                  (catch clojure.lang.ExceptionInfo error error))]
+    (is (some? refusal) "an unstructured public tool must not build")
+    (is (= :unstructured-public-tool (:error-type (ex-data refusal))))
+    (is (= "silent_tool" (:tool (ex-data refusal))))
+    (is (str/includes? (:remedy (ex-data refusal)) "dispatch-tool-fn"))))

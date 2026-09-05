@@ -59,13 +59,35 @@
             vec)
        []))))
 
+(defonce ^:private active-state
+  (atom nil))
+
+;; @spec MCP-OP-TELCOV-001
+(defn active
+  "The telemetry session this JVM's MCP server started, or nil.
+
+  The dispatch boundary lives in `mcp-server` and is built by
+  `configure-specification`, which takes no configuration argument on either
+  transport. Threading state through it would mean a second plumb that a new
+  transport could forget; a process-wide registry cannot be forgotten, because
+  `start!` is the only way a server obtains a session at all."
+  []
+  @active-state)
+
+(defn install!
+  "Record `state` as this process's active telemetry session and return it."
+  [state]
+  (reset! active-state state)
+  state)
+
 (defn start!
   "Create one local telemetry session. Modes are :off, :metrics, and :full."
   [{:keys [mode directory retention-days session-id run-id]}]
   (let [mode (normalize-mode mode)
         session-id (str (or session-id (UUID/randomUUID)))]
     (if (= :off mode)
-      {:mode :off :session-id session-id :run-id run-id :file nil :lock (Object.)}
+      (install!
+        {:mode :off :session-id session-id :run-id run-id :file nil :lock (Object.)})
       (let [directory (str (or directory (default-directory)))
             directory-file (io/file directory)
             _ (.mkdirs directory-file)
@@ -81,11 +103,12 @@
                            :session-id session-id})))
         (spit file "")
         (private-permissions! file "rw-------")
-        {:mode mode
-         :session-id session-id
-         :run-id run-id
-         :file (.getCanonicalPath file)
-         :lock (Object.)}))))
+        (install!
+          {:mode mode
+           :session-id session-id
+           :run-id run-id
+           :file (.getCanonicalPath file)
+           :lock (Object.)})))))
 
 (defn emit!
   "Append one structured event. Never writes to stdout."
@@ -143,21 +166,30 @@
     (contains? response :rolled_back)
     (assoc :rolled_back (:rolled_back response))))
 
+;; @spec MCP-OP-TELCOV-002
 (defn call-event
-  "Build the mode-dependent tool.call event payload without performing I/O."
-  [mode request response timings]
-  (cond->
-    {:tool "apply_clojure_changes"
-     :request_shape (request-shape request)
-     :outcome (outcome-shape response)
-     :timings_ms timings}
-    (= :full (normalize-mode mode))
-    (assoc :request request :response response)))
+  "Build the mode-dependent tool.call event payload without performing I/O.
+
+  `tool` is the PUBLIC entrance the caller invoked. `edit_clojure` and
+  `apply_clojure_changes` share one handler, and hardcoding the latter here is
+  what made every compact edit read as an apply call (2026-09-05)."
+  ([mode request response timings]
+   (call-event mode "apply_clojure_changes" request response timings))
+  ([mode tool request response timings]
+   (cond->
+     {:tool (or tool "apply_clojure_changes")
+      :request_shape (request-shape request)
+      :outcome (outcome-shape response)
+      :timings_ms timings}
+     (= :full (normalize-mode mode))
+     (assoc :request request :response response))))
 
 (defn record-call!
-  [state request response timings]
-  (emit! state :tool.call
-         (call-event (:mode state) request response timings)))
+  ([state request response timings]
+   (record-call! state "apply_clojure_changes" request response timings))
+  ([state tool request response timings]
+   (emit! state :tool.call
+          (call-event (:mode state) tool request response timings))))
 
 (defn inspect-request-shape
   "Return source-free shape and payload-size evidence for inspect_clojure."
@@ -208,3 +240,48 @@
   [state request response timings]
   (emit! state :tool.call
          (inspect-call-event (:mode state) request response timings)))
+
+(defn- payload-bytes
+  "Serialized size of one public payload, in UTF-8 bytes. Size only: this is a
+   metrics-mode field, so it must never depend on payload CONTENT surviving."
+  [payload]
+  (try
+    (alength (.getBytes (json/generate-string payload) "UTF-8"))
+    (catch Exception _ 0)))
+
+;; @spec MCP-OP-TELCOV-001
+;; @spec MCP-OP-TELCOV-002
+;; @spec MCP-OP-TELCOV-003
+(defn dispatch-event
+  "Build the `tool.dispatch` payload for ONE public MCP tool call.
+
+  `tool` is the PUBLIC name the caller invoked, never an internal operation the
+  server routed to. The 2026-09-05 false zero was exactly that substitution:
+  `edit_clojure` calls were written as `apply_clojure_changes` because the
+  event named the implementation rather than the entrance."
+  [{:keys [tool request-id session-key arguments started-ns finished-ns
+           outcome structured]}]
+  (let [arguments (or arguments {})
+        structured (or structured {})
+        operation (or (value structured :operation) (value arguments :operation))
+        mode (or (value arguments :mode) (value arguments :action))
+        error-type (or (value structured :error_type) (value structured :error-type))]
+    (cond->
+      {:tool (str tool)
+       :request_id (str request-id)
+       :outcome (name outcome)
+       :started_ns started-ns
+       :finished_ns finished-ns
+       :wall_ms (/ (double (- finished-ns started-ns)) 1000000.0)
+       :bytes_in (payload-bytes arguments)
+       :bytes_out (payload-bytes structured)}
+      operation (assoc :operation (str operation))
+      mode (assoc :mode (str mode))
+      session-key (assoc :mcp_session_key (str session-key))
+      (and (= :refused outcome) error-type) (assoc :refusal_kind (str error-type))
+      (and (= :error outcome) error-type) (assoc :error_type (str error-type)))))
+
+(defn record-dispatch!
+  "Append one `tool.dispatch` event. Callers guarantee exactly one per call."
+  [state event]
+  (emit! state :tool.dispatch (dispatch-event event)))
