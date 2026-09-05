@@ -183,7 +183,19 @@
 
     clj-surgeon.mcp-compact-relations-test
     [["/usr/bin/true" "the project-owned exact-verify profile actually running, so `verify exact` is proved end to end rather than mocked"]
-     ["/usr/bin/false" "the same profile failing, so a refusal is proved by the same path"]]})
+     ["/usr/bin/false" "the same profile failing, so a refusal is proved by the same path"]]
+
+    ;; The INTEGRATION lane, same rule and same reason. Its lane text already
+    ;; says `still no cold child JVM`, and these are not: they are the
+    ;; user-supplied verify commands whose handling is the subject.
+    clj-surgeon.mcp-http-server-test
+    [["/usr/bin/true" "the verification profile the HTTP surface is asked to run, actually run, so the wire contract is proved over a real process result"]]
+
+    clj-surgeon.mcp-tool-test
+    [["/usr/bin/true" "a passing project verify profile, run for real through the tool boundary"]
+     ["/usr/bin/false" "the same boundary refusing, by the same path"]
+     ["/bin/test" "the profile asserting a file the change was supposed to produce -- the check a user would actually configure"]
+     ["/bin/sh -c sleep 0.05;" "the cold-verification proof: a command that outlives the call, so `verification_pending` is a real state rather than a mocked one"]]})
 
 (defn allowlisted-spawn?
   "@spec TEST-ISO-002 -- true when `command` is a declared fixture command for
@@ -634,11 +646,34 @@
                           ms budget))]
       [])))
 
+(def shared-pool-thread-name
+  "@spec TEST-ISO-010 -- thread names that belong to a JVM-GLOBAL pool rather
+   than to the namespace that happened to be running when the pool grew.
+
+   `clojure-agent-send-off-pool-N` is Clojure's own cached pool behind
+   `send-off` and `future`. It is non-daemon by design, it has a 60 second
+   keep-alive, and it is shared by every namespace in the run -- so which
+   namespace `created` a worker is an artefact of scheduling, not of
+   ownership. Measured on this branch: the same thread was attributed to
+   `workspace-onboarding-test` on one run and to `mcp-tool-test` on the next,
+   and a third run reported none. A witness whose verdict moves with the
+   weather is not a ratchet; it is a thing people learn to re-run until it is
+   green, and that habit is worse than the check is worth.
+
+   The rule it protects is unchanged and still enforced: a namespace that
+   starts its OWN non-daemon thread and leaves it running is refused by id and
+   name. The only remedy for the shared pool is `shutdown-agents`, which would
+   break every namespace that runs after it -- the correct place for that is
+   the end of the whole run, not the end of a namespace."
+  #"^clojure-agent-send-off-pool-\d+$")
+
 (defn thread-violations
   "@spec TEST-ISO-010"
   [ns-sym before after]
-  (let [new-ids (set/difference (set (keys (:threads after)))
-                                (set (keys (:threads before))))]
+  (let [new-ids (->> (set/difference (set (keys (:threads after)))
+                                     (set (keys (:threads before))))
+                     (remove #(re-matches shared-pool-thread-name
+                                          (str (get-in after [:threads %])))))]
     (mapv (fn [id]
             (violation "TEST-ISO-010" ns-sym "non-daemon thread"
                        (format "thread %d (%s) is alive and non-daemon after this namespace finished; a leaked non-daemon thread keeps the JVM from exiting even when every test passed"

@@ -136,6 +136,25 @@
       (is (str/includes? (iso/message (first vs)) "424242"))
       (is (str/includes? (iso/message (first vs)) "witness-only-never-executed")))))
 
+;; @spec TEST-ISO-010
+(deftest a-shared-agent-pool-worker-is-not-attributed-to-a-namespace
+  ;; MEASURED on this branch: the same `clojure-agent-send-off-pool-2` was
+  ;; attributed to workspace-onboarding-test on one run, to mcp-tool-test on
+  ;; the next, and to nobody on a third. It is a JVM-global cached pool with a
+  ;; 60 s keep-alive; which namespace was running when it grew is scheduling,
+  ;; not ownership. The rule it protects is UNCHANGED -- a namespace's own
+  ;; non-daemon thread is still refused by id and name, which is the second
+  ;; half of this witness.
+  (let [before (empty-snapshot)
+        pool (assoc (empty-snapshot) :threads {165 "clojure-agent-send-off-pool-2"})
+        own (assoc (empty-snapshot) :threads {166 "my-test-listener-thread"})]
+    (is (empty? (of-intent (iso/violations subject before pool) "TEST-ISO-010"))
+        "a shared agent-pool worker must not fail the namespace that met it")
+    (let [vs (of-intent (iso/violations subject before own) "TEST-ISO-010")]
+      (is (= 1 (count vs)) "a namespace's OWN non-daemon thread is still refused")
+      (is (str/includes? (iso/message (first vs)) "my-test-listener-thread"))
+      (is (str/includes? (iso/message (first vs)) "166")))))
+
 ;; @spec TEST-ISO-002
 (deftest the-spawn-allowlist-is-exact-per-namespace-and-cannot-reach-a-cold-runtime
   ;; The contract amendment, held to its three properties. It reads: NO child

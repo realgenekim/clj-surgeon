@@ -414,7 +414,7 @@
     clj-surgeon.mcp-feature-thread-test    69 ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
     clj-surgeon.mcp-feature-thread-sed-test 1 ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
-    clj-surgeon.ns-isolation-test          23}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
+    clj-surgeon.ns-isolation-test          24}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -425,9 +425,9 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 138 deftests  (12+4+25+3+69+1+1+23)
+  ;;   adopted since round one .................... 139 deftests  (12+4+25+3+69+1+1+24)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1058 deftests
+  ;;   total declared by the manifest ............. 1059 deftests
   ;;
   ;; ROUND FIVE MOVED ONE TEST OUT of a round-one namespace, which is why the
   ;; first line went 921 -> 920, and it is worth saying plainly because it is
@@ -461,9 +461,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 138 adopted) (str "adopted tests: " adopted)))
+      (is (= 139 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1058 total) (str "manifest declares " total " tests"))
+      (is (= 1059 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
