@@ -242,6 +242,39 @@
     (is (str/includes? (:out report) "--receipt PATH"))
     (is (str/includes? (:out report) "Never uploads source"))))
 
+(deftest up-is-explicitly-development-only
+  (testing "the launcher refuses a side-effecting developer command without --force"
+    (let [refusal (core/parse-up-args [])]
+      (is (= :development-only (:error-type refusal)))
+      (is (str/includes? (:error refusal) "development-only"))
+      (is (= ["clj-surgeon" "up" "<WORKSPACE>" "--force"]
+             (:next_call refusal)))))
+  (testing "force is order-independent and workspace remains data"
+    (is (= {:workspace "/repo" :force true}
+           (core/parse-up-args ["--force" "/repo"])))
+    (is (= {:workspace "/repo" :force true}
+           (core/parse-up-args ["/repo" "--force"]))))
+  (testing "help is side-effect free"
+    (is (= {:help true} (core/parse-up-args ["--help"])))
+    (is (str/includes? (core/format-up-help) "Development-only"))
+    (is (str/includes? (core/format-up-help) "--force")))
+  (testing "extra positional arguments are rejected"
+    (is (= :invalid-arguments
+           (:error-type (core/parse-up-args ["/a" "/b" "--force"]))))))
+
+(deftest cli-up-help-discloses-development-guard
+  (let [{:keys [exit out]} (run-cli "up" "--help")]
+    (is (zero? exit))
+    (is (str/includes? out "Development-only"))
+    (is (str/includes? out "--force"))))
+
+(deftest cli-up-refusal-is-nonzero-and-typed
+  (let [{:keys [exit out]} (run-cli "up")
+        refusal (edn/read-string out)]
+    (is (not (zero? exit)))
+    (is (= :development-only (:error-type refusal)))
+    (is (seq (:next_call refusal)))))
+
 (deftest cli-mv-refusal-is-edn-nonzero-and-preserves-source
   (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
         tmp (java.io.File/createTempFile "clj-surgeon-cli-mv-guard" ".clj")]

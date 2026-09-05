@@ -2534,7 +2534,7 @@
                     (group-by (fn [[_ v]] (:category v))))]
     (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
-    (.append sb "       clj-surgeon up [WORKSPACE]      join the shared hot MCP stack\n")
+    (.append sb "       clj-surgeon up [WORKSPACE] --force  join the dev-only MCP stack\n")
     (.append sb "       clj-surgeon recover [WORKSPACE] repair once; receipt names fallback\n")
     (.append sb "       clj-surgeon report-failure --receipt PATH\n")
     (.append sb "       clj-surgeon --help              show this message\n")
@@ -2553,6 +2553,10 @@
             (.append sb (format "  -> %s" (name pair))))
           (.append sb "\n"))
         (.append sb "\n")))
+    (.append sb "  Structured input (avoids shell quoting):\n")
+    (.append sb "    clj-surgeon :op :change! :spec-file - <<'EDN'\n")
+    (.append sb "      {:changes [{:id :example :in [\"src/app.clj\"] :forms [run] :find :old :do [:replace :new]}]}\n")
+    (.append sb "      EDN\n\n")
     (.append sb "  Quick start:\n")
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
@@ -2566,6 +2570,43 @@
     (.append sb "  Convenience alias: :mv-with-deps presets :with-deps true.\n\n")
     (.append sb "  All ops return EDN. Read-only operations never write.\n  Write operations differ: :mv writes unless :dry-run true; paired operations use their documented ! executor.\n")
     (str sb)))
+
+(defn parse-up-args
+  "Parse the developer-only `up` launcher without starting any services.
+
+   `up` edits workspace agent configuration and joins a local MCP stack, so
+   callers must make that side effect explicit with `--force`.  Keeping this
+   parser pure makes the safety boundary directly testable."
+  [args]
+  (let [args (vec args)
+        help? (some #{"--help" "-h"} args)
+        force? (some #{"--force"} args)
+        positional (vec (remove #{"--help" "-h" "--force"} args))]
+    (cond
+      help?
+      {:help true}
+
+      (> (count positional) 1)
+      {:error "Usage: clj-surgeon up [WORKSPACE] --force"
+       :error-type :invalid-arguments}
+
+      (not force?)
+      {:error "clj-surgeon up is development-only and changes workspace agent configuration; rerun with --force"
+       :error-type :development-only
+       :next_call ["clj-surgeon" "up" (or (first positional) "<WORKSPACE>") "--force"]}
+
+      :else
+      {:workspace (first positional)
+       :force true})))
+
+(defn format-up-help
+  "Render the explicit safety contract for the developer-only `up` command."
+  []
+  (str "Usage: clj-surgeon up [WORKSPACE] --force\n\n"
+       "Development-only: joins a workspace to the shared clj-surgeon and "
+       "cclsp MCP stack and may edit .codex/config.toml. WORKSPACE defaults "
+       "to cwd. The explicit --force flag is required to prevent accidental "
+       "startup from makefiles or shell history."))
 
 (defn format-op-help
   "Per-command help: description, args, examples.
@@ -3054,21 +3095,22 @@
                         :version structural-lens/tool-version})
 
             (= "up" (first args))
-            (let [[_ workspace & extra] args]
+            (let [{:keys [help error error-type next_call workspace force]}
+                  (parse-up-args (rest args))]
               (cond
-                (= "--help" workspace)
-                (println (str "Usage: clj-surgeon up [WORKSPACE]\n\n"
-                              "Idempotently joins an existing workspace to one shared "
-                              "clj-surgeon and cclsp MCP stack. WORKSPACE defaults to cwd."))
+                help
+                (println (format-up-help))
 
-                (seq extra)
-                (throw (ex-info "Usage: clj-surgeon up [WORKSPACE]"
-                                {:error-type :invalid-arguments}))
+                error
+                (throw (ex-info error
+                                (cond-> {:error-type error-type}
+                                  next_call (assoc :next_call next_call))))
 
                 :else
                 (pp/pprint
                   ((requiring-resolve 'clj-surgeon.workspace-onboarding/up!)
-                   {:workspace workspace}))))
+                   {:workspace workspace
+                    :force force}))))
 
             (= "recover" (first args))
             (let [[_ workspace & extra] args]
