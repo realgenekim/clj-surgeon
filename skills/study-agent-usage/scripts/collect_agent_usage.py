@@ -16,6 +16,9 @@ from pathlib import Path
 
 
 SCHEMA = "clj-surgeon.agent-usage-ethnography.v6"
+# Registered client server names, not guesses from arbitrary tool/gateway text.
+SURGEON_MCP_SERVERS = {"clj-surgeon", "clj_surgeon", "surgeon"}
+SURGEON_MCP_PREFIXES = tuple(f"mcp__{server}__" for server in sorted(SURGEON_MCP_SERVERS))
 LOGICAL_ARGUMENT_DOMAIN = b"clj-surgeon.logical-tool-arguments.v1\0"
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
@@ -108,7 +111,7 @@ def compile_mcp_action_evidence(item: dict) -> dict:
         evidence["logical_argument_sha256"] = hashlib.sha256(
             LOGICAL_ARGUMENT_DOMAIN + logical_bytes
         ).hexdigest()
-    if item.get("server") == "clj-surgeon" and "result" in item:
+    if item.get("server") in SURGEON_MCP_SERVERS and "result" in item:
         evidence["result_canonical_bytes"] = len(
             canonical_json_bytes(item.get("result"))
         )
@@ -339,7 +342,7 @@ def route_kinds(text: str, action: str) -> list[str]:
     nested_methods = js_tool_methods(text)
     surgeon_methods = {
         method for method in nested_methods
-        if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
+        if method.startswith(SURGEON_MCP_PREFIXES)
     }
     cclsp_methods = {
         method for method in nested_methods
@@ -356,7 +359,7 @@ def route_kinds(text: str, action: str) -> list[str]:
             kinds.add("surgeon-read")
     if any(method.endswith("__inspect_clojure") for method in surgeon_methods):
         kinds.add("surgeon-read")
-    if any(method.endswith("__apply_clojure_changes") for method in surgeon_methods):
+    if any(method.endswith(("__apply_clojure_changes", "__alias_migration")) for method in surgeon_methods):
         kinds.add("surgeon-apply")
     if cclsp_methods:
         kinds.add("semantic-read")
@@ -454,16 +457,16 @@ def completed_item_clock_sample(payload: dict) -> dict | None:
         action_evidence = compile_mcp_action_evidence(item)
         if action_evidence:
             sample["action_evidence"] = action_evidence
-        if server == "clj-surgeon":
+        if server in SURGEON_MCP_SERVERS:
             if tool == "inspect_clojure":
                 sample["kind"] = "surgeon-read"
-            elif tool in {"apply_clojure_changes", "edit_clojure"}:
+            elif tool in {"apply_clojure_changes", "edit_clojure", "alias_migration"}:
                 sample["kind"] = "surgeon-apply"
             else:
                 sample["kind"] = "surgeon-plan"
             if tool in {
                 "apply_clojure_changes", "edit_clojure", "inspect_clojure",
-                "transform_clojure"
+                "transform_clojure", "alias_migration"
             }:
                 sample["operation"] = tool
             if tool == "inspect_clojure":
@@ -835,7 +838,7 @@ def record_tool_text(session: dict, text: str, action: str, scan_commands: bool 
     nested_methods = js_tool_methods(text)
     surgeon_methods = sorted(
         method for method in nested_methods
-        if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
+        if method.startswith(SURGEON_MCP_PREFIXES)
     )
     cclsp_methods = sorted(
         method for method in nested_methods if method.startswith("mcp__cclsp__")
@@ -972,7 +975,7 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
             command_text = tool_input if has_shell else ""
             surgeon_methods = {
                 method for method in tool_methods
-                if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
+                if method.startswith(SURGEON_MCP_PREFIXES)
             }
             mcp_methods = {
                 method for method in tool_methods
@@ -1566,7 +1569,43 @@ def write_fixture(path: Path, events: list[dict]) -> None:
     path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
 
 
+def self_test_registered_surgeon_alias() -> None:
+    """Field regression: optional caller used registered server `surgeon`."""
+    start = parse_time("2026-09-05T02:20:00Z")
+    start_ms = round(start.timestamp() * 1000)
+    arguments = {"workspace_root": "/PRIVATE/ALIAS/ROOT", "from": {"var": "PRIVATE_ALIAS_VAR"}}
+    result = {"structuredContent": {"ok": True, "private": "PRIVATE_ALIAS_RESULT"}}
+    with tempfile.TemporaryDirectory(prefix="study-agent-alias-") as tmp:
+        for server in ["surgeon", "clj-surgeon", "clj_surgeon", "unrelated"]:
+            method = f"mcp__{server}__alias_migration"
+            path = Path(tmp) / f"rollout-{server}.jsonl"
+            write_fixture(path, [
+                {"timestamp": iso_time(start), "type": "event_msg", "payload": {"type": "task_started", "turn_id": "alias-turn"}},
+                {"timestamp": "2026-09-05T02:20:01Z", "type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "alias-call", "input": f"const r = await tools.{method}({json.dumps(arguments)}); text(r);"}},
+                {"timestamp": "2026-09-05T02:20:01.100Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "alias-call", "output": json.dumps(result)}},
+                {"timestamp": "2026-09-05T02:20:01.100Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "alias-turn", "started_at_ms": start_ms + 1000, "completed_at_ms": start_ms + 1100, "item": {"type": "McpToolCall", "server": server, "tool": "alias_migration", "arguments": arguments, "result": result, "status": "completed"}}},
+                {"timestamp": "2026-09-05T02:20:02Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "alias-turn", "duration_ms": 2000}},
+            ])
+            session = analyze_codex_file(path, start, parse_time("2026-09-05T02:21:00Z"))
+            known = server != "unrelated"
+            assert session["clj_surgeon_calls"] == int(known), (server, "direct-call-count")
+            assert session["clj_surgeon_ops"] == ({"alias_migration": 1} if known else {})
+            assert session["clj_surgeon_result_actions"] == int(known)
+            assert session["clj_surgeon_action_wall_samples_ms"] == ([100] if known else [])
+            clock = session["task_turns"][0]["event_clock"]
+            assert clock["by_kind_ms"].get("surgeon-apply", 0) == (100 if known else 0), (server, "completed-clock-apply")
+            if known:
+                assert session["route_phases"][0]["kinds"] == ["surgeon-apply"]
+            assert "PRIVATE_ALIAS" not in json.dumps(session)
+            assert "/PRIVATE/ALIAS/ROOT" not in json.dumps(session)
+            evidence = compile_mcp_action_evidence({"server": server, "arguments": arguments, "result": result})
+            assert ("result_canonical_bytes" in evidence) == known
+        assert route_kinds('const note = "tools.mcp__surgeon__alias_migration({})";', "exec") == []
+        assert route_kinds('await tools.mcp__unrelated__alias_migration({});', "exec") == []
+
+
 def self_test() -> int:
+    self_test_registered_surgeon_alias()
     assert [
         match.group(1)
         for match in SURGEON_RE.finditer(
