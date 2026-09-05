@@ -93,10 +93,11 @@
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {
 
-   ;; ---- :fast (39) ----
+   ;; ---- :fast (40) ----
    'clj-surgeon.battery-ledger-test                     :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
+   'clj-surgeon.helper-extraction-test                  :fast
    'clj-surgeon.lane-manifest-test                      :fast
    'clj-surgeon.mcp-change-buffer-test                  :fast
    'clj-surgeon.mcp-combinable-transaction-test         :fast
@@ -141,12 +142,13 @@
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
 
-   ;; ---- :battery (13) ----
+   ;; ---- :battery (14) ----
    'clj-surgeon.admit-patch-test                        :battery
    'clj-surgeon.core-discovery-test                     :battery
    'clj-surgeon.mcp-alias-migration-test                :battery
    'clj-surgeon.mcp-cold-verify-test                    :battery
    'clj-surgeon.mcp-feature-thread-sed-test             :battery
+   'clj-surgeon.mcp-helper-extraction-test              :battery
    'clj-surgeon.mcp-inspect-cold-job-test               :battery
    'clj-surgeon.mcp-prepared-wire-test                  :battery
    'clj-surgeon.mcp-process-test                        :battery
@@ -185,17 +187,6 @@
 
    'clj-surgeon.memory.oom-reproduction-test
    "transaction-kernel memory witness -- `make memory-red-kernel`, exclusive suite.lock"
-
-   'clj-surgeon.helper-extraction-test
-   "RED until the GREEN phase -- `make helper-extraction-red`; the PURE planner
-    namespace it witnesses does not exist yet, so it fails to LOAD and must not
-    answer for the merge gate. It moves into :fast in the GREEN change"
-
-   'clj-surgeon.mcp-helper-extraction-test
-   "RED until the GREEN phase -- `make mcp-helper-extraction-red`; the BOUNDARY
-    namespace it witnesses does not exist yet. It also spawns babashka child
-    processes to prove fixture trees load, so it belongs to :battery, not the
-    merge gate, when it goes green"
 
    'clj-surgeon.worktree-lifecycle-prune-test
    "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"

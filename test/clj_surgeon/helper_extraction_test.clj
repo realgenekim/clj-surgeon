@@ -50,7 +50,7 @@
   The oracle is `clj-surgeon.helper-extraction-fixture`, which renders PRE and
   canonical POST from one description, so no assertion here is fed by the
   planner under test."
-  {:lane :excluded}
+  {:lane :fast}
   (:require
    [clj-surgeon.helper-extraction :as helper]
    [clj-surgeon.helper-extraction-fixture :as fixture]

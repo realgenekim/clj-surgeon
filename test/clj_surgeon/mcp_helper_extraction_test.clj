@@ -35,7 +35,7 @@
     The boundary adds one refusal the planner cannot reach:
     `helper-extraction-verification-preflight-unavailable`, because a
     profile's capability is a fact about the registry, not about a request"
-  {:lane :excluded}
+  {:lane :battery}
   (:require
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-helper-extraction :as mcp-helper]
@@ -272,7 +272,24 @@
   mapper's oracle the description rather than the planner's own output."
   {:destination {:lib fixture/dest-lib :file fixture/dest-file}
    :helpers fixture/helpers
-   :counts fixture/canonical-counts
+   ;; `plan-counts` projects the plan's own `:receipt` onto whatever the kernel
+   ;; reported, so a plan-shaped value without one produces a receipt with no
+   ;; flat counts at all. An earlier version of this def carried `:counts`
+   ;; instead and the mapper faithfully echoed it -- the exemplars looked
+   ;; plausible and validated against NO schema variant.
+   :receipt {:helpers (:helpers fixture/canonical-counts)
+             :source_retired (:source-retired fixture/canonical-counts)
+             :caller_files (:caller-files fixture/canonical-counts)
+             :source_file (:source-file fixture/canonical-counts)
+             :changed_files (:changed-files fixture/canonical-counts)
+             :sites (:sites fixture/canonical-counts)
+             :retained_sites (:retained-sites fixture/canonical-counts)
+             :alias_histogram (:alias-histogram fixture/canonical-counts)
+             :partition fixture/canonical-receipt-partition
+             :closure {:roots fixture/admitted-roots
+                       :authorized_paths fixture/scope-paths
+                       :grammar "supported-libspecs-only"
+                       :dynamic_references "not-claimed"}}
    :partition fixture/canonical-receipt-partition})
 
 (def ^:private profile-result
@@ -1312,3 +1329,189 @@
           (delete-tree! server-ws)
           (delete-tree! request-ws)
           (delete-tree! receipt-dir))))))
+
+;; ---------------------------------------------------------------------------
+;; THE SCHEMA MATRIX (MCP-OP-HELPER-020)
+;;
+;; `mcp-schema/helper-extraction-output-schema` declares the receipt's five
+;; faces as an `:oneOf` matrix. The witnesses below are GENERATED FROM that
+;; matrix rather than transcribed from it, so a variant that gains a required
+;; field or a pinned constant is covered on the next run without anyone
+;; remembering to add a case. A hand-listed matrix test drifts from the schema
+;; the moment the schema moves, and drifts silently.
+;;
+;; The exemplars come from real output wherever the runtime can produce it:
+;; the four terminal faces are mapped by the production `terminal-receipt` from
+;; injected kernel facts, so what is validated is a receipt this server can
+;; actually emit rather than a literal written to satisfy its own assertion.
+
+(defn- schema-check
+  "Validate `receipt` against one `:oneOf` branch. Returns nil when valid, or a
+  keyword naming the first violation.
+
+  This understands EXACTLY the JSON-Schema constructs the matrix uses, and
+  THROWS on any construct it does not — a validator that silently ignores an
+  unknown keyword would pass a receipt it never checked, which is the same
+  false green this suite exists to catch."
+  [branch receipt]
+  (let [known #{:title :description :properties :required :not}]
+    (when-let [unknown (seq (remove known (keys branch)))]
+      (throw (ex-info (str "the schema matrix grew a construct this witness "
+                           "does not validate; teach it or the branch goes "
+                           "unchecked")
+                      {:unknown (vec unknown) :branch (:title branch)}))))
+  (or
+   ;; :not {:required [...]} -- the refusal branch's "carries no status"
+   (when-let [forbidden (get-in branch [:not :required])]
+     (when (every? #(contains? receipt (keyword %)) forbidden)
+       :forbidden-field-present))
+   (some (fn [field]
+           (when-not (contains? receipt (keyword field)) :missing-required))
+         (:required branch))
+   (some (fn [[field constraint]]
+           (let [present? (contains? receipt (keyword field))
+                 value (get receipt (keyword field))]
+             (cond
+               (not present?) nil
+               (and (contains? constraint :const)
+                    (not= (:const constraint) value)) :const-mismatch
+               (and (= "null" (:type constraint)) (some? value)) :type-mismatch
+               (and (:enum constraint)
+                    (not (contains? (set (:enum constraint)) value))) :enum-mismatch
+               :else nil)))
+         (:properties branch))))
+
+(defn- valid-against
+  "Every branch title `receipt` validates against."
+  [receipt]
+  (into #{}
+        (keep (fn [branch]
+                (when (nil? (schema-check branch receipt)) (:title branch))))
+        (:oneOf mcp-schema/helper-extraction-output-schema)))
+
+(defn- branch-named
+  [title]
+  (some #(when (= title (:title %)) %)
+        (:oneOf mcp-schema/helper-extraction-output-schema)))
+
+(def ^:private restored-exemplar-kernel
+  {:restored true
+   :restored_files ["src/acid/web/http.clj" "src/acid/app/m01.clj"]
+   :restoration_read_back {"src/acid/web/http.clj" "sha-a"
+                           "src/acid/app/m01.clj" "sha-b"}
+   :destination_removed true
+   :details_path "/local/state/helper-extraction-detail.edn"
+   :elapsed_ms 41.0})
+
+(defn- exemplar
+  "A receipt for one face, mapped by the PRODUCTION `terminal-receipt` from
+  injected kernel facts wherever a mapper can produce it."
+  [title]
+  (case title
+    "committed"
+    (assoc (mcp-helper/terminal-receipt
+            {:kernel (assoc committed-kernel
+                            :undo_receipt "/local/state/undo-1.edn"
+                            :receipt_hash "abc123"
+                            :details_path "/local/state/detail.edn"
+                            :elapsed_ms 93.0)
+             :verification profile-result
+             :plan fixture-plan})
+           :elapsed_ms 93.0)
+
+    ("verification-failed" "verification-timeout")
+    (assoc (mcp-helper/terminal-receipt
+            {:kernel (assoc restored-exemplar-kernel :status (keyword title))
+             :verification (assoc profile-result :ok false)
+             :plan fixture-plan})
+           :elapsed_ms 41.0)
+
+    "rollback-failed"
+    (assoc (mcp-helper/terminal-receipt
+            {:kernel (assoc rollback-failed-kernel :elapsed_ms 12.0)
+             :verification (assoc profile-result :ok false)
+             :plan fixture-plan})
+           :elapsed_ms 12.0)
+
+    ;; THE ONE LITERAL, and the reason it is one: no mapper produces a
+    ;; refusal. A refusal never reaches the kernel, so `terminal-receipt` is
+    ;; not on its path, and building it from a real `plan` call would either
+    ;; pull the pure planner into this namespace -- undoing the split that lets
+    ;; the planner builder run his half with this boundary absent -- or need a
+    ;; materialized workspace to route to. The shape below is the envelope
+    ;; `refusal` builds plus the finalizer's clock; if it ever drifts from what
+    ;; the boundary emits, `the-public-uninitialized-refusal-carries-next-call-nil`
+    ;; and the preflight witnesses are the ones that catch it, because they read
+    ;; real refusals off the real wire.
+    "refusal"
+    {:ok false
+     :operation "helper_extraction"
+     :error_type "helper-extraction-private-dependency"
+     :error "A selected helper references a retained private var of the source."
+     :next_call nil
+     :source_unchanged true
+     :target_unchanged true
+     :decision "whether to select that var too"
+     :elapsed_ms 3.0}))
+
+;; @spec MCP-OP-HELPER-020
+(deftest every-output-variant-validates-against-exactly-one-face
+  (doseq [{:keys [title]} (:oneOf mcp-schema/helper-extraction-output-schema)]
+    (testing title
+      (let [receipt (exemplar title)]
+        (is (= #{title} (valid-against receipt))
+            (str "the five faces are DISJOINT: a receipt that satisfies two of "
+                 "them makes `oneOf` a menu instead of a discrimination. "
+                 (pr-str receipt)))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest removing-any-required-field-invalidates-its-variant
+  (doseq [{:keys [title required]} (:oneOf mcp-schema/helper-extraction-output-schema)]
+    (testing title
+      (let [receipt (exemplar title)]
+        (doseq [field required]
+          (testing (str "without " field)
+            (is (some? (schema-check (branch-named title)
+                                     (dissoc receipt (keyword field))))
+                (str field " is declared required by the " title
+                     " variant, so a receipt missing it must not validate. If "
+                     "this fails the field is required in name only."))))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest contradicting-any-pinned-constant-invalidates-its-variant
+  (doseq [{:keys [title properties]} (:oneOf mcp-schema/helper-extraction-output-schema)]
+    (testing title
+      (let [receipt (exemplar title)]
+        (doseq [[field constraint] properties
+                :when (contains? constraint :const)]
+          (testing (str "with a contradicted " field)
+            (let [pinned (:const constraint)
+                  contradiction (cond
+                                  (boolean? pinned) (not pinned)
+                                  (number? pinned) (inc pinned)
+                                  ;; a terminal word swapped for another
+                                  ;; face's: the exact confusion `status` and
+                                  ;; `kernel_status` exist to prevent
+                                  (= "committed" pinned) "rollback-failed"
+                                  :else "committed")]
+              (is (some? (schema-check (branch-named title)
+                                       (assoc receipt (keyword field) contradiction)))
+                  (str field " is pinned to " (pr-str pinned) " on the " title
+                       " face; " (pr-str contradiction) " must not validate")))))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest the-named-contradictions-the-review-called-out-are-all-rejected
+  (testing "the three the fence review named by hand, asserted by name so a
+            regression is readable without decoding the generated matrix"
+    (is (some? (schema-check (branch-named "committed")
+                             (assoc (exemplar "committed")
+                                    :kernel_status "rollback-failed")))
+        "a committed receipt wearing another face's kernel word")
+    (is (some? (schema-check (branch-named "refusal")
+                             (assoc (exemplar "refusal") :source_unchanged false)))
+        "a refusal that admits it changed the source is not a refusal")
+    (is (some? (schema-check (branch-named "committed")
+                             (dissoc (exemplar "committed") :receipt_hash)))
+        "a committed receipt naming an undo document without the hash that
+         binds it is an inverse nobody can prove they are applying to the
+         right transaction")))

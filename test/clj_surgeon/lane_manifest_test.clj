@@ -377,10 +377,10 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 39 (count (lm/namespaces-for :fast))))
+    (is (= 40 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 13 (count (lm/namespaces-for :battery))))
-    (is (= 57 (count lm/manifest))
+    (is (= 14 (count (lm/namespaces-for :battery))))
+    (is (= 59 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -414,7 +414,9 @@
     clj-surgeon.mcp-feature-thread-test    69 ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
     clj-surgeon.mcp-feature-thread-sed-test 1 ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
-    clj-surgeon.ns-isolation-test          24}) ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
+    clj-surgeon.ns-isolation-test          24  ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
+    clj-surgeon.helper-extraction-test     34  ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
+    clj-surgeon.mcp-helper-extraction-test 34}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -425,9 +427,19 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 139 deftests  (12+4+25+3+69+1+1+24)
+  ;;   adopted since round one .................... 207 deftests  (12+4+25+3+69+1+1+24+34+34)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1059 deftests
+  ;;   total declared by the manifest ............. 1127 deftests
+  ;;
+  ;; ROUND SIX ADOPTED THE HELPER-EXTRACTION PAIR, 68 deftests, on the day the
+  ;; planner and the boundary both went green. They had been `excluded` with
+  ;; their own red targets for exactly as long as the namespaces they witness
+  ;; did not exist -- the repository's pattern for a not-yet-implemented
+  ;; witness -- and enrolling them retires those targets. The split is the
+  ;; lanes' own rule rather than a preference: the pure half requires only the
+  ;; planner, the fixture and clojure.test and spawns nothing, so it is :fast;
+  ;; the boundary half launches babashka children to prove fixture trees LOAD
+  ;; and drives real execute! transactions, so it is :battery.
   ;;
   ;; ROUND FIVE MOVED ONE TEST OUT of a round-one namespace, which is why the
   ;; first line went 921 -> 920, and it is worth saying plainly because it is
@@ -461,9 +473,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 139 adopted) (str "adopted tests: " adopted)))
+      (is (= 207 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1059 total) (str "manifest declares " total " tests"))
+      (is (= 1127 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

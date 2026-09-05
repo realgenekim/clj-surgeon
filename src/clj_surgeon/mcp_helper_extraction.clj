@@ -867,9 +867,17 @@
                                                     :changed_files :sites
                                                     :retained_sites :alias_histogram
                                                     :partition]))
-                (map? (:counts plan)) (assoc :counts (:counts plan))
-                (some? (:partition plan)) (assoc :partition (:partition plan))
-                (coll? (:helpers plan)) (assoc :helpers (count (:helpers plan)))
+                ;; ONE plan shape, and it is `[:plan :receipt]`. The three
+                ;; legacy passthroughs that used to sit here — `:counts`,
+                ;; a top-level `:partition`, a top-level `:helpers` collection —
+                ;; let a plan WITHOUT its receipt produce a half-populated face:
+                ;; a receipt carrying `helpers` and `partition` but none of
+                ;; `source_retired`, `caller_files` or `sites`. It looked
+                ;; plausible and validated against no schema variant at all.
+                ;; Rejecting that downstream is not the same as making it
+                ;; unrepresentable, so the alternate shapes are gone: a plan
+                ;; that did not bring its receipt now contributes no counts,
+                ;; which is the honest answer and the one the schema describes.
                 (map? (:destination plan)) (assoc :destination_lib
                                                   (get-in plan [:destination :lib])))]
     (if (= :committed outcome)
