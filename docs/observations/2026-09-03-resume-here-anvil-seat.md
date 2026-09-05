@@ -536,3 +536,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - 02:13Z: default `make test` is still the FULL run (battery + tail); fast lane = `make mcp-test`; landing list = `make landing-gate`. Do not tell Gene "faster by default" until bridge/test-default-fast lands (needs his ratification + green battery-fresh).
 
 - 02:45Z: 7906 PID 2164551 / 8171 PID 2164553 on trunk b8249bc5 (cores 6–9). Battery running (battery-clean-0243.log). Flip tip 971bc4a7 awaits Astra confirm → land. Then telemetry gates on the lane. Read docs/observations/2026-09-05-astra-next-api-advice.md (Astra's API direction).
+
+## RESUME DELTA 03:53Z
+- Trunk MCP/main = 2209c61e (candidate 0305 landed as 68f24f51). `make test` = landing gate; `make test-full` = full. ~/bin/land runs battery-fresh first and keeps its log (tee -a). Servers 7906 PID 3534456 / 8171 PID 3534458 on trunk, lane 6–9.
+- Astra directs the API effort (six-helper closure design is HIS next lane). Coordination file pair unchanged. Telemetry 417ed6b5 HELD (touches the collector Astra owns; his counterexample pending). Opus harness r3 3b640785 NO-GO. Owed: fence launcher split, recovery-battery receipt, N=4 battery (after Astra's lanes drain), MEM-003/study-ops/CI/gate-r18 gates.

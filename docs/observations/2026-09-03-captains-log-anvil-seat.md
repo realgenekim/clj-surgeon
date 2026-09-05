@@ -1952,3 +1952,26 @@ The merge gate is now the landed default: `make test` = fast lane + merge gate (
 ## 03:46Z — landing refused, then relanded. Candidate 0c846748 (flip + ISO-007 override + :pass receipt + Astra's binding series c188d5a3/e6808fca/40e5fa5a + collector 29b8466d; his placement/blob review GO 03:30Z): merged tree be976e0d — battery-fresh OK, mcp-test `Ran 547 tests containing 6847 assertions. 0 failures`, bb `Ran 859 tests containing 7337 assertions. 1 failures` → ok=0, trunk untouched. Named on rerun: cli-contract-is-versioned-edn-with-typed-exits (WTL-CLI-002) asserts the Makefile literal "Run all tests"; the flip had written "Run ALL tests". Fix 1fe16056: the literal restored on the test-full help line. Witness namespace green on the candidate tree. Relanding candidate e420f24e (started 03:46Z). Note: the gate did its job — the landing list caught a contract the flip broke — and the fixed tee -a kept every gate line in the log this time.
 
 ## 03:52Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 216  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 03:48Z load 2.32 ; === rc 0 end 03:52Z)
+
+## 03:53Z — LANDED 68f24f51 on MCP/main: integration candidate 0305 = default `make test` → landing gate (full run = `make test-full`), declared TEST-ISO-007 override for reader-eval-fence-test + its :pass battery receipt, Astra's sequential alias binding-scope repair (c188d5a3/e6808fca/40e5fa5a) and client usage-collector alias fix (29b8466d). Gate lines on the merged tree, verbatim:
+```
+=== land e420f24e onto 359c7559 -> merge 68f24f51 03:46Z load 2.50
+=== make battery-fresh
+battery-fresh: OK -- newest receipt sha f686662858dd44f7d8bba58fd200d493c325e0bd, started 2026-09-05T03:13:43Z, wall 716s, 0.5 h old, 15 commit(s) beh
+RC=0
+=== ~/bin/suite-run clojure -M:clj-surgeon/mcp-test
+Ran 547 tests containing 6847 assertions.
+0 failures, 0 errors.
+RC=0
+=== ~/bin/suite-run bb test/run_all.clj
+Ran 859 tests containing 7337 assertions.
+0 failures, 0 errors.
+RC=0
+=== make mcp-operation-oracle
+RC=0
+=== make repository-hygiene
+RC=0
+=== audit
+=== done 03:50Z ok=1
+```
+Servers restarted onto trunk 2209c61e: 7906 PID 3534456, 8171 PID 3534458 (lane 6–9). Gene: "Go on test" (02:2xZ) is delivered: `make test` on trunk is now the landing gate; `make test-full` is the old full run. Owed: split the fence launcher drives and retire the override; transaction-recovery battery receipt (test-full) so the battery has no skipped precondition.
