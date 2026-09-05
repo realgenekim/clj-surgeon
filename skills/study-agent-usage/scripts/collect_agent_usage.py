@@ -1261,6 +1261,42 @@ def default_surgeon_telemetry_roots() -> list[Path]:
     ]
 
 
+def surgeon_call_events(events: list[dict]) -> list[dict]:
+    """The authoritative call record for one telemetry session file.
+
+    # @spec MCP-OP-TELCOV-005
+    `tool.dispatch` is written by the server's single dispatch boundary and
+    names the PUBLIC tool the caller invoked, so it is the count. `tool.call`
+    is the older per-handler stream: it missed alias_migration entirely and
+    named every compact edit `apply_clojure_changes`, so it is used ONLY for a
+    session that predates the boundary and therefore has no dispatch events at
+    all. Counting both would double-count every modern call.
+    """
+    dispatched = [event for event in events if event.get("event") == "tool.dispatch"]
+    if dispatched:
+        return dispatched
+    return [event for event in events if event.get("event") == "tool.call"]
+
+
+def summarize_surgeon_calls(calls: list[dict]) -> dict:
+    tools = Counter()
+    outcomes = Counter()
+    for call in calls:
+        tools[str(call.get("tool") or "unknown")] += 1
+        outcome = call.get("outcome")
+        if isinstance(outcome, str):
+            outcomes[outcome] += 1
+        else:
+            shape = outcome if isinstance(outcome, dict) else {}
+            response = call.get("response") if isinstance(call.get("response"), dict) else {}
+            outcomes["ok" if (shape.get("ok") is True or response.get("ok") is True) else "refused"] += 1
+    return {
+        "mcp_tool_calls": len(calls),
+        "tools": dict(sorted(tools.items())),
+        "outcomes": dict(sorted(outcomes.items())),
+    }
+
+
 def collect_surgeon_telemetry(roots: Path | list[Path], since: datetime, until: datetime) -> dict:
     roots = [roots] if isinstance(roots, Path) else list(roots)
     roots_checked = [str(root) for root in roots]
@@ -1268,7 +1304,25 @@ def collect_surgeon_telemetry(roots: Path | list[Path], since: datetime, until: 
 
     events = []
     seen_paths: set[str] = set()
+    # @spec MCP-OP-TELCOV-005
+    # Attribution is read from the telemetry files themselves -- the root that
+    # held the file and the session_id the server wrote -- never inferred from
+    # a launcher process name, which cannot distinguish two agents sharing one
+    # launcher and is absent entirely for a server started any other way.
+    per_root: dict[str, dict] = {}
+    per_session: dict[str, dict] = {}
     for root in roots:
+        key = str(root)
+        entry = per_root.setdefault(
+            key,
+            {"root": key, "status": "root-absent", "note": f"root absent: {key}",
+             "files_present": 0, "files_in_window": 0, "events": 0,
+             "mcp_tool_calls": 0, "tools": {}, "sessions": []},
+        )
+        if not root.exists():
+            continue
+        entry["files_present"] = sum(1 for _ in root.rglob("*.jsonl"))
+        root_events: list[dict] = []
         for path in candidate_files(root, "*.jsonl", since):
             try:
                 resolved = str(path.resolve())
@@ -1277,10 +1331,52 @@ def collect_surgeon_telemetry(roots: Path | list[Path], since: datetime, until: 
             if resolved in seen_paths:
                 continue
             seen_paths.add(resolved)
-            events.extend(value for value in iter_jsonl(path) if in_window(value, since, until))
+            entry["files_in_window"] += 1
+            file_events = [value for value in iter_jsonl(path) if in_window(value, since, until)]
+            root_events.extend(file_events)
+            for session_id in {str(value.get("session_id")) for value in file_events if value.get("session_id")}:
+                session_events = [value for value in file_events if str(value.get("session_id")) == session_id]
+                session = per_session.setdefault(
+                    session_id,
+                    {"session_id": session_id, "roots": [], "events": 0,
+                     "mcp_tool_calls": 0, "tools": {}, "outcomes": {}},
+                )
+                if key not in session["roots"]:
+                    session["roots"].append(key)
+                if session_id not in entry["sessions"]:
+                    entry["sessions"].append(session_id)
+                session["events"] += len(session_events)
+                summary = summarize_surgeon_calls(surgeon_call_events(session_events))
+                session["mcp_tool_calls"] += summary["mcp_tool_calls"]
+                for name, count in summary["tools"].items():
+                    session["tools"][name] = session["tools"].get(name, 0) + count
+                for name, count in summary["outcomes"].items():
+                    session["outcomes"][name] = session["outcomes"].get(name, 0) + count
+        events.extend(root_events)
+        root_summary = summarize_surgeon_calls(surgeon_call_events(root_events))
+        entry["events"] = len(root_events)
+        entry["mcp_tool_calls"] = root_summary["mcp_tool_calls"]
+        entry["tools"] = root_summary["tools"]
+        entry["sessions"] = sorted(entry["sessions"])
+        # @spec MCP-OP-TELCOV-006
+        # A present root that produced no files is NOT a measured zero. Saying
+        # "0 calls" here is what let an hour with an attested alias_migration
+        # call read as silence (2026-09-05); the honest answer names the root.
+        if entry["files_present"] == 0:
+            entry["status"] = "no-files"
+            entry["note"] = f"no files under {key}"
+        elif entry["files_in_window"] == 0:
+            entry["status"] = "no-files-in-window"
+            entry["note"] = f"no files under {key} modified within the window"
+        elif root_events:
+            entry["status"] = "ok"
+            entry["note"] = None
+        else:
+            entry["status"] = "no-events-in-window"
+            entry["note"] = f"files under {key} exist but hold no events in the window"
 
+    calls = surgeon_call_events(events)
     starts = [event for event in events if event.get("event") == "server.start"]
-    calls = [event for event in events if event.get("event") == "tool.call"]
     tools = Counter()
     outcomes = Counter()
     errors = Counter()
@@ -1293,30 +1389,44 @@ def collect_surgeon_telemetry(roots: Path | list[Path], since: datetime, until: 
     inspect_files = []
     apply_edits = []
     apply_files = []
+    detail_calls = [event for event in events if event.get("event") == "tool.call"]
     for call in calls:
         tool = str(call.get("tool") or "unknown")
         tools[tool] += 1
-        outcome = call.get("outcome") if isinstance(call.get("outcome"), dict) else {}
-        response = call.get("response") if isinstance(call.get("response"), dict) else {}
-        shape = call.get("request_shape") if isinstance(call.get("request_shape"), dict) else {}
-        ok = outcome.get("ok") is True or response.get("ok") is True
-        outcomes["ok" if ok else "refused"] += 1
-        error_type = (
-            response.get("error_type")
-            or response.get("error-type")
-            or outcome.get("error_type")
-            or outcome.get("error-type")
-        )
+        raw_outcome = call.get("outcome")
+        if isinstance(raw_outcome, str):
+            outcomes[raw_outcome] += 1
+            error_type = call.get("refusal_kind") or call.get("error_type")
+        else:
+            outcome = raw_outcome if isinstance(raw_outcome, dict) else {}
+            response = call.get("response") if isinstance(call.get("response"), dict) else {}
+            ok = outcome.get("ok") is True or response.get("ok") is True
+            outcomes["ok" if ok else "refused"] += 1
+            error_type = (
+                response.get("error_type")
+                or response.get("error-type")
+                or outcome.get("error_type")
+                or outcome.get("error-type")
+            )
         if error_type:
             errors[str(error_type)] += 1
-        for operation, count in (shape.get("operations") or {}).items():
-            if isinstance(count, int):
-                operations[str(operation)] += count
         total_ms = (call.get("timings_ms") or {}).get("total_ms")
+        if total_ms is None:
+            total_ms = call.get("wall_ms")
         if isinstance(total_ms, (int, float)):
             elapsed = round(total_ms)
             timings.append(elapsed)
             timings_by_tool.setdefault(tool, []).append(elapsed)
+
+    for call in detail_calls:
+        tool = str(call.get("tool") or "unknown")
+        outcome = call.get("outcome") if isinstance(call.get("outcome"), dict) else {}
+        response = call.get("response") if isinstance(call.get("response"), dict) else {}
+        shape = call.get("request_shape") if isinstance(call.get("request_shape"), dict) else {}
+        ok = outcome.get("ok") is True or response.get("ok") is True
+        for operation, count in (shape.get("operations") or {}).items():
+            if isinstance(count, int):
+                operations[str(operation)] += count
         file_reads += int(outcome.get("file_reads") or 0)
         source_characters += int(outcome.get("source_characters") or 0)
         if tool == "inspect_clojure" and ok:
@@ -1335,8 +1445,13 @@ def collect_surgeon_telemetry(roots: Path | list[Path], since: datetime, until: 
 
     return {
         "status": status,
+        # @spec MCP-OP-TELCOV-006
+        "window": {"since": iso_time(since), "until": iso_time(until)},
         "roots_checked": roots_checked,
         "roots_present": roots_present,
+        # @spec MCP-OP-TELCOV-005
+        "roots": [per_root[str(root)] for root in roots],
+        "by_session": {key: per_session[key] for key in sorted(per_session)},
         "event_count": len(events),
         "server_starts": len(starts),
         "sessions": len({str(event.get("session_id")) for event in events if event.get("session_id")}),
