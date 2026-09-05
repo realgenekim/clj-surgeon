@@ -800,6 +800,10 @@
              :pre pre
              :post (when happy? post)
              :partition (:partition spec)
+             ;; the ns form's own libspecs, so a witness can assert survival
+             ;; against the DESCRIPTION rather than a hardcoded substring
+             :requires-pre (vec (:requires-pre spec))
+             :requires-post (vec (or (:requires-post spec) (:requires-pre spec)))
              :alias (:alias spec)
              :sites (:sites spec)
              :retained-sites (:retained-sites spec)

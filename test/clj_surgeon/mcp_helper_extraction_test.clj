@@ -205,15 +205,10 @@
       (is (nil? (get-in result [:plan :transactions])) "nothing staged")
       (is (nil? (:next_call result))
           "MCP-OP-HELPER-016: a weaker profile is never suggested")))
-  (testing "and an admitted profile is NOT refused: the check is capability,
-            not a blanket rejection"
-    (let [named (first (keys (mcp-helper/admitted-profiles)))
-          result (mcp-helper/plan
-                  (fixture/request {:verification {:profile named}}))]
-      (is (not= "helper-extraction-verification-preflight-unavailable"
-                (:error_type result))
-          (str "profile " (pr-str named) " is in admitted-profiles and must
-                pass preflight")))))
+  (testing "and it is in the BOUNDARY's refusal set, which is the planner's
+            plus the refusals only an I/O boundary can raise"
+    (is (contains? (set (mcp-helper/refusal-types))
+                   "helper-extraction-verification-preflight-unavailable"))))
 ;; ---------------------------------------------------------------------------
 ;; the terminal-receipt MAPPER
 ;;
@@ -378,6 +373,144 @@
                                        :compiled_callers)
                                  verification))
               "and it invents no counts"))))))
+
+
+;; ---------------------------------------------------------------------------
+;; a throw AFTER staging (Astra, 05:56/05:59)
+;;
+;; Everything below runs `execute!` on a real materialized tree and then
+;; compares EVERY file against the fixture's PRE bytes. A rollback that is
+;; asserted only through the receipt it wrote is a receipt checking itself; the
+;; filesystem is the witness here.
+;;
+;; SEAMS. Witness (b) uses a REAL production seam: `:receipt-dir` in the config
+;; map, pointed at a directory this process cannot create, so the receipt
+;; publication genuinely fails where it fails in the field. Witness (a) needs a
+;; proof step that THROWS, and `execute!` today calls `run-proof!` directly with
+;; no injection point, so it is written against a DOCUMENTED seam name -- an
+;; optional `:run-proof!` fn in the same config map -- which the boundary must
+;; expose. Nothing here stubs production.
+
+(defn- materialize!
+  [root tree]
+  (doseq [[path source] tree]
+    (let [target (io/file root path)]
+      (io/make-parents target)
+      (spit target source)))
+  root)
+
+(defn- tree-on-disk
+  [root paths]
+  (into {} (keep (fn [path]
+                   (let [file (io/file root path)]
+                     (when (.isFile file) [path (slurp file)]))))
+        paths))
+
+(defn- with-materialized-happy-tree
+  "Materialize the happy PRE tree, run `f` with the project root, and always
+  clean up. `f` returns whatever it likes; the tree is handed back with it."
+  [label f]
+  (let [root (io/file tmp-root (str label "-" (System/nanoTime)))
+        pre (tree-of :happy :pre)]
+    (try
+      (materialize! root pre)
+      (let [result (f (str root))]
+        {:result result
+         :pre pre
+         :after (tree-on-disk root (keys pre))
+         :destination-present? (.isFile (io/file root fixture/dest-file))})
+      (finally (delete-tree! root)))))
+
+(defn- assert-restored!
+  "Every PRE byte is back and the destination is gone."
+  [{:keys [pre after destination-present?]}]
+  (doseq [[path source] pre]
+    (testing path
+      (is (= source (get after path))
+          "restored byte-for-byte from the pre-extraction tree")))
+  (is (= (set (keys pre)) (set (keys after)))
+      "and no file the transaction touched was left behind or deleted")
+  (is (false? destination-present?)
+      "and the destination the transaction created is gone"))
+
+(def ^:private noop-proof-profile
+  "An admitted profile whose command really runs and really succeeds, so the
+  failures below are the ones the witness injects and not a proof that could
+  never have passed."
+  {"noop-proof" {:commands [["bb" "-e" "(println \"{}\")"]]}})
+
+;; @spec MCP-OP-HELPER-020
+(deftest a-proof-that-throws-after-staging-restores-every-byte
+  (testing "an exception from the verification step is a proof that did not
+            complete, and an incomplete proof may never leave a commit standing.
+            SEAM: `:run-proof!` in the execute! config map -- the boundary must
+            expose it; today `execute!` calls `run-proof!` directly."
+    (let [outcome (with-materialized-happy-tree
+                    "proof-throws"
+                    (fn [root]
+                      (mcp-helper/execute!
+                       {:verification-profiles noop-proof-profile
+                        :run-proof! (fn [& _]
+                                      (throw (ex-info "proof exploded" {})))}
+                       (fixture/request
+                        {:workspace_root root
+                         :verification {:profile "noop-proof"}}))))
+          receipt (:result outcome)]
+      (assert-restored! outcome)
+      (is (not (true? (:committed receipt))) "never committed")
+      (is (not (true? (:ok receipt))))
+      (is (true? (:restored receipt)) "the receipt reports the restoration")
+      (is (true? (:source_unchanged receipt))
+          "and claims unchanged only because the rollback verified")
+      (is (contains? #{"verification-failed" "verification-timeout"}
+                     (:status receipt))
+          (str "the kernel's typed failure state, never a bare error: "
+               (pr-str (:status receipt))))
+      (is (false? (:destination_created receipt)))
+      (is (seq (:restoration_read_back receipt))
+          "carrying the kernel's own read-back of what it restored")
+      (is (some? (:cause_error receipt))
+          "and naming the exception that caused it"))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest a-receipt-publication-that-fails-restores-every-byte
+  (testing "publishing the receipt can fail after the bytes are staged -- here
+            because the receipt directory cannot be created. The tree must come
+            back exactly as it was, and `source_unchanged` may be claimed only
+            because the rollback's read-back proves it."
+    (let [locked (io/file tmp-root (str "locked-" (System/nanoTime)))]
+      (try
+        (.mkdirs locked)
+        (.setWritable locked false false)
+        (let [outcome (with-materialized-happy-tree
+                        "receipt-fails"
+                        (fn [root]
+                          (mcp-helper/execute!
+                           {:verification-profiles noop-proof-profile
+                            :receipt-dir (str (io/file locked "receipts"))}
+                           (fixture/request
+                            {:workspace_root root
+                             :verification {:profile "noop-proof"}}))))
+              receipt (:result outcome)]
+          (assert-restored! outcome)
+          (is (not (true? (:committed receipt))) "never committed")
+          (is (not (true? (:ok receipt))))
+          (is (string? (:status receipt)) "a typed terminal state")
+          (is (not= "committed" (:status receipt)))
+          (if (true? (:restored receipt))
+            (do
+              (is (true? (:source_unchanged receipt))
+                  "unchanged is claimed only alongside a verified restoration")
+              (is (seq (:restoration_read_back receipt))
+                  "and the read-back is the evidence for that claim"))
+            (do
+              (is (false? (:source_unchanged receipt))
+                  "a rollback that did not verify NEVER claims unchanged")
+              (is (seq (:files receipt)) "it names the files")
+              (is (some? (:recovery_required receipt))))))
+        (finally
+          (.setWritable locked true true)
+          (delete-tree! locked))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the public boundary: a project that lives UNDER an ancestor named `src`

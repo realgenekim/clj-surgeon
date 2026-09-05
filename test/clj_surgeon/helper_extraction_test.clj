@@ -324,15 +324,31 @@
 ;; @spec MCP-OP-HELPER-006
 (deftest a-mixed-caller-keeps-its-old-require-and-gains-exactly-one-new-one
   (let [tree (extracted-tree (plan-of :happy))]
-    (doseq [{:keys [file partition]} (fixture/files :happy)
+    (doseq [{:keys [file partition alias requires-pre retained-sites]}
+            (fixture/files :happy)
             :when (= :mixed partition)]
       (testing file
-        (let [text (get tree file)]
-          (is (str/includes? text "[acid.web.http :as http]")
-              "the whole library require is NEVER replaced in a mixed caller")
-          (is (str/includes? text "[acid.web.response :as response]"))
-          (is (str/includes? text "(http/parse-json-body request)")
-              "the retained use is unchanged"))))))
+        (let [text (get tree file)
+              ;; the OLD libspec exactly as the description wrote it, so a
+              ;; caller that binds the source with `:refer` or with extra
+              ;; options is held to its own bytes and not to a canned spelling
+              old-libspec (first (filter #(str/includes? % fixture/source-lib)
+                                         requires-pre))
+              new-libspec (str "[" fixture/dest-lib " :as " alias "]")]
+          (is (some? old-libspec) "the description names the old libspec")
+          (is (str/includes? text old-libspec)
+              (str "the old require survives byte-for-byte in a mixed caller; "
+                   "the whole library require is NEVER replaced: " old-libspec))
+          (is (= 1 (count (re-seq (re-pattern (java.util.regex.Pattern/quote
+                                               new-libspec))
+                                  text)))
+              (str "and EXACTLY ONE new require is added: " new-libspec))
+          (when (pos? retained-sites)
+            (is (str/includes? text "(http/parse-json-body request)")
+                "and where the description has retained SITES, the retained use
+                 is unchanged. A caller whose only retained binding is an unused
+                 `:refer` has no such site, and asserting one here would demand
+                 a call the fixture never described.")))))))
 
 ;; @spec MCP-OP-HELPER-006
 (deftest an-untouched-caller-is-not-in-the-footprint-and-gains-no-authority

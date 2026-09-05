@@ -646,3 +646,91 @@
                 "details_retention" {:type "string"}
                 "details_retained" {:type "integer" :minimum 0}}
    :required ["ok" "elapsed_ms"]})
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-002
+;; @spec MCP-OP-HELPER-017
+;; @spec MCP-OP-HELPER-025
+(def helper-extraction-schema
+  "The CLOSED field set. `additionalProperties false` at every level is what
+  makes the request constant in the number of callers: a per-file, per-owner or
+  per-site table has nowhere to arrive. `expect` is optional and is a strict
+  guard when supplied."
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"op" {:type "string" :const "helper_extraction"}
+    "workspace_root" {:type "string" :minLength 1}
+    "from"
+    {:type "object"
+     :additionalProperties false
+     :properties {"file" {:type "string" :minLength 1
+                          :description "Project-relative path of the namespace the helpers leave."}}
+     :required ["file"]}
+    "helpers" {:type "array"
+               :minItems 1
+               :uniqueItems true
+               :items {:type "string" :minLength 1}
+               :description "The selected helper names, each resolving to exactly one top-level owner in from.file."}
+    "to"
+    {:type "object"
+     :additionalProperties false
+     :properties {"lib" {:type "string" :minLength 1
+                         :description "The destination namespace. The created namespace equals this exactly and its path is project-relative."}
+                  "alias_policy" {:type "array"
+                                  :minItems 1
+                                  :items {:type "string" :minLength 1}
+                                  :description "Alias preferences in order; each rewritten file takes the first entry bound to nothing in that file."}}
+     :required ["lib" "alias_policy"]}
+    "scope"
+    {:type "object"
+     :additionalProperties false
+     :properties {"paths" {:type "array"
+                           :minItems 1
+                           :items {:type "string" :minLength 1}
+                           :description "Write-authorization subset of the admitted discovery roots. Discovery still runs over every admitted root; a supported reference outside these paths refuses."}}
+     :required ["paths"]}
+    "verification"
+    {:type "object"
+     :additionalProperties false
+     :properties {"profile" {:type "string" :minLength 1
+                             :description "One synchronous, rollback-capable, runnable configured profile. Validated before anything is staged."}}
+     :required ["profile"]}
+    "expect"
+    {:type "object"
+     :additionalProperties false
+     :properties {"caller_files" {:type "integer" :minimum 0}}
+     :required ["caller_files"]}}
+   :required ["from" "helpers" "to" "scope" "verification"]})
+
+;; @spec MCP-OP-HELPER-009
+;; @spec MCP-OP-HELPER-012
+;; @spec MCP-OP-HELPER-020
+;; @spec MCP-OP-HELPER-022
+(def helper-extraction-output-schema
+  "Counts and histograms only; never a file list. The verification map is TYPED
+  — the executed profile and its three named checks — and never a bare coverage
+  integer."
+  {:type "object"
+   :properties {"ok" {:type "boolean"}
+                "operation" {:type "string"}
+                "status" {:type "string"}
+                "kernel_status" {:type "string"}
+                "committed" {:type "boolean"}
+                "restored" {:type "boolean"}
+                "source_unchanged" {:type "boolean"}
+                "elapsed_ms" {:type "number" :minimum 0}
+                "helpers" {:type "integer" :minimum 0}
+                "source_retired" {:type "integer" :minimum 0}
+                "destination_created" {:type "boolean"}
+                "caller_files" {:type "integer" :minimum 0}
+                "partition" {:type "object"}
+                "sites" {:type "integer" :minimum 0}
+                "retained_sites" {:type "integer" :minimum 0}
+                "alias_histogram" {:type "object"}
+                "verification" {:type "object"}
+                "closure" {:type "object"}
+                "details_path" {:type "string"}
+                "undo_receipt" {:type "string"}
+                "receipt_hash" {:type "string"}}
+   :required ["ok" "elapsed_ms"]})
