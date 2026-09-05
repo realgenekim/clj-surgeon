@@ -17,10 +17,11 @@
   transaction kernel, or mint a terminal receipt. The plan receipt therefore
   carries NO `:verification` key at all -- an unexecuted check must never be
   implied (MCP-OP-HELPER-022), and the boundary adds the typed map from the
-  profile it actually ran. The one verification fact the planner does own is
-  ADMISSIBILITY: MCP-OP-HELPER-011 requires the profile to be refused before
-  anything is staged, and nothing is more `before staging` than plan time."
+  profile it actually ran, and `verification.profile` reaches this namespace as
+  an opaque string it never judges."
   (:require
+   [clj-surgeon.alias-migration :as alias-migration]
+   [clj-surgeon.extract-header :as extract-header]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
    [rewrite-clj.parser :as parser]))
@@ -82,93 +83,18 @@
   (filterv meaningful? (children root)))
 
 ;; ---------------------------------------------------------------------------
-;; local binding scopes: a bare name a form introduces is not a reference
-
-(def ^:private local-binding-vector-heads
-  #{"let" "let*" "if-let" "when-let" "if-some" "when-some" "loop" "loop*"
-    "with-open" "with-local-vars" "doseq" "for" "dotimes"})
-
-(def ^:private function-heads
-  #{"fn" "fn*" "defn" "defn-" "defmacro" "defmethod" "definline"})
-
-(defn- binding-form-names
-  "Names declared by a binding form, ignoring metadata, discards and defaults."
-  [node]
-  (let [parts (meaningful-children node)]
-    (case (n/tag node)
-      :meta (binding-form-names (last parts))
-      :token (set (keep identity [(simple-symbol-name node)]))
-      :vector (into #{} (mapcat binding-form-names) parts)
-      :map (into #{}
-                 (mapcat (fn [[key-node value-node]]
-                           (let [key-text (n/string key-node)]
-                             (cond
-                               (= ":or" key-text) #{}
-                               (= ":as" key-text) (binding-form-names value-node)
-                               (or (contains? #{":keys" ":syms" ":strs"} key-text)
-                                   (some #(str/ends-with? key-text %)
-                                         ["/keys" "/syms" "/strs"]))
-                               (into #{} (keep #(some-> % token-symbol name))
-                                     (meaningful-children value-node))
-                               :else (binding-form-names key-node)))))
-                 (partition 2 parts))
-      #{})))
-
-(defn- pair-binding-names
-  [vector-node]
-  (into #{} (mapcat binding-form-names) (take-nth 2 (meaningful-children vector-node))))
-
-(defn- parameter-vectors
-  "The parameter vectors of a fn-shaped form, arities included."
-  [node]
-  (let [parts (rest (meaningful-children node))
-        direct (filter #(vector-node? (unmeta-node %)) parts)
-        arities (mapcat (fn [part]
-                          (when (= :list (n/tag part))
-                            (filter #(vector-node? (unmeta-node %))
-                                    (take 1 (meaningful-children part)))))
-                        parts)]
-    (map unmeta-node (concat direct arities))))
-
-(defn- function-parameter-names
-  [node]
-  (into #{} (mapcat binding-form-names) (parameter-vectors node)))
-
-(defn- letfn-binding-names
-  [vector-node]
-  (into #{}
-        (keep (fn [part]
-                (when (= :list (n/tag part))
-                  (some-> (first (meaningful-children part)) simple-symbol-name))))
-        (meaningful-children vector-node)))
-
-(defn- form-introduced-names
-  "Names one form introduces into scope for its own children."
-  [node]
-  (let [head (head-name node)
-        parts (meaningful-children node)]
-    (cond
-      (nil? head) #{}
-
-      (= "letfn" head)
-      (if-let [vector-part (first (filter vector-node? (rest parts)))]
-        (letfn-binding-names vector-part)
-        #{})
-
-      (contains? local-binding-vector-heads head)
-      (if-let [vector-part (first (filter vector-node? (rest parts)))]
-        (pair-binding-names vector-part)
-        #{})
-
-      (contains? function-heads head)
-      (function-parameter-names node)
-
-      (contains? #{"as->" "catch"} head)
-      (if-let [name-node (nth parts 2 nil)]
-        (set (keep identity [(simple-symbol-name name-node)]))
-        #{})
-
-      :else #{})))
+;; NOTE ON BINDING ANALYSIS. There is deliberately none in this namespace.
+;;
+;; Whether a bare symbol is still a reference at a point in a tree -- past a
+;; `let` that shadows it PAIRWISE, past one arity's parameters but not
+;; another's, past a `:or` default, inside a reader discard or an unselected
+;; reader-conditional branch -- is answered by
+;; `clj-surgeon.alias-migration/rewrite-forms`, the repository's one lexical
+;; walker, through its `:decide` seam. A second copy of that analysis here
+;; would be a WEAKER copy, and the shapes it got wrong would fail SILENTLY, as
+;; an unrewritten call rather than an error. Where that walker reports a shape
+;; it does not model, this namespace turns the report into a typed refusal
+;; instead of dropping it.
 
 ;; ---------------------------------------------------------------------------
 ;; ns form and libspecs
@@ -248,21 +174,7 @@
   (into #{} (concat (mapcat :aliases direct) (mapcat :referred direct))))
 
 ;; ---------------------------------------------------------------------------
-;; whole-file bound names
-;;
-;; alias_migration deliberately restricts alias collisions to ns-level bindings,
-;; because a LOCAL can never shadow a qualifier. This verb is stricter on
-;; purpose: it introduces a NEW alias into a file it did not write, and the
-;; contract's own witness (`the-alias-is-the-first-policy-entry-that-collides-
-;; with-nothing`) requires a file whose only `response` is a `let` local to be
-;; given `resp`. Readability of the rewritten caller is the reason; correctness
-;; would have allowed the collision.
-
-(defn- introduced-names
-  [root]
-  (into #{}
-        (mapcat form-introduced-names)
-        (filter n/inner? (tree-seq n/inner? children root))))
+;; source definitions
 
 (def ^:private definition-heads
   #{"def" "defn" "defn-" "defmacro" "defmulti" "defonce" "declare"})
@@ -303,32 +215,12 @@
       acc)))
 
 ;; ---------------------------------------------------------------------------
-;; the rewriting walk
-;;
-;; One walk answers three questions at once: how many references to a SELECTED
-;; owner this form carries, how many to a RETAINED one, and what the form reads
-;; after the selected ones are re-qualified. Reader discards, comments, strings
-;; and every other trivia node are carried through untouched, which is what the
-;; fixture's protected regions exist to prove.
-
-(def ^:private empty-walk
-  {:nodes [] :selected 0 :retained 0})
-
-(defn- leaf
-  [node]
-  {:node node :selected 0 :retained 0})
-
-(defn- accumulate
-  [state result]
-  (-> state
-      (update :nodes conj (:node result))
-      (update :selected + (:selected result))
-      (update :retained + (:retained result))))
+;; the rewriting walk: one question asked through the shared lexical walker
 
 (defn- respelled
   "The new spelling of a selected owner's symbol.
 
-  A nil `replacement-qualifier` means the reference now sits INSIDE the
+  A blank `replacement-qualifier` means the reference now sits INSIDE the
   destination namespace, where the owner's own bare name is the whole answer:
   that is how a moved -> moved peer reference, and a multi-arity helper that
   delegates to another of its own arities by name, keep reading correctly."
@@ -337,59 +229,48 @@
     var-name
     (str replacement-qualifier "/" var-name)))
 
-(defn- token-decision
-  "Classify one token against the extraction, by whole symbol identity."
-  [node {:keys [qualifiers selected retained replacement-qualifier]} live-bare]
-  (when-let [value (token-symbol node)]
+(defn- decide-token
+  "The `:decide` seam for `alias-migration/rewrite-forms`.
+
+  It answers ONE question -- does this token name a var in `targets`, reached
+  through a qualifier this file binds or as a bare name still in scope -- and
+  answers nothing about scope itself, which is the walker's job. A token that
+  is not a symbol (a keyword, an auto-resolved `::alias/kw`, a string) never
+  names a var and is never a site."
+  [node {:keys [qualifiers targets replacement-qualifier]} live-bare]
+  (if-let [value (token-symbol node)]
     (let [qualifier (namespace value)
           var-name (name value)]
-      (cond
-        qualifier
-        (when (contains? qualifiers qualifier)
-          (cond
-            (contains? selected var-name)
-            {:rewrite (respelled replacement-qualifier var-name) :selected 1}
-            (contains? retained var-name) {:retained 1}
-            :else nil))
+      (if (and (contains? targets var-name)
+               (if qualifier
+                 (contains? qualifiers qualifier)
+                 (contains? live-bare var-name)))
+        {:rewrite (respelled replacement-qualifier var-name)}
+        {}))
+    {}))
 
-        (contains? live-bare var-name)
-        (cond
-          (contains? selected var-name)
-          {:rewrite (respelled replacement-qualifier var-name) :selected 1}
-          (contains? retained var-name) {:retained 1}
-          :else nil)
+(defn- walk-context
+  [{:keys [qualifiers targets replacement-qualifier file]}]
+  {:decide decide-token
+   ;; each arity of a multi-arity fn is its own binding scope, which the
+   ;; walker models only when asked; the l01-l03 witnesses are what asks
+   :per-arity-scopes true
+   :qualifiers qualifiers
+   :targets targets
+   :replacement-qualifier replacement-qualifier
+   :platform (if (str/ends-with? (str file) ".cljs") ":cljs" ":clj")})
 
-        :else nil))))
+(defn- walk
+  "Walk `forms` for one question, through the shared lexical walker.
 
-(defn- rewrite-node
-  "Rewrite one node and tally its selected and retained references."
-  [node context live-bare]
-  (let [tag (n/tag node)]
-    (cond
-      ;; a reader discard is data the contract keeps exactly as it is
-      (= :uneval tag) (leaf node)
-
-      (= :token tag)
-      (let [{:keys [rewrite selected retained]} (token-decision node context live-bare)]
-        (cond-> (leaf node)
-          rewrite (assoc :node (parser/parse-string rewrite))
-          selected (assoc :selected selected)
-          retained (assoc :retained retained)))
-
-      (n/inner? node)
-      (let [body-bare (reduce disj live-bare (form-introduced-names node))
-            walked (reduce (fn [state child]
-                             (accumulate state (rewrite-node child context body-bare)))
-                           empty-walk
-                           (children node))]
-        {:node (n/replace-children node (:nodes walked))
-         :selected (:selected walked)
-         :retained (:retained walked)})
-
-      :else (leaf node))))
-
-;; ---------------------------------------------------------------------------
-;; namespace-sensitive forms inside a moved body (MCP-OP-HELPER-018)
+  `:sites` counts hits, `:nodes` are the rewritten forms in order, `:indirect`
+  is every shape the walker declined to model rather than guess at."
+  [forms context live-bare]
+  (let [walked (mapv #(alias-migration/rewrite-forms % context live-bare) forms)]
+    {:sites (reduce + 0 (map :sites walked))
+     :nodes (mapv :node walked)
+     :walked walked
+     :indirect (vec (mapcat :indirect walked))}))
 
 (defn- namespace-sensitive-form
   "The first namespace-sensitive form in `node`, as its literal text, or nil.
@@ -485,21 +366,6 @@
    (concat (children ns-node)
            [(n/newlines 1) (n/spaces 2) (require-clause-node libspec-nodes)])))
 
-(defn- rendered-ns-node
-  [lib libspec-nodes]
-  (if (seq libspec-nodes)
-    (n/list-node [(n/token-node 'ns) (n/spaces 1) (n/token-node (symbol lib))
-                  (n/newlines 1) (n/spaces 2) (require-clause-node libspec-nodes)])
-    (n/list-node [(n/token-node 'ns) (n/spaces 1) (n/token-node (symbol lib))])))
-
-;; ---------------------------------------------------------------------------
-;; refusals (MCP-OP-HELPER-010, MCP-OP-HELPER-016)
-;;
-;; Every v1 refusal carries `next_call nil`, bounded evidence, and the ONE
-;; unresolved decision. None offers a continuation, and none is allowed to
-;; propose a smaller problem: no caller left out of the footprint, no reduced
-;; scope, no invented alias or destination, no lesser verification profile.
-
 (def ^:private refusal-suffixes
   ["ambiguous-owner"
    "private-dependency"
@@ -511,17 +377,15 @@
    "alias-policy-exhausted"
    "expect-mismatch"
    "target-exists"
-   "unknown-field"
-   "verification-preflight-unavailable"])
+   "unknown-field"])
 
 ;; @spec MCP-OP-HELPER-010
 (defn refusal-types
   "The closed set of v1 `error_type` strings this planner can emit.
 
-  `helper-extraction-verification-preflight-unavailable` is raised here, at
-  plan time, precisely because MCP-OP-HELPER-011 requires the profile to be
-  validated BEFORE anything is staged; the boundary re-validates capability
-  against the live runner."
+  `helper-extraction-verification-preflight-unavailable` is NOT here: profile
+  admission is a fact about configured runners, which a pure function cannot
+  observe, so MCP-OP-HELPER-011 belongs to the boundary alone."
   []
   (mapv #(str "helper-extraction-" %) refusal-suffixes))
 
@@ -547,9 +411,11 @@
   of these, never a substitute for them (revision 3, rule 4)."
   ["src" "test"])
 
-(def admitted-profile-names
-  "Verification profiles v1 admits: synchronous and rollback-capable."
-  #{"helper-proof"})
+;; NOTE ON verification.profile. The planner takes it as an OPAQUE STRING and
+;; never refuses on it. Which profiles are admitted -- synchronous,
+;; rollback-capable, runnable now -- is a fact about configured runners, not
+;; about source text, and a pure function that cannot observe a runner must not
+;; pretend to have validated one. MCP-OP-HELPER-011 is the boundary's.
 
 (defn- sha256
   [text]
@@ -606,13 +472,36 @@
 ;; ---------------------------------------------------------------------------
 ;; step 2 -- moved bodies (MCP-OP-HELPER-004, -018, -019)
 
+(defn- retained-hit
+  "The retained var one moved body actually references, or nil.
+
+  Both passes run through the shared lexical walker, so a `let` that shadows a
+  retained name, an arity that binds it as a parameter, and a reader discard
+  that merely mentions it are all NOT dependencies. The first pass asks the
+  cheap question -- is any retained name reached at all -- and only a positive
+  answer pays for the per-name pass that says WHICH, because the refusal has to
+  name the var."
+  [source-lib retained-order retained-index node]
+  (let [names (set (keys retained-index))
+        context (walk-context {:qualifiers #{source-lib}
+                               :targets names
+                               :replacement-qualifier "q"})]
+    (when (pos? (:sites (walk [node] context names)))
+      (some (fn [candidate]
+              (let [one (walk-context {:qualifiers #{source-lib}
+                                       :targets #{candidate}
+                                       :replacement-qualifier "q"})]
+                (when (pos? (:sites (walk [node] one #{candidate})))
+                  (get retained-index candidate))))
+            retained-order))))
+
 (defn- body-dependency-refusal
   "The first dependency or namespace sensitivity that stops a moved body."
   [source-lib owners definitions]
   (let [selected (set (map :name owners))
-        retained (into {} (comp (remove #(contains? selected (:name %)))
-                                (map (juxt :name identity)))
-                       definitions)]
+        retained (remove #(contains? selected (:name %)) definitions)
+        retained-index (into {} (map (juxt :name identity)) retained)
+        retained-order (mapv :name retained)]
     (first
      (keep
       (fn [{:keys [name node]}]
@@ -627,31 +516,19 @@
                     {:helper name :form form}))
          ;; @spec MCP-OP-HELPER-004
          ;; @spec MCP-OP-HELPER-019
-         (let [live (reduce disj (set (keys retained)) (form-introduced-names node))
-               hit (first
-                    (keep (fn [child]
-                            (when-let [value (token-symbol child)]
-                              (let [qualifier (namespace value)
-                                    var-name (clojure.core/name value)]
-                                (when (and (or (nil? qualifier) (= source-lib qualifier))
-                                           (contains? retained var-name)
-                                           (or qualifier (contains? live var-name)))
-                                  (get retained var-name)))))
-                          (tree-seq #(and (n/inner? %) (not= :uneval (n/tag %)))
-                                    children node)))]
-           (when hit
-             (if (:private? hit)
-               (refusal "private-dependency"
-                        (str "The selected helper " name " references a private"
-                             " var the source retains.")
-                        (str "whether " (:name hit) " belongs in the selection")
-                        {:helper name :var (str source-lib "/" (:name hit))})
-               (refusal "retained-dependency"
-                        (str "The selected helper " name " references a public"
-                             " var the source retains, so the destination would"
-                             " have to require the source.")
-                        (str "whether " (:name hit) " belongs in the selection")
-                        {:helper name :var (str source-lib "/" (:name hit))}))))))
+         (when-let [hit (retained-hit source-lib retained-order retained-index node)]
+           (if (:private? hit)
+             (refusal "private-dependency"
+                      (str "The selected helper " name " references a private"
+                           " var the source retains.")
+                      (str "whether " (:name hit) " belongs in the selection")
+                      {:helper name :var (str source-lib "/" (:name hit))})
+             (refusal "retained-dependency"
+                      (str "The selected helper " name " references a public"
+                           " var the source retains, so the destination would"
+                           " have to require the source.")
+                      (str "whether " (:name hit) " belongs in the selection")
+                      {:helper name :var (str source-lib "/" (:name hit))})))))
       owners))))
 
 ;; ---------------------------------------------------------------------------
@@ -718,45 +595,63 @@
                                         (str (:lib competing) "/" helper-name)]}))))
            (sort selected)))))
 
-(defn- reader-conditional-refusal
-  [file root source-lib]
-  (when (some (fn [node]
-                (and (= :reader-macro (n/tag node))
-                     (str/includes? (n/string node) source-lib)))
-              (tree-seq n/inner? children root))
+(defn- walker-refusal
+  "Turn a shape the shared walker declined to model into a typed refusal.
+
+  Never a silent unrewritten call: an unmodelled binding scope, a quoted
+  reference, or a selected site in an unselected reader-conditional branch all
+  land here, named, with the offending form."
+  [file indirect]
+  (when-let [{:keys [reason form]} (first indirect)]
     (refusal "unsupported-binding"
-             (str file " reaches the source inside a reader conditional; v1 does"
-                  " not model per-platform binding.")
-             (str "how " file " should bind the destination namespace")
-             {:file file :form source-lib})))
+             (str file " reaches a selected helper through a shape v1 does not"
+                  " model (" (name reason) "), so the reference cannot be closed"
+                  " mechanically.")
+             (str "how " file " should reach the destination at this site")
+             {:file file :reason (name reason) :form form})))
 
 (defn- analyze-caller
   "Discovery for ONE file that is not the source.
 
   Returns nil when the file neither binds nor mentions the source, a refusal
-  map, or `{:file :partition :sites :retained :bound :root :ns-node :target
-  :direct :forms}` -- everything the edit builder needs and nothing it does not."
-  [{:keys [file source]} {:keys [source-lib selected retained] :as context}]
+  map, or the facts the edit builder needs and nothing it does not.
+
+  TWO walks, one question each: which references MOVE, and which references
+  STAY. Splitting them keeps the tally honest without teaching the shared
+  walker a second counter, and only the selected walk can refuse -- an
+  unmodelled scope around a reference that is not moving changes no bytes."
+  [{:keys [file source]} {:keys [source-lib selected retained]}]
   (let [root (parser/parse-string-all source)
         ns-node (ns-node-of root)
         direct (filterv map? (ns-libspecs ns-node))
         target (first (filter #(= source-lib (:lib %)) direct))
         others (remove #(= source-lib (:lib %)) direct)
         qualifiers (into #{source-lib} (:aliases target))
+        referred (:referred target #{})
         forms (remove #(identical? % ns-node) (top-level-forms root))
-        walk-context {:qualifiers qualifiers
-                      :selected selected
-                      :retained retained
-                      ;; counting-only walk: the real qualifier is chosen once the
-                      ;; partition is known, so this spelling is never emitted
-                      :replacement-qualifier "q"}
-        walked (mapv #(rewrite-node % walk-context (:referred target #{})) forms)
-        sites (reduce + 0 (map :selected walked))
-        retained-sites (reduce + 0 (map :retained walked))]
+        ;; counting-only: the real qualifier is chosen once the partition is
+        ;; known, so this spelling is never emitted
+        probe (fn [targets]
+                (walk forms
+                      (walk-context {:qualifiers qualifiers
+                                     :targets targets
+                                     :replacement-qualifier "q"
+                                     :file file})
+                      referred))
+        moving (probe selected)
+        staying (probe retained)
+        sites (:sites moving)
+        retained-sites (:sites staying)
+        ;; @spec MCP-OP-HELPER-006
+        ;; An unused RETAINED refer is still a binding this file declared, and
+        ;; dropping it is a change nobody asked for. A file that refers a
+        ;; retained name it never calls is therefore mixed, not moved_only:
+        ;; the old require is retained and one new one is added.
+        unused-retained-refers (seq (remove selected referred))]
     (or (when ns-node (prefix-list-refusal file ns-node source-lib))
         (when ns-node (use-clause-refusal file ns-node source-lib))
         (when target (target-grammar-refusal file target))
-        (reader-conditional-refusal file root source-lib)
+        (when (pos? sites) (walker-refusal file (:indirect moving)))
         (when (pos? sites)
           (ambiguous-reference-refusal file source-lib selected target others))
         (cond
@@ -769,19 +664,22 @@
           {:file file
            :partition (cond
                         (nil? target) "qualified_only"
-                        (pos? retained-sites) "mixed"
+                        (or (pos? retained-sites) unused-retained-refers) "mixed"
                         :else "moved_only")
            :sites sites
            :retained retained-sites
-           :bound (into (ns-bound-names direct)
-                        (concat (introduced-names root)
-                                (mapcat definition-names forms)))
+           ;; @spec MCP-OP-HELPER-007
+           ;; ns-level bindings only, which is the repository's doctrine and a
+           ;; fact about Clojure: a qualified symbol's namespace part resolves
+           ;; through the ns alias map, so a local can never shadow it.
+           :bound (ns-bound-names direct)
+           :qualifiers qualifiers
+           :referred referred
            :root root
            :ns-node ns-node
            :target target
            :direct direct
-           :forms forms
-           :context (assoc context :qualifiers qualifiers)}))))
+           :forms forms}))))
 
 ;; ---------------------------------------------------------------------------
 ;; step 5 -- alias choice (MCP-OP-HELPER-007)
@@ -826,30 +724,40 @@
      :replacement (n/string new-ns)}))
 
 (defn- form-edits
-  "One whole-form edit per top-level form that carries a selected reference."
+  "One whole-form edit per top-level form that carries a selected reference.
+
+  The find is the COMPLETE original top-level form and the replacement is that
+  same form with only the selected symbols respelled, so every other byte --
+  comments, strings, docstrings, `#_` discards, the indentation the file chose
+  -- is carried through by the walker rather than reproduced by this namespace."
   [forms context live-bare]
-  (into []
-        (keep (fn [form]
-                (let [{:keys [node selected]} (rewrite-node form context live-bare)]
-                  (when (pos? selected)
+  (let [{:keys [walked]} (walk forms context live-bare)]
+    (into []
+          (keep (fn [[form result]]
+                  (when (pos? (:sites result))
                     {:original (n/string form)
-                     :replacement (n/string node)}))))
-        forms))
+                     :replacement (n/string (:node result))})))
+          (map vector forms walked))))
 
 (defn- caller-plan
-  [analysis dest-lib alias]
-  (let [context (assoc (:context analysis)
-                       :replacement-qualifier (if (= "qualified_only" (:partition analysis))
-                                                dest-lib
-                                                alias))
-        live-bare (get-in analysis [:target :referred] #{})]
-    {:file (:file analysis)
-     :partition (:partition analysis)
-     :alias (when-not (= "qualified_only" (:partition analysis)) alias)
-     :sites (:sites analysis)
-     :retained (:retained analysis)
+  [{:keys [file partition sites retained qualifiers referred forms] :as analysis}
+   dest-lib alias]
+  (let [qualified-only? (= "qualified_only" partition)
+        context (walk-context {:qualifiers qualifiers
+                               :targets (:selected analysis)
+                               ;; a caller with no require of the source gets a
+                               ;; plain require of the DESTINATION, so its
+                               ;; rewritten symbol stays fully qualified and has
+                               ;; a load path of its own (MCP-OP-HELPER-014)
+                               :replacement-qualifier (if qualified-only? dest-lib alias)
+                               :file file})]
+    {:file file
+     :partition partition
+     :alias (when-not qualified-only? alias)
+     :sites sites
+     :retained retained
      :edits (into [(caller-ns-edit analysis dest-lib alias)]
-                  (form-edits (:forms analysis) context live-bare))}))
+                  (form-edits forms context referred))}))
 
 ;; ---------------------------------------------------------------------------
 ;; the source file: retirement, one new require, source-local lowering
@@ -877,16 +785,15 @@
         selected (set (map :name owners))
         retained-forms (remove #(or (identical? % ns-node) (contains? moved-nodes %))
                                (top-level-forms root))
-        context {:qualifiers #{source-lib}
-                 :selected selected
-                 :retained #{}
-                 :replacement-qualifier alias}
-        ;; every top-level name of the source is in scope as a bare symbol
-        ;; inside the source itself
+        context (walk-context {:qualifiers #{source-lib}
+                               :targets selected
+                               :replacement-qualifier alias
+                               :file file})
+        ;; inside the defining namespace every top-level name is in scope as a
+        ;; bare symbol, so the walker starts with all of them live and shadows
+        ;; them per binding form as it descends
         live-bare (into #{} (map :name) definitions)
-        edits (form-edits retained-forms context live-bare)
-        sites (reduce + 0 (map (fn [form] (:selected (rewrite-node form context live-bare)))
-                               retained-forms))
+        walked (walk retained-forms context live-bare)
         clause (require-clause ns-node)
         libspec (alias-libspec dest-lib alias)
         anchor (when clause
@@ -900,46 +807,71 @@
                                                (concat (children clause)
                                                        [(n/newlines 1) (n/spaces 3) libspec])))
                  :else (replace-child ns-node clause (insert-after clause anchor [libspec])))]
-    {:file file
-     :partition "source"
-     :alias alias
-     :sites sites
-     :retained 0
-     :policy policy
-     :edits (into [{:original (n/string ns-node) :replacement (n/string new-ns)}]
-                  (concat (mapv #(deletion-edit root (:node %)) owners)
-                          edits))}))
+    (or
+     (walker-refusal file (:indirect walked))
+     {:file file
+      :partition "source"
+      :alias alias
+      :sites (:sites walked)
+      :retained 0
+      :policy policy
+      :edits (into [{:original (n/string ns-node) :replacement (n/string new-ns)}]
+                   (concat (mapv #(deletion-edit root (:node %)) owners)
+                           (form-edits retained-forms context live-bare)))})))
 
 ;; ---------------------------------------------------------------------------
 ;; the destination namespace
 
 (defn- destination-source
-  "The destination's complete text: `require_policy minimal` over the source's
-  own libspecs, then the moved forms verbatim in definition order.
+  "The destination's complete text, or a typed refusal.
 
-  A moved -> moved reference is already the destination's own bare symbol, and a
-  fully qualified self-reference is lowered to one. No moved -> retained edge
-  can reach here: MCP-OP-HELPER-019 refused before the plan was built, which is
-  why this namespace requires nothing of the source and no cycle can pass
-  through it."
-  [{:keys [dest-lib source-lib source-ns-node owners]}]
-  (let [selected (set (map :name owners))
-        context {:qualifiers #{source-lib}
-                 :selected selected
-                 :retained #{}
-                 :replacement-qualifier nil}
-        rewritten (mapv (fn [{:keys [node]}]
-                          (n/string (:node (rewrite-node node context #{}))))
-                        owners)
-        body (str/join "\n\n" (map str/trim-newline rewritten))
-        moved-text (str/join "\n" rewritten)
-        direct (filterv map? (ns-libspecs source-ns-node))
-        used (filterv (fn [{:keys [aliases referred]}]
-                        (some (fn [needle] (str/includes? moved-text needle))
-                              (concat (map #(str % "/") aliases) referred)))
-                      direct)
-        ns-text (n/string (rendered-ns-node dest-lib (mapv :node used)))]
-    (str ns-text "\n\n" body "\n")))
+  The HEADER is not this namespace's to invent. `require_policy :minimal` is
+  already implemented, with real free-symbol analysis, in
+  `clj-surgeon.extract-header/compile-target-header`, and it keeps every clause
+  the moved bodies actually need -- including `:import`, which a require-only
+  view does not see at all. Choosing libspecs here by searching the moved text
+  for an alias would both invent requires (an alias named in a comment or a
+  string literal) and miss real ones (an imported class, a fully qualified
+  symbol with no alias). Where that logic cannot prove a minimal header it says
+  so, and this returns a typed refusal rather than a candidate that fails to
+  load.
+
+  The BODIES move verbatim in definition order. A moved -> moved peer reference
+  is already the destination's own bare symbol; a fully qualified self-reference
+  is lowered to one. No moved -> retained edge can reach here: MCP-OP-HELPER-019
+  refused before the plan was built, which is why this namespace requires
+  nothing of the source and no cycle can pass through it."
+  [{:keys [file dest-lib source-lib source-ns-node owners]}]
+  (let [context (walk-context {:qualifiers #{source-lib}
+                               :targets (set (map :name owners))
+                               :replacement-qualifier nil
+                               :file file})
+        walked (walk (mapv :node owners) context #{})
+        bodies (mapv n/string (:nodes walked))
+        header (extract-header/compile-target-header
+                {:source-ns-form (n/string source-ns-node)
+                 :target-ns dest-lib
+                 :form-sources bodies
+                 :require-policy :minimal})]
+    (cond
+      (seq (:indirect walked)) (walker-refusal file (:indirect walked))
+
+      (not (:ok header))
+      (refusal "unsupported-binding"
+               (str "The destination's dependency-minimal header cannot be"
+                    " proved from the source's own ns form ("
+                    (name (or (:reason header) :unknown)) ").")
+               (str "how the destination should declare "
+                    (pr-str (:entry header)))
+               {:file file
+                :reason (name (or (:reason header) :unknown))
+                :form (:entry header)})
+
+      :else
+      {:source (str (:ns-form header) "\n\n"
+                    (str/join "\n\n" (map str/trim-newline bodies))
+                    "\n")
+       :omitted_requires (vec (:omitted-target-requires header))})))
 
 ;; ---------------------------------------------------------------------------
 ;; the receipt (MCP-OP-HELPER-009, MCP-OP-HELPER-012)
@@ -1033,7 +965,6 @@
 ;; @spec MCP-OP-HELPER-008
 ;; @spec MCP-OP-HELPER-009
 ;; @spec MCP-OP-HELPER-010
-;; @spec MCP-OP-HELPER-011
 ;; @spec MCP-OP-HELPER-012
 ;; @spec MCP-OP-HELPER-013
 ;; @spec MCP-OP-HELPER-014
@@ -1064,7 +995,6 @@
         dest-lib (get-in request [:to :lib])
         policy (vec (get-in request [:to :alias_policy]))
         scope-paths (vec (get-in request [:scope :paths]))
-        profile (get-in request [:verification :profile])
         from-file (get-in request [:from :file])
         source-entry (first (filter #(= from-file (:file %)) sources))]
     (cond
@@ -1075,15 +1005,6 @@
                "The request carries a field outside the closed set."
                "which of the closed request fields carries this information"
                {:unknown_fields (mapv name unknown)})
-
-      ;; @spec MCP-OP-HELPER-011
-      ;; validated BEFORE anything is planned, so nothing is ever staged
-      (not (contains? admitted-profile-names profile))
-      (refusal "verification-preflight-unavailable"
-               (str "The verification profile " (pr-str profile) " is not an"
-                    " admitted synchronous, rollback-capable profile.")
-               "which admitted profile proves this write"
-               {:profile profile})
 
       (nil? source-entry)
       (refusal "ambiguous-owner"
@@ -1133,7 +1054,8 @@
                                    (cond
                                      (nil? result) acc
                                      (false? (:ok result)) (assoc acc :refusal result)
-                                     :else (update acc :files conj result)))))
+                                     :else (update acc :files conj
+                                                   (assoc result :selected selected))))))
                              {:files []}
                              (remove #(= from-file (:file %)) sources))]
                (or
@@ -1157,15 +1079,11 @@
                 ;; @spec MCP-OP-HELPER-007
                 (let [rewritten (filterv #(pos? (:sites %)) (:files analyses))
                       untouched (filterv #(zero? (:sites %)) (:files analyses))
-                      source-bound (let [moved (set (map :node owners))
-                                         retained-forms
-                                         (remove #(or (identical? % source-ns-node)
-                                                      (contains? moved %))
-                                                 (top-level-forms source-root))]
-                                     (into (ns-bound-names
-                                            (filterv map? (ns-libspecs source-ns-node)))
-                                           (concat (mapcat introduced-names retained-forms)
-                                                   (mapcat definition-names retained-forms))))
+                      ;; @spec MCP-OP-HELPER-007
+                      ;; ns-level bindings only, exactly as alias-migration
+                      ;; defines a collision: a local never shadows a qualifier
+                      source-bound (ns-bound-names
+                                    (filterv map? (ns-libspecs source-ns-node)))
                       choices (reduce
                                (fn [acc analysis]
                                  (if (:refusal acc)
@@ -1199,7 +1117,7 @@
                                      " should use for the destination")
                                 {:file from-file
                                  :collided_bindings (:collided (choose-alias source-bound policy))})
-                       (let [source-file-plan
+                       (let [source-result
                              (source-plan {:file from-file
                                            :root source-root
                                            :ns-node source-ns-node
@@ -1209,10 +1127,20 @@
                                            :dest-lib dest-lib
                                            :alias source-alias
                                            :policy policy})
-                             files (conj (:plans choices) source-file-plan)
+                             destination (when-not (false? (:ok source-result))
+                                           (destination-source
+                                            {:file from-file
+                                             :dest-lib dest-lib
+                                             :source-lib source-lib
+                                             :source-ns-node source-ns-node
+                                             :owners owners}))
+                             files (when-not (false? (:ok source-result))
+                                     (conj (:plans choices) source-result))
                              derived (count files)
                              expected (get-in request [:expect :caller_files])]
                          (cond
+                           (false? (:ok source-result)) source-result
+                           (false? (:ok destination)) destination
                            ;; @spec MCP-OP-HELPER-013 MCP-OP-HELPER-017
                            (and (some? expected) (not= expected derived))
                            (refusal "expect-mismatch"
@@ -1236,11 +1164,11 @@
                                 ;; named `src`, so an ancestor named `src`
                                 ;; cannot leak into the destination
                                 :file dest-file
-                                :source (destination-source
-                                         {:dest-lib dest-lib
-                                          :source-lib source-lib
-                                          :source-ns-node source-ns-node
-                                          :owners owners})}
+                                :source (:source destination)
+                                ;; requires the minimal-header logic proved the
+                                ;; moved bodies do NOT use, named rather than
+                                ;; silently dropped
+                                :omitted_requires (:omitted_requires destination)}
                                :moved (mapv :name owners)
                                :files files
                                :transactions

@@ -81,6 +81,7 @@
 (def function-heads
   #{"fn" "fn*" "defn" "defn-" "defmacro" "defmethod" "definline"})
 
+
 (defn- binding-form-names
   "Names declared by a binding, excluding metadata, discards and default expressions."
   [node]
@@ -209,6 +210,13 @@
     (recur (last (meaningful-children node)))
     node))
 
+(defn- arity-list?
+  "One arity of a multi-arity function: a list whose first form is its own
+  parameter vector, and therefore its own binding scope."
+  [node]
+  (and (= :list (n/tag node))
+       (some-> (first (meaningful-children node)) unmeta-node vector-node?)))
+
 (defn- refer-symbol-name
   "A live refer token's identity; reader-discarded entries are never names."
   [node]
@@ -314,6 +322,7 @@
 ;; names it introduces, so shadowing is lexical rather than file-wide.
 
 (declare rewrite-binding-vector)
+(declare rewrite-arity)
 
 ;; @spec MCP-OP-ALIAS-025
 
@@ -391,13 +400,26 @@
                                   (str alias "/" var-name)
                                   (str alias "/" to-var)))))))))))
 
+(defn- decide
+  "The token decision this walk is running under.
+
+  `token-facts` is the alias-migration decision and stays the default, so every
+  context this namespace builds behaves exactly as before. A caller that walks
+  with the SAME lexical rules but a different question -- which is what
+  `clj-surgeon.helper-extraction` does, rewriting a SET of selected owners
+  rather than one lib or one var -- supplies `:decide` and reuses the binding,
+  shadowing, reader-conditional and discard analysis wholesale instead of
+  shipping a second, weaker copy of it."
+  [node context live-bare]
+  ((get context :decide token-facts) node context live-bare))
+
 ;; @spec MCP-OP-ALIAS-031
 (defn- quoted-facts
   "Site facts for every token inside a quoted form."
   [node context live-bare]
   (->> (tree-seq n/inner? n/children node)
        (filter #(= :token (n/tag %)))
-       (keep #(let [facts (token-facts % context live-bare)]
+       (keep #(let [facts (decide % context live-bare)]
                 (when (:rewrite facts) facts)))
        vec))
 
@@ -431,8 +453,13 @@
 
 ;; @spec MCP-OP-ALIAS-029
 ;; @spec MCP-OP-ALIAS-033
-(defn- rewrite-forms
+(defn rewrite-forms
   "Walk one node and return its rewritten node plus the migration's tallies.
+
+  PUBLIC SEAM. This is the repository's one lexical walker for whether a token
+  is a reference and whether it is still in scope here, and it is the only one
+  any verb should use: `context` may carry `:decide` to ask a different question
+  of each token while keeping these binding rules exactly.
 
   Every node type a qualified symbol can sit in is walked: operator and
   argument position, binding vectors, map keys and values, vector elements,
@@ -471,13 +498,39 @@
 
       (= :token tag)
       (let [{:keys [rewrite refer-hit? other-use? indirect]}
-            (token-facts node context live-bare)]
+            (decide node context live-bare)]
         (cond-> (leaf node)
           rewrite (assoc :node (parser/parse-string rewrite) :sites 1)
           refer-hit? (assoc :refer-sites 1)
           other-use? (assoc :other-use true)
           indirect (assoc :indirect
                           [(assoc indirect :form (n/string node))])))
+
+      ;; @spec MCP-OP-ALIAS-066
+      ;; PER-ARITY SCOPES. `(defn f ([] (h)) ([h] h))` has two scopes, not one:
+      ;; the first arity's `(h)` is a reference and the second arity's `h` is a
+      ;; parameter. The generic descendant walk below cannot express that,
+      ;; because it subtracts the names a form introduces before walking ALL of
+      ;; its children, so it would union the parameters of every arity and
+      ;; leave the first arity's call unrewritten -- silently. The guard after
+      ;; this branch is what has protected alias migration from that, by
+      ;; refusing multi-arity shapes outright.
+      ;;
+      ;; This branch is the analysis that refusal stood in for, and it is OPT-IN
+      ;; (`:per-arity-scopes`) precisely so that alias migration's published
+      ;; refusal does not change under it: a caller that has its own witnesses
+      ;; for the rewritten shape asks for it, everyone else keeps the refusal.
+      (and (:per-arity-scopes context)
+           (contains? function-heads (head-name node))
+           (some arity-list? (children node)))
+      (let [walked (reduce
+                     (fn [state child]
+                       (if (arity-list? child)
+                         (accumulate state (rewrite-arity child context live-bare))
+                         (accumulate state (rewrite-forms child context live-bare))))
+                     empty-walk
+                     (children node))]
+        (walk-result node walked))
 
       (reader-conditional-node? node)
       (let [kids (children node)
@@ -486,7 +539,7 @@
             body-kids (children body)
             {:keys [selected unselected]} (branch-positions body-kids platform)
             branch-site? (fn [position]
-                           (some #(:rewrite (token-facts % context live-bare))
+                           (some #(:rewrite (decide % context live-bare))
                                  (filter #(= :token (n/tag %))
                                          (tree-seq n/inner? n/children
                                                    (nth body-kids position)))))
@@ -531,7 +584,7 @@
                                     (= :meta (n/tag first-vector))))
             potential? (some (fn [part]
                                (when (= :token (n/tag part))
-                                 (let [facts (token-facts part context live-bare)]
+                                 (let [facts (decide part context live-bare)]
                                    (or (:rewrite facts) (:refer-hit? facts)))))
                              (tree-seq #(and (n/inner? %) (not= :uneval (n/tag %)))
                                        children node))]
@@ -590,6 +643,24 @@
             kids)))
 
       :else (leaf node))))
+
+(defn- rewrite-arity
+  "Rewrite ONE arity list of a multi-arity function.
+
+  Its parameter vector is a binding form, never a site, and the names it binds
+  leave scope for this arity's body ONLY -- never for its siblings."
+  [node context live-bare]
+  (let [params (first (filter #(vector-node? (unmeta-node %))
+                              (meaningful-children node)))
+        body-bare (reduce disj live-bare (binding-form-names (unmeta-node params)))
+        walked (reduce
+                 (fn [state child]
+                   (if (identical? child params)
+                     (update state :nodes conj child)
+                     (accumulate state (rewrite-forms child context body-bare))))
+                 empty-walk
+                 (children node))]
+    (walk-result node walked)))
 
 (defn- rewrite-binding-vector
   "Rewrite a let-style binding vector.
