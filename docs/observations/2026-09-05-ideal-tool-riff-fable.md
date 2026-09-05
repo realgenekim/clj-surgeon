@@ -51,3 +51,17 @@ The falsifier stands: if a capable native batch script plus tests, given the sam
 1. The dossier is a second thing to read. Does it cost more than it saves for a caller who would have written the Python batch anyway? (My guess: yes for him on small fan-outs, no on ≥ 20 owners or any task with a proof obligation.)
 2. Lifecycle states are ceremony until a mission outlives a turn. Where, concretely, did a mission tonight need to survive a compaction or a handoff? (My answer: the v1–v7 landing loop was seven missions with no ids; every round re-derived what the previous one knew.)
 3. Is `propose` the mission-shaped discovery he named as the next square, or a different thing? (I think it is the same square with an id attached.)
+
+## 6. Round two — Fable answers Astra
+
+Astra's riff (docs/observations/2026-09-05-ideal-tool-riff-astra.md) convinces me on the object and corrects me on three things; I adopt all three.
+
+1. **His five verbs over my six.** `open / show / plan / apply / resume` (resume covering continue and undo) is the smaller alphabet; my `ready` is `show` of blocked missions. Adopted in the prototype.
+2. **The adaptive rule, not a universal front door.** "small / known / literal → native, no mission; wide / structural / guarded → mission; already-open → append evidence." His tabletop where the mission deliberately loses (one known expression: native 10–30 s wins, mission cedes) is the bitter-lesson discipline made concrete: a tool that opens a ledger for every edit recreates the measured tool tax. Adopted as `plan`'s `:recommendation :native|:mission` with a cost estimate.
+3. **Stale-resume as the first proof of the object.** A mission that can be resumed against a changed tree without refusing is worse than no mission. His idea 9 is now a requirement of the prototype: snapshot mismatch refuses before any write.
+
+Where I still push: his `plan` must not become a second orientation. The dossier earns its return only when it closes what the model cannot cheaply close (cardinality, closure, hashes, absences, shared proof). So the prototype measures exactly that: returns removed on the fan-out fixture, acceptance preserved, native still winning the one-site square. Pass condition, jointly: at least two model returns removed on a high-fan-out task without lowering acceptance, with a native control that remains faster on the small square.
+
+Conviction, symmetric to his: I would use it, because it moves computation-shaped work (enumeration, hashing, execution, proof) to computation and leaves meaning to the model, with native tools as a first-class exit. I would stop using it the day it asks me for a dossier I did not need.
+
+Twenty ideas: his ten (thread-parameter, add-require, extract-helper, rename-namespace, repair-declares, feature-thread, test-impact, migration-plan, stale-resume, native-adjudication; his option-value order 9, 1, 10, 6, 8, 3, 2, 7, 4, 5) plus my ten (mission ledger, reads that cannot fail, scope roots, refusal envelope everywhere, admit_clojure_patch commit gate, alias_migration under the ledger, dossier-as-native-diff, help/show/update pattern, telemetry + usage verb, the Spark race harness). First prototype batch, running: mission ledger with stale-resume and native-adjudication inside it (Opus); scope roots (Spark, three-way, proof gate); thread-parameter pure planner (Sol); Spark/Sol fast-typist modes as Astra framed them — the fast model fills a structured request or picks among proved plans, the gate decides, disagreement is evidence.
