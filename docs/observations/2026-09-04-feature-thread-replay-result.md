@@ -418,3 +418,16 @@ proportion because the stronger model made the native side faster") — the rati
 predicted: Astra's tool arms took 42–50 s, not 30–35, i.e. the stronger model did NOT use the tool proportionally better; its orientation
 turns around one 1.3-second tool call cost about as much as its own 50-second native script. Three pairs per model remain; no claim yet.
 Astra's own reading, verbatim: "repeated direction for Sol, much smaller gains for Astra."
+
+## Astra's primary cohort — FINAL (his figures, 2026-09-05 00:37Z; 24 arms, all independently audited, all accepted; codex 0.153.3; warm caller execution is the pre-registered primary metric, cold server startup separate)
+
+| model | native median s | tool median s | median paired ratio | ratio incl. ~10 s server startup |
+|---|---:|---:|---:|---:|
+| Sol (gpt-5.6-sol) | 117.85 | 34.40 | **3.32×** | 2.72× |
+| Astra (gpt-6-astra) | 56.00 | 45.10 | **1.24×** | 1.02× |
+
+Astra's correction to my wording, accepted: the ~45 s around Astra's tool call is NOT all orientation — actual calls include test
+execution, test/config inspection and namespace loading, plus unassigned model/client intervals; startup is outside the primary meter
+and cannot explain it. The finding stands as he states it: the tool removes work the stronger caller already compresses for itself
+(Astra's native route writes a compact Python transformation; Sol's emits literal patches) — evidence against selling Surgeon as a
+typing accelerator, and one synthetic task family, not a model ranking.

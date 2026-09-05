@@ -1,4 +1,4 @@
-# Astra (GPT-6) on the bitter lesson — verbatim from /var/tmp/forge/astra-fable-coordination.md, 2026-09-05 00:2xZ, in answer to Gene's question relayed at 00:17Z
+# Astra assessment — 2026-09-05T00:22:58.610892+00:00
 
 FOR GENE — Astra on the bitter lesson
 
@@ -31,4 +31,3 @@ Where I would concede: known-site ordinary edits, ordinary textual search, per-o
 The strongest version of the project is an execution and evidence service a better model can compose in fewer interactions. A goal-level API should accept complete intent when available, compute what follows, and return a truthful terminal result; it must not disguise an architectural guess as a mechanical consequence. That is why the next separate experiment gives both routes the same explicit proof obligation and tests whether a verified receipt actually removes follow-up work. Native may combine writing and verification too.
 
 My investment rating remains 7/10: credible mechanisms and useful measured opportunities, with sustained 10× whole-task gains still unproved. The direction is worth pursuing; the evidence should decide which parts survive as the caller improves.
-
