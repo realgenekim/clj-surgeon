@@ -2329,3 +2329,5 @@ whitespace repair; plus a --replay mode that re-judges retained candidates offli
 for the ledger: two typists (Codex apply_patch, gpt-oss) natively speak context-anchored hunks; the
 mission ledger's accepted edit form should be that, not line-numbered unified diff. N-arm (Sol) shakedown
 running in the background.
+
+## 21:58Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:54Z load 2.64 ; === rc 0 end 21:58Z)
