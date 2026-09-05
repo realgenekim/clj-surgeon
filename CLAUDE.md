@@ -261,6 +261,14 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
   absent from the compact editor, or gates that must participate in rollback.
   Use the process-starting CLI only when MCP is unavailable, the operation is
   not exposed there, or the CLI itself is under test.
+- To insert new top-level forms beside a known owner, use
+  `apply_clojure_changes` with `changes`, `forms: [owner]`, and an
+  `insert_before` or `insert_after` array. Omit `find` for that guarded
+  top-level insertion; keep the exact per-change match guard. An array item
+  may contain several complete forms, but detached comment gaps refuse.
+  Do not encode an append as one compact replacement containing the old
+  owner plus new forms. Literal `from`/`to` replacements require complete
+  subtrees; replace a complete owner when the intended fragment is incomplete.
 - For a projection's collection writes, use the read-only `relation_census` MCP
   tool (or `clj-surgeon :op :relation-census`). It classifies every write inside
   a `defmethod fold-event` arm as `:door`, `:set`, `:guarded`, `:raw`, or

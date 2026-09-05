@@ -1,6 +1,6 @@
 # Preserve unrelated imports during selected Var migration
 
-Status: reviewed candidate, ready for a branch commit; public wire and full-suite gates remain pending. Independent GO applies to source SHA-256 `9528d0290648ea0c7ef4ab21ebf91f61563d75774c031fc7ba1a38684633e361`. No release or performance claim.
+Status: reviewed candidate committed on the experiment branch at da7ba418cbe3e1de22efdd1471a0c295c0422d80; public wire PASS; full-suite gate remains pending. Independent GO applies to source SHA-256 `9528d0290648ea0c7ef4ab21ebf91f61563d75774c031fc7ba1a38684633e361`. No release or performance claim.
 
 ## Problem and current contract
 
@@ -21,8 +21,8 @@ Only src/clj_surgeon/alias_migration.clj, test/clj_surgeon/alias_migration_test.
 - Formatter: cached standard-clojure-style on changed source/tests, before targeted tests.
 - Pure matrix: 44 tests, 641 assertions, zero failures/errors (repair-fourth-green.txt).
 - Independent GO: 36 scenarios; 28 successful plans return baseline-identical values, 26 survive old selected-definition retirement and two are the documented retained-reader exceptions; eight selected-rename refusals have no planned files or next_call. Twelve independent reader-effect probes produced no callbacks or markers, with a working positive trap control. See alias-independent-fourth-verdict.json and alias-repair-independent-review.md.
-- Seventeen fresh owned wire fixtures have frozen valid behavior baselines. They cover the original three controls, same-name migrations, refer-all, metadata on symbols/containers, reader discards, unrelated renames and four explicit refusal cases. Parent will start a fresh server pinned to the reviewed candidate; the repair lane will run public HTTP requests, check exact hashes and behavior, remove the selected old definition through edit_clojure for successful cases, and check behavior again.
-- Targeted lint result is retained at repair-final-lint.txt. Public wire replay and repository full-suite gates remain pending; candidate status does not imply release readiness.
+- Seventeen fresh owned wire fixtures have frozen valid behavior baselines. They cover the original three controls, same-name migrations, refer-all, metadata on symbols/containers, reader discards, unrelated renames and four explicit refusal cases. Fresh server 8301, PID 2584607, ran from server-src at the reviewed commit and exact source hash. All 17 public HTTP quality checks passed: 13 migrations preserved behavior, all 13 survived old selected-definition removal via edit_clojure, and four typed refusals preserved every source byte and behavior. No retries occurred. Selected-rename refusals had the exact reason and no next_call. Process pin repair-wire-process-pin.json, aggregate repair-wire-summary.json, integrity manifest repair-wire-manifest.json. The server was stopped by the parent after verification.
+- Targeted lint passed in 117 ms with zero errors and warnings (repair-final-lint.txt). Repository make test remains pending for the allocated 00:20 verification window; candidate status does not imply release readiness.
 
 BB and lint processes run sequentially on CPUs 2,3; no new JVM or server reload during timed calibration. Parent owns server creation and any broader test allocation. Parent reviews and commits only the five owned files on the experiment branch; main stays frozen.
 
