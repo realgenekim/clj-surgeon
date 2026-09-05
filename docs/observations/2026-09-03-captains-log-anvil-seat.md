@@ -2398,3 +2398,5 @@ session. Falsifier: Spark k=1 median under 3 s on the one-site dossier.
 ## 22:50Z — provider bench: OpenRouter default routing = slowest (3.24 s / 44.7 s medians, slow upstreams); pinned to Cerebras = fastest (0.52 s / 1.63 s vs Groq 0.72 / 6.49). Same model, same hit rate; the upstream decides the wall. Pin added (TYPIST_OPENROUTER_ORDER, no fallback). Cerebras k=5 fan-out rounds running for the headline vs cold Sol. Runner e61190a6+pin.
 
 ## 22:51Z — Cerebras k=5 fan-out: 6/6 rounds, median 1.95 s (vs Groq k=5 5.54 s, vs cold Sol 26.66 s at 5/6). Published in the provider-bench doc. Spark row pending 23:37Z.
+
+## 22:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:51Z load 1.30 ; === rc 0 end 22:56Z)
