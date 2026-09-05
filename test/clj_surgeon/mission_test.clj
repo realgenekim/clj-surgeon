@@ -552,6 +552,20 @@
         (is (str/includes? (cli/help-text "apply") "Exits non-zero")
             "and one verb's help is one verb's")))
 
+    (testing "@bb-help — help is PURE TEXT, so both entrances print the same
+              bytes. Probe 2 spent eight returns on `help` at ~5 s of JVM start
+              each, about a third of its whole run, to print a string that
+              touches no planner and no tree."
+      (doseq [verb [nil "apply" "plan"]]
+        (let [out (:out (clojure.java.shell/sh
+                         "bb" "--classpath" "src" "bin/mission-read.clj"
+                         "help" (or verb "") :dir "."))]
+          (is (= (mission/help-text verb) out)
+              (str "bb and JVM help differ for " (pr-str verb)))))
+      (is (= "help" (get mission/read-verbs "help"))
+          "and `help` is declared a READ verb, which is what routes it to bb")
+      (is (not (contains? mission/write-verbs "help"))))
+
     (testing "PROFILE DISCOVERY — the workspace's own config file is read, and
               `show` says where the ledger looked"
       (let [ws (io/file tmp-root (str "cfg-ws-" (System/nanoTime)))]

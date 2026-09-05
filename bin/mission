@@ -21,8 +21,23 @@ cd "$(dirname "$0")/.."
 # babashka-safe on purpose; routing them through the JVM costs ~6 s of start and
 # loading for ~1 ms of work. Writes stay on the JVM: they reach a planner and a
 # guarded transaction kernel.
+# @bb-help: HELP IS PURE TEXT and goes to babashka too. Probe 2 spent eight
+# returns on `help` at ~5 s of JVM start each -- about a third of its run --
+# to print a string that touches no planner and no tree.
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) exec bb --classpath src bin/mission-read.clj help ;;
+  esac
+done
 case "${1:-}" in
-  show|list|ready|blocked)
+  show|list|ready|blocked|help)
+    exec bb --classpath src bin/mission-read.clj "$@" ;;
+  "")
+    exec bb --classpath src bin/mission-read.clj help ;;
+  open|plan|propose|apply|resume|undo|link)
+    : ;;                      # a real write verb: fall through to the JVM
+  *)
+    # unknown verb: the same help, the same exit 2, without a JVM
     exec bb --classpath src bin/mission-read.clj "$@" ;;
 esac
 

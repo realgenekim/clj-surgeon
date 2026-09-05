@@ -15,31 +15,49 @@
          '[clojure.string :as str])
 
 (defn- parse-flags
+  "The same order-independent, boolean-aware parse the JVM entrance uses: a
+   global option may come before or after the verb, and a valueless flag does
+   not swallow the next token."
   [args]
   (loop [[a b & more :as remaining] args acc {} positional []]
     (cond
       (empty? remaining) [acc positional]
-      (str/starts-with? (str a) "--") (recur more (assoc acc (keyword (subs a 2)) b) positional)
+      (str/starts-with? (str a) "--")
+      (if (or (nil? b) (str/starts-with? (str b) "--"))
+        (recur (rest remaining) (assoc acc (keyword (subs a 2)) true) positional)
+        (recur more (assoc acc (keyword (subs a 2)) b) positional))
       :else (recur (rest remaining) acc (conj positional a)))))
 
-(let [[verb & args] *command-line-args*
-      [flags positional] (parse-flags args)
-      state-dir (mission/workspace-state-dir (:workspace flags) (:state-home flags))
-      missions (mission/read-all state-dir)]
+(let [[flags positional] (parse-flags *command-line-args*)
+      verb (first positional)
+      args (rest positional)
+      ;; @bb-help: help needs NO ledger, so the state dir is not computed for it
+      state-dir (delay (mission/workspace-state-dir (:workspace flags)
+                                                    (:state-home flags)))
+      missions (delay (mission/read-all @state-dir))]
   (case verb
-    "show" (let [m (mission/read-mission state-dir (first positional))]
+    ("help" nil) (print (mission/help-text (first args)))
+
+    "show" (let [m (mission/read-mission @state-dir (first args))]
              (pp/pprint (if (mission/refused? m)
                           m
-                          (assoc (mission/show-view missions (first positional))
+                          (assoc (mission/show-view @missions (first args))
                                  :config_sources
                                  (mission/config-sources (:workspace flags)
                                                          (:config flags))))))
+
     "list" (pp/pprint {:ok true :operation "mission"
-                       :ledger (mission/missions-dir state-dir)
-                       :count (count missions)
-                       :index (mission/index-lines missions)})
+                       :ledger (mission/missions-dir @state-dir)
+                       :count (count @missions)
+                       :index (mission/index-lines @missions)})
+
     ("ready" "blocked") (pp/pprint {:ok true :operation "mission"
-                                    :ready (mission/ready-missions missions)
-                                    :waiting (mission/waiting-missions missions)})
-    (do (println "read verbs: show <id> | list | ready|blocked  (--workspace R [--state-home H])")
+                                    :ready (mission/ready-missions @missions)
+                                    :waiting (mission/waiting-missions @missions)})
+
+    ;; @bb-help. An unknown verb prints the SAME help the JVM entrance would and
+    ;; exits 2 — never 0, which the first probe read as "it ran".
+    (do (binding [*out* *err*]
+          (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
+        (print (mission/help-text nil))
         (System/exit 2))))

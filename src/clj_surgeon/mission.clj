@@ -28,6 +28,7 @@
   (:require
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.pprint :as pp]
    [clojure.string :as str]))
 
 (def operation "mission")
@@ -808,6 +809,78 @@
         ;; transition, and the history says so with a from = to entry.
         (update refreshed :history (fnil conj [])
                 {:from "ready" :to "ready" :event "plan" :at at})))))
+
+;; ---------------------------------------------------------------------------
+;; HELP — pure text, so it lives on the babashka entrance
+;;
+;; @bb-help. Probe 2 reached :verified in 141 s, and EIGHT of its returns were
+;; `help` calls at ~5 s each — roughly 40 s, nearly a third of the run, spent
+;; starting a JVM to print a string. Help is the verb a caller uses most while
+;; it is still learning the tool, which is exactly when it can least afford a
+;; five-second turn. None of this text touches a planner or a tree, so it
+;; belongs in the pure half with `show`, `list` and `ready`.
+
+(def example-request
+  "@caller-probe. THE COPY-PASTE SHAPE. The first probe spent seven refusals and
+   ~35 s of JVM starts reverse-engineering this closed map one field at a time,
+   and each refusal named the field it rejected but not the shape that would
+   have been accepted. A closed schema the caller cannot see is a guessing game
+   with a five-second turn."
+  {:verb "helper_extraction"
+   :question "why this write is being made"
+   :request {:op "helper_extraction"
+             :workspace_root "/abs/path/to/workspace"
+             :from {:file "src/acid/web/http.clj"}
+             :to {:lib "acid.web.response" :alias_policy ["response" "resp"]}
+             :helpers ["html-response" "see-other" "text-response"]
+             :scope {:paths ["src/**/*.clj"]}
+             :verification {:profile "mission-proof"}}})
+
+(def example-config
+  "What `<workspace_root>/.clj-surgeon.edn` must contain for that profile to be
+   ADMITTED. `plan` and `apply` read this file themselves."
+  {:verification-profiles {"mission-proof" {:commands [["/bin/true"]]}}})
+
+(def verb-help
+  {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Writes no bytes."
+   "plan"   "plan  [--spec-file <file|->] | plan <id> [--spec-file <file|->]\n    With no id: open-and-plan (same as `open`).\n    With an id: RE-plan that mission against the tree as it now is.\n    With an id AND --spec-file on a :blocked/:failed mission: open a NEW\n    mission carrying the repaired intent, linked :supersedes to the old one."
+   "show"   "show <id> --workspace R\n    The mission, its dependency DAG, its supersession chain, and the\n    config files this ledger read (:config_sources)."
+   "apply"  "apply <id> --workspace R\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
+   "resume" "resume <id> --workspace R\n    Move it from wherever it is: :ready -> apply, :verified -> undo."
+   "undo"   "undo <id> --workspace R\n    The explicit inverse, from the receipt apply published."
+   "link"   "link <id> --depends-on <id> | --supersedes <id> --workspace R\n    Order two missions. A cycle is refused before it is written."
+   "ready"  "ready --workspace R\n    :ready — what a machine can start now.\n    :waiting — real work held by a dependency or owed a re-plan."
+   "list"   "list --workspace R\n    The human index, one fixed-column line per mission."
+   "help"   "help [verb]\n    This text, or one verb's. Runs on babashka: ~0.05 s, not ~5 s."})
+
+(def write-verbs
+  "The verbs that reach a planner or a transaction kernel and must stay on the
+   JVM. Everything else this entrance offers is pure and runs under babashka."
+  #{"open" "plan" "propose" "apply" "resume" "undo" "link"})
+
+(def read-verbs
+  #{"show" "list" "ready" "blocked" "help"})
+
+(defn help-text
+  [verb]
+  (str "bin/mission — the mission ledger. Global options may come BEFORE or\n"
+       "AFTER the verb: --workspace <root> --state-home <dir> --config <file>\n\n"
+       (if-let [one (get verb-help verb)]
+         (str "  " one "\n")
+         (str/join "\n" (for [[_ text] (sort verb-help)]
+                          (str "  " text "\n"))))
+       "\nTHE SPEC (copy-paste, closed shape — every field below is required\n"
+       "unless marked optional; nothing else is accepted):\n\n"
+       (with-out-str (pp/pprint example-request))
+       "\nTHE PROFILE CONFIG — write this to <workspace_root>/"
+       config-file-name
+       ", which\n`plan` and `apply` read themselves (`show` reports :config_sources):\n\n"
+       (with-out-str (pp/pprint example-config))
+       "\nRunnable end to end:\n"
+       "  bin/mission open  --spec-file spec.edn --state-home $H\n"
+       "  bin/mission ready --workspace $WS --state-home $H\n"
+       "  bin/mission apply M-1 --workspace $WS --state-home $H\n"
+       "  bin/mission show  M-1 --workspace $WS --state-home $H\n"))
 
 ;; ---------------------------------------------------------------------------
 ;; the human index
