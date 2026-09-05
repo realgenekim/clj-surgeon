@@ -79,3 +79,23 @@ Repair review caught mixed refer / metadata / reader-discard counterexamples; fo
 Repair candidate da7ba418 passed17 fresh pinned MCP scenarios:13 migrations retain baseline behavior after old selecteddefinition retirement;4 refusals preserve sourcebytes. Independent pure review36scenarios and44tests/641assertions plus lint0errors/0warnings preceded commit. Full repository gate remains pending. Sourcepin amendment2 was written before any model toolarm.
 
 Fable suite independent review is NO-GO on105f4b6f: exclusion runner-membership witness accepts false redirection; fast-lane fixtures escape private tmp; declared no-child lane actually spawns child. Also510/957tests move off local mergegate. Same total corpus is not same pre-merge coverage. Directed Fable to fix and correct claims, no landing.
+
+2026-09-05T00:41:22.430828+00:00
+
+### Astra — primary cohort complete; verification and follow-up allocation
+
+All24 primary observations are independently accepted, model/source bound and clean under the frozen load policy. Six pairs/model: Sol native/tool medians117.85/34.40s, paired median speedup3.319x; Astra56.00/45.10s, paired median1.240x. Median paired savings84.25/11.05s clear frozen within-model two-SD floors53.687/8.907s; this is the preregistered threshold, not a significance test. Startup-inclusive paired medians2.720x/1.021x. No10x whole-task claim. Five Sol tool arms lack caller namespace-load execution; their final trees independently load, and all24 actually ran the behavioral suite. The next screen makes both proof commands explicit for both routes. Audit: evidence/astra-primary-2026-09-05/report.md.
+
+Mechanism: both native routes batch all21 files. Astra writes a compact Python transform while Sol generally constructs apply_patch hunks. Tool execution median1.192s sits inside full taskwall; tests, config reads, loading and unattributed intervals must not all be called orientation. Fable received this correction and relayed the bitter-lesson assessment at00:37Z. Investment remains7/10 pending wider evidence.
+
+Branch01d9f0af pushed; full make test began00:27Z and remains active on cores2–5. BB850tests7203assertions and analyzer6tests25assertions passed; full MCP stage ongoing. No product source changed during gate. Fable retains one suite verification lane6–9, followed by telemetry verification; lower-priority fleets held. Public main frozen.
+
+Fresh caller protocol mistake is retained: first actor got both tasks and README acceptance details. Both calls functionally succeeded, insertion exact bytes differ only whitespace, but the blind claim is invalid. Separate sanitized one-task caller repetitions now both succeeded in one call; independent final fixture/behavior grading pending. This is routing usability evidence, not comparative speed evidence.
+
+Configured preflights passed: N21 migration+two checks in one request; deliberate check failure observed candidate bytes then restored all original bytes/modes; N80 migration80files240sites passed six independent checks. Exact failure-checker exit is absent from public result and remains unknown. Verification-dropping next_call is not a valid completion path. No follow-up model arms yet. Priority order before results: verified21 round1, N80 round1, optional adoption6arms, remaining verified21 rounds, remaining N80 rounds; latest new arm start01:45Z, unchanged900s arm budget. All source/meter pins unchanged.
+
+Hour2 collector completed once for23:05–00:05UTC. Forty recorded service calls do not mean all calls: alias emitter gap and public-edit misnaming remain confirmed. The57-call retained own-work ledger is a separate bounded population; completed hourly observation documents coverage and avoids adding overlapping populations.
+
+### Astra — 2026-09-05T00:46:34.619713+00:00 — gate failure and clock terminology
+
+Full gate returned2 after932.493s: MCP919tests15214assertions, three failures all in the same pool-size test (expected8, actual4 under four-core affinity, plus unstripped requested-pool metadata). The other MCP tests reported no failures. Focused environment/baseline diagnosis is pending; no green gate claim and no test waiver. Also, primary “warm” shorthand means startup-excluded fresh-process first-use, not a fully warmed long-lived JVM. Each arm’s server was distinct, so steady-state JIT/cache gains remain unmeasured.

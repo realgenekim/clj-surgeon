@@ -1,0 +1,1230 @@
+{
+  "rows": [
+    {
+      "arm": "pair-1-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "pair": 1,
+      "wall_s": 117.2,
+      "adapter_wall_s": 117.88256767904386,
+      "wrapper_wall_s": 118.75911687710322,
+      "acceptance_wall_s": 0.5375142300035805,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 120,
+          "maximum": 1.95,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.82,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 122,
+          "maximum": 1.95,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-1-sol-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-1-sol-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-1-sol-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-1-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "pair": 1,
+      "wall_s": 35.2,
+      "adapter_wall_s": 35.53192011010833,
+      "wrapper_wall_s": 36.47769205085933,
+      "acceptance_wall_s": 0.5278097288683057,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 37,
+          "maximum": 1.62,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.48,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 40,
+          "maximum": 1.62,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.526780044892803,
+        "pid": 2781927,
+        "birth": "200406052",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-1-sol-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-1-sol-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-1-sol-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-1-sol-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-1-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "pair": 1,
+      "wall_s": 45.4,
+      "adapter_wall_s": 45.89926962694153,
+      "wrapper_wall_s": 46.983211506856605,
+      "acceptance_wall_s": 0.5274966009892523,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 48,
+          "maximum": 2.39,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 2.09,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 50,
+          "maximum": 2.39,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 10.148245653836057,
+        "pid": 2817264,
+        "birth": "200417003",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-1-astra-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-1-astra-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-1-astra-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-1-astra-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-1-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "pair": 1,
+      "wall_s": 55.3,
+      "adapter_wall_s": 55.53423087694682,
+      "wrapper_wall_s": 56.48603690811433,
+      "acceptance_wall_s": 0.5295137478969991,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 57,
+          "maximum": 2.17,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.73,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 60,
+          "maximum": 2.17,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-1-astra-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-1-astra-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-1-astra-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-2-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "pair": 2,
+      "wall_s": 49.7,
+      "adapter_wall_s": 50.04622163879685,
+      "wrapper_wall_s": 50.98449298902415,
+      "acceptance_wall_s": 0.5288017888087779,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 52,
+          "maximum": 1.8,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.56,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 54,
+          "maximum": 1.8,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-2-astra-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-2-astra-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-2-astra-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-2-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "pair": 2,
+      "wall_s": 50.3,
+      "adapter_wall_s": 51.378421457950026,
+      "wrapper_wall_s": 52.18362200399861,
+      "acceptance_wall_s": 0.527320897905156,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 53,
+          "maximum": 1.91,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.75,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 56,
+          "maximum": 1.91,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.563956714933738,
+        "pid": 2906318,
+        "birth": "200443255",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-2-astra-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-2-astra-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-2-astra-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-2-astra-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-2-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "pair": 2,
+      "wall_s": 39.0,
+      "adapter_wall_s": 39.94541247491725,
+      "wrapper_wall_s": 40.9812192118261,
+      "acceptance_wall_s": 0.5276717538945377,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 42,
+          "maximum": 1.75,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.42,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 44,
+          "maximum": 1.75,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.343723233090714,
+        "pid": 2947989,
+        "birth": "200456162",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-2-sol-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-2-sol-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-2-sol-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-2-sol-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-2-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "pair": 2,
+      "wall_s": 117.7,
+      "adapter_wall_s": 118.18791759898886,
+      "wrapper_wall_s": 119.2588024160359,
+      "acceptance_wall_s": 0.5276308429893106,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 120,
+          "maximum": 1.91,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.58,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 123,
+          "maximum": 1.91,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-2-sol-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-2-sol-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-2-sol-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-3-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "pair": 3,
+      "wall_s": 118.0,
+      "adapter_wall_s": 118.46155812195502,
+      "wrapper_wall_s": 119.50949716381729,
+      "acceptance_wall_s": 0.5280518541112542,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 120,
+          "maximum": 1.55,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.11,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 123,
+          "maximum": 1.55,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-3-sol-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-3-sol-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-3-sol-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-3-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "pair": 3,
+      "wall_s": 31.5,
+      "adapter_wall_s": 32.11329378397204,
+      "wrapper_wall_s": 32.97784950188361,
+      "acceptance_wall_s": 0.5289711719378829,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 34,
+          "maximum": 2.85,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 2.85,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 36,
+          "maximum": 2.85,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.56677491008304,
+        "pid": 3062012,
+        "birth": "200490071",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-3-sol-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-3-sol-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-3-sol-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-3-sol-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-3-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "pair": 3,
+      "wall_s": 42.4,
+      "adapter_wall_s": 43.05066332197748,
+      "wrapper_wall_s": 43.981555795064196,
+      "acceptance_wall_s": 0.5315148879308254,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 45,
+          "maximum": 3.4,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 3.4,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 47,
+          "maximum": 3.4,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.52408737805672,
+        "pid": 3078025,
+        "birth": "200494403",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-3-astra-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-3-astra-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-3-astra-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-3-astra-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-3-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "pair": 3,
+      "wall_s": 60.1,
+      "adapter_wall_s": 60.19967178301886,
+      "wrapper_wall_s": 61.23758919397369,
+      "acceptance_wall_s": 0.5394798039924353,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 62,
+          "maximum": 3.4,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.83,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 65,
+          "maximum": 3.4,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-3-astra-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-3-astra-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-3-astra-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-4-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "pair": 4,
+      "wall_s": 58.6,
+      "adapter_wall_s": 59.39296417613514,
+      "wrapper_wall_s": 60.23623925400898,
+      "acceptance_wall_s": 0.5364906941540539,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 61,
+          "maximum": 1.29,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.13,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 64,
+          "maximum": 1.29,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-4-astra-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-4-astra-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-4-astra-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-4-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "pair": 4,
+      "wall_s": 46.4,
+      "adapter_wall_s": 47.47028496908024,
+      "wrapper_wall_s": 48.48212375398725,
+      "acceptance_wall_s": 0.5353659358806908,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 49,
+          "maximum": 1.52,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.3,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 52,
+          "maximum": 1.52,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.557824791874737,
+        "pid": 3168490,
+        "birth": "200521484",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-4-astra-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-4-astra-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-4-astra-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-4-astra-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-4-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "pair": 4,
+      "wall_s": 54.9,
+      "adapter_wall_s": 56.048703872133046,
+      "wrapper_wall_s": 56.98650833684951,
+      "acceptance_wall_s": 0.5363163519650698,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 58,
+          "maximum": 1.56,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.16,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 60,
+          "maximum": 1.56,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.516526130959392,
+        "pid": 3188171,
+        "birth": "200527349",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-4-sol-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-4-sol-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-4-sol-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-4-sol-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-4-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "pair": 4,
+      "wall_s": 181.6,
+      "adapter_wall_s": 181.86440344084986,
+      "wrapper_wall_s": 182.78242214000784,
+      "acceptance_wall_s": 0.5366297920700163,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 184,
+          "maximum": 2.29,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.47,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 186,
+          "maximum": 2.29,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-4-sol-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-4-sol-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-4-sol-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-5-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "pair": 5,
+      "wall_s": 135.2,
+      "adapter_wall_s": 135.5659985439852,
+      "wrapper_wall_s": 136.5141263739206,
+      "acceptance_wall_s": 0.535443063126877,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 137,
+          "maximum": 3.93,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 1.98,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 140,
+          "maximum": 3.93,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-5-sol-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-5-sol-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-5-sol-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-5-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "pair": 5,
+      "wall_s": 32.5,
+      "adapter_wall_s": 32.93211040995084,
+      "wrapper_wall_s": 33.97843801206909,
+      "acceptance_wall_s": 0.5350488210096955,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 35,
+          "maximum": 2.59,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 2.59,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 37,
+          "maximum": 2.59,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.74443009798415,
+        "pid": 3347782,
+        "birth": "200576549",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-5-sol-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-5-sol-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-5-sol-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-5-sol-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-5-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "pair": 5,
+      "wall_s": 43.1,
+      "adapter_wall_s": 43.88670261390507,
+      "wrapper_wall_s": 44.98256215592846,
+      "acceptance_wall_s": 0.5371175238396972,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 46,
+          "maximum": 3.47,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 2.94,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 48,
+          "maximum": 3.47,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.923190898029134,
+        "pid": 3363401,
+        "birth": "200580995",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-5-astra-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-5-astra-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-5-astra-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-5-astra-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-5-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "pair": 5,
+      "wall_s": 56.7,
+      "adapter_wall_s": 57.32792238006368,
+      "wrapper_wall_s": 58.23645674600266,
+      "acceptance_wall_s": 0.5358199870679528,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 59,
+          "maximum": 3.29,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 3,
+          "maximum": 2.8,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 62,
+          "maximum": 3.29,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-5-astra-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-5-astra-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-5-astra-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-6-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "pair": 6,
+      "wall_s": 49.6,
+      "adapter_wall_s": 50.04444906185381,
+      "wrapper_wall_s": 50.98422797699459,
+      "acceptance_wall_s": 0.5364648159593344,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 52,
+          "maximum": 1.9,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.42,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 54,
+          "maximum": 1.9,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-6-astra-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-6-astra-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-6-astra-native/orchestration-result.json"
+    },
+    {
+      "arm": "pair-6-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "pair": 6,
+      "wall_s": 44.8,
+      "adapter_wall_s": 45.91554730804637,
+      "wrapper_wall_s": 46.98244101507589,
+      "acceptance_wall_s": 0.533853478031233,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 48,
+          "maximum": 2.23,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.85,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 50,
+          "maximum": 2.23,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.530709113925695,
+        "pid": 3429443,
+        "birth": "200601058",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-6-astra-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-6-astra-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-6-astra-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-6-astra-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-6-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "pair": 6,
+      "wall_s": 33.6,
+      "adapter_wall_s": 33.92930534807965,
+      "wrapper_wall_s": 34.978061731904745,
+      "acceptance_wall_s": 0.5360909539740533,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true,
+        "cold_start_binding": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 36,
+          "maximum": 2.04,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.68,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 38,
+          "maximum": 2.04,
+          "contaminated": false
+        }
+      },
+      "startup": {
+        "wall_s": 9.55393989593722,
+        "pid": 3449825,
+        "birth": "200606765",
+        "receipt": "/var/tmp/forge/astra-program/servers/pair-6-sol-tool/ready.json"
+      },
+      "run": "/var/tmp/forge/astra-program/arms/pair-6-sol-tool/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-6-sol-tool/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-6-sol-tool/orchestration-result.json"
+    },
+    {
+      "arm": "pair-6-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "pair": 6,
+      "wall_s": 90.2,
+      "adapter_wall_s": 90.87183427112177,
+      "wrapper_wall_s": 91.7494558650069,
+      "acceptance_wall_s": 0.5362379900179803,
+      "checks": {
+        "model_session_binding": true,
+        "accepted": true,
+        "valid": true,
+        "guards_rechecked": true,
+        "prompt_rechecked": true,
+        "base_rechecked": true,
+        "oracle_final_load": true,
+        "contamination_rederived": true,
+        "all_intervals_clean": true
+      },
+      "contamination": {
+        "adapter": {
+          "samples": 93,
+          "maximum": 1.7,
+          "contaminated": false
+        },
+        "acceptance": {
+          "samples": 2,
+          "maximum": 1.27,
+          "contaminated": false
+        },
+        "verified_completion": {
+          "samples": 95,
+          "maximum": 1.7,
+          "contaminated": false
+        }
+      },
+      "startup": null,
+      "run": "/var/tmp/forge/astra-program/arms/pair-6-sol-native/run.json",
+      "acceptance": "/var/tmp/forge/astra-program/receipts/pair-6-sol-native/acceptance-result.json",
+      "orchestration": "/var/tmp/forge/astra-program/receipts/pair-6-sol-native/orchestration-result.json"
+    }
+  ],
+  "groups": {
+    "gpt-5.6-sol": {
+      "pairs": [
+        {
+          "pair": 1,
+          "native_s": 117.2,
+          "tool_s": 35.2,
+          "ratio": 3.329545454545454,
+          "saving_s": 82.0,
+          "cold_tool_s": 44.726780044892806
+        },
+        {
+          "pair": 2,
+          "native_s": 117.7,
+          "tool_s": 39.0,
+          "ratio": 3.017948717948718,
+          "saving_s": 78.7,
+          "cold_tool_s": 48.343723233090714
+        },
+        {
+          "pair": 3,
+          "native_s": 118.0,
+          "tool_s": 31.5,
+          "ratio": 3.746031746031746,
+          "saving_s": 86.5,
+          "cold_tool_s": 41.06677491008304
+        },
+        {
+          "pair": 4,
+          "native_s": 181.6,
+          "tool_s": 54.9,
+          "ratio": 3.3078324225865208,
+          "saving_s": 126.69999999999999,
+          "cold_tool_s": 64.4165261309594
+        },
+        {
+          "pair": 5,
+          "native_s": 135.2,
+          "tool_s": 32.5,
+          "ratio": 4.159999999999999,
+          "saving_s": 102.69999999999999,
+          "cold_tool_s": 42.24443009798415
+        },
+        {
+          "pair": 6,
+          "native_s": 90.2,
+          "tool_s": 33.6,
+          "ratio": 2.6845238095238093,
+          "saving_s": 56.6,
+          "cold_tool_s": 43.15393989593722
+        }
+      ],
+      "native_median_s": 117.85,
+      "tool_median_s": 34.400000000000006,
+      "ratio_of_medians": 3.425872093023255,
+      "median_paired_ratio": 3.3186889385659875,
+      "median_paired_ratio_bootstrap_95_percentile": [
+        2.8512362637362636,
+        3.9530158730158726
+      ],
+      "bootstrap_method": "exact enumeration of all 6^6=46656 ordered paired resamples; linear percentile endpoints",
+      "difference_of_medians_s": 83.44999999999999,
+      "median_paired_saving_s": 84.25,
+      "frozen_native_two_sd_s": 53.68704375048665,
+      "difference_of_medians_exceeds_floor": true,
+      "median_paired_saving_exceeds_floor": true,
+      "cold_tool_median_s": 43.94035997041502,
+      "cold_median_paired_ratio": 2.719753200637605,
+      "startup_median_s": 9.540359970415011
+    },
+    "gpt-6-astra": {
+      "pairs": [
+        {
+          "pair": 1,
+          "native_s": 55.3,
+          "tool_s": 45.4,
+          "ratio": 1.2180616740088106,
+          "saving_s": 9.899999999999999,
+          "cold_tool_s": 55.548245653836055
+        },
+        {
+          "pair": 2,
+          "native_s": 49.7,
+          "tool_s": 50.3,
+          "ratio": 0.9880715705765408,
+          "saving_s": -0.5999999999999943,
+          "cold_tool_s": 59.863956714933735
+        },
+        {
+          "pair": 3,
+          "native_s": 60.1,
+          "tool_s": 42.4,
+          "ratio": 1.4174528301886793,
+          "saving_s": 17.700000000000003,
+          "cold_tool_s": 51.92408737805672
+        },
+        {
+          "pair": 4,
+          "native_s": 58.6,
+          "tool_s": 46.4,
+          "ratio": 1.2629310344827587,
+          "saving_s": 12.200000000000003,
+          "cold_tool_s": 55.957824791874735
+        },
+        {
+          "pair": 5,
+          "native_s": 56.7,
+          "tool_s": 43.1,
+          "ratio": 1.3155452436194897,
+          "saving_s": 13.600000000000001,
+          "cold_tool_s": 53.023190898029135
+        },
+        {
+          "pair": 6,
+          "native_s": 49.6,
+          "tool_s": 44.8,
+          "ratio": 1.1071428571428572,
+          "saving_s": 4.800000000000004,
+          "cold_tool_s": 54.33070911392569
+        }
+      ],
+      "native_median_s": 56.0,
+      "tool_median_s": 45.099999999999994,
+      "ratio_of_medians": 1.2416851441241687,
+      "median_paired_ratio": 1.2404963542457845,
+      "median_paired_ratio_bootstrap_95_percentile": [
+        1.047607213859699,
+        1.3664990369040844
+      ],
+      "bootstrap_method": "exact enumeration of all 6^6=46656 ordered paired resamples; linear percentile endpoints",
+      "difference_of_medians_s": 10.900000000000006,
+      "median_paired_saving_s": 11.05,
+      "frozen_native_two_sd_s": 8.907300376657341,
+      "difference_of_medians_exceeds_floor": true,
+      "median_paired_saving_exceeds_floor": true,
+      "cold_tool_median_s": 54.93947738388087,
+      "cold_median_paired_ratio": 1.0213741255133406,
+      "startup_median_s": 9.560890753404237
+    }
+  },
+  "issues": [],
+  "all_24_retained_no_exclusion": true,
+  "schedule_order_rechecked": true,
+  "distinct_server_pid_births": 12,
+  "privacy": "Metadata and public tool outcomes only; no private reasoning text",
+  "raw_receipts_modified": false
+}

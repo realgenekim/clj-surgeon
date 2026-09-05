@@ -1,0 +1,1412 @@
+{
+  "audit_utc": "2026-09-05T00:28:33.674034+00:00",
+  "scope": "all six complete pairs per model, fixed 24-arm roster",
+  "rows": [
+    {
+      "arm": "pair-1-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "watcher_wall_s": 55.3,
+      "outer_actions": 5,
+      "assistant_message_records": 3,
+      "write_action": 4,
+      "successful_edit_style": "direct Python rewrite",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 5,
+          "rollout_line": 40,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 5,
+          "rollout_line": 41,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-1-astra-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-1-astra-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-1-astra-native/run.json",
+      "sources": {
+        "rollout.jsonl": "b92107a768336c20697fc0fe940bb3eade25b9072195fe58ded96d97ea9eb296",
+        "watch.jsonl": "6dd16cb7ba821ef50ae2edea1355c749ea34751505d43166e36fda44e402f66c",
+        "run.json": "a5f548a076cdc47e5731e79e67422c948368fe0cf87f9fdcd7db8d4b2bf177f5"
+      }
+    },
+    {
+      "arm": "pair-1-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "watcher_wall_s": 45.4,
+      "outer_actions": 5,
+      "assistant_message_records": 2,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        4
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        32
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 26,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 5,
+          "rollout_line": 41,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 20,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1188.815642,
+          "runtime_duration_s": 1.230056737,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-1-astra-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-1-astra-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-1-astra-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "0550775c0246ffc5a87e6c01528d2922bd0cad008923992f48735d202e3f9131",
+        "watch.jsonl": "534aa1dffc3883682328f2cf76a1400c641c2c212dd0ffe77bed342d0ebbb971",
+        "run.json": "4cffccc08c5b6ffba63f0f8df6a527c656979cbdf85d916ac05069eed2f636cb"
+      }
+    },
+    {
+      "arm": "pair-1-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "watcher_wall_s": 117.2,
+      "outer_actions": 7,
+      "assistant_message_records": 4,
+      "write_action": 3,
+      "successful_edit_style": "literal apply_patch batch",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        6
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        54
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 5,
+          "rollout_line": 49,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 7,
+          "rollout_line": 63,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-1-sol-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-1-sol-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-1-sol-native/run.json",
+      "sources": {
+        "rollout.jsonl": "fd9ccb092656b929ac580be6a6b4bfc989ff274995a4df0321b0bb01df8c8554",
+        "watch.jsonl": "6d01e904ae268ae742f56b0a0ffc92fe5dfcfd9cc491ac5056841de0ce0acdd0",
+        "run.json": "02f7f32e8abc7a70470d0bccbd4bd3a003c0b96f79d2c2186ea081f96ba190e2"
+      }
+    },
+    {
+      "arm": "pair-1-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "watcher_wall_s": 35.2,
+      "outer_actions": 4,
+      "assistant_message_records": 3,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 32,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [],
+      "all_namespace_load_observed": false,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 23,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1177.508043,
+          "runtime_duration_s": 1.235860921,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-1-sol-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-1-sol-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-1-sol-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "5c7b90fe539496fb95484cc1690b2fa11460d49704c82af074ad986a55212a24",
+        "watch.jsonl": "4b686eb88be6b44b278ce532f0342678cb1b72131ca4095350309f57c2d36dce",
+        "run.json": "40414335f82f6cee34a65c6a97d9c81203db6266f76c3d8d34d81b492e3aa787"
+      }
+    },
+    {
+      "arm": "pair-2-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "watcher_wall_s": 49.7,
+      "outer_actions": 4,
+      "assistant_message_records": 3,
+      "write_action": 4,
+      "successful_edit_style": "direct Python rewrite + checks in same outer action",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 4,
+          "rollout_line": 36,
+          "exit_code": 0,
+          "counts": "LOAD-OK namespaces=100"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 4,
+          "rollout_line": 36,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "Ran 21 tests containing 147 assertions.",
+            "FAN-TEST tests=21 assertions=147 failures=0 errors=0",
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-2-astra-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-2-astra-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-2-astra-native/run.json",
+      "sources": {
+        "rollout.jsonl": "60341e188f9f1cbe57434262cde1bc98e26c13d651e25df2bfc5713b1a97ff61",
+        "watch.jsonl": "8191890a9e752422c508e112189bb964b72150443c7d6fcb9ca47c8ac6e4aad9",
+        "run.json": "4d851e6cdedbee81d26694e6ee709288c73002c231706dcd3b14bbe352956ab8"
+      }
+    },
+    {
+      "arm": "pair-2-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "watcher_wall_s": 50.3,
+      "outer_actions": 6,
+      "assistant_message_records": 2,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        4,
+        5
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        31,
+        36
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 26,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 6,
+          "rollout_line": 45,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 21,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1229.748233,
+          "runtime_duration_s": 1.2966103150000001,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-2-astra-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-2-astra-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-2-astra-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "679a6d5307337d7e6cd831694b8d3a7e6932a9a27567e77bf3a13342849592a0",
+        "watch.jsonl": "4bb0552c01cb6d18796d3b0931f0c94f636c78f818e90a1fb815d72be6ecb220",
+        "run.json": "7de0651d67c0a4ec59f7b62fa3da5e42b72c3514acb103c978840bf3f3fa9f44"
+      }
+    },
+    {
+      "arm": "pair-2-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "watcher_wall_s": 117.7,
+      "outer_actions": 14,
+      "assistant_message_records": 5,
+      "write_action": 6,
+      "successful_edit_style": "JavaScript-generated apply_patch batch",
+      "failed_patch_actions": [
+        5
+      ],
+      "postwrite_test_runner_config_read_actions": [
+        9,
+        10,
+        13
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        74,
+        83,
+        108
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 8,
+          "rollout_line": 69,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 11,
+          "rollout_line": 93,
+          "exit_code": 1,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        },
+        {
+          "outer_action": 14,
+          "rollout_line": 117,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 1,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-2-sol-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-2-sol-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-2-sol-native/run.json",
+      "sources": {
+        "rollout.jsonl": "3ea4f0b5295533a483c2fc09de80ba6652a64052cdec8b742e69a223a820561d",
+        "watch.jsonl": "b43ef42fcbcc99999296582cb186ebfcefc10132ea9ff68b8a98df1e58dc88c7",
+        "run.json": "26d3a32e166f6c7f3d7f544e156918a395b36eb9000023d690b3b1000fb81d8a"
+      }
+    },
+    {
+      "arm": "pair-2-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "watcher_wall_s": 39.0,
+      "outer_actions": 4,
+      "assistant_message_records": 3,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 32,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [],
+      "all_namespace_load_observed": false,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 23,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1213.275547,
+          "runtime_duration_s": 1.2768223060000001,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-2-sol-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-2-sol-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-2-sol-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "8e696272fae93fdf1c70cfb24abc26a26765f99ccfd9ae7413865becf3931c9c",
+        "watch.jsonl": "d478a7e1c87d15a3ff5e3554b7ea3b43d430b6d9bccaaa31ea22cad54a76b088",
+        "run.json": "90104fc819f44aa18c388c195e831c3bc91adb4cf8e2ee9f6b065273f9d6c41c"
+      }
+    },
+    {
+      "arm": "pair-3-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "watcher_wall_s": 60.1,
+      "outer_actions": 5,
+      "assistant_message_records": 3,
+      "write_action": 5,
+      "successful_edit_style": "direct Python rewrite + checks in same outer action",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 5,
+          "rollout_line": 43,
+          "exit_code": 0,
+          "counts": "LOAD-OK namespaces=100"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 5,
+          "rollout_line": 43,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "Ran 21 tests containing 147 assertions.",
+            "FAN-TEST tests=21 assertions=147 failures=0 errors=0",
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-3-astra-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-3-astra-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-3-astra-native/run.json",
+      "sources": {
+        "rollout.jsonl": "a982437ae06e3e178a0ff9ba0c48bd6baaff9abc0ef94be79d9cf6c9ea97ae2d",
+        "watch.jsonl": "1c56c0415e2a5becbf617bc34ede7865d5451a6ec514283da03048ebbae064e0",
+        "run.json": "ab6fa674827359a23a605a07099690f436a2e34d71d79c544e17a7ce3c7cf887"
+      }
+    },
+    {
+      "arm": "pair-3-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "watcher_wall_s": 42.4,
+      "outer_actions": 6,
+      "assistant_message_records": 2,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        4,
+        5
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        30,
+        35
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 24,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 6,
+          "rollout_line": 42,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 20,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1311.597293,
+          "runtime_duration_s": 1.366280029,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-3-astra-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-3-astra-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-3-astra-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "efe2d175d264ef337375ceaa56bd924f12483a58cb7e48ceef485f996a2d6f10",
+        "watch.jsonl": "d565d4a824c031cb179d7358d43f9fcba7f6307691d3ba52e950225e85d61fa2",
+        "run.json": "b0378f4500c6de47ff14705cc01a7c690047c98615fccfb1b230102eca8649e5"
+      }
+    },
+    {
+      "arm": "pair-3-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "watcher_wall_s": 118.0,
+      "outer_actions": 10,
+      "assistant_message_records": 5,
+      "write_action": 6,
+      "successful_edit_style": "JavaScript-generated apply_patch batch",
+      "failed_patch_actions": [
+        4,
+        5
+      ],
+      "postwrite_test_runner_config_read_actions": [
+        9
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        75
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 8,
+          "rollout_line": 70,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 10,
+          "rollout_line": 86,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-3-sol-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-3-sol-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-3-sol-native/run.json",
+      "sources": {
+        "rollout.jsonl": "048793bcff267f4707a6c4114ee7b3ac110f6be6608d9083c3ab266f9510ca1f",
+        "watch.jsonl": "666d2ff1e05eb75da75109b488bcf8e17e5185836b8730478a5693883581b752",
+        "run.json": "8f77181d801bf2e1bd81cd88b6358e8b9a38c26854f524ccf71b551ab14fdc9f"
+      }
+    },
+    {
+      "arm": "pair-3-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "watcher_wall_s": 31.5,
+      "outer_actions": 3,
+      "assistant_message_records": 3,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 32,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [],
+      "all_namespace_load_observed": false,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 23,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1161.318582,
+          "runtime_duration_s": 1.214379203,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-3-sol-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-3-sol-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-3-sol-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "64093d063d463ad7b56e7bdea2e8b57cbb3d33fc82d74b89359abb73de2196dd",
+        "watch.jsonl": "238ae55042bb38d4977f1e6f58a89a9125fad548e9667a42b6969b82e39d8457",
+        "run.json": "b31b04866984b8823284fd0632ea1cd073792b05b3e6a69f412fd277eb761a43"
+      }
+    },
+    {
+      "arm": "pair-4-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "watcher_wall_s": 58.6,
+      "outer_actions": 5,
+      "assistant_message_records": 3,
+      "write_action": 4,
+      "successful_edit_style": "direct Python rewrite",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 5,
+          "rollout_line": 42,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 5,
+          "rollout_line": 41,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-4-astra-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-4-astra-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-4-astra-native/run.json",
+      "sources": {
+        "rollout.jsonl": "318358bf216fc389172e55215490f8c004d7078cd380d22832ae2151fd081a94",
+        "watch.jsonl": "4997ba74106a4d63e6a01c6dc3aff26b18eaffd34e242355c833b66fd1df6072",
+        "run.json": "af344634016d95685b1c400265e9ff53778359c38db81d629e2cbfe4a6b928e9"
+      }
+    },
+    {
+      "arm": "pair-4-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "watcher_wall_s": 46.4,
+      "outer_actions": 6,
+      "assistant_message_records": 3,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        4,
+        5
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        29,
+        34
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 24,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 6,
+          "rollout_line": 45,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 19,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1125.099145,
+          "runtime_duration_s": 1.178369461,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-4-astra-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-4-astra-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-4-astra-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "4d882ffaf98a0be4691f9cf68143cf2f7f6998b138deabd672bf240ec7725351",
+        "watch.jsonl": "77148cada6be6bd2635c135b50c86cb2df467f81254016028baa100b63401c95",
+        "run.json": "e6d07de7f2e9c484df7e45fe187a5f745940d609e9c2b2bcb1c91c48cc8c62d7"
+      }
+    },
+    {
+      "arm": "pair-4-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "watcher_wall_s": 181.6,
+      "outer_actions": 12,
+      "assistant_message_records": 7,
+      "write_action": 3,
+      "successful_edit_style": "literal apply_patch batch",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        7,
+        8,
+        11
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        61,
+        68,
+        97
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 6,
+          "rollout_line": 56,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 9,
+          "rollout_line": 79,
+          "exit_code": 1,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        },
+        {
+          "outer_action": 10,
+          "rollout_line": 90,
+          "exit_code": 1,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        },
+        {
+          "outer_action": 12,
+          "rollout_line": 106,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 2,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-4-sol-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-4-sol-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-4-sol-native/run.json",
+      "sources": {
+        "rollout.jsonl": "9a9a950ed0dce64fc9b49ee688dce8c0c618c7ac5410bcdb90168434cfcd94bf",
+        "watch.jsonl": "885d3deda94db6cff38e6cf02f1fdeb5c966953b5ebf7979a6759f83a6f3338f",
+        "run.json": "5bc9af5ea68c856a2b5cc33637cabe2853f0c55d69ed4908a6dcb88ea1aaa1be"
+      }
+    },
+    {
+      "arm": "pair-4-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "watcher_wall_s": 54.9,
+      "outer_actions": 7,
+      "assistant_message_records": 4,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        5,
+        6
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        44,
+        51
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 32,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 7,
+          "rollout_line": 62,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 23,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1110.719659,
+          "runtime_duration_s": 1.180889741,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-4-sol-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-4-sol-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-4-sol-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "37a58bf6eace3ab5ee8a286a90d86507a8549f969abb7a40623c6aec9eb53677",
+        "watch.jsonl": "437e6d20f63398d618bdddcff4f7a0b88747eb8951c275bc45ad1b448ef627a7",
+        "run.json": "871be215513c9e2ba08ea5f5f238d4abaee90866569833a318ba4d7289b97a38"
+      }
+    },
+    {
+      "arm": "pair-5-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "watcher_wall_s": 56.7,
+      "outer_actions": 5,
+      "assistant_message_records": 3,
+      "write_action": 4,
+      "successful_edit_style": "direct Python rewrite",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        4
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        30
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 5,
+          "rollout_line": 41,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 5,
+          "rollout_line": 41,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": [
+            "Ran 21 tests containing 147 assertions.",
+            "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-5-astra-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-5-astra-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-5-astra-native/run.json",
+      "sources": {
+        "rollout.jsonl": "7fe3ac2b0012f8b854c453ebc1baa1e9de74bde8b8b9d8e5cc2bb5655336577f",
+        "watch.jsonl": "ebeb17185f2e4e587bdb65c8ba1d17450fd9cbe2bcfe59fab2985bb5c4ed5093",
+        "run.json": "21bca54b8ff8ae09ce5f88fffded88d1fbcaa2b1fa31e04d584dbb20bbece027"
+      }
+    },
+    {
+      "arm": "pair-5-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "watcher_wall_s": 43.1,
+      "outer_actions": 6,
+      "assistant_message_records": 2,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        4,
+        5
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        30,
+        35
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 25,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 6,
+          "rollout_line": 42,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 20,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1194.411472,
+          "runtime_duration_s": 1.263283197,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-5-astra-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-5-astra-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-5-astra-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "b43409db89892d66732e7903f09f99f16c6569fb28c04c7a2dc2693205af32a6",
+        "watch.jsonl": "ad94c8053e19df3ba67f7c2ded05d078286e7adf2d62578f8025cb4cb9462bfd",
+        "run.json": "45720df760fa49ebcfbb88931d7e01c88c19a382c3e4a0b3cdf8996c9f40414d"
+      }
+    },
+    {
+      "arm": "pair-5-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "watcher_wall_s": 135.2,
+      "outer_actions": 11,
+      "assistant_message_records": 5,
+      "write_action": 5,
+      "successful_edit_style": "literal apply_patch batch",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        8,
+        9,
+        10
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        68,
+        75,
+        82
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 7,
+          "rollout_line": 63,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 11,
+          "rollout_line": 93,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-5-sol-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-5-sol-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-5-sol-native/run.json",
+      "sources": {
+        "rollout.jsonl": "680975861d627e850fce5647df21338203c906a7769865f955a83d11562a5a3a",
+        "watch.jsonl": "1d6d135c2947aaf8ae07fe597d182bcfda18df69f178b840cd67a5bfe3003c29",
+        "run.json": "cdcd2de664cc5c98b23be0f0c27f252fdfe87c3d7d50a45c711c0ddec32f4fb8"
+      }
+    },
+    {
+      "arm": "pair-5-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "watcher_wall_s": 32.5,
+      "outer_actions": 4,
+      "assistant_message_records": 3,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 32,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [],
+      "all_namespace_load_observed": false,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 23,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1220.90037,
+          "runtime_duration_s": 1.28596701,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-5-sol-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-5-sol-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-5-sol-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "a498759f491dbc33de0121a67583b58702e333070457f7e063328fb75fd2ac8c",
+        "watch.jsonl": "6ecfbc47456adf390b979c4fdd87f94f25c2bd8692d34b3b1ee1c816f9f20191",
+        "run.json": "9230ec7d1f02d4a45b94a09a2fb71249b6271a1ba87a66a93bdf8cd003d4e876"
+      }
+    },
+    {
+      "arm": "pair-6-astra-native",
+      "model": "gpt-6-astra",
+      "route": "native",
+      "watcher_wall_s": 49.6,
+      "outer_actions": 4,
+      "assistant_message_records": 3,
+      "write_action": 4,
+      "successful_edit_style": "direct Python rewrite + checks in same outer action",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 4,
+          "rollout_line": 35,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 4,
+          "rollout_line": 36,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-6-astra-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-6-astra-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-6-astra-native/run.json",
+      "sources": {
+        "rollout.jsonl": "2da5b3a152a585f603d45f83ae7f046da2ba0f8af2f1372e1390f45c76f78e49",
+        "watch.jsonl": "795bd7c686f3536dbb058e3ec336d195599219b0f6d6b854952369889ae5a678",
+        "run.json": "dfc6eb81d67bc8b4c96a870ed448b6f69377ec381c00662346ae67def359c044"
+      }
+    },
+    {
+      "arm": "pair-6-astra-tool",
+      "model": "gpt-6-astra",
+      "route": "tool",
+      "watcher_wall_s": 44.8,
+      "outer_actions": 6,
+      "assistant_message_records": 2,
+      "write_action": 3,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        5
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        34
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 4,
+          "rollout_line": 28,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 6,
+          "rollout_line": 44,
+          "exit_code": 0,
+          "method": "explicit enumeration/require loop",
+          "named_receipts": []
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 3,
+          "rollout_line": 24,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1162.31963,
+          "runtime_duration_s": 1.214592639,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-6-astra-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-6-astra-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-6-astra-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "6b3ab069144d5ca3de4fa1534f33a540c3962c828d61bd9e9d7fbb9c55f09256",
+        "watch.jsonl": "b131d12b0380f722ac6d3732768a3f298a9c97229a5d630ae672162e0bb2a5f4",
+        "run.json": "9080a27c9767e12d51d0e8543f5ef59ff6e969223537e919e751af78c9aca73e"
+      }
+    },
+    {
+      "arm": "pair-6-sol-native",
+      "model": "gpt-5.6-sol",
+      "route": "native",
+      "watcher_wall_s": 90.2,
+      "outer_actions": 8,
+      "assistant_message_records": 4,
+      "write_action": 4,
+      "successful_edit_style": "literal apply_patch batch",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [
+        7
+      ],
+      "postwrite_test_runner_config_read_lines": [
+        63
+      ],
+      "in_session_suite": [
+        {
+          "outer_action": 5,
+          "rollout_line": 49,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [
+        {
+          "outer_action": 8,
+          "rollout_line": 72,
+          "exit_code": 0,
+          "method": "named load_all.clj",
+          "named_receipts": [
+            "LOAD-OK namespaces=100"
+          ]
+        }
+      ],
+      "all_namespace_load_observed": true,
+      "failed_load_attempts": 0,
+      "mcp": [],
+      "native_write_fallback_observed": null,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-6-sol-native-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-6-sol-native/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-6-sol-native/run.json",
+      "sources": {
+        "rollout.jsonl": "eb99a8df7df2193aa05879ffeef000aa7fa444d2a9707ad91bcbc17833fd1a40",
+        "watch.jsonl": "a345b6abe051c69c39bcf86b7c59d427fdba86773d6c87ca5841c375f61bac4a",
+        "run.json": "288ed5111c4359d4230b22b87404811bfeaa04d66d649ebb9bf4dc5ba576b2c5"
+      }
+    },
+    {
+      "arm": "pair-6-sol-tool",
+      "model": "gpt-5.6-sol",
+      "route": "tool",
+      "watcher_wall_s": 33.6,
+      "outer_actions": 4,
+      "assistant_message_records": 4,
+      "write_action": 2,
+      "successful_edit_style": "alias_migration",
+      "failed_patch_actions": [],
+      "postwrite_test_runner_config_read_actions": [],
+      "postwrite_test_runner_config_read_lines": [],
+      "in_session_suite": [
+        {
+          "outer_action": 3,
+          "rollout_line": 32,
+          "exit_code": 0,
+          "counts": "FAN-TEST tests=21 assertions=147 failures=0 errors=0"
+        }
+      ],
+      "in_session_all_namespace_load": [],
+      "all_namespace_load_observed": false,
+      "failed_load_attempts": 0,
+      "mcp": [
+        {
+          "outer_action": 2,
+          "rollout_line": 23,
+          "tool": "alias_migration",
+          "status": "completed",
+          "ok": true,
+          "committed": true,
+          "files": 21,
+          "sites": 63,
+          "server_elapsed_ms": 1196.546974,
+          "runtime_duration_s": 1.255269379,
+          "focused_test": {
+            "status": "not-requested"
+          },
+          "kondo_delta": {
+            "status": "not-requested"
+          },
+          "verify_argument_present": false
+        }
+      ],
+      "native_write_fallback_observed": false,
+      "all_outer_intervals_unambiguous": true,
+      "supplement": "/var/tmp/forge/astra-program/primary-mechanism-audit-24/pair-6-sol-tool-supplement.json",
+      "original_rollout": "/var/tmp/forge/astra-program/arms/pair-6-sol-tool/rollout.jsonl",
+      "original_run": "/var/tmp/forge/astra-program/arms/pair-6-sol-tool/run.json",
+      "sources": {
+        "rollout.jsonl": "96f4ca2c1a6cca7dba7f743641ccfe5ecf13f872a70bc156cfdb699ac717e4cf",
+        "watch.jsonl": "49aa1131c32839c2d2156400eb4905f096c6734a9ad66637e3746d046ea52db7",
+        "run.json": "81e2fcd21a1ed2666760c48be707a024bf9acde3219814a18c111ff740558f0a"
+      }
+    }
+  ],
+  "groups": {
+    "gpt-5.6-sol/native": {
+      "n": 6,
+      "median_outer_actions": 10.5,
+      "median_task_wall_s": 117.85,
+      "postwrite_test_config_read_actions": 12,
+      "successful_in_session_load_arms": 6,
+      "failed_load_attempts": 3,
+      "failed_patch_attempts": 3
+    },
+    "gpt-5.6-sol/tool": {
+      "n": 6,
+      "median_outer_actions": 4.0,
+      "median_task_wall_s": 34.400000000000006,
+      "postwrite_test_config_read_actions": 2,
+      "successful_in_session_load_arms": 1,
+      "failed_load_attempts": 0,
+      "failed_patch_attempts": 0
+    },
+    "gpt-6-astra/native": {
+      "n": 6,
+      "median_outer_actions": 5.0,
+      "median_task_wall_s": 56.0,
+      "postwrite_test_config_read_actions": 1,
+      "successful_in_session_load_arms": 6,
+      "failed_load_attempts": 0,
+      "failed_patch_attempts": 0
+    },
+    "gpt-6-astra/tool": {
+      "n": 6,
+      "median_outer_actions": 6.0,
+      "median_task_wall_s": 45.099999999999994,
+      "postwrite_test_config_read_actions": 10,
+      "successful_in_session_load_arms": 6,
+      "failed_load_attempts": 0,
+      "failed_patch_attempts": 0
+    }
+  },
+  "privacy": "No assistant prose, private reasoning text or raw source bodies in this safe summary. Tool event metadata, command-derived labels and test count receipts only.",
+  "model_api_round_trip_count": "not established",
+  "raw_receipts_modified": false
+}

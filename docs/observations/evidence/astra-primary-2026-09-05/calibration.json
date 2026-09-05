@@ -1,0 +1,399 @@
+{
+  "utc": "2026-09-04T23:52:21.009756+00:00",
+  "rows": [
+    {
+      "name": "cal-astra-1",
+      "model": "gpt-6-astra",
+      "wall_s": 52.2,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 3.16,
+      "acceptance_wall_s": 0.5369938279036433,
+      "adapter_wall_s": 53.0240127639845,
+      "wrapper_wall_s": 53.986478723818436,
+      "slot_wait_s": 0.07940624887123704,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-astra-2",
+      "model": "gpt-6-astra",
+      "wall_s": 49.3,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 2.02,
+      "acceptance_wall_s": 0.5347819009330124,
+      "adapter_wall_s": 49.79069744399749,
+      "wrapper_wall_s": 50.73411511979066,
+      "slot_wait_s": 0.07867163699120283,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-astra-3",
+      "model": "gpt-6-astra",
+      "wall_s": 50.1,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 1.4,
+      "acceptance_wall_s": 0.5353872398845851,
+      "adapter_wall_s": 50.84499674709514,
+      "wrapper_wall_s": 51.73485200898722,
+      "slot_wait_s": 0.08321228995919228,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-astra-4",
+      "model": "gpt-6-astra",
+      "wall_s": 59.5,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 0.88,
+      "acceptance_wall_s": 0.539095361949876,
+      "adapter_wall_s": 59.9255482009612,
+      "wrapper_wall_s": 60.98848614702001,
+      "slot_wait_s": 0.08880882314406335,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-astra-5",
+      "model": "gpt-6-astra",
+      "wall_s": 53.0,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 1.45,
+      "acceptance_wall_s": 0.5370728059206158,
+      "adapter_wall_s": 53.43776406091638,
+      "wrapper_wall_s": 54.48462205892429,
+      "slot_wait_s": 0.08330710208974779,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-astra-6",
+      "model": "gpt-6-astra",
+      "wall_s": 46.4,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 1.79,
+      "acceptance_wall_s": 0.535637442022562,
+      "adapter_wall_s": 47.192484848201275,
+      "wrapper_wall_s": 48.23230092506856,
+      "slot_wait_s": 0.07589821889996529,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-sol-1",
+      "model": "gpt-5.6-sol",
+      "wall_s": 122.3,
+      "actions": 8,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": true,
+      "max_load": 13.19,
+      "acceptance_wall_s": 0.36752552608959377,
+      "adapter_wall_s": 122.6286541109439,
+      "wrapper_wall_s": null,
+      "slot_wait_s": null,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": false
+    },
+    {
+      "name": "cal-sol-1-cleanretry",
+      "model": "gpt-5.6-sol",
+      "wall_s": 167.8,
+      "actions": 12,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 1.66,
+      "acceptance_wall_s": 0.5352856570389122,
+      "adapter_wall_s": 168.27079119696282,
+      "wrapper_wall_s": 169.27732370095327,
+      "slot_wait_s": 0.07972458191215992,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-sol-2",
+      "model": "gpt-5.6-sol",
+      "wall_s": 160.3,
+      "actions": 13,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 2.34,
+      "acceptance_wall_s": 0.53687231708318,
+      "adapter_wall_s": 161.30422576190904,
+      "wrapper_wall_s": 162.27516166493297,
+      "slot_wait_s": 0.08252504584379494,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-sol-3",
+      "model": "gpt-5.6-sol",
+      "wall_s": 117.8,
+      "actions": 7,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 3.49,
+      "acceptance_wall_s": 0.5360626429319382,
+      "adapter_wall_s": 118.91600038297474,
+      "wrapper_wall_s": 119.75903027388267,
+      "slot_wait_s": 0.07949859998188913,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-sol-4",
+      "model": "gpt-5.6-sol",
+      "wall_s": 121.4,
+      "actions": 9,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 1.69,
+      "acceptance_wall_s": 0.5361340299714357,
+      "adapter_wall_s": 121.56971973599866,
+      "wrapper_wall_s": 122.50968388398178,
+      "slot_wait_s": 0.08052058308385313,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-sol-5",
+      "model": "gpt-5.6-sol",
+      "wall_s": 99.8,
+      "actions": 4,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 1.89,
+      "acceptance_wall_s": 0.5369819200132042,
+      "adapter_wall_s": 100.76946948212571,
+      "wrapper_wall_s": 101.75353546300903,
+      "slot_wait_s": 0.0774834081530571,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    },
+    {
+      "name": "cal-sol-6",
+      "model": "gpt-5.6-sol",
+      "wall_s": 148.1,
+      "actions": 14,
+      "accepted": true,
+      "valid_measurement": true,
+      "contaminated": false,
+      "max_load": 2.37,
+      "acceptance_wall_s": 0.5375308820512146,
+      "adapter_wall_s": 148.38110266299918,
+      "wrapper_wall_s": 149.27033485099673,
+      "slot_wait_s": 0.07720439601689577,
+      "session_binding_rechecked": true,
+      "guards_bytes_modes_rechecked": true,
+      "base_rechecked": true,
+      "prompt_rechecked": true,
+      "clean": true
+    }
+  ],
+  "summary": {
+    "gpt-5.6-sol": {
+      "clean_n": 6,
+      "median_s": 134.75,
+      "mean_s": 135.86666666666667,
+      "sample_sd_s": 26.843521875243326,
+      "two_sd_s": 53.68704375048665,
+      "range_s": [
+        99.8,
+        167.8
+      ]
+    },
+    "gpt-6-astra": {
+      "clean_n": 6,
+      "median_s": 51.150000000000006,
+      "mean_s": 51.75,
+      "sample_sd_s": 4.4536501883286705,
+      "two_sd_s": 8.907300376657341,
+      "range_s": [
+        46.4,
+        59.5
+      ]
+    }
+  },
+  "issues": [],
+  "frozen_identity_hash_sets": {
+    "wrapper": [
+      "d9abb7b8eecd4004f12e37ae35873660c5acd1df6e6b39f703e1917a4ee6b6ee"
+    ],
+    "prompt_sha256": [
+      "47891a0fe5201d4c8b86a1eeee39892dc1bbd3a41ddb66124cc5461b0853ba70"
+    ],
+    "runner_sha256": [
+      "8f6c909ffe25836a3599a2eec45f5da5a35d3fdc94541356c4778b440372b449"
+    ],
+    "watch_sha256": [
+      "aebfffef7ee069814aa7e92436910bbd139e14eb11638e96be81603a04e4b7b4"
+    ],
+    "score_sha256": [
+      "f0f198f44d1dbf9af37f14f1111435751c9d5e2d292cebe6d28bfa001f5a3f8e"
+    ],
+    "codex_sha256": [
+      "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70"
+    ],
+    "codex_vendor_sha256": [
+      "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6"
+    ]
+  },
+  "raw_receipts_modified": false,
+  "extra_receipt_checks": [
+    {
+      "name": "cal-astra-1",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-astra-2",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-astra-3",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-astra-4",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-astra-5",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-astra-6",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-1",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-1-cleanretry",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-2",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-3",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-4",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-5",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    },
+    {
+      "name": "cal-sol-6",
+      "driver_announced_session_rechecked": true,
+      "six_check_log_rechecked": true
+    }
+  ],
+  "first_pair_snapshot": [
+    {
+      "name": "pair-1-sol-native",
+      "model": "gpt-5.6-sol",
+      "watcher_wall_s": 117.2,
+      "actions": 7,
+      "accepted": true,
+      "clean_adapter": true,
+      "acceptance_wall_s": 0.5375142300035805,
+      "verified_task_total_s": 117.73751423000358,
+      "wrapper_wall_s": 118.75911687710322,
+      "server_sha": null,
+      "startup_wall_s": null
+    },
+    {
+      "name": "pair-1-sol-tool",
+      "model": "gpt-5.6-sol",
+      "watcher_wall_s": 35.2,
+      "actions": 4,
+      "accepted": true,
+      "clean_adapter": true,
+      "acceptance_wall_s": 0.5278097288683057,
+      "verified_task_total_s": 35.72780972886831,
+      "wrapper_wall_s": 36.47769205085933,
+      "server_sha": "da7ba418cbe3e1de22efdd1471a0c295c0422d80",
+      "startup_wall_s": 9.526780044892803
+    }
+  ],
+  "first_pair_ratio": 3.329545454545454,
+  "first_pair_difference_s": 82.0,
+  "raw_metadata_only": true
+}
