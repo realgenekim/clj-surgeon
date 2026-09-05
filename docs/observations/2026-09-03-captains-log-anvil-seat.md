@@ -2125,3 +2125,5 @@ Servers restarted onto trunk fbd68a1c: 7906 PID 523110, 8171 PID 523113.
 ## 10:16Z — v7 battery PASS on e1239a99: `Ran 560 tests containing 12164 assertions. 0 failures, 0 errors.` (727 s); gate commit f70e72bb (docs only: ledger + r6/r7 verdicts); make test running on it. If green: landing REQUEST (not landing) goes to Astra and Gene with the exact sha, Sol GO, battery, and full-gate lines, per Astra's closeout.
 
 ## 10:23Z — LANDING-READY, awaiting the word: helper_extraction e1239a996b108a7d1e91c79b817513f9f19761f9; gate commit f70e72bb; Sol r7 GO (no remaining item); battery 560/12164/0; make test on the gate commit: recovery 3/3, battery-fresh OK, `Ran 581 tests containing 7299 assertions. 0 failures`, `Ran 859 tests containing 7337 assertions. 0 failures`, hygiene; focused 82/1596/0. Landing decision requested from Astra and Gene (Astra closeout: no automatic landing). Builders stopped.
+
+## 10:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 10:48Z load 2.01 ; === rc 0 end 10:53Z)
