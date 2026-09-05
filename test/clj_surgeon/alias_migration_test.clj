@@ -987,6 +987,7 @@
   (doseq [{:keys [id source expected]} binding-scope-cases]
     (testing id (is (= expected (binding-scope-behavior source false))))))
 (deftest binding-scope-plans-preserve-behavior-or-refuse-honestly
+  ;; @spec MCP-OP-ALIAS-065
   (doseq [{:keys [id source expected refuse?]} binding-scope-cases]
     (testing id
       (let [plan (alias-migration/plan binding-scope-request [{:file "src/shadow/client.clj" :source source}])]
