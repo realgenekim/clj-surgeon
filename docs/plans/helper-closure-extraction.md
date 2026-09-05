@@ -58,7 +58,7 @@ is constant in the number of callers: no per-file, per-owner or per-site table, 
                   "ok": true},
  "closure": {"roots": ["src", "test"], "authorized_paths": ["src/**", "test/**"],
              "grammar": "supported-libspecs-only", "dynamic_references": "not-claimed"},
- "details_path": ".clj-surgeon/helper-extraction/<id>.edn",
+ "details_path": "<the kernel's existing receipt-dir for this workspace>/<id>.edn",
  "undo_receipt": "...", "receipt_hash": "...", "elapsed_ms": 0}
 ```
 

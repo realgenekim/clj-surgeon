@@ -75,7 +75,8 @@ The operation composes three existing mechanisms and adds one planner:
 Counts and histograms only: helpers, source_retired, destination_created, caller_files, partition
 {moved_only mixed qualified_only untouched}, sites, retained_sites, alias_histogram, verification
 {profile status(checks-completed | …) structural_callers helper_behaviors compiled_callers ok}, kernel_status (the kernel's own terminal state, retained separately), closure {roots grammar dynamic_references "not-claimed"},
-details_path, undo_receipt, receipt_hash, elapsed_ms. Never a file list.
+details_path (inside the kernel's existing receipt-dir; no new in-workspace publisher), undo_receipt,
+receipt_hash, elapsed_ms. Never a file list.
 
 ## What it does not claim
 
