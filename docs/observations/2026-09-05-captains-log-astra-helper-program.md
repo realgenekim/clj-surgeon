@@ -37,3 +37,27 @@ Reviewed corrected receipt mapper tests through persistent Surgeon: 8 forms, one
 An early planner read (7 forms, one read, 168.164 ms) found benchmark-specific profile admission and raised lexical-scope concerns: removing all names in a let before visiting initializers can hide a real reference. Asked Fable to reuse the landed binding semantics or refuse unsupported shapes, rather than build a weaker duplicate. Independent literal probes are underway; these concerns are not yet runtime findings.
 
 Public positive and staged-then-restored preflight fixtures are prepared. Independent Python fakes reject untouched BASE and unrelated proof receipts. Root must bind observer PID/birth to independently attested server identity; the evaluator alone does not establish that identity. No new product write or speed result exists yet.
+
+## 05:44Z — Astra: independent planner counterexamples
+
+The full pure planner returns success for a helper using java.util.UUID but drops its import. Original behavior works; the generated destination fails to load on UUID/fromString. Source remained stable during the literal BB probe. This is a concrete planner false success, before the MCP boundary exists. Reproducer and raw plan: `/var/tmp/forge/astra-helper-program/dependency-review/`. Fable has the finding; preserving the dependency or typed refusal is required.
+
+Independent private-walker probes also reproduce three lexical errors (own let initializer, later let binding, multi-arity parameter union), with two passing controls. Baseline and correctly rewritten literals return 7; current walker output fails after retiring the selected import. These are private-walker findings so far, not yet a full-plan corruption claim. Evidence: `/var/tmp/forge/astra-helper-program/planner-review/`.
+
+Implication: syntax preservation alone does not establish binding preservation. The high-value tool must reuse proven semantic machinery and expose limits, rather than make small new walkers pass only the happy fixture. These quality failures are retained and excluded from performance success claims.
+
+## 05:51Z — Astra: live-read and full-plan qualifications
+
+The lexical failure also reaches the full pure plan: source h is retired, while its real initializer caller is classified untouched and explicitly ignored. Ordinary shadow control passes. See `planner-review/FULL-PLAN-ADDENDUM.md`. Still no public mutation: the kernel/profile could reject a bad plan.
+
+A later attempt to outline the actively written MCP boundary returned typed invalid-source (unmatched delimiter, 11.611 ms). No native source fallback or repeated read: wait for the builder's completed checkpoint. This is an observation of an evolving worktree, not a released defect or malformed caller request.
+
+Root wrapper subset ledger at 05:49 records ten earlier reads, 1.165 seconds of call wall, one refusal. It excludes other agents and is not a complete usage census. Receipt: `/var/tmp/forge/astra-helper-program/readiness/root-read-ledger-054900.json`.
+
+## 06:00Z — Astra: first hour and transaction exception finding
+
+Window 04:55:58–05:55:58 UTC: collector self-test passes; service telemetry records 21 inspections, 15 successes / 6 refusals, 1.391 seconds total service wall. Client recognition is incomplete (it reports zero despite retained HTTP wrapper calls). Do not interpret this as zero adoption. The isolated classifier repair is underway; the study marker is withheld until the corrected study is complete. Original receipt `/var/tmp/forge/astra-helper-program/hour-1-agent-usage.json` is retained.
+
+The draft boundary directly committed extraction, published receipts, then ran proof and manually undid returned failures. Exact-owner BB replay proves a thrown receipt/proof exception escapes after commit without undo; returned-failure control does undo. Current owner identity c7083571 matches the replay. This is control-flow execution with stubbed I/O, not a real application mutation. Evidence `/var/tmp/forge/astra-helper-program/boundary-review/review.md`. Fable accepted the NO-GO and is lowering through the existing guarded kernel; no new handwritten rollback mechanism.
+
+Actual account meter at 05:53:51Z reports 20% weekly headroom remaining, with no secondary window. Optional exploratory lanes stopped; required correction checks, telemetry repair, fence review and measured trials remain. This meter is account-wide, not a per-model spend or capacity forecast.
