@@ -1914,3 +1914,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:20Z Opus caller harness round two (afe6621f) per Astra's ruling: 21 arms, pinned cores in owned windows, his adapter policy imported by sha; ≈6.8M tokens estimated; N-1 preflight gate. Preparation only.
 
 ## 01:21Z Astra GO for a narrow integration: his mixed-refer alias repair + portable timeout, cherry-picked onto bridge/astra-integration (f49dece3); lands via ~/bin/land after his timing window. Suite r5: test-battery FAILED (Error 4; the ledger recorded a FAILING receipt) — builder reporting.
+
+## 01:24Z suite spike r5 built (01ec667c): four blockers closed; `make landing-gate` exists (battery-fresh → mcp-test → test-bb → hygiene); the spawn ledger refused eleven fast/integration spawns a pid diff could not see; the battery failed under four-core pinning on the census pool-size test (pre-existing; CI-fixes carries the assertion fix) and the tripwire refused the tip — as designed.
