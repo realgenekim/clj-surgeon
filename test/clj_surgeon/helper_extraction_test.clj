@@ -38,7 +38,16 @@
       rewritten qualified symbol has a load path of its own;
     - `scope.paths` is a write-authorization subset of the admitted roots, and
       a supported reference outside it REFUSES (021);
-    - verification coverage is TYPED, never a bare count (022).
+    - verification coverage is TYPED, never a bare count (022), and a success
+      says its `status` is `checks-completed` about its CHECKS, with the
+      kernel's own outcome in a separate `kernel_status` field.
+
+  Boundary surfaces these witnesses also bind to:
+  `(mcp-helper/plan request)` reads a real tree under `workspace_root` and
+  plans; `(mcp-helper/terminal-receipt {:kernel _ :verification _ :plan _})`
+  is a PURE MAPPING from facts the kernel and the profile produced onto the
+  receipt -- see the comment above the terminal-receipt witnesses for what it
+  deliberately does not test.
 
   The oracle is `clj-surgeon.helper-extraction-fixture`, which renders PRE and
   canonical POST from one description, so no assertion here is fed by the
@@ -48,8 +57,55 @@
    [clj-surgeon.helper-extraction :as helper]
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-helper-extraction :as mcp-helper]
+   [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
+
+;; ---------------------------------------------------------------------------
+;; loading is proved by LOADING, in a fresh process
+;;
+;; An acyclic require graph is NOT a proof that Clojure loads a tree: a
+;; required namespace can reach a Var of the namespace that requires it before
+;; that one has finished loading, and the compile fails with a graph that has
+;; no cycle in it at all. `fresh-load` runs the real loader in a real child
+;; process instead. These witnesses therefore launch child processes, which is
+;; one more reason this namespace is `excluded` from the JVM gate lanes and
+;; runs under `make helper-extraction-red`.
+
+(def ^:private tmp-root
+  (or (System/getenv "CLJ_SURGEON_HELPER_TMP") "/var/tmp/forge/helper-fx"))
+
+(defn- delete-tree!
+  [^java.io.File file]
+  (when (.isDirectory file)
+    (run! delete-tree! (.listFiles file)))
+  (.delete file))
+
+(defn- tree-of
+  "`{path source}` for one fixture variant at one phase (`:pre` or `:post`)."
+  [variant phase]
+  (into {}
+        (keep (fn [entry] (when-let [source (get entry phase)]
+                            [(:file entry) source])))
+        (fixture/files variant)))
+
+(defn- fresh-load
+  "Materialize `tree`, then `require` `namespaces` in a FRESH babashka
+  process. Returns `{:exit :out :err}`; exit 0 means the tree really loads."
+  [label tree namespaces]
+  (let [root (io/file tmp-root (str label "-" (System/nanoTime)))]
+    (try
+      (doseq [[path source] tree]
+        (let [target (io/file root path)]
+          (io/make-parents target)
+          (spit target source)))
+      (shell/sh "bb" "-cp" "src" "-e"
+                (str "(require "
+                     (str/join " " (map #(str "'" %) namespaces))
+                     ") (println :loaded)")
+                :dir (str root))
+      (finally (delete-tree! root)))))
 
 ;; ---------------------------------------------------------------------------
 ;; harness
@@ -183,27 +239,50 @@
         "adding a var to the selection is the caller's decision, not the server's")))
 
 ;; @spec MCP-OP-HELPER-019
-(deftest a-moved-helper-referencing-a-retained-public-var-refuses
-  (let [plan (plan-of :retained-dependency-direct)]
-    (is (refused? plan "helper-extraction-retained-dependency") (pr-str plan))
-    (is (= "acid.web.http/strong-etag" (:var plan)))
-    (is (= "with-etag" (:helper plan)))
-    (is (nil? (:next_call plan)))))
+(deftest a-valid-original-with-a-retained-public-dependency-still-refuses
+  (testing "THE ORIGINAL IS VALID, PROVED BY LOADING IT. A fresh babashka
+            process loads the whole pre-extraction tree, so the refusal below
+            is about the extraction, never about a broken fixture."
+    (let [{:keys [exit err]} (fresh-load "retained-direct-pre"
+                                         (tree-of :retained-dependency-direct :pre)
+                                         ['acid.web.http])]
+      (is (zero? exit) (str "the original must load: " err))))
+  (testing "and the moved -> retained-public edge refuses anyway"
+    (let [plan (plan-of :retained-dependency-direct)]
+      (is (refused? plan "helper-extraction-retained-dependency") (pr-str plan))
+      (is (= "acid.web.http/strong-etag" (:var plan)))
+      (is (= "with-etag" (:helper plan)))
+      (is (nil? (:next_call plan))))))
 
 ;; @spec MCP-OP-HELPER-019
-(deftest the-chain-fixtures-original-loads-and-the-retained-edge-still-refuses
-  (testing "THE ORIGINAL IS VALID. The source requires C; C reaches a selected
-            helper fully qualified with no require of the source, so the PRE
-            require graph carries no edge back and the tree loads."
-    (let [graph (fixture/static-require-graph :retained-dependency-chain :pre)]
-      (is (contains? (get graph "acid.web.http") "acid.app.c01")
-          "the source requires C, which is what makes the shape reachable")
-      (is (empty? (get graph "acid.app.c01"))
-          "C requires nothing: it reaches the helper fully qualified")
-      (is (empty? (fixture/cyclic-namespaces graph))
-          "the fixture's own description shows the original tree loads")))
-  (testing "and the plan still refuses at the moved -> retained-public edge,
-            which is where this shape is stopped"
+(deftest the-source-requiring-a-third-namespace-refuses-at-the-same-edge
+  (testing "This fixture is the source -> C -> destination -> source shape:
+            the source requires C, and C reaches a selected helper fully
+            qualified, so the write would give C a require of the destination.
+
+            ITS ORIGINAL DOES NOT LOAD, AND THAT IS ASSERTED RATHER THAN
+            ASSUMED. Loading the source requires C, and C is compiled while
+            the source is still loading, so C cannot resolve
+            acid.web.http/json-response. The require graph is ACYCLIC and the
+            tree still fails to load -- which is exactly why an acyclic graph
+            is not a load proof.
+
+            The consequence is a finding, not a claim about all programs: in
+            the supported grammar a source -> third -> destination chain whose
+            ORIGINAL loads is not constructible, because the third namespace
+            must statically reach the source that requires it. The valid
+            original above is where the refusal is proved on a loading tree."
+    (let [{:keys [exit err]} (fresh-load "chain-pre"
+                                         (tree-of :retained-dependency-chain :pre)
+                                         ['acid.web.http])]
+      (is (not (zero? exit))
+          "recorded as evidence: this shape's original does not load")
+      (is (str/includes? (str err) "acid.web.http/json-response")
+          "and the loader names the unresolvable forward reference"))
+    (is (empty? (fixture/cyclic-namespaces
+                 (fixture/static-require-graph :retained-dependency-chain :pre)))
+        "while its require graph is acyclic: the false proof, made visible"))
+  (testing "the plan refuses at the moved -> retained-public edge"
     (let [plan (plan-of :retained-dependency-chain)]
       (is (refused? plan "helper-extraction-retained-dependency") (pr-str plan))
       (is (= "acid.web.http/strong-etag" (:var plan)))
@@ -310,15 +389,21 @@
         tree (extracted-tree plan)
         after (get tree "src/acid/app/fq01.clj")]
     (testing "the ORIGINAL is valid but only BOOTSTRAP-loads: it requires
-              nothing, so its qualified symbol resolves because something else
-              in the program loaded the source first"
-      (let [before (pre-source :happy "src/acid/app/fq01.clj")]
+              nothing, so its qualified symbol resolves only because something
+              else in the program loaded the source first. Both halves are
+              proved by loading, in fresh processes."
+      (let [before (pre-source :happy "src/acid/app/fq01.clj")
+            pre-tree (tree-of :happy :pre)]
         (is (not (str/includes? before ":require"))
             "no require of the source, which is what makes it qualified-only")
         (is (str/includes? before "(acid.web.http/json-response data)"))
-        (is (empty? (fixture/cyclic-namespaces
-                     (fixture/static-require-graph :happy :pre)))
-            "the pre tree loads")))
+        (is (zero? (:exit (fresh-load "fq01-bootstrap" pre-tree
+                                      ['acid.web.http 'acid.app.fq01])))
+            "with the source loaded first, the original loads")
+        (is (not (zero? (:exit (fresh-load "fq01-standalone" pre-tree
+                                           ['acid.app.fq01]))))
+            "and on its own it does NOT: that is what a load path being
+             absent looks like, and what the write has to repair")))
     (testing "discovered, and its own partition class"
       (is (some? entry) "discovered even though it never requires the source")
       (is (= "qualified_only" (:partition entry)))
@@ -330,9 +415,10 @@
       (is (str/includes? after "acid.web.response")
           "never a bare qualified symbol with no require")
       (is (str/includes? after "(acid.web.response/json-response data)"))
-      (is (empty? (fixture/cyclic-namespaces
-                   (fixture/static-require-graph :happy :post)))
-          "and the post tree loads"))))
+      (is (zero? (:exit (fresh-load "fq01-post" (tree-of :happy :post)
+                                    ['acid.app.fq01])))
+          "proved by loading it alone in a fresh process, with nothing else
+           required first"))))
 
 ;; @spec MCP-OP-HELPER-015
 (deftest the-source-local-use-is-lowered-by-the-extraction-itself
@@ -464,63 +550,160 @@
               (vals (mcp-helper/admitted-profiles)))
       "capability is validated BEFORE writing, not discovered afterwards"))
 
+;; ---------------------------------------------------------------------------
+;; the terminal-receipt MAPPER
+;;
+;; `terminal-receipt` is a PURE MAPPING from facts the kernel and the profile
+;; actually produced onto the receipt. Every witness below INJECTS those facts
+;; and asserts the receipt reflects exactly them. None of them hands it empty
+;; input and then demands a number, because that would force production to
+;; manufacture evidence -- to hardcode a caller count or assert fresh_process
+;; with nothing to base it on. The negative witness pins the other side: with
+;; no evidence the mapper must claim nothing.
+;;
+;; WHAT THIS IS NOT: these witnesses do not execute the verifier, the kernel,
+;; or a rollback. Boundary tests must later run the actual profile and an
+;; actual staged-write rollback and feed their real results through this
+;; mapper. A green mapper test is not evidence that a rollback restores bytes.
+
+(def ^:private profile-result
+  "A profile result as the acceptance-owned helper-proof would return it."
+  {:profile "helper-proof"
+   :structural_callers 28
+   :helper_behaviors 24
+   :compiled_callers 0
+   :fresh_process true
+   :ok true})
+
+(def ^:private committed-kernel
+  {:status :committed
+   :destination_created true
+   :undo_receipt "undo-1" :receipt_hash "hash-1" :elapsed_ms 9310})
+
+(defn- restored-kernel
+  [status]
+  {:status status
+   :restored true
+   :restored_files ["src/acid/web/http.clj" "src/acid/app/m01.clj"]
+   :restoration_read_back {"src/acid/web/http.clj" "sha-a"
+                           "src/acid/app/m01.clj" "sha-b"}
+   :destination_removed true})
+
+(def ^:private rollback-failed-kernel
+  {:status :rollback-failed
+   :restored false
+   :unrestored_files ["src/acid/web/http.clj"]
+   :recovery_required {:journal "txn-77" :reason "read-back mismatch"}})
+
 ;; @spec MCP-OP-HELPER-020
-(deftest the-four-terminal-states-are-distinct-and-rollback-failed-never-claims-unchanged
+(deftest the-four-terminal-states-are-distinct
   (is (= #{:committed :verification-failed :verification-timeout :rollback-failed}
-         (set (mcp-helper/terminal-states))))
-  (testing "a handled failure restores every protected byte and mode"
-    (doseq [state [:verification-failed :verification-timeout]]
-      (testing state
-        (let [receipt (mcp-helper/terminal-receipt state {})]
-          (is (= (name state) (:status receipt)))
-          (is (false? (:committed receipt)))
-          (is (true? (:restored receipt)))
-          (is (true? (:source_unchanged receipt)))
-          (is (false? (:destination_created receipt))
-              "the destination is removed on a handled failure")
-          (is (some? (:restoration_read_back receipt)))))))
+         (set (mcp-helper/terminal-states)))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest a-handled-failure-reports-the-restoration-the-kernel-actually-did
+  (doseq [status [:verification-failed :verification-timeout]]
+    (testing status
+      (let [kernel (restored-kernel status)
+            receipt (mcp-helper/terminal-receipt
+                     {:kernel kernel
+                      :verification (assoc profile-result :ok false)
+                      :plan (:plan (plan-of :happy))})]
+        (is (= (name status) (:status receipt)))
+        (is (false? (:committed receipt)))
+        (is (true? (:restored receipt)) "reflecting the kernel's own :restored")
+        (is (true? (:source_unchanged receipt))
+            "unchanged is claimed only because the kernel restored it")
+        (is (false? (:destination_created receipt)))
+        (is (= (:restoration_read_back kernel) (:restoration_read_back receipt))
+            "the read-back is carried through, not regenerated")
+        (is (false? (get-in receipt [:verification :ok]))))))
   (testing "a failed restoration is never reported as unchanged"
-    (let [receipt (mcp-helper/terminal-receipt :rollback-failed {})]
+    (let [receipt (mcp-helper/terminal-receipt
+                   {:kernel rollback-failed-kernel
+                    :verification (assoc profile-result :ok false)
+                    :plan (:plan (plan-of :happy))})]
       (is (= "rollback-failed" (:status receipt)))
       (is (false? (:committed receipt)))
       (is (false? (:restored receipt)))
       (is (false? (:source_unchanged receipt))
           "MCP-OP-HELPER-020: it NEVER claims unchanged")
-      (is (seq (:files receipt)) "it names the files")
-      (is (some? (:recovery_required receipt))
-          "the kernel's recovery-required evidence is carried through")))
-  (testing "only a committed receipt claims a completed proof"
-    (let [receipt (mcp-helper/terminal-receipt :committed {})]
-      (is (true? (:committed receipt)))
-      (is (= "complete" (get-in receipt [:verification :status]))))))
+      (is (= (:unrestored_files rollback-failed-kernel) (:files receipt))
+          "it names the files the kernel could not restore")
+      (is (= (:recovery_required rollback-failed-kernel)
+             (:recovery_required receipt))
+          "the kernel's recovery-required evidence is carried through"))))
 
+;; @spec MCP-OP-HELPER-020
 ;; @spec MCP-OP-HELPER-022
-(deftest the-proof-is-typed-and-runs-in-a-fresh-process-never-a-bare-count
-  (let [receipt (mcp-helper/terminal-receipt :committed {})
+(deftest a-committed-receipt-reflects-exactly-the-profile-result-it-was-given
+  (let [receipt (mcp-helper/terminal-receipt
+                 {:kernel committed-kernel
+                  :verification profile-result
+                  :plan (:plan (plan-of :happy))})
         verification (:verification receipt)]
-    (testing "the executed profile names itself and its typed checks"
+    (is (true? (:committed receipt)))
+    (is (= "committed" (:kernel_status receipt))
+        "the kernel's outcome is its own field")
+    (testing "the executed profile names itself and its TYPED checks, and the
+              receipt reflects the injected numbers exactly"
+      (is (= "checks-completed" (:status verification))
+          "the verification status is about the checks, not about the commit")
       (is (= "helper-proof" (:profile verification)))
-      (is (= "complete" (:status verification)))
-      (is (= (:caller-files fixture/canonical-counts)
-             (:structural_callers verification))
-          "the structural check covers the declared caller set")
-      (is (pos-int? (:helper_behaviors verification))
-          "behavior is run, not merely parsed")
-      (is (int? (:compiled_callers verification)))
+      (is (= 28 (:structural_callers verification)))
+      (is (= 24 (:helper_behaviors verification)))
+      (is (= 0 (:compiled_callers verification)))
+      (is (true? (:fresh_process verification)))
       (is (true? (:ok verification))))
     (testing "an ambiguous coverage integer is not a typed check"
       (is (not (contains? verification :covered_callers))
-          "a bare covered_callers integer cannot say WHAT was covered"))
-    (testing "a compile claim must be backed by compiles that happened"
+          "a bare covered_callers integer cannot say WHAT was covered"))))
+
+;; @spec MCP-OP-HELPER-022
+(deftest a-compiled-caller-claim-must-be-backed-by-compiles-that-happened
+  (testing "a profile that reports compiled callers without the per-compile
+            evidence must not reach the receipt as a claim"
+    (let [receipt (mcp-helper/terminal-receipt
+                   {:kernel committed-kernel
+                    :verification (assoc profile-result
+                                         :compiled_callers 28
+                                         :compiled_evidence [])
+                    :plan (:plan (plan-of :happy))})
+          verification (:verification receipt)]
       (is (or (zero? (:compiled_callers verification))
               (= (:compiled_callers verification)
                  (count (:compiled_evidence verification))))
-          "claiming compiled callers without the evidence of each compile is
-           the false green this witness exists to prevent"))
-    (testing "and the proof cannot be manufactured by a warm namespace"
-      (is (true? (:fresh_process verification))
-          "stale Vars in an already-loaded source would otherwise satisfy a
-           proof after the definitions were retired"))))
+          "claiming 28 compiled callers with no evidence of any compile is the
+           false green this witness exists to prevent")
+      (is (not (true? (:ok verification)))
+          "and the profile result is not ok when its own claim is unbacked"))))
+
+;; @spec MCP-OP-HELPER-020
+;; @spec MCP-OP-HELPER-022
+(deftest with-no-evidence-the-mapper-claims-nothing
+  (testing "empty or missing kernel and profile facts must never become a
+            proof, a restoration, or a fresh-process claim"
+    (doseq [input [{}
+                   {:kernel {} :verification {}}
+                   {:kernel {:status :verification-failed} :verification nil}]]
+      (testing (pr-str input)
+        (let [receipt (mcp-helper/terminal-receipt input)
+              verification (:verification receipt)]
+          (is (not (true? (:committed receipt))))
+          (is (not (true? (:restored receipt)))
+              "restoration is never assumed")
+          (is (not (true? (:source_unchanged receipt)))
+              "unchanged is a claim, and it needs evidence")
+          (is (not (true? (:ok verification)))
+              "no proof without a profile result")
+          (is (not (true? (:fresh_process verification)))
+              "fresh_process is a fact about an execution that happened")
+          (is (= "unknown" (:status verification))
+              "the honest answer is unknown, never a manufactured number")
+          (is (not-any? number? ((juxt :structural_callers :helper_behaviors
+                                       :compiled_callers)
+                                 verification))
+              "and it invents no counts"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the receipt
@@ -610,6 +793,45 @@
                 "no weaker verification profile")))
         (is (some? (:decision plan))
             "each refusal names the ONE unresolved decision")))))
+
+;; ---------------------------------------------------------------------------
+;; the public boundary: a project that lives UNDER an ancestor named `src`
+
+;; @spec MCP-OP-HELPER-001
+;; @spec MCP-OP-HELPER-012
+(deftest an-ancestor-directory-named-src-does-not-influence-the-destination
+  (testing "the project root is <tmp>/src/ancestor/project, so a path walk
+            that looks for the nearest `src` above a file, rather than
+            resolving relative to the project root, infers a namespace like
+            ancestor.project.src.acid.web.response and writes to the wrong
+            place. The destination namespace must equal `to.lib` exactly and
+            its path must be project-relative."
+    (let [root (io/file tmp-root "src" "ancestor" "project")]
+      (try
+        (doseq [[path source] (tree-of :happy :pre)]
+          (let [target (io/file root path)]
+            (io/make-parents target)
+            (spit target source)))
+        (let [result (mcp-helper/plan
+                      (fixture/request {:workspace_root (str root)}))]
+          (if (:ok result)
+            (let [destination (get-in result [:plan :destination])]
+              (is (= fixture/dest-lib (:lib destination))
+                  "the destination namespace is exactly to.lib")
+              (is (= fixture/dest-file (:file destination))
+                  "and its path is project-relative")
+              (is (not (str/includes? (str (:file destination)) "ancestor"))
+                  "no ancestor directory leaks into the path")
+              (is (not (str/starts-with? (str (:file destination)) "/"))
+                  "and it is not absolute"))
+            (do
+              (is (false? (:ok result)))
+              (is (some? (:limitation result))
+                  "if the seam cannot take an explicit project-relative path,
+                   the refusal must NAME that limitation rather than pass
+                   silently or guess a namespace")
+              (is (nil? (:next_call result))))))
+        (finally (delete-tree! (io/file tmp-root "src")))))))
 
 ;; @spec MCP-OP-HELPER-024
 ;; @spec MCP-OP-HELPER-016
