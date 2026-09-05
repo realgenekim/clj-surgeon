@@ -159,54 +159,6 @@
   (emit! state :tool.call
          (call-event (:mode state) request response timings)))
 
-(defn helper-request-shape
-  "Return content-free cardinality evidence for one helper extraction call."
-  [request]
-  (let [extraction (or (value request :extraction) {})
-        scope (or (value request :scope) {})
-        expect (or (value request :expect) {})]
-    {:has_extraction (map? (value request :extraction))
-     :forms (count (or (value extraction :forms) []))
-     :public_forms (count (or (value extraction :public_forms) []))
-     :caller_changes (count (or (value extraction :caller_changes) []))
-     :scope_paths (count (or (value scope :paths) []))
-     :expected_files (value expect :files)
-     :expected_forms (value expect :forms)
-     :expected_caller_edits (value expect :caller_edits)}))
-
-(defn helper-outcome-shape
-  "Return stable helper result fields without paths, source, or receipts."
-  [response]
-  (cond->
-    {:ok (boolean (:ok response))}
-    (contains? response :committed) (assoc :committed (:committed response))
-    (contains? response :verification_complete)
-    (assoc :verification_complete (:verification_complete response))
-    (:error_type response) (assoc :error_type (:error_type response))
-    (contains? response :source_unchanged)
-    (assoc :source_unchanged (:source_unchanged response))
-    (contains? response :mutation_attempted)
-    (assoc :mutation_attempted (:mutation_attempted response))
-    (contains? response :helpers) (assoc :helpers (:helpers response))
-    (contains? response :caller_files) (assoc :caller_files (:caller_files response))
-    (contains? response :sites) (assoc :sites (:sites response))))
-
-(defn helper-call-event
-  "Build the content-free public helper tool.call event."
-  [mode request response timings]
-  (cond->
-    {:tool "helper_extraction"
-     :request_shape (helper-request-shape request)
-     :outcome (helper-outcome-shape response)
-     :timings_ms timings}
-    (= :full (normalize-mode mode))
-    (assoc :request request :response response)))
-
-(defn record-helper-call!
-  [state request response timings]
-  (emit! state :tool.call
-         (helper-call-event (:mode state) request response timings)))
-
 (defn inspect-request-shape
   "Return source-free shape and payload-size evidence for inspect_clojure."
   [request]

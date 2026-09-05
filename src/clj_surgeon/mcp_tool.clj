@@ -2045,22 +2045,14 @@
   (mcp-operation/invoke!
     {:execute
      (fn []
-       (let [started (System/nanoTime)
-             normalized (json/parse-string (json/generate-string params) true)
-             record! (fn [state result]
-                       (when state
-                         (telemetry/record-helper-call!
-                           state params result
-                           {:total_ms (/ (double (- (System/nanoTime) started))
-                                         1000000.0)}))
-                       result)]
+       (let [normalized (json/parse-string (json/generate-string params) true)]
          (if-not @runtime-config
            ;; @spec MCP-OP-HELPER-010
            ;; every refusal this handler emits carries the closed envelope,
            ;; `next_call nil` included. A refusal that merely omits next_call
            ;; is indistinguishable, to a caller reading either face, from one
            ;; whose continuation was dropped on the way out.
-             (helper-extraction-refusal
+           (helper-extraction-refusal
              "server-not-initialized"
              "helper_extraction server is not initialized"
              {:remedy "Restart the configured clj-surgeon MCP server."})
@@ -2076,16 +2068,14 @@
                ;; through the boundary's own normalizer as well, so a routing
                ;; refusal wears exactly the envelope every other pre-write
                ;; refusal wears
-               (let [result (helper-extraction/normalize-refusal
-                              (merge (helper-extraction-refusal
-                                      (or (some-> (:error_type routed) name)
-                                          (some-> (:error-type routed) name)
-                                          "invalid-workspace-root")
-                                      (or (:error routed) "The workspace root could not be resolved")
-                                      {})
-                                    (dissoc routed :ok :next_call)))]
-                 (record! (or (:telemetry (:config routed))
-                              (:telemetry @runtime-config)) result))
+               (helper-extraction/normalize-refusal
+                (merge (helper-extraction-refusal
+                        (or (some-> (:error_type routed) name)
+                            (some-> (:error-type routed) name)
+                            "invalid-workspace-root")
+                        (or (:error routed) "The workspace root could not be resolved")
+                        {})
+                      (dissoc routed :ok :next_call)))
                ;; the same receipt-directory derivation alias_migration uses:
                ;; the routed workspace's own LOCAL-STATE directory, outside the
                ;; tree this verb mutates
@@ -2093,12 +2083,11 @@
                      receipt-dir (str (or (:receipt-dir routed-config)
                                           (default-receipt-dir
                                             (:project-root routed-config))))]
-                 (record! (:telemetry routed-config)
-                           (assoc (helper-extraction/execute!
-                                    (assoc routed-config :receipt-dir receipt-dir)
-                                    (assoc (:params routed)
-                                           :workspace_root (:workspace-root routed)))
-                                  :workspace_root (:workspace-root routed)))))))))
+                 (assoc (helper-extraction/execute!
+                          (assoc routed-config :receipt-dir receipt-dir)
+                          (assoc (:params routed)
+                                 :workspace_root (:workspace-root routed)))
+                        :workspace_root (:workspace-root routed))))))))
      :summarize helper-extraction-summary
      :callback callback}))
 

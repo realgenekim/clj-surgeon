@@ -29,17 +29,6 @@
    :undo_receipt "/private/receipt.edn"
    :read_back_hashes {"src/private/customer_view.clj" "abc"}})
 
-(def helper-request
-  {:extraction {:forms ["one" "two"]
-                :public_forms ["one"]
-                :caller_changes [{:file "src/a.clj"}]}
-   :scope {:paths ["src/**"]}
-   :expect {:files 2 :forms 2 :caller_edits 1}})
-
-(def helper-response
-  {:ok true :committed true :verification_complete true
-   :helpers 1 :caller_files 2 :sites 3})
-
 (defn- temp-dir
   []
   (.toFile
@@ -116,26 +105,6 @@
           (is (= (json/parse-string (json/generate-string response) true)
                  (:response call)))
           (is (= "full" (:telemetry_mode call)))))
-      (finally
-        (delete-tree! directory)))))
-
-(deftest helper-call-is-observable-with-content-free-metrics
-  (let [directory (temp-dir)]
-    (try
-      (let [state (telemetry/start! {:mode :metrics
-                                     :directory (.getPath directory)
-                                     :session-id "helper-session"})]
-        (telemetry/record-helper-call! state helper-request helper-response
-                                       {:total_ms 17})
-        (let [call (first (events state))
-              raw (slurp (:file state))]
-          (is (= "tool.call" (:event call)))
-          (is (= "helper_extraction" (:tool call)))
-          (is (= 2 (get-in call [:request_shape :forms])))
-          (is (= true (get-in call [:outcome :committed])))
-          (is (= 17 (get-in call [:timings_ms :total_ms])))
-          (is (not (contains? call :request)))
-          (is (not (str/includes? raw "src/a.clj")))))
       (finally
         (delete-tree! directory)))))
 
