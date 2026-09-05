@@ -570,3 +570,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - 15:35Z: MCP/main = 01f66435 (Astra telemetry landed as 2b5b3d97). Servers 7906 PID 539986 / 8171 PID 539988 on it. land refuses ancestor tips/empty merges now. Astra idle after his block (telemetry + prereg delivered; no accepted comparison). Next per his handoff: oracle revision, then a fresh preregistered epoch with six accepted controls.
 
 - 16:26Z: MCP/main = 32910d14 (Astra production-readiness landed as 32910d14). Servers 7906 PID 1565316 / 8171 PID 1565318 on it; CLI/skills installed. The pane agent keeps using the shared seat checkout on its own branches — read its branch there before assuming trunk.
+
+- 21:23Z: Spark (gpt-5.3-codex-spark) still limited; Codex says "try again at 11:37 PM" (box time UTC). Next action after that: the three-way test (native apply_patch / Spark emits mission request / Spark emits native patch), effort low, dossier prompt, 5-min cap, gate outside; design in docs/observations/2026-09-05-ideal-tool-riff-fable.md §8.
