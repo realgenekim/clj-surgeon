@@ -1,0 +1,4 @@
+TOOLING: Your ordinary native tools are available. A clj-surgeon MCP server is
+also attached to this session as the server "clj-surgeon"; among its operations
+is mcp__clj-surgeon__alias_migration. You are not asked or expected to use it.
+Choose whatever route you judge best for this task.

@@ -1,0 +1,32 @@
+# Opus-caller cohort plan — astra-fanout, 21-owner alias migration
+# written 2026-09-05T01:01:49Z by calibrate.sh
+# caller: claude -p --model claude-opus-5 --dangerously-skip-permissions
+# fixture: /var/tmp/forge/astra-program/verified21/base-repo
+#          at 92fdf5d1545af934ff14250d39cef41c400e5df8
+# oracle:  /var/tmp/forge/astra-program/repo/bench/fanout/rescore-FAN.sh
+# mcp:     http://127.0.0.1:8341/mcp   (T and O only; this cohort's own band 8340-8379)
+# drift controls (Block C): OFF — cohort is exploratory on drift
+# every arm: /home/forge/bin/slot -t  (refuses above 1-min load 10, honours the quiet window)
+#
+# ord cell rep block  command
+   1    N   1 calibration /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 1
+   2    N   2 calibration /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 2
+   3    N   3 calibration /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 3
+   4    N   4 calibration /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 4
+   5    N   5 calibration /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 5
+   6    N   6 calibration /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 6
+   7    T   1 comparison  OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 1
+   8    T   2 comparison  OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 2
+   9    T   3 comparison  OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 3
+  10    T   4 comparison  OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 4
+  11    T   5 comparison  OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 5
+  12    T   6 comparison  OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 6
+  13    O   1 adoption    OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 1
+  14    O   2 adoption    OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 2
+  15    O   3 adoption    OPUS_MCP_URL=http://127.0.0.1:8341/mcp /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 3
+#
+# total arms: 15
+# stopping rules (Astra's, inherited): a 900s arm is a failed task, not a
+#   missing observation; a failed arm is recorded and NOT replaced by a rerun;
+#   an instrument-invalid run gets a fresh rep number; two identical tool
+#   refusals stop Block B for a contract investigation.

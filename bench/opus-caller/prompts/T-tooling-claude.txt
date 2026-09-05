@@ -1,0 +1,5 @@
+
+CLAUDE TOOL BINDING. The clj-surgeon MCP server named above is attached to this
+session as the server "clj-surgeon"; its operation is called
+mcp__clj-surgeon__alias_migration. The mandate in the TOOLING paragraph applies
+to that tool by that name.

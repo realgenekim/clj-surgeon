@@ -1,0 +1,6 @@
+
+CALLER NOTE (identical text in every cell of this cohort).
+Your ordinary native tools are Read, Edit, Write and Bash. Use them directly.
+Do not delegate any part of this task to a subagent or to another session:
+a subagent's edits do not appear in this run's transcript and would be an
+unmeasured write. Do not use web tools. Work only inside the current directory.
