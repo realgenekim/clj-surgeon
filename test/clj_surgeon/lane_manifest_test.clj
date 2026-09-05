@@ -429,7 +429,7 @@
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
   ;;   adopted since round one .................... 221 deftests  (12+4+25+3+69+1+1+24+34+48)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1141 deftests
+  ;;   total declared by the manifest ............. 1142 deftests
   ;;
   ;; ROUND SIX ADOPTED THE HELPER-EXTRACTION PAIR, 68 deftests, on the day the
   ;; planner and the boundary both went green. They had been `excluded` with
@@ -475,7 +475,7 @@
                                      (keys lm/manifest))))))
       (is (= 221 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1141 total) (str "manifest declares " total " tests"))
+      (is (= 1142 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
