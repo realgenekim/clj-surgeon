@@ -1910,3 +1910,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:13Z Astra: root gate MCP 919/15214 GREEN, whole make NOT green — fails at CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh (fake fast case classified failed); alias merge held until accounted. New trunk defect recorded: extract derives the namespace by stripping the first /src/ of an absolute path (wrong for every repo under ~/src). Opus harness roster NOT approved — amendments sent to the builder.
 
 ## 01:13Z KNOWN RED on the trunk (Astra's root gate at 01:07Z): `make test` fails in its post-Clojure harness stage — CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh (a fake fast case classified failed). The landing gates (mcp-test/bb/oracle/hygiene/audit) never ran that stage; nothing on any branch fixes it. Astra diagnosing.
+
+## 01:20Z Opus caller harness round two (afe6621f) per Astra's ruling: 21 arms, pinned cores in owned windows, his adapter policy imported by sha; ≈6.8M tokens estimated; N-1 preflight gate. Preparation only.
