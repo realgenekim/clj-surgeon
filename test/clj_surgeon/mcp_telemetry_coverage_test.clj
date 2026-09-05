@@ -133,6 +133,10 @@
                   (str (:tool event)
                        " refused without naming a typed refusal kind"))))))
       (finally
+        ;; The registry is process-wide: leaving a deleted fixture installed
+        ;; would let a later test recreate it inside the run's isolated temp
+        ;; root and trip the temp-leak ratchet.
+        (telemetry/install! nil)
         (mcp-tool/init! previous-config)
         (delete-tree! workspace)
         (delete-tree! telemetry-dir)))))
@@ -171,6 +175,10 @@
               (str "an edit_clojure call was recorded under an internal name: "
                    (pr-str (sort names))))))
       (finally
+        ;; The registry is process-wide: leaving a deleted fixture installed
+        ;; would let a later test recreate it inside the run's isolated temp
+        ;; root and trip the temp-leak ratchet.
+        (telemetry/install! nil)
         (mcp-tool/init! previous-config)
         (delete-tree! workspace)
         (delete-tree! telemetry-dir)))))
