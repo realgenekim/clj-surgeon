@@ -77,3 +77,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **07:38Z ratchet owed (no bd db in this clone)**: one shared expected-tool-list Var for the five test sites that hardcode the MCP tool list (mcp_server_test, mcp_http_server_test ×3, admit_patch_test:582, mcp_operation_registry_test catalog).
 
 - **07:50Z pre-landing obligation (helper_extraction)**: enroll helper_extraction_test → :fast and mcp_helper_extraction_test → :battery in lane_manifest, delete the two red make targets, Sol r4 delta on the schema-enforcement fix; battery-fresh on the landed sha. The legacy 547 does not cover the new 64 tests.
+
+- **08:38Z helper_extraction follow-ups (not in v4)**: scope.paths glob friction (explicit roots field or examples; no silent broadening); public refusal structuredContent must carry `operation`; verb telemetry through the existing service emitter.
