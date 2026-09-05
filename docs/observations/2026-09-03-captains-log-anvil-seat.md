@@ -1989,3 +1989,33 @@ Servers restarted onto trunk 2209c61e: 7906 PID 3534456, 8171 PID 3534458 (lane 
 ## 04:44Z — ADMIT-150 fix: battery on the tip `Ran 512 tests containing 11008 assertions. 0 failures, 0 errors.` (:pass, 718 s, zero skipped preconditions). First landing attempt refused on a battery-ledger merge conflict (trunk received the :fail receipt while the branch received the :pass one; both appended at the tail). Resolved on the branch append-only in :started order (6ce42e4b); battery-fresh green; relanding. Lesson for the ledger design: two receipts appended on divergent branches always conflict — the ledger should be one file per receipt (content-addressed) or land should resolve the ledger by union-sort; filed as the next ratchet. Phase-1 design revision 2 (9d4b54bb): Astra's four corrections applied — no escape-hatch continuations, no silent weakening, fully qualified/source-local/cyclic accounting, accurate proof label. Gene relayed Astra's 04:40Z self-assessment verbatim; his two-hour proposal awaits Gene's word.
 
 ## 04:52Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 216  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 04:48Z load 2.46 ; === rc 0 end 04:52Z)
+
+## 04:53Z — LANDED 6ef3de2b: the default `make test` lane owns the transaction-recovery battery receipt again (ADMIT-150), with a :pass battery receipt carrying zero skipped preconditions. Gate lines verbatim:
+```
+=== land 6ce42e4b onto d3a1ca8a -> merge 6ef3de2b 04:43Z load 1.38
+=== make battery-fresh
+battery-fresh: OK -- newest receipt sha 0dd733cbaf4fb9bc397472844021fde660cb67ec, started 2026-09-05T04:26:40Z, wall 718s, 0.3 h old, 6 comm
+RC=0
+=== make admit-transaction-recovery-battery
+java -cp "$(clojure -Spath -A:clj-surgeon/mcp-test)" clojure.main test/admit_transaction_recovery_battery.clj
+admit-transaction-recovery-battery: 3/3 arms passed
+battery receipt · target/admit-transaction-recovery-battery-receipt.edn · verdict :passed · 3/3 arms passed · kinds #{:transaction-recov
+RC=0
+=== ~/bin/suite-run clojure -M:clj-surgeon/mcp-test
+Testing clj-surgeon.battery-ledger-test
+Ran 547 tests containing 6847 assertions.
+0 failures, 0 errors.
+RC=0
+=== ~/bin/suite-run bb test/run_all.clj
+Testing clj-surgeon.memory-battery-test
+Ran 859 tests containing 7337 assertions.
+0 failures, 0 errors.
+RC=0
+=== make mcp-operation-oracle
+RC=0
+=== make repository-hygiene
+RC=0
+=== audit
+=== done 04:48Z ok=1
+```
+Servers restarted onto trunk fbd68a1c: 7906 PID 523110, 8171 PID 523113.

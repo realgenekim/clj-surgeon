@@ -69,3 +69,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **03:04Z ISO007** — bridge/iso007-fence-override dd5e4881: reader-eval-fence-test budget override (battery unpassable at the 300 s default). Needs Astra confirm + one battery run on the tip → :pass receipt → land. Blocks: flip 971bc4a7 and every later landing.
 
 - **03:53Z LANDED 68f24f51** — candidate 0305: flip (bridge/test-default-fast 1fe16056), ISO-007 override (bridge/iso007-fence-override 322a63f1 incl. :pass receipt), Astra binding series c188d5a3/e6808fca/40e5fa5a, collector 29b8466d. Rows FLIP/ISO007/ASTRA-BINDING/COLLECTOR: LANDED. Servers on 2209c61e.
+
+- **04:53Z LANDED 6ef3de2b** — bridge/test-owns-recovery-battery (ADMIT-150; recovery battery back in the default recipe). Battery ledger has a :pass receipt with zero skips. Servers on fbd68a1c.
