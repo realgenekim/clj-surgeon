@@ -478,6 +478,8 @@ records the failure pattern that led to `:fix-declares`.
 git clone https://github.com/realgenekim/clj-surgeon.git
 cd clj-surgeon
 make install    # → CLI plus Codex and Claude skills
+# Optional box-wide analyzer shim
+make install-with-analyzer
 ```
 
 `make install` creates content-addressed, read-only copies of the CLI runtime
@@ -494,6 +496,8 @@ The default entrances are `~/bin/clj-surgeon`,
 and immutable package path. Run `make install-cli`,
 `make install-codex-skill`, or `make install-claude-skill` to install one
 surface. Installation refuses to replace unrelated files or skill directories.
+The default install does not modify an existing `clj-kondo`; use
+`make install-with-analyzer` only when you explicitly want the admission shim.
 
 To put the CLI somewhere else, pass its complete file path as `CLI_DEST`. The
 installer creates the parent directory and handles paths containing spaces:
