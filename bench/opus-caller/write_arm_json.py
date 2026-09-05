@@ -39,13 +39,54 @@ e = os.environ
 flag = lambda k: e[k] == "true"
 oracle_rc = int(e["OPUS_ORACLE_RC"])
 
+arm_dir = pathlib.Path(e["OPUS_ARMDIR"])
+prepared = json.loads((arm_dir / "prepared.json").read_text())
+
+# --- load: a SAMPLED interval, not two endpoints -------------------------------
+ceiling = float(e["OPUS_LOAD_CEILING"])
+samples = []
+for line in (arm_dir / "load.jsonl").read_text().splitlines():
+    line = line.strip()
+    if line:
+        try:
+            samples.append(json.loads(line))
+        except ValueError:
+            pass
+def one_min(row):
+    return float(row["loadavg"].split()[0])
+by_phase = {}
+for row in samples:
+    by_phase.setdefault(row.get("phase", "unknown"), []).append(one_min(row))
+load_summary = {
+    "sampler_interval_s": int(os.environ.get("OPUS_LOAD_SAMPLE_S", "5")),
+    "samples": len(samples), "ceiling": ceiling,
+    "max_by_phase": {k: max(v) for k, v in by_phase.items()},
+    "max_overall": max((one_min(r) for r in samples), default=None),
+    # CONTAMINATION IS CLASSIFIED PER PHASE, and an unsampled phase is UNKNOWN,
+    # never "clean" (his review: missing measurements must remain unknown).
+    "contaminated_driver": (max(by_phase["driver"]) > ceiling
+                            if by_phase.get("driver") else None),
+    "contaminated_acceptance": (max(by_phase["acceptance"]) > ceiling
+                                if by_phase.get("acceptance") else None),
+    "boundary_load_start": e["OPUS_ADAPTER_LOAD_START"],
+    "boundary_load_end": e["OPUS_ATTESTED_LOAD"],
+}
+here = pathlib.Path(e["OPUS_HERE"])
+ready = None
+if e["OPUS_READY_V"]:
+    try:
+        ready = json.loads(pathlib.Path(e["OPUS_READY_V"]).read_text())
+    except (OSError, ValueError):
+        ready = None
+
+
 json.dump({
     "id": e["OPUS_ID"], "cell": e["OPUS_CELL"], "rep": e["OPUS_REP"],
     "exp": "astra-fanout/opus-caller", "driver": "claude -p",
     "requested_model": e["OPUS_MODEL_REQ"], "cli_version": e["OPUS_CLI"],
     "caller_bin": e["OPUS_CALLER_PATH"],
     "fixture_src": e["OPUS_FIX_SRC"], "base": e["OPUS_BASE"],
-    "frozen_prompt": e["OPUS_FROZEN_PROMPT"], "mcp_url": e["OPUS_URL"] or None,
+    "frozen_prompt": prepared["frozen_prompt"], "mcp_url": e["OPUS_URL"] or None,
     "session_id": e["OPUS_SID"], "session_file": e["OPUS_SESSION_FILE"],
     "session_bound": flag("OPUS_SESSION_BOUND"),
     "session_sha256": e["OPUS_SESSION_SHA"] or None,
@@ -59,24 +100,25 @@ json.dump({
     "correctness": "accepted" if oracle_rc == 0 else "not-accepted",
     "cpus": e["OPUS_CPUS"], "cpu_affinity": "taskset -c " + e["OPUS_CPUS"],
     "canonical_src_match": flag("OPUS_CANONICAL_MATCH"),
+    "resolved_model": e["OPUS_MODEL_RESOLVED"] or None,
+    "mcp_config_mode": prepared.get("mcp_config_mode"),
+    "immutable_inputs": {k: prepared.get(k) for k in (
+        "frozen_prompt_sha256", "composed_prompt_sha256", "oracle_sha256",
+        "oracle_manifest_sha256", "oracle_canonical_tree_sha256",
+        "verification_profile_sha256")},
+    "load": load_summary,
 }, open(e["OPUS_ARMJSON"], "w"), indent=2, sort_keys=True)
-
-arm_dir = pathlib.Path(e["OPUS_ARMDIR"])
-here = pathlib.Path(e["OPUS_HERE"])
-ready = None
-if e["OPUS_READY_V"]:
-    try:
-        ready = json.loads(pathlib.Path(e["OPUS_READY_V"]).read_text())
-    except (OSError, ValueError):
-        ready = None
 
 # --- attest.json: Astra's field names, so his reader works unchanged --------------
 json.dump({
     "attest_ok": True, "start_utc": e["OPUS_UTC_START"],
     "arm": e["OPUS_CELL"], "exp": "astra-fanout/opus-caller", "driver": "claude -p",
-    "model": e["OPUS_MODEL_REQ"], "effort": "default",
+    "model_requested": e["OPUS_MODEL_REQ"],
+    "model_resolved": e["OPUS_MODEL_RESOLVED"] or None,
+    "effort": "default",
     "worktree": e["OPUS_WT"], "worktree_head": e["OPUS_BASE"], "base": e["OPUS_BASE"],
     "prompt_path": e["OPUS_PROMPT_PATH"], "prompt_sha256": sha_file(e["OPUS_PROMPT_PATH"]),
+    "frozen_prompt": prepared["frozen_prompt"],
     "driver_command": (arm_dir / "command.txt").read_text().split("\n")[:-1],
     "cpus": e["OPUS_CPUS"],
     # caller-specific renames of his codex_* keys (same quantities, different binary)
@@ -89,21 +131,33 @@ json.dump({
     "port_pid": (ready or {}).get("port_pid"),
     "server_cwd": (ready or {}).get("server_cwd"),
     "server_ready": ready,
+    "server_attestation": (json.loads((arm_dir / "server-attest.json").read_text())
+                           if (arm_dir / "server-attest.json").is_file() else None),
+    "mcp_config_mode": prepared.get("mcp_config_mode"),
+    "immutable_inputs": {k: prepared.get(k) for k in (
+        "frozen_prompt_sha256", "composed_prompt_sha256", "oracle_sha256",
+        "oracle_manifest_sha256", "oracle_canonical_tree_sha256",
+        "verification_profile_sha256")},
     "correctness": "pending-independent-acceptance",
 }, open(arm_dir / "attest.json", "w"), indent=2, sort_keys=True)
 
 # --- adapter-result.json: his run() record, field for field ----------------------
 f = float
 adapter_start, driver_start = f(e["OPUS_ADAPTER_START"]), f(e["OPUS_DRIVER_START"])
-driver_end = f(e["OPUS_DRIVER_END"])
+driver_end, attested_end = f(e["OPUS_DRIVER_END"]), f(e["OPUS_ATTESTED_END"])
+oracle_start, oracle_end = f(e["OPUS_ORACLE_START"]), f(e["OPUS_ORACLE_END"])
 json.dump({
     "watch_rc": int(e["OPUS_DRIVER_RC"]),
     "valid_measurement": (flag("OPUS_SESSION_BOUND")
                           and int(e["OPUS_ATTRIB_RC"]) == 0
                           and int(e["OPUS_DRIVER_RC"]) == 0),
     "session_id": e["OPUS_SID"],
-    "resolved_model": "see attribution.json: models_in_transcript "
-                      "(the command alias is never the model claim)",
+    # AN ACTUAL MODEL ID, not a prose pointer (his review).  Null when the transcript
+    # did not name exactly one model -- which is itself a terminal :unverified.
+    "resolved_model": e["OPUS_MODEL_RESOLVED"] or None,
+    "requested_model_alias": e["OPUS_MODEL_REQ"],
+    "resolved_model_source": "session transcript; the command alias is never the claim",
+    "load": load_summary,
     "protected_bytes_match": flag("OPUS_GUARD"),
     "canonical_src_match": flag("OPUS_CANONICAL_MATCH"),
     "timing": {
@@ -116,9 +170,23 @@ json.dump({
         "watch_load_start": e["OPUS_LOAD_START"],
         "watch_load_end": e["OPUS_LOAD_END"],
         "lock_wait_included": False,
-        "adapter_wall_s": driver_end - adapter_start,
-        "adapter_load_end": open("/proc/loadavg").read().strip(),
-        "adapter_wall_scope": "prepare-through-freeze-and-attestation; excludes scorer",
+        # THE WALL ENDS WHERE ITS SCOPE SAYS IT ENDS.  Round two computed
+        # driver_end - adapter_start and labelled it prepare-through-attestation,
+        # which was false: freeze, diff and attribution all happen after the caller
+        # exits.  It now ends at the attestation boundary, and adapter_load_end is
+        # read at that same instant -- one boundary, one number.
+        "adapter_wall_s": attested_end - adapter_start,
+        "adapter_load_end": e["OPUS_ATTESTED_LOAD"],
+        "adapter_wall_scope": ("prepare-through-freeze-and-attestation; "
+                               "excludes the acceptance oracle"),
+        "freeze_and_attribution_wall_s": attested_end - driver_end,
+        "acceptance_wall_s": oracle_end - oracle_start,
+        "acceptance_wall_scope": "the external six-check oracle only",
+        "verified_completion_wall_s": oracle_end - adapter_start,
+        "verified_completion_scope": ("prepare through accepted; the only total that "
+                                      "covers a verified task end to end"),
+        "monotonic_source": "/proc/uptime (10 ms granularity) — NOT interchangeable "
+                            "with the shared adapter's time.monotonic()",
     },
     "correctness": "accepted" if oracle_rc == 0 else "not-accepted",
 }, open(arm_dir / "adapter-result.json", "w"), indent=2, sort_keys=True)

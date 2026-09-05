@@ -1,10 +1,10 @@
 # Opus-caller cohort plan — astra-fanout, 21-owner alias migration
-# written 2026-09-05T01:19:54Z by calibrate.sh
+# written 2026-09-05T01:55:35Z by calibrate.sh
 # caller: taskset -c 12,13 claude -p --model claude-opus-5 --dangerously-skip-permissions
 #   (the command alias is NEVER the model claim; the resolved id comes from
 #    the session transcript — see attribution.json models_in_transcript)
 # fixture: /var/tmp/forge/opuscaller-fx/base-repo
-#          at 6bce26c301b965fbb410bb6c3e6781108645c673  (Astra's base, unchanged)
+#          at 245d0ee4db82e7708c8ef8d0efcf08c2be794f35  (Astra's base, unchanged)
 # prompts: /var/tmp/forge/opuscaller-fx/prompts  (his files, verbatim)
 # oracle:  /var/tmp/forge/opuscaller-fx/bin/stub-oracle.sh  (his six checks)
 # mcp:     http://127.0.0.1:8341/mcp   (T and O only; this flank's own band 8340-8379)
@@ -13,36 +13,43 @@
 # slot:    /home/forge/bin/slot -t  (refuses above 1-min load 10)
 #
 # ord cell rep block          command
-   1    N   1 A-calibration  /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 1
-   2    N   2 A-calibration  /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 2
-   3    N   3 A-calibration  /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 3
-   4    N   4 A-calibration  /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 4
-   5    N   5 A-calibration  /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 5
-   6    N   6 A-calibration  /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 6
-   7    N   7 B-pair1        /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 7
-   8    T   1 B-pair1        OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 1
-   9    T   2 B-pair2        OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 2
-  10    N   8 B-pair2        /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 8
-  11    N   9 B-pair3        /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 9
-  12    T   3 B-pair3        OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 3
-  13    T   4 B-pair4        OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 4
-  14    N  10 B-pair4        /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 10
-  15    N  11 B-pair5        /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 11
-  16    T   5 B-pair5        OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 5
-  17    T   6 B-pair6        OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 6
-  18    N  12 B-pair6        /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 12
-  19    O   1 C-adoption     OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 1
-  20    O   2 C-adoption     OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 2
-  21    O   3 C-adoption     OPUS_MCP_URL=http://127.0.0.1:8341/mcp OPUS_READY=<armdir>/server/ready.json OPUS_SERVER_SHA=<pinned> /home/forge/bin/slot -t bash /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 3
+   1    N   1 A-calibration  /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 1 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 1 launch
+   2    N   2 A-calibration  /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 2 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 2 launch
+   3    N   3 A-calibration  /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 3 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 3 launch
+   4    N   4 A-calibration  /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 4 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 4 launch
+   5    N   5 A-calibration  /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 5 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 5 launch
+   6    N   6 A-calibration  /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 6 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 6 launch
+   7    N   7 B-pair1        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 7 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 7 launch
+   8    T   1 B-pair1        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 1 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 1 launch ; stop_server
+   9    T   2 B-pair2        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 2 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 2 launch ; stop_server
+  10    N   8 B-pair2        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 8 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 8 launch
+  11    N   9 B-pair3        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 9 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 9 launch
+  12    T   3 B-pair3        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 3 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 3 launch ; stop_server
+  13    T   4 B-pair4        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 4 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 4 launch ; stop_server
+  14    N  10 B-pair4        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 10 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 10 launch
+  15    N  11 B-pair5        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 11 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 11 launch
+  16    T   5 B-pair5        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 5 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 5 launch ; stop_server
+  17    T   6 B-pair6        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 6 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh T 6 launch ; stop_server
+  18    N  12 B-pair6        /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 12 prepare ; /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh N 12 launch
+  19    O   1 C-adoption     /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 1 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 1 launch ; stop_server
+  20    O   2 C-adoption     /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 2 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 2 launch ; stop_server
+  21    O   3 C-adoption     /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 3 prepare ; start_server ; OPUS_READY/READY_EDN/SPAWNED /home/forge/bin/slot -t /home/forge/src/clj-surgeon-opuscaller/bench/opus-caller/run-opus-arm.sh O 3 launch ; stop_server
 #
 # TOTAL ARMS: 21   (6 calibration native + 6 pair native + 6 pair tool + 3 adoption)
 #
 # PREFLIGHT: the FIRST arm, N-1, is the instrument preflight, run ALONE.
-#   The 38 fake-caller tests prove the harness, not live readiness: they never
+#   The 102 fake-caller tests prove the harness, not live readiness: they never
 #   call a model, never start a server, never run the real oracle.  N-1 is the
 #   first evidence that a live Claude session binds, that the transcript names
 #   the resolved model, and that the six checks run on a real tree.  Read its
 #   receipt AND the pool meter before arm 2.
+#
+# ORDER OF OWNERSHIP: prepare (the ARM makes its dir + clone) -> start the
+#   server against that existing clone -> launch (attest + run) -> stop.
+#
+# TERMINAL OUTCOMES propagate and HALT the cohort: rc 2 refused, rc 3
+#   :unverified attribution, rc 4 the oracle did not accept, rc 5 the caller
+#   failed.  A halted cohort preserves the observation; it never deletes it.
 #
 # stopping rules (Astra's, inherited): a 900s arm is a failed task, not a
 #   missing observation; a failed arm is recorded and NOT replaced by a rerun;

@@ -1,3 +1,7 @@
+<!-- Filed verbatim from /var/tmp/forge/astra-program/opus-independent-review/review.md
+     source sha256: bfb2898c581e197e2a55c3c1f97412b02064be2c8c965bf7d7e930ec4965a86e
+     filed 2026-09-05T01:44:08Z by forge-anvil, unaltered. -->
+
 # Independent Opus apparatus review — NO-GO
 
 Reviewed /home/forge/src/clj-surgeon-opuscaller at afe6621f650101e946dbe03d53759c468abaad26. Exact six apparatus file SHA256 values are in source-hashes.json. Read-only source review; no Fable source edits, model, JVM or MCP runtime. Existing fake suite executed with isolated OPUSCALLER_FX:66 passed0failed. Independent fake reproductions are probes.py/probes.json; fixtures and raw fake evidence are retained locally. No private model reasoning was read.

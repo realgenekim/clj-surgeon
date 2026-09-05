@@ -15,6 +15,13 @@ been spent.** Everything below describes an instrument that refuses to run until
 > rather than re-implemented; the resolved model comes from the transcript and the
 > **command alias is never the model claim**; and **N-1 alone is the instrument
 > preflight** once runtime is allocated.
+>
+> **Round three, 2026-09-05T01:55:19Z. Astra's independent review returned NO-GO** — filed
+> verbatim beside this file as `…-review-astra-NO-GO.md`. His four blockers and three
+> follow-ups are closed below, each with a fail-first witness; his own `probes.py` was
+> reproduced RED against the round-two tip and now returns GREEN. This document is
+> amended in place. **Nothing here is a GO for a live cohort**; that remains a
+> separately authorised preflight.
 
 ## What this is, and what it is not
 
@@ -163,7 +170,7 @@ control: they are the later natives that protect against drift after calibration
 exactly as Astra's pre-registration requires, and the pairs alternate which cell leads
 so neither systematically occupies the warmer or cooler half of a pair.
 
-**The first arm, `N-1`, is the instrument preflight, and it runs alone.** The 66
+**The first arm, `N-1`, is the instrument preflight, and it runs alone.** The 102
 fake-caller tests prove the *harness*; they never call a model, never start a server,
 never run the real oracle. `N-1` is the first evidence that a live Claude session
 binds, that the transcript names a resolved model, and that the six checks run against
@@ -299,7 +306,7 @@ by default precisely so that reading has to happen.
 
 ## Evidence that the instrument works
 
-`bash bench/opus-caller/test_run_opus_arm.sh` — **66 passed, 0 failed**, with no
+`bash bench/opus-caller/test_run_opus_arm.sh` — **102 passed, 0 failed**, with no
 model, no JVM and no server: a fake `claude` first on PATH writes a synthetic session
 transcript and makes one real edit; a stub oracle stands in for `rescore-FAN.sh`. It
 witnesses the reused-identity refusal (and that the existing arm is byte-untouched),
@@ -317,7 +324,7 @@ owned-window requirement, the stub-attested server evidence, and a complete
 `adapter-result.json` `timing` block. Those arm directories carry a `DRY-RUN.txt`
 marker; **rep 9xx is never a measured arm.**
 
-**What these tests are not.** They are 66 witnesses about a harness, run with a fake
+**What these tests are not.** They are 102 witnesses about a harness, run with a fake
 caller, a stub oracle and a stub attestation. They are not live readiness. Nothing here
 has yet proved that a real `claude -p` session binds, that the resolved model is what
 was asked for, that a real MCP server passes his `validate_ready`, or that the six
@@ -361,3 +368,150 @@ plausible-sounding shortcut:
 
 The 15-arm plan is preserved here because a roster that was argued and rejected is part
 of the record. It is not the plan; `plan-opus-cohort.txt` is, and it says 21.
+
+## Round three — closing Astra's NO-GO
+
+His review is filed verbatim at
+`docs/observations/2026-09-05-opus-caller-harness-review-astra-NO-GO.md`. His probe
+apparatus (`probes.py` + fake fixtures) was **copied into this seat's scratch** and run
+there — only the two path constants changed, nothing was written under
+`/var/tmp/forge/astra-program`. It was run **RED first**, against the round-two tip, and
+reproduced all four findings exactly.
+
+| his probe | RED (round two) | GREEN (now) |
+|---|---|---|
+| `wrong-model` | `shell_rc 0`, `valid_measurement false` | **`shell_rc 3`**, `valid_measurement false` |
+| `oracle-failure` | `shell_rc 0`, `correctness not-accepted` | **`shell_rc 4`**, `correctness not-accepted` |
+| `parent-precreated-tool-arm` | `shell_rc 2` — the tool path could not reach its arm | `shell_rc 2` — **and that is now the right answer** (below) |
+| `native-isolation-and-diff` | `strict_mcp_config false`, `explicit_mcp_config false`, `new_file_in_diff false`, `cached_diff_bytes 0` | **all true; `cached_diff_bytes 518`** |
+
+The suite grew from 66 to **102 witnesses, 0 failures**.
+
+### Blocker 1 — ownership and preparation order
+
+Round two had `calibrate.sh` create the arm directory and start the server against
+`A/wt` *before that clone existed*, and the arm then refused the directory the parent
+had just made. The tool path was structurally unable to reach its own arm, and the
+fake suite never noticed because it never exercised the calibrate→arm transition.
+
+`run-opus-arm.sh` now has **two phases**. `prepare` is the arm's own job: it makes the
+directory and the clone and refuses an existing arm. `launch` attests and runs, and
+refuses unless `prepared.json` exists and `arm.json` does not. `calibrate.sh` runs
+**prepare → start_server (against the clone that now exists) → launch → stop_server**,
+and `start_server` itself refuses if `A/wt` is missing.
+
+**His probe's `shell_rc 2` is now the correct answer, not the defect.** A parent that
+pre-creates an arm directory *should* be refused; what changed is that the
+orchestration no longer does it. Test block 11 witnesses the real transition: prepare
+exits 0 and the clone exists; launch then exits 0 and the arm reaches identity
+`opus-T-20`; `launch` without `prepare` is refused naming the missing preparation; a
+second `launch` of the same arm is refused naming the reused identity.
+
+### Blocker 2 — a spawn that is armed only after health polling
+
+`SERVER_STARTED=1` now happens **immediately after the fork**, on the line after the
+`pid start-ticks boot-id` record is written. Every failure between fork and readiness —
+a port that never answers, a missing `ready.edn`, a failed ready-write — is a refusal
+*with the server still owned and stopped*. The ready-write is checked (`[ -s ready.json ]`)
+rather than masked by the next assignment. `stop_server` escalates: TERM, wait up to
+30 s, KILL, then re-check and **print a SURVIVOR line** if the pid is still alive, and
+report any descendants. A survivor is loud; it is not an assumption.
+
+### Blocker 3 — native MCP absence is now explicit, and checked
+
+`--mcp-config` and `--strict-mcp-config` are passed for **every** cell. A native arm's
+config is an explicitly empty map, `{"mcpServers":{}}`, recorded in the receipt as
+`mcp_config_mode: "explicit-empty"`. Absence is then **verified**: attribution counts
+tool calls whose name begins `mcp__`, and for a native arm any such call is a terminal
+`:unverified`. A fake caller that reaches `mcp__clj-surgeon__alias_migration` from a
+native arm exits 3 with the refusal naming the call.
+
+**Honest limit, his words kept:** strict MCP config establishes *MCP* isolation. It does
+not establish that no user or project settings or instructions reach the session. The
+`--disallowedTools` roster narrows the tool surface; it is not a claim about everything
+the CLI reads. The doc no longer says "no ambient configuration reaches every arm".
+
+### Blocker 4 — terminal outcomes propagate
+
+`run-opus-arm.sh` exit codes are now outcomes: **0** accepted · **2** refused ·
+**3** attribution `:unverified` · **4** the oracle did not accept · **5** the caller
+failed. `calibrate.sh` **halts the cohort** on any non-zero arm, prints which outcome it
+was, and says where the preserved observation is — preserving a failed observation and
+silently continuing an invalid cohort are different things. The documented
+two-tool-refusals rule is now **implemented**, not just written in the plan header.
+
+### Imported-policy coverage — the gap he named
+
+He was right that a field-compatible ready JSON is not lifecycle parity, and that narrow
+helper imports must not be called policy parity. `astra_policy.py` now offers
+`attest-server`, which adds three checks his `prepare` makes and round two omitted:
+
+* **the server's own `ready.edn`** is read and cross-checked against the launcher's
+  `ready.json` (worktree and port must appear in it), and its sha is recorded. A label
+  the launcher wrote is not evidence about the server.
+* **pid birth** — the recorded `pid + start-ticks + boot-id` must still describe the
+  live process. A pid alone is not identity; start-ticks repeat across reboots, so the
+  boot id travels with them.
+* **the actual server checkout HEAD**, read from the server's own cwd and compared with
+  the expected sha — his `prepare` does this and the round-two wrapper did not.
+
+`guard.py` now takes the protected inventory with **his `snapshot`** (bytes *and* mode,
+symlinks refused) instead of `find`+`sha256sum`, and the selected verification profile
+`.clj-surgeon.edn` is **inside** the protected set — in round two an arm could have
+rewritten its own verification profile without the guard noticing.
+
+**Immutable inputs are bound by sha in every receipt**, not merely selected by path: the
+frozen cell prompt (against its pinned hash, *before* composition), the composed prompt,
+the oracle executable, the oracle **manifest**, a digest over the whole **canonical**
+tree, and the verification profile. All six travel in `arm.json.immutable_inputs` and
+`attest.json`.
+
+### Diff, identity and measurement semantics
+
+* **The diff is now actually staged.** `git add -- .` then
+  `git diff --cached --binary <base>`, so new files are inside the patch and it is a
+  complete replay artifact. The untracked inventory is taken *before* staging, so both
+  facts survive. (His probe: `cached_diff_bytes` 0 → **518**, `new_file_in_diff` false →
+  **true**.)
+* **Model identity is exact.** The transcript must name **exactly one** model; that id
+  is the `resolved_model` and it must answer the requested alias. Two models is a
+  refusal. A transcript/stream disagreement about the model is now **terminal**, not a
+  recorded curiosity. `adapter-result.resolved_model` is an **actual id**, not a prose
+  pointer, with `requested_model_alias` beside it; `attest.json` carries
+  `model_requested` and `model_resolved` separately.
+* **Load is sampled, not sampled twice.** A background sampler writes
+  `load.jsonl` every 5 s with a phase label (`driver`, `freeze`, `attribution`,
+  `acceptance`). The receipt carries per-phase maxima and classifies
+  `contaminated_driver` / `contaminated_acceptance` against the ceiling — and an
+  **unsampled phase is `null`, never "clean"**.
+* **The wall means its label.** Round two computed `driver_end - adapter_start` and
+  called it prepare-through-attestation, which was false. `adapter_wall_s` now ends at
+  the attestation boundary, `adapter_load_end` is read at that same instant, and the
+  scope string says `"…excludes the acceptance oracle"`. `acceptance_wall_s` and
+  `verified_completion_wall_s` are separate measured fields, and
+  `monotonic_source` states that `/proc/uptime` is **not** interchangeable with the
+  shared adapter's `time.monotonic()` — no shared precision or calibration threshold is
+  imported without an explicit comparison policy.
+
+### What remains outside a fake caller's reach — stated plainly
+
+These 102 witnesses are preparation evidence. They are **not** GO, and the following are
+untested by construction because no model, JVM or server ran:
+
+1. **Live server readiness.** `astra_policy.attest-server` has never validated a real
+   server: no healthz bytes, no real `ready.edn`, no live pid owning a listener, no real
+   checkout HEAD. The fake suite substitutes a stub validator, so it proves the harness
+   *calls* the predicate and refuses when it says no — not that the predicate passes a
+   real server. A malformed-ready live probe has not been made.
+2. **Exact model binding.** No real transcript has been read. The uniqueness and
+   prefix checks are exercised only against synthetic transcripts.
+3. **Real acceptance.** `rescore-FAN.sh` has never run here: no `bb`, no `bin/fan-test`,
+   no 100-namespace load. Every "6/6" in this document came from a stub.
+4. **Server lifecycle under stress.** Escalation and the survivor/descendant reporting
+   are exercised by reading the code, not by killing a real JVM.
+5. **Contamination instrumentation at real load.** The sampler is proven to sample; it
+   has never watched a real arm.
+6. **Everything cross-caller.** No wall figure exists, and none may be quoted.
+
+`N-1`, run alone under a separate authorisation, is what converts items 1–5 from
+argument into evidence.

@@ -17,6 +17,18 @@ does not appear in the transcript is `model_matches_request: false` -- the arm
 is then :unverified for attribution, and the caller's own summary is never a
 counting authority for anything here.
 
+ROUND THREE, after his review.  Three things were too loose:
+
+  * model matching was a SUBSTRING test across however many models the transcript
+    happened to name.  It now requires EXACTLY ONE model in the transcript -- the
+    resolved id -- and that id must begin with the requested alias.  Two models is a
+    refusal, not a set.
+  * a stream/transcript model disagreement was recorded and tolerated.  It is now
+    TERMINAL: two witnesses that disagree about which model ran mean nobody knows.
+  * native arms proved MCP absence by not passing a URL.  With an explicitly empty
+    --mcp-config, absence is now also CHECKED: --expect-no-mcp makes any tool call
+    whose name begins `mcp__` a refusal.
+
 Writes <arm>/calls.json and <arm>/attribution.json.  Exit 0 on a bound and
 self-consistent session, 3 otherwise (never a silent zero).
 """
@@ -84,6 +96,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     for key in ("arm", "session", "run-log", "session-id", "requested-model"):
         parser.add_argument("--" + key, required=True)
+    parser.add_argument("--expect-no-mcp", action="store_true",
+                        help="native cell: any mcp__ tool call is a refusal")
     args = parser.parse_args()
 
     arm = pathlib.Path(args.arm)
@@ -98,6 +112,8 @@ def main() -> int:
                  if r.get("type") == "system" and r.get("subtype") == "init"), {})
 
     bound = session_path.is_file() and bool(session_rows)
+    mcp_calls = [c for c in s_calls if (c["name"] or "").startswith("mcp__")]
+    resolved = sorted(s_models)[0] if len(s_models) == 1 else None
     record = {
         "session_id_requested": args.session_id,
         "session_file": str(session_path),
@@ -109,8 +125,11 @@ def main() -> int:
         "session_id_matches": s_sessions == {args.session_id} if s_sessions else False,
         "requested_model": args.requested_model,
         "models_in_transcript": sorted(s_models),
-        "model_matches_request": any(args.requested_model in m or m in args.requested_model
-                                     for m in s_models),
+        "resolved_model": resolved,
+        "model_unique": len(s_models) == 1,
+        "model_matches_request": bool(resolved) and resolved.startswith(args.requested_model),
+        "mcp_tool_calls": len(mcp_calls),
+        "mcp_expected_absent": bool(args.expect_no_mcp),
         "stream_init": {"session_id": init.get("session_id"),
                         "model": init.get("model"),
                         "mcp_servers": init.get("mcp_servers"),
@@ -122,6 +141,7 @@ def main() -> int:
                        "models": sorted(r_models), "unreadable_lines": stream_bad},
             "agree_tool_call_count": len(s_calls) == len(r_calls),
             "agree_models": s_models == r_models,
+            "disagreement_is_terminal": True,
         },
     }
     (arm / "attribution.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -144,12 +164,26 @@ def main() -> int:
         print("ATTRIBUTION :unverified — transcript session ids "
               f"{sorted(s_sessions)} != requested {args.session_id}", file=sys.stderr)
         return 3
-    if not record["model_matches_request"]:
-        print(f"ATTRIBUTION :unverified — models {sorted(s_models)} do not match "
-              f"requested {args.requested_model}", file=sys.stderr)
+    if not record["model_unique"]:
+        print(f"ATTRIBUTION :unverified — transcript names {len(s_models)} models "
+              f"{sorted(s_models)}; a run has exactly one resolved model",
+              file=sys.stderr)
         return 3
-    print(f"ATTRIBUTION ok session={args.session_id} models={sorted(s_models)} "
-          f"tool_calls={len(s_calls)}")
+    if not record["model_matches_request"]:
+        print(f"ATTRIBUTION :unverified — resolved model {resolved!r} does not answer "
+              f"the requested {args.requested_model!r}", file=sys.stderr)
+        return 3
+    if r_models and s_models != r_models:
+        print(f"ATTRIBUTION :unverified — the two witnesses disagree about the model: "
+              f"transcript {sorted(s_models)} vs stream {sorted(r_models)}",
+              file=sys.stderr)
+        return 3
+    if args.expect_no_mcp and mcp_calls:
+        print(f"ATTRIBUTION :unverified — a native arm made {len(mcp_calls)} MCP tool "
+              f"call(s): {sorted({c['name'] for c in mcp_calls})}", file=sys.stderr)
+        return 3
+    print(f"ATTRIBUTION ok session={args.session_id} resolved_model={resolved} "
+          f"tool_calls={len(s_calls)} mcp_tool_calls={len(mcp_calls)}")
     return 0
 
 
