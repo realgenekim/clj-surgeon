@@ -2271,3 +2271,21 @@ context-mismatch recovery; diff computed after); (3) speculative pre-staging —
 before the pick. Condition for all three: the gate must be cheap; the mission ledger's proof profile is
 that gate. Experiment of record: five candidates from one dossier on the scope-roots mission, gate
 outside, time-to-first-verified vs one Sol arm.
+
+## 21:41Z — gpt-oss on CPU measured then deleted (Gene: "Delete ollama and anything it might have downloaded"); Groq is the path; riff sent to the pane agent
+
+Measured before deletion, ollama 0.33.3 user-space, gpt-oss:20b, dossier prompt (344 prompt tokens),
+1200 output tokens: wall 192.1 s, load 28.6 s, prompt 83 tok/s, OUTPUT 7.5 tok/s (ollama's own
+counters). Prediction was 15–30; actual 7.5 — CPU decode of a 13 GB MoE on this box is a quarter of Sol's
+remote speed. Local is not the typist. Ollama + models deleted (disk back to 75 GB free); first kill
+attempt matched my own shell via `pgrep -f 'opt/ollama'` (the self-match class again; killed by exact PID
+after). Gene: "gptoss calls already in MCP server … it's API calls … ask mayor [for auth tokens]". On this
+box the only related code is the voice remote's Groq client (Whisper transcription, key groq-api-key in
+Secret Manager / secrets/groq.edn); Groq serves gpt-oss-120b on the same OpenAI-compatible endpoint at
+~1k tok/s. No key on this seat; asked the mayor (/tmp/anvil-to-mayor.txt) for the key as a 600 file and
+for the location of the existing gpt-oss caller. Bench script staged: /var/tmp/forge/groq-oss-bench.sh
+(prints Groq's own usage/completion_time fields). Riff request to the pane agent (status line still
+gpt-5.6-luna) posted 21:40Z in /var/tmp/forge/fable-to-astra.md: three jobs (search under a cheap
+verifier; whole-file rewrite as the primitive; speculative pre-staging), condition (cheap gate), asked
+for attack, a fourth job, the falsifying experiment with predicted numbers, and the verifier bound for
+"keep everything else byte-identical".
