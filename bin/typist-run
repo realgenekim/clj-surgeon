@@ -247,6 +247,110 @@ def extract_diff(text):
     return body
 
 
+# --------------------------------------------------------------------------
+# the context-anchored hunk applier
+#
+# gpt-oss-120b (like Codex's own apply_patch format) emits hunks with a BARE
+# `@@` header and no line ranges, and sometimes omits the `diff --git` line.
+# That is a context-anchored patch, not a malformed one: the hunk locates itself
+# by its context and `-` lines rather than by line numbers. `git apply` cannot
+# read it, so the runner does — as a FALLBACK, only after git apply refuses.
+#
+# It never repairs whitespace INSIDE a line. A `+` line carrying an extra
+# leading space is written exactly as the model emitted it, and the gate and the
+# acceptance check do the judging.
+
+HUNK_HEADER = re.compile(r"^@@")
+
+
+def parse_unified(diff_text):
+    """[{:path p :hunks [[(marker, text), ...], ...]}] — `diff --git` optional,
+    hunk ranges optional. Returns None when there is no file block at all."""
+    lines = diff_text.split("\n")
+    blocks, i, n = [], 0, len(lines)
+    while i < n:
+        line = lines[i]
+        if line.startswith("--- "):
+            old = line[4:].strip()
+            if i + 1 >= n or not lines[i + 1].startswith("+++ "):
+                i += 1
+                continue
+            new = lines[i + 1][4:].strip()
+            path = new if new not in ("/dev/null", "") else old
+            for pre in ("a/", "b/"):
+                if path.startswith(pre):
+                    path = path[2:]
+            path = path.split("\t")[0].strip()
+            i += 2
+            hunks = []
+            while i < n and HUNK_HEADER.match(lines[i]):
+                i += 1
+                body = []
+                while i < n:
+                    l = lines[i]
+                    if HUNK_HEADER.match(l) or l.startswith("--- ") or \
+                       l.startswith("diff --git ") or l.startswith("```"):
+                        break
+                    if l == "":
+                        # a bare empty line inside a hunk is an empty context line
+                        body.append((" ", ""))
+                    elif l[0] in " +-":
+                        body.append((l[0], l[1:]))
+                    elif l.startswith("\\ No newline"):
+                        pass
+                    else:
+                        break
+                    i += 1
+                if body:
+                    hunks.append(body)
+            if hunks:
+                blocks.append({"path": path, "hunks": hunks})
+        else:
+            i += 1
+    return blocks or None
+
+
+def safe_path(workdir, rel):
+    full = os.path.realpath(os.path.join(workdir, rel))
+    root = os.path.realpath(workdir)
+    return full if full == root or full.startswith(root + os.sep) else None
+
+
+def apply_anchored(workdir, diff_text):
+    """Locate every hunk by VERBATIM context, require exactly one match, and
+    splice. -> (ok, detail)"""
+    blocks = parse_unified(diff_text)
+    if not blocks:
+        return False, "anchor: no file block in the response"
+    staged = {}
+    for b in blocks:
+        full = safe_path(workdir, b["path"])
+        if full is None:
+            return False, "anchor: path escapes the workspace: " + b["path"]
+        if not os.path.isfile(full):
+            return False, "anchor: no such file: " + b["path"]
+        with open(full) as fh:
+            cur = fh.read().split("\n")
+        for body in b["hunks"]:
+            old = [t for (m, t) in body if m in " -"]
+            new = [t for (m, t) in body if m in " +"]
+            if not old:
+                return False, "anchor: hunk has no context to locate it"
+            hits = [j for j in range(len(cur) - len(old) + 1)
+                    if cur[j:j + len(old)] == old]
+            if not hits:
+                return False, "anchor: no match"
+            if len(hits) > 1:
+                return False, "anchor: ambiguous (%d)" % len(hits)
+            j = hits[0]
+            cur = cur[:j] + new + cur[j + len(old):]
+        staged[full] = "\n".join(cur)
+    for full, text in staged.items():
+        with open(full, "w") as fh:
+            fh.write(text)
+    return True, "anchored: %d file block(s)" % len(blocks)
+
+
 def apply_diff(workdir, diff_text):
     """git apply --check then git apply. -> (ok, detail)
 
@@ -259,14 +363,19 @@ def apply_diff(workdir, diff_text):
     patch = os.path.join(workdir, ".typist.patch")
     with open(patch, "w") as fh:
         fh.write(diff_text)
+    git_detail = None
     for stage in (["git", "apply", "--check", "-p1", ".typist.patch"],
                   ["git", "apply", "-p1", ".typist.patch"]):
         r = subprocess.run(stage, cwd=workdir, capture_output=True, text=True)
         if r.returncode != 0:
-            os.remove(patch)
-            return False, (r.stderr or r.stdout).strip()[:400]
+            git_detail = (r.stderr or r.stdout).strip()[:200]
+            break
     os.remove(patch)
-    return True, "applied"
+    if git_detail is None:
+        return True, "applied", "git"
+    # git refused; try the context-anchored applier on the untouched tree
+    ok, detail = apply_anchored(workdir, diff_text)
+    return ok, "git refused (%s); %s" % (git_detail, detail), ("anchored" if ok else None)
 
 
 def run_gate(workdir, cmds, timeout=300):
@@ -308,11 +417,12 @@ def evaluate(cand_dir, diff_text, manifest, cmds):
     if diff_text is None:
         rec["apply_ok"] = False
         rec["apply_detail"] = "no unified diff in the response"
+        rec["applier"] = None
         rec["gate_ok"] = False
         rec["accept_ok"] = False
         return rec
-    ok, detail = apply_diff(cand_dir, diff_text)
-    rec["apply_ok"], rec["apply_detail"] = ok, detail
+    ok, detail, applier = apply_diff(cand_dir, diff_text)
+    rec["apply_ok"], rec["apply_detail"], rec["applier"] = ok, detail, applier
     if not ok:
         rec["gate_ok"] = False
         rec["accept_ok"] = False
@@ -343,6 +453,25 @@ def arm_fake(k, good, bad):
         out.append({"cand": "c%d" % i, "source": path, "text": text,
                     "response_s": time.time() - T0,
                     "tokens": None, "error": None})
+    return out
+
+
+def arm_replay(run_dir):
+    """Re-feed the RETAINED bytes of an earlier run through apply+gate+acceptance.
+    No network, no model call: the candidates are read off disk exactly as they
+    were received. This is how a protocol amendment is tested against candidates
+    that already exist, instead of buying new ones."""
+    run_dir = os.path.abspath(run_dir)
+    out = []
+    for name in sorted(os.listdir(run_dir)):
+        f = os.path.join(run_dir, name, "candidate.diff")
+        if not os.path.isfile(f):
+            continue
+        with open(f) as fh:
+            out.append({"cand": name, "source": "replay:" + f, "text": fh.read(),
+                        "response_s": 0.0, "tokens": None, "error": None})
+    if not out:
+        die("typist-run: no retained candidate.diff under %s" % run_dir, 6)
     return out
 
 
@@ -440,7 +569,10 @@ def arm_f(prompt, k, temperature=0.7):
 
 def main():
     ap = argparse.ArgumentParser(prog="typist-run", add_help=True)
-    ap.add_argument("--arm", required=True, choices=["N", "F", "fake"])
+    ap.add_argument("--arm", choices=["N", "F", "fake"])
+    ap.add_argument("--replay", metavar="RUN_DIR",
+                    help="re-run apply+gate+acceptance on the RETAINED "
+                         "candidate.diff files of an earlier run. No network.")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--k", type=int, default=None)
     ap.add_argument("--temperature", type=float, default=0.7)
@@ -448,6 +580,8 @@ def main():
     ap.add_argument("--fake-bad", default=os.path.join(HERE, "fixtures", "typist-bad.diff"))
     ap.add_argument("--rebuild-fixture", action="store_true")
     a = ap.parse_args()
+    if not a.arm and not a.replay:
+        ap.error("one of --arm or --replay is required")
 
     if shutil.which("bb") is None:
         die("typist-run: refusing — bb (babashka) is not on PATH; the gate cannot run", 5)
@@ -458,8 +592,13 @@ def main():
     manifest = materialize_fixture(force=a.rebuild_fixture)
     cmds = resolve_gate_commands()
 
-    k = a.k if a.k is not None else (1 if a.arm == "N" else 5)
-    runs = a.runs if a.arm == "N" else a.runs
+    if a.replay:
+        a.arm = a.arm or "replay"
+        runs = 1
+        k = 0
+    else:
+        k = a.k if a.k is not None else (1 if a.arm == "N" else 5)
+        runs = a.runs
 
     exit_code = 0
     for r_i in range(runs):
@@ -468,7 +607,9 @@ def main():
         RUN_DIR = os.path.join(FX, run_id)
         os.makedirs(RUN_DIR, exist_ok=True)
 
-        if a.arm == "fake":
+        if a.replay:
+            cands = arm_replay(a.replay)
+        elif a.arm == "fake":
             cands = arm_fake(k, a.fake_good, a.fake_bad)
         elif a.arm == "N":
             cands = arm_n(prompt, k)
