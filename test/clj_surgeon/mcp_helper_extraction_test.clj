@@ -40,6 +40,7 @@
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-helper-extraction :as mcp-helper]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [cheshire.core :as json]
    [clojure.java.io :as io]
@@ -1135,11 +1136,16 @@
       "wire"
       (fn [root]
         (let [receipt-dir (io/file tmp-root (str "wire-receipts-" (System/nanoTime)))
+              telemetry-dir (io/file tmp-root (str "wire-telemetry-" (System/nanoTime)))
+              telemetry-state (telemetry/start! {:mode :metrics
+                                                  :directory (str telemetry-dir)
+                                                  :session-id "helper-wire"})
               captured (atom nil)]
           (try
             (.mkdirs receipt-dir)
             (mcp-tool/init! {:project-root (str root)
                              :receipt-dir (str receipt-dir)
+                             :telemetry telemetry-state
                              :verification-profiles configured-profiles})
             (mcp-tool/handle-helper-extraction
              nil
@@ -1182,9 +1188,17 @@
                                 (str (:sites fixture/canonical-counts))]]
                   (is (str/includes? summary needle)
                       (str "the content summary omits " needle ": " summary)))))
+              (testing "the public call is present in the service telemetry"
+                (let [events (->> (str/split-lines (slurp (:file telemetry-state)))
+                                  (map #(json/parse-string % true))
+                                  (filter #(= "tool.call" (:event %))))]
+                  (is (= 1 (count events)))
+                  (is (= "helper_extraction" (:tool (first events))))
+                  (is (= true (get-in (first events) [:outcome :committed])))))
             (finally
               (mcp-tool/init! nil)
-              (delete-tree! receipt-dir))))))))
+              (delete-tree! receipt-dir)
+              (delete-tree! telemetry-dir))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the REAL wire, not a mapper fixture
