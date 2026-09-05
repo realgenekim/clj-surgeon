@@ -2306,3 +2306,26 @@ plausible diff — with a defect: every '+' line carried an extra leading space 
 ```diff fence. Versus gpt-oss-20b on this CPU (192 s): 70x. Both corrections and the defect class sent to
 the runner agent (arm F reads both fields, budgets 6000, records finish_reason length as a typed refusal,
 strips fences, never repairs whitespace — the gate judges).
+
+## 21:53Z — Gene: "what are you having astra do? I'm expecting him to work on experiments, too" → Astra assigned his own fair comparison; typist runner shakedown: 0/5 Groq candidates apply (format, not model)
+
+Honest answer given: since his four-hour program ended the pane agent had done only reviews for me
+(confirm, riff). Assigned him his own preregistered fair comparison from its named next action (fresh
+fixture → six native controls per model → interleaved tool arms), own worktree, own branch, results as a
+table, per-step lines in the coordination file; delivered via tmux paste-buffer to forge-anvil:1.0 (the
+window was renamed; send-keys -l printed "not in a mode" and typed nothing — paste-buffer + Enter works).
+The pane's status line switched to gpt-6-astra at 21:5xZ (it had read gpt-5.6-luna since ~19:5xZ).
+
+Typist runner (bridge/mission-ledger 53ba6120 → ba26d258; bin/typist-run, bin/typist-dossier.md, two
+fixtures; fake arm: good diff → apply/gate/accept ok, bad diff → gate+accept false, 0.185 s whole run;
+refusal without key = exit 4 pre-network). Live shakedowns (not data): F k=1 → 403 (UA), fixed; F k=1 →
+HTTP 200, 523 tokens (355 reasoning), 1.08 s Groq completion (483 tok/s), apply FAILED "patch with only
+garbage at line 5"; F k=5 → 0/5 apply, all finish stop, 3067 tokens total. Retained bytes show the cause:
+gpt-oss-120b emits BARE "@@" hunk headers (no ranges) and sometimes no "diff --git" line — the
+context-anchored shape of Codex's own apply_patch, which git apply rejects. Protocol amendment recorded
+BEFORE any cohort run: the applier accepts context-anchored hunks (exactly one verbatim match in the
+preimage, else refuse), git apply first, anchored fallback second, applier recorded per candidate, no
+whitespace repair; plus a --replay mode that re-judges retained candidates offline. Tool-shape finding
+for the ledger: two typists (Codex apply_patch, gpt-oss) natively speak context-anchored hunks; the
+mission ledger's accepted edit form should be that, not line-numbered unified diff. N-arm (Sol) shakedown
+running in the background.
