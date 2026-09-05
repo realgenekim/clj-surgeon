@@ -183,6 +183,169 @@ ONESITE_ACCEPT = (
     "(println \"ACCEPT-OK\"))"
 )
 
+# ---- mission 3: fanout (the SEARCH mission; multi-file, multi-hunk) ------
+#
+# Cohort 1 found a single gpt-oss-120b candidate verifying 12/12 on both of the
+# missions above, which makes k=5 unmeasurable: parallel search cannot beat a
+# ceiling already reached at k=1. This mission is deliberately harder — six
+# hunks across three files, a signature change fanned out to five call sites,
+# and TWO traps a fast typist gets wrong: the old name survives inside a
+# docstring example and inside a string literal, and must NOT be renamed.
+
+FANOUT_UTIL_CLJ = r"""(ns fixture.util
+  "Path helpers shared by the scope expander."
+  (:require [clojure.string :as str]))
+
+(defn normalize
+  "Trim a path and drop any trailing slash."
+  [p]
+  (str/replace (str/trim p) #"/+$" ""))
+"""
+
+FANOUT_SCOPE_CLJ = r"""(ns fixture.scope
+  "Scope expansion for the helper-extraction fence."
+  (:require [fixture.util :as util]))
+
+(def default-roots
+  "The roots this workspace admits when the caller names none."
+  ["src"])
+
+(defn scope-roots
+  "The admitted roots for this scope expansion."
+  []
+  default-roots)
+
+(defn expand
+  "Every admitted root plus the caller's paths, normalised, in order."
+  [paths]
+  (vec (distinct (map util/normalize (concat (scope-roots) paths)))))
+
+(defn admits?
+  "Does this scope admit the given path?"
+  [p]
+  (contains? (set (expand [])) (util/normalize p)))
+"""
+
+FANOUT_PATHS_CLJ = r"""(ns fixture.paths
+  "Path assembly built on the shared helpers."
+  (:require [clojure.string :as str]
+            [fixture.util :as util]))
+
+(def op-name
+  "The operation name reported in telemetry."
+  "normalize")
+
+(defn join
+  "Join segments into one path.
+
+  Example:
+    (normalize \"a/b/\")  ;=> \"a/b\""
+  [segs]
+  (util/normalize (str/join "/" segs)))
+
+(defn relative-to
+  "Strip the root prefix from a path."
+  [root p]
+  (let [r (util/normalize root)
+        n (util/normalize p)]
+    (if (str/starts-with? n (str r "/"))
+      (subs n (inc (count r)))
+      n)))
+
+(defn clean-all
+  "Normalise every path in the collection."
+  [paths]
+  (mapv util/normalize paths))
+"""
+
+FANOUT_TEST_CLJ = r"""(ns fixture.fanout-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [fixture.util :as util]
+            [fixture.scope :as scope]
+            [fixture.paths :as paths]))
+
+(deftest normalize-path-renamed
+  (is (= "a//b" (util/normalize-path "  a//b//  ")))
+  (is (= "" (util/normalize-path "   ")))
+  (is (nil? (resolve 'fixture.util/normalize))))
+
+(deftest strict-collapses-inner-slashes
+  (is (= "a/b" (util/normalize-path "  a//b//  " {:strict? true})))
+  (is (= "a//b" (util/normalize-path "a//b" {:strict? false})))
+  (is (= "a//b" (util/normalize-path "a//b" nil))))
+
+(deftest expand-threads-strict
+  (is (= ["src" "test"] (scope/expand ["test/"])))
+  (is (= ["src" "a//b"] (scope/expand ["a//b/"])))
+  (is (= ["src" "a/b"] (scope/expand ["a//b/"] {:strict? true}))))
+
+(deftest admits-still-works
+  (is (true? (scope/admits? "src/")))
+  (is (false? (scope/admits? "lib"))))
+
+(deftest join-threads-strict
+  (is (= "a/b" (paths/join ["a" "b/"])))
+  (is (= "a//b" (paths/join ["a" "" "b"])))
+  (is (= "a/b" (paths/join ["a" "" "b"] {:strict? true}))))
+
+(deftest relative-to-and-clean-all
+  (is (= "a/b" (paths/relative-to "src/" "src/a/b")))
+  (is (= "lib/x" (paths/relative-to "src" "lib/x")))
+  (is (= ["a" "b"] (paths/clean-all ["a/" "b//"]))))
+
+(deftest the-two-traps
+  (testing "the string literal and the docstring example keep the OLD name"
+    (is (= "normalize" paths/op-name))
+    (is (re-find #"\(normalize " (:doc (meta #'paths/join))))))
+"""
+
+FANOUT_EDN = (
+    '{:verification-profiles\n'
+    ' {"typist-fanout"\n'
+    '  {:commands [["bb" "-cp" "src:test" "-e"\n'
+    '               "(require \'clojure.test \'fixture.fanout-test)'
+    ' (let [r (clojure.test/run-tests \'fixture.fanout-test)]'
+    ' (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}\n'
+)
+
+FANOUT_SEED = {
+    "deps.edn": '{:paths ["src" "test"]}\n',
+    ".clj-surgeon.edn": FANOUT_EDN,
+    "src/fixture/util.clj": FANOUT_UTIL_CLJ,
+    "src/fixture/scope.clj": FANOUT_SCOPE_CLJ,
+    "src/fixture/paths.clj": FANOUT_PATHS_CLJ,
+    "test/fixture/fanout_test.clj": FANOUT_TEST_CLJ,
+}
+
+# Independent of the gate: requires only the three SOURCE namespaces, never
+# fixture.fanout-test. Asserts the end state, both traps, and that the old name
+# is gone from code while surviving in the docstring and the string literal.
+FANOUT_ACCEPT = r"""(require 'fixture.util 'fixture.scope 'fixture.paths)
+(let [np (resolve 'fixture.util/normalize-path)
+      ex (resolve 'fixture.scope/expand)
+      ad (resolve 'fixture.scope/admits?)
+      jn (resolve 'fixture.paths/join)
+      rl (resolve 'fixture.paths/relative-to)
+      ca (resolve 'fixture.paths/clean-all)]
+  (assert np "normalize-path resolves")
+  (assert (nil? (resolve 'fixture.util/normalize)) "the old name is gone from code")
+  (assert (= "a//b" (np "  a//b//  ")) "1-arity trims and drops trailing slashes")
+  (assert (= "" (np "   ")) "1-arity on blank")
+  (assert (= "a/b" (np "  a//b//  " {:strict? true})) ":strict? collapses inner slashes")
+  (assert (= "a//b" (np "a//b" nil)) "nil opts is lenient")
+  (assert (= ["src" "test"] (ex ["test/"])) "expand 1-arity unchanged")
+  (assert (= ["src" "a//b"] (ex ["a//b/"])) "expand lenient by default")
+  (assert (= ["src" "a/b"] (ex ["a//b/"] {:strict? true})) "expand threads :strict?")
+  (assert (true? (ad "src/")) "admits? still works")
+  (assert (= "a/b" (jn ["a" "b/"])) "join 1-arity")
+  (assert (= "a//b" (jn ["a" "" "b"])) "join lenient by default")
+  (assert (= "a/b" (jn ["a" "" "b"] {:strict? true})) "join threads :strict?")
+  (assert (= "a/b" (rl "src/" "src/a/b")) "relative-to")
+  (assert (= ["a" "b"] (ca ["a/" "b//"])) "clean-all")
+  (assert (= "normalize" @(resolve 'fixture.paths/op-name)) "TRAP: string literal intact")
+  (assert (re-find #"\(normalize " (:doc (meta jn))) "TRAP: docstring example intact")
+  (println "ACCEPT-OK"))"""
+
 MISSIONS = {
     "scope-roots": {
         "dossier": os.path.join(HERE, "typist-dossier.md"),
@@ -201,6 +364,17 @@ MISSIONS = {
         "mutable": "src/fixture/util.clj",
         "accept_expr": ONESITE_ACCEPT,
         "accept_desc": "independent behavioural witness (fixture.util only) + preimage byte identity",
+    },
+    "fanout": {
+        "dossier": os.path.join(HERE, "typist-dossier-fanout.md"),
+        "preimage": os.path.join(FX, "fixture-preimage-fanout"),
+        "seed": FANOUT_SEED,
+        "profile": "typist-fanout",
+        "mutable": ["src/fixture/util.clj", "src/fixture/scope.clj",
+                    "src/fixture/paths.clj"],
+        "accept_expr": FANOUT_ACCEPT,
+        "accept_desc": ("independent behavioural witness (fixture.util/scope/paths only, "
+                        "never the gate's test ns) + both traps + preimage byte identity"),
     },
 }
 
@@ -226,7 +400,8 @@ def select_mission(name, dossier=None, fixture=None):
     PREIMAGE = os.path.abspath(fixture) if fixture else m["preimage"]
     MANIFEST = PREIMAGE + ".manifest.edn"
     PROFILE = m["profile"]
-    MUTABLE = m["mutable"]
+    mut = m["mutable"]
+    MUTABLE = list(mut) if isinstance(mut, (list, tuple)) else [mut]
     ACCEPT_EXPR = m["accept_expr"]
     return m
 
@@ -515,17 +690,19 @@ def run_acceptance(workdir, manifest, timeout=300):
     added = sorted(set(now) - set(manifest))
     removed = sorted(set(manifest) - set(now))
     changed = sorted(k for k in now if k in manifest and now[k] != manifest[k])
-    illegal = [k for k in changed if k != MUTABLE] + added + removed
+    illegal = [k for k in changed if k not in MUTABLE] + added + removed
     if illegal:
         return False, "files outside the mission changed: " + ",".join(illegal[:6])
-    if MUTABLE not in changed:
-        return False, "the authorized file %s is byte-identical to the preimage" % MUTABLE
+    untouched = [f for f in MUTABLE if f not in changed]
+    if untouched:
+        return False, ("authorized file(s) byte-identical to the preimage: %s"
+                       % ",".join(untouched))
     r = subprocess.run(["bb", "-cp", "src", "-e", ACCEPT_EXPR], cwd=workdir,
                        capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0 or "ACCEPT-OK" not in r.stdout:
         tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
         return False, "behaviour: " + (" | ".join(tail[-3:])[:300] or "no ACCEPT-OK")
-    return True, "behaviour ok; only %s changed" % MUTABLE
+    return True, "behaviour ok; only %s changed" % ",".join(MUTABLE)
 
 
 def evaluate(cand_dir, diff_text, manifest, cmds):
