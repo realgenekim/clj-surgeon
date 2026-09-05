@@ -1918,3 +1918,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 01:24Z suite spike r5 built (01ec667c): four blockers closed; `make landing-gate` exists (battery-fresh → mcp-test → test-bb → hygiene); the spawn ledger refused eleven fast/integration spawns a pid diff could not see; the battery failed under four-core pinning on the census pool-size test (pre-existing; CI-fixes carries the assertion fix) and the tripwire refused the tip — as designed.
 
 ## 01:43Z Gene: "Tests need to be faster. Integrate the 2.5m changes immediately." Suite landing (01ec667c) chained behind the integration landing; priority reconciled with Astra in writing (one bounded runtime inside his window; all else held; no unannounced restarts). Opus harness: Astra NO-GO, held.
+
+## 01:52Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 203  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 01:48Z load 0.94 ; === rc 0 end 01:52Z)
