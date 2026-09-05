@@ -31,7 +31,10 @@
                                          and the profile produced onto the
                                          receipt
     `(mcp-helper/plan request)`          reads a real tree under
-                                         `workspace_root` and plans"
+                                         `workspace_root` and plans
+    The boundary adds one refusal the planner cannot reach:
+    `helper-extraction-verification-preflight-unavailable`, because a
+    profile's capability is a fact about the registry, not about a request"
   {:lane :excluded}
   (:require
    [clj-surgeon.helper-extraction-fixture :as fixture]
@@ -182,6 +185,35 @@
                 (and (:synchronous? profile) (:rollback-capable? profile)))
               (vals (mcp-helper/admitted-profiles)))
       "capability is validated BEFORE writing, not discovered afterwards"))
+
+;; @spec MCP-OP-HELPER-011
+;; @spec MCP-OP-HELPER-016
+(deftest a-profile-that-cannot-run-refuses-before-anything-is-staged
+  (testing "THE BOUNDARY OWNS THIS REFUSAL. The pure planner treats
+            `verification.profile` as an opaque string; whether a named
+            profile exists, is synchronous and is rollback-capable is a fact
+            about the registry above, which is why
+            `helper-extraction-test/the-declared-refusal-set-is-complete`
+            deliberately does not expect the planner to emit it."
+    (let [result (mcp-helper/plan
+                  (fixture/request {:verification {:profile "no-such-profile"}}))]
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "helper-extraction-verification-preflight-unavailable"
+             (:error_type result)))
+      (is (= "no-such-profile" (:profile result)))
+      (is (true? (:source_unchanged result)))
+      (is (nil? (get-in result [:plan :transactions])) "nothing staged")
+      (is (nil? (:next_call result))
+          "MCP-OP-HELPER-016: a weaker profile is never suggested")))
+  (testing "and an admitted profile is NOT refused: the check is capability,
+            not a blanket rejection"
+    (let [named (first (keys (mcp-helper/admitted-profiles)))
+          result (mcp-helper/plan
+                  (fixture/request {:verification {:profile named}}))]
+      (is (not= "helper-extraction-verification-preflight-unavailable"
+                (:error_type result))
+          (str "profile " (pr-str named) " is in admitted-profiles and must
+                pass preflight")))))
 ;; ---------------------------------------------------------------------------
 ;; the terminal-receipt MAPPER
 ;;

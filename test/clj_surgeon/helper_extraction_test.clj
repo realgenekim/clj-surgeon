@@ -398,9 +398,107 @@
         tree (extracted-tree plan)]
     (is (= (:alias-histogram fixture/canonical-counts)
            (into (sorted-map) (get-in plan [:receipt :alias_histogram]))))
-    (testing "m04 binds a local named `response`, so `resp` is chosen"
-      (is (= "resp" (:alias (entry-for plan "src/acid/app/m04.clj"))))
-      (is (= (canonical "src/acid/app/m04.clj") (get tree "src/acid/app/m04.clj"))))))
+    (testing "m04 binds a LOCAL named `response` and still gets `response`"
+      (is (= "response" (:alias (entry-for plan "src/acid/app/m04.clj")))
+          "a `let` local can never shadow a namespace qualifier: the symbol in
+           `response/html-response` is QUALIFIED and resolves through the ns
+           alias map, while the local lives in lexical scope. Treating it as a
+           collision would burn a policy entry for nothing. Doctrine and
+           reasoning: alias-migration/ns-bound-names. A top-level def named
+           `response` would not collide either, for the same reason.")
+      (is (= (canonical "src/acid/app/m04.clj") (get tree "src/acid/app/m04.clj"))))
+    (testing "m09 binds an existing require ALIAS named `response`, which IS a
+              collision, so the second policy entry is chosen"
+      (is (= "resp" (:alias (entry-for plan "src/acid/app/m09.clj"))))
+      (is (= (canonical "src/acid/app/m09.clj") (get tree "src/acid/app/m09.clj")))
+      (is (str/includes? (get tree "src/acid/app/m09.clj")
+                         "[acid.web.alt :as response]")
+          "and the alias that collided keeps its own binding untouched"))))
+
+;; @spec MCP-OP-HELPER-006
+(deftest a-caller-that-refers-a-retained-name-it-never-uses-is-mixed
+  (testing "x21's ns form `:refer`s the retained `parse-json-body` and no site
+            uses it. The binding is still live in the ns form, so the old
+            require cannot be replaced: the file is MIXED, never moved-only."
+    (let [plan (plan-of :happy)
+          entry (entry-for plan "src/acid/app/x21.clj")
+          tree (extracted-tree plan)
+          after (get tree "src/acid/app/x21.clj")]
+      (is (some? entry))
+      (is (= "mixed" (:partition entry))
+          "an unused refer of a retained name is not an absence of one")
+      (is (str/includes? after "[acid.web.http :as http :refer [parse-json-body]]")
+          "the old require survives byte-for-byte, unused refer and all")
+      (is (str/includes? after "[acid.web.response :as response]")
+          "and exactly one new require is added")
+      (is (= (canonical "src/acid/app/x21.clj") after)))))
+
+;; @spec MCP-OP-HELPER-005
+(deftest a-shadowed-binding-is-rewritten-by-SCOPE-not-by-spelling
+  (testing "Astra's executed lexical counterexamples. Each file `:refer`s the
+            selected helper `plain-not-found` and then shadows that name, so a
+            rewrite driven by the symbol's spelling corrupts the file while one
+            driven by binding scope does not."
+    (let [plan (helper/plan (fixture/request) (fixture/sources :lexical))]
+      (is (:ok plan) (pr-str plan))
+      (let [pre (into {} (keep (fn [{:keys [file pre]}] (when pre [file pre])))
+                      (fixture/files :lexical))
+            tree (reduce (fn [acc {:keys [file edits]}]
+                           (assoc acc file (apply-edits (get acc file) edits)))
+                         pre
+                         (plan-files plan))
+            canonical-of (fn [file]
+                           (some #(when (= file (:file %)) (:post %))
+                                 (fixture/files :lexical)))]
+        (testing "(let [h (h)] h) -- the INITIALIZER is the site"
+          (is (= (canonical-of "src/acid/app/l01.clj")
+                 (get tree "src/acid/app/l01.clj")))
+          (is (str/includes? (get tree "src/acid/app/l01.clj")
+                             "(let [plain-not-found (response/plain-not-found)]")
+              "the local's declaration stays bare and its initializer moves")
+          (is (str/includes? (get tree "src/acid/app/l01.clj")
+                             "\n    plain-not-found))")
+              "and the body occurrence is the LOCAL, so it is untouched"))
+        (testing "(let [x (h) h 4] x) -- the first initializer is the site"
+          (is (= (canonical-of "src/acid/app/l02.clj")
+                 (get tree "src/acid/app/l02.clj")))
+          (is (str/includes? (get tree "src/acid/app/l02.clj")
+                             "(response/plain-not-found)")
+              "the initializer runs before the later binding exists")
+          (is (str/includes? (get tree "src/acid/app/l02.clj")
+                             "plain-not-found 4")
+              "and the later binding is a shadow, not a site"))
+        (testing "(defn f ([] (h)) ([h] h)) -- one arity only"
+          (is (= (canonical-of "src/acid/app/l03.clj")
+                 (get tree "src/acid/app/l03.clj")))
+          (is (str/includes? (get tree "src/acid/app/l03.clj")
+                             "([] (response/plain-not-found))"))
+          (is (str/includes? (get tree "src/acid/app/l03.clj")
+                             "([plain-not-found] plain-not-found)")
+              "the arity that binds the name as a parameter is untouched"))))))
+
+;; @spec MCP-OP-HELPER-005
+;; @spec MCP-OP-HELPER-018
+(deftest a-moved-body-that-needs-an-import-carries-it-or-refuses
+  (testing "`with-etag` calls `UUID/fromString`, and `UUID` is bound by the
+            SOURCE ns form's `(:import (java.util UUID))`. Moving the body
+            without the import produces a destination that does not compile.
+            Either answer is admissible; silently dropping the import is not."
+    (let [plan (helper/plan (fixture/request) (fixture/sources :import))]
+      (if (:ok plan)
+        (let [destination (:source (plan-destination plan))]
+          (is (str/includes? destination "UUID")
+              "the destination still names the class")
+          (is (str/includes? destination ":import")
+              "so its ns form must carry the import: a plan that returns ok
+               with a destination lacking it FAILS this witness")
+          (is (str/includes? destination "java.util")))
+        (do
+          (is (false? (:ok plan)))
+          (is (string? (:error_type plan))
+              "or it is a TYPED refusal naming what it could not carry")
+          (is (str/starts-with? (str (:error_type plan)) "helper-extraction-"))
+          (is (nil? (:next_call plan))))))))
 
 ;; @spec MCP-OP-HELPER-007
 (deftest a-caller-that-binds-every-policy-entry-refuses
@@ -485,16 +583,13 @@
         (is (nil? (plan-transactions plan))
             "a refusal before staging plans no write")))))
 
-;; @spec MCP-OP-HELPER-011
-(deftest a-profile-that-cannot-run-refuses-before-anything-is-staged
-  (let [plan (plan-of :happy {:verification {:profile "no-such-profile"}})]
-    (is (refused? plan "helper-extraction-verification-preflight-unavailable")
-        (pr-str plan))
-    (is (= "no-such-profile" (:profile plan)))
-    (is (true? (:source_unchanged plan)))
-    (is (nil? (plan-transactions plan)) "nothing staged")
-    (is (nil? (:next_call plan))
-        "MCP-OP-HELPER-016: a weaker profile is never suggested")))
+
+;; MCP-OP-HELPER-011 (`verification-preflight-unavailable`) is NOT witnessed
+;; here. The pure planner treats `verification.profile` as an OPAQUE string:
+;; whether a named profile exists, is synchronous and is rollback-capable is a
+;; fact about the boundary's registry, not about a request and some sources.
+;; `mcp-helper-extraction-test` owns that refusal and the admitted-profile set.
+
 ;; ---------------------------------------------------------------------------
 ;; the receipt
 
@@ -527,9 +622,12 @@
 ;; the refusal matrix: each type exactly once, none of them a continuation
 
 (def refusal-matrix
-  "Every v1 refusal type, mapped to the ONE fixture that produces it. The map
-  is the exactly-once proof: a duplicated key cannot exist, and a type with no
-  entry fails `the-declared-refusal-set-is-complete`."
+  "Every refusal type THE PURE PLANNER can reach, mapped to the ONE fixture
+  that produces it. The map is the exactly-once proof: a duplicated key cannot
+  exist, and a type with no entry fails `the-declared-refusal-set-is-complete`.
+
+  `helper-extraction-verification-preflight-unavailable` is deliberately
+  absent: a profile's capability is the boundary's fact, not the planner's."
   {"helper-extraction-ambiguous-owner"       #(plan-of :ambiguous-owner)
    "helper-extraction-private-dependency"    #(plan-of :private-dependency)
    "helper-extraction-retained-dependency"   #(plan-of :retained-dependency-direct)
@@ -540,8 +638,6 @@
    "helper-extraction-caller-outside-scope"  #(plan-of :caller-outside-scope)
    "helper-extraction-target-exists"         #(plan-of :target-exists)
    "helper-extraction-expect-mismatch"       #(plan-of :happy {:expect {:caller_files 99}})
-   "helper-extraction-verification-preflight-unavailable"
-   #(plan-of :happy {:verification {:profile "no-such-profile"}})
    "helper-extraction-unknown-field"
    #(plan-of :happy {:caller_files [{:file "src/acid/app/m01.clj"}]})})
 

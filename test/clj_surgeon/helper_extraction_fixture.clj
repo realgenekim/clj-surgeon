@@ -70,28 +70,52 @@
 ;; rendering: one description, two sources
 
 (defn- ns-form
-  [namespace-name requires]
-  (if (seq requires)
+  [namespace-name requires imports]
+  (if (or (seq requires) (seq imports))
     (str "(ns " namespace-name "\n"
-         "  (:require\n"
-         (str/join "\n" (map #(str "   " %) requires))
-         "))\n")
+         (when (seq requires)
+           (str "  (:require\n"
+                (str/join "\n" (map #(str "   " %) requires))
+                ")"))
+         (when (seq imports)
+           (str (when (seq requires) "\n")
+                "  (:import\n"
+                (str/join "\n" (map #(str "   " %) imports))
+                ")"))
+         ")\n")
     (str "(ns " namespace-name ")\n")))
 
 (defn- render
   "PRE and POST for one file spec. A spec with no `:requires-post` and no
   `:body-post` is invariant under the extraction and renders POST = PRE."
-  [{:keys [ns requires-pre requires-post body-pre body-post]}]
-  (let [pre (when body-pre (str (ns-form ns requires-pre) "\n" body-pre))]
+  [{:keys [ns requires-pre requires-post imports-pre imports-post
+           body-pre body-post]}]
+  (let [pre (when body-pre
+              (str (ns-form ns requires-pre imports-pre) "\n" body-pre))]
     {:pre pre
      :post (if (or requires-post body-post)
-             (str (ns-form ns (or requires-post requires-pre)) "\n"
+             (str (ns-form ns
+                           (or requires-post requires-pre)
+                           (or imports-post imports-pre))
+                  "\n"
                   (or body-post body-pre))
              pre)}))
 
 (defn- pad
   [i]
   (format "%02d" i))
+
+(def success-variants
+  "Variants whose plan SUCCEEDS, and which therefore have a canonical POST.
+  Every other variant is a fixture for one typed refusal: a refusal writes no
+  bytes, so there is no post-state to compare against and `:post` is nil.
+  `:import` is deliberately NOT here -- its contract is `carry the import OR
+  refuse`, so the fixture describes no single canonical answer for it."
+  #{:happy :lexical})
+
+(defn- success-variant?
+  [variant]
+  (contains? success-variants variant))
 
 ;; ---------------------------------------------------------------------------
 ;; the source namespace, acid.web.http
@@ -116,6 +140,14 @@
                          (str "(defn with-etag\n"
                               "  [response etag]\n"
                               "  (assoc-in response [:headers \"etag\"] (strong-etag etag)))\n")
+                         ;; a MOVED body that depends on an :import of the
+                         ;; SOURCE ns form -- the destination needs that import
+                         ;; or the move does not compile
+                         :import
+                         (str "(defn with-etag\n"
+                              "  [response etag]\n"
+                              "  (assoc-in response [:headers \"etag\"]\n"
+                              "            (str (UUID/fromString etag))))\n")
                          (str "(defn with-etag\n"
                               "  [response etag]\n"
                               "  (assoc-in response [:headers \"etag\"] etag))\n"))
@@ -210,11 +242,12 @@
      :retained-sites 0
      :protected []
      :requires-pre (source-requires variant)
+     :imports-pre (when (= variant :import) ["(java.util UUID)"])
      :body-pre (str/join "\n" (map :text owners))
-     :requires-post (when (= variant :happy)
+     :requires-post (when (success-variant? variant)
                       (conj (source-requires variant)
                             (str "[" dest-lib " :as response]")))
-     :body-post (when (= variant :happy)
+     :body-post (when (success-variant? variant)
                   (str/join "\n" (map #(or (:text-post %) (:text %))
                                       (remove :selected? owners))))}))
 
@@ -222,7 +255,7 @@
   "The canonical destination. Rendered for :happy only; every other variant
   refuses and therefore creates no destination at all."
   [variant]
-  (when (= variant :happy)
+  (when (success-variant? variant)
     (let [owners (filter :selected? (source-owners variant))]
       {:file dest-file
        :ns dest-lib
@@ -402,19 +435,27 @@
         "  [to]\n"
         "  (response/see-other to))\n")})
 
-(def ^:private alias-collision-caller
-  "m04: binds a local named `response`, so the first alias-policy entry
-  collides and the second (`resp`) is chosen (MCP-OP-HELPER-007)."
+(def ^:private lexical-local-caller
+  "m04: binds a LOCAL named `response` and still gets the alias `response`.
+
+  This is the repository's doctrine, not a policy choice, and
+  `alias-migration/ns-bound-names` states why: a qualified symbol's namespace
+  part is resolved through the ns alias map, while a `let`, `loop`, `fn`
+  parameter or destructured name lives in lexical scope and can never shadow a
+  qualifier. `(let [response 1] (response/html-response x))` is unambiguous.
+  A TOP-LEVEL DEF named `response` would not collide either, for the same
+  reason: `response` alone reads the var, `response/x` reads through the alias.
+  The real collision case is `alias-collision-caller` below."
   {:file "src/acid/app/m04.clj"
    :ns "acid.app.m04"
    :partition :moved-only
-   :alias "resp"
+   :alias "response"
    :sites 2
    :retained-sites 0
-   :collided ["response"]
+   :collided []
    :protected ["(assoc response :wrapped true)"]
    :requires-pre [(str "[" source-lib " :as http]")]
-   :requires-post [(str "[" dest-lib " :as resp]")]
+   :requires-post [(str "[" dest-lib " :as response]")]
    :body-pre
    (str "(defn wrap\n"
         "  [body]\n"
@@ -427,12 +468,70 @@
    :body-post
    (str "(defn wrap\n"
         "  [body]\n"
-        "  (let [response (resp/html-response body \"e04\")]\n"
+        "  (let [response (response/html-response body \"e04\")]\n"
         "    (assoc response :wrapped true)))\n"
         "\n"
         "(defn away\n"
         "  [to]\n"
+        "  (response/see-other to))\n")})
+
+(def ^:private alias-collision-caller
+  "m09: an existing REQUIRE ALIAS named `response`, which is a real collision
+  because it lives in the ns alias map. The first policy entry is unavailable,
+  so `resp` is chosen (MCP-OP-HELPER-007)."
+  {:file "src/acid/app/m09.clj"
+   :ns "acid.app.m09"
+   :partition :moved-only
+   :alias "resp"
+   :sites 2
+   :retained-sites 0
+   :collided ["response"]
+   :protected ["[acid.web.alt :as response]" "(response/other body)"]
+   :requires-pre [(str "[" source-lib " :as http]")
+                  "[acid.web.alt :as response]"]
+   :requires-post [(str "[" dest-lib " :as resp]")
+                   "[acid.web.alt :as response]"]
+   :body-pre
+   (str "(defn wrap\n"
+        "  [body]\n"
+        "  [(http/html-response body \"e09\") (response/other body)])\n"
+        "\n"
+        "(defn away\n"
+        "  [to]\n"
+        "  (http/see-other to))\n")
+   :body-post
+   (str "(defn wrap\n"
+        "  [body]\n"
+        "  [(resp/html-response body \"e09\") (response/other body)])\n"
+        "\n"
+        "(defn away\n"
+        "  [to]\n"
         "  (resp/see-other to))\n")})
+
+(def ^:private unused-refer-caller
+  "x21: its ns form :refers a RETAINED name it never uses.
+
+  The binding is live in the ns form even though no site uses it, so the old
+  require cannot be replaced and the file is MIXED, never moved-only. The
+  unused `:refer` survives byte-for-byte."
+  {:file "src/acid/app/x21.clj"
+   :ns "acid.app.x21"
+   :partition :mixed
+   :alias "response"
+   :sites 1
+   :retained-sites 0
+   :protected [":refer [parse-json-body]"]
+   :requires-pre [(str "[" source-lib " :as http :refer [parse-json-body]]")]
+   :requires-post [(str "[" source-lib " :as http :refer [parse-json-body]]")
+                   (str "[" dest-lib " :as response]")]
+   :body-pre
+   (str "(defn encode-21\n"
+        "  [request]\n"
+        "  (http/json-response request))\n")
+   :body-post
+   (str "(defn encode-21\n"
+        "  [request]\n"
+        "  (response/json-response request))\n")})
 
 (def ^:private qualified-only-caller
   "fq01: uses a selected helper fully qualified and does NOT require the
@@ -465,7 +564,13 @@
 
 (def ^:private support-specs
   "Namespaces the corpus needs that are not callers of the source."
-  [{:file "src/acid/web/codec.clj"
+  [{:file "src/acid/web/alt.clj"
+    :ns "acid.web.alt"
+    :partition :support
+    :alias nil :sites 0 :retained-sites 0 :protected []
+    :requires-pre nil
+    :body-pre "(defn other\n  [x]\n  x)\n"}
+   {:file "src/acid/web/codec.clj"
     :ns "acid.web.codec"
     :partition :support
     :alias nil :sites 0 :retained-sites 0 :protected []
@@ -476,6 +581,61 @@
 
 ;; ---------------------------------------------------------------------------
 ;; the per-variant refusal callers
+
+(defn- lexical-caller
+  "One of Astra's executed lexical counterexamples. Each `:refer`s the selected
+  helper `plain-not-found` and then SHADOWS that name in lexical scope, so the
+  rewrite must follow binding scope rather than the symbol's spelling."
+  [n body-pre body-post]
+  {:file (str "src/acid/app/l" n ".clj")
+   :ns (str "acid.app.l" n)
+   :partition :moved-only
+   :alias "response"
+   :sites 1
+   :retained-sites 0
+   :protected []
+   :requires-pre [(str "[" source-lib " :refer [plain-not-found]]")]
+   :requires-post [(str "[" dest-lib " :as response]")]
+   :body-pre body-pre
+   :body-post body-post})
+
+(def ^:private lexical-caller-specs
+  "The shadowing cases live in their own variant so the happy counts stay put."
+  [(lexical-caller
+    "01"
+    ;; the local's own INITIALIZER is the site; the declaration and the body
+    ;; occurrence are the local, and stay bare
+    (str "(defn shadowed-by-its-own-initializer\n"
+         "  []\n"
+         "  (let [plain-not-found (plain-not-found)]\n"
+         "    plain-not-found))\n")
+    (str "(defn shadowed-by-its-own-initializer\n"
+         "  []\n"
+         "  (let [plain-not-found (response/plain-not-found)]\n"
+         "    plain-not-found))\n"))
+   (lexical-caller
+    "02"
+    ;; the first initializer runs BEFORE the later binding exists, so it is a
+    ;; site; the later binding shadows the refer from that point on
+    (str "(defn shadowed-by-a-later-binding\n"
+         "  []\n"
+         "  (let [x (plain-not-found)\n"
+         "        plain-not-found 4]\n"
+         "    x))\n")
+    (str "(defn shadowed-by-a-later-binding\n"
+         "  []\n"
+         "  (let [x (response/plain-not-found)\n"
+         "        plain-not-found 4]\n"
+         "    x))\n"))
+   (lexical-caller
+    "03"
+    ;; one arity refers to the helper, the other binds the name as a parameter
+    (str "(defn shadowed-in-one-arity-only\n"
+         "  ([] (plain-not-found))\n"
+         "  ([plain-not-found] plain-not-found))\n")
+    (str "(defn shadowed-in-one-arity-only\n"
+         "  ([] (response/plain-not-found))\n"
+         "  ([plain-not-found] plain-not-found))\n"))])
 
 (def ^:private prefix-list-caller
   "Binds the source through a prefix list: grammar v1 does not close over."
@@ -519,10 +679,9 @@
    :body-pre (str "(defn one\n  [body]\n  (http/html-response body \"ae\"))\n")})
 
 (def ^:private alias-exhausted-support-specs
-  [{:file "src/acid/web/alt.clj" :ns "acid.web.alt" :partition :support
-    :alias nil :sites 0 :retained-sites 0 :protected []
-    :requires-pre nil :body-pre "(defn other\n  [x]\n  x)\n"}
-   {:file "src/acid/web/alt2.clj" :ns "acid.web.alt2" :partition :support
+  "`acid.web.alt` is already a shared support (m09 binds it); this variant only
+  adds the second one it needs to exhaust the policy."
+  [{:file "src/acid/web/alt2.clj" :ns "acid.web.alt2" :partition :support
     :alias nil :sites 0 :retained-sites 0 :protected []
     :requires-pre nil :body-pre "(defn other\n  [x]\n  x)\n"}])
 
@@ -598,9 +757,10 @@
   1 qualified-only, 3 untouched."
   (vec (sort-by :file
                 (concat generated-moved-only
-                        [refer-caller first-class-caller alias-collision-caller]
+                        [refer-caller first-class-caller
+                         lexical-local-caller alias-collision-caller]
                         generated-mixed
-                        [qualified-only-caller]
+                        [unused-refer-caller qualified-only-caller]
                         generated-untouched))))
 
 ;; ---------------------------------------------------------------------------
@@ -618,6 +778,7 @@
                 :caller-outside-scope [outside-scope-caller]
                 :target-exists [occupied-destination-spec]
                 :retained-dependency-chain [chain-third-caller]
+                :lexical lexical-caller-specs
                 [])
         base (concat [(source-spec variant)]
                      (when-let [d (destination-spec variant)] [d])
@@ -634,7 +795,7 @@
   [variant]
   (mapv (fn [spec]
           (let [{:keys [pre post]} (render spec)
-                happy? (= variant :happy)]
+                happy? (success-variant? variant)]
             {:file (:file spec)
              :pre pre
              :post (when happy? post)
@@ -652,7 +813,7 @@
   because it does not exist yet."
   [variant]
   (into []
-        (comp (remove #(and (= :happy variant) (= dest-file (:file %))))
+        (comp (remove #(and (success-variant? variant) (= dest-file (:file %))))
               (map (fn [{:keys [file pre]}] {:file file :source pre})))
         (files variant)))
 
