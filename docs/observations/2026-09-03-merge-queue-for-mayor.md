@@ -71,3 +71,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **03:53Z LANDED 68f24f51** — candidate 0305: flip (bridge/test-default-fast 1fe16056), ISO-007 override (bridge/iso007-fence-override 322a63f1 incl. :pass receipt), Astra binding series c188d5a3/e6808fca/40e5fa5a, collector 29b8466d. Rows FLIP/ISO007/ASTRA-BINDING/COLLECTOR: LANDED. Servers on 2209c61e.
 
 - **04:53Z LANDED 6ef3de2b** — bridge/test-owns-recovery-battery (ADMIT-150; recovery battery back in the default recipe). Battery ledger has a :pass receipt with zero skips. Servers on fbd68a1c.
+
+- **06:44Z HELPER_EXTRACTION** — bridge/helper-extraction-impl: candidate ee03b49a = real public one-call success (Astra, 406-byte request, 30 files, proof pass) but Sol fence r1 NO-GO (11 findings, 1 critical rollback gap). Round 3 fixes + witnesses in flight; re-freeze as new sha; landing only after fence GO + Astra public proof on the new sha. Never lands without battery-fresh.
