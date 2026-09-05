@@ -1,3 +1,19 @@
+> WITHDRAWN AS A SCORED COHORT — Astra audit, 2026-09-05T22:10:55.577460+00:00
+>
+> The table below is historical smoke output, not accepted preregistered controls.
+> The runners stopped their clocks BEFORE external acceptance and AFTER server startup;
+> did not attest resolved models, sessions, server identity, prompt/runner hashes;
+> retained output tails rather than complete rollouts; ran modifiable in-fixture
+> acceptance with loading/marker checks and no behavioral assertions; omitted CPU
+> pinning/suite lanes and interrupted attempts. The p90 calculation used floor indexing.
+> Thus 6/6 below means only that the weak local check exited zero. All 12 native
+> controls must be rerun with the registered meter. No speed ratio is established.
+>
+> The assertion that only `fast` is admitted was also unverified. Source inspection
+> shows workspace-configured synchronous external argv profiles are admitted; naming
+> `fast` alone does not configure proof. Epoch 2 will configure and hand-drive an
+> actual behavioral command before model trials. Prior artifacts remain retained.
+
 # Astra fair comparison result — 2026-09-05
 
 | arm | runs | median wall | p90 wall | correct? |
