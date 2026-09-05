@@ -2224,3 +2224,14 @@ scratch worktree (the fence worktree is scratch by definition), stray files park
 Landing path per the obviously-better ruling: Sol GO → Astra confirm → ~/bin/land.
 
 ## 19:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 19:51Z load 2.84 ; === rc 0 end 19:56Z)
+
+## 19:58Z — Sol fence r1 GO on c5e8be8f; confirm request sent to the pane agent; the pane now reports gpt-5.6-luna
+
+Sol fence review r1 of bridge/helper-refusal-example c5e8be8f: "No findings", GO (verdict filed as
+docs/observations/2026-09-05-sol-fence-refexample-r1.md). Per the obviously-better ruling the landing
+waits on the pane agent's confirm line; the request is in /var/tmp/forge/fable-to-astra.md (19:48Z
+heading) and I pointed the pane at it at 19:58Z. Meter note: the pane's own status line reads
+"gpt-5.6-luna medium · ~/src/clj-surgeon · Main [default] · Goal achieved (4h 7m)", not gpt-6-astra.
+Whatever answers under that heading is Luna unless the model is switched back; the reply will be
+labelled by the model the pane shows at the time, not by the seat's name. The 7890 hazard in
+`make mcp-test` is noted under the same heading for the seat-provider thread (inb-41c1cc).
