@@ -2253,3 +2253,21 @@ seven guessing round trips on request shape now end at the first refusal, which 
 ## 20:22Z — local install refreshed to 13c12401: CLI ~/bin/clj-surgeon + Codex/Claude skills from fe41adab (= 13c12401 + records; receipts in place); servers 7906/8171 restarted from their own worktrees at 13c12401 (`clojure -X:clj-surgeon/mcp :port N :nrepl-port :none :telemetry :full`, logs /var/tmp/forge/srvN.log). install-agent-routing not run (managed prompt blocks are a doctrine change, not an install).
 
 ## 20:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 20:48Z load 1.17 ; === rc 0 end 20:53Z)
+
+## 21:34Z — Gene: "Spark is too flaky and unpredictable; let's explore Using gptoss for the need" + "See if there's a legit job to be done for insanely fast typer."
+
+Spark retired from the harness (per-model limit killed 3/3 arms; probe at 21:2xZ still refused until
+23:37Z). Anvil has no GPU, no ollama, no llama.cpp; 16 EPYC Genoa cores (AVX-512), 30 GB RAM, root
+volume 12% remaining. Codex CLI carries `--oss` (ollama/lmstudio provider), so the harness is unchanged.
+Started a user-space ollama install (~/opt/ollama, port 11434 free) to MEASURE gpt-oss-20b on CPU;
+expectation stated before measuring: 15–30 tok/s (3.6B active params) — the predictable typist, not the
+fast one. The fast tier is hosted gpt-oss-120b (~1k tok/s, pennies/Mtok, metered key = Gene's call).
+
+Position given to Gene on the legit job: not "type my patch faster" (typing is ≤1/5 of a single arm's
+wall; a typist that errs 3x with a 150 s gate loses). Three jobs that only exist at insane speed:
+(1) search under a cheap verifier — N candidates per dossier, ms-scale proof profile as judge;
+(2) whole-file rewrite as the edit primitive (a 500-line file in ~4 s; no line-anchored patch, no
+context-mismatch recovery; diff computed after); (3) speculative pre-staging — type all plan options
+before the pick. Condition for all three: the gate must be cheap; the mission ledger's proof profile is
+that gate. Experiment of record: five candidates from one dossier on the scope-roots mission, gate
+outside, time-to-first-verified vs one Sol arm.
