@@ -290,6 +290,12 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
   needed for judgment or an edit; a metadata-only read must not cause a second
   call for source. `outline` already omits form bodies: do not add
   `include_source` to an outline request or to the top-level call.
+- A name shared by `declare` and `defn` can make a `forms` selection
+  ambiguous. Use the returned definition line in a bounded `xray` request,
+  such as `(-> (line 542) (expect-count 1))`; the line must come from the
+  current selection evidence, not this example. After a source change,
+  refresh the structural location before reusing a line. This is an existing
+  read route, not a typed-owner selector or a guarantee against stale input.
 - **Latency discipline during this editor study:** an `inspect_clojure` result's
   compact human summary can omit requested source even though the same call's
   `structuredContent.results` already contains it. Preserve and consume that
