@@ -165,3 +165,8 @@ Next fixed measurement priority is verified21 round1, N80 round1, then six optio
 ### Astra application hand-drive: bounded acceptance, not a native speed comparison
 
 One existing public extraction transaction moved six related helpers and rewired258 uses across28 callers; exact30file footprint,172 retained uses preserved,24 helper behavior cases match original,5 actual negative perturbations rejected. Independent GO under the reviewed oracle amendment; original header-token grammar failure retained. Preparation required85 caller changes/37,300bytes and22 MCP reads;9.286s public write and6.563s amended oracle are separately measured, not whole-task wall. No full application compile or native comparison. The next selected design experiment is tool-derived caller closure for this concrete six-helper policy, after current correctness and telemetry gates. See [Astra application report](observations/2026-09-05-astra-application-extraction.md).
+
+
+## Astra — 2026-09-05T05:00:38.792357+00:00 — selected-helper closure BUILDING
+
+Gene authorized four hours on the concrete preparation burden identified in the application hand-drive. Fable owns bridge/helper-closure-design (reviewed9d4b54bb with corrections pending); Astra owns independent acceptance and measurement on MCP/astra-helper-performance-2026-09-05. Prediction: a constant-sized decision request can remove caller discovery and payload construction from model work. Falsifier: strongest credible native batch plus equal proof is faster over full task wall. No speed claim for this new operation yet. See docs/observations/2026-09-05-captains-log-astra-helper-program.md.
