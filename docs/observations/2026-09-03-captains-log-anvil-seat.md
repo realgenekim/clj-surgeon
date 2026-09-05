@@ -2400,3 +2400,5 @@ session. Falsifier: Spark k=1 median under 3 s on the one-site dossier.
 ## 22:51Z — Cerebras k=5 fan-out: 6/6 rounds, median 1.95 s (vs Groq k=5 5.54 s, vs cold Sol 26.66 s at 5/6). Published in the provider-bench doc. Spark row pending 23:37Z.
 
 ## 22:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:51Z load 1.30 ; === rc 0 end 22:56Z)
+
+## 22:57Z — friction ledger: helper_extraction refused twice with the same reason (preflight-unavailable, profile helper-proof not admitted) → inbox item inb-a9b30e. Filing needed a seat fix: `clj` on this box wants rlwrap; ~/bin/clj shim execs clojure; maven-w/maven-r now prepend ~/bin to PATH.
