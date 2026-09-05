@@ -33,12 +33,12 @@ The operation composes three existing mechanisms and adds one planner:
 2. Body dependencies of the selected owners: moved→moved is rewritten to the destination symbol;
    moved→retained-public refuses `retained-dependency`; moved→retained-private refuses
    `private-dependency`; a namespace-sensitive form in a moved body refuses
-   `namespace-sensitive-body`. Def initializers are admitted only for constant literals in v1.
+   `namespace-sensitive-body` (explicit v1 refusal). Def initializers are admitted only for constant literals in v1.
 3. References across all admitted roots (`src`, `test`, `.clj-surgeon.edn :source-roots`): head
    calls, first-class uses, `:refer`ed bare symbols, fully qualified symbols with or without a
    require, admitted def initializers. Unsupported bindings refuse `unsupported-binding`.
 4. Partition: `moved-only` (replace the require), `mixed` (retain the old require, add one),
-   `qualified-only` (rewrite the qualified symbol, no require), `untouched`. A supported reference
+   `qualified-only` (rewrite the qualified symbol and add one destination require for admitted static callers; refuse where load semantics cannot be established), `untouched`. A supported reference
    outside `scope.paths` refuses `caller-outside-scope`. The source file counts once.
 5. Alias per rewritten caller: first `alias_policy` entry colliding with nothing bound in that
    file; else `alias-policy-exhausted`.
@@ -54,7 +54,7 @@ The operation composes three existing mechanisms and adds one planner:
 
 Counts and histograms only: helpers, source_retired, destination_created, caller_files, partition
 {moved_only mixed qualified_only untouched}, sites, retained_sites, alias_histogram, verification
-{profile status covered_callers ok}, closure {roots grammar dynamic_references "not-claimed"},
+{profile status structural_callers helper_behaviors compiled_callers ok}, closure {roots grammar dynamic_references "not-claimed"},
 details_path, undo_receipt, receipt_hash, elapsed_ms. Never a file list.
 
 ## What it does not claim
