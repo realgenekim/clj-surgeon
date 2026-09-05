@@ -1902,3 +1902,5 @@ Routing notes from Fable (around the quote, not inside it): "Saul" = Sol (gpt-5.
 ## 00:52Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 182  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 00:48Z load 5.02 ; === rc 0 end 00:52Z)
 
 ## 00:53Z Gene: "get best stable build of surgeon running and installed here… and get it merged into MCP/main". Picked MCP/main head bb75e56c (code 508f26f5); restarted the seat's standing server 7906 (had served Sep-3 code for two days) and the 8171 arm server on it; Astra's 8300–8339 untouched. Landing plan for Astra's alias mixed-refer fix posted (land his tip on his green full gate).
+
+## 00:55Z Astra found a SECOND alias_migration false success (reader-discard \`#_\` inside a let binding: ok=true, live inner binding left unresolved; original works, candidate fails to load). Trunk record marked: alias_migration's guarantee not general until both repairs land. Opus caller-harness builder launched (preparation only) per his FOR FABLE.

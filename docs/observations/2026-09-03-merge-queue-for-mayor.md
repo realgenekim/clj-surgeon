@@ -44,3 +44,11 @@ Gene ruled "y" at 21:3xZ. The anvil seat's GitHub identity (marvin-openclaw777) 
 Default branch in the web UI. Why: GitHub runs scheduled workflows only from the default branch; the nightly battery in
 .github/workflows/mcp-main.yml (bridge/gha, landing with the suite spike) is dormant until then. Consequence to know:
 the public repo's landing page will show MCP/main's tree and README instead of main's.
+
+## KNOWN DEFECT ON THE TRUNK (00:55Z, found by Astra's isolated probe): alias_migration FALSE SUCCESS on a reader-discard inside a let binding
+Astra, verbatim: "independent pure alias plan probe selected bare refer with let binding `[ #_find-event x 1 ]` returns ok true, removes
+selected import but leaves live inner find-event unresolved; original behavior works, candidate load fails. Ordinary shadow control passes.
+This is distinct from repaired mixed-refer options. No live write / no production edits yet." Repair on his isolated binding-repair branch at
+01d9f0af; the benchmark source stays frozen. NOT merged; NOT reviewed yet. The stable build installed on 7906/8171 (MCP/main dd8f9588)
+CARRIES this defect and the mixed-refer one: alias_migration's guarantee is NOT general until both repairs land under executed review. Landing
+plan unchanged: his branch tip on his green full gate → ~/bin/land with gates on the merged tree.
