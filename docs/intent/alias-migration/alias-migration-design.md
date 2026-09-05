@@ -247,7 +247,18 @@ because that spelling is unqualified.
 migrated, the old libspec is *replaced* by `[to.lib :as <alias>]`. When any
 other use survives — another var of the old lib, or an occurrence the tool
 deliberately left alone in a non-selected reader-conditional branch — the new
-libspec is *added* alongside and the old require is left in place.
+libspec is *added* alongside and the old require is left in place. In selected-Var mode,
+unrelated names declared in the old explicit `:refer` vector also require keeping
+the old libspec, even if their uses are not selected sites. The selected name is
+removed from that old vector once its uses have migrated, unless a deliberately
+retained reader branch still needs it. Other refer names, options, and trivia
+remain at the old library. An empty resulting refer vector is valid and preserves
+its surrounding trivia. A selected-Var migration retains `:refer :all` at the old
+library because it cannot enumerate unrelated imports from the client alone.
+This partition works when the selected Var is subsequently removed from the old
+library. Both refer policy spellings retain their existing selected-Var behavior:
+selected bare calls become qualified calls using the new alias; the policy table
+below governs whole-library migrations.
 
 ## Verification and the receipt's two summary fields
 
@@ -367,3 +378,19 @@ per-caller decision is a judgment rather than a closure.
 MCP only. The CLI is not an entrance for this verb: the experiment measures the
 model's call count, and `core.clj` dispatch would add a second layer with no
 measured return (`CLAUDE.md`, "the CLI as an MCP substitute" is a closed loser).
+
+### Selected refer repair: supported identity and explicit boundary
+
+Refer ownership uses symbol identity, including a metadata-bearing symbol.
+Unrelated metadata-bearing entries survive as their original nodes; retiring the
+selected import removes its entire metadata-bearing entry. The selected Var's
+`:rename` local binding is not modeled by this migration's scope walker. When
+that entry is present, the operation refuses before planning writes with
+`alias-migration-indirect-reference`, reason `unsupported-selected-renamed-refer`,
+the file and an explicit missing-capability remedy, and no `next_call`. A caller
+must review and perform a migration that accounts for the renamed binding; the
+refusal never prescribes widening scope or dropping the affected file. Unrelated
+`:rename` entries remain at the old library. Full renamed-binding migration is a
+separate capability, and this refusal counts as a failed benchmark task.
+
+Metadata wrappers on a refer vector or rename map do not change its import meaning. The planner unwraps metadata only to inspect the underlying node and preserves wrappers on retained imports. Reader-discarded entries are protected literal source, not live refer names or rename keys. Import identity and selected-rename detection operate on nodes and tokens without applying `n/sexpr` to arbitrary supplied forms.

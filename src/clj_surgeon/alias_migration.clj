@@ -63,7 +63,6 @@
   #{"let" "let*" "if-let" "when-let" "if-some" "when-some" "loop" "loop*"
     "with-open" "with-local-vars" "doseq" "for" "dotimes"})
 
-
 ;; @spec MCP-OP-ALIAS-030
 (def var-binding-vector-heads
   "Heads whose binding vector names VARS, not locals.
@@ -193,6 +192,18 @@
        (= clause-keyword (some-> (first (meaningful-children node))
                                  token-string))))
 
+(defn- unmeta-node
+  "Inspect a metadata-wrapped value without reading or evaluating it."
+  [node]
+  (if (= :meta (n/tag node))
+    (recur (last (meaningful-children node)))
+    node))
+
+(defn- refer-symbol-name
+  "A live refer token's identity; reader-discarded entries are never names."
+  [node]
+  (simple-symbol-name (unmeta-node node)))
+
 (defn- libspec-facts
   "Facts for one direct libspec node, or ::indirect when it is a prefix list."
   [node]
@@ -201,7 +212,7 @@
              {:lib (name symbol-value) :aliases [] :referred #{} :refer-all? false
               :node node})
     :vector
-    (let [parts (meaningful-children node)
+    (let [parts (remove #(= :uneval (n/tag %)) (meaningful-children node))
           lib (some-> (first parts) token-symbol name)
           options (rest parts)]
       (when lib
@@ -221,11 +232,11 @@
                        referred refer-all?)
 
                 (= ":refer" option-text)
-                (if (and value (vector-node? value))
+                (if (and value (vector-node? (unmeta-node value)))
                   (recur (drop 2 remaining) aliases
                          (into referred
-                               (keep simple-symbol-name)
-                               (meaningful-children value))
+                               (keep refer-symbol-name)
+                               (meaningful-children (unmeta-node value)))
                          refer-all?)
                   (recur (drop 2 remaining) aliases referred true))
 
@@ -294,7 +305,6 @@
 
 (declare rewrite-binding-vector)
 
-
 ;; @spec MCP-OP-ALIAS-025
 
 ;; @spec MCP-OP-ALIAS-032
@@ -333,43 +343,43 @@
       {:indirect {:reason :auto-resolved-keyword}}
       {})
     (let [value (token-symbol node)]
-    (if-not value
-      {}
-      (let [qualifier (namespace value)
-            var-name (name value)]
-        (if qualifier
-          (if-not (contains? qualifiers qualifier)
-            {}
-            (let [fully-qualified? (= qualifier (:from-lib context))
-                  ;; @spec MCP-OP-ALIAS-035
-                  ;; Inside a plain quote the symbol is a VALUE, not a
-                  ;; reference the reader resolves: the alias map plays no part
-                  ;; in what it names. A fully-qualified quoted symbol names
-                  ;; exactly one namespace from anywhere, which is the whole
-                  ;; reason it is a site at all — (requiring-resolve
-                  ;; 'old.lib/v) would otherwise break lazily at call time —
-                  ;; so its replacement must name exactly one namespace too.
-                  ;; Alias-qualifying it produces 'alias/x, the shape this same
-                  ;; verb refuses to READ because nothing resolves it.
-                  qualify (if (and (:quoted-data? context) fully-qualified?)
-                            (:to-lib context)
-                            alias)]
-              (if (= :lib mode)
-                {:rewrite (str qualify "/" var-name)
-                 :fully-qualified? fully-qualified?}
-                (if (= var-name from-var)
-                  {:rewrite (str qualify "/" to-var)
+      (if-not value
+        {}
+        (let [qualifier (namespace value)
+              var-name (name value)]
+          (if qualifier
+            (if-not (contains? qualifiers qualifier)
+              {}
+              (let [fully-qualified? (= qualifier (:from-lib context))
+                    ;; @spec MCP-OP-ALIAS-035
+                    ;; Inside a plain quote the symbol is a VALUE, not a
+                    ;; reference the reader resolves: the alias map plays no part
+                    ;; in what it names. A fully-qualified quoted symbol names
+                    ;; exactly one namespace from anywhere, which is the whole
+                    ;; reason it is a site at all — (requiring-resolve
+                    ;; 'old.lib/v) would otherwise break lazily at call time —
+                    ;; so its replacement must name exactly one namespace too.
+                    ;; Alias-qualifying it produces 'alias/x, the shape this same
+                    ;; verb refuses to READ because nothing resolves it.
+                    qualify (if (and (:quoted-data? context) fully-qualified?)
+                              (:to-lib context)
+                              alias)]
+                (if (= :lib mode)
+                  {:rewrite (str qualify "/" var-name)
                    :fully-qualified? fully-qualified?}
-                  {:other-use? true}))))
-          (let [live? (contains? live-bare var-name)]
-            (cond-> {}
-              (and live? (contains? count-bare var-name))
-              (assoc :refer-hit? true)
+                  (if (= var-name from-var)
+                    {:rewrite (str qualify "/" to-var)
+                     :fully-qualified? fully-qualified?}
+                    {:other-use? true}))))
+            (let [live? (contains? live-bare var-name)]
+              (cond-> {}
+                (and live? (contains? count-bare var-name))
+                (assoc :refer-hit? true)
 
-              (and live? (contains? rewrite-bare var-name))
-              (assoc :rewrite (if (= :lib mode)
-                                (str alias "/" var-name)
-                                (str alias "/" to-var)))))))))))
+                (and live? (contains? rewrite-bare var-name))
+                (assoc :rewrite (if (= :lib mode)
+                                  (str alias "/" var-name)
+                                  (str alias "/" to-var)))))))))))
 
 ;; @spec MCP-OP-ALIAS-031
 (defn- quoted-facts
@@ -458,7 +468,6 @@
           other-use? (assoc :other-use true)
           indirect (assoc :indirect
                           [(assoc indirect :form (n/string node))])))
-
 
       (reader-conditional-node? node)
       (let [kids (children node)
@@ -913,18 +922,38 @@
                                (mapv #(n/token-node (symbol %)) (sort referred))))]))))
 
 (defn- ns-form-edit
-  [ns-node clause target-node mode to-lib alias referred alias-needed?]
-  {:kind :ns
-   :original (n/string ns-node)
-   :replacement
-   (n/string
-     (replace-child
-       ns-node clause
-       (if (empty? referred)
-         (rewrite-require-clause clause target-node mode to-lib alias)
-         (replace-child clause target-node
-                        (libspec-with-refer to-lib alias referred
-                                            alias-needed?)))))})
+  [ns-node clause target-node mode to-lib alias referred alias-needed? remove-refer]
+  ;; @spec MCP-OP-ALIAS-062 MCP-OP-ALIAS-063 MCP-OP-ALIAS-064
+  ;; Partition the old import without interpreting discarded forms or losing
+  ;; metadata wrappers, unrelated entries, options, and surrounding trivia.
+  (letfn [(remove-selected [node]
+            (if (= :meta (n/tag node))
+              (let [value (last (meaningful-children node))]
+                (replace-child node value (remove-selected value)))
+              (n/replace-children
+                node
+                (remove #(= remove-refer (refer-symbol-name %)) (children node)))))]
+    (let [refer-node (when remove-refer
+                       (some (fn [[option value]]
+                               (when (and (= ":refer" (n/string option))
+                                          (vector-node? (unmeta-node value)))
+                                 value))
+                             (partition 2 1 (rest (remove #(= :uneval (n/tag %)) (meaningful-children target-node))))))
+          retained-target (if refer-node
+                            (replace-child target-node refer-node (remove-selected refer-node))
+                            target-node)
+          retained-clause (replace-child clause target-node retained-target)]
+      {:kind :ns
+       :original (n/string ns-node)
+       :replacement
+       (n/string
+         (replace-child
+           ns-node clause
+           (if (empty? referred)
+             (rewrite-require-clause retained-clause retained-target mode to-lib alias)
+             (replace-child retained-clause retained-target
+                            (libspec-with-refer to-lib alias referred
+                                                alias-needed?)))))})))
 
 ;; @spec MCP-OP-ALIAS-013
 ;; @spec MCP-OP-ALIAS-021
@@ -992,6 +1021,28 @@
       :else
       (let [{:keys [ns-node clause direct target others]} analysis]
         (cond
+          ;; @spec MCP-OP-ALIAS-063
+          ;; The scope walker models referred names, not their :rename bindings.
+          ;; Do not commit a partial rewrite or offer a different scope as repair.
+          (and from-var
+               (some (fn [[option value]]
+                       (and (= ":rename" (n/string option))
+                            (= :map (n/tag (unmeta-node value)))
+                            (some (fn [[key-node _]]
+                                    (= from-var (refer-symbol-name key-node)))
+                                  (partition 2
+                                             (remove #(= :uneval (n/tag %))
+                                                     (meaningful-children (unmeta-node value)))))))
+                     (partition 2 1 (rest (remove #(= :uneval (n/tag %)) (meaningful-children (:node target)))))))
+          {:refusal (refusal :alias-migration-indirect-reference
+                             (str "The selected Var has an unsupported renamed binding in " file)
+                             {:file file
+                              :reason "unsupported-selected-renamed-refer"
+                              :remedy (str "This migration does not model the selected Var's renamed binding. "
+                                           "Review and migrate that binding and its uses explicitly; "
+                                           "no scope-changing next_call is provided.")}
+                             nil)}
+
           (ownership-refusal request file from-lib from-var target others)
           {:refusal (ownership-refusal request file from-lib from-var target others)}
 
@@ -1084,7 +1135,11 @@
                   (and (zero? sites) (zero? refer-sites)) nil
 
                   :else
-                  (let [mode (if (or unselected? other-use?) :add :replace)]
+                  (let [other-imports? (and (not lib-mode?)
+                                            (or (seq (disj referred from-var))
+                                                (:refer-all? target)))
+                        mode (if (or unselected? other-use? other-imports?)
+                               :add :replace)]
                     {:file file
                      :alias alias
                      :collided collided
@@ -1094,7 +1149,11 @@
                      :edits (into [(ns-form-edit ns-node clause (:node target)
                                                  mode to-lib alias
                                                  (if (= :add mode) #{} kept-refer)
-                                                 (pos? sites))]
+                                                 (pos? sites)
+                                                 (when (and (not lib-mode?)
+                                                            (= :add mode)
+                                                            (not unselected?))
+                                                   from-var))]
                                   (keep (fn [[form result]]
                                           (when (pos? (:sites result))
                                             {:kind :form
