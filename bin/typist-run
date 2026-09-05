@@ -4,8 +4,26 @@
 Two arms over ONE frozen dossier (bin/typist-dossier.md, byte-identical to both):
 
   --arm N --runs 1   one careful author  (codex exec -m gpt-5.6-sol)
-  --arm F --k 5      five parallel typists (Groq openai/gpt-oss-120b)
+  --arm F --k 5      k parallel typists   (--provider groq|openrouter|spark)
   --arm fake --k 2   the ratchet: known-good + known-bad diffs, no network
+  --replay <dir>     re-judge RETAINED candidate bytes; no network
+  --bench            compare typists head to head; one table at the end
+
+WHICH fast typist arm F buys is a provider choice, not a different arm: every
+provider returns the same candidate record and every candidate goes through the
+same apply / gate / acceptance judging.
+
+  groq        Groq openai/gpt-oss-120b        (reports completion/queue time)
+  openrouter  openai/gpt-oss-120b via OpenRouter (records the routed :upstream)
+  spark       codex exec -m gpt-5.3-codex-spark, low reasoning; k = k processes
+
+  bin/typist-run --bench --providers groq,openrouter,spark \
+                 --dossier bin/typist-dossier-onesite.md --rounds 6
+
+--bench runs `rounds` rounds of k=1 per provider, INTERLEAVED round-robin so
+every provider shares the same time-of-day weather, and writes the table to
+/var/tmp/forge/typist-fx/bench-<epoch>.edn. A provider with no key, or one whose
+calls all refuse, gets a row of refusals and "n/a" — never a fabricated time.
 
 Every candidate diff is applied onto its OWN fresh copy of the fixture preimage,
 then the GATE runs (the verification profile the mission ledger would resolve for
@@ -797,39 +815,94 @@ def arm_n(prompt, k):
         return list(ex.map(one, range(k)))
 
 
-def groq_key():
-    if not os.path.exists(GROQ_KEY_FILE):
-        die("typist-run: refusing — no Groq key at %s" % GROQ_KEY_FILE, 4)
-    with open(GROQ_KEY_FILE) as fh:
+# --------------------------------------------------------------------------
+# TYPIST PROVIDERS (arm F)
+#
+# Arm F is "a fast typist". WHICH fast typist is a provider choice, not a
+# rewrite of the arm: every provider returns the SAME candidate record shape and
+# every candidate goes through the same apply / gate / acceptance judging.
+#
+# A field the provider does not report is `None` — never a computed stand-in.
+# Groq reports `completion_time` and `queue_time`; OpenRouter usually does not;
+# `codex exec` exposes no token counts at all. Those are nil in the record and
+# "n/a" in the bench table. Nothing here invents a number.
+
+PROVIDERS = {
+    "groq": {
+        "kind": "openai-chat",
+        "url": GROQ_URL,
+        "model": GROQ_MODEL,
+        "key_file": GROQ_KEY_FILE,
+        "key_label": "Groq",
+        "headers": {"User-Agent": GROQ_UA},
+    },
+    "openrouter": {
+        "kind": "openai-chat",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "openai/gpt-oss-120b",
+        "key_file": os.environ.get("TYPIST_OPENROUTER_KEY_FILE",
+                                   "/home/forge/secrets/openrouter.edn"),
+        "key_label": "OpenRouter",
+        "headers": {
+            "User-Agent": GROQ_UA,
+            # OpenRouter's attribution headers; they identify the caller, not a secret.
+            "HTTP-Referer": "https://github.com/realgenekim/clj-surgeon",
+            "X-Title": "clj-surgeon typist",
+        },
+    },
+    "spark": {
+        "kind": "codex-exec",
+        "model": "gpt-5.3-codex-spark",
+        "reasoning_effort": "low",
+    },
+}
+
+# The provider-side usage-limit refusal. It is a TYPED REFUSAL, exactly like
+# Groq's finish_reason=length: nothing is applied, nothing is gated, and it is
+# counted in `refusals`. It is never retried in a loop.
+USAGE_LIMIT_RE = re.compile(r"hit your usage limit", re.I)
+
+
+def provider_key(cfg):
+    """Read the provider's API key. Refuses BEFORE any network call is made.
+    The key is never echoed, logged, or written to a receipt."""
+    path = cfg["key_file"]
+    if not os.path.exists(path):
+        die("typist-run: refusing — no %s key at %s" % (cfg["key_label"], path), 4)
+    with open(path) as fh:
         m = re.search(r':key\s+"([^"]+)"', fh.read())
     if not m:
-        die("typist-run: refusing — no Groq key at %s" % GROQ_KEY_FILE, 4)
+        die("typist-run: refusing — no %s key at %s" % (cfg["key_label"], path), 4)
     return m.group(1)
 
 
-def arm_f(prompt, k, temperature=0.7):
-    key = groq_key()          # refuses BEFORE any network call is made
+def call_openai_chat(cfg, model, prompt, k, temperature, tag):
+    """Groq and OpenRouter share the OpenAI chat-completions wire format."""
+    key = provider_key(cfg)   # refuses BEFORE any network call is made
 
     def one(i):
-        body = json.dumps({"model": GROQ_MODEL,
+        cand = "%s%d" % (tag, i)
+        body = json.dumps({"model": model,
                            "messages": [{"role": "user", "content": prompt}],
                            "temperature": temperature,
                            # gpt-oss-120b is a REASONING model: reasoning tokens
                            # are spent BEFORE any output token, so the budget has
                            # to cover reasoning + diff, not the diff alone.
                            "max_tokens": GROQ_MAX_TOKENS}).encode()
-        req = urllib.request.Request(
-            GROQ_URL, body,
-            {"Content-Type": "application/json",
-             # urllib's default User-Agent earns HTTP 403 from Groq's edge.
-             "User-Agent": GROQ_UA,
-             "Authorization": "Bearer " + key})
+        headers = {"Content-Type": "application/json",
+                   "Authorization": "Bearer " + key}
+        headers.update(cfg["headers"])
+        req = urllib.request.Request(cfg["url"], body, headers)
+        t_call = time.time()
         try:
             d = json.load(urllib.request.urlopen(req, timeout=300))
         except Exception as e:                                   # noqa: BLE001
-            return {"cand": "f%d" % i, "source": GROQ_MODEL, "text": None,
-                    "response_s": time.time() - T0, "tokens": None,
-                    "error": "groq request failed: %s" % e}
+            return {"cand": cand, "source": model, "text": None,
+                    "response_s": time.time() - T0,
+                    "call_wall_s": time.time() - t_call,
+                    "tokens": None,
+                    "error": "%s request failed: %s" % (cfg["key_label"], e)}
+        call_wall = time.time() - t_call
         u = d.get("usage") or {}
         details = u.get("completion_tokens_details") or {}
         choice = (d.get("choices") or [{}])[0]
@@ -841,21 +914,290 @@ def arm_f(prompt, k, temperature=0.7):
         # `length` is a TYPED REFUSAL — the budget ran out. It is not a wrong
         # candidate and must never be scored as one.
         refusal = "length" if finish == "length" else None
-        return {"cand": "f%d" % i, "source": GROQ_MODEL,
+        if msg.get("refusal"):
+            refusal = refusal or "refusal"
+        return {"cand": cand, "source": model,
                 "text": None if refusal else extract_diff(content),
                 "raw_chars": len(content),
                 "reasoning_chars": reasoning_chars,
                 "finish_reason": finish,
                 "refusal": refusal,
                 "response_s": time.time() - T0,
+                "call_wall_s": call_wall,
                 "tokens": u.get("completion_tokens"),
                 "reasoning_tokens": details.get("reasoning_tokens"),
                 "prompt_tokens": u.get("prompt_tokens"),
+                # provider-reported timings; absent on most OpenRouter upstreams.
                 "completion_time_s": u.get("completion_time"),
                 "queue_time": u.get("queue_time"),
+                # which upstream OpenRouter actually routed to (Cerebras/Groq/...).
+                "upstream": d.get("provider"),
                 "error": None}
     with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
         return list(ex.map(one, range(k)))
+
+
+def call_codex_exec(model, prompt, k, tag, reasoning_effort, run_dir):
+    """`codex exec` as a typist: k parallel invocations = k PROCESSES.
+
+    Each gets a fresh scratch copy of the fixture as its cwd, stdin from
+    /dev/null, and the dossier bytes as its prompt. Wall is measured from
+    process spawn to exit. codex exec exposes NO token counts, so every token
+    field is nil — never a guess."""
+    def one(i):
+        cand = "%s%d" % (tag, i)
+        scratch = fresh_copy(os.path.join(run_dir, "%s-scratch" % cand))
+        cmd = ["codex", "exec", "-m", model,
+               "-c", 'model_reasoning_effort="%s"' % reasoning_effort,
+               "--skip-git-repo-check", prompt]
+        t_call = time.time()
+        try:
+            with open(os.devnull) as devnull:
+                r = subprocess.run(cmd, cwd=scratch, stdin=devnull,
+                                   capture_output=True, text=True, timeout=900)
+            text = r.stdout or ""
+            # The WHOLE stderr is what refusal detection reads. codex exec
+            # prints a banner FIRST and the refusal LAST, so truncating the
+            # head would hide exactly the sentence we are looking for.
+            full_err = (r.stderr or "").strip()
+            err = full_err[-600:] if r.returncode else None
+        except Exception as e:                                   # noqa: BLE001
+            text, full_err, err = "", "", "codex exec failed: %s" % e
+        call_wall = time.time() - t_call
+        blob = text + "\n" + full_err + "\n" + (err or "")
+        refusal = "usage-limit" if USAGE_LIMIT_RE.search(blob) else None
+        d = None
+        if not refusal:
+            d = extract_diff(text)
+            if d is None:
+                # it may have edited the scratch tree in place
+                g = subprocess.run(["git", "diff"], cwd=scratch,
+                                   capture_output=True, text=True)
+                if g.stdout.strip():
+                    d = g.stdout
+        return {"cand": cand, "source": "codex exec " + model,
+                "text": d,
+                # a refusal must carry its own evidence, verbatim
+                "refusal_evidence": (full_err or text).strip()[-400:] if refusal else None,
+                "raw_chars": len(text),
+                "reasoning_chars": None,
+                "finish_reason": None,
+                "refusal": refusal,
+                "response_s": time.time() - T0,
+                "call_wall_s": call_wall,
+                "tokens": None, "reasoning_tokens": None, "prompt_tokens": None,
+                "completion_time_s": None, "queue_time": None,
+                "upstream": None,
+                "error": None if refusal else err}
+    with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
+        return list(ex.map(one, range(k)))
+
+
+def arm_f(prompt, k, temperature=0.7, provider="groq", model=None,
+          tag="f", run_dir=None):
+    """The fast-typist arm, over whichever provider was named."""
+    if provider not in PROVIDERS:
+        die("typist-run: refusing — unknown provider %r (known: %s)"
+            % (provider, ", ".join(sorted(PROVIDERS))), 7)
+    cfg = PROVIDERS[provider]
+    model = model or cfg["model"]
+    if cfg["kind"] == "codex-exec":
+        return call_codex_exec(model, prompt, k, tag,
+                               cfg["reasoning_effort"], run_dir or RUN_DIR)
+    return call_openai_chat(cfg, model, prompt, k, temperature, tag)
+
+
+# --------------------------------------------------------------------------
+# judging — one path for every arm, every provider, every mode
+
+REFUSAL_DETAIL = {
+    "length": "finish_reason=length: the token budget ran out before a complete diff",
+    "refusal": "the model returned a refusal message instead of a diff",
+    "usage-limit": ("the provider reported a usage limit; apply, gate and "
+                    "acceptance were NOT run and nothing was retried"),
+}
+
+
+def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
+    """Apply + gate + acceptance for every candidate, in one place.
+
+    `t_ref` is the clock a verified candidate's wall is measured from: process
+    start for a normal run, ROUND start in --bench (so rounds are comparable)."""
+    t_ref = T0 if t_ref is None else t_ref
+    records = []
+    for c in cands:
+        refusal = c.get("refusal")
+        if refusal:
+            # A TYPED REFUSAL is not a wrong candidate: nothing is applied,
+            # nothing is gated, and it is scored in `refusals`, never as
+            # apply_ok=false. nil, not false — we did not run the check.
+            cand_dir = None
+            ev = {"apply_ok": None, "gate_ok": None, "accept_ok": None,
+                  "refusal_detail": REFUSAL_DETAIL.get(
+                      refusal, "provider refused: %s" % refusal)}
+        else:
+            cand_dir = fresh_copy(os.path.join(run_dir, c["cand"]))
+            ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
+        verified = bool(ev.get("apply_ok") and ev.get("gate_ok") and ev.get("accept_ok"))
+        rec = {"cand": c["cand"], "source": c["source"],
+               "dir": cand_dir,
+               "response_wall_s": round(c["response_s"], 3),
+               "call_wall_s": (round(c["call_wall_s"], 3)
+                               if c.get("call_wall_s") is not None else None),
+               "upstream": c.get("upstream"),
+               "refusal": refusal,
+               "finish_reason": c.get("finish_reason"),
+               "tokens": c.get("tokens"),
+               "reasoning_tokens": c.get("reasoning_tokens"),
+               "reasoning_chars": c.get("reasoning_chars"),
+               "raw_chars": c.get("raw_chars"),
+               "prompt_tokens": c.get("prompt_tokens"),
+               "refusal_evidence": c.get("refusal_evidence"),
+               "completion_time_s": c.get("completion_time_s"),
+               "queue_time_s": c.get("queue_time"),
+               "error": c.get("error")}
+        rec.update(ev)
+        rec["verified"] = verified
+        rec["verified_wall_s"] = round(time.time() - t_ref, 3) if verified else None
+        rec["semantic_mismatch"] = bool(ev.get("gate_ok") and not ev.get("accept_ok"))
+        records.append(rec)
+    return records
+
+
+# --------------------------------------------------------------------------
+# --bench — the provider comparison
+#
+# Round-robin, k=1, one shared apply/gate/acceptance path. Round-robin is the
+# point: a provider measured in a block of six would carry that block's
+# time-of-day load. Interleaving makes every provider share the same weather.
+
+def median(xs):
+    s = sorted(xs)
+    n = len(s)
+    if not n:
+        return None
+    return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2.0
+
+
+def fmt(x, spec="%.2f"):
+    return "n/a" if x is None else (spec % x)
+
+
+def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
+    """Per provider: `rounds` rounds of k=1, interleaved. Prints ONE table."""
+    # Pre-flight, before any network call: a provider whose key file is absent
+    # is BLOCKED, not slow. It gets a row of typed refusals and "n/a" times.
+    # (Outside --bench the same condition is a hard exit 4 — a single-provider
+    # run has nothing to compare it against.)
+    blocked = {}
+    for p in providers:
+        cfg = PROVIDERS[p]
+        if cfg["kind"] != "openai-chat":
+            continue
+        path = cfg["key_file"]
+        ok = False
+        if os.path.exists(path):
+            with open(path) as fh:
+                ok = bool(re.search(r':key\s+"([^"]+)"', fh.read()))
+        if not ok:
+            blocked[p] = "no-key"
+            print("bench: %s is BLOCKED — no %s key at %s; it will show refusals, "
+                  "never a time" % (p, cfg["key_label"], path))
+
+    per = {p: [] for p in providers}
+    for r_i in range(rounds):
+        for p in providers:
+            if p in blocked:
+                per[p].append({
+                    "cand": "%s-r%d-0" % (p, r_i), "round": r_i, "provider": p,
+                    "source": models.get(p) or PROVIDERS[p]["model"],
+                    "refusal": blocked[p],
+                    "refusal_detail": "no API key on this box; nothing was called",
+                    "verified": False, "verified_wall_s": None,
+                    "call_wall_s": None, "response_wall_s": None,
+                    "tokens": None, "completion_time_s": None, "upstream": None,
+                    "apply_ok": None, "gate_ok": None, "accept_ok": None})
+                continue
+            run_dir = os.path.join(FX, "bench-%d-%s-r%d" % (int(T0), p, r_i))
+            os.makedirs(run_dir, exist_ok=True)
+            global RUN_DIR
+            RUN_DIR = run_dir
+            t_round = time.time()
+            cands = arm_f(prompt, 1, temperature, provider=p,
+                          model=models.get(p), tag="%s-r%d-" % (p, r_i),
+                          run_dir=run_dir)
+            recs = judge_candidates(cands, manifest, cmds, run_dir, t_ref=t_round)
+            rec = recs[0]
+            rec["round"] = r_i
+            rec["provider"] = p
+            rec["run_dir"] = run_dir
+            per[p].append(rec)
+            print("  bench round %d/%d %-11s verified=%s wall=%s refusal=%s"
+                  % (r_i + 1, rounds, p, rec["verified"],
+                     fmt(rec["verified_wall_s"] or rec["call_wall_s"]),
+                     rec["refusal"] or "-"), flush=True)
+
+    rows = []
+    for p in providers:
+        recs = per[p]
+        model = models.get(p) or PROVIDERS[p]["model"]
+        firsts = sorted(round(r["verified_wall_s"], 2)
+                        for r in recs if r["verified_wall_s"] is not None)
+        walls = [r["call_wall_s"] for r in recs if r["call_wall_s"] is not None]
+        # provider-REPORTED completion throughput only. No provider timing ->
+        # no tok/s. We never divide by our own wall and call it the provider's.
+        tps = [r["tokens"] / r["completion_time_s"]
+               for r in recs
+               if r.get("tokens") and r.get("completion_time_s")]
+        rows.append({
+            "provider": p, "model": model,
+            "rounds": len(recs),
+            "verified": len(firsts),
+            "first_verified_s": firsts,
+            "median_first_verified_s": median(firsts),
+            "max_first_verified_s": max(firsts) if firsts else None,
+            "median_response_wall_s": median(walls),
+            "median_completion_tok_s": median(tps),
+            "refusals": sum(1 for r in recs if r.get("refusal")),
+            "upstreams": sorted({r["upstream"] for r in recs if r.get("upstream")}),
+        })
+
+    hdr = ("provider", "model", "rounds verified", "first_verified_s (sorted)",
+           "median", "max", "med resp_wall_s", "med tok/s", "refusals")
+    body = [(r["provider"], r["model"],
+             "%d/%d" % (r["verified"], r["rounds"]),
+             ("[" + ", ".join("%.2f" % x for x in r["first_verified_s"]) + "]")
+             if r["first_verified_s"] else "n/a",
+             fmt(r["median_first_verified_s"]),
+             fmt(r["max_first_verified_s"]),
+             fmt(r["median_response_wall_s"]),
+             fmt(r["median_completion_tok_s"], "%.1f"),
+             str(r["refusals"])) for r in rows]
+    widths = [max(len(hdr[i]), *(len(b[i]) for b in body)) for i in range(len(hdr))]
+    line = "  ".join("-" * w for w in widths)
+    print("")
+    print("BENCH  mission=%s  dossier=%s  rounds=%d  k=1  round-robin"
+          % (MISSION, os.path.basename(DOSSIER), rounds))
+    print(line)
+    print("  ".join(h.ljust(w) for h, w in zip(hdr, widths)))
+    print(line)
+    for b in body:
+        print("  ".join(c.ljust(w) for c, w in zip(b, widths)))
+    print(line)
+
+    out = os.path.join(FX, "bench-%d.edn" % int(T0))
+    with open(out, "w") as fh:
+        fh.write(edn({"bench": True,
+                      "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                      "mission": MISSION, "dossier": DOSSIER,
+                      "dossier_sha256": sha256_bytes(prompt.encode()),
+                      "preimage": PREIMAGE, "gate_profile": PROFILE,
+                      "gate_commands": cmds, "rounds": rounds, "k": 1,
+                      "interleaved": True,
+                      "rows": rows,
+                      "candidates": [r for p in providers for r in per[p]]}) + "\n")
+    print("\nbench table written to %s" % out)
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -866,6 +1208,17 @@ def main():
     ap.add_argument("--replay", metavar="RUN_DIR",
                     help="re-run apply+gate+acceptance on the RETAINED "
                          "candidate.diff files of an earlier run. No network.")
+    ap.add_argument("--provider", default="groq", choices=sorted(PROVIDERS),
+                    help="which fast typist arm F buys (default: groq)")
+    ap.add_argument("--model", default=None,
+                    help="override the provider's default model id")
+    ap.add_argument("--bench", action="store_true",
+                    help="compare providers: `rounds` rounds of k=1 per provider, "
+                         "interleaved round-robin, one table at the end")
+    ap.add_argument("--providers", default="groq",
+                    help="--bench only: comma-separated provider list")
+    ap.add_argument("--rounds", type=int, default=6,
+                    help="--bench only: rounds per provider (default 6)")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--k", type=int, default=None)
     ap.add_argument("--temperature", type=float, default=0.7)
@@ -883,8 +1236,20 @@ def main():
                     help="override the mission's preimage directory; its manifest "
                          "is written beside it as <dir>.manifest.edn")
     a = ap.parse_args()
-    if not a.arm and not a.replay:
-        ap.error("one of --arm or --replay is required")
+    if not a.arm and not a.replay and not a.bench:
+        ap.error("one of --arm, --replay or --bench is required")
+
+    bench_providers = []
+    if a.bench:
+        bench_providers = [p.strip() for p in a.providers.split(",") if p.strip()]
+        if not bench_providers:
+            ap.error("--bench needs a non-empty --providers list")
+        for p in bench_providers:
+            if p not in PROVIDERS:
+                die("typist-run: refusing — unknown provider %r (known: %s)"
+                    % (p, ", ".join(sorted(PROVIDERS))), 7)
+        if a.rounds < 1:
+            ap.error("--rounds must be >= 1")
 
     mission = a.mission or (mission_for_dossier(a.dossier) if a.dossier else "scope-roots")
     select_mission(mission, a.dossier, a.fixture)
@@ -899,6 +1264,11 @@ def main():
 
     manifest = materialize_fixture(force=a.rebuild_fixture)
     cmds = resolve_gate_commands()
+
+    if a.bench:
+        models = {p: a.model for p in bench_providers} if a.model else {}
+        sys.exit(bench(prompt, bench_providers, models, a.rounds,
+                       a.temperature, manifest, cmds))
 
     if a.replay:
         a.arm = a.arm or "replay"
@@ -922,41 +1292,10 @@ def main():
         elif a.arm == "N":
             cands = arm_n(prompt, k)
         else:
-            cands = arm_f(prompt, k, a.temperature)
+            cands = arm_f(prompt, k, a.temperature,
+                          provider=a.provider, model=a.model, run_dir=RUN_DIR)
 
-        records = []
-        for c in cands:
-            refusal = c.get("refusal")
-            if refusal:
-                # A TYPED REFUSAL is not a wrong candidate: nothing is applied,
-                # nothing is gated, and it is scored in `refusals`, never as
-                # apply_ok=false. nil, not false — we did not run the check.
-                cand_dir = None
-                ev = {"apply_ok": None, "gate_ok": None, "accept_ok": None,
-                      "refusal_detail": "finish_reason=%s: the token budget ran "
-                                        "out before a complete diff" % refusal}
-            else:
-                cand_dir = fresh_copy(os.path.join(RUN_DIR, c["cand"]))
-                ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
-            verified = bool(ev.get("apply_ok") and ev.get("gate_ok") and ev.get("accept_ok"))
-            rec = {"cand": c["cand"], "source": c["source"],
-                   "dir": cand_dir,
-                   "response_wall_s": round(c["response_s"], 3),
-                   "refusal": refusal,
-                   "finish_reason": c.get("finish_reason"),
-                   "tokens": c.get("tokens"),
-                   "reasoning_tokens": c.get("reasoning_tokens"),
-                   "reasoning_chars": c.get("reasoning_chars"),
-                   "raw_chars": c.get("raw_chars"),
-                   "prompt_tokens": c.get("prompt_tokens"),
-                   "completion_time_s": c.get("completion_time_s"),
-                   "queue_time_s": c.get("queue_time"),
-                   "error": c.get("error")}
-            rec.update(ev)
-            rec["verified"] = verified
-            rec["verified_wall_s"] = round(time.time() - T0, 3) if verified else None
-            rec["semantic_mismatch"] = bool(ev.get("gate_ok") and not ev.get("accept_ok"))
-            records.append(rec)
+        records = judge_candidates(cands, manifest, cmds, RUN_DIR)
 
         verified_walls = [r["verified_wall_s"] for r in records if r["verified"]]
         first = min(verified_walls) if verified_walls else None
@@ -974,6 +1313,9 @@ def main():
             "preimage": PREIMAGE, "manifest": MANIFEST,
             "gate_profile": PROFILE, "gate_commands": cmds,
             "mission": MISSION, "mutable_file": MUTABLE,
+            "provider": (a.provider if a.arm == "F" else None),
+            "model": ((a.model or PROVIDERS[a.provider]["model"])
+                      if a.arm == "F" else None),
             "acceptance": MISSIONS[MISSION]["accept_desc"],
             "candidates": records,
             "first_verified_s": first,
