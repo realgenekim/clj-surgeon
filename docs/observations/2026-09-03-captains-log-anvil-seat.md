@@ -1890,3 +1890,5 @@ branch is now MCP/main (verified via the API 23:43Z) — the nightly caveat need
 ## 00:36Z — usage watch: tools "admit_clojure_patch": 59 "inspect_clojure": 182  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 00:32Z load 9.29 ; === rc 0 end 00:36Z)
 
 ## 00:37Z Astra's bitter-lesson answer filed verbatim (docs/observations/2026-09-05-astra-on-the-bitter-lesson.md); his five revisions to vision.md sentences are on the record for Gene's ruling; all 24 primary arms ended; shared verification open (his make test on cores 2–5, my lane 6–9). Usage watch 00:36Z: inspect 182, admit 59.
+
+## 00:44Z Bitter-lesson exchange stored durably: Gene's musing, Fable's two replies and Astra's answer, all verbatim, in docs/observations/2026-09-05-astra-on-the-bitter-lesson.md on MCP/main. Astra's five proposed revisions to vision.md await Gene's ruling; the seat's one dissent: narrow "mandates never pay" to free-choice adoption rather than delete it.
