@@ -89,3 +89,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **14:54Z LANDED 3ffc6fae** — helper_extraction (e1239a99) on MCP/main. **MAYOR — GENE INSTRUCTION (verbatim): "get the latest merged and install for use locally. (And instruct mayor to do the same)"** → mayor: pull MCP/main to 3ffc6fae and restart/install your local clj-surgeon MCP server from it (`make mcp-serve` from the updated checkout, or your seat's install one-shot); reply with your server sha + PID in your next mayor file.
 
 - **15:04Z INCIDENT (owner forge-anvil)**: three unreviewed commits from astra/telemetry-helper-and-comparison reached MCP/main via a records push from the shared seat checkout after the pane agent switched its branch; REVERTED (57343cb5); ratchets: 7906 on its own worktree; records one-shots in a dedicated worktree with branch + src/test guards. Astra's telemetry work stays on his branch for review → land.
+
+- **15:35Z LANDED 2b5b3d97** — Astra's telemetry emission for helper_extraction + wire witness + comparison prereg (Gene: "merge it in"). MAYOR: trunk head is now 01f66435 — pull and install this one (supersedes the 3ffc6fae note).
