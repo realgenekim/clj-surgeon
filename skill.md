@@ -4,36 +4,67 @@ description: >-
   Use for advanced clj-surgeon workflows: semantic preparation, computed preview, extraction or movement, CLI fallback, MCP recovery, and troubleshooting. Do not invoke for ordinary inspect_clojure or edit_clojure calls; always-loaded routing and tool schemas cover them.
 ---
 
-# Advanced clj-surgeon routes
+# Production clj-surgeon routes (advanced router)
 
-Optimize complete verified task time. Do not load this skill for an ordinary
-bounded structural read or already-decided compact edit.
+Optimize complete verified task time. The installed Babashka CLI is the
+production entrance. Persistent MCP is a development-only, months-long
+experiment; use it only when explicitly testing that service. Do not load this
+skill for an ordinary bounded structural read or an already-decided compact
+edit.
+## Choose the cheapest authority
 
-## Trip-wire: `{:error "Unknown op: ."}` means YOUR SYNTAX, not a broken tool
+Use native `rg` and `apply_patch` for a known literal and one small region. Use
+`:ls`, `:cat`, or `:match-form` for unknown structural owners; use `:edit` for
+an exact nested replacement. Use `:change!`, `:extract!`, `:mv-with-deps`,
+`:rename-ns!`, or `:fix-declares!` for guarded cross-file work. MCP is opt-in
+development work only.
+Surgeon earns its cost when one guarded operation replaces many owner reads and
+writes. Historical favorable fan-out cohorts reached roughly 3–10x complete-task
+speedup; tiny edits often favor native tools. Treat those figures as
+workload-specific priors, never guarantees.
+## Timing and safety
 
-Every call is **`:op <name>` plus key-value pairs** — there are no positional
-arguments. `clj-surgeon outline file.clj` (positional guess) fails with
-`Unknown op: .`, and an agent that guesses instead of reading this skill will
-conclude the tool is broken and silently fall back to native edits — the exact
-silent-adoption-killer the routing experiments measured. (Field-verified on the
-bridge seat 2026-08-31: CLI + wrapper work perfectly when called as documented.)
+Count complete verified task time, including orientation, refusals, retries,
+emission, and proof. Tool runtime alone is not end-to-end speed. Inspect the
+EDN receipt, stop on `:error`, run focused tests or lint, and keep one coherent
+operation per commit.
+## Avoid shell quoting
 
-Known-good smoke test:
+For any nontrivial plan, put the structured request on stdin. This is the CLI
+equivalent of MCP's structured arguments and avoids nested shell quoting:
+
+```bash
+clj-surgeon :op :change! :spec-file - <<'EDN'
+{:changes [{:id :rename
+            :in ["src/app.clj"]
+            :forms [run]
+            :find :old
+            :do [:replace :new]
+            :expect {:matches 1 :each-form 1}}]
+ :expect {:changes 1 :edits 1 :files 1}}
+EDN
+```
+
+Use `:spec-file PATH` for a saved request. Attach stdin in the same shell
+action; never invoke `:spec-file -` and wait for a later input stream.
+Never run `clj-surgeon up` casually. It is development-only, edits workspace
+agent configuration, starts local services, and requires an explicit guard:
+
+```bash
+clj-surgeon up /absolute/repository --force
+```
+
+## Syntax trip-wire
+
+Every call is `:op <name>` plus key-value pairs; positional guesses produce
+`Unknown op`. Known-good smoke test:
 
 ```bash
 clj-surgeon :op :ls :file src/my/ns.clj
 ```
+## References
 
-
-## Load only the required reference
-
-- Read [advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md) for semantic
-  preparation, standalone computed preview, heavyweight rollback-gated
-  transactions, hot-process recovery, or schema reloads.
-- Read [CLI fallback](skills/clj-surgeon/references/cli-fallback.md) only when persistent MCP is
-  unavailable, the operation is not exposed there, or the CLI is under test.
-- Read [advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md) for
-  dependency-aware extraction, form movement, namespace rename, or CLJC work.
-
-Do not reopen a reference already consumed in this task. Return to the compact
-route as soon as the advanced condition is resolved.
+Read [CLI fallback](skills/clj-surgeon/references/cli-fallback.md) for full syntax and receipts,
+[advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md) for extraction,
+moves, renames, or CLJC, and [advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md)
+only for explicit development-service work. Do not reopen a reference already consumed.

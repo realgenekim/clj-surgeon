@@ -93,6 +93,7 @@ help:
 	@echo "  make workspace-mcp-status WORKSPACE=/repo   Verify the shared stack and local config"
 	@echo "  make uninstall-mcp-codex-dev   Remove Codex registration and stop the local MCP"
 	@echo "  make install                   Stable copied CLI, both skills, and global routing instructions"
+	@echo "  make install-with-analyzer     Stable install plus the opt-in clj-kondo admission shim"
 	@echo "  make install-cli               Install only the stable copied CLI"
 	@echo "  make install-clj-kondo-admission Install the box-wide analyzer gate"
 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
@@ -161,7 +162,9 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :mv :file f :form foo :before bar"
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
-install: install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing
+install: install-cli install-codex-skill install-claude-skill install-agent-routing
+
+install-with-analyzer: install install-clj-kondo-admission
 
 install-clj-kondo-admission:
 	@set -eu; \

@@ -478,6 +478,8 @@ records the failure pattern that led to `:fix-declares`.
 git clone https://github.com/realgenekim/clj-surgeon.git
 cd clj-surgeon
 make install    # → CLI plus Codex and Claude skills
+# Optional box-wide analyzer shim
+make install-with-analyzer
 ```
 
 `make install` creates content-addressed, read-only copies of the CLI runtime
@@ -494,6 +496,8 @@ The default entrances are `~/bin/clj-surgeon`,
 and immutable package path. Run `make install-cli`,
 `make install-codex-skill`, or `make install-claude-skill` to install one
 surface. Installation refuses to replace unrelated files or skill directories.
+The default install does not modify an existing `clj-kondo`; use
+`make install-with-analyzer` only when you explicitly want the admission shim.
 
 To put the CLI somewhere else, pass its complete file path as `CLI_DEST`. The
 installer creates the parent directory and handles paths containing spaces:
@@ -538,12 +542,17 @@ bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/scri
 
 What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
 
-### Experimental Codex MCP entrance
+### Experimental Codex MCP entrance (development only)
 
-Keep this branch-local while the MCP contract is under evaluation. The
-development installer points the CLI and both skills at the current checkout,
-starts the hot clj-surgeon and cclsp services on loopback, and registers exactly
-five clj-surgeon tools with Codex:
+The installed Babashka CLI is the supported production entrance. The MCP
+entrance below was a months-long development experiment. It proved useful for
+contract and telemetry work, but it did not produce a dependable production
+advantage over the CLI and native tools. Keep it local, opt-in, and disposable;
+do not put it in release automation or require it for ordinary use.
+
+The development installer points the CLI and both skills at the current
+checkout, starts the hot clj-surgeon and cclsp services on loopback, and
+registers exactly five clj-surgeon tools with Codex:
 
 - `inspect_clojure` for read-only structural batches and proof-carrying change
   preparation;
@@ -561,16 +570,20 @@ five clj-surgeon tools with Codex:
 make install-mcp-codex-dev
 
 # Join any repository to the same hot clj-surgeon and cclsp processes.
-clj-surgeon up /absolute/repository
+# This is a developer-only side effect and requires an explicit guard.
+clj-surgeon up /absolute/repository --force
 ```
 
-`clj-surgeon up [WORKSPACE]` defaults to the current directory. It discovers
+`clj-surgeon up [WORKSPACE] --force` defaults to the current directory. It discovers
 the effective clj-kondo configuration, registers the canonical workspace with
 the shared cclsp provider, starts the shared loopback services when needed, and
 installs the two MCP entries in the workspace's `.codex/config.toml`. It
 preserves unrelated TOML, migrates older per-repository tables, validates the
-result, and is idempotent. `make workspace-mcp-onboard WORKSPACE=/repo` remains
-a compatibility alias.
+result, and is idempotent. Without `--force`, it returns a typed
+`:development-only` refusal and does nothing. This guard is deliberate:
+`up` edits `.codex/config.toml` and starts local services, so a makefile or
+shell history must not enable it accidentally. `make workspace-mcp-onboard
+WORKSPACE=/repo` remains a compatibility alias for this development path.
 
 The managed cclsp service inherits the invoking shell's complete PATH. This is
 part of semantic correctness: clojure-lsp is a native executable, but it still
@@ -1095,10 +1108,12 @@ explicitly read a Markdown file. A test checks it against the canonical skill,
 with only its repository-relative reference links allowed to differ.
 
 The canonical package keeps uncommon move, extraction, dependency, and CLJC
-guidance in `references/advanced-operations.md`. It keeps the complete
-process-starting CLI manual in `references/cli-fallback.md`. The default skill
-is a compact MCP-first contract. It tells agents to inspect the deferred tool
-catalog before they start a shell process.
+guidance in `references/advanced-operations.md`. It keeps the complete CLI
+manual in `references/cli-fallback.md`, including the `:spec-file -` heredoc
+route that avoids shell quoting. The default skill is a compact CLI-first
+contract; MCP is mentioned only as an explicit development experiment. The
+repository also publishes the focused `skills/safe-refactor/SKILL.md` playbook
+for contract-first, one-commit-at-a-time refactors.
 
 The skill activates before an agent uses native Read, Edit, grep, sed, or cat
 on an existing Clojure file. It routes coherent reads to `inspect_clojure`,
@@ -1162,7 +1177,11 @@ the exact file and form counts. The command rejects unknown keys, duplicate
 physical paths, count mismatches, failed form selection, and output above the
 declared or hard limit. Every refusal returns no partial source. Use
 `:spec-file PATH` for a saved manifest. Inline `:spec` remains available for a
-small manifest, but stdin avoids shell escaping.
+small manifest, but stdin avoids shell escaping. For complex writes, prefer the
+heredoc form shown in the CLI skill: the EDN document is parsed as data, so
+nested Clojure forms never pass through the shell's quoting rules. This is the
+main ergonomic advantage worth carrying from the experimental MCP entrance
+into the production CLI.
 
 Always attach stdin in the same shell action. Do not invoke `:spec-file -` and
 wait to send the manifest later. `:format :semantic` is the compact behavior
@@ -2202,3 +2221,31 @@ guessing intent or expanding the requested scope.
 Existing callers can continue to use `:outline`, `:show-form`, `:find-subform`,
 `:grep-form`, `:lens`, and `:q`. New callers should use `:ls`, `:cat`,
 `:match-form`, `:xray`, and `:edit`.
+
+## What we learned about the winning squares
+
+The durable advantage is a narrow one: when the intended change is already
+known and spans several structurally related owners, the CLI can perform the
+bookkeeping in one guarded operation. Extraction with dependency repair,
+namespace moves, declaration repair, namespace renames, and exact multi-owner
+changes are the strongest squares. Historical cohorts reached roughly 3–10x
+faster complete task time in favorable fan-out cases, but those are conditional
+measurements, not a general speed promise. The gain comes from collapsing
+search, repeated patching, and verification into one reviewed transaction.
+
+Native tools remain the floor for a known one-site edit, a tiny file, literal
+search, or syntax the structural kernel cannot model. `rg` is usually the
+cheapest way to discover a literal. `apply_patch` is usually the cheapest way
+to change one already-located region. A structural call must pay for itself in
+reduced model turns, safer fan-out, or stronger proof.
+
+This is our practical reading of the Bitter Lesson: keep the kernel general,
+composable, and evidence-producing instead of accumulating clever task-specific
+shortcuts. The model supplies intent; Surgeon supplies structural bookkeeping,
+guards, and receipts. When the bookkeeping is smaller than the model's
+orientation cost, use native tools and cede the square cleanly.
+
+The MCP entrance is retained for development experiments and contract work,
+not as the production answer. Production guidance should name the installed
+CLI, state the timing conditions above, and treat every speed claim as a
+measurement with a workload, caller, and verification definition attached.
