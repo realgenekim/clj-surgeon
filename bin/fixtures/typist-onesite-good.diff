@@ -1,0 +1,11 @@
+--- a/src/fixture/util.clj
++++ b/src/fixture/util.clj
+@@ -4,7 +4,7 @@
+ 
+ (def max-path-segments
+   "The most path segments this workspace will normalise in one call."
+-  16)
++  64)
+ 
+ (defn normalize
+   "Trim a path and drop any trailing slash."
