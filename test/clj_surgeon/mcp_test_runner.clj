@@ -40,6 +40,7 @@
    [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
+   [clj-surgeon.mcp-telemetry-coverage-test]
    [clj-surgeon.mcp-telemetry-test]
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
@@ -105,6 +106,7 @@
           'clj-surgeon.mcp-program-tool-test
           'clj-surgeon.mcp-read-request-normalization-test
           'clj-surgeon.mcp-schema-test
+          'clj-surgeon.mcp-telemetry-coverage-test
           'clj-surgeon.mcp-telemetry-test
           'clj-surgeon.mcp-tool-test
           'clj-surgeon.mcp-workspace-test

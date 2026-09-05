@@ -144,10 +144,23 @@
                 "untouched, and report the cause: a throw reaching this "
                 "boundary is a defect in the tool, not in the request.")})
 
+(defn dispatch-tool-fn
+  "The ONE server-side dispatch boundary every public MCP tool call passes.
+
+  Both transports build their tool specifications from
+  `configure-specification`, which builds every specification with
+  `create-async-tool`, which reaches each tool's callback only through this
+  function. Anything that must hold for EVERY public call — telemetry above
+  all — belongs here, because here is the only place a tool cannot opt out of.
+  Returning `(:tool-fn tool)` unchanged is the pre-instrumentation behaviour."
+  [tool]
+  (:tool-fn tool))
+
 (defn create-structured-async-tool
   "Create one SDK-native tool with annotations and structuredContent support."
-  [{:keys [name description schema output-schema annotations tool-fn summarize]}]
-  (let [json-mapper (McpJsonMapper/getDefault)
+  [{:keys [name description schema output-schema annotations summarize] :as tool}]
+  (let [tool-fn (dispatch-tool-fn tool)
+        json-mapper (McpJsonMapper/getDefault)
         annotation-record
         (McpSchema$ToolAnnotations.
           (:title annotations)
