@@ -44,7 +44,7 @@ No general problem-to-published-change win is established. The prepared typist w
 - Astra: the admission retry with the fixed adapter (recognise the two gate bookkeeping paths), then the patch-and-proof slice: guidance in the refusal text, one executable profile example from the real suite, adoption measured as first-attempt gate successes.
 - Refusal-text branch: pick up inb-2da8ea (one item) in a tool-perfect block, fence once, land.
 - Probe verb (advisory, one question: "did this exact change break the behavior I am reasoning about?") only after one real iteration shows it would change the caller's next action sooner.
-- Servers 7906/8171 rebuilt on trunk after Astra's retry window.
+- Servers 7906/8171 NOT rebuilt tonight (Astra held them to preserve the service identity through his accounting); rebuild on trunk is the first act of the next window after the agreed catalog check.
 
 ## Final stamp 16:18Z
 Window closed. Trunk MCP/main 4151ddd1. Commentary loop stopped. Servers 7906/8171 on 181c365c pending the agreed catalog check (first act of the next window). Open: inb-2da8ea (refusal-text branch parked at 76768a1f), inb-4c3d0e, inb-8f108d, inb-866a62, inb-591c41, inb-7c05bc, inb-b5356a; docs-only tips 9aa2fbf9 for a later batch.
