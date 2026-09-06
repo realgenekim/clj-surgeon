@@ -576,6 +576,9 @@ def parse_unified(diff_text):
     """[{:path p :hunks [[(marker, text), ...], ...]}] — `diff --git` optional,
     hunk ranges optional. Returns None when there is no file block at all."""
     lines = diff_text.split("\n")
+    # Fable 4b277bfc: split adds a phantom final context line to mid-file hunks.
+    if lines and lines[-1] == "":
+        lines.pop()
     blocks, i, n = [], 0, len(lines)
     while i < n:
         line = lines[i]
