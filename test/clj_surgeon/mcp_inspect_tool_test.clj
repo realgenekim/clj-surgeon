@@ -88,7 +88,12 @@
         (is (= "(def alpha :old)"
                (get-in result [:results 0 :forms 0 :source])))
         (is (= 1 (get-in result [:results 2 :match_count])))
-        (is (= ":old" (get-in result [:results 2 :matches 0 :source])))
+        ;; @spec MCP-OP-FIELD-008 -- this site's source WAS ":old", byte-for-byte
+        ;; the request's own match string, so it is now omitted as derivable.
+        ;; The reconstruction basis is the request-level match on the receipt.
+        (is (not (contains? (get-in result [:results 2 :matches 0]) :source)))
+        (is (= ":old" (get-in result [:results 2 :match])))
+        (is (true? (get-in result [:results 2 :source_omitted_when_equal_to_match])))
         (is (= (get-in result [:file_hashes "src/demo.clj"])
                (get-in result [:results 0 :file_hash]))) (is (= {:file "src/demo.clj"
                                                                  :source_sha256 (get-in result [:file_hashes "src/demo.clj"])
@@ -1345,3 +1350,99 @@
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; The 32,768-byte public-result budget, MEASURED through the public tool path.
+;; Round 2, 2026-09-06.
+;;
+;; READ THE VERB CAREFULLY. `enforce-public-result-budget` is a HELPER: it
+;; measures a result and returns a typed refusal for one that is over. The
+;; inspect handler only routes prepare-change / basis-view / plan-extraction
+;; results and continuations through it. An ORDINARY match result reaches the
+;; `:else` branch of `enforce-result-budget` and is PUBLISHED WHOLE, over the
+;; budget or not. That is a pre-existing defect, filed inb-b60d6e, and NOT
+;; something these witnesses fix or should be read as fixing. What they pin is
+;; the measured byte count and what the helper says about it.
+;;
+;; The other budget, `clj-surgeon.mcp-inspect/enforce-output-budget`
+;; (per-request-result 65,536), IS on the ordinary path and does refuse.
+;;
+;; 200 owners is a TESTED FIXTURE, not a capacity guarantee: the measured byte
+;; count depends on the length of each site's path, address, and owner name, so
+;; a file with longer names or deeper paths crosses the budget sooner.
+;; ---------------------------------------------------------------------------
+
+(def ^:private fence-literal "(send! :ping)")
+
+(defn- repeated-literal-source
+  [owner-count]
+  (str "(ns many)\n"
+       (str/join
+         (map (fn [i] (format "(defn owner-%03d []\n  %s)\n" i fence-literal))
+              (range owner-count)))))
+
+(defn- measure-repeated-literal
+  "One real inspect_clojure request through the public tool path, measured the
+   way the server measures it before it publishes anything."
+  [owner-count]
+  (let [project (temp-dir)]
+    (try
+      (write-source! project "src/many.clj" (repeated-literal-source owner-count))
+      (let [result (inspect-tool/execute-inspect!
+                     {:project-root (.getPath project)}
+                     {"requests" [{"id" "m00" "operation" "match"
+                                   "file" "src/many.clj"
+                                   "match" fence-literal}]
+                      "expect" {"requests" 1 "files" 1}})
+            normalized (assoc result :elapsed_ms 0.0)
+            summary (#'inspect-tool/inspect-summary normalized)]
+        {:result result
+         :bytes (inspect-tool/mcp-result-byte-count summary normalized)
+         :gated (inspect-tool/enforce-public-result-budget summary normalized)})
+      (finally (delete-tree! project)))))
+
+(deftest omitting-the-source-echo-pays-back-what-owner-counts-cost-in-bytes
+  ;; @spec MCP-OP-FIELD-008
+  ;; NOT a trunk-to-tip capability gain. Trunk (d95e6304) already measured 101
+  ;; repeated-literal owners under the budget; adding owner_counts (MCP-OP-FIELD-007)
+  ;; pushed the same fixture over it, and dropping the derivable source echo
+  ;; brings it back under. This witness pins the restoration, not a new capacity.
+  (let [{:keys [result bytes gated]} (measure-repeated-literal 101)
+        request (first (:results result))]
+    (testing "101 repeated-literal owners measure under the published budget"
+      (is (:ok result))
+      (is (pos? bytes))
+      (is (< bytes inspect-tool/max-public-result-bytes))
+      (is (:ok gated))
+      (is (nil? (:error-type gated))))
+    (testing "with every site, count, hash and owner tally intact"
+      (is (= 101 (:match_count request)))
+      (is (= 101 (count (:matches request))))
+      (is (= 101 (count (:owner_counts request))))
+      (is (= 101 (reduce + 0 (map :matches (:owner_counts request)))))
+      (is (every? :hash (:matches request)))
+      (is (every? :file_hash (:matches request))))
+    (testing "and the reconstruction basis on the receipt"
+      (is (true? (:source_omitted_when_equal_to_match request)))
+      (is (= fence-literal (:match request)))
+      (is (not-any? #(contains? % :source) (:matches request))))))
+
+(deftest an-oversized-match-is-measured-over-budget-and-nothing-is-truncated
+  ;; @spec MCP-OP-FIELD-008
+  ;; 200 owners is over the budget with or without the echo. What is pinned:
+  ;; the omission never truncates a result to fit, every site and count survives
+  ;; at 200 as at 101, and the budget helper -- when it is asked -- names itself
+  ;; and returns no partial result. The handler does NOT ask it for an ordinary
+  ;; match result (inb-b60d6e), so this result IS published whole today.
+  (let [{:keys [result bytes gated]} (measure-repeated-literal 200)]
+    (is (:ok result))
+    (is (= 200 (:match_count (first (:results result)))))
+    (is (= 200 (count (:matches (first (:results result))))))
+    (is (every? :hash (:matches (first (:results result)))))
+    (is (> bytes inspect-tool/max-public-result-bytes))
+    (is (false? (:ok gated)))
+    (is (= :structural-buffer-output-budget-exceeded (:error-type gated)))
+    (is (nil? (:results gated)))
+    (is (true? (:source-unchanged gated)))
+    (is (= inspect-tool/max-public-result-bytes
+           (get-in gated [:limits :public-result-bytes])))))

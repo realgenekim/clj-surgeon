@@ -51,6 +51,17 @@
     "reconstruct aggregate expect or reread completed siblings. Every guarded file is verified before evaluation; "
     "a changed guard refuses without source or write authority. Hypotheses are "
     "never selection authority, and continuation is never write authority. "
+    "Every match result carries its file and an owner_counts vector of "
+    "{inside, matches} in first-occurrence order summing to match_count. Those "
+    "counts are the query's per-owner tallies: they are the apply_clojure_changes "
+    "edits matches only when one concrete from/to replacement addresses every "
+    "site in that owner, which a wildcard query does not guarantee, and an "
+    "owner_counts entry whose inside is null is a top-level match with no named "
+    "within.form. A match site OMITS its source exactly when that source equals "
+    "the request-level match string byte-for-byte; absent site source means "
+    "source = result.match, reported per result by "
+    "source_omitted_when_equal_to_match. Any site whose spelling differs -- "
+    "whitespace, a comment, a wildcard capture -- keeps its source verbatim. "
     "read_complete=true is "
     "terminal. Never writes."))
 
