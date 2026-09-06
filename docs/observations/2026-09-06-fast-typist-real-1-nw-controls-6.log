@@ -1,0 +1,62 @@
+ORIENT start 01:46:08Z load1=2.47
+ORIENT attempt2 start 01:46:41Z load1=3.50
+=== CONTROL 1 start=01:47:18.298347063Z load1=2.66
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788659238-4180590-0 first_verified_s=22.89 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a07465-7a8c-7423-b598-cbac0681c1f5 call_wall_s=22.84 edit_channel=in-place
+=== CONTROL 1 rc=0 end=01:47:41.332802534Z load1=2.46
+=== CONTROL 2 start=01:47:41.345579680Z load1=2.46
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788659261-4187519-0 first_verified_s=20.93 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a07465-7a8c-7423-b598-cbac0681c1f5 call_wall_s=20.88 edit_channel=in-place
+=== CONTROL 2 rc=0 end=01:48:02.422459612Z load1=2.45
+=== CONTROL 3 start=01:48:02.433444760Z load1=2.45
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788659282-4193916-0 first_verified_s=22.30 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a07465-7a8c-7423-b598-cbac0681c1f5 call_wall_s=22.25 edit_channel=in-place
+=== CONTROL 3 rc=0 end=01:48:24.870143817Z load1=1.86
+=== CONTROL 4 start=01:48:24.880028263Z load1=1.86
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788659304-10238-0 first_verified_s=19.96 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a07465-7a8c-7423-b598-cbac0681c1f5 call_wall_s=19.91 edit_channel=in-place
+=== CONTROL 4 rc=0 end=01:48:44.984606309Z load1=1.79
+=== CONTROL 5 start=01:48:44.993905437Z load1=1.79
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788659325-17224-0 first_verified_s=21.17 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a07465-7a8c-7423-b598-cbac0681c1f5 call_wall_s=21.12 edit_channel=in-place
+=== CONTROL 5 rc=0 end=01:49:06.303370807Z load1=1.98
+=== CONTROL 6 start=01:49:06.313342935Z load1=1.98
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788659346-23865-0 first_verified_s=21.69 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a07465-7a8c-7423-b598-cbac0681c1f5 call_wall_s=21.64 edit_channel=in-place
+=== CONTROL 6 rc=0 end=01:49:28.140762101Z load1=2.54
+ALL DONE 01:49:28Z
+
+================ ANALYSIS (fable, 2026-09-06) ================
+ORIENTATION (recorded, NOT charged)
+  session_id      01a07465-7a8c-7423-b598-cbac0681c1f5
+  wall            10.618 s   (01:46:42Z spawn -> 01:46:52Z)
+  rollout         ~/.codex/sessions/2026/09/06/rollout-2026-09-06T01-46-42-01a07465-7a8c-7423-b598-cbac0681c1f5.jsonl
+  PROOF it loaded the source: one CommandExecution, parsed_cmd type "read",
+    `sed -n '1,220p' src/clj_surgeon/diagnostic_delta.clj`, output began
+    "(ns clj-surgeon.diagnostic-delta ..." ; final AgentMessage = "READY";
+    orientation_edited=false (git diff empty), zero write tool calls.  VALID.
+  sandbox: bypass (fenced to /var/tmp/forge/typist-real-fx/warm-ws-real-1)
+
+SIX CONTROLS — verified 6/6, all in-place edit channel, all forks of the SAME session.
+  sorted verified walls (s): 19.96 20.93 21.17 21.69 22.30 22.89
+  median 21.430   mean 21.491   SD 1.040 (sample SD, n-1)   max 22.895
+  all six candidate.diff byte-identical: md5 2054872f578240fb4f937892c6157424 (70 lines)
+
+PER-TRIAL BOUNDARIES (offsets in s from fork spawn; gate cold, bb)
+ trial  spawn(UTC)      ttft   model-turn-end  copy   apply   gate    accept  acceptance-end  load1
+ 1      01:47:18.30     4.257  22.843          22.857 22.862  22.879  22.892  22.895          2.66
+ 2      01:47:41.35     4.388  20.877          20.893 20.898  20.915  20.930  20.933          2.46
+ 3      01:48:02.43     3.507  22.247          22.261 22.265  22.280  22.292  22.295          2.45
+ 4      01:48:25.00     3.511  19.914          19.928 19.932  19.947  19.959  19.961          1.86
+ 5      01:48:45.10     5.169  21.121          21.135 21.139  21.156  21.169  21.172          1.79
+ 6      01:49:06.42     3.430  21.641          21.654 21.658  21.673  21.684  21.687          2.54
+   (judge total 43-53 ms per trial: apply 4-5 ms, gate 15-17 ms, accept 11-15 ms)
+
+EDIT STYLE (from the six fork rollouts) — identical in all six:
+  tool_calls=2, begin_patch_blocks=1, FileChange_items=1, selfcheck_turns=1, ran_bb_test=1
+  i.e. ONE batched apply_patch block (single *** Update File, multiple @@ hunks),
+  then ONE self-verification turn of Sol's own choosing (parallel exec_command:
+  git diff / git status, rg for the trap spellings, and the bb test) INSIDE the
+  charged wall.  No per-site edits in any trial.
+
+ATTEMPTS LOG (all, including failures)
+  01:46:08Z  orientation attempt 1 — driver script crashed BEFORE any codex call
+             (missing `import importlib.machinery`); warm workspace mtime unchanged,
+             no session created, ZERO codex calls spent. Not a void orientation.
+  01:46:42Z  orientation attempt 2 — success (above).
+  01:47:18Z .. 01:49:28Z  controls 1-6, all rc=0, all verified.
+  codex calls used: 7 of 8 (1 orientation + 6 controls). Spare unused.

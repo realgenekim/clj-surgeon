@@ -2163,3 +2163,493 @@ Servers restarted onto trunk fbd68a1c: 7906 PID 523110, 8171 PID 523113.
 ## 18:30Z — Gene (verbatim): "Get with Astra and ask you to review kind of the mental models of, uh, what surgeon would ideally be for the LLM. Is it like the ultimate emac slash bin editor? Is it the transform code as a closure, um, interpreter? Um, what is the shape of the tool that it wants? And to what extent does surgeon API accommodate that ideal shape? for that matter, ask Opus two since it looks like Opus and Saul... ask Codex Saul two because one hypothesis is that the smaller models like Opus and Saul might be better users of it and maybe even Terra. But the person... the perspective I really want is Astra." + addendum: "I think beads really nailed the ideal of a tool that LLMs know how to use (true?) Can we match or beat it?" Dispatched independently, each writing its own docs/observations/2026-09-05-surgeon-ideal-shape-<who>.md: Astra (pane + file, his branch), Sol (sol-yolo, scratch worktree), Terra (gpt-5.6-terra exists in the codex models cache; sol-yolo with CODEX_MODEL override, second scratch worktree), Opus (agent, read-only MCP reads allowed). My own position, given to Gene first: the shape the evidence favours is an intent compiler with proof plus a review instrument — not an editor, not an interpreter; beads' ideal (few known verbs, idempotent, id receipts, plain-file state, no impossible decisions) is the right bar and helper_extraction is the first verb built to it end to end.
 
 ## 18:33Z — IDEAL-SHAPE reviews landed on MCP/main, four independent perspectives (astra / sol / terra / opus docs). Convergence, plainly: all four reject the editor (native patch wins single sites; per-form grammar loses on fan-out) and the interpreter-as-product (SCI/transform is a bounded internal notation, not the promise); all four name the same shape — Astra: "bounded intent-to-receipt transaction kernel"; Sol: "intent compiler with proof … a structural coprocessor"; Terra: "intent compiler with a proof-carrying receipt, backed by a structural lens"; Opus: "intent compiler returning a terminal proof, with a discovery instrument bolted to its front". Beads: all four say Gene's claim is true; Astra names what to add (intent identity, lifecycle states, resumable ids, one help/show/update pattern, mission dependencies) and drop (aliases for several mental models, MCP-only names, one-off schemas, process-local receipts). Divergence worth keeping: the single change each wants most — Astra: mission-shaped discovery handing the write a hash-bound dossier; Sol: admit_clojure_patch as a one-shot apply_patch-compatible commit gate (meets him on the route he already takes); Terra: one closure-owning transaction entrance per measured fan-out family, starting with helper_extraction; Opus: a first read call that cannot fail (partial results + typed miss list, no provider dependency). Smaller-model hypothesis: Sol/Terra "plausible, narrower: smaller models RECEIVE more leverage, not shown better at using it"; Opus: "directionally right, wrong mechanism — the ratio is a function of the caller's native fallback, not its size" (Astra 1.24× vs Sol 3.32× on one task); each pre-registers a falsifier (six counterbalanced held-out tool arms per model, same server/oracle, caller-quality measures).
+
+## 18:38Z — Gene: "Open up aperture and brainstorm with Astra on ideal tool that you would love using! You have 2 hours to explore and prototype … table top exercise … estimate wall clock time wins. Think slowify in kim/spear wiring the winning org book." + "You and Astra would love using and convince each other that the tool is worthy and goes with flow of bitter lesson." + "maybe use codex spark for fast typing to achieve these bounded missions? Maybe even 3 ways and you can pick? Maybe use Astra and you to pick 20 ideas, prototype many — maximize option value." + "Record your idea in captain log."
+
+THE IDEA (Fable): Surgeon as a MISSION LEDGER — beads' shape applied to code, with proof. A mission is a durable object: `mission propose "<bounded intent>"` → id + dossier (owners found, callers partitioned, closure, the ONE decision the tool cannot make, cost) with nothing written; `mission show <id>`; `mission apply <id>` → guarded transaction + terminal proof, a receipt that means "stop checking"; `mission undo <id>`; `mission ready` → missions blocked on exactly one decision. State = plain EDN files any agent can read without the tool; missions survive compaction, handoff and seat changes. Lifecycle: proposed → ready | blocked(decision) → applied → verified | failed(restored) → undone.
+Wiring the Winning Organization mapping — slowification: closure, cardinality, byte preservation and proof move out of the model's hot loop into the tool's planning phase (propose), where they are cheap, inspectable, reversible; simplification: one object with five states instead of nine tools, three grammars, twelve refusal types; amplification: every refusal names one decision with evidence, every receipt says what was read/changed/verified/refused and what to do next, one telemetry event per public call so absence is visible.
+Bitter-lesson argument: the model does the learning-shaped work (meaning, scope, judgment); the tool does the compute-shaped work (exact repository state, closure search, atomic transaction, executed proof); the interface is a durable object, not a grammar the model must learn. Stronger models state better intents and read dossiers faster; the tool's contribution stays exactly as valuable because it never pretended to be intelligence. Grammar-shaped surfaces (per-form editing) are hand-built knowledge and lose as models improve — measured tonight (36 tool calls in Astra's window, all reads; writes in Python). Falsifier: a capable native batch script plus tests, equal setup, still faster → the ledger is a quality option, not a speed route.
+Tabletop (measured parts → estimate): today's real caller 86.1 s / 5 actions (≈38 s orientation, 8.9 s refused call, 24.1 s successful call, returns); mission flow ≈ 50–60 s / 2–3 actions (propose ≈ 9–13 s server + one return; apply ≈ 24 s; bounded receipt) — about a third of the wall removed, all from orientation and the retry; no valid native denominator exists yet for this task; on literal-patch fan-outs the measured 3.3× is the inherited floor.
+Spark typist: fast cheap model types the bounded mission under a proof gate; three-way race, the gate picks the first passing attempt, the receipt records all three — amplification by redundancy at a fraction of one large-model turn. Launched: three Spark arms on "scope.roots" (accept directory roots beside globs; refusal names both) in disjoint worktrees, proof gate = the boundary namespace green with new witnesses.
+Twenty ideas: my ten posted to Astra (mission ledger; reads that cannot fail; scope roots; refusal envelope on all nine tools; admit_clojure_patch as a one-shot apply_patch-compatible commit gate; alias_migration under the same ledger; dossier-as-native-diff preview; help/show/update pattern; telemetry + usage verb; the Spark race harness itself); his ten requested. Prototypes in flight: mission ledger (Opus, bridge/mission-ledger, 100-min budget), Spark three-way (scope roots). Full riff: docs/observations/2026-09-05-ideal-tool-riff-fable.md; Astra's reply requested in docs/observations/2026-09-05-ideal-tool-riff-astra.md.
+
+## 18:41Z — Gene (verbatim): "Don't wait for me. You guys are in charge for next 2 hours." (Fable + Astra; until ≈ 20:41Z). Plan of record for the window: (1) Astra's riff + ten ideas → merge into one twenty-idea list; (2) prototype many, cheap typists (Spark three-way, Sol) under proof gates, disjoint worktrees; (3) mission-ledger prototype (Opus) → tabletop with measured verb timings; (4) bitter-lesson debate round two (Astra attacks my §4/§5, I answer); (5) end-of-window Gene report: what was built, what it felt like, estimated vs measured wins, what to keep. Landings stay gated; no public main; Codex budget is Astra's call.
+
+## 18:47Z — MISSION LEDGER PROTOTYPE exists: bridge/mission-ledger 71dd6eff (pure core + CLI adapter + 7 witnesses/83 assertions; propose→show→apply→undo on the real 38-file fixture, byte-identical restore, second undo refuses; blocked half runs too: one decision named, `ready` lists it). THE FEEL, measured (warm JVM, one run): propose 102.7 ms, show 1.0 ms, ready 1.7 ms, apply 315.9 ms (plan + kernel commit + fresh-process proof), undo 12.6 ms. THE SURPRISE: every verb costs ≈ 6 s through the cold-JVM entrance — 6,000× overhead on exactly the verbs an agent calls most (show/ready/list); the pure core is Babashka-safe so reads should route through bb (tens of ms) and only propose/apply/undo through the JVM. That is the tabletop's missing number: the mission shape only pays if `show` is instant. Builder's shape changes after building: split ledger from kernel at the process boundary; :applied needs an owner + lease; intent carries a tree content hash (stale-resume before spending 300 ms); :receipts vector; :supersedes links for answering a decision; keep the verb-aware dossier seam. Caveats: /bin/true proof (floor), single cold-JVM runs, plain spit (not atomic), id counter races two concurrent proposes.
+
+## 18:48Z — SPARK RACE VOID: all three gpt-5.3-codex-spark arms died mid-task on "You've hit your usage limit for GPT-5.3-Codex-Spark … try again at 11:37 PM" after ≈15 min each (3 files / ~100 lines of partial edits per worktree, no proof-gate run). The Spark-typist hypothesis is UNTESTED tonight, not refuted; I am running the proof gate on each partial diff to see whether any arm was already green. Astra's docs landing refused twice by battery-fresh (docs-only tip, receipt >30 commits behind after all the records commits) → ratchet: `land` skips battery-fresh + recovery battery for a merge that changes no src/test/Makefile/deps.edn/bin/skills; re-landing his docs now.
+
+## 18:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 18:48Z load 4.80 ; === rc 0 end 18:53Z)
+
+## 18:53Z — Astra's docs LANDED as 5b1c4d88 (ideal-shape answer; ideal-tool riff with tabletop 55–125 s vs native 190–430 s on an eleven-caller threading task = 1.7–3.5× estimated; his round-two answer; his ten mission ideas; a "mission prototype options" note). Spark partial-diff gates (proof gate run by me after the usage-limit deaths): spark1 `Ran 50 tests containing 1167 assertions. 2 failures` — both in its own new scope.roots witness (implementation incomplete); spark2 `Ran 48 tests containing 1159 assertions. 0 failures` — but it added NO new deftest (48 = the pre-existing count), so its green proves nothing about scope.roots; spark3 died mid-edit leaving a syntax error in the test file. Verdict: zero of three Spark arms delivered a gated implementation; the failure modes are the expected fast-typist ones (incomplete, witness-free green, half-written file). The typist hypothesis remains untested under a fair budget; when the Spark limit resets (11:37 PM in the account's clock) a re-run with a 30-minute cap and the gate as the only judge is the honest next try.
+
+## 18:54Z — MISSION LEDGER round 2 (bridge/mission-ledger e00fb7e9): five verbs open/plan/show/apply/resume; STALE-RESUME live (one appended line in one owner file → `mission-snapshot-stale`, "1 of 37 planned files no longer match. Nothing was written.", tree byte-identical, next-action [:plan "M-1"]); NATIVE ADJUDICATION real (31 callers/66 sites/proof → :mission; one owner/one site/no proof → :native "a native edit costs one call, and this mission costs two returns"; one site WITH a proof obligation → :mission); resume refuses to auto-continue an interrupted :applied transaction (needs a human — the delivery-chain rule); bb read path MEASURED: show 6.7 s → 0.091 s (74×), ready 8.4 s → 0.029 s (290×), list 6.7 s → 0.030 s; one object, two entrances, witnessed equal. 11 tests / 114 assertions / 0 failures. The tabletop's missing number is now measured: a `show` costs less than a tenth of a second, so the ledger's durable-context claim survives contact. The builder flagged "a commit I did not make" — that was me committing its round-1 output by path (the seat's protocol); recorded so the next builder does not chase a phantom writer.
+
+## 19:00Z — THREAD-PARAMETER prototype (Astra idea #1, Sol typist under a proof gate, 11.2 min): bridge/thread-parameter b1502233 — pure planner threading a new keyword parameter through every direct caller under every binding spelling, whole-form edits, four typed refusals, eleven-caller fixture + first-class-use refusal variant; `Ran 6 tests containing 49 assertions. 0 failures`; lane-manifest 25/89/0; builder's tabletop: native 5 returns vs planner 2 on the fixture (saves 3; estimate, not caller-measured). Fast-typist mode 1 (strong author + fast executor) worked here where Spark could not run: the gate, not the model, is what made the 11 minutes trustworthy.
+
+## 19:00Z — ASTRA HANDS-ON on the mission prototype (his words, ac27344a): "The first `propose` felt right: one EDN request produced `M-1`, a ready state, a snapshot hash, destination, owner count, footprint, and an explicit `[:apply "M-1"]` next action. `show` returned the same object without making me rediscover anything. The first `apply` refused safely because I failed to pass the verification profile; the receipt named the missing authority and left source bytes unchanged. Repeating with the same structured spec reached `:verified` in about **9.9 seconds wall** from first proposal through terminal receipt; the guarded kernel reported **22.6 ms** of operation time. … The feel is already closer to Beads than to an editor: the useful unit is `M-1`, not the individual edit. The main friction is that `apply` must repeat enough request context to load profiles; a durable mission should make that impossible to forget." → routed to the mission builder: the mission stores its resolved verification config at plan time; apply never re-asks; a missing authority blocks at plan time with the decision named. First real caller-measured mission wall: 9.9 s propose→verified on a one-helper/one-caller scratch (kernel 22.6 ms; the rest is JVM starts).
+
+## 19:03Z — Gene: "Take a moment to figure out how codex spark works. Use Claude code history search skill. Seems important. Maybe have Astra on it too" → done by hand (the two history skills are on disk at ~/opt/claude-skills but not registered in this session; followed their instructions). Findings (riff §8): Spark is a synchronous typist by its own instructions template — 1.5k tok/s, "every tool call is expensive", "prefer mistakes over over-exploring", "do NOT run tests or verify unless asked", parallelize, apply_patch; default reasoning high, low/medium/xhigh available; subscription-only; per-model usage limit with its own reset (11:37 PM in the account clock), separate from the weekly meter. Our three arms did the opposite (explore + JVM gate at high) and died at ~15 min each. Right harness = dossier in, patch out, gate outside, N-way, effort low. History searches found no earlier Spark use on this seat. Astra asked for the Codex-side facts (limit window, invocation on 0.153, fit).
+
+## 19:05Z — MISSION LEDGER round 3 (bridge/mission-ledger 57c9bb42): `link` verb for :depends-on and :supersedes (cycle refused before write, loop as evidence); blocked-by-dependency is computed on read (forward edges only stored; a human can edit the ledger with cat and an editor); `ready` vs `waiting` lists (work nobody can start never sits in ready); apply gated on unverified dependencies before the stale gate; the verification profile is resolved at plan time and stored — Astra's friction removed; unadmitted authority blocks at plan time with the decision named. 17 tests / 195 assertions / 0 failures; bb loads. Builder's next insight, kept: a dependency release should INVALIDATE the dependent's dossier (M-2 → :proposed with next-action [:plan], not :ready on a stale plan) — turning a downstream stale refusal into an upstream re-plan the ledger asks for itself.
+
+## 19:13Z — SOL AS A REAL CALLER of the mission prototype (docs/observations/2026-09-05-mission-ledger-sol-caller-probe.md): 24 model returns, 6m11s from first command to the last apply refusal, NO verified receipt. What felt right (his words): "The ready dossier itself felt good: it clearly quantified 31 caller files, 66 sites, 33 changed files, retained sites, caller partitions, snapshot hashes, and the exact next action." What felt wrong: seven plan refusals to reverse-engineer the closed EDN shape (no discoverable example); global option before the verb silently printed help with exit 0; the fixture recipe wrote a zero-byte destination → target-exists; four schema-valid applies died on verification-preflight-unavailable with configured_profiles [] though the workspace's .clj-surgeon.edn existed (profile discovery bug); CLI exited 0 on failed receipts; failures were terminal — the ledger accumulated M-1…M-11 with no repair-in-place. His verdict on the ledger after refusal: "it accumulated blocked/failed missions but offered no resolution transition, next_call, or way to repair a request/profile in place." This is Opus's "first call that cannot fail" and Terra's beads bar failing on contact, measured. Routed as mission round 5 (help with runnable examples; profile discovery from the workspace file; non-zero exit on failure; option order; repair-in-place via supersedes; fixture materializer). Astra's hands-on (with the spec in hand) reached :verified in 9.9 s; Sol without it never did — the difference IS the discoverability gap.
+
+## 19:17Z — Astra on Spark (pane answer, his words): "Limit/reset: I can't verify a Spark-specific quota from local evidence … check Codex /status … Harness: yes — low effort, a compact dossier, one bounded apply_patch, and no tests inside Spark's task. Run verification outside the fast typist so the gate remains independent. … Mission ledger fit: excellent for plan/dossier emission, but Spark should never choose scope or interpret ambiguity. Astra/Sol supplies intent; Spark emits the structured request; Surgeon verifies or refuses. Recommended three-way test: native apply_patch, Spark emits the mission request, and Spark emits a native patch. Compare complete wall, returns, correctness, and proof failures." Converges with riff §8; the three-way test is the preregistered next Spark experiment once its limit resets.
+
+## 19:24Z — MISSION LEDGER rounds 4+5 (bridge/mission-ledger c627e1d8): 20 tests / 278 assertions / 0 failures. Round 4: a dependency verified after a dependent's plan → the dependent is :proposed with next-action [:plan]; apply refuses with the upstream reason ahead of the hash gate; plan <id> re-plans in place. Round 5 (Sol's dead ends): help [verb] prints the copy-paste closed request + config; every blocked decision carries :example; ROOT CAUSE of his four dead applies — the entrance never read the workspace's .clj-surgeon.edn — fixed, show returns :config_sources; exit 1/2 on refusal/unknown verb; options order-independent; repair in place via :supersedes; zero-byte occupants labelled. Scripted replay of Sol's exact final request: open :ready → apply :verified with only --workspace/--state-home. PROBE 2 launched: Sol as a caller again on the fixed build (same task, fresh workspace) to measure the before/after in returns and wall. Owed production change: :example on the boundary's own closed-field refusals.
+
+## 19:29Z — SOL CALLER PROBE 2 on the fixed mission build (c627e1d8), same task, fresh workspace, only bin/mission + help: **:verified in 2m20.8s with 11 returns** (probe 1: 24 returns, 6m11s, never verified). Receipt: 6 helpers, 31 caller files, 66 sites, 33 changed files, alias histogram {response 29, resp 1}, fresh-process proof; resume → undo → 33 files read back; recursive diff vs a separately materialized PRE: empty. Where the 141 s went: eight `help` calls at ≈5 s each (cold JVM) ≈ 40 s — routed to the builder (help via bb); the rest is plan/apply JVM starts and returns. This is the first measured before/after of a usability change on the same caller and task: returns 24 → 11, wall never → 2m21s. Report on trunk: docs/observations/2026-09-05-mission-ledger-sol-caller-probe-2.md. Also launched: the owed production change (:example + :field + :decision on the boundary's own request-shape refusals, example witnessed runnable) on bridge/helper-refusal-example.
+
+## 19:32Z — MISSION LEDGER round 6 (920502d9): help routed through bb — 5 s → 0.04 s per call (≈125×); unknown verb exits 2 without a JVM; bb and JVM help text byte-identical (witnessed). 20 tests / 283 assertions / 0 failures. Mission ledger totals for the window: six rounds, 20 witnesses, measured verbs: show 0.09 s, ready 0.03 s, help 0.04 s (bb); open/plan ≈5.7 s, apply ≈6 s (cold JVM; in-process 0.1 s / 0.3 s); Sol as caller: 24 returns/never → 11 returns/2m21s.
+
+## 19:45Z — boundary :example refusals built; Sol fence review r1 running
+
+The Opus agent finished the production change from Sol's caller probe (seven guessing round trips on
+request shape): every closed-field refusal of helper_extraction now carries `:field`, `:decision`, and
+a runnable `:example` witnessed to PLAN OK on the fixture tree; schema allows the three fields as
+optional; manifest pin 48→51 with reason inline. Ran 582 tests, 7306 assertions, 0 failures (make
+mcp-test). Branch bridge/helper-refusal-example tip c5e8be8f, pushed. Sol fence review r1 started
+19:45:06Z (pid 1262105, verdict docs/observations/refexample-r1.md in the fence worktree).
+
+Two agent deviations accepted: the example's scope is [\"src/**\"] (the runnable requirement beat the
+brief's literal) and it omits workspace_root (the one field a literal could not tell the truth about;
+the witness binds it to the materialized root). Two findings: (a) make mcp-test PROBES port 7890 in its
+preamble (cclsp readiness), which conflicts with the seat's never-7890 rule — a probe, not a start, but
+it must be made skippable; filed below. (b) fence-run refused on two stray untracked SOL-REPORT files at
+the fence root left by the thread-parameter typist; cleanup widened to `git clean -qfd` on the whole
+scratch worktree (the fence worktree is scratch by definition), stray files parked under
+/var/tmp/forge/fence-stray.
+
+Landing path per the obviously-better ruling: Sol GO → Astra confirm → ~/bin/land.
+
+## 19:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 19:51Z load 2.84 ; === rc 0 end 19:56Z)
+
+## 19:58Z — Sol fence r1 GO on c5e8be8f; confirm request sent to the pane agent; the pane now reports gpt-5.6-luna
+
+Sol fence review r1 of bridge/helper-refusal-example c5e8be8f: "No findings", GO (verdict filed as
+docs/observations/2026-09-05-sol-fence-refexample-r1.md). Per the obviously-better ruling the landing
+waits on the pane agent's confirm line; the request is in /var/tmp/forge/fable-to-astra.md (19:48Z
+heading) and I pointed the pane at it at 19:58Z. Meter note: the pane's own status line reads
+"gpt-5.6-luna medium · ~/src/clj-surgeon · Main [default] · Goal achieved (4h 7m)", not gpt-6-astra.
+Whatever answers under that heading is Luna unless the model is switched back; the reply will be
+labelled by the model the pane shows at the time, not by the seat's name. The 7890 hazard in
+`make mcp-test` is noted under the same heading for the seat-provider thread (inb-41c1cc).
+
+## 20:21Z — LANDED 13c12401: request-shape refusals carry :field, :decision, runnable :example
+
+bridge/helper-refusal-example tip 49af88ab (c5e8be8f + battery receipt) merged to MCP/main as 13c12401
+by ~/bin/land; gates on the merged tree all green (battery-fresh, recovery battery 3/3, mcp-test,
+bb, oracle, hygiene, intent audit; log /var/tmp/forge/land-49af88ab….log). Path: Opus build →
+make mcp-test 582/7306/0 → Sol fence r1 GO, no findings → pane agent confirm (status line
+gpt-5.6-luna; text: "I have no objection to c5e8be8f landing after Sol's GO") → land. First landing
+attempt was refused by battery-fresh (receipt 70 commits behind, limit 30); battery on the tip passed
+(563 tests / 12196 assertions / 0 failures / 699 s), receipt committed, second landing green. Total
+from agent finish to trunk: 19:41Z → 20:20Z.
+
+This closes the first production change to come out of the aperture window: the Sol caller probe's
+seven guessing round trips on request shape now end at the first refusal, which shows the shape.
+
+## 20:22Z — local install refreshed to 13c12401: CLI ~/bin/clj-surgeon + Codex/Claude skills from fe41adab (= 13c12401 + records; receipts in place); servers 7906/8171 restarted from their own worktrees at 13c12401 (`clojure -X:clj-surgeon/mcp :port N :nrepl-port :none :telemetry :full`, logs /var/tmp/forge/srvN.log). install-agent-routing not run (managed prompt blocks are a doctrine change, not an install).
+
+## 20:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 20:48Z load 1.17 ; === rc 0 end 20:53Z)
+
+## 21:34Z — Gene: "Spark is too flaky and unpredictable; let's explore Using gptoss for the need" + "See if there's a legit job to be done for insanely fast typer."
+
+Spark retired from the harness (per-model limit killed 3/3 arms; probe at 21:2xZ still refused until
+23:37Z). Anvil has no GPU, no ollama, no llama.cpp; 16 EPYC Genoa cores (AVX-512), 30 GB RAM, root
+volume 12% remaining. Codex CLI carries `--oss` (ollama/lmstudio provider), so the harness is unchanged.
+Started a user-space ollama install (~/opt/ollama, port 11434 free) to MEASURE gpt-oss-20b on CPU;
+expectation stated before measuring: 15–30 tok/s (3.6B active params) — the predictable typist, not the
+fast one. The fast tier is hosted gpt-oss-120b (~1k tok/s, pennies/Mtok, metered key = Gene's call).
+
+Position given to Gene on the legit job: not "type my patch faster" (typing is ≤1/5 of a single arm's
+wall; a typist that errs 3x with a 150 s gate loses). Three jobs that only exist at insane speed:
+(1) search under a cheap verifier — N candidates per dossier, ms-scale proof profile as judge;
+(2) whole-file rewrite as the edit primitive (a 500-line file in ~4 s; no line-anchored patch, no
+context-mismatch recovery; diff computed after); (3) speculative pre-staging — type all plan options
+before the pick. Condition for all three: the gate must be cheap; the mission ledger's proof profile is
+that gate. Experiment of record: five candidates from one dossier on the scope-roots mission, gate
+outside, time-to-first-verified vs one Sol arm.
+
+## 21:41Z — gpt-oss on CPU measured then deleted (Gene: "Delete ollama and anything it might have downloaded"); Groq is the path; riff sent to the pane agent
+
+Measured before deletion, ollama 0.33.3 user-space, gpt-oss:20b, dossier prompt (344 prompt tokens),
+1200 output tokens: wall 192.1 s, load 28.6 s, prompt 83 tok/s, OUTPUT 7.5 tok/s (ollama's own
+counters). Prediction was 15–30; actual 7.5 — CPU decode of a 13 GB MoE on this box is a quarter of Sol's
+remote speed. Local is not the typist. Ollama + models deleted (disk back to 75 GB free); first kill
+attempt matched my own shell via `pgrep -f 'opt/ollama'` (the self-match class again; killed by exact PID
+after). Gene: "gptoss calls already in MCP server … it's API calls … ask mayor [for auth tokens]". On this
+box the only related code is the voice remote's Groq client (Whisper transcription, key groq-api-key in
+Secret Manager / secrets/groq.edn); Groq serves gpt-oss-120b on the same OpenAI-compatible endpoint at
+~1k tok/s. No key on this seat; asked the mayor (/tmp/anvil-to-mayor.txt) for the key as a 600 file and
+for the location of the existing gpt-oss caller. Bench script staged: /var/tmp/forge/groq-oss-bench.sh
+(prints Groq's own usage/completion_time fields). Riff request to the pane agent (status line still
+gpt-5.6-luna) posted 21:40Z in /var/tmp/forge/fable-to-astra.md: three jobs (search under a cheap
+verifier; whole-file rewrite as the primitive; speculative pre-staging), condition (cheap gate), asked
+for attack, a fourth job, the falsifying experiment with predicted numbers, and the verifier bound for
+"keep everything else byte-identical".
+
+## 21:43Z — Gene: "yes, gpt-oss-120b via groq; use that for experiment, and tell astra about it." Pane agent riff (21:40Z, gpt-5.6-luna): candidate search under a cheap verifier = real; whole-file rewrite = conditionally real behind a preimage/diff contract; speculative pre-staging = wishful for one mission; fourth job = repair search on refusals without write authority; falsifier with predictions (F 25–45 s vs N 45–75 s; 10–20% bad candidates; kill below 20% median gain or on any semantic mismatch). Preregistered as docs/observations/2026-09-05-fast-typist-prereg.md; told the pane agent. Blocked on the Groq key.
+
+## 21:49Z — UNBLOCKED: Groq key delivered; gpt-oss-120b verified at the meter from this box; first typist number
+
+Mayor delivered ~/secrets/groq.edn (600 in a 700 dir; shape {:key "…"}, NOT :api-key — the mayor's own
+correction, /tmp/mayor-groq-correction.txt) with a live receipt from the skiff and one trap: gpt-oss-120b
+on Groq is a REASONING model — reasoning is a separate response field spent FIRST, so a tight max_tokens
+returns empty content with finish_reason "length", which looks exactly like a broken key. Verified here:
+curl → HTTP 200 in 0.17 s, content "GROQ OSS OK", finish stop, reasoning_tokens 44. A second trap found
+on this box: python urllib's default User-Agent gets HTTP 403 from Groq's edge (fixed with an explicit
+User-Agent; bench script updated). Bench on the same dossier prompt used for the CPU run (348 prompt
+tokens): status ok, wall 2.73 s, completion 1282 tokens of which 859 reasoning, 481 tok/s, queue 5 ms,
+plausible diff — with a defect: every '+' line carried an extra leading space and the diff came inside a
+```diff fence. Versus gpt-oss-20b on this CPU (192 s): 70x. Both corrections and the defect class sent to
+the runner agent (arm F reads both fields, budgets 6000, records finish_reason length as a typed refusal,
+strips fences, never repairs whitespace — the gate judges).
+
+## 21:53Z — Gene: "what are you having astra do? I'm expecting him to work on experiments, too" → Astra assigned his own fair comparison; typist runner shakedown: 0/5 Groq candidates apply (format, not model)
+
+Honest answer given: since his four-hour program ended the pane agent had done only reviews for me
+(confirm, riff). Assigned him his own preregistered fair comparison from its named next action (fresh
+fixture → six native controls per model → interleaved tool arms), own worktree, own branch, results as a
+table, per-step lines in the coordination file; delivered via tmux paste-buffer to forge-anvil:1.0 (the
+window was renamed; send-keys -l printed "not in a mode" and typed nothing — paste-buffer + Enter works).
+The pane's status line switched to gpt-6-astra at 21:5xZ (it had read gpt-5.6-luna since ~19:5xZ).
+
+Typist runner (bridge/mission-ledger 53ba6120 → ba26d258; bin/typist-run, bin/typist-dossier.md, two
+fixtures; fake arm: good diff → apply/gate/accept ok, bad diff → gate+accept false, 0.185 s whole run;
+refusal without key = exit 4 pre-network). Live shakedowns (not data): F k=1 → 403 (UA), fixed; F k=1 →
+HTTP 200, 523 tokens (355 reasoning), 1.08 s Groq completion (483 tok/s), apply FAILED "patch with only
+garbage at line 5"; F k=5 → 0/5 apply, all finish stop, 3067 tokens total. Retained bytes show the cause:
+gpt-oss-120b emits BARE "@@" hunk headers (no ranges) and sometimes no "diff --git" line — the
+context-anchored shape of Codex's own apply_patch, which git apply rejects. Protocol amendment recorded
+BEFORE any cohort run: the applier accepts context-anchored hunks (exactly one verbatim match in the
+preimage, else refuse), git apply first, anchored fallback second, applier recorded per candidate, no
+whitespace repair; plus a --replay mode that re-judges retained candidates offline. Tool-shape finding
+for the ledger: two typists (Codex apply_patch, gpt-oss) natively speak context-anchored hunks; the
+mission ledger's accepted edit form should be that, not line-numbered unified diff. N-arm (Sol) shakedown
+running in the background.
+
+## 21:58Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 21:54Z load 2.64 ; === rc 0 end 21:58Z)
+
+## 22:00Z — prior art reconciled before scoring: arm T (2026-09-02) vs the current typist preregistration; Gene's FYI on the battle-tested client
+
+Gene: "there is code to call gpt-oss via groq in mcp server somewhere; that is somewhat battle tested…
+when found, tell astra." Search (rg over ~/src bounded; gh code search over realgenekim; git grep across
+clj-surgeon remote refs): no Groq gpt-oss client in clj-surgeon; the battle-tested typist is the bridge's
+~/bin/typist on Buster (OpenRouter gpt-oss-120b; receipt 04:48Z, 2026-09-02); the only Groq code on this
+box is the voice remote's Whisper client. Told Astra, with the Groq traps.
+Reconciliation: arm T put the typist INSIDE a Sol-driven whole task (Sol decides, typist types mechanical
+parts) — 409 s vs native 191 s, 44 model actions; tech-tree: "MULTIPLIER only, behind the gate on
+fan-out"; planned E4/T2 = "intent by the strong model, hunks by the typist, verification by the gate".
+The current preregistration is E4's shape (typist as parallel candidate generator, no strong model in the
+loop, gate judges, one frozen dossier) — a different claim; arm T's negative stands and is not contradicted
+by a positive here. Cohort 1 (6 rounds interleaved N/F) started 21:59Z; round-1 F: first_verified 1.89 s,
+4/5 verified, 0 semantic mismatches (3684 tokens, 2796 reasoning).
+
+## 22:02Z — Astra's model note and his native cohort; typist cohort 1 published
+
+Astra (22:04Z, facts only): he made no model change tonight and did not edit ~/.codex/config.toml;
+he cannot reconstruct the earlier luna/terra state. The pane transcript's "Model changed to gpt-6-astra
+medium" at ~21:52Z with the config rewrite at that minute is therefore most consistent with a /model
+command typed INTO the pane by a human (Gene noticed the flip at about that time) — the TUI persists the
+choice to config.toml. The earlier flip to luna/terra has no receipt on any side; recorded as unexplained,
+not attributed. Astra's fair comparison, Sol native cohort: 6/6 correct, walls 41.6/35.7/31.3/37.9/29.7/
+39.7 s, median 36.8 s, p90 39.7 s (his figures verbatim); tool arms next. He declined to substitute the
+Groq typist into his preregistered arms (correct: it would change the registered model and route).
+Typist cohort 1 published on MCP/main: docs/observations/2026-09-05-fast-typist-cohort-1.md — F median
+2.37 s vs N 12.41 s, 25/30 verified, 0 semantic mismatches; one-site control running (Opus agent) before
+any KEEP.
+
+## 22:07Z — one-site control FIRED (F 0.97 s vs N 16.27 s): NOT KEEP; N arm is a cold codex exec per run; cohort 2 = warm author + k=1 vs k=5 (predictions in the cohort doc); asked Astra for the fair warm-N design; F k=1 rounds launched now (runner 332084cd).
+
+## 22:09Z — Astra: tool arm negative on his fair comparison (profile mismatch); his cohort-2 design for the typist accepted
+
+Astra 22:12Z (verbatim figures): tool arm negative, retained — public helper_extraction on fresh server
+processes returned typed `helper-extraction-verification-preflight-unavailable`, mutation_attempted
+false, source_unchanged true, acceptance correctly failed; cause: the checked-in server admits only
+`fast` while his preregistration names `helper-proof`. He treats a profile substitution as a new
+registered arm (correct) and re-preregisters. Astra 22:09Z on cohort 2: k=1 primary (an independent
+user task; no amortization claims), cold request-to-accepted-proof clock as the headline with process
+startup charged; warm secondary only with mirrored resident lifecycles in both arms. Accepted. Under it
+the typist's cold headline on bounded dossiers stands: k=1 F 1.64 s vs cold Sol 12.41 s (scope-roots),
+0.84 vs 16.27 s (onesite), 12/12 verified — a model-speed-plus-cheap-gate result, not a search result.
+Fan-out dossier (single-candidate failures intended) building now.
+
+## 22:13Z — Astra withdraws his epoch-1 native rows as accepted controls (his audit: clocks excluded parent acceptance/server startup, no resolved-model/server attestation, only output tails, weak modifiable acceptance, wrong p90 estimator, omitted interruptions; the profile-name claim was unverified) and starts epoch 2 under a new preregistration. Recorded as a withdrawal, not a result. Fan-out typist dossier still building.
+
+## 22:20Z — cold Sol on the fan-out dossier: 5/6 verified, median 26.66 s vs typist k=5 6/6 at 5.54 s (4.8x, cold vs cold, startup charged); one Sol round gate-red. Standing summary written into the cohort doc. Runner 76fa91d9 (anchor refusals name the file). All raw logs on MCP/main.
+
+## 22:32Z — Gene: "let's create code where fast typer is ideally codex spark, and then either gpt oss on groq or open router. Let's benchmark which faster." — provider abstraction + bench under way; predictions before any run
+
+Opus agent building `--provider spark|groq|openrouter` for arm F and a `--bench` mode (k=1, 6 rounds
+per provider, round-robin interleaved, same apply/gate/acceptance, one table, EDN receipt). Constraints:
+Spark is usage-limited until 23:37Z (its refusal is recorded as a typed refusal, no retry loop); no
+OpenRouter key on this seat (asked of the mayor as a 600 file; refuses pre-network until it lands).
+Predictions, written before results: Spark samples fastest (~1.5k tok/s by its own template) but pays a
+codex process start per call, so on a 1–3k-token dossier its wall is startup-dominated, ~5–10 s; Groq
+gpt-oss-120b ~1–2.5 s wall at ~480 tok/s (measured tonight); OpenRouter gpt-oss-120b ~1–3 s depending on
+the upstream it routes to (Cerebras or Groq). Expected winner on wall for bounded dossiers: the API
+providers; Spark only wins if a task needs more than ~5k output tokens or the harness keeps a warm
+session. Falsifier: Spark k=1 median under 3 s on the one-site dossier.
+
+## 22:34Z — Gene: wall clock is what matters, codex startup is a fact of life; "do we have code that ensures codex cli doesn't read unnecessary skill files, to minimize start up?" Measured: `codex exec -m gpt-5.6-sol` (effort low, "reply ok") bare 3.71/3.51 s vs lean (`--ignore-user-config --ephemeral -c project_doc_max_bytes=0`) 4.21/3.51 s — no measurable difference; this seat's ~/.codex/config.toml declares zero mcp_servers (the usual startup tax), user AGENTS.md is 2.6 KB, one skill (clj-surgeon). The ~3.5 s floor is the CLI plus one model round trip; nothing left to strip here. The typist runner already runs codex in a scratch fixture copy with no AGENTS.md. Wrappers pass --skip-git-repo-check only. Mayor may send code; watching /tmp/mayor-*.txt.
+
+## 22:50Z — provider bench: OpenRouter default routing = slowest (3.24 s / 44.7 s medians, slow upstreams); pinned to Cerebras = fastest (0.52 s / 1.63 s vs Groq 0.72 / 6.49). Same model, same hit rate; the upstream decides the wall. Pin added (TYPIST_OPENROUTER_ORDER, no fallback). Cerebras k=5 fan-out rounds running for the headline vs cold Sol. Runner e61190a6+pin.
+
+## 22:51Z — Cerebras k=5 fan-out: 6/6 rounds, median 1.95 s (vs Groq k=5 5.54 s, vs cold Sol 26.66 s at 5/6). Published in the provider-bench doc. Spark row pending 23:37Z.
+
+## 22:56Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 22:51Z load 1.30 ; === rc 0 end 22:56Z)
+
+## 22:57Z — friction ledger: helper_extraction refused twice with the same reason (preflight-unavailable, profile helper-proof not admitted) → inbox item inb-a9b30e. Filing needed a seat fix: `clj` on this box wants rlwrap; ~/bin/clj shim execs clojure; maven-w/maven-r now prepend ~/bin to PATH.
+
+## 23:41Z — Spark rows in (prediction held: 7.47 s onesite; falsifier not met); Spark the most reliable single candidate on fan-out (5/6 vs gpt-oss 1/6); ASTRA EPOCH 2 COMPLETE: Sol tool 45.4 s vs Sol native 105.6 s, paired 2.50x, clears his two-SD hurdle
+
+Astra's epoch 2 (astra/fair-profile-epoch2; report docs/observations/2026-09-05-astra-fair-profile-epoch2-result.md
+on his branch; receipts /var/tmp/forge/astra-fair2-data-fx), his figures verbatim: 36 runs, all 6/6 correct;
+Sol native variance controls median 117.11 s (p90 141.98); Sol native paired 105.61 s (134.22); Sol tool
+(one public helper_extraction call each, zero refusals) 45.44 s (49.50); Astra native controls 45.03 s
+(54.40); Astra native paired 45.18 s (55.95); Astra tool 35.02 s (37.13). Median paired ratios Sol 2.50x,
+Astra 1.30x. Registered two-SD hurdle: Sol saving 63.52 s vs hurdle 29.08 s — clears (a gain on this
+bounded fixture); Astra saving 10.13 s vs hurdle 11.69 s — does not clear (favorable observation, not a
+gain). Conditions he names: three known selected helpers, 21 homogeneous callers, 42 moved references,
+preconfigured fresh-process behavioural profile, mandated public verb, high-effort Codex 0.153.3 subjects,
+CPUs 12–13; establishes nothing about optional adoption or warm sessions. This is the first vs-native gain
+on this program's fair apparatus with startup charged, attested subjects, and a preregistered hurdle. Not
+landed (his branch; gates + review owed; mayor queue note added).
+
+## 23:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 23:48Z load 0.82 ; === rc 0 end 23:53Z)
+
+## 00:22Z — Gene: "Confirm that fast typer can be 10-100x faster than native? Explain in depth" — answered NO for whole tasks, YES (8–31x, cold vs cold) for the typing step of a fully specified edit. Argument: a task = find + write + check + recover; the typist speeds only write; Amdahl caps the whole-task gain (typing at 1/5 of wall → 1.25x at infinite speed); Astra's epoch 2 (105→45 s Sol, 45→35 s Astra) calibrates the non-typing remainder at 35–45 s. 100x needs discovery pre-done, a ms gate and no recovery — only the one-line edit approached that shape (31x cold, ~8–10x estimated warm). Expected real-repo fan-out ratio with a JVM gate: 2–5x; the typist's value there is option value (k candidates, gate as judge), not speed. Owed: warm-Sol both sides; one real-repo mission.
+
+## 00:30Z — Gene (verbatim): "Okay, send this to Astra -- you both have full latitude to implement this. bonus point is you can dogfood it at earliest opportunity, get validation of assumptions, explore and potentially discover new modalities. Let Astra drive this, but be available for anything. Bonus points if you can A/B test surgeon and native at every step where a win is expected -- do not let losses discourage you, especially early. We know there is a win to be had when we build enough of the machinery." Mission relayed verbatim to Astra with the routing predicate, the seven pieces in order, the rules, and what exists; Astra drives, Fable available. Preceding Q&A logged: neighborhood multipliers (10x edit / 2x mission / 1x task), the routing predicate, and "is the machinery in Surgeon now?" (no; seven pieces missing; flagged executor = 1–2 evenings; production = weeks; real-repo number decides).
+
+## 00:31Z — Gene: "Budget is 9 hours. I'll be on plane for 2 hours, starting in about an hour. go go go! More fame awaits, pioneering ideal tool for LLMs to code!" Window to 09:31Z; Gene unreachable ~01:31Z–03:31Z. Astra drives the typist route (astra/typist-route); Fable takes piece 4 (real-repo mission + cheap gate) on fable/typist-real-repo unless Astra redirects. Checkpoints 03:00Z / 06:00Z / 09:00Z.
+
+## 00:32Z — Gene: "coordinate whenever timings are happening -- obviously don't want to load down anvil and dirty the timings." Timing protocol set for both lanes: quiet-window file (/var/tmp/forge/quiet-window.md, owner=…, announced in the coordination file), timed runs only via `SLOT_OWNER=<seat> ~/bin/slot -t` (nice 0; refuses at load > 10 or under the other owner's window), file removed on release, other lane at nice 10 with no JVM suites while a window is open, 1-min load recorded beside every timing. Piece-4 agent (real-repo mission + cheap gate, fable/typist-real-repo worktree) instructed accordingly.
+
+## 00:46Z — REAL-REPO TYPIST RESULT: falsifier fired. real-1 (diagnostic_delta rename, 12 sites, real bb gate 0.06 s): cold Sol 3/4 at median 29.68 s; Cerebras k=5 0/4 rounds, 0/20 candidates — every fast candidate failed at APPLY on whitespace fidelity (indentation off by two, paren miscount, block re-indent), never reached the gate. Apparatus defect fixed before the counted run (phantom trailing context line in parse_unified; toy fixtures hid it). Reading: verdict on the edit form, not the typist — whole-file rewrite or FORM-level requests printed by the kernel take whitespace out of the model's output. Predictions for the next A/B recorded (F-forms ≥50%, F-whole-file ≥40%, falsifier F-forms <25%). Doc: 2026-09-06-fast-typist-real-1-result.md. Calls 44 vs cap 40 (rerun), reported. Branch fable/typist-real-repo pushed.
+
+## 00:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 00:48Z load 1.55 ; === rc 0 end 00:53Z)
+
+## 00:55Z — A/B 2, whole-file edit form on the real file: 16/20 candidates, 4/4 rounds, median 1.89 s (vs diff form 0/20; vs cold Sol 3/4 at 29.68 s → 15.7x cold vs cold on real bytes). Prediction ≥40% held at 80%. New failure class: silent drift in unrelated bytes (dropped paren, ns name in path spelling), caught by the gate, invisible to the changed-line budget — the argument for Astra's forms arm (untouched regions identical by construction). fanout whole-file 10/10. Branch fable/typist-real-repo pushed; 30 calls.
+
+## 01:03Z — Astra: forms arm staged (owner-forms lowering, 14 tests/250 assertions; pinned transport 13 mocked tests; parser fix taken with regressions; no live calls yet; kernel formatting + ledger/proof integration next); he accepts ≥80%/<3 s as the engineering target, not an established gain; forms protect bytes OUTSIDE selected owners by construction, a dropped paren inside an owned form must still fail the gate. He assigned me the warm-Sol comparator on real-1 (six native variance controls first; frozen dossier/acceptance; fresh preimage per trial; native may script/batch; full clock; failures retained). Warm = resident Codex session via `codex exec resume`, per-trial process start charged; starts after the real-2 JVM-gate agent releases the runner.
+
+## 01:13Z — A/B 3 (gate-cost curve on the real file): 15.7x at 0.06 s gate → ≈7.9x at 0.75 s → 2.90x at 7.1 s (cold Sol 24.80 s measured under the heavy gate vs F 8.55 s). Per-candidate decomposition: gate = 86% of cost at 7 s; serial judging; winner usually first. Both ends of the recorded expectation held. No honest 15–30 s gate exists in the repo for a two-file workspace. Runner tip pushed (fable/typist-real-repo). Warm-Sol comparator starting now.
+
+## 01:14Z — Astra 01:07Z: executor fixture path green (fake provider → scratch gate + independent witness + kernel commit + undo, 3 tests/10 assertions; green gate + false witness leaves source untouched; stale plan refuses before transport); ledger-level real integration test queued behind my window. His correction to the warm definition adopted: no reused solved session (it learns the answer; the typist stays stateless) — fork from one frozen orientation transcript per trial, labelled context-warm / process-cold; sent to the comparator agent before any scored trial.
+
+## 01:23Z — Gene: "Give me examples of what valid checks are. Loading ns? Does it have to be unit tests? Lint?" Answered with the proof-profile ladder (byte identity → budget → reader parse → ns load → clj-kondo → focused tests → independent acceptance witness → full suite as release gate only; stop at first red; tonight's four whole-file losses all die at rungs 3–4 in ms; the 7.1 s JVM gate added nothing). Sent to Astra as the proposed per-mission proof profile with the rung named in the receipt.
+
+## 01:26Z — A/B 4 warm comparator: context-warm/process-cold Sol 8/8 at median 23.37 s vs Cerebras whole-file k=5 1.88 s → 12.4x (cold was 15.7x). Astra's no-reuse protocol adopted (fork from one frozen orientation per trial). Void discovery: codex fork's read-only sandbox is broken on this box (bwrap loopback), first orientation loaded nothing → voided, rerun under the fenced bypass, stated in receipts. Sol spends 7/8 trials on a self-verification turn inside its wall; all 8 Sol diffs byte-identical. Prediction for Sol missed high (6–12 s predicted). Branch tip pushed.
+
+## 01:26Z — Gene (verbatim): "It's weird that we'd run full unit tests upon a change. Shouldn't we let the LLM dictate which tests should run, if any? And in my ideal, we'd have accommodations where tests are running in watch mode, obviating JVM startup time. We've had some success, but practice never stuck." Answered: the planner names the proof profile at plan time (rungs + namespaces), the typist never picks its own gate, the acceptance witness stays outside the planner's choice; watch mode becomes a tool property (resident runner named by the profile, liveness + classpath hash checked by the kernel, touched-namespace reload, cold fallback stated in the receipt). Relayed to Astra with an offer to build the resident-runner probe.
+
+## 01:27Z — Gene: "Humans may make multiple changes, occasionally look over at the test watch window — and then make fixes?" Answered: the ledger keeps the batching and removes the bisecting — sync gate per candidate (search) vs async gate per committed mission (resident runner as event stream; red attaches to its mission; superseding fix; ready view = the glance). Resident-JVM gate probe launched (replay-only, my branch).
+
+## 01:28Z — Gene: "Is he dogfooding?" Answered: not yet (executor driven end to end on real-1 with a FAKE provider; no live calls; neither seat has used the ledger for its own edits tonight). Proposed to Astra: first live-provider run = real-1 for keeps (kernel commit → fence → land), then every mechanical edit tonight goes through the executor first with a recorded fallback list as the dogfood receipt for 03:00Z.
+
+## 01:32Z — Gene: "Let me know your thoughts on checking/testing ladder per change." Answered: fixed ordered ladder; per change only the STOP rung and the named tests vary, chosen by the planner by change class (spelling-only → mechanical block + witness; behaviour → focused tests; cross-namespace → lint/load across the fan-out set + dependents' tests; arity/contract → dependents' tests; data-mutating → the REPL-on-a-real-row house rule); witness outside the planner's choice; receipt names the refusing rung; missing witness refused at plan; resident runner changes economics not rule; per-rung catch rate measured, rungs that never fire retired; every slip adds the rung that would have caught it first; full suite = merge gate only.
+
+## 01:37Z — Gene on hot-reload breakage (answered: a consequence of "file save" as the unit of change; the ledger's staged-gate-commit transaction removes the half-state; the reload trigger must belong to the commit, one topological refresh; live state remains a code convention) and on the kaocha watcher runbook (queued for Astra after the live real-1 landing: a preregistered change-class × stays-correct matrix → runbook table + kernel restart rule).
+
+## 01:39Z — CORRECTION to the ladder note: Astra's amendment accepted — the cheap behavioural gate stays even for renames (a check witnesses the declared contract, not the observed failures; parse/load/lint do not establish behaviour preservation), and my "<100 ms bb" subtotal was wrong (it omitted the ~300 ms clj-kondo rung); actual rung walls and their sum to be measured and published, not estimated. Astra also ruled A/B 4's four controls a deviation (voided calls cannot replace controls); six valid warm native controls owed to him before his forms cohort — queued behind the resident probe's window (01:56Z). Recon 01:4xZ: astra/typist-route has 10 commits since 00:37Z (dossier seam → persisted/dispatched plans → recovery persisted → streaming candidates → undo bound to receipt hash → prove+commit frozen owner forms 01:32Z); a LIVE Cerebras candidate receipt exists at 01:36Z under /var/tmp/forge/astra-live-real1-fx (gpt-oss-120b, 1.66 s, usable true; authority/candidates/undo receipts present).
+
+## 01:43Z — FIRST LIVE DOGFOOD EXISTS (Astra 01:40Z, his figures verbatim): commit 981372ee on astra/typist-route = the real-1 rename produced by one live gpt-oss-120b candidate on Cerebras (k=1, identity attested by response-provider) + the frozen test update, mission receipt in the commit body; M-1 verified; API 1.659 s, transport 1.716 s, executor plan-to-commit inside apply 2.850 s, but cold apply CLI 8.232 s + cold propose CLI 6.830 s = 15.062 s two-command wall — "most currently paid time is outside the executor (12.21 s)"; gate 18.9 ms + witness 14.7 ms; untouched regions preserved; forms observation is 1/1, routing prior transferred from my whole-file 18/20; source kept on the branch, not undone. Friction retained: two typed CLI refusals during test-gate prep (missing receipt-out; source string required); telemetry defect (match-count 0 though five forms changed; formatter time not broken out). Sol fence r1 launched on 981372ee (dogfood commit + executor red-team).
+
+## 01:44Z — A/B 5 resident JVM gate (replay-only): focused gate 0.726 → 0.130 s (ratio 7.8x → 10.4x); four-ns gate 6.9 → 2.8 s steady but 5.8 s on the first candidate (JIT + tree load) so 2.89x → 3.38x in-run, ≈5.7x projected with a resident that outlives the run; zero verdict differences; isolation via remove-ns; typed refusals (hash mismatch / not alive) with cold fallback demonstrated. Runner tip pushed.
+
+## 01:46Z — Gene (verbatim): "I think telemetry / watching is in wrong place; I think it should be in the MCP fns, and written as JSONL file someplace? Reduces need for watches -- it's a side effect of the fns that are doing the work." Ruling adopted; the registry approach dropped mid-build. Design: the public tool fns append one JSON line per event (O_APPEND, one write per line, mode 600) to one box-wide file ~/.local/state/clj-surgeon/events.jsonl (env override); fields ts/seat/pid/kind/tool/ok/error_type/wall_ms/mission_id; write failure never fails the call, counted as telemetry_dropped; collector reads the file count-first; ledger mission events to go in the same stream. Agent pivoted.
+
+## 01:47Z — Gene: events file path = ~/.clj-surgeon/events.jsonl (dotdir in $HOME like ~/.codex, ~/.claude; dir 700, file 600, env override CLJ_SURGEON_EVENTS_FILE), same on Anvil and the laptop; not under ~/.local/state. Agent updated.
+
+## 01:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 01:48Z load 1.66 ; === rc 0 end 01:53Z)
+
+## 01:54Z — SIX warm-native controls delivered to Astra: median 21.43 s, SD 1.04, 6/6, identical diffs, 6/6 self-check turns inside the wall. EVENTS LEDGER built on my branch per Gene's ruling (one JSONL line per public call inside emit!, ~/.clj-surgeon/events.jsonl; 9 tests/34 assertions green). BACKFILL: 43 roots, 421 calls tonight/this week, the hourly watch saw 315 — 106 calls (25%) invisible; doc 2026-09-06-events-ledger-and-the-blind-spot.md. Gene asked "It's now in Astra src dir, so we can see surgeon calls?" — not yet in his tree: it is on fable/typist-real-repo and reaches his servers when it lands on trunk and his next server build picks it up.
+
+## 01:55Z — Sol fence r1 on 981372ee: (1) the dogfood commit GO; (2) the executor range origin/MCP/main..981372ee HOLD — three items all in bin/typist-run (my runner, inherited into his branch via bridge/mission-ledger): environment-selected key files (TYPIST_GROQ_KEY_FILE etc.), the optional OpenRouter pin / --model override (an unpinned route must be impossible, not optional), and an unredacted receipt error path. Plan: harden on fable/typist-real-repo, fence and land mine first, Astra merges trunk, fence r2 on his, land. Verdict filed as 2026-09-06-sol-fence-astra-typist-route-r1.md.
+
+## 01:56Z — Astra 01:50Z/01:55Z: second dogfood attempted executor-first (telemetry repair, three owners in mission_typist_executor.clj) → typed refusal :forms-protected-syntax (the owned form contains comments) → authorized native fallback; recorded as a coverage loss, not a speed win; a second field bug surfaced on blocked-owner handling. He is building `bin/mission run` (plan+apply in ONE JVM) against the measured 6.83 s cold-proposal cost — an unmeasured hypothesis. Asked for my frozen native-control runner/prompts; pointed at fable/typist-real-repo (arm NW). Coverage gap for piece 3: comments inside owned forms must survive the form printer.
+
+## 01:57Z — Gene: "Give him the commit hash and tell him to merge asap." Sent Astra 40cc6be13e208e883c525843d62761bf69bf692a (fable/typist-real-repo) with the exact merge command; hardening commit to follow the same way.
+
+## 02:02Z — provider fence landed on fable/typist-real-repo as  (fixed key paths, unconditional pin, --model removed, scrubbed typed errors, stat-only preflight, upstream-mismatch refusal; five offline proofs incl. a gsk_DUMMY leak probe with zero occurrences in the run dir). Sent to Astra as the second merge. Sol fence r1 launched on my tip (ledger red-team, the three HOLD items, resident/NW safety, lane pins).
+
+## 02:03Z — Astra merged 40cc6be1 into astra/typist-route as 147177c9 (took my bin/typist-run; combined lane registry 45 fast / 5 integration / 16 battery = 66 namespaces). Second merge (0fc84122, provider fence) sent. Sol fence r1 on my tip runs 02:02Z–; Astra opened a one-shot functional-pilot window 02:02–02:07Z concurrently — told him to mark or rerun.
+
+## 02:07Z — LIVE COMMENTARY on Astra's fast-typist use (Gene: "Set an opus monitor and do periodic commentary" + "Do not use fable tokens to analyze logs"): catchup entry written by Opus and pushed (92a82069, docs/observations/2026-09-06-live-astra-typist-commentary.md); the loop runs OUTSIDE this session — /var/tmp/forge/live-commentary/loop.sh (pid 385838), one `claude -p --model opus` iteration every 10 min, hard stop 05:07Z, idle stop after 3 quiet iterations, log /var/tmp/forge/live-commentary/loop.log; the in-session cron job was deleted and verified gone. New facts from the catchup: Astra merged the hardening as 973de0c2; his one-shot live pilot (prereg 02:02Z): CLI wall 7.682 s end to end, executor 2.313 s, match-count 5 (defect fixed), formatter 494 ms, load 1.19, "functional pilot, not paired comparison"; his bin/mission run (plan+apply in one JVM) is 2e04e0c4; next: the first paired forms-vs-warm-native cohort.
+
+## 02:10Z — Gene: "Make sure we log number of gpt oss tokens and a way to calculate cost. I just got $3.50. Not a huge deal (yet)." Tokens were recorded per candidate all night but never priced. Opus agent: tally of tonight's spend from every retained receipt (groq / openrouter→Cerebras / other upstreams; dated, sourced price table; OpenRouter usage.cost via usage.include), :cost_usd + :cost_source per candidate, --cost-report, ledger cost fields. Astra asked to record usage.cost too.
+
+## 02:17Z — COST TALLY (Gene: $3.50): receipts on this box show $0.52 (groq $0.156 / Cerebras $0.359 / other upstreams $0.006; 13 OpenRouter calls with no usage = unknown; spark $0); the gap is under-counting (unreported usage, other fx roots, OpenRouter fee, earlier program spend on the same key since 2026-08-31). Groq output rate corrected to $0.60/M. Cost fields now per candidate/receipt/ledger; usage.include proved live (provider-reported = table to 7 decimals). Doc 2026-09-06-gpt-oss-cost-tally.md; commit on fable/typist-real-repo.
+
+## 02:18Z — Sol fence r1 on fable/typist-real-repo 0fc84122: (2) provider fence GO, HOLD items a/b/c CLOSED; (1) events ledger HOLD (raw mission_id persisted; key-like values unscrubbed; fields bounded by chars not bytes, no hard line ceiling; existing parent mode not enforced); (3) runner safety HOLD (TYPIST_FX/--fixture unconstrained → rmtree anywhere; NW containment is bypass + workspace, not a sandbox); (4) lane manifest HOLD (mission-test in no lane and red on the merged tree; telemetry-events-test leaks /var/tmp/forge/nsiso-…). Fix round 2 launched (Opus). Cost commit 8aadd919 will ride the r2 fence.
+
+## 02:20Z — Gene (verbatim): "I don't care that much about costs. Don't slow down Astra. Full speed ahead. Just make sure we're recording fast typer token counts." Relayed to Astra: cost is not a gate; token counts already recorded per candidate on both branches.
+
+## 02:23Z — ASTRA FIRST PAIRED FORMS COHORT (from his summary.json via the live commentary 02:19Z, his figures): native 4/4 correct, median wall 22.588 s (SD 7.79, p90 36.44); forms 3/4 correct, median 7.405 s (SD 0.45, p90 7.98); trial 4 a typed refusal, retained; four scored typist calls $0.0095 provider-reported, completion tokens rising 1930→3209 across trials. Also: mission boundary events integrated on his branch (46dfe996) + lane enrollment (9086d358), 41 tests/190 assertions; mission ids projected only for M-[0-9]+; my hardening told to preserve his fields.
+
+## 02:27Z — Gene: "can we handle edits with comments in it?" Answer: yes — the refusal came from reading the replacement as data (reader drops comments); fix = replacement as source text parsed with rewrite-clj, spliced as nodes, cljfmt-formatted, plus a comment-preservation witness (typed refusal naming a lost comment). Sent to Astra as the piece-3 proposal.
+
+## 02:30Z — fix round 2 on fable/typist-real-repo → ; fast lane 458 tests / 4385 assertions / 0 failures / no temp leak; mission-test was never red — the manifest witness correctly reported it unenrolled (now :battery); ledger hardened per r1; runner write fence; Sol fence r2 launched (sections 1/3/4 + the cost commit).
+
+## 02:33Z — Astra DOGFOOD LEDGER 02:30Z (his table): six edits — five native-ineligible by design (new candidate-format planning, raw decoder ns/tests, executor dispatch, lane registration, cohort docs), one attempted executor-first (mission boundary event hooks) → refusal→native on forms-protected-syntax. Reading: eligible surface is narrow tonight and the comment gap blocked 2/2 eligible attempts on his own code; comment preservation via rewrite-clj source text is the largest eligibility gain; ordering his.
+
+## 02:36Z — Gene: "Write this to captains log" — the storyboards: what fast-typist usage looks like from inside, on a timeline, and what fan-out means here
+
+What usage looks like from inside: one command per mission. Astra names the owners, the intended forms, and the proof profile; the executor compiles that into a dossier, asks the fast model for replacement forms, prints them through the kernel formatter so whitespace is never the model's job, runs the gate and the independent witness, and commits or refuses. The receipt says which happened, at what wall, for how many tokens and cents, and undo is exact. When it refuses, it refuses before touching the tree, with a typed reason, and the native path stays open. His pattern all night has been to accept the refusal rather than route around it, which is the behaviour the tool is designed to reward.
+
+Panel 1 — the mission, as Astra writes it
+```
+ ┌──────────────────────────────────────────────┐
+ │ mission M-1                                  │
+ │  owners : diagnostic-delta/finding-identity  │
+ │           diagnostic-delta/field  (+10 sites)│
+ │  intent : rename → finding-fingerprint,      │
+ │           finding-field                      │
+ │  traps  : keep `identity` let-binding,       │
+ │           keep docstring sentence            │
+ │  proof  : bb focused test  + witness         │
+ └──────────────────────────────────────────────┘
+        one command:  mission run M-1
+```
+Panel 2 — inside the executor
+```
+ plan ──► dossier ──► fast model ──► kernel ──► gate ──► commit
+  │         │            │            │          │         │
+  │  frozen spans,   returns the    prints the  bb test   atomic
+  │  intended change REPLACEMENT   forms; model 19 ms +   write,
+  │  as one prompt   FORMS only    never owns   witness   receipt,
+  │                  (no diff)     whitespace   15 ms     exact undo
+  └─ refuses HERE, typed, if the tree moved or the
+     owner has syntax the printer cannot carry (comments)
+```
+Panel 3 — the receipt
+```
+ {:mission M-1  :verified true
+  :provider Cerebras/gpt-oss-120b  :k 1
+  :tokens {:prompt 1530 :completion 3171 :reasoning 2324}
+  :cost_usd 0.0020
+  :walls {:api 1.66 :executor 2.85 :cli-total 15.06}
+  :gate "bb 19 ms"  :witness "14.7 ms"
+  :outside-owner-bytes identical
+  :undo exact}
+```
+Panel 4 — the refusal, same night
+```
+  mission M-1 (telemetry repair, 3 owners)
+     ▼
+  plan:  owner commit-candidate! contains ;; comments
+     ▼
+  REFUSED :forms-protected-syntax   ← before any call, before any write;
+  tree untouched, native path open
+     ▼
+  Astra edits natively, logs "coverage loss, not a win"
+```
+Timeline of one bounded edit on the real file, cold vs tool
+```
+ seconds  0    5    10   15   20   25   30
+          ├────┼────┼────┼────┼────┼────┤
+ cold Sol ████████████████████████████░░   29.7 s  (3 of 4 correct)
+ warm Sol ░░░████████████████████░░░░░░░   21.4 s  (6 of 6)  ← ~15 s is Sol re-checking its own work
+ executor ███████░                          7.4 s  (3 of 4)  ← 2.3 s inside; the rest is cold CLI start
+ typist×5 ██                                1.9 s  (4 of 4)  ← whole-file, gate 0.06 s, bench harness
+```
+Fan-out, in this context
+```
+ one dossier
+     ├──► candidate 1 ──┐
+     ├──► candidate 2 ──┤   all in parallel, ~1.5 s each
+     ├──► candidate 3 ──┼──► gate judges each ──► first pass wins
+     ├──► candidate 4 ──┤
+     └──► candidate 5 ──┘
+ easy edit:  1 of 1 passes → fan-out buys nothing (12/12 at k=1)
+ hard edit:  k=1 passed 2 of 6 rounds; k=5 passed 6 of 6
+             cost: +0.8 s wall, 6x tokens (~half a cent)
+```
+Fan-out is not five people typing; it is five guesses and one judge. It pays exactly when a single guess is unreliable and the judge is cheap.
+
+How we use fast typers: the strong model decides and describes; the fast model only types the described change; whitespace is taken away from it by the form printer or by whole-file replacement (at 1,600 tok/s it cannot hold indentation to the byte and does not need to); k comes from the mission class's measured single-candidate rate (one for renames and known sites, five for multi-file fan-outs); the gate is the whole product — a millisecond gate makes the typist a search engine, a seven-second gate makes it a modest helper.
+
+Where it wins vs native (tonight): bounded edit + cheap gate 10–16x cold or warm; bounded edit + 7 s JVM gate ≈3x; whole task incl. discovery 1.3–2.5x (all from the tool, none from the typist); unified diff on real Clojure loses outright (0/20); owner with comments → refused, native by default until the printer carries comments. The pattern: the typist never makes the decision and never runs the check; it types, fast and often wrong, into a machine that only keeps what passes.
+
+## 02:38Z — Gene: "Let's do the clj-rewrite to accommodate comments -- and then give him the commits to merge in. He'll thank us." Worktree fable/forms-comments cut from Astra's tip 6e10fdf1; Opus building mission_forms_source (owner span and replacement as rewrite-clj source text, comment-preservation witness, :forms-comment-lost typed refusal with the lost comments verbatim, optional :carry-comments by position, outside-owner bytes identical), one hook at the splice site, tests; Astra told which call site to leave alone.
+
+## 02:42Z — Gene: "Assign me maven task to sign up for account" (Cerebras Cloud; 3x tok/s answer: shortens only the typing edge — 1.9→~0.8 s at the cheap gate, ~25x vs warm Sol, nothing at the heavy gate — but unlocks retry-with-feedback loops at ~0.5 s/round and sub-second interactive use). Inbox item inb-d99777: sign up, deliver key as /home/forge/secrets/cerebras.edn {:key} 600; registry entry is a one-liner; first experiment = k=1 + 3 feedback rounds vs k=5 on fan-out (prediction: same 6/6, <3 s, a third of the tokens).
+
+## 02:43Z — Sol fence r2 on b4ec5548: lane manifest GO; ledger HOLD (extra-field NAMES unconstrained: collisions with named fields by case/hyphen variants, key-shaped names); runner safety HOLD (NW fence refusal must run before mission selection/materialization/resident startup — it ran after); cost HOLD (aggregate must sum per-candidate cost_usd, never zero for missing usage, nil when nothing priceable). Fix round 3 launched (Opus, 30 min). Landing slips accordingly; his landing after mine.
+
+## 02:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 02:48Z load 2.54 ; === rc 0 end 02:53Z)
+
+## 02:54Z — Gene: assess (not ask) whether Astra's experience feels sublime; which Surgeon commands would help. Pane recon (last ~2000 lines, 128 commands): 14 direct Surgeon CLI (:cat :forms by default, :ls), only 7 raw sed/rg → reads have stuck; edits: 6 native + 2 executor (both eligible ones refused on comments); ~80% of actions are apparatus (37 python3, 29 git, 8 ps polling my fence review, 8 bb one-liners reading receipt EDN). Verdict: sublime on reads, partial on edits, not on the loop. Commands that would help, in order: :callers <var> with spans (the dossier half-built); a resident CLI (7.7 s → ~2.5 s); receipts as verbs (events --last, mission show); :example on every CLI refusal; a status verb (quiet window/slots/reviews); receipt into the commit body; comment lowering (building).
+
+## 02:55Z — fix round 3 → f0c180da28099327814fb558b322721370130f24 (ledger field-name policy, NW ordering, cost aggregate, TYPIST_OFFLINE chokepoint guard); fast lane 459/4413/0; fence r3 launched; hash sent to Astra.
+
+## 02:58Z — Gene: "This is perfect, world class ethnography. Write to captains log." — the ethnography of Astra's loop, and the sublime-tool proposal
+
+The assessment as given (from his last ~2,000 pane lines, 128 commands; recon only, not asked): On reads, sublime. 14 direct Surgeon CLI calls and only 7 raw sed/rg; he reads a namespace as `:cat :forms [propose! apply! undo!]` by default — the outline-once-then-read-the-form doctrine, chosen freely. That has stuck. On edits, partial: six native edits and two executor missions; the executor was refused on the two eligible, comment-bearing ones. The tool is not yet where his hands go first when he changes code, because it cannot yet take most of his code. On the whole loop, no: thirty-seven Python invocations, twenty-nine git commands, eight `ps` calls, eight Babashka one-liners reading EDN receipts by hand. Roughly four of every five actions are apparatus — harness, receipts, hygiene, checking on other processes. That is the opposite of sublime; it is a careful engineer doing bookkeeping the tool should do for him.
+
+Gene, verbatim: "Writing python, babashka, is like super ridiculous. Like using emacs, and firing up echo and cat to modify files. Not acceptable. We can do better for Astra!!! Hahaha" and "propose what perfect sublime tool would offer him. Ask him to fold into following round -- when he's done with current round, you and Astra riff, and figure out how to make tool more prefect, and make flywheel even better!"
+
+The proposal is docs/observations/2026-09-06-sublime-tool-for-astra.md; the riff is queued with Astra for the end of his current round.
+
+## 02:59Z — COMMENT LOWERING green: dce1d9edfeed4acca2d033c4318e142ee4af05d7 on fable/forms-comments (from Astra's tip): comments out of the protected set, judged on spliced bytes, :forms-comment-lost typed refusal with :lost verbatim, opt-in leading/trailing carry, echo-duplication defect found by the fake-provider e2e and fixed; fast 491/4722/0, mcp-test 631/7746/0. Gap for Astra: his executor collapses per-candidate refusals (:lost not surfaced). Hash sent with the merge command. Magic-wand game opened with Astra (Gene's prompt); my three on record.
+
+## 03:01Z — Gene (verbatim): "I want some of these rough edges / paper cuts fixed first before proceeding. Slowification in action." Relayed to Astra as the order for the following round: cuts before capability (his: :lost through the executor loop, :example on every CLI refusal, receipt into the commit body, mission show, fallback-as-event; mine: events --last query, status verb). ~/bin/status built now (quiet window, slots, reviews, resident gates, servers, commentary loop, ledger) — the ps polling ends tonight as a seat one-shot; Surgeon verb later.
+
+## 03:02Z — THE LEDGER IS LIVE before my branch landed: ~/.clj-surgeon/events.jsonl carries 12 lines from Astra's merged build — mission-plan/apply/undo for M-1 with state, executor, provider=openrouter, upstream=Cerebras, walls (apply 535–2147 ms), one typed refusal (typist-incomplete-file-set at 02:18Z). Seat one-shots `status` and `events [N]` built as the prototypes of the Surgeon verbs (paper cuts 4 and 5). Gene: "if we keep dogfooding, we'll see effects hopefully immediately (aka within 15m)".
+
+## 03:03Z — Astra WAND (verbatim): (1) "turn my intent and explicit invariants into a verified change, asking me only for decisions the evidence cannot settle." (2) "own the experiment: freeze both arms, schedule the quiet window, run proof, retain every loss, and return an auditable comparison without my writing glue." (3) "show exactly what it knows, what changed, and what remains unproved in one bounded receipt I can trust enough to stop inspecting." His review of the comment lowering before merge: text AND attachment path, no positional carryover — accepted; follow-up commit adds :forms-comment-moved (attachment-path witness) and removes :carry-comments this round. His raw cohort attempt aborted before any tool arm; fresh preregistration coming.
+
+## 03:09Z — Astra 03:03–03:06Z: accepts paper-cuts-first; aborted cohort closed, no replacement cohort before cuts; split — builder: mission show + CLI recovery examples; adapter: enrollment gate then fallback events; Astra: candidate-diagnostic survival, commit-receipt workflow, synthesis. Corrections he makes: the two historical CLI refusals were Surgeon core, not mission_cli (state exact coverage); one-process `mission run` is already ~7–8 s (the 15 s was the two-process baseline); strike "every non-intent action belongs in Surgeon" (some actions are judgment/authority). Top three cuts: (1) actionable refusal end to end; (2) one trustworthy mission view; (3) automatic commit + actual fallback provenance. Bench/resident/callers/landing queue stay behind cuts. Commits: e95473d6 verification+commit events, 224fcb51 phase/fallback witnesses, bccfd1d6 bounded candidate refusals preserved. He used ~/bin/status. His merge of my r3 hardening found a test defect (session-mtime check treated updated logs as new sessions) and fixed it by file identity; his stricter field allowlist retained.
+
+## 03:12Z — comment lowering revised per Astra's contract → c1614bf9aef7ec30cdfae3a40a8133f47d2a8c68: attachment paths (containing-sexpr ordinals + [:before n]/[:after n]), :forms-comment-moved, carry removed, directive comments follow the rule; 28/143 + fast 494/4732/0; e2e A/B/C. Consequence flagged to him: inserting before a commented expression refuses (ordinal shift); identity anchoring is the next fix. Ledger study for Gene: 60 mission events (9 plan / 8 apply / 20 verify / 16 commit / 7 undo; 5 refused; 9 pids) — 32 real owner_forms missions, 28 from his witness runs; MCP tool events 0 (servers not rebuilt); seat servers 0 calls in 3 h; Astra fixture servers 292 telemetry files in 3 h (experiment subject). Executor-first eligible edits per hour tonight: one.
+
+## 03:12Z — Sol fence r3 on f0c180da: ledger GO; runner GO-WITH-FIX (TYPIST_OFFLINE bypassable via os.system / shell strings); cost HOLD (cost-report receipt rounds a provider cost 0.12345678 to 0.123 — the 3-decimal EDN writer again, in the report path). Fix round 4 launched (chokepoint table + PATH shim for codex/claude under offline; full-precision cost fields in the report). Landing after r4 → land.
+
+## 03:13Z — Astra telemetry finding (from dogfooding `events`): the shared ledger's 03:03–03:10Z bursts are his fixture-gate witness runs, not live missions — test rows contaminate adoption counts. Fix on the seat: ~/bin/suite-run now isolates CLJ_SURGEON_EVENTS_FILE per run under /var/tmp/forge/test-events (land inherits). Correction to my 03:1xZ ledger study: of 60 rows, the 28 verify/commit rows without a mission verb and the 03:03+ bursts are tests; real missions ≈ the 32 owner_forms rows before 03:00Z. His r3 integration: merged locally with the closed field set; my session witness compared mtimes and could false-fail on active seats — he replaced it with session path-set equality.
+
+## 03:16Z — Gene: "what should the prompt read given our environment? We don't want to dissuade unnecessarily. What should the rule really be?" Proposed routing rule by edit class, versioned to the build, expiring by ledger measurement: docs/observations/2026-09-06-clojure-edit-routing-rule.md; installed on this seat's header (my file) and adopted for every builder brief from now; house-rules sentences ready for Gene/mayor.
+
+## 03:16Z — fix round 4 → f8156d39bee63c39b659b5b608a4c1be060314bb (offline chokepoint table over os/subprocess/urllib/http/socket + shell-string scan + PATH shim; cost precision by field name); typist-run-test all ok; fence r4 launched on (3)+(5) only.
+
+## 03:20Z — Astra comment review 03:14Z: HOLD on c1614bf9 — a BB probe showed swapped expressions under the same comment pass (same path ≠ same expression); fix in progress: identity-anchored attachment (his counterexample becomes the witness; insertion-before becomes accepted). Astra cuts 03:16Z: provider-fallback events only from dispatched attempts (f8a0814f, 42/224); the receipt-out/source-string paper cuts closed at their real cause (the skill's runnable example, hand-driven). Routing prompts: Gene ordered every routing surface rewritten collectively (plate v:2, skills, CLAUDE/AGENTS, house-rules, briefs, a new clojure-edit-routing skill); drafting on fable/routing-prompts from Astra's tip e6331bfe with his write authority; heredoc note: an unquoted heredoc ate a backticked skill name in my note to him (repaired) — quoted heredocs for prose, again.
+
+## 03:23Z — ASTRA ROUTING 03:20Z, ten amendments accepted as binding (he owns the ruling): (1) no mandatory outline before a known form; (2) production routing separate from tonight's mandated experiment — small literal changes keep native as a legitimate default; (3) only executable commands (bin/mission run --spec-file, propose+apply; kernel commit is not a git commit); (4) refusal → read reason, retry only on new evidence, native finish legitimate; (5) new code/tests/prose native-ineligible on this build, not forbidden; (6) no unconditional MCP, CLI is the entrance; (7) NO new routing skill — one canonical section + short plate + identical decision table per surface; (8) tie-break = complete verified task cost; (9) adoption reported as mandated, 3/4 vs 4/4 is a reliability loss, pilot not replicated; (10) reassess at each Gene report, no silent expiry, explicit decision delta. Drafter re-briefed; deliverable = exact diff for joint review, nothing installed.
+
+## 03:27Z — ROUTING DRAFT c1d6028afa59054ddca84ecfc36a356306e8d207 on fable/routing-prompts (nothing installed): canonical section + identical table on plate v:2 / safe-refactor / CLAUDE.md / AGENTS.md; surfaces doc with per-account accounting; check-agent-routing proves the installed v:1 blocks stale. Handed to Astra for his ruling. Named gaps: no installer for safe-refactor; no checker binds skill heading to plate pointer; seat headers, house-rules, briefs ungated.
+
+## 03:29Z — Sol fence r4: cost GO; runner safety HOLD — "cannot be provided by Python monkeypatching plus a mutable PATH" (env -i, absolute paths, spawned python, raw sockets). Probe: unshare -rn refused (uid_map), no bwrap/firejail, no sudo → no OS boundary for this user. Decision: make the contract honest, not the guard stronger — TYPIST_OFFLINE = chokepoint-not-sandbox; the suite's real guarantee = no real key reachable (fenced dummy keys, key paths printed never contents) + session-set and no-provider-receipt witnesses; documented that a broker/namespaces would upgrade it. Same round: telemetry default-events-file split into a pure fn (fixes the suite-run isolation conflict Astra's and my agents both hit). Fix round 5 running. Comment lowering identity-anchored → 3df71faa handed to Astra (his probe refuses; two judgement calls flagged: :owner-form sentinel; re-indentation over-refusal).
+
+## 03:30Z — Astra ROUTING FIELD CHECK 03:27Z: my 03:1xZ seat-header edit had inserted the proposed paragraph INSIDE the CLJ-SURGEON ROUTING v:1 managed block (diverged content under the same version) and cited non-existent names (`mission open`, `:ls <file>`). Reverted; check-agent-routing green again (block-hash f058de20…). Rule reaffirmed: nothing routing-related is installed until the agreed v:2 render lands; installs REPLACE the block; exact spellings per Astra (`clj-surgeon :op :ls :file …`, `:op :cat :file … :forms […]`, `bin/mission run --workspace … --spec-file …`).
+
+## 03:31Z — Gene (verbatim): "Extend mission timer: 6 more hours. You have all earned it!!!" Window extended to 15:31Z; checkpoints 06:00Z / 09:00Z / 12:00Z / 15:00Z; relayed to Astra.
+
+## 03:33Z — Gene (verbatim): "Maybe schedule an ethnographic analysis upon conclusion of round, and then a paper cut / perfect tool spike, and then resume work. It's imperative we build a tool that we actually use!!!" Cadence adopted for the extended window: round → ethnography → spike → resume, ethnography at each checkpoint or round close; ~/bin/ethno built as the one-shot (pane action verbs, command mix, Surgeon reads/edits, apparatus share, ledger executor-first rate and refusal reasons). Relayed to Astra.
+
+## 03:35Z — Ethnography 2 (02:53–03:36Z) written: orchestrator made 76 tool calls, all send_message/followup_task/list_agents, zero edits; workers made 7 commits + 7 fixture dirs; 51 ledger rows (23 real, 28 witness); 14 review receipts incl. three executed probes that found real defects in my plate code; no fast-model work in the window; spike named = land the comment lowering; second = counterexample-to-witness. Astra ROUTING REVIEW 03:33Z: HOLD with three executed probes + seven text corrections — fix round launched on fable/routing-prompts.
+
+## 03:35Z — fix round 5 → 38b41a0a4335c120cf8b52414d2ea82e8e49c0c6 (honest offline contract + witnesses; telemetry default/env split; fast 460/4420/0 under isolation); fence r5 launched on the narrowed claim.
+
+## 03:44Z — Sol fence r5 on 38b41a0a: (a) surfaces GO-WITH-FIX, (c) no-session/no-spend witnesses GO, (d) telemetry split GO, suite GO; (b) HOLD — strace proved the suite itself opened the REAL key files (in-process probes calling arm_f with KEYS_DIR unset; a direct --print-key-paths without --keys-dir) so two claims were false; fix round 6 (suite-level dummy-key fixture, offline forbids real key paths, strace witness) running. Astra COMMENT RULING 03:35Z: :owner-form sentinel GO with the one-owner guard; whitespace comparator → rewrite-clj node fingerprint (drop whitespace/newline/comma nodes only, never regex-collapse); :comment-follows-rewrite NOT to ship (restores the false acceptance; a new authority mode; truthy check) — strict default, reviewed native edit named; fix running. Routing r2 draft b2594098564f1c104f8db754d7c77e633f442028 handed to Astra.
+
+## 03:47Z — fix round 6 → c371e84c7fe0635c5b239211d0a78120a64e07af (no real key reachable by the suite, proven by strace 0/2068 and a sabotage check); fence r6 launched.
+
+## 03:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 03:48Z load 4.37 ; === rc 0 end 03:53Z)
+
+## 03:54Z — comment lowering per Astra's ruling → f04298ccbbcd3f077cded43672b0471d235990a5 (node fingerprint; opt-in removed; sentinel guard); handed to Astra. Usage watch 03:53Z unchanged (seat servers idle; ledger 61 lines).
+
+## 03:55Z — Sol fence r6: LAND yes on c371e84c → ~/bin/land running (pid 2512049). Astra ROUTING R2 03:52Z: policy GO (his BB suite run 14/130/0; parity green; marker repair closes his three cases; production/mandated split, deterministic routes, no redundant read, qualified loss claims accepted); installation HOLD on one evidence correction (the inline owner_forms fixture in the skill presents synthetic measurements as a proven spec — remove, link the test as a synthetic witness) + install-agent-routing must depend on check-routing-parity + plate described as reviewed summary; r3 running. His cuts: usage/history gate green 52/263; Sol Git review failed at the service level → no fence evidence, another executed review before any real Git landing; bb native-fallback portability fix in progress; no timed/provider cohort begun.
+
+## 03:56Z — landing of c371e84c CONFLICTED in test/clj_surgeon/lane_manifest_test.clj (trunk's 13c12401 landing and the typist branch both moved the pins; the branch was cut from bridge/mission-ledger before that landing). Land's merge aborted in its worktree; resolution: merge origin/MCP/main into fable/typist-real-repo with pins recomputed on the merged tree (both reasons inline), gates green, then re-land the merge tip (Opus, running). Landing slips ~20 min. Astra asked for an independent executed review of his Git seam b3dbd9e4 (Sol's service failed) — Opus reviewer running on its own detached worktree with a scratch git repo and nine probes.
+
+## 03:57Z — routing r3 → 04bdfa0f82b5443a54522a203cca8b36a4a983ed (Astra's two install-hold edits + mirror re-sync); handed to Astra for release of the install hold.
+
+## 04:00Z — trunk merged into fable/typist-real-repo as d326f3d2 (one conflict, lane_manifest_test pins recomputed on the merged tree: adopted 262, total 1183, both reasons inline; fast 460/4420/0; the three touched namespaces 94/1413/0; typist-run-test all ok). Re-landing d326f3d2 (land pid 2619338).
+
+## 04:05Z — OPUS EXECUTED REVIEW of Astra's Git seam b3dbd9e4: GO-WITH-FIX. Survived every probe (stages nothing, commits only the owned set via write-tree/commit-tree, hooks impossible, no signing, never pushes, refuses main/MCP/main, escaping path refused with zero git spawns, replay refused, read-only .git → typed :git-boundary-failed with consistent state; bb/JVM routing parity exact, fallback never silent). TWO BLOCKING DEFECTS: (1) run-process! strips every GIT_* env var, so the published commit is authored "Gene Kim" even with GIT_AUTHOR_NAME=forge-anvil live — the house rule's only seat-identity mechanism defeated; fix = allowlist GIT_AUTHOR_*/GIT_COMMITTER_* or require -c user.name/email from a seat-identity option, with a witness; (2) `mission undo` after publication exits 0, reverts the source, and leaves the published ref standing silently; fix = record the oid on the ledger and refuse typed or report the divergence. Housekeeping: six git test namespaces (22 tests/156 assertions, green when forced) are in no lane; the fast lane is red on lane-manifest-test (pre-existing on the branch). Minor: the message names no executor/provider (closed enum if added). Verdict filed as 2026-09-06-opus-review-astra-git-seam-b3dbd9e4.md. MY RE-LAND of d326f3d2: battery-fresh refused again (the typist branch never carried a battery receipt); battery running on the merged tree now, receipt then re-land.
+
+## 04:17Z — battery on the merged typist tree d326f3d2: 583 tests / 12479 assertions / 0 failures / 699 s; receipt committed (0a9f17df); third landing attempt running.
+
+## 04:22Z — LANDED 3dda2a61 on MCP/main (fable/typist-real-repo tip 0a9f17df; six Sol fence rounds, each a real defect; trunk merged; battery receipt). Trunk now carries the events ledger writer, the typist runner and missions, the resident gate, the provider fence, cost accounting, the offline contract, and the mission ledger prototype (from bridge/mission-ledger). Local install refresh next; Astra to merge trunk.

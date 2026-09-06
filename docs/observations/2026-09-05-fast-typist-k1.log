@@ -1,0 +1,13 @@
+arm=F mission=scope-roots run=F-scope-roots-1788646044-0 first_verified_s=1.14 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=484 reasoning_tokens=364
+arm=F mission=onesite run=F-onesite-1788646045-0 first_verified_s=0.45 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=167 reasoning_tokens=106
+arm=F mission=scope-roots run=F-scope-roots-1788646045-0 first_verified_s=1.33 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=534 reasoning_tokens=376
+arm=F mission=onesite run=F-onesite-1788646047-0 first_verified_s=0.62 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=241 reasoning_tokens=180
+arm=F mission=scope-roots run=F-scope-roots-1788646048-0 first_verified_s=1.55 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=665 reasoning_tokens=544
+arm=F mission=onesite run=F-onesite-1788646049-0 first_verified_s=0.84 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=322 reasoning_tokens=261
+arm=F mission=scope-roots run=F-scope-roots-1788646050-0 first_verified_s=2.71 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=1124 reasoning_tokens=964
+arm=F mission=onesite run=F-onesite-1788646053-0 first_verified_s=0.83 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=352 reasoning_tokens=291
+arm=F mission=scope-roots run=F-scope-roots-1788646054-0 first_verified_s=1.75 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=779 reasoning_tokens=659
+arm=F mission=onesite run=F-onesite-1788646056-0 first_verified_s=1.42 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=610 reasoning_tokens=540
+arm=F mission=scope-roots run=F-scope-roots-1788646057-0 first_verified_s=1.73 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=756 reasoning_tokens=586
+arm=F mission=onesite run=F-onesite-1788646059-0 first_verified_s=1.02 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=425 reasoning_tokens=326
+=== K1 DONE 22:07:40Z

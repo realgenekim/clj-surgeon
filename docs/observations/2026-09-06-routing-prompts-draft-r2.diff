@@ -1,0 +1,1105 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 1630d930..16976ce7 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -6,15 +6,29 @@ Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
+ canonical repository instruction file for all coding agents, regardless of
+ vendor or runtime.
+ 
+-Clojure edit routing is governed by ONE canonical text: the `clj-surgeon`
+-skill, section "Edit routing (measured 2026-09-06, build >= 13c12401)". Read it
+-before the first Clojure edit of a task. The installed CLI is the production
+-entrance; persistent MCP is explicit development work, not an unconditional
+-preference, and no MCP server is started for an ordinary edit. Native `rg` plus
+-`apply_patch` stays a legitimate production default for a known small literal
+-change; the `bin/mission` executor is tried first only when scope, proof
+-profile, provider permission, and measured admission facts already fit. The
+-table below is that section reproduced verbatim; change it there first.
++Clojure edit routing is governed by ONE canonical text:
++[skills/clj-surgeon/SKILL.md](skills/clj-surgeon/SKILL.md), section
++**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is
++the SOURCE; installed mirrors follow it through `make install-claude-skill` and
++`make install-codex-skill`, and every copy of the table below is checked by
++`bb bin/check-routing-parity.clj`. Change it there first.
++
++Reading the section is not a per-edit tax: the managed `CLJ-SURGEON ROUTING`
++block carries the routing summary, and a known literal change with sufficient
++context in hand pays no extra read boundary. Read the section when the route is
++not already decided, and load its references only for the advanced workflows
++they cover.
++
++The installed CLI is the production entrance; persistent MCP is explicit
++development work, not an unconditional preference, and no MCP server is started
++for an ordinary edit. Native `rg` plus `apply_patch` stays a legitimate
++production default for a known small literal change. For any other bounded
++mechanical edit, production chooses native or one of the earned deterministic
++Surgeon routes by complete verified task cost -- there is no executor-first
++rule in production; executor-first applies only inside the explicitly opted-in
++dogfood experiment. A typed refusal is read, retried only on new evidence or a
++concrete supported correction, and otherwise finished natively with its
++provenance recorded.
+ 
+ | Situation | Route |
+ |---|---|
+@@ -22,10 +36,11 @@ table below is that section reproduced verbatim; change it there first.
+ | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+ | Source already held in context | No reread. |
+ | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
++| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
++| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
+ | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
+-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
++| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
++| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
+ | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
+ 
+ For non-trivial feature work, `CLAUDE.md` requires the design, planning,
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 9ffcce00..f51fee01 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -51,9 +51,12 @@ Before non-trivial feature or refactoring work, read:
+   feature standard and required test layers.
+ - The applicable plan in [docs/plans/](docs/plans/) when one exists.
+ 
+-When working in this repository, the working-tree [skill.md](skill.md)
+-supersedes any installed clj-surgeon skill; installed copies are stable
+-snapshots that may lag the branch.
++When working in this repository, the working tree supersedes any installed
++clj-surgeon skill; installed copies are stable snapshots that may lag the
++branch. The canonical working-tree skill is
++[skills/clj-surgeon/SKILL.md](skills/clj-surgeon/SKILL.md) -- the file
++`SKILL_SOURCE` installs from. Root [skill.md](skill.md) is a legacy copy that
++points at it.
+ 
+ If a non-trivial feature has no plan, write one in `docs/plans/` before
+ implementation. A useful plan fixes the observable contract, non-goals,
+@@ -254,18 +257,29 @@ counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
+ 
+ ## Clojure edit routing
+ 
+-Clojure edit routing is governed by ONE canonical text: the `clj-surgeon`
+-skill, section "Edit routing (measured 2026-09-06, build >= 13c12401)". Read it
+-before the first Clojure edit of a task. The installed CLI is the production
+-entrance; persistent MCP is explicit development work, not an unconditional
+-preference, and no MCP server is started for an ordinary edit. Native `rg` plus
+-`apply_patch` stays a legitimate production default for a known small literal
+-change; the `bin/mission` executor is tried first only when scope, proof
+-profile, provider permission, and measured admission facts already fit. A typed
+-refusal is read, retried only on new evidence or a concrete supported
+-correction, and otherwise finished natively with its provenance recorded. The
+-tie-break is complete verified task cost, not the existence of a receipt. The
+-table below is that section reproduced verbatim; change it there first.
++Clojure edit routing is governed by ONE canonical text:
++[skills/clj-surgeon/SKILL.md](skills/clj-surgeon/SKILL.md), section
++**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is
++the SOURCE; installed mirrors follow it through `make install-claude-skill` and
++`make install-codex-skill`, and every copy of the table below is checked by
++`bb bin/check-routing-parity.clj`. Change it there first.
++
++Reading the section is not a per-edit tax: the managed `CLJ-SURGEON ROUTING`
++block carries the routing summary, and a known literal change with sufficient
++context in hand pays no extra read boundary. Read the section when the route is
++not already decided, and load its references only for the advanced workflows
++they cover.
++
++The installed CLI is the production entrance; persistent MCP is explicit
++development work, not an unconditional preference, and no MCP server is started
++for an ordinary edit. Native `rg` plus `apply_patch` stays a legitimate
++production default for a known small literal change. For any other bounded
++mechanical edit, production chooses native or one of the earned deterministic
++Surgeon routes by complete verified task cost -- there is no executor-first
++rule in production; executor-first applies only inside the explicitly opted-in
++dogfood experiment. A typed refusal is read, retried only on new evidence or a
++concrete supported correction, and otherwise finished natively with its
++provenance recorded.
+ 
+ | Situation | Route |
+ |---|---|
+@@ -273,10 +287,11 @@ table below is that section reproduced verbatim; change it there first.
+ | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+ | Source already held in context | No reread. |
+ | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
++| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
++| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
+ | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
+-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
++| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
++| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
+ | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
+ 
+ The MCP-preference conventions below are scoped to this repository's own editor
+diff --git a/Makefile b/Makefile
+index d50df664..4f442e60 100644
+--- a/Makefile
++++ b/Makefile
+@@ -60,7 +60,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
+ CCLSP_HEALTH_INTERVAL ?= 0.25
+ WORKSPACE ?=
+ 
+-.PHONY: repository-hygiene repository-hygiene-self-test test test-full test-fast test-integration test-battery battery-fresh landing-gate test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-events study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
++.PHONY: repository-hygiene repository-hygiene-self-test test test-full test-fast test-integration test-battery battery-fresh landing-gate test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing check-routing-parity prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-events study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
+ 
+ help:
+ 	@echo "clj-surgeon — structural operations on Clojure namespaces"
+@@ -99,7 +99,8 @@ help:
+ 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
+ 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
+ 	@echo "  make install-agent-routing     Install compact routing into Codex and Claude globals"
+-	@echo "  make check-agent-routing       Verify both global routing blocks without writing"
++	@echo "  make check-agent-routing       Verify routing-table parity, then both global routing blocks"
++	@echo "  make check-routing-parity      Assert every rendered routing table matches the canonical section"
+ 	@echo "  make sync-clj-surgeon-skill    Regenerate Claude/root mirrors from the canonical skill"
+ 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
+ 	@echo "  make nrepl                     Start bb nREPL"
+@@ -184,10 +185,13 @@ install-clj-kondo-admission:
+ 	  printf '%s\n' '{:artifact :clj-kondo-admission' ' :source-commit "$(SOURCE_COMMIT)"' ' :gate "$(CLJ_KONDO_ADMISSION_DEST)"' ' :shell-entrance "$(CLJ_KONDO_SHIM_DEST)"}' > "$$receipt"
+ 	@echo "Installed analyzer gate $(CLJ_KONDO_ADMISSION_DEST) and shell entrance $(CLJ_KONDO_SHIM_DEST)"
+ 
++check-routing-parity:
++	bb "$(CLJ_SURGEON_HOME)bin/check-routing-parity.clj"
++
+ install-agent-routing:
+ 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
+ 
+-check-agent-routing:
++check-agent-routing: check-routing-parity
+ 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
+ 
+ sync-clj-surgeon-skill:
+diff --git a/bin/check-routing-parity.clj b/bin/check-routing-parity.clj
+new file mode 100755
+index 00000000..a1947c24
+--- /dev/null
++++ b/bin/check-routing-parity.clj
+@@ -0,0 +1,84 @@
++#!/usr/bin/env bb
++;; Routing-table parity guard.
++;;
++;; The decision table is COPIED BY HAND into every prompt surface. Nothing
++;; generates it, so nothing but this check stops one copy from drifting into a
++;; different rule than the seat next to it. It asserts:
++;;   1. every rendering's table is BYTE-IDENTICAL to the canonical section's;
++;;   2. the managed plate's pointer heading really exists in the canonical file;
++;;   3. every document the plate cites exists on disk.
++;; Run: bb bin/check-routing-parity.clj   (exit 0 green, exit 2 on drift)
++
++(require '[clojure.string :as str]
++         '[babashka.fs :as fs])
++
++(def canonical "skills/clj-surgeon/SKILL.md")
++
++(def renderings
++  ["skill.md"
++   "skills/safe-refactor/SKILL.md"
++   "CLAUDE.md"
++   "AGENTS.md"
++   "docs/observations/2026-09-06-routing-prompt-surfaces.md"])
++
++(def plate "resources/clj-surgeon-agent-routing.md")
++
++(def pointer-heading "## Edit routing (policy revision 1, 2026-09-06)")
++
++(defn table
++  "The contiguous run of table rows beginning at the decision table's header."
++  [path]
++  (let [lines (str/split-lines (slurp path))
++        start (first (keep-indexed #(when (= "| Situation | Route |" %2) %1) lines))]
++    (when start
++      (str/join "\n" (take-while #(str/starts-with? % "|") (drop start lines))))))
++
++(defn -main []
++  (let [expected (table canonical)
++        failures (atom [])
++        fail! (fn [m] (swap! failures conj m))]
++    (when-not expected
++      (fail! {:check :canonical-table-present :path canonical
++              :problem "no `| Situation | Route |` table found in the canonical section"}))
++    (doseq [path renderings]
++      (let [actual (table path)]
++        (cond
++          (nil? actual)
++          (fail! {:check :table-present :path path
++                  :problem "no routing decision table found"})
++          (not= expected actual)
++          (fail! {:check :table-parity :path path
++                  :problem "routing table differs from the canonical section"
++                  :canonical-rows (count (str/split-lines expected))
++                  :rendered-rows (count (str/split-lines actual))
++                  :first-difference
++                  (first (remove nil?
++                                 (map (fn [i e a] (when (not= e a) {:row i :canonical e :rendered a}))
++                                      (range)
++                                      (concat (str/split-lines expected) (repeat nil))
++                                      (concat (str/split-lines actual) (repeat nil)))))}))))
++    (let [plate-text (slurp plate)
++          canonical-text (slurp canonical)]
++      (when-not (str/includes? canonical-text pointer-heading)
++        (fail! {:check :plate-pointer-resolves :path canonical
++                :problem (str "the plate points at heading " (pr-str pointer-heading)
++                              " but the canonical file does not contain it")}))
++      (when-not (str/includes? plate-text "Edit routing (policy revision 1, 2026-09-06)")
++        (fail! {:check :plate-names-the-heading :path plate
++                :problem "the plate no longer names the canonical section heading"}))
++      (doseq [cited (re-seq #"docs/observations/[A-Za-z0-9._-]+\.md" plate-text)]
++        (when-not (fs/exists? cited)
++          (fail! {:check :plate-citation-resolves :path plate
++                  :problem (str "the plate cites " cited ", which does not exist")}))))
++    (if (seq @failures)
++      (do (prn {:ok false :operation :check-routing-parity
++                :canonical canonical :failures @failures})
++          (System/exit 2))
++      (prn {:ok true :operation :check-routing-parity
++            :canonical canonical
++            :table-rows (count (str/split-lines expected))
++            :renderings-checked (count renderings)
++            :plate plate
++            :pointer-heading pointer-heading}))))
++
++(-main)
+diff --git a/docs/observations/2026-09-06-routing-prompt-surfaces.md b/docs/observations/2026-09-06-routing-prompt-surfaces.md
+index 86106931..c121a375 100644
+--- a/docs/observations/2026-09-06-routing-prompt-surfaces.md
++++ b/docs/observations/2026-09-06-routing-prompt-surfaces.md
+@@ -18,23 +18,41 @@ the MCP per-form editing grammar. The mission executor is a different mechanism
+ different caller. A rule measured on the first does not govern the second — and it does not
+ license the second beyond what has been measured either.
+ 
+-Numbers, always with their qualifiers:
++Numbers, always with the artifact each one was read from. Nothing appears here without a
++source; the header of the canonical section carries the identical table.
+ 
+-| Meter | Result | Qualifier |
+-|---|---|---|
+-| Executor adoption in the pilot | executor-first | MANDATED, not chosen. Not an adoption signal. |
+-| Terminal latency, Astra caller, complete CLI | 3.05x | Came with a reliability LOSS: 3/4 versus 4/4. |
+-| Bench harness wall | 11x | Single harness, not replicated. |
+-| Unified-diff route acceptance | 0 of 20 | Why the executor spec shape is used at all. |
++| Meter | Result | Where it comes from | Qualifier |
++|---|---|---|---|
++| Median complete command wall, four prepared-change pairs | 3.05x | Astra forms cohort: `/var/tmp/forge/astra-forms-cohort-fx/summary.json` (written 2026-09-06 02:19:03Z); write-up `docs/observations/2026-09-06-astra-forms-cohort-result.md`, measurement stamped 2026-09-06T02:20:24Z, cohort engine `0a49f012` | Tool 3/4 verified against native Sol 4/4 verified. Latency only, bought at LOWER reliability. It is NOT an Astra-caller-versus-Sol-caller comparison. n=4. |
++| Codex `apply_patch` V4A payloads refused by a unified-diff-only gate | 69-75% of admit calls | `docs/observations/2026-09-02-resume-here-bridge-program.md`, UPDATE 15:41Z | Why a structured spec shape is used instead of a diff string. A different gate, not this executor. |
++| The 2026-09-02 native-default ruling | ~2x wall and ~2x actions for a tool-mandated agent | `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`; 81 arm-runs, verified servers, two blind judges | Measured on the Sol caller, on the build before `13c12401`, and on the MCP per-form editing grammar. |
++| Executor-first in the pilot | not a measurement | this document; the experiment row of the canonical table | MANDATED by the experiment, not chosen by any agent. No adoption signal, no speedup claim. |
+ 
+-The raw pilot is not a replicated speedup. The mission executor is a PROTOTYPE dated
+-2026-09-05; its kernel source commit is not yet a git commit on any published branch.
++**The 11x bench row has been REMOVED.** It was a single unreplicated harness reading with
++no retained receipt naming its scope. It is not carried on any surface.
++
++The raw pilot is not a replicated speedup. The EXPERIMENTAL ENGINE is named separately from
++production routing: the `bin/mission` `owner_forms` executor, PROTOTYPE dated 2026-09-05,
++cohort engine `0a49f012`; its kernel source commit is not yet a git commit on any published
++branch. Production routing does not depend on it.
+ 
+ ## 2. Canonical text
+ 
+ ONE canonical section: `skills/clj-surgeon/SKILL.md`, heading
+-**"Edit routing (measured 2026-09-06, build >= 13c12401)"**. Every other surface renders the
+-identical decision table, verbatim, not a paraphrase:
++**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is the SOURCE;
++installed skill mirrors follow it through `make install-claude-skill` and
++`make install-codex-skill`.
++
++**The copies are made BY HAND. Nothing generates them.** No templating step, no include, no
++substitution: each surface below holds its own literal bytes of the table, typed in by whoever
++last edited it. The guard against drift is therefore a CHECK, not a generator ---
++`bb bin/check-routing-parity.clj` asserts that every rendering's table is byte-identical to
++the canonical section's, that the plate's pointer heading exists in the canonical file, and
++that every document the plate cites exists on disk. It exits 2 and names the first differing
++row. `make check-agent-routing` runs it before checking the managed blocks, so a drifted copy
++fails the same gate that catches a stale plate.
++
++The table:
+ 
+ | Situation | Route |
+ |---|---|
+@@ -42,10 +60,11 @@ identical decision table, verbatim, not a paraphrase:
+ | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+ | Source already held in context | No reread. |
+ | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
++| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
++| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
+ | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
+-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
++| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
++| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
+ | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
+ 
+ Reads: owner and line known — direct bounded read, no outline. Owner unknown in a large file
+@@ -57,14 +76,15 @@ Reads: owner and line known — direct bounded read, no outline. Owner unknown i
+ |---|---|---|---|---|---|
+ | 1 | Managed block `CLJ-SURGEON ROUTING v:2` in `~/.claude/CLAUDE.md` | `resources/clj-surgeon-agent-routing.md` | `make install-agent-routing` | `make check-agent-routing` | `~/bin/check-prompt-plate.sh` (bridge, hourly cron) |
+ | 2 | Same block in `~/.codex/AGENTS.md` | same file | `make install-agent-routing` | `make check-agent-routing` | same |
+-| 3 | Claude skill `clj-surgeon` | `skills/clj-surgeon/SKILL.md` | `make install-claude-skill` (via `prepare-skill-package`) | `make check-clj-surgeon-skill-mirrors` | none — **gap, see §6** |
++| 3 | Claude skill `clj-surgeon` | `skills/clj-surgeon/SKILL.md` | `make install-claude-skill` (via `prepare-skill-package`) | `make check-clj-surgeon-skill-mirrors`; `bb bin/check-routing-parity.clj` (canonical source) | none — **gap, see §6** |
+ | 4 | Codex skill `clj-surgeon` | same file | `make install-codex-skill` | same | none — **gap** |
+-| 5 | Skill `safe-refactor` | `skills/safe-refactor/SKILL.md` | **none on this branch — outstanding: no Makefile target installs `skills/safe-refactor`** | none | none |
+-| 6 | Repository `CLAUDE.md` | repo root | git checkout (read in-repo) | none | none |
+-| 7 | Repository `AGENTS.md` | repo root | git checkout (read in-repo) | none | none |
++| 5 | Skill `safe-refactor` | `skills/safe-refactor/SKILL.md` | **none on this branch — outstanding: no Makefile target installs `skills/safe-refactor`** | `bb bin/check-routing-parity.clj` (table only) | none |
++| 6 | Repository `CLAUDE.md` | repo root | git checkout (read in-repo) | `bb bin/check-routing-parity.clj` (table only) | none |
++| 7 | Repository `AGENTS.md` | repo root | git checkout (read in-repo) | `bb bin/check-routing-parity.clj` (table only) | none |
+ | 8 | Seat header `~/.claude/CLAUDE.md` prose (outside the managed block) | forge@anvil seat file | hand-edited by the seat owner | none | none |
+ | 9 | Shared doctrine `~/opt/claude-skills/_doctrine/house-rules.md` | claude-skills repo | `git pull` on each seat | none | none |
+ | 10 | Delegation briefs | each launching agent's prompt text | the launching agent | none | none |
++| 11 | Legacy root `skill.md` | repo root | not installed (`SKILL_SOURCE` is `skills/clj-surgeon`) | `bb bin/check-routing-parity.clj` (table only) | none |
+ 
+ `SKILL_SOURCE` in the Makefile is `skills/clj-surgeon` only. Rows 3 and 4 are the ONLY
+ skill directory with an installer. Rows 5 and 8-10 are hand-carried surfaces; they are where
+@@ -76,10 +96,12 @@ Run in this order, from a clean checkout of the merged branch.
+ 
+ 1. **Regenerate / confirm the plate.**
+    `sha256sum resources/clj-surgeon-agent-routing.md`
+-   Current block hash on this branch: `589799bdba1bd2832d65bd07edab0cd65558711aadb2fdbb26462d1d2ba34a11`
+-   (`make install-agent-routing` prints `:block-hash` computed over the same bytes; quote
+-   THAT value in the captain's log, not this one, because it is the installer's own receipt.)
+-2. **Prove the checker fails on the CURRENT installed v:1 block, before installing.**
++   The plate was rewritten for policy revision 1; do NOT carry a hash from an earlier draft
++   here. `make install-agent-routing` prints `:block-hash` computed over the installed bytes;
++   quote THAT value in the captain's log, because it is the installer's own receipt.
++2. **Prove the parity check is green and the checker fails on the CURRENT installed v:1
++   block, before installing.** `make check-agent-routing` runs
++   `bb bin/check-routing-parity.clj` first; a hand-copied table that drifted fails here.
+    `make check-agent-routing` — expected: `:error-type :agent-routing-stale-version`,
+    `:expected-version 2`, one target per account with `:previous-state :stale`,
+    `:stale-version 1`. Quote it.
+@@ -113,11 +135,14 @@ edits" paragraph):
+ > pointer at it, and every other prompt surface renders its decision table verbatim.
+ >
+ > **Native `rg` plus `apply_patch` remains a legitimate production default for a known small
+-> literal change.** The mission executor is tried first only when scope, proof profile,
+-> provider permission, and measured admission facts already fit. A typed refusal is read, not
+-> defeated: retry only when new evidence or a concrete supported correction lifts the stated
+-> reason; otherwise finish natively and record the provenance. The tie-break is complete
+-> verified task cost, not the existence of a receipt.
++> literal change.** For any other bounded mechanical edit, production chooses native or one of
++> the earned deterministic Surgeon routes (`:extract!`, `:rename-ns!`, `require_change`,
++> `within` plus `from`/`to`) by complete verified task cost. **There is no executor-first rule
++> in production**; trying the `bin/mission` executor first is the rule of the explicitly
++> opted-in dogfood experiment alone. A typed refusal is read, not defeated: retry only when new
++> evidence or a concrete supported correction lifts the stated reason; otherwise finish
++> natively and record the provenance. The tie-break is complete verified task cost, not the
++> existence of a receipt.
+ >
+ > **Reassess at each Gene report. Nothing expires silently.** Each reassessment records the
+ > measured build, the route taken per edit class, any counterexample, and the explicit
+@@ -125,28 +150,36 @@ edits" paragraph):
+ 
+ Delegation-brief paragraph, for every builder prompt:
+ 
+-> Clojure edit routing: read the `clj-surgeon` skill's "Edit routing" section before your
+-> first Clojure edit. Owner and line known — read the form directly, no outline. Owner unknown
+-> in a large file — one outline or one search, then the form. Known small literal change —
+-> native `rg` plus `apply_patch`. Bounded mechanical edit (rename across call sites, move
+-> helpers, thread a parameter, add a require across namespaces) where scope, proof profile and
+-> provider permission already fit — try `bin/mission` first (`run --spec-file -`, or
+-> `propose` then `apply`); do not invent a profile to force eligibility. On a typed refusal,
+-> read `:error_type`, retry only on new evidence, otherwise finish natively and say so. New
+-> code, tests, and prose are native — ineligible for this executor on this build, not
+-> forbidden. Never use per-form MCP writes for fan-out, `apply_clojure_changes` with a
+-> namespace owner, or forms-scoped `find`+`replace` for insertion. Do not start an MCP server
+-> for an ordinary edit. If this is a dogfood run, record one ledger line per edit:
++> Clojure edit routing: the `CLJ-SURGEON ROUTING` block in your instructions carries the
++> routing summary and is sufficient for an ordinary edit — do NOT load a skill per edit. Read
++> the `clj-surgeon` skill's "Edit routing (policy revision 1, 2026-09-06)" section only when
++> the route is not already decided, or for an advanced workflow. Owner and line known — read
++> the form directly, no outline. Owner unknown in a large file — one outline or one search,
++> then the form. Known small literal change — native `rg` plus `apply_patch`. Any other
++> bounded mechanical edit — choose native or a deterministic Surgeon route (`:extract!`,
++> `:rename-ns!`, `require_change`, `within` plus `from`/`to`) by complete verified task cost;
++> there is no executor-first rule in production. On a typed refusal, read the code wherever it
++> sits — `:error_type` strings beginning `mission-`, `:error-type` keywords such as
++> `:forms-protected-syntax`, or a nested diagnostic under `:candidates`/`:proof`/`:decision` —
++> retry only on new evidence, otherwise finish natively and say so. New code, tests, and prose
++> are native — ineligible for the experimental executor on this build, not forbidden. Never use
++> per-form MCP writes for fan-out, `apply_clojure_changes` with a namespace owner, or
++> forms-scoped `find`+`replace` for insertion. Do not start an MCP server for an ordinary edit.
++> **Only if this brief explicitly opts you into the dogfood experiment:** try `bin/mission`
++> first on an eligible edit (`run --workspace WS --spec-file spec.edn`, or `propose` then
++> `apply`; schema in `docs/mission-typist.md`), do not invent a profile to force eligibility,
++> and record one ledger line per edit:
+ > `dogfood | <edit class> | <route> | <refusal type or -> | <wall seconds>`.
+ 
+ ## 6. Gaps this draft does not close
+ 
+ 1. **No installer for `skills/safe-refactor`.** `SKILL_SOURCE` is `skills/clj-surgeon`
+    alone. The safe-refactor text ships only to agents reading the working tree.
+-2. **No checker binds the skill text to the plate.** `check-agent-routing` compares the
+-   managed block only. If the skill's "Edit routing" heading is renamed, the plate's pointer
+-   dangles and nothing goes red. A one-line addition to
+-   `check-clj-surgeon-skill-mirrors` (grep the heading) would close it.
++2. ~~No checker binds the skill text to the plate.~~ **CLOSED.**
++   `bb bin/check-routing-parity.clj` fails if the canonical heading the plate names is
++   missing, if any rendering's table differs by a byte, or if a document the plate cites does
++   not exist. `make check-agent-routing` depends on it. It does NOT check rows 8-10 below, or
++   the prose around each table --- only the table bytes, the pointer, and the citations.
+ 3. **Rows 6-10 have no checker at all.** Repo `CLAUDE.md`/`AGENTS.md`, the seat header,
+    shared house rules, and delegation briefs are verified by reading, not by a gate.
+ 4. **The plate does not carry the doctrine commit it was derived from.** The generator is an
+diff --git a/resources/clj-surgeon-agent-routing.md b/resources/clj-surgeon-agent-routing.md
+index 0008119b..fd26f1b7 100644
+--- a/resources/clj-surgeon-agent-routing.md
++++ b/resources/clj-surgeon-agent-routing.md
+@@ -1,17 +1,17 @@
+ <!-- BEGIN CLJ-SURGEON ROUTING v:2 -->
+-## Clojure edit routing (measured 2026-09-06, build >= 13c12401)
++## Clojure edit routing (policy revision 1, 2026-09-06)
+ 
+-Canonical text: the `clj-surgeon` skill, section "Edit routing". This block is a pointer; read that section before the first Clojure edit of a task. It holds the full decision table, the entrance commands, the refusal handling, and the numbers with their qualifiers.
++Canonical text: the `clj-surgeon` skill, section "Edit routing (policy revision 1, 2026-09-06)", in `skills/clj-surgeon/SKILL.md`. This block is a pointer AND the routing summary: it is sufficient on its own for an ordinary edit. Read the canonical section when the route is not already decided by the rules below, or when an advanced workflow needs its references. Do not load a skill per edit.
+ 
+ - Reads: owner and line known — direct bounded read, no outline. Owner unknown in a large file — one outline or one search, then the form. Source already held — no reread.
+ - Known small literal change in one region: native `rg` plus `apply_patch` remains a legitimate production default.
+-- Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) AND scope, proof profile, provider permission and measured admission facts already fit: try the `bin/mission` executor first (`bin/mission run --spec-file -`, or `propose` then `apply`). Do not invent a profile or a prior to force eligibility. The executor is a 2026-09-05 PROTOTYPE; its kernel source commit is not yet a git commit.
+-- Typed refusal (`:error_type` starting `mission-`): read the reason; retry only when new evidence or a concrete supported correction lifts it; otherwise finish natively and record the provenance. Finishing natively is legitimate.
+-- New code, new tests, prose, non-Clojure: native — ineligible for this executor on this build, not forbidden. Where complete reference discovery is required, keep Surgeon semantic preparation; `rg` is not a closure proof.
+-- Never: per-form MCP writes for fan-out, `apply_clojure_changes` with a namespace owner, forms-scoped `find`+`replace` for insertion. Measured losers 2026-09-02.
+-- The installed CLI is the production entrance. Do not start an MCP server for an ordinary edit; persistent MCP is explicit development work; provider calls only in opted-in repositories or profiles.
+-- Tie-break is complete verified task cost — orientation, refusals, proof — not the existence of a receipt. Reassess at each Gene report; nothing expires silently.
+-- Lint through `~/bin/clj-kondo`. Do not discover, register, start, or call cclsp or clojure-lsp.
++- Any other bounded mechanical edit: production chooses native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production.
++- The earned deterministic Surgeon routes: `:extract!` to a new namespace, `:rename-ns!`, `require_change` across namespaces, `within` plus `from`/`to` inside one known form. Measured winners 2026-09-02; unchanged.
++- Under the mandated dogfood EXPERIMENT ONLY, explicitly opted into: try the `bin/mission` executor first on an eligible edit, then one ledger line. Executor-first is the experiment's rule, not production's. The executor is a 2026-09-05 PROTOTYPE; its kernel source commit is not yet a git commit.
++- Typed refusal: codes arrive as `:error_type` strings beginning `mission-` (`"mission-workspace-required"`), as `:error-type` keywords from the kernel (`:forms-protected-syntax`, `:forms-comment-lost`, `:forms-comment-moved`, `:typist-all-candidates-rejected`), and as NESTED diagnostics under `:candidates`/`:proof`/`:decision`. Read the reason; retry only when new evidence or a concrete supported correction lifts it; otherwise finish natively and record the provenance. Finishing natively is legitimate.
++- New code, new tests, prose, non-Clojure: native — ineligible for the experimental executor on this build, not forbidden. Where complete reference discovery is required, keep Surgeon semantic preparation; `rg` is not a closure proof.
++- Never: per-form MCP writes for fan-out, `apply_clojure_changes` with a namespace owner, forms-scoped `find`+`replace` for insertion (measured losers 2026-09-02). The installed CLI is the production entrance: do not start an MCP server for an ordinary edit; persistent MCP is explicit development work; provider calls only in opted-in repositories or profiles.
++- Tie-break is complete verified task cost — orientation, refusals, proof — not the existence of a receipt. Reassess at each Gene report; nothing expires silently. Lint through `~/bin/clj-kondo`. Do not discover, register, start, or call cclsp or clojure-lsp.
+ 
+ **Every Surgeon MCP operation relays the same terminal-response contract.**
+ If `terminal_response` is present and this mutation completes all remaining
+@@ -21,5 +21,5 @@ terminal evidence for this operation and continue. `next_action=none` and
+ `terminal_response` describe only the completed mutation. They never prove
+ that the complete user request is finished.
+ 
+-Derived from `docs/observations/2026-09-06-clojure-edit-routing-rule.md`; surfaces and install procedure in `docs/observations/2026-09-06-routing-prompt-surfaces.md`.
++Numbers with their evidence, surfaces and install procedure: `docs/observations/2026-09-06-routing-prompt-surfaces.md`.
+ <!-- END CLJ-SURGEON ROUTING v:2 -->
+diff --git a/skill.md b/skill.md
+index e4b24e4b..1430aad1 100644
+--- a/skill.md
++++ b/skill.md
+@@ -11,6 +11,33 @@ production entrance. Persistent MCP is a development-only, months-long
+ experiment; use it only when explicitly testing that service. Do not load this
+ skill for an ordinary bounded structural read or an already-decided compact
+ edit.
++## Edit routing (policy revision 1, 2026-09-06)
++
++The canonical Clojure edit-routing table lives in
++[skills/clj-surgeon/SKILL.md](skills/clj-surgeon/SKILL.md), section
++**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is the
++SOURCE; installed skill mirrors follow it through `make install-claude-skill`
++and `make install-codex-skill`. The table below is that section's table
++reproduced verbatim; change it there first, then re-run
++`bb bin/check-routing-parity.clj`.
++
++| Situation | Route |
++|---|---|
++| Owner and line already known | Direct bounded read: `:op :cat :file F :form NAME`, or `sed -n 'A,Bp'` on the known range. No outline. |
++| Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
++| Source already held in context | No reread. |
++| Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
++| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
++| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
++| Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
++| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
++| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
++| Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
++
++This file is a legacy working-tree copy kept for readers who open it
++directly. It is NOT the installer source and it does not override the
++canonical section above.
++
+ ## Choose the cheapest authority
+ 
+ Use native `rg` and `apply_patch` for a known literal and one small region. Use
+diff --git a/skills/clj-surgeon/SKILL.md b/skills/clj-surgeon/SKILL.md
+index e63c8383..d99da290 100644
+--- a/skills/clj-surgeon/SKILL.md
++++ b/skills/clj-surgeon/SKILL.md
+@@ -1,7 +1,7 @@
+ ---
+ name: clj-surgeon
+ description: >-
+-  Carries the canonical Clojure EDIT ROUTING table (measured 2026-09-06, build >= 13c12401) plus advanced clj-surgeon workflows: semantic preparation, computed preview, extraction or movement, CLI fallback, MCP recovery, and troubleshooting. Do not invoke for ordinary inspect_clojure or edit_clojure calls; always-loaded routing and tool schemas cover them.
++  Carries the canonical Clojure EDIT ROUTING table (policy revision 1, 2026-09-06) plus advanced clj-surgeon workflows: semantic preparation, computed preview, extraction or movement, CLI fallback, MCP recovery, and troubleshooting. Do not invoke for ordinary inspect_clojure or edit_clojure calls; always-loaded routing and tool schemas cover them.
+ ---
+ 
+ # Production clj-surgeon routes (advanced router)
+@@ -10,12 +10,23 @@ Optimize complete verified task time. The installed Babashka CLI is the
+ production entrance. Persistent MCP is a development-only, months-long
+ experiment; use it only when explicitly testing that service.
+ 
+-## Edit routing (measured 2026-09-06, build >= 13c12401)
++## Edit routing (policy revision 1, 2026-09-06)
+ 
+-This section is the CANONICAL routing text. The `CLJ-SURGEON ROUTING v:2`
+-managed block, `safe-refactor`, the repository `CLAUDE.md` and `AGENTS.md`, and
+-`docs/observations/2026-09-06-routing-prompt-surfaces.md` render this same
+-table. They do not paraphrase it. Change it here first.
++This section is the CANONICAL routing text and the SOURCE of every copy. The
++`CLJ-SURGEON ROUTING v:2` managed block points at it; `skills/safe-refactor`,
++the repository `CLAUDE.md` and `AGENTS.md`, and
++`docs/observations/2026-09-06-routing-prompt-surfaces.md` render its table
++verbatim. Change it HERE first, then re-render the copies and re-run the parity
++check (`bb bin/check-routing-parity.clj`). Installed skill mirrors follow from
++this working tree through `make install-claude-skill` and
++`make install-codex-skill`; the working tree is authoritative and the mirrors
++are stable copies of it.
++
++You do NOT have to load this skill before every edit. The managed block carries
++the routing summary; a known literal change with sufficient context already in
++hand pays no extra read boundary. Read this section when the route is not
++already decided, and load the references below only for the advanced workflows
++they cover.
+ 
+ ### The table
+ 
+@@ -25,10 +36,11 @@ table. They do not paraphrase it. Change it here first.
+ | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+ | Source already held in context | No reread. |
+ | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
++| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
++| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
+ | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
+-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
++| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
++| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
+ | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
+ 
+ ### Entrance commands, as they exist on this branch
+@@ -37,17 +49,10 @@ table. They do not paraphrase it. Change it here first.
+ `help`, `show`, `list`, `ready`, and `blocked` run on babashka. `propose`,
+ `plan`, `apply`, `run`, `resume`, `undo`, and `link` start a JVM.
+ 
+-One JVM, plan and write together, no review step:
++Run a saved, complete spec in one JVM (plan and write together, no review step):
+ 
+ ```bash
+-bin/mission run --spec-file - --state-home "$H" <<'EDN'
+-{:verb "owner_forms"
+- :question "why this write is being made"
+- :request {:op "owner_forms"
+-           :workspace_root "/abs/path"
+-           :scope {:paths ["src/**/*.clj"]}
+-           :verification {:profile "mission-proof"}}}
+-EDN
++bin/mission run --workspace "$WS" --state-home "$H" --spec-file owner-forms.edn
+ ```
+ 
+ Review before write:
+@@ -59,16 +64,50 @@ bin/mission apply   M-1 --workspace "$WS" --state-home "$H"
+ bin/mission undo    M-1 --workspace "$WS" --state-home "$H"
+ ```
+ 
+-`open` is an alias of `propose`. `run` supports the `owner_forms` verb only.
+-`apply` exits non-zero on a refusal or a failed receipt. The proof profile is
+-read from `<workspace_root>/.clj-surgeon.edn`:
++`open` is an alias of `propose`. `run` supports the `owner_forms` verb only and
++refuses an existing mission id. `apply` exits non-zero on a refusal or a failed
++receipt. The spec schema — every required key, and why each one exists — is
++[docs/mission-typist.md](../../docs/mission-typist.md).
++
++The only spec shape shown here is one that has been PROVEN to plan, commit, and
++undo: the request built by `test/clj_surgeon/mission_typist_executor_test.clj`
++(`request`, line 32) out of `test/clj_surgeon/mission_typist_test.clj`
++(`eligible`, line 8), exercised by the `real-proof-commit-and-undo` test at line
++42. Written out, with the fixture's own profiles:
+ 
+ ```edn
+-{:verification-profiles {"mission-proof" {:commands [["/bin/true"]]}}}
++{:verb "owner_forms"
++ :profiles
++ {"gate"   {:id "gate"   :measured-ms 10 :evidence "receipt:gate"
++            :commands [["clojure" "-M" "-e" "(require 'fixture.core)"]]}
++  "accept" {:id "accept" :measured-ms 10 :evidence "receipt:witness-receipt"
++            :commands [["clojure" "-M" "-e" "(require 'fixture.core) (assert (nil? (ns-resolve 'fixture.core 'old-name))) (assert (= 1 ((ns-resolve 'fixture.core 'new-name))))"]]}}
++ :request
++ {:workspace_root "/absolute/workspace"
++  :intent "Rename old-name to new-name preserving behavior"
++  :owners [{:file "src/fixture/core.clj" :owner "old-name" :new-owner "new-name"}]
++  :proof-files []
++  :verification {:profile "gate"}
++  :acceptance_profile "accept"
++  :typist {:enabled? true
++           :mission-class :rename
++           :discovery-complete? true
++           :source-policy {"src/fixture/core.clj" {:generated? false
++                                                   :reader-conditionals? false
++                                                   :format-sensitive? false}}
++           :budget {:max-files 1 :max-changed-chars 1000}
++           :commit {:atomic? true :rollback? true}
++           :provider {:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}
++           :rate {:mission-class :rename :provider :openrouter :upstream "Cerebras"
++                  :model "openai/gpt-oss-120b" :verified 9 :attempted 10
++                  :evidence "cohort:rename"}}}}
+ ```
+ 
+-Supply a profile that actually proves the change. Do not point a profile at
+-`/bin/true` to make a mission eligible.
++The gate and the acceptance profile must be independently authored and must run
++DIFFERENT commands with different retained evidence; the planner refuses
++identical proof commands (`:typist-identical-proof-commands`). Supply a profile
++that actually proves the change. Never point a profile at a command that cannot
++fail.
+ 
+ The mission executor is a PROTOTYPE dated 2026-09-05. Its kernel source commit
+ is not yet a git commit on any published branch. Say so when you cite it.
+@@ -82,15 +121,32 @@ in a repository or profile that has opted in.
+ 
+ ### A typed refusal
+ 
+-A refusal is EDN in the repository receipt shape:
++Refusals do not all share one spelling. Read whichever of these the receipt
++carries, at whatever depth it carries it:
++
++- `:error_type` as a STRING beginning `mission-`, in a CLI dossier — e.g.
++  `"mission-not-ready"`, `"mission-workspace-required"`.
++- `:error-type` as a KEYWORD, from the kernel — e.g.
++  `:forms-protected-syntax` (the owner contains comments or other protected
++  syntax; no mutation was attempted), `:forms-comment-lost`,
++  `:forms-comment-moved`, `:forms-owner-mismatch`,
++  `:typist-all-candidates-rejected`, `:typist-stale-plan`,
++  `:typist-identical-proof-commands`, `:typist-invalid-undo-hash`.
++- NESTED diagnostics: a refusal may arrive inside `:candidates`, `:proof`, or
++  `:decision` rather than at the top level. `(:ok result)` false with no
++  top-level code is still a refusal — walk the map before retrying.
++
++A CLI dossier refusal has this shape:
+ 
+ ```edn
+-{:ok false :operation "mission" :error_type "mission-<suffix>" :error "one sentence" :next_call nil}
++{:ok false :operation "mission" :error_type "mission-<suffix>" :error "one sentence"
++ :decision "what to do instead" :next_call nil}
+ ```
+ 
+-1. Read `:error_type` and `:error`.
++1. Read the code and the `:error` and `:decision` sentences.
+ 2. Retry only when new evidence or a concrete supported correction lifts the
+-   stated reason.
++   stated reason. Never retry an identical request after
++   `:forms-protected-syntax`.
+ 3. Otherwise finish the edit natively. That is a legitimate outcome, not a
+    defeat, and it is recorded.
+ 4. Record the provenance as actual or user-reported. Do not widen scope to make
+@@ -104,8 +160,8 @@ guarantees, its unknowns, and whether its evidence is test or live.
+ 
+ ### The dogfood ledger line
+ 
+-For the mandated experiment, record one line per Clojure edit in the session
+-work log:
++For the mandated experiment ONLY, record one line per Clojure edit in the
++session work log:
+ 
+ ```text
+ dogfood | <edit class> | <route> | <refusal type or -> | <wall seconds>
+@@ -113,16 +169,25 @@ dogfood | <edit class> | <route> | <refusal type or -> | <wall seconds>
+ 
+ `route` is `executor`, `native-after-refusal`, or `native-ineligible`.
+ 
+-### The numbers, with their qualifiers
++### The numbers, and exactly where each one comes from
++
++Policy revision 1, dated 2026-09-06. No figure appears here without the
++artifact it was read from.
+ 
+-| Meter | Result | Qualifier |
+-|---|---|---|
+-| Executor adoption in the pilot | executor-first | MANDATED, not chosen. Not an adoption signal. |
+-| Terminal latency, Astra caller, complete CLI | 3.05x | Came with a reliability LOSS: 3/4 versus 4/4. |
+-| Bench harness wall | 11x | Single harness, not replicated. |
+-| Unified-diff route acceptance | 0 of 20 | Why the executor spec shape is used at all. |
++| Meter | Result | Where it comes from | Qualifier |
++|---|---|---|---|
++| Median complete command wall, four prepared-change pairs | 3.05x | Astra forms cohort: `/var/tmp/forge/astra-forms-cohort-fx/summary.json` (written 2026-09-06 02:19:03Z); write-up `docs/observations/2026-09-06-astra-forms-cohort-result.md`, measurement stamped 2026-09-06T02:20:24Z, cohort engine `0a49f012` | Tool 3/4 verified against native Sol 4/4 verified. Latency only, bought at LOWER reliability. It is NOT an Astra-caller-versus-Sol-caller comparison. n=4; the native SD widened to 2SD 15.585s. |
++| Codex `apply_patch` V4A payloads refused by a unified-diff-only gate | 69-75% of admit calls | `docs/observations/2026-09-02-resume-here-bridge-program.md`, UPDATE 15:41Z | Why a structured spec shape is used instead of a diff string. A different gate, not this executor. |
++| The 2026-09-02 native-default ruling | ~2x wall and ~2x actions for a tool-mandated agent, no quality meter clearing the noise floor | `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`; 81 arm-runs, verified servers, two blind judges | Measured on the Sol caller, on the build before `13c12401` ("merge: helper_extraction: request-shape refusals carry :field, :decision and a runnable :example"), and on the MCP per-form editing grammar. |
++| Executor-first in the pilot | not a measurement | this section's experiment row, and `docs/observations/2026-09-06-routing-prompt-surfaces.md` | MANDATED by the experiment, not chosen by any agent. Carries no adoption signal and no speedup claim. |
+ 
+-The raw pilot is not a replicated speedup. Never render these bare.
++No 11x bench figure is carried. It was a single unreplicated harness reading
++with no retained receipt naming its scope, and it has been removed.
++
++The EXPERIMENTAL ENGINE is named separately from production routing: the
++`bin/mission` `owner_forms` executor, PROTOTYPE dated 2026-09-05, cohort engine
++`0a49f012`. Production routing in the table above does not depend on it and does
++not change if it is withdrawn.
+ 
+ ### Why this replaces the 2026-09-02 ruling
+ 
+@@ -132,12 +197,16 @@ the MCP per-form editing grammar. Under those conditions the agent kept its
+ native read and patch loop and layered the tool on top, paying about 2x wall
+ and 2x actions with no quality meter clearing the noise floor.
+ 
++That ruling's EXCEPTIONS survive unchanged and keep their row in the table:
++`:extract!`, `:rename-ns!`, `require_change`, and `within` plus `from`/`to` were
++the measured winners then and are the measured winners now.
++
+ The mission executor is a different mechanism: owners, intended forms, and a
+ proof profile in; a verified commit with a receipt and an undo out, or a typed
+ refusal before any write. A rule measured on the first mechanism does not
+ govern the second. It also does not license the second beyond what has been
+-measured, which is why the table keeps native as the production default for
+-small literal changes.
++measured, which is why the table keeps production routing on complete verified
++task cost and confines executor-first to the opted-in experiment.
+ 
+ ### Reassessment
+ 
+@@ -174,17 +243,19 @@ For any nontrivial plan, put the structured request on stdin. This is the CLI
+ equivalent of MCP's structured arguments and avoids nested shell quoting:
+ 
+ ```bash
+-clj-surgeon :op :change! :spec-file - <<'EDN'
++clj-surgeon :op :change! :receipt-out ./change-receipt.edn :spec-file - <<'EDN'
+ {:changes [{:id :rename
+             :in ["src/app.clj"]
+             :forms [run]
+-            :find :old
+-            :do [:replace :new]
++            :find ":old"
++            :do [:replace ":new"]
+             :expect {:matches 1 :each-form 1}}]
+  :expect {:changes 1 :edits 1 :files 1}}
+ EDN
+ ```
+ 
++`:find` and the replacement are source strings, even for a keyword literal.
++`:change!` requires a writable `:receipt-out` path for its guarded undo receipt.
+ Use `:spec-file PATH` for a saved request. Attach stdin in the same shell
+ action; never invoke `:spec-file -` and wait for a later input stream.
+ Never run `clj-surgeon up` casually. It is development-only, edits workspace
+diff --git a/skills/safe-refactor/SKILL.md b/skills/safe-refactor/SKILL.md
+index 3b301549..faaefeb3 100644
+--- a/skills/safe-refactor/SKILL.md
++++ b/skills/safe-refactor/SKILL.md
+@@ -37,6 +37,11 @@ clj-surgeon :op :rename-ns! ...
+ clj-surgeon :op :fix-declares! ...
+ ```
+ 
++A `:change!` call needs a writable `:receipt-out` path for its guarded undo
++receipt, and `:find` plus the replacement are SOURCE STRINGS even for a keyword
++literal (`":old"`, not `:old`). The runnable example is in the `clj-surgeon`
++skill's "Avoid shell quoting" section.
++
+ Stop on a nonzero exit or EDN `:error`. A refusal is evidence to narrow the
+ intent, not a cue to retry blindly. `clj-surgeon up` is a development-only MCP
+ onboarding command and requires `--force`; it is not part of the production
+@@ -44,9 +49,13 @@ refactor path.
+ 
+ ## Edit routing
+ 
+-The canonical Clojure edit-routing table lives in the `clj-surgeon` skill,
+-section "Edit routing (measured 2026-09-06, build >= 13c12401)". It is
+-reproduced here verbatim; change it there first.
++The canonical Clojure edit-routing table lives in
++`skills/clj-surgeon/SKILL.md`, section
++**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is the
++SOURCE; installed skill mirrors follow it through `make install-claude-skill`
++and `make install-codex-skill`. The table below is that section's table
++reproduced verbatim; change it there first, then re-run
++`bb bin/check-routing-parity.clj`.
+ 
+ | Situation | Route |
+ |---|---|
+@@ -54,10 +63,11 @@ reproduced here verbatim; change it there first.
+ | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+ | Source already held in context | No reread. |
+ | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
++| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
++| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
+ | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
+-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
++| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
++| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
+ | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
+ 
+ Reads: owner and line known, read the form directly with no outline; owner
+diff --git a/src/clj_surgeon/agent_routing.clj b/src/clj_surgeon/agent_routing.clj
+index efb59e1f..bb096814 100644
+--- a/src/clj_surgeon/agent_routing.clj
++++ b/src/clj_surgeon/agent_routing.clj
+@@ -20,60 +20,70 @@
+ (def ^:private any-begin-pattern #"<!-- BEGIN CLJ-SURGEON ROUTING v:(\d+) -->")
+ (def ^:private any-end-pattern #"<!-- END CLJ-SURGEON ROUTING v:(\d+) -->")
+ 
+-(defn- stale-marker-state
+-  "Locate a single routing block written at a version other than the current one.
+-   A stale block is real drift: the seat is reading a superseded rule."
++(defn- marker-scan
++  "Every marker of EVERY version, with its span and its declared version.
++   Scanning only the current version's literal is what let a superseded block
++   survive next to a fresh one: the old bytes were invisible to the check."
++  [pattern source]
++  (let [matcher (re-matcher pattern source)]
++    (loop [found []]
++      (if (.find matcher)
++        (recur (conj found {:start (.start matcher)
++                            :end (.end matcher)
++                            :version (parse-long (.group matcher 1))}))
++        found))))
++
++(defn- marker-state
++  "Exactly ONE well-formed BEGIN/END pair, at ONE version, across ALL versions.
++   Anything else is refused with a diagnosis and the file is left alone: a
++   second block, a crossed pair, or a version-mismatched pair means a human
++   edited a managed region and the installer cannot know which rule governs."
+   [source]
+-  (let [begins (vec (re-seq any-begin-pattern source))
+-        ends (vec (re-seq any-end-pattern source))]
+-    (when (and (= 1 (count begins)) (= 1 (count ends)))
+-      (let [begin-text (first (first begins))
+-            end-text (first (first ends))
+-            version (second (first begins))
+-            begin (str/index-of source begin-text)
+-            end (str/index-of source end-text)]
+-        (when (and begin end (< begin end))
+-          {:ok true
+-           :state :stale
+-           :stale-version (parse-long version)
+-           :begin begin
+-           :end (+ end (count end-text))})))))
+-
+-(defn- indexes-of [source needle]
+-  (loop [from 0
+-         indexes []]
+-    (if-let [index (str/index-of source needle from)]
+-      (recur (+ index (count needle)) (conj indexes index))
+-      indexes)))
+-
+-(defn- marker-state [source]
+-  (let [begins (indexes-of source managed-begin)
+-        ends (indexes-of source managed-end)]
++  (let [begins (marker-scan any-begin-pattern source)
++        ends (marker-scan any-end-pattern source)
++        refuse (fn [diagnosis]
++                 {:ok false
++                  :error-type :invalid-managed-routing
++                  :diagnosis diagnosis
++                  :begin-count (count begins)
++                  :end-count (count ends)
++                  :begin-versions (mapv :version begins)
++                  :end-versions (mapv :version ends)})]
+     (cond
+       (and (empty? begins) (empty? ends))
+       {:ok true :state :absent}
+ 
+-      (and (= 1 (count begins))
+-           (= 1 (count ends))
+-           (< (first begins) (first ends)))
+-      {:ok true
+-       :state :present
+-       :begin (first begins)
+-       :end (+ (first ends) (count managed-end))}
++      (or (not= 1 (count begins)) (not= 1 (count ends)))
++      (refuse (str "expected exactly one CLJ-SURGEON ROUTING marker pair across all "
++                   "versions; found " (count begins) " BEGIN "
++                   (pr-str (mapv :version begins)) " and " (count ends) " END "
++                   (pr-str (mapv :version ends))
++                   ". Delete every routing block by hand until at most one "
++                   "remains, then re-run the installer."))
++
++      (>= (:start (first begins)) (:start (first ends)))
++      (refuse (str "the END marker (v:" (:version (first ends))
++                   ") appears before the BEGIN marker (v:"
++                   (:version (first begins)) "); the managed region is inverted."))
++
++      (not= (:version (first begins)) (:version (first ends)))
++      (refuse (str "BEGIN is v:" (:version (first begins)) " but END is v:"
++                   (:version (first ends))
++                   "; a routing block must open and close at the same version. "
++                   "Neither marker can be trusted to bound the managed region."))
+ 
+       :else
+-      {:ok false
+-       :error-type :invalid-managed-routing
+-       :begin-count (count begins)
+-       :end-count (count ends)})))
++      (let [version (:version (first begins))
++            span {:begin (:start (first begins)) :end (:end (first ends))}]
++        (if (= managed-version version)
++          (merge {:ok true :state :present} span)
++          (merge {:ok true :state :stale :stale-version version} span))))))
+ 
+ (defn- routing-state
+-  "Current-version markers win. A lone older-version block is reported stale."
++  "One pair or nothing. A lone older-version pair is reported stale and is
++   replaced IN PLACE, so no bytes of the superseded rule survive."
+   [source]
+-  (let [state (marker-state source)]
+-    (if (and (:ok state) (= :absent (:state state)))
+-      (or (stale-marker-state source) state)
+-      state)))
++  (marker-state source))
+ 
+ (defn- valid-canonical-block? [block]
+   (let [state (marker-state block)]
+diff --git a/test/clj_surgeon/agent_routing_test.clj b/test/clj_surgeon/agent_routing_test.clj
+index 2bd42a3e..04a0ba06 100644
+--- a/test/clj_surgeon/agent_routing_test.clj
++++ b/test/clj_surgeon/agent_routing_test.clj
+@@ -151,7 +151,7 @@
+     (is (str/starts-with? source routing/managed-begin))
+     (is (str/ends-with? (str/trimr source) routing/managed-end))
+     (is (not (str/includes? source "ROUTING v:1")))
+-    (is (str/includes? source "the `clj-surgeon` skill, section \"Edit routing\""))
++    (is (str/includes? source "the `clj-surgeon` skill, section \"Edit routing (policy revision 1, 2026-09-06)\""))
+     (is (str/includes? source "bin/mission"))
+     (is (str/includes? source "PROTOTYPE"))
+     (is (not (str/includes? source "Native `rg` plus a native patch is the default route")))
+@@ -160,7 +160,7 @@
+     (testing "the block names the document it was derived from"
+       (is (str/includes?
+             source
+-            "docs/observations/2026-09-06-clojure-edit-routing-rule.md")))))
++            "docs/observations/2026-09-06-routing-prompt-surfaces.md")))))
+ 
+ (deftest terminal-response-routing-is-conditional-on-complete-user-work
+   ;; @spec MCP-OP-RELAY-004
+@@ -172,3 +172,136 @@
+     (is (re-find
+           #"They never prove\s+that the complete user request is finished\."
+           source))))
++
++;; ---------------------------------------------------------------------------
++;; Astra's three probes, 2026-09-06 03:33Z, verbatim as witnesses.
++;;
++;; Executed against c1d6028a they returned: (a) :current with :changed false,
++;; leaving a contradictory v:1 rule installed beside the v:2 one; (b) :absent,
++;; so a THIRD block was appended next to two v:1 blocks; (c) accepted as stale
++;; and replaced, trusting a BEGIN v:1 / END v:3 pair to bound the region.
++;; Marker state must require exactly one well-formed matching pair across ALL
++;; versions and refuse everything else without touching the file.
++
++(defn- v-block [version body]
++  (str "<!-- BEGIN CLJ-SURGEON ROUTING v:" version " -->\n"
++       body "\n"
++       "<!-- END CLJ-SURGEON ROUTING v:" version " -->\n"))
++
++(deftest astra-probe-a-current-block-beside-an-old-block-refuses
++  (let [source (str "seat header\n"
++                    (v-block 2 "the current rule")
++                    "\n"
++                    (v-block 1 "Native `rg` plus a native patch is the default route.")
++                    "tail\n")
++        result (routing/upsert-routing-block source canonical-block)]
++    (testing "not :current, not :changed false -- a typed refusal"
++      (is (false? (:ok result)))
++      (is (= :invalid-managed-routing (:error-type result)))
++      (is (nil? (:previous-state result)))
++      (is (not= :current (:previous-state result))))
++    (testing "the diagnosis names both versions it found"
++      (is (= [2 1] (:begin-versions result)))
++      (is (= [2 1] (:end-versions result)))
++      (is (str/includes? (:diagnosis result) "exactly one")))
++    (testing "the file is NOT modified"
++      (is (= source (:source result))))))
++
++(deftest astra-probe-b-two-old-blocks-are-not-absent
++  (let [source (str "seat header\n"
++                    (v-block 1 "first old rule")
++                    "\n"
++                    (v-block 1 "second old rule")
++                    "tail\n")
++        result (routing/upsert-routing-block source canonical-block)]
++    (testing "not :absent -- refused, so no third block is appended"
++      (is (false? (:ok result)))
++      (is (= :invalid-managed-routing (:error-type result)))
++      (is (= 2 (:begin-count result)))
++      (is (= 2 (:end-count result))))
++    (testing "the file is NOT modified"
++      (is (= source (:source result)))
++      (is (not (str/includes? (:source result) "ROUTING v:2"))))))
++
++(deftest astra-probe-c-mismatched-pair-versions-refuse
++  (let [source (str "seat header\n"
++                    "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\n"
++                    "a rule bounded by markers that disagree\n"
++                    "<!-- END CLJ-SURGEON ROUTING v:3 -->\n"
++                    "tail\n")
++        result (routing/upsert-routing-block source canonical-block)]
++    (testing "not accepted as stale"
++      (is (false? (:ok result)))
++      (is (= :invalid-managed-routing (:error-type result)))
++      (is (not= :stale (:previous-state result)))
++      (is (nil? (:stale-version result))))
++    (testing "the diagnosis names both marker versions"
++      (is (= [1] (:begin-versions result)))
++      (is (= [3] (:end-versions result)))
++      (is (str/includes? (:diagnosis result) "BEGIN is v:1"))
++      (is (str/includes? (:diagnosis result) "END is v:3")))
++    (testing "the file is NOT modified"
++      (is (= source (:source result))))))
++
++(deftest a-lone-well-formed-pair-is-still-handled
++  (testing "a lone stale pair is replaced in place"
++    (let [source (str "head\n" (v-block 1 "old rule") "tail\n")
++          result (routing/upsert-routing-block source canonical-block)]
++      (is (:ok result))
++      (is (= :stale (:previous-state result)))
++      (is (= 1 (:stale-version result)))
++      (is (= (str "head\n" canonical-block "tail\n") (:source result)))))
++  (testing "a lone current pair is :current and byte-idempotent"
++    (let [source (str "head\n" canonical-block "tail\n")
++          result (routing/upsert-routing-block source canonical-block)]
++      (is (:ok result))
++      (is (= :current (:previous-state result)))
++      (is (false? (:changed result)))
++      (is (= source (:source result))))))
++
++(deftest no-old-version-bytes-survive-a-replacement
++  ;; A replacement that appended instead of replacing would keep the old rule
++  ;; readable in the same file. Assert on the BYTES, at every older version.
++  (doseq [old-version [1 3 11]]
++    (testing (str "v:" old-version " leaves nothing behind")
++      (let [marker-body (str "SUPERSEDED-RULE-" old-version)
++            source (str "head\n" (v-block old-version marker-body) "tail\n")
++            result (routing/upsert-routing-block source canonical-block)
++            updated (:source result)]
++        (is (:ok result))
++        (is (= :stale (:previous-state result)))
++        (is (= old-version (:stale-version result)))
++        (is (not (str/includes? updated marker-body)))
++        (is (not (str/includes? updated (str "ROUTING v:" old-version))))
++        (is (= 1 (count (re-seq #"BEGIN CLJ-SURGEON ROUTING" updated))))
++        (is (= 1 (count (re-seq #"END CLJ-SURGEON ROUTING" updated))))
++        (is (= (str "head\n" canonical-block "tail\n") updated))))))
++
++(deftest the-plate-pointer-and-its-citations-resolve
++  ;; A pointer that names a heading nobody wrote, or a document nobody
++  ;; committed, is worse than no pointer: the seat reads a compact rule and
++  ;; believes fuller text exists behind it. The plate cited
++  ;; docs/observations/2026-09-06-clojure-edit-routing-rule.md, which was never
++  ;; written. `bb bin/check-routing-parity.clj` is the same guard over all the
++  ;; hand-copied table renderings.
++  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")
++        canonical (slurp "skills/clj-surgeon/SKILL.md")
++        heading "## Edit routing (policy revision 1, 2026-09-06)"]
++    (testing "the plate names the canonical heading and that heading exists"
++      (is (str/includes? plate "Edit routing (policy revision 1, 2026-09-06)"))
++      (is (str/includes? canonical heading)))
++    (testing "every document the plate cites exists on disk"
++      (let [cited (set (re-seq #"docs/observations/[A-Za-z0-9._-]+\.md" plate))]
++        (is (seq cited))
++        (doseq [doc cited]
++          (is (fs/exists? doc) (str "the plate cites a missing document: " doc)))))
++    (testing "the plate carries no executor-first rule for production"
++      (is (str/includes? plate "There is no executor-first rule in production"))
++      (is (str/includes? plate "EXPERIMENT ONLY")))
++    (testing "the plate names the real refusal shapes, not only mission-*"
++      (is (str/includes? plate ":forms-protected-syntax"))
++      (is (str/includes? plate "mission-workspace-required"))
++      (is (str/includes? plate "NESTED diagnostics")))
++    (testing "no unsourced 11x figure survives on any surface"
++      (is (not (str/includes? plate "11x")))
++      (is (not (str/includes? canonical "| Bench harness wall | 11x |"))))))

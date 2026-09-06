@@ -1,0 +1,37 @@
+### round=1 k=1 22:13:32
+arm=F mission=fanout run=F-fanout-1788646412-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=1747 reasoning_tokens=934
+exit=0
+### round=1 k=5 22:13:38
+arm=F mission=fanout run=F-fanout-1788646418-0 first_verified_s=6.50 candidates=5 apply_ok=3 gate_ok=2 accept_ok=2 semantic_mismatch=0 refusals=0 tokens=10798 reasoning_tokens=6459
+exit=0
+### round=2 k=1 22:13:46
+arm=F mission=fanout run=F-fanout-1788646426-0 first_verified_s=3.87 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=1762 reasoning_tokens=894
+exit=0
+### round=2 k=5 22:13:52
+arm=F mission=fanout run=F-fanout-1788646432-0 first_verified_s=5.66 candidates=5 apply_ok=3 gate_ok=3 accept_ok=3 semantic_mismatch=0 refusals=0 tokens=11370 reasoning_tokens=6737
+exit=0
+### round=3 k=1 22:14:00
+arm=F mission=fanout run=F-fanout-1788646440-0 first_verified_s=none candidates=1 apply_ok=1 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=1782 reasoning_tokens=1064
+exit=0
+### round=3 k=5 22:14:06
+arm=F mission=fanout run=F-fanout-1788646446-0 first_verified_s=5.63 candidates=5 apply_ok=3 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=10982 reasoning_tokens=6552
+exit=0
+### round=4 k=1 22:14:14
+arm=F mission=fanout run=F-fanout-1788646454-0 first_verified_s=5.66 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=2612 reasoning_tokens=1839
+exit=0
+### round=4 k=5 22:14:22
+arm=F mission=fanout run=F-fanout-1788646462-0 first_verified_s=5.44 candidates=5 apply_ok=4 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=10817 reasoning_tokens=6263
+exit=0
+### round=5 k=1 22:14:29
+arm=F mission=fanout run=F-fanout-1788646470-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=2706 reasoning_tokens=1815
+exit=0
+### round=5 k=5 22:14:38
+arm=F mission=fanout run=F-fanout-1788646478-0 first_verified_s=4.98 candidates=5 apply_ok=2 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=10159 reasoning_tokens=6046
+exit=0
+### round=6 k=1 22:14:45
+arm=F mission=fanout run=F-fanout-1788646485-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=2075 reasoning_tokens=1243
+exit=0
+### round=6 k=5 22:14:52
+arm=F mission=fanout run=F-fanout-1788646492-0 first_verified_s=5.29 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=10444 reasoning_tokens=6408
+exit=0
+ALLDONE Sat Sep  5 10:14:59 PM UTC 2026

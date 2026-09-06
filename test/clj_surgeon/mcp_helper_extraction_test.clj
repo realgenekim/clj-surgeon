@@ -2113,3 +2113,79 @@
             (str "an executed " field " relabelled `unknown` keeps its typed "
                  "counts, which the not-run face forbids, and loses the enum "
                  "the executed face requires: it must satisfy neither"))))))
+
+;; ---------------------------------------------------------------------------
+;; REQUEST-SHAPE refusals show the shape (the Sol seven-round-trip finding)
+;;
+;; 2026-09-05: a real caller needed SEVEN refused `plan` calls to reverse-engineer
+;; helper_extraction's closed request shape. Every one of those refusals named the
+;; offending field and its grammar in prose and none of them showed a request. The
+;; three witnesses below are the ratchet: the example is RUNNABLE, not decorative;
+;; the field path is named; and the enriched refusal is still exactly one schema face.
+
+(defn- shape-refusal-of
+  "The refusal `params` earns from the real boundary, with no workspace involved."
+  [params]
+  (mcp-helper/plan params configured-profiles))
+
+;; @spec MCP-OP-HELPER-002
+;; @spec MCP-OP-HELPER-010
+;; @spec MCP-OP-HELPER-025
+(deftest an-unknown-field-refusal-carries-a-runnable-example
+  (testing "the example is submitted AS-IS on a materialized happy tree -- only
+            workspace_root is bound, because it is the one field whose correct
+            value is the caller's own tree and which the example therefore
+            cannot state. If this goes red the example is decorative."
+    (let [refused (shape-refusal-of
+                   (assoc (fixture/request) :destination-ns "acid.web.response"))]
+      (is (false? (:ok refused)) (pr-str refused))
+      (is (= "helper-extraction-unknown-field" (:error_type refused)))
+      (is (= "destination-ns" (:field refused)))
+      (is (string? (:decision refused)))
+      (is (nil? (:next_call refused))
+          "MCP-OP-HELPER-010: an example is not a continuation")
+      (let [example (:example refused)]
+        (is (map? example))
+        (is (= #{:op :from :helpers :to :scope :verification} (set (keys example)))
+            "complete and minimal: every required closed field, nothing else")
+        (let [outcome (with-materialized-happy-tree
+                        "refusal-example"
+                        (fn [root]
+                          (mcp-helper/plan (assoc example :workspace_root root)
+                                           configured-profiles)))
+              planned (:result outcome)]
+          (is (true? (:ok planned))
+              (str "the example the refusal handed back must PLAN OK as written: "
+                   (pr-str planned)))
+          (is (some? (:plan planned))))))))
+
+;; @spec MCP-OP-HELPER-002
+(deftest a-to-given-as-namespace-names-the-field-and-shows-the-shape
+  (testing "the exact wrong guess the real caller made on round three"
+    (let [refused (shape-refusal-of
+                   (assoc (fixture/request) :to {:namespace "acid.web.response"}))]
+      (is (false? (:ok refused)) (pr-str refused))
+      (is (= "helper-extraction-invalid-request" (:error_type refused)))
+      (is (= "to" (:field refused)))
+      (is (= ["to"] (:path refused)) "the pre-existing evidence is retained")
+      (is (re-find #"alias_policy" (:decision refused))
+          "the decision says which closed field carries the information")
+      (is (= {:lib "acid.web.response" :alias_policy ["response" "resp"]}
+             (get-in refused [:example :to]))
+          "and the example shows the shape the prose only names")
+      (is (nil? (:next_call refused))))))
+
+;; @spec MCP-OP-HELPER-020
+(deftest an-enriched-shape-refusal-is-still-exactly-the-refusal-face
+  (doseq [[label params]
+          [["unknown field" (assoc (fixture/request) :destination-ns "x")]
+           ["to as namespace" (assoc (fixture/request) :to {:namespace "x"})]
+           ["scope as a string" (assoc (fixture/request) :scope "project")]
+           ["verification as a string" (assoc (fixture/request) :verification "helper-proof")]]]
+    (testing label
+      (let [refused (assoc (shape-refusal-of params) :elapsed_ms 2.0)]
+        (is (contains? refused :example))
+        (is (contains? refused :field))
+        (is (= #{"refusal"} (valid-against refused))
+            (str "a refusal carrying example/field must still validate against "
+                 "EXACTLY the refusal branch: " (pr-str refused)))))))
