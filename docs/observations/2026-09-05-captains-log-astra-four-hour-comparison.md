@@ -195,3 +195,7 @@ Source audit confirms mission classes are rate labels over one existing-definiti
 ### Astra single Spark coding result, 2026-09-06 11:28Z
 
 The sole paid attempt verified on the original three-owner Maven task: generation 4.152 s, complete parent 13.020 s, proofs 2/5 and 4/24, scope preserved. Input 7089, output 804 including reasoning 256; subscription dollar cost unknown. New unpaid preflight independently GO; old failed preflight retained. No retry or production route change. Timing window explicitly released to Fable after terminal cleanup. [Full boundaries](2026-09-06-astra-spark-utility.md). Collector fence sole hold fixed separately in99d5d5fc by removing a root-only study’s live fleet-cutoff marker.
+
+### Astra 12:00Z checkpoint, recorded 2026-09-06T11:42:12.863714+00:00
+
+[Full Gene report](2026-09-06-astra-checkpoint-1200z.md) records the prepared wins, the new assigned-route loss, the independently verified single Spark candidate, the known witness defect and next small fresh-caller pilot. Meter observed11:37: 50% weekly remaining, reset September12 15:48:08UTC; no token-budget estimate. Next scheduled checkpoint15:00, extended end16:20.
