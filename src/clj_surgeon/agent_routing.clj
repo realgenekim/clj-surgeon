@@ -84,6 +84,12 @@
                      :reason (if at-line-start?
                                :unversioned-marker
                                :marker-not-at-line-start)
+                     ;; The byte offset, not the character index: a refusal has
+                     ;; to be findable with `head -c` / an editor's goto-byte,
+                     ;; and it is the only locator the CLI is allowed to print
+                     ;; now that the file's contents never leave the process
+                     ;; (Sol fence r4, secondary finding).
+                     :byte-offset (alength (.getBytes (subs source 0 idx) "UTF-8"))
                      :line (subs source line-start line-end)})]
           (recur (long (inc idx)) (conj found hit)))))))
 
@@ -106,7 +112,9 @@
                           :begin-versions (mapv #(or (:version %) :malformed) begins)
                           :end-versions (mapv #(or (:version %) :malformed) ends)}
                    (seq malformed)
-                   (assoc :malformed-markers (mapv :line malformed))))]
+                   (assoc :malformed-markers
+                          (mapv #(select-keys % [:line :byte-offset :reason])
+                                malformed))))]
     (cond
       (seq malformed)
       (refuse (str "a CLJ-SURGEON ROUTING marker line is not well formed: "
@@ -233,49 +241,6 @@
        :block-hash (sha256 block)
        :targets targets})))
 
-(defn install-routing!
-  "Install the canonical block after every target passes preflight."
-  [block-file target-paths]
-  (let [prepared (prepare-install block-file target-paths)]
-    (if-not (:ok prepared)
-      prepared
-      (do
-        (doseq [{:keys [path source changed]} (:targets prepared)
-                :when changed]
-          (.mkdirs (.getParentFile (.getAbsoluteFile (io/file path))))
-          (file-ops/atomic-write! path source))
-        {:ok true
-         :operation :install-agent-routing
-         :block-hash (:block-hash prepared)
-         :target-count (count (:targets prepared))
-         :changed-count (count (filter :changed (:targets prepared)))
-         :targets (mapv #(select-keys % [:path :previous-state :changed
-                                         :stale-version])
-                        (:targets prepared))}))))
-
-(defn check-routing!
-  "Check that every target contains the exact canonical block. Does not write."
-  [block-file target-paths]
-  (let [prepared (prepare-install block-file target-paths)]
-    (cond
-      (not (:ok prepared)) prepared
-      (every? (complement :changed) (:targets prepared))
-      {:ok true
-       :operation :check-agent-routing
-       :block-hash (:block-hash prepared)
-       :target-count (count (:targets prepared))}
-      :else
-      (let [drifted (filterv :changed (:targets prepared))]
-        {:ok false
-         :operation :check-agent-routing
-         :error-type (if (some #(= :stale (:previous-state %)) drifted)
-                       :agent-routing-stale-version
-                       :agent-routing-drift)
-         :expected-version managed-version
-         :targets (mapv #(select-keys % [:path :previous-state :changed
-                                         :stale-version])
-                        drifted)}))))
-
 (def ^:private scratch-root
   "The ONLY root a --scratch install may write under. Tests need a real
    filesystem target; they do not need the ability to name one anywhere."
@@ -341,6 +306,99 @@
                        :else (not (and exists? dir?)))]
            {:component (str component)
             :reason (if link? :symlinked-component :missing-parent)}))))))
+
+(defn confinement-refusal
+  "Refuse-or-nil for ONE target under `root`, re-checked IMMEDIATELY before its
+   bytes are written.
+
+   Sol fence r4, secondary finding -- time of check versus time of use. The CLI
+   gate ran `confine-targets` once and `install-routing!` wrote afterwards.
+   Between the two, `$HOME/.codex` can be replaced by a symlink: the check
+   passed on a real directory and the write landed outside the home. A check
+   whose result outlives the state it checked is not a check. So the component
+   walk and the canonical containment run again, inside the function that
+   writes, against the root that authorized the target -- and a failure writes
+   NOTHING."
+  [root path]
+  (let [root-real (canonical root)
+        root-prefix (str root-real java.io.File/separator)
+        real (canonical path)
+        bad-component (unreal-component root-real path)
+        escapes? (not (str/starts-with? real root-prefix))]
+    (when (or bad-component escapes?)
+      (merge {:ok false
+              :error-type :agent-routing-target-refused-at-write
+              :path path
+              :canonical-path real
+              :root root-real
+              :diagnosis (str "the target stopped being confined between the "
+                              "gate and the write: " (pr-str path)
+                              " now resolves to " (pr-str real)
+                              (if bad-component
+                                (str " through " (name (:reason bad-component))
+                                     " " (pr-str (:component bad-component)))
+                                (str ", outside " (pr-str root-real)))
+                              ". Nothing was written to it.")}
+             (or bad-component {:reason :escapes-root})))))
+
+(defn install-routing!
+  "Install the canonical block after every target passes preflight.
+
+   `write-root` is the root that AUTHORIZED these targets -- the real home for a
+   normal install, the scratch root under --scratch, the fixture directory for a
+   test. It is required, not defaulted: every caller has to name the tree it
+   believes it is writing inside, because that name is what the pre-write
+   re-check is checked against (Sol fence r4, time of check versus time of use)."
+  [block-file target-paths write-root]
+  (let [prepared (prepare-install block-file target-paths)]
+    (if-not (:ok prepared)
+      prepared
+      (loop [pending (filter :changed (:targets prepared))
+             written []]
+        (if-let [{:keys [path source]} (first pending)]
+          (do
+            (.mkdirs (.getParentFile (.getAbsoluteFile (io/file path))))
+            ;; The LAST act before the bytes move. Nothing may come between
+            ;; this refusal check and `atomic-write!`.
+            (if-let [refusal (confinement-refusal write-root path)]
+              (assoc refusal
+                     :operation :install-agent-routing
+                     :written written
+                     :unwritten (mapv :path pending))
+              (do
+                (file-ops/atomic-write! path source)
+                (recur (rest pending) (conj written path)))))
+          {:ok true
+           :operation :install-agent-routing
+           :block-hash (:block-hash prepared)
+           :target-count (count (:targets prepared))
+           :changed-count (count (filter :changed (:targets prepared)))
+           :targets (mapv #(select-keys % [:path :previous-state :changed
+                                           :stale-version])
+                          (:targets prepared))})))))
+
+(defn check-routing!
+  "Check that every target contains the exact canonical block. Does not write."
+  [block-file target-paths]
+  (let [prepared (prepare-install block-file target-paths)]
+    (cond
+      (not (:ok prepared)) prepared
+      (every? (complement :changed) (:targets prepared))
+      {:ok true
+       :operation :check-agent-routing
+       :block-hash (:block-hash prepared)
+       :target-count (count (:targets prepared))}
+      :else
+      (let [drifted (filterv :changed (:targets prepared))]
+        {:ok false
+         :operation :check-agent-routing
+         :error-type (if (some #(= :stale (:previous-state %)) drifted)
+                       :agent-routing-stale-version
+                       :agent-routing-drift)
+         :expected-version managed-version
+         :targets (mapv #(select-keys % [:path :previous-state :changed
+                                         :stale-version])
+                        drifted)}))))
 
 (defn- allowed-global-targets
   "The two authorized files, named LEXICALLY under the canonical home. Never
@@ -412,6 +470,24 @@
                               " instead.")))}
       {:ok true :targets (vec target-paths)})))
 
+(defn redact-source
+  "Strip the target file's contents out of a result before it is PRINTED.
+
+   `upsert-routing-block` carries the whole untouched `:source` so a caller can
+   prove the bytes did not change; that is an in-memory invariant, not something
+   to echo. Sol fence r4, secondary finding: `-main` printed the entire contents
+   of a global instruction file on every malformed-file refusal. A refusal has to
+   say where the problem is, not what the file says -- so what survives is the
+   path, the offending marker line, and its byte offset (already carried by
+   `:malformed-markers`), plus the size of what was withheld."
+  [result]
+  (if-let [source (:source result)]
+    (-> result
+        (dissoc :source)
+        (assoc :source-withheld true
+               :source-bytes (alength (.getBytes ^String source "UTF-8"))))
+    result))
+
 (defn -main [operation block-file & args]
   (let [scratch? (boolean (some #{"--scratch"} args))
         target-paths (remove #{"--scratch"} args)
@@ -425,11 +501,14 @@
 
                  :else
                  (case operation
-                   "install" (install-routing! block-file target-paths)
+                   "install" (install-routing! block-file target-paths
+                                                (if scratch?
+                                                  (canonical scratch-root)
+                                                  (real-home)))
                    "check" (check-routing! block-file target-paths)
                    {:ok false
                     :error-type :unknown-operation
                     :operation operation}))]
-    (prn result)
+    (prn (redact-source result))
     (when-not (:ok result)
       (System/exit 2))))

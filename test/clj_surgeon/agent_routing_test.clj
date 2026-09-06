@@ -107,7 +107,8 @@
       (fs/create-dirs (fs/parent claude-file))
       (spit claude-file (str "claude-original\n" routing/managed-begin "\n"))
       (let [result (routing/install-routing! block-file
-                                             [codex-file claude-file])]
+                                             [codex-file claude-file]
+                                             tmp)]
         (is (false? (:ok result)))
         (is (= :invalid-managed-routing (:error-type result)))
         (is (= "codex-original\n" (slurp codex-file)))
@@ -126,11 +127,13 @@
       (fs/create-dirs (fs/parent codex-file))
       (spit codex-file "preserve-codex\n")
       (let [first-result (routing/install-routing! block-file
-                                                   [codex-file claude-file])
+                                                   [codex-file claude-file]
+                                                   tmp)
             first-codex (slurp codex-file)
             first-claude (slurp claude-file)
             second-result (routing/install-routing! block-file
-                                                    [codex-file claude-file])]
+                                                    [codex-file claude-file]
+                                                    tmp)]
         (is (:ok first-result))
         (is (= 2 (:changed-count first-result)))
         (is (str/starts-with? first-codex "preserve-codex\n"))
@@ -359,7 +362,7 @@
     (try
       (spit block-file canonical-block)
       (spit target original)
-      (let [result (routing/install-routing! block-file [target])
+      (let [result (routing/install-routing! block-file [target] (str dir))
             after (slurp target)]
         (is (false? (:ok result)))
         (is (= :invalid-managed-routing (:error-type result)))
@@ -515,7 +518,7 @@
     (try
       (spit block-file canonical-block)
       (spit target original)
-      (let [result (routing/install-routing! block-file [target])]
+      (let [result (routing/install-routing! block-file [target] (str dir))]
         (is (false? (:ok result)))
         (is (= :invalid-managed-routing (:error-type result)))
         (testing "the target is byte-identical"
@@ -531,7 +534,7 @@
     (try
       (spit block-file canonical-block)
       (spit target original)
-      (let [result (routing/install-routing! block-file [target])]
+      (let [result (routing/install-routing! block-file [target] (str dir))]
         (is (false? (:ok result)))
         (is (= :invalid-managed-routing (:error-type result)))
         (testing "the target is byte-identical"
@@ -613,7 +616,7 @@
     (try
       (spit block-file canonical-block)
       (spit target original)
-      (let [result (routing/install-routing! block-file [target])
+      (let [result (routing/install-routing! block-file [target] (str dir))
             after (slurp target)]
         (is (false? (:ok result)))
         (is (= :invalid-managed-routing (:error-type result)))
@@ -744,3 +747,107 @@
         (is (= [:symlinked-component] (mapv :reason (:refused r)))))
       (is (empty? (fs/list-dir outside)))
       (finally (fs/delete-tree root)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r4, secondary finding 1: a refusal printed the whole target file.
+;; `-main` prints `(redact-source result)`, so the witness is on the value that
+;; reaches `prn`: the private contents must be gone and the LOCATOR must remain.
+
+(deftest a-refusal-never-echoes-the-target-file
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-routing-redact"})
+        block-file (str (fs/path dir "block.md"))
+        target (str (fs/path dir "target.md"))
+        ;; Stand-in for the private bytes of a global instruction file.
+        original (str "PRIVATE-INSTRUCTION-BYTES\n"
+                      "<!-- BEGIN CLJ-SURGEON ROUTING v:x -->\n"
+                      "MORE-PRIVATE-BYTES\n"
+                      "<!-- END CLJ-SURGEON ROUTING v:x -->\n")]
+    (try
+      (spit block-file canonical-block)
+      (spit target original)
+      (let [result (routing/install-routing! block-file [target] (str dir))
+            printed (routing/redact-source result)
+            rendered (pr-str printed)]
+        (is (false? (:ok result)))
+        (is (= :invalid-managed-routing (:error-type result)))
+        (testing "the file's bytes never reach the printed result"
+          (is (nil? (:source printed)))
+          (is (true? (:source-withheld printed)))
+          (is (= (count original) (:source-bytes printed)))
+          (is (not (str/includes? rendered "PRIVATE-INSTRUCTION-BYTES")))
+          (is (not (str/includes? rendered "MORE-PRIVATE-BYTES"))))
+        (testing "what remains is enough to FIND the problem"
+          (is (str/includes? rendered target)
+              "the path is printed")
+          (let [markers (:malformed-markers printed)]
+            (is (= 2 (count markers)))
+            (is (= ["<!-- BEGIN CLJ-SURGEON ROUTING v:x -->"
+                    "<!-- END CLJ-SURGEON ROUTING v:x -->"]
+                   (mapv :line markers))
+                "the offending LINE, not the file")
+            (is (= [(str/index-of original "<!-- BEGIN")
+                    (str/index-of original "<!-- END")]
+                   (mapv :byte-offset markers))
+                "the byte offset of each offending marker"))))
+      (finally (fs/delete-tree dir)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r4, secondary finding 2: time of check versus time of use. The CLI
+;; gate confined the target, and `install-routing!` wrote later. Swap the parent
+;; for a symlink in between and the write lands outside the authorized root.
+;; The check now runs INSIDE the writing function, immediately before the write.
+
+(defn- toctou-fixture
+  "root/real/target.md authorized under root, with root/outside/target.md as the
+   canary the escape would land on."
+  [prefix]
+  (let [dir (fs/create-temp-dir {:prefix prefix})
+        root (fs/create-dirs (fs/path dir "root"))
+        real (fs/create-dirs (fs/path root "real"))
+        outside (fs/create-dirs (fs/path dir "outside"))]
+    (spit (str (fs/path outside "target.md")) "CANARY\n")
+    {:dir dir
+     :root (str root)
+     :real (str real)
+     :outside (str outside)
+     :target (str (fs/path real "target.md"))
+     :canary (str (fs/path outside "target.md"))}))
+
+(defn- swap-parent-for-a-symlink!
+  "The time-of-use half: the authorized parent becomes a link to `outside`."
+  [{:keys [real outside]}]
+  (fs/delete-tree real)
+  (fs/create-sym-link real outside))
+
+(deftest confinement-is-revalidated-immediately-before-the-write
+  (let [{:keys [dir root target canary] :as fx} (toctou-fixture "clj-surgeon-routing-toctou")
+        block-file (str (fs/path dir "block.md"))]
+    (try
+      (spit block-file canonical-block)
+      (spit target "keep me\n")
+      (testing "the pre-write validator passes on the real, authorized target"
+        (is (nil? (routing/confinement-refusal root target)))
+        (let [ok (routing/install-routing! block-file [target] root)]
+          (is (:ok ok))
+          (is (= 1 (:changed-count ok)))
+          (is (str/includes? (slurp target) routing/managed-begin))))
+      (swap-parent-for-a-symlink! fx)
+      (testing "the same target, same gate verdict, now escapes -- and is refused"
+        (let [refusal (routing/confinement-refusal root target)]
+          (is (some? refusal) "a symlinked parent must refuse at write time")
+          (is (false? (:ok refusal)))
+          (is (= :agent-routing-target-refused-at-write (:error-type refusal)))
+          (is (= :symlinked-component (:reason refusal)))
+          (is (= (str (fs/path root "real")) (:component refusal)))))
+      (testing "and the write path is never reached"
+        (let [before (slurp canary)
+              result (routing/install-routing! block-file [target] root)]
+          (is (false? (:ok result)))
+          (is (= :agent-routing-target-refused-at-write (:error-type result)))
+          (is (= :install-agent-routing (:operation result)))
+          (is (empty? (:written result)))
+          (is (= [target] (:unwritten result)))
+          (is (= "CANARY\n" before))
+          (is (= "CANARY\n" (slurp canary))
+              "not one byte reached the file outside the authorized root")))
+      (finally (fs/delete-tree dir)))))
