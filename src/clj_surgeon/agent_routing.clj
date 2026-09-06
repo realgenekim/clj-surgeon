@@ -33,7 +33,7 @@
    ;; without stating WHEN the route is withdrawn is an unbounded default, so the
    ;; rule line and the retirement line are pinned together.
    "**Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control."
-   "**Kill switch.** Stop routing a class and re-run a preregistered native pair when"])
+   "**Kill switch.** A correctness failure SUSPENDS a routed class immediately. A wall"])
 
 (defn missing-sections
   "Required plate sections absent from `source`, in declaration order."
