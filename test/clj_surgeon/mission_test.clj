@@ -993,12 +993,27 @@
                   (fn [sym] (fn [& args] (swap! calls conj [sym args]) :called))]
       (is (= :called ((get-in cli/verbs ["owner_forms" :plan]) typist-request {})))
       (is (= :called ((get-in cli/verbs ["owner_forms" :execute!]) typist-request {:plan typist-planned})))
-      (is (= :called ((get-in cli/verbs ["owner_forms" :undo]) "receipt.edn")))
+      (is (= :called ((get-in cli/verbs ["owner_forms" :undo]) "receipt.edn" "expected-hash")))
       (is (= '[clj-surgeon.mission-typist-executor/plan
                clj-surgeon.mission-typist-executor/execute!
                clj-surgeon.mission-typist-executor/undo!]
              (mapv first @calls)))
-      (is (= '("receipt.edn") (second (last @calls)))))))
+      (is (= '("receipt.edn" "expected-hash") (second (last @calls))))))
+  (let [calls (atom [])
+        stored {:id "m1" :verb "owner_forms" :state :verified
+                :undo {:receipt "receipt.edn" :receipt_hash "wrong-stored-hash"}}]
+    (with-redefs-fn
+      {#'cli/verbs {"owner_forms"
+                    {:undo (fn [path expected]
+                             (swap! calls conj [path expected])
+                             {:ok false :error-type :typist-invalid-undo-hash})}}
+       #'cli/state-dir-for (fn [& _] "/ledger")
+       #'mission/read-mission (fn [& _] stored)
+       #'io/file (fn [& _] (proxy [java.io.File] ["receipt.edn"] (isFile [] true)))
+       #'cli/save! (fn [& _] (throw (ex-info "must not save a refused undo" {})))}
+      #(do
+         (is (mission/refused? (cli/undo! {:id "m1" :workspace "/fixture"})))
+         (is (= [["receipt.edn" "wrong-stored-hash"]] @calls))))))
 
 (deftest owner-forms-publishes-recovery-before-a-crashed-write
   (let [saved (atom {:id "m1" :verb "owner_forms" :state :ready :root "/fixture"

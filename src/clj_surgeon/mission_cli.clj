@@ -50,9 +50,9 @@
     :execute! (fn [request config]
                 ((requiring-resolve 'clj-surgeon.mission-typist-executor/execute!)
                  request config))
-    :undo (fn [undo-receipt]
+    :undo (fn [undo-receipt expected-hash]
             ((requiring-resolve 'clj-surgeon.mission-typist-executor/undo!)
-             undo-receipt))}
+             undo-receipt expected-hash))}
    "helper_extraction"
    {:plan     (fn [request profiles] (helper/plan request profiles))
     :execute! (fn [request config] (helper/execute! config request))
@@ -455,7 +455,10 @@
                             :decision "how this write is to be inverted"})
 
           :else
-          (let [result ((get-in verbs [(:verb m) :undo]) receipt-file)]
+          (let [undo (get-in verbs [(:verb m) :undo])
+                result (if (= "owner_forms" (:verb m))
+                         (undo receipt-file (get-in m [:undo :receipt_hash]))
+                         (undo receipt-file))]
             (if-not (:ok result)
               (mission/refusal "undo-failed"
                                (str "The inverse did not verify: "
