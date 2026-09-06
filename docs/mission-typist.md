@@ -46,9 +46,15 @@ The saved spec has `:verb "owner_forms"`, `:request`, and optionally a trusted
 A candidate is a JSON array of objects with exactly `file`, `owner`, and `form`
 string fields. The model emits a new definition, never old context, offsets or a
 patch. The kernel validates it, formats only owned fragments and splices those
-fragments into frozen source. Comments, metadata and unsupported reader syntax
-refuse; docstrings must remain byte-identical. Untouched owners and gaps retain
-exact bytes. This does not prove that changed definitions preserve behavior.
+fragments into frozen source. Comments must retain their text and attached
+expression identity. Whitespace-only reindentation is allowed; string bytes,
+nested comments, attachment side and containing path remain significant.
+Dropped or moved comments refuse with diagnostics; there is no broad rewrite
+opt-in. Leading owner comments remain attached to the declared owner, whose
+name, head and docstring are checked separately. This is not proof that prose
+remains true after a behavior change. Metadata and unsupported reader syntax
+still refuse; docstrings must remain byte-identical. Untouched owners and gaps
+retain exact bytes. This does not prove that changed definitions preserve behavior.
 
 An experimental one-file response format is selected with
 `:typist {:candidate-format :clojure-forms}`. The model returns plain complete
@@ -75,8 +81,10 @@ Candidate responses and proof outcomes remain under the receipt directory.
 Runtime credentials are read by the fixed transport client, never copied into
 the dossier. OpenRouter pins `openai/gpt-oss-120b` to Cerebras without upstream
 fallback; direct Groq is an explicit selection. Wrong model/upstream and malformed
-or incomplete output refuse. Automatic Groq fallback and Spark execution are
-not implemented yet. The executor starts at most five separately bounded requests and consumes them in
+or incomplete output refuse. An explicitly frozen Groq fallback can follow a
+started OpenRouter request's typed 429 or 503 response. Both attempts and their
+observed usage/cost are retained; a fallback event requires actual dispatch,
+not merely a configured route. Spark execution is not implemented. The executor starts at most five separately bounded requests and consumes them in
 completion order. Before commit it cancels remaining work and checks both worker
 termination and tracked transport-process liveness. Completed replies are retained;
 cancelled requests have unknown billed usage. The three-process fake-client path passes real proof, guarded commit and undo;

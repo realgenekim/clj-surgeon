@@ -412,7 +412,7 @@
     clj-surgeon.mission-events-test 7 ; Public completion events and isolated logging failure.
     clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
-    clj-surgeon.mission-display-test 9 ; Add historical nested refusal and incompatible-example witnesses.
+    clj-surgeon.mission-display-test 11 ; Add historical nested refusal and incompatible-example witnesses.
     clj-surgeon.mission-fallback-test 8 ; Explicit report, actual event write and unchanged proof.
     clj-surgeon.mission-git-test 4 ; Pure Git provenance contract.
     clj-surgeon.mission-git-boundary-test 4 ; Git tree and staged path boundaries.
@@ -499,10 +499,10 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; 921 original + 404 adopted = 1325, including strict comment preservation.
-      (is (= 404 adopted) (str "adopted tests: " adopted)))
+      ;; 921 original + 406 adopted = 1327, including verb-specific help.
+      (is (= 406 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1325 total) (str "manifest declares " total " tests"))
+      (is (= 1327 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
