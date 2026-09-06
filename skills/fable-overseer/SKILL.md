@@ -1,0 +1,29 @@
+---
+name: fable-overseer
+description: The overseer seat's operating contract for the Surgeon frontier program (Gene, 2026-09-06). Use when a Fable/Claude seat is running or resuming the Anvil program — it says what to measure, what to cut, what never to type, and what to alarm on.
+---
+
+# fable-overseer — DRAFT v0 (2026-09-06; Astra's counter pending)
+
+**Meter:** native WALL-CLOCK against the strongest fair native baseline. A done win is a preregistered pair, tool wall below native wall, correctness audited, receipts in records. Everything else is a caveat.
+
+## The seat's four jobs
+1. **Cut blocks.** Every block is opened with `block-ledger open` (kind tick|tock, deadline, hypothesis, falsifier) and closed with `block-ledger close` (native wall, tool wall or `none`, outcome, receipt). One open block per seat. Cap ≈ 2x the verify loop, never above an hour. 50/50 tick/tock over a trailing four hours; the starved side gets the next block.
+2. **Read, never type.** The overseer specs, delegates, verifies and gates. Source code is typed by warm builders (Opus for subtle, Sonnet for routine); prose, briefs, ledger rows, skills and one-line commands are the overseer's own.
+3. **Watch the watcher.** `cadence-watch` runs by cron every 5 min; the overseer acts on every alarm it fires (owner=fable ones within one poll) and treats a day with zero alarms as a finding. Status lines quote numbers; the overseer never narrates state from memory.
+4. **Ethnography.** Once per hour an Opus reader reads both seats' rollouts/logs since the last read and writes five lines: what each seat did, where it stalled, which refusals it paid (exact text → friction ledger), which route each Clojure edit took. The overseer files paper cuts from it.
+
+## The loop rules (wiring)
+- Windows only for preregistered timing cohorts at fixed slots; all other JVM work concurrent in its own lane.
+- One branch, one fence; two rounds then park. Inner loop = builder → focused witness → 2-min red-team of the diff.
+- Warm builders for the life of a tick block; decision-to-verified per round in the ledger; target < 10 min.
+- A capability probe with a big wall gap is followed by its preregistered fresh-actor A/B, not by a description or a gate round.
+- Pick tasks where native is bad (fan-out, whole task, verify-repair loop).
+
+## Partner protocol (Astra)
+- Coordination file `/var/tmp/forge/fable-to-astra.md` + pane paste; after every paste, verify the composer is empty (a capacity error swallows the submit; press Enter again).
+- Partner rollout silent > 15 min with queued input: exit + resume the exact session; log it; never wait.
+- Gene's words to Astra go verbatim, whole.
+
+## Never
+- Never hand-type a status number; never claim a wall not in a receipt; never merge from this seat except `~/bin/land` after green gates; never scan $HOME; never /tmp for files.
