@@ -719,7 +719,10 @@ def select_mission(name, dossier=None, fixture=None, edit_form="diff"):
     else:
         default_dossier = m["dossier"]
     DOSSIER = os.path.abspath(dossier) if dossier else default_dossier
-    PREIMAGE = os.path.abspath(fixture) if fixture else m["preimage"]
+    # THE PREIMAGE IS A WRITABLE PATH: `materialize_fixture` rmtrees and
+    # recreates it, so --fixture is fenced exactly like --keys-dir is.
+    PREIMAGE = fenced_path(os.path.abspath(fixture) if fixture else m["preimage"],
+                           "--fixture preimage directory")
     MANIFEST = PREIMAGE + ".manifest.edn"
     PROFILE = m["profile"]
     mut = m["mutable"]
@@ -751,6 +754,55 @@ def mission_for_dossier(path):
 def die(msg, code=1):
     sys.stderr.write(msg + "\n")
     sys.exit(code)
+
+
+# --------------------------------------------------------------------------
+# THE WRITE FENCE
+#
+# Sol's fence review (r1, 2026-09-06) found the runner could not honestly claim
+# it writes only beneath /var/tmp/forge or the worktree: `TYPIST_FX` was read
+# straight from the environment, `--fixture` became an arbitrary absolute path,
+# and `materialize_fixture` will `rmtree` and recreate whatever that path names.
+# An unconstrained rmtree target reached through an environment variable is not
+# a test knob, it is a delete primitive with a nice name.
+#
+# WHAT CONTAINMENT MEANS HERE, said plainly, because Sol's other finding was
+# that the docstring overclaimed: containment is THIS PATH FENCE plus the warm
+# workspace directory. It is NOT a kernel sandbox. Arm NW passes codex
+# `--dangerously-bypass-approvals-and-sandbox`, which by codex's own
+# documentation "execute[s] commands without sandboxing ... Intended solely for
+# running in environments that are externally sandboxed", and Sol demonstrated
+# an executed child writing OUTSIDE the warm workspace. So the fence below
+# bounds what THE RUNNER writes and deletes; it bounds a cooperative child only
+# by its working directory. Arm NW therefore refuses outright unless its warm
+# workspace resolves under /var/tmp/forge, so the blast radius of a
+# non-cooperative child is at worst the seat's own scratch tmpfs -- the same
+# fence ~/bin/sol-yolo has always used -- rather than $HOME or the worktree.
+
+REPO_ROOT = os.path.realpath(os.path.join(HERE, os.pardir))
+WRITE_FENCES = (os.path.realpath("/var/tmp/forge"), REPO_ROOT)
+
+
+def under_fence(p):
+    """(resolved, ok) -- `p` fully resolved, and whether it lands inside a
+    fence. realpath, so a SYMLINK planted under /var/tmp/forge that points at
+    $HOME resolves to $HOME and is refused on its target, not excused by its
+    name."""
+    r = os.path.realpath(p)
+    return r, any(r == f or r.startswith(f + os.sep) for f in WRITE_FENCES)
+
+
+def fenced_path(p, purpose):
+    """Resolve `p` and REFUSE (typed, exit 4) unless it is inside the write
+    fence. Every path this runner creates, copies onto, or removes goes
+    through here; the refusal names the purpose and both fences, because a
+    refusal that does not say where writing IS allowed just gets retried."""
+    r, ok = under_fence(p)
+    if not ok:
+        die("typist-run: refusing — %s outside the write fence "
+            "(%s resolves to %s, which is under neither %s nor %s)"
+            % (purpose, p, r, WRITE_FENCES[0], WRITE_FENCES[1]), 4)
+    return r
 
 
 # --------------------------------------------------------------------------
@@ -899,6 +951,7 @@ def resolve_gate_commands():
 # candidate evaluation
 
 def fresh_copy(dest):
+    dest = fenced_path(dest, "candidate workspace")
     shutil.rmtree(dest, ignore_errors=True)
     shutil.copytree(PREIMAGE, dest)
     subprocess.run(["git", "init", "-q", "."], cwd=dest, check=True,
@@ -1414,6 +1467,7 @@ class Resident(object):
         self.meta = os.path.join(self.dir, "resident.json")
 
     def start(self):
+        self.dir = fenced_path(self.dir, "resident server workspace")
         if os.path.isdir(self.dir):
             shutil.rmtree(self.dir)
         os.makedirs(os.path.join(self.dir, "src"))
@@ -1465,6 +1519,7 @@ class Resident(object):
             return False
 
     def stage(self, cand_dir):
+        fenced_path(self.dir, "resident staging root")
         for root in ("src", "test"):
             dst = os.path.join(self.dir, root)
             if os.path.isdir(dst):
@@ -2287,6 +2342,15 @@ def bench(prompt, providers, rounds, temperature, manifest, cmds):
 # (~/bin/sol-yolo), and this arm's fence is the warm workspace under
 # /var/tmp/forge/typist-real-fx. Recorded in every receipt as :sandbox "bypass",
 # because it is a real difference from arm N (cold Sol, read-only, diff-in-response).
+# WHAT CONTAINS THIS ARM, stated exactly (Sol fence r1, 2026-09-06, which
+# demonstrated an executed child writing outside the warm workspace): the
+# containment is THE RUNNER'S PATH FENCE plus THE WARM WORKSPACE DIRECTORY --
+# it is NOT a kernel sandbox, and this flag explicitly turns codex's own off.
+# `cwd=ws` is a working directory, not confinement; a child that chooses to
+# write an absolute path elsewhere will succeed. That is why main() REFUSES
+# arm NW unless the warm workspace resolves under /var/tmp/forge: the fence we
+# can actually enforce is which directory the damage lands in, so the arm is
+# only allowed to run where that directory is the seat's scratch tmpfs.
 WARM_SANDBOX = ["--dangerously-bypass-approvals-and-sandbox"]
 
 WARM_ORIENT_SUFFIX = "\n\nRead the file now and reply READY; do not edit yet.\n"
@@ -2306,7 +2370,8 @@ def warm_workspace_path():
     """One fixed path per mission. Fixed BECAUSE the orientation session read
     the source at this path; a different path per trial would invalidate the
     very context the arm is measuring."""
-    return os.path.join(FX, "warm-ws-%s" % MISSION)
+    return fenced_path(os.path.join(FX, "warm-ws-%s" % MISSION),
+                       "warm workspace")
 
 
 def newest_rollout():
@@ -2329,6 +2394,7 @@ def reset_preimage_in_place(dest):
     """Restore the preimage AT THE SAME PATH, keeping .git. Returns the
     `git diff --stat` of the result, which MUST be empty: a non-empty value
     means the reset did not reach the preimage and the trial is not comparable."""
+    dest = fenced_path(dest, "resident/warm workspace reset target")
     for name in sorted(os.listdir(dest)):
         if name == ".git":
             continue
@@ -2707,6 +2773,15 @@ def main():
                     help="override the mission's preimage directory; its manifest "
                          "is written beside it as <dir>.manifest.edn")
     a = ap.parse_args()
+
+    # THE WRITE FENCE, applied to the artifact root BEFORE anything is built,
+    # copied onto, or removed under it. TYPIST_FX is an environment variable,
+    # and `materialize_fixture`/`fresh_copy`/the resident workspace all rmtree
+    # paths derived from it: unfenced, it is a delete primitive reachable from
+    # the environment (Sol fence r1).
+    global FX
+    FX = fenced_path(FX, "TYPIST_FX artifact root")
+
     if a.cost_report:
         sys.exit(cost_report(a.fx or list(COST_REPORT_DEFAULT_FX)))
     if not a.arm and not a.replay and not a.bench:
@@ -2778,6 +2853,27 @@ def main():
 
     warm = None
     if a.arm == "NW":
+        # ARM NW REFUSES WITHOUT A FENCED WORKSPACE. NW hands codex
+        # --dangerously-bypass-approvals-and-sandbox, which codex documents as
+        # "execute commands without sandboxing ... Intended solely for running
+        # in environments that are externally sandboxed", and Sol demonstrated
+        # an executed child writing OUTSIDE the warm workspace. We do not have
+        # an external kernel sandbox on this seat, so the honest position is
+        # not to claim containment we lack: the workspace must be under
+        # /var/tmp/forge -- the seat's scratch fence, the same one
+        # ~/bin/sol-yolo uses -- and NW refuses outright when it is not. The
+        # worktree is deliberately NOT accepted here even though the general
+        # write fence allows it: a non-cooperative child inside the source
+        # tree is a different blast radius from one inside scratch.
+        ws_real, _ok = under_fence(warm_workspace_path())
+        scratch = os.path.realpath(TEST_KEYS_FENCE)
+        if not (ws_real == scratch or ws_real.startswith(scratch + os.sep)):
+            die("typist-run: refusing — NW: sandbox unavailable — workspace "
+                "not under the fence (%s resolves to %s, not under %s). Arm NW "
+                "runs codex with --dangerously-bypass-approvals-and-sandbox; "
+                "its ONLY containment is this directory, so a workspace "
+                "outside it is an unsandboxed child with no fence at all."
+                % (warm_workspace_path(), ws_real, scratch), 4)
         if EDIT_FORM != "diff":
             die("typist-run: refusing — arm NW reads the model's OWN in-place "
                 "edit back as a git diff; --edit-form whole-file is not its "

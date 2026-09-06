@@ -11,6 +11,10 @@ Covers the three Sol fence findings:
   (1) key paths are fixed; the only seam is --keys-dir, fenced to /var/tmp/forge
   (2) the OpenRouter upstream pin and the registry model are UNCONDITIONAL
   (3) no exception text -- and no key -- reaches a record or a receipt
+  (4) the WRITE fence: TYPIST_FX, --fixture and every rmtree target resolve
+      under /var/tmp/forge or the worktree, and arm NW refuses outright unless
+      its warm workspace is under /var/tmp/forge (it runs codex unsandboxed,
+      so that directory is its ONLY containment)
 """
 
 import importlib.machinery
@@ -202,6 +206,55 @@ def test_keys_dir_fence():
               (r.stderr.strip().splitlines() or [""])[0])
 
 
+def test_write_fence():
+    """THE WRITE FENCE (Sol fence r1, finding 3). Every proof here is a
+    SUBPROCESS refusal, because the fence is enforced in main() and a refusal
+    that only holds when a unit test calls the helper directly is not a fence.
+    Each case must exit 4 and must do so BEFORE any provider call."""
+    repo_root = os.path.realpath(os.path.join(HERE, os.pardir))
+
+    def run(args, env=None, name=""):
+        e = dict(os.environ)
+        if env:
+            e.update(env)
+        r = subprocess.run([sys.executable, RUNNER] + args, env=e,
+                           capture_output=True, text=True, timeout=180)
+        return r
+
+    r = run(["--arm", "fake"], {"TYPIST_FX": "/home/forge"})
+    check("TYPIST_FX=/home/forge is refused",
+          r.returncode == 4 and "TYPIST_FX artifact root" in r.stderr,
+          (r.stderr.strip().splitlines() or [""])[0])
+
+    r = run(["--arm", "fake", "--fixture", "/tmp/x"])
+    check("--fixture /tmp/x is refused",
+          r.returncode == 4 and "--fixture preimage directory" in r.stderr,
+          (r.stderr.strip().splitlines() or [""])[0])
+
+    # A SYMLINK planted INSIDE the fence that points outside it. The name is
+    # inside; the target is not, and the target is what gets rmtree'd.
+    link_dir = tempfile.mkdtemp(prefix="fence-symlink-", dir=FENCE)
+    link = os.path.join(link_dir, "looks-inside")
+    os.symlink("/home/forge", link)
+    r = run(["--arm", "fake", "--fixture", link])
+    check("a symlink under the fence pointing outside is refused",
+          r.returncode == 4 and "/home/forge" in r.stderr,
+          (r.stderr.strip().splitlines() or [""])[0])
+    os.unlink(link)
+    os.rmdir(link_dir)
+
+    # ARM NW with a workspace inside the WRITE fence (the worktree) but outside
+    # the SCRATCH fence: allowed to be written, not allowed to host an
+    # unsandboxed codex child. Refused before any codex process is started.
+    fx_in_repo = os.path.join(repo_root, "target", "fence-probe-fx")
+    r = run(["--arm", "NW"], {"TYPIST_FX": fx_in_repo})
+    check("NW with a workspace outside the scratch fence is refused",
+          r.returncode == 4 and "NW: sandbox unavailable" in r.stderr,
+          (r.stderr.strip().splitlines() or [""])[0])
+    check("...and it refused before any codex call",
+          "codex" not in r.stdout)
+
+
 def main():
     m = load_runner()
     print("== scrubber ==");        test_scrub(m)
@@ -209,6 +262,7 @@ def main():
     print("== routing pin ==");     test_routing(m)
     print("== key fence ==");       test_keys(m)
     print("== --keys-dir fence =="); test_keys_dir_fence()
+    print("== write fence ==");     test_write_fence()
     print("")
     if FAILURES:
         print("FAILED %d: %s" % (len(FAILURES), ", ".join(FAILURES)))

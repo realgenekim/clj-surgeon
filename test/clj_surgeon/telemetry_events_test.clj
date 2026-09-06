@@ -10,7 +10,7 @@
    [clj-surgeon.telemetry-events :as events]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is use-fixtures]])
+   [clojure.test :refer [deftest is testing use-fixtures]])
   (:import
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute PosixFilePermissions)))
@@ -29,6 +29,36 @@
 
 (defn- reset-drops! [f] (reset! events/dropped 0) (f) (reset! events/dropped 0))
 
+(defn- delete-tree!
+  [^java.io.File f]
+  (when (.isDirectory f) (run! delete-tree! (.listFiles f)))
+  (.delete f))
+
+(defn- clean-namespace-tmp!
+  "@spec TEST-ISO-003 -- this namespace owns `nsiso-clj-surgeon.telemetry-
+   events-test` under the run's temp root, and owning it includes REMOVING it.
+   Sol's fence run (2026-09-06) ended with `temp-leak: 1 entries` naming
+   exactly this directory: the isolation fold attributed the leak correctly,
+   and the namespace still had no cleanup. `:once` and a `finally`, so a
+   failing assertion inside a test cannot leave the tree behind either.
+
+   The permission fixtures below deliberately leave a directory unwritable, so
+   the tree is re-opened to `rwx------` on the way down -- a cleanup that can
+   be defeated by the test it is cleaning up after is not a cleanup."
+  [f]
+  (try (f)
+       (finally
+         (let [root (iso/namespace-tmp-dir 'clj-surgeon.telemetry-events-test)]
+           (try
+             (doseq [^java.io.File d (file-seq root)
+                     :when (.isDirectory d)]
+               (try (Files/setPosixFilePermissions
+                      (.toPath d) (PosixFilePermissions/fromString "rwx------"))
+                    (catch Exception _ nil)))
+             (delete-tree! root)
+             (catch Exception _ nil))))))
+
+(use-fixtures :once clean-namespace-tmp!)
 (use-fixtures :each reset-drops!)
 
 (defn- lines [file] (->> (slurp file) str/split-lines (remove str/blank?)))
@@ -47,7 +77,10 @@
       (is (true? (:ok parsed)))
       (is (nil? (:error_type parsed)))
       (is (= 13 (:wall_ms parsed)) "wall is a rounded long, not a float")
-      (is (= "m-7" (:mission_id parsed)))
+      (is (= (events/safe-mission-id "m-7") (:mission_id parsed))
+          "the id is projected by policy, not copied")
+      (is (str/starts-with? (:mission_id parsed) "sha256:")
+          "m-7 is not the minted M-<digits> form, so it is hashed")
       (is (= (events/current-pid) (:pid parsed)))
       (is (string? (:seat parsed)))
       (is (str/ends-with? (first written) "}") "the line is complete"))))
@@ -152,6 +185,160 @@
           (is (= "inspect_clojure" (:tool parsed)))
           (is (true? (:ok parsed)))
           (is (= 9 (:wall_ms parsed))))))))
+
+;; ---------------------------------------------------------------------------
+;; SOL FENCE r1 (2026-09-06) -- the three ledger HOLDs, each with its witness.
+
+(deftest a-key-shaped-mission-id-is-hashed-and-never-persisted-raw
+  ;; Sol put `gsk_LEDGER_CANARY|FILE-CONTENT-CANARY` through the caller's
+  ;; mission_id and read both canaries back out of the "content-free" ledger.
+  ;; A field copied from a caller is content, and content is what this ledger
+  ;; promises not to hold.
+  (let [file (io/file (temp-dir "events-mission-id-") "events.jsonl")
+        canary "gsk_LEDGER_CANARY|FILE-CONTENT-CANARY"]
+    (events/record! file {:kind "mcp-call" :tool "inspect_clojure" :ok true
+                          :mission_id canary})
+    (let [raw (slurp file)
+          parsed (json/parse-string (first (lines file)) true)]
+      (is (not (str/includes? raw "gsk_LEDGER_CANARY"))
+          "the raw key-shaped id never reaches the file")
+      (is (not (str/includes? raw "FILE-CONTENT-CANARY"))
+          "nor does the content smuggled beside it")
+      (is (str/starts-with? (:mission_id parsed) "sha256:")
+          (str "an id that is not a name is persisted as a digest, got "
+               (pr-str (:mission_id parsed))))
+      (is (= 23 (count (:mission_id parsed))) "sha256: + 16 hex")
+      (is (= (:mission_id parsed)
+             (:mission_id (events/line-map {:mission_id canary})))
+          "the digest is stable, so a mission's lines still group")))
+  (testing "a well-formed name is kept raw -- the ledger stays readable"
+    (is (= "M-17" (events/safe-mission-id "M-17"))
+        "the mission ledger's own minted form is the ONLY raw shape")
+    (is (str/starts-with? (events/safe-mission-id "real-2j") "sha256:")
+        "a free-form runner mission name is a digest, not a word")
+    (is (nil? (events/safe-mission-id nil)) "absent is a fact, not a digest"))
+  (testing "the wide identifier shape would have admitted a live credential"
+    (is (str/starts-with? (events/safe-mission-id "gsk_ABCdef123") "sha256:")
+        "gsk_ABCdef123 matches ^[A-Za-z0-9._-]{1,64}$ and is still a key")))
+
+(deftest an-extra-scalar-field-passes-through-and-a-nested-value-does-not
+  ;; THE PASS-THROUGH RULE (Astra, 2026-09-06). The mission boundary emits its
+  ;; own dimensions -- mission_state, mission_verb, executor, candidate_count
+  ;; -- and a writer that must be edited before a caller may count a new
+  ;; dimension is a writer callers stop using. The rule is about SHAPES, not
+  ;; names: a scalar is a value someone chose to report, a collection is a
+  ;; structure someone forgot to summarize.
+  (let [file (io/file (temp-dir "events-extras-") "events.jsonl")]
+    (events/record! file {:kind "mission-call" :tool "mission_apply" :ok true
+                          :mission_state "applied" :mission_verb "apply"
+                          :executor "sol" :candidate_count 3 :model "gpt-5.6-sol"
+                          :route "openrouter" :replayed false
+                          :dossier {:files ["a.clj"] :body "..."}
+                          :candidates [1 2 3]
+                          :leaked "Authorization: Bearer sk-live.ABC-"})
+    (let [parsed (json/parse-string (first (lines file)) true)]
+      (is (= "applied" (:mission_state parsed)))
+      (is (= "apply" (:mission_verb parsed)))
+      (is (= "sol" (:executor parsed)))
+      (is (= 3 (:candidate_count parsed)) "a number survives as a number")
+      (is (= "gpt-5.6-sol" (:model parsed)))
+      (is (= "openrouter" (:route parsed)))
+      (is (false? (:replayed parsed)) "a boolean survives as a boolean")
+      (is (not (contains? parsed :dossier)) "a map is dropped, never rendered")
+      (is (not (contains? parsed :candidates)) "so is a vector")
+      (is (= "Authorization: <redacted>" (:leaked parsed))
+          "an extra takes the scrubber like every other string field")))
+  (testing "an extra is bounded by the same byte ceiling"
+    (let [huge (apply str (repeat 10000 "e"))
+          line (events/line-map {:kind "mission-call" :some_extra huge})]
+      (is (= events/free-text-limit
+             (count (.getBytes ^String (:some_extra line) "UTF-8"))))))
+  (testing "an extra can never shadow a named field"
+    (is (true? (:ok (events/line-map {:ok true :kind "k"}))))))
+
+(deftest every-string-field-is-scrubbed-of-key-shaped-values
+  (let [file (io/file (temp-dir "events-scrub-") "events.jsonl")]
+    (events/record! file {:kind "mcp-call" :tool "apply_clojure_changes"
+                          :ok false
+                          :error_type "upstream said: Authorization: Bearer sk-live.ABC-"
+                          :provider "router gsk_DEADBEEF"
+                          :upstream "sk-or-v1_abcDEF-09"})
+    (let [raw (slurp file)
+          parsed (json/parse-string (first (lines file)) true)]
+      (is (not (str/includes? raw "gsk_DEADBEEF")))
+      (is (not (str/includes? raw "sk-or-v1_abcDEF-09")))
+      (is (not (str/includes? raw "Bearer sk-live.ABC-")))
+      (is (str/includes? (:error_type parsed) "<redacted>")
+          "the redaction is visible, so a reader knows something was removed")
+      (is (= "router <redacted>" (:provider parsed)))
+      (is (= "<redacted>" (:upstream parsed))))))
+
+(deftest no-input-can-push-a-line-past-the-atomic-append-budget
+  ;; `huge-line-bytes=5185 limit=4096` -- the old fallback rebuilt the line
+  ;; without bounding `seat`, which comes from the environment and was never
+  ;; truncated at all.
+  (let [file (io/file (temp-dir "events-ceiling-") "events.jsonl")
+        huge (apply str (repeat 10000 "x"))]
+    (events/record! file {:kind huge :tool huge :ok false :error_type huge
+                          :mission_id huge :provider huge :upstream huge
+                          :wall_ms 1})
+    (let [line (first (lines file))]
+      (is (< (count (.getBytes line "UTF-8")) events/line-limit)
+          (str "line is " (count (.getBytes line "UTF-8")) " bytes"))
+      (is (map? (json/parse-string line true)) "and it is still one valid line")))
+  (testing "a 10 KB seat -- an environment value, not a tool argument"
+    (let [line (events/render-line
+                 (events/line-map {:kind "mcp-call" :tool "inspect_clojure"
+                                   :ok true :wall_ms 1
+                                   :seat (apply str (repeat 10000 "s"))}))]
+      (is (< (count (.getBytes line "UTF-8")) events/line-limit)
+          (str "line is " (count (.getBytes line "UTF-8")) " bytes"))))
+  (testing "the floor is reachable and is itself under the ceiling"
+    (let [line (events/render-line
+                 {:ts "2026-09-06T00:00:00Z" :pid 1 :ok true :wall_ms 1
+                  :seat (apply str (repeat 100000 "s"))})]
+      (is (< (count (.getBytes line "UTF-8")) events/line-limit))
+      (is (true? (:over_limit (json/parse-string line true)))
+          "a shrunken line always says it was shrunk"))))
+
+(deftest truncation-is-by-utf8-bytes-and-never-splits-a-codepoint
+  (let [emoji (apply str (repeat 5000 "🙂")) ; U+1F642, 4 UTF-8 bytes
+        [cut truncated?] (events/truncate emoji)]
+    (is (true? truncated?))
+    (is (<= (count (.getBytes cut "UTF-8")) events/free-text-limit)
+        (str "cut is " (count (.getBytes cut "UTF-8")) " BYTES -- a 1024-CHAR "
+             "bound would have been 4096 bytes here"))
+    (is (= cut (String. (.getBytes cut "UTF-8") "UTF-8"))
+        "the cut string survives a UTF-8 round trip: no split codepoint")
+    (is (not (str/includes? cut "�")) "no replacement character")
+    (is (even? (count cut)) "surrogate pairs are kept whole")
+    (is (= 256 (count (re-seq #"🙂" cut)))
+        "1024 bytes / 4 bytes per codepoint"))
+  (testing "an ASCII field is unaffected by the change of unit"
+    (is (= [(apply str (repeat events/free-text-limit "x")) true]
+           (events/truncate (apply str (repeat 5000 "x")))))))
+
+(deftest an-existing-parent-that-is-not-0700-is-tightened-before-the-write
+  ;; `existing-dir-mode=755` -- chmod only ran when `.mkdirs` returned true,
+  ;; so a directory this process did not create stayed world-readable forever.
+  (let [parent (doto (io/file (temp-dir "events-existing-parent-") "ledger") .mkdirs)
+        file (io/file parent "events.jsonl")
+        opts (into-array java.nio.file.LinkOption [])]
+    (Files/setPosixFilePermissions (.toPath parent)
+                                   (PosixFilePermissions/fromString "rwxr-xr-x"))
+    (is (= "rwxr-xr-x"
+           (PosixFilePermissions/toString
+             (Files/getPosixFilePermissions (.toPath parent) opts)))
+        "precondition: the parent exists and is 0755")
+    (events/record! file {:kind "mcp-call" :tool "inspect_clojure" :ok true})
+    (is (= "rwx------"
+           (PosixFilePermissions/toString
+             (Files/getPosixFilePermissions (.toPath parent) opts)))
+        "the append tightened the parent it found")
+    (is (= "rw-------"
+           (PosixFilePermissions/toString
+             (Files/getPosixFilePermissions (.toPath file) opts))))
+    (is (= 1 (count (lines file))) "and the line still landed")))
 
 (deftest the-default-path-is-the-home-dotdir
   (is (str/ends-with? (events/default-events-file) "/.clj-surgeon/events.jsonl")
