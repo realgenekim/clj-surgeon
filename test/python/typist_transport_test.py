@@ -42,4 +42,27 @@ class TransportTests(unittest.TestCase):
   r=t.attempt(t.validate(self.cfg()),'secret',lambda *a:b'x'*(t.MAX_RESPONSE+1));self.assertEqual(r['error_type'],'response-too-large')
  def test_key_echo(self):
   r=self.response();r['choices'][0]['message']['content']='leakedsecret';out=t.attempt(t.validate(self.cfg()),'leakedsecret',lambda *a:json.dumps(r).encode());self.assertNotIn('leakedsecret',json.dumps(out));self.assertFalse(out['usable'])
+class CostTests(unittest.TestCase):
+ cfg=TransportTests.cfg
+ response=TransportTests.response
+ def test_usage_requested_only_openrouter(self):
+  c=t.validate(self.cfg());self.assertEqual(t.payload(c)['usage'],{'include':True})
+  c['route']='groq';self.assertNotIn('usage',t.payload(c))
+ def test_provider_cost_values(self):
+  for value in [0,0.0023,1]:
+   r=t.candidate(self.response(usage={'cost':value}),'openrouter-cerebras')
+   self.assertEqual(r['cost_usd'],value);self.assertEqual(r['cost_source'],'provider-reported')
+  for value in [None,-1,True,False,'0.002',float('inf'),float('-inf'),float('nan')]:
+   r=t.candidate(self.response(usage={'cost':value}),'openrouter-cerebras')
+   self.assertIsNone(r['cost_usd']);self.assertIsNone(r['cost_source'])
+  self.assertIsNone(t.candidate(self.response(),'openrouter-cerebras')['cost_usd'])
+ def test_length_and_refusal_retain_cost(self):
+  for finish,refusal in [('length',None),('stop','private refusal')]:
+   raw=self.response(usage={'cost':0.004,'completion_tokens':7})
+   raw['choices'][0]['finish_reason']=finish;raw['choices'][0]['message']['refusal']=refusal
+   r=t.candidate(raw,'openrouter-cerebras');self.assertFalse(r['usable'])
+   self.assertEqual(r['cost_usd'],0.004);self.assertEqual(r['completion_tokens'],7)
+ def test_groq_and_transport_failure_unknown(self):
+  self.assertIsNone(t.candidate(self.response(provider='Groq'),'groq')['cost_usd'])
+  self.assertIsNone(t.failure('timeout')['cost_usd'])
 if __name__=='__main__':unittest.main()

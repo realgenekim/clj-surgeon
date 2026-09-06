@@ -7,7 +7,7 @@ this trusted config and must close stdin / bound the complete process lifetime.
 Keys never come from stdin/environment. Output candidates are untrusted text,
 not applied edits. Batch is sequential and waits for all k attempts; no fallback.
 """
-import json,os,re,signal,socket,stat,sys,time,urllib.error,urllib.request
+import json,math,os,re,signal,socket,stat,sys,time,urllib.error,urllib.request
 from pathlib import Path
 
 MODEL='openai/gpt-oss-120b'
@@ -29,7 +29,9 @@ def validate(value):
 
 def payload(c):
  p={'model':MODEL,'messages':[{'role':'user','content':c['prompt']}],'max_tokens':c['max_tokens'],'stream':False}
- if c['route']=='openrouter-cerebras':p['provider']={'order':['Cerebras'],'allow_fallbacks':False}
+ if c['route']=='openrouter-cerebras':
+  p['provider']={'order':['Cerebras'],'allow_fallbacks':False}
+  p['usage']={'include':True}
  return p
 
 def parse_key(raw):
@@ -50,7 +52,7 @@ def load_key(route):
    return parse_key(f.read(16385))
  except OSError:raise Refusal('key-unavailable') from None
 
-def failure(kind):return {'usable':False,'error_type':kind,'content':None,'finish_reason':None,'reasoning_tokens':None}
+def failure(kind):return {'usable':False,'error_type':kind,'content':None,'finish_reason':None,'reasoning_tokens':None,'cost_usd':None,'cost_source':None}
 
 def candidate(d,route):
  if not isinstance(d,dict):return failure('invalid-response')
@@ -65,7 +67,10 @@ def candidate(d,route):
  usage=d.get('usage') if isinstance(d.get('usage'),dict) else {}
  details=usage.get('completion_tokens_details') if isinstance(usage.get('completion_tokens_details'),dict) else {}
  count=lambda v:v if type(v) is int and v>=0 else None
+ cost=usage.get('cost')
+ cost=cost if ((type(cost) is int and cost>=0) or (type(cost) is float and math.isfinite(cost) and cost>=0)) else None
  r={'usable':False,'error_type':None,'model':MODEL,'upstream':upstream,'upstream_evidence':'response-provider' if d.get('provider') else 'fixed-direct-endpoint','content':None,'finish_reason':finish if finish in ['stop','length','content_filter','tool_calls','function_call'] else None,'reasoning_tokens':count(details.get('reasoning_tokens')),'completion_tokens':count(usage.get('completion_tokens')),'prompt_tokens':count(usage.get('prompt_tokens'))}
+ r.update(cost_usd=cost,cost_source='provider-reported' if cost is not None else None)
  if isinstance(msg.get('content'),str):r['content']=msg['content']
  if msg.get('refusal'):r['error_type']='provider-refusal'
  elif finish!='stop':r['error_type']='output-length' if finish=='length' else 'nonterminal-output'
