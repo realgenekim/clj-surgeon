@@ -36,3 +36,22 @@ The public success receipt does not expose the adapter’s success stdout or exp
 The second bounded usage study found the successful call in both event sources, again with missing producer elapsed time. Current source inspection shows admission emits telemetry before public elapsed is finalized; merely restarting the old server would not fix it. This does not invalidate the separately recorded public/client clocks, and it was not used to excuse the first profile failure.
 
 This demonstrates one useful frozen-fixture integration of the existing API. It does not demonstrate a generic profile runner, free-choice adoption, a native speedup, or publication of the Maven edit into its original repository. The keeper is in the explicitly supplied scratch workspace. Tool-description guidance and portable example packaging remain separate unfinished parts of the usage plan.
+
+
+## Second useful task — Astra, 2026-09-06 15:03Z
+
+The same v3 profile admitted a second real-source refactor on its **first call**: extract the identical timing-pair conversion into private `timing-points`, and replace that expression at its original positions in `timed-segments` and `grounding-quote-citations`. No validation, clamping policy or evaluation-position change was introduced. Both existing consumer tests remain unchanged.
+
+| Boundary | Observed wall |
+|---|---:|
+| Public admission result | 2,068.714 ms |
+| Parent HTTP wrapper | 2,084 ms |
+| Collector enclosing caller action | 2,144 ms |
+
+The committed result names one added owner and two changed owners in one file, complete verification, two tests with zero failures/errors, clean lint and zero outside-hunk drift. Its post-image hash is `66814eb61989632d13f540eee6b1bc066641ece91ae70b0873842d87861e8643`; the candidate was prepared before execution. There was no new adapter repair or redundant external suite. Artifacts: `/var/tmp/forge/astra-admission-use-2-fx/{request.json,result.json,timing.json,preparation.json}`.
+
+The aggregate is now **2/3 successful public calls**, **1/2 first-call-complete tasks**. The frozen first-task failure and historical counters above remain as observed. This is profile reuse on one restricted real-source fixture, not free-choice adoption, native A/B evidence or an integrated fast-typist latency measurement. Source preparation, earlier adapter construction and review remain outside these call clocks.
+
+The third bounded usage study detected the successful public call but again found null service-ledger timing. It did not identify the Python-wrapped installed CLI preview/apply, whose receipts independently supply those timings. This is a collector coverage gap, not evidence that those CLI calls did not occur. Study: `/var/tmp/forge/astra-admission-use-2-fx/usage/report.md`.
+
+The separate public description change is implemented and its exact source tip `e1270478` passed the full normal gate; live catalog exposure and portable profile packaging remain unfinished.
