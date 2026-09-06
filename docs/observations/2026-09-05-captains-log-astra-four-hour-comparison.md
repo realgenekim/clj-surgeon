@@ -50,3 +50,32 @@ bookkeeping; they do not yet earn a speed claim. The JSON cohort is still a
 reliability loss (3/4 versus native Sol 4/4), and the raw comparison still needs
 a fresh preregistered run after the native phase-transition failure. No new
 provider calls occurred during this integration. Deadline remains 15:31Z.
+
+## Astra 2026-09-06T04:10:17.493927+00:00 — review changes the next action
+
+Fable's independent executed Opus review at b3dbd9e4 found two blockers hidden
+by our green functional tests. Git subprocess sanitization removed explicit seat
+author identity and fell back to the repository's Gene identity. Also, mission
+undo could revert source after Git publication while leaving the published ref
+standing without explanation. Neither has been exercised on a real user landing
+through the new command. Fixes are assigned with faithful witnesses; publication
+needs an intent record before the Git boundary, not merely a happy-path ledger
+write afterward. Existing Git lane enrollment is already fixed on our current
+branch. Review report: /var/tmp/forge/review-b3dbd9e4-fx/verdict.md.
+
+Two smaller cuts closed meanwhile: actual help commit/fallback now omit the
+unrelated helper-extraction/no-op-proof example (4cdfd031; builder31tests260
+assertions; root help+manifest36tests185assertions). Spark now refuses during
+executor planning rather than claiming readiness without an adapter (9a450631;
+builder17tests264assertions, root admission+manifest27tests122assertions).
+Routing final mirror b2824ee1 is GO, with actual installation receipts pending.
+
+New raw cohort apparatus is only prepared code,60ba2ec1: six fixed native
+attempts, failures retained, explicit end to orientation-only mode, floor saved
+before paired dispatch. No paid run or score yet. Parent review adds actual
+CLI-header attestation and pre-dispatch frozen fixture checks before launch.
+
+This is the slowification lesson in concrete form: an executable witness must
+include the real environment and the next operation in the lifecycle, not only
+a successful isolated call. Otherwise fast success can hand the caller a costly
+identity or undo surprise. No performance claim changes from these corrections.
