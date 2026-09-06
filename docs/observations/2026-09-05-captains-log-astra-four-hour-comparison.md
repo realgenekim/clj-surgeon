@@ -79,3 +79,9 @@ This is the slowification lesson in concrete form: an executable witness must
 include the real environment and the next operation in the lifecycle, not only
 a successful isolated call. Otherwise fast success can hand the caller a costly
 identity or undo surprise. No performance claim changes from these corrections.
+
+### Astra 04:40Z — trunk integrated; executed review earned two safety ratchets
+
+Trunk 0970f4e5 (records atop landed 3dda2a61) merged into astra/typist-route as f92f04be; merge gate 93 tests / 1438 assertions passed. Independent actual Opus review at 9a450631 found staged gitlinks could be hidden by repo submodule configuration while write-tree still included them. Commit 189e0086 pins --ignore-submodules=none; two faithful repo-config/.gitmodules witnesses failed before and pass afterward. Applied the decided literal fix through installed Surgeon :change!, retained receipt /var/tmp/forge/astra-git-submodule-fx/receipt.edn; approximately 0.164 s command wall, no native comparator or complete-task speed claim. Review and gate costs dominate this safety task.
+
+Publication/undo repair e50c4403 writes a forced recovery intent before Git publication, preserves true or uncertain Git outcomes if ledger persistence fails, and blocks silent source undo/resume after publication. Combined current Git, identity, submodule, publication, mission, display, fallback and lane gate passes 101 tests / 827 assertions. Seven new publication tests enrolled: total 1344 tests, 86 namespaces. Combined fix awaits independent re-review; no real publication or paid cohort admitted yet. Additional Opus report retained in docs/observations/2026-09-06-opus-mission-git-review.md; smaller failure-taxonomy findings remain visible.

@@ -197,3 +197,5 @@ help, dispatch, EDN/nonzero refusal and unchanged source. See
 Receipt and limitations: [Astra captain log](observations/2026-09-05-captains-log-astra-four-hour-comparison.md),
 [current completion audit](observations/2026-09-06-astra-typist-completion-audit.md).
 No cohort result is upgraded by these functional gates.
+
+- Astra 04:40Z: Git publication safety ratchets (189e0086, e50c4403): force visibility of staged submodules despite Git config; durable publication intent and conservative undo refusal on uncertain outcomes. Combined root gate 101/827 green; independent re-review pending. Deterministic Surgeon literal-edit dogfood receipt retained at /var/tmp/forge/astra-git-submodule-fx/receipt.edn, not a speed comparison. This is proof-cost evidence, not a newly won latency square.

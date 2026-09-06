@@ -378,8 +378,8 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 49 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 31 (count (lm/namespaces-for :battery))))
-    (is (= 85 (count lm/manifest))
+    (is (= 32 (count (lm/namespaces-for :battery))))
+    (is (= 86 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -416,6 +416,7 @@
     clj-surgeon.mission-fallback-test 8 ; Explicit report, actual event write and unchanged proof.
     clj-surgeon.mission-git-identity-test 3 ; Explicit seat author/committer survive subprocess sanitization.
     clj-surgeon.mission-git-submodule-test 2 ; Git config cannot hide staged gitlinks from scope guard.
+    clj-surgeon.mission-publication-test 7 ; Durable publication intent blocks silent source undo.
     clj-surgeon.mission-git-test 4 ; Pure Git provenance contract.
     clj-surgeon.mission-git-boundary-test 4 ; Git tree and staged path boundaries.
     clj-surgeon.mission-git-fence-test 5 ; Identity and refusal witnesses.
@@ -502,12 +503,12 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; 921 original + 416 adopted = 1337: retain Astra identity/receipt witnesses and add trunk
+      ;; 921 original + 423 adopted = 1344: retain Astra identity/receipt witnesses and add trunk
       ;; helper request-shape refusals (48 -> 51); closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
-      (is (= 416 adopted) (str "adopted tests: " adopted)))
+      (is (= 423 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1337 total) (str "manifest declares " total " tests"))
+      (is (= 1344 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

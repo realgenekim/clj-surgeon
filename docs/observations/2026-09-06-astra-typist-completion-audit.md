@@ -38,3 +38,7 @@ label. An additional root-launched Opus review remains in progress; no verdict
 is inferred from its live process. An author reviewing another author's CLI
 does not substitute for independent review of the kernel he wrote. Integration on this experiment branch is not a
 merge-queue GO or permission to publish.
+
+### Astra update 04:40Z
+
+Trunk merge f92f04be green (93/1438). Additional actual Opus review HOLD discovered staged-submodule scope bypass: repaired 189e0086 with two faithful red-to-green regressions. Publication/undo safety integrated e50c4403, seven battery tests enrolled. Combined root gate 101 tests / 827 assertions passes. Current inventory 1344 tests, 86 namespaces (49 fast / 5 integration / 32 battery). Independent combined-fix re-review and whole-branch r2 fence remain required before live publication or landing. Raw cohort apparatus remains HOLD on the four independent review findings; no new provider calls.
