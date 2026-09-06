@@ -413,10 +413,18 @@
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(if-let [config @runtime-config]
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(if-let [config @runtime-config]
                  (execute-request! config params)
                  (refusal :server-not-initialized
-                          "transform_clojure server is not initialized"))
+                          "transform_clojure server is not initialized")))
      :summarize summary
      :callback callback}))
 

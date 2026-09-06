@@ -1,0 +1,10 @@
+2026-09-06T17:12:52Z cohort-J start load=1.31 pid=1581078
+{"freeze_check": {"files": 14, "manifest": "/var/tmp/forge/cell-prep/runner-b/freeze-b.json"}}
+{"mode": "preregistered", "schedule": ["J1", "J2", "J3", "J4"], "cohort": "/var/tmp/forge/cell-prep/runner-b/cohort-J", "timing_window": "/var/tmp/forge/quiet-window.md", "proof_b_entry": "/var/tmp/forge/cell-prep/out/fanout-B/proof-b/run.py", "block_to_first_dispatch_s": null}
+{"arm": "J1", "actor_exit": 0, "actor_wall_s": 56.13172202091664, "wall_s": 56.13883139472455, "total_with_proof_s": 60.64088252186775, "correct": false, "load1_at_start": 1.30810546875, "apparatus_fault": null}
+{"arm": "J2", "actor_exit": 0, "actor_wall_s": 45.95999728515744, "wall_s": 45.96402538800612, "total_with_proof_s": 50.56814660690725, "correct": false, "load1_at_start": 1.96337890625, "apparatus_fault": null}
+{"arm": "J3", "actor_exit": 0, "actor_wall_s": 61.54800735088065, "wall_s": 61.55203265789896, "total_with_proof_s": 66.25171013595536, "correct": false, "load1_at_start": 1.73583984375, "apparatus_fault": null}
+{"arm": "J4", "actor_exit": 0, "actor_wall_s": 54.182921327184886, "wall_s": 54.18680346990004, "total_with_proof_s": 58.839937140233815, "correct": false, "load1_at_start": 1.6884765625, "apparatus_fault": null}
+{"summary": "/var/tmp/forge/cell-prep/runner-b/cohort-J/summary.json", "arms": 4, "correct": 0}
+2026-09-06T17:16:48Z cohort-J rc=0
+2026-09-06T17:16:48Z window released

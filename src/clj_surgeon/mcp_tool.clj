@@ -1273,7 +1273,15 @@
 (defn- handle-operation
   [operation exchange params callback]
   (mcp-operation/invoke!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
     {:execute
+     (comp mcp-operation/canonicalize-receipt-text
      (fn []
        (write-refusal/bound-public-refusal
          (with-exact-terminal-response
@@ -1330,7 +1338,7 @@
                       combinable/process-registry
                       (prepared-confirmation/exchange-session-key exchange)
                       params)))))
-         concise-summary))
+         concise-summary)))
      :summarize concise-summary
      :callback callback}))
 
@@ -1964,7 +1972,15 @@
   "Stable callback that plans, commits, and publishes one O(1) receipt."
   [_exchange params callback]
   (mcp-operation/invoke!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
     {:execute
+     (comp mcp-operation/canonicalize-receipt-text
      (fn []
        (let [normalized (json/parse-string (json/generate-string params) true)]
          (if-not @runtime-config
@@ -1989,7 +2005,7 @@
                  (assoc (alias-migration/execute!
                           (assoc routed-config :receipt-dir receipt-dir)
                           (:params routed))
-                        :workspace_root (:workspace-root routed))))))))
+                        :workspace_root (:workspace-root routed)))))))))
      :summarize alias-migration-summary
      :callback callback}))
 
@@ -2105,7 +2121,15 @@
   "Stable callback that plans, stages, proves, and publishes one O(1) receipt."
   [_exchange params callback]
   (mcp-operation/invoke!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
     {:execute
+     (comp mcp-operation/canonicalize-receipt-text
      (fn []
        (let [started (System/nanoTime)
              normalized (json/parse-string (json/generate-string params) true)
@@ -2160,7 +2184,7 @@
                                     (assoc routed-config :receipt-dir receipt-dir)
                                     (assoc (:params routed)
                                            :workspace_root (:workspace-root routed)))
-                                  :workspace_root (:workspace-root routed)))))))))
+                                  :workspace_root (:workspace-root routed))))))))))
      :summarize helper-extraction-summary
      :callback callback}))
 

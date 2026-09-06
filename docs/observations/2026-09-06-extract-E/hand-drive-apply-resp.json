@@ -1,0 +1,62 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "apply_clojure_changes\n  31 edits \u00b7 20 files \u00b7 2019.56 ms\n\n\u2713 atomic commit complete\n\u2713 written bytes read back and verified\n\u26a0 caller proof \u00b7 structural candidates only; not semantic completeness\n\u2713 terminal evidence \u00b7 verification_complete=true \u00b7 next action none"
+      }
+    ],
+    "isError": false,
+    "structuredContent": {
+      "workspace_root": "/var/tmp/forge/cell-prep/out/extract-E/reference2/workspace",
+      "committed": true,
+      "format": {
+        "status": "complete",
+        "file-count": 1,
+        "changed-file-count": 0,
+        "elapsed_ms": 1010.525284
+      },
+      "changes": 1,
+      "verification_complete": true,
+      "elapsed_ms": 2019.556275,
+      "edits": 31,
+      "read_back_hashes": {
+        "src/maven/article.clj": "62f6958a5639f0aec33f56e0b47aadeae2335af416ab32e7f91c5bc7bda3d0b8",
+        "src/maven/db.clj": "63a933f38e4d1c4b1b4391cbe87990917552048c2e847a08f592a52311e51397",
+        "src/maven/db_helpers.clj": "03ad201cf36410fca7a1132b12947622060ba36c9e30c1addba99180a6a8b051",
+        "src/maven/embed.clj": "5368219af5474a2eba745e9229ba0bf03cf20cfc1a331df3f84bd4babce7f5a2",
+        "src/maven/feedly.clj": "d24cb3039c4dce335c664b49bb05e3219d5b74ba1ae16816d3ff8d5cec898050",
+        "src/maven/feedly_enrich.clj": "04bf286d257b1334e2d7a767974c062063d71740bbff966ea6cd532525cd1857",
+        "src/maven/feedly_enrich_api.clj": "d7b54073f9d87e5067eb8717d59e37ddc7defeae9db01493c97975981f020f14",
+        "src/maven/feedly_fetch.clj": "9361f61764059587fc7c0f17dd75655638f8e92aad0bccc9e4ecf328fc6550b7",
+        "src/maven/feedly_ground.clj": "2984ce94b5b0c4c279dc4852f0e12571a448d47e57e5795688725249cf388097",
+        "src/maven/feedly_resolve.clj": "64e0f8444b199b837a9cda2da2b7e2ed6a5ea5ae52e15dc3ccc6af04589f3ed5",
+        "src/maven/import.clj": "45d3868b3e6f176798f71578a4f68eff99d084cfae89f8d256f70c550a4d098b",
+        "src/maven/import_sorter.clj": "9a49527310e741ba35260984b13f3b423301cf6fc0a85c1d72d0d5c4d46318ac",
+        "src/maven/inbox.clj": "fb7e3a545be4e99422b36e5e19e54ec2461c955c8daff0e862fa688742d5977f",
+        "src/maven/migrate.clj": "8cbc082cdb915a6b3e5e4ba596bbc015360de70a85faf12d834c02259d8c410a",
+        "src/maven/moment.clj": "f7aecba764d5c510530d858723f1fe1ad53a36bf00c00b39b8b330319e6d1809",
+        "src/maven/recording_query.clj": "309dfc7af97cb10cc5127f787d80c0f12e9028e7c8182183c944a1c550e34a42",
+        "src/maven/tweets.clj": "a23d2207282a45efee985fb2a0f623c65e12dd60e6f2955bda605b50879d2371",
+        "src/maven/tweets_import.clj": "99c7c3676371b978ba7b94cb3ded58bd22e32465ca987c45d703fe530556b6c2",
+        "src/maven/youtube.clj": "6b02216895f5155dddb259c4cfea5645a639eaa522c3898b34ebc84d031cc64a",
+        "src/maven/yt_transcript_import.clj": "6de13ac53c52ef7cbfc849071ec82c0404bf9f77443517da2f81eb91ba2adfde"
+      },
+      "next_action": "none",
+      "files": 20,
+      "receipt_hash": "71be75d25075babd636db917255d71e72917360ccc71d0a2a1b4acdf1647b22f",
+      "ok": true,
+      "operation": "apply_clojure_changes",
+      "caller_proof": {
+        "meaning": "Exact structural scans completed; aliases, macros, or generated callers may remain.",
+        "level": "structural-candidates-only",
+        "scan_complete": true,
+        "semantic_provider_used": false,
+        "zero_callers_authoritative": false
+      },
+      "undo_receipt": "/home/forge/.local/state/clj-surgeon/workspaces/36e4f1c0302df514d9d2c41d0fc9cc5c2da2af0c996a53e20e549dba83eeb65b/receipts/8c44db39-20bf-46c3-b837-2914effb35af.edn"
+    }
+  }
+}

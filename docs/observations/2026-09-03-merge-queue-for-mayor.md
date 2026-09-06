@@ -109,3 +109,16 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - 11:03Z QUEUED (after the refusal-text landing): astra/typist-route cdbaaf8b — docs-only successor to a90d21d4/4f5f0131/02ca47fa (collector fix b60b9103 + corrected usage study + complete-boundary cohort table + existing-route result); delta vs trunk = 1 py + 19 md, no clj/Make/deps/bin. Sol fence then land.
 - 12:08Z LANDED: astra/typist-route 32228dc0 (+ battery receipt) → MCP/main b912f714 — paved usage collector fix b60b9103, corrected usage study (fleet marker removed), cohort table, existing-route and Spark results; Sol fence r1 HOLD on the marker only, fixed 99d5d5fc; all gates green. Trunk head b912f714.
 - 12:52Z QUEUED: astra/typist-route 8a1cff6f — collector change (collect_agent_usage.py) + proof-guidance docs + patch/proof design (reviewed GO by fable with four additions); Sol fence then land, after refusal-text r6.
+- 14:12Z LANDED: astra/typist-route 284ca48b (single-form cardinality diagnostic, OP-ALG-FORM-COUNT-001, inb-e68905; RED-first; fixed via Surgeon CLI :change!) → MCP/main ee911577; Sol fence r1 LAND YES (HEAD-bound); all gates green. Trunk head ee911577.
+- 14:39Z QUEUED (docs-only, no gate tonight per Astra): astra/typist-route 9aa2fbf9 — v2/v3 profile results, retained first refusal, captain/tech-tree/plan/audit updates; batch-land later.
+- 15:33Z LANDED: astra/typist-route e1270478 (+ battery receipt 3ecd0cfc) → MCP/main 10f03973 — admit_clojure_patch tool-description guidance (description-only, one owner, via Surgeon CLI; Sol fence r1 LAND YES; all gates green). Trunk head 10f03973. Sixth landing of the window.
+
+- QUEUED docs-only: astra f25d4a32 (first whole-task pair LOSS + profile guide; no source; land in the next docs batch with 9aa2fbf9) — 17:44Z
+
+- LANDED: fable/match-owner-counts d6c0d035 (+receipt 1472105d) → MCP/main 7f920915 at 19:01Z (inspect owner_counts + source-omission; fence r2 HOLD on a pre-existing defect, landed per Gene) — 19:03Z
+- QUEUED docs-only: astra 61f62705 (alias-replication report + captain + tech tree) — 19:42Z
+- LANDED: fable/strictly-better-skill 5d0b31f7 (+receipt 2c68e673) → MCP/main 30d7920c at 20:37Z; tag stable/2026-09-06-strict — 20:39Z
+- QUEUED docs-only: astra e3a3cd64 (brainstorm hand-drive report + scripts + raw clocks + captain) — 21:08Z
+- QUEUED docs-only: astra dc33eba2 (trace report + raw trace) and 43b99afb (keeper) — 21:35Z
+- LANDED: fable/public-result-ceiling c10a90f6 (+receipt 5c7c9e79) → MCP/main 7030bb56 at 22:50Z (inb-b60d6e; fence r3 LAND YES; Astra GO) — 22:51Z
+- LANDED: fable/hot-verify-done 10f5131d (+receipt 3c2e023c) → MCP/main 0ddf8ec5 at 23:17Z (inb-adcc9e; Astra GO ten-3c; 61 s → 1.1 s live) — 23:18Z

@@ -142,7 +142,41 @@
                    cut)]
          (str (subs collapsed 0 cut) caller-text-truncation-marker))))))
 
+(defn canonicalize-receipt-text
+  "One receipt map with its caller-quoted sentences in canonical safe form.
+
+  Call this WHERE THE RECEIPT IS BUILT -- inside the verb, on the map the verb
+  is about to hand to `invoke!` -- not later. `MCP-OP-EDIT-037` requires the
+  canonical representation to be computed at receipt CONSTRUCTION so the
+  structured field and every renderer quote one string by construction; and
+  `MCP-OP-RESULT-003` forbids the shared finalizer from changing any domain
+  field except `elapsed_ms`. Sol fence r7 (2026-09-06) proved those two
+  mutually inconsistent while this transformation lived in `finalize-result`:
+  probed directly, the finalizer turned \"bad\\n\u2713 forged\" into
+  \"bad forged\", so finalization was not identity on the domain fields.
+
+  `encode-caller-text` is idempotent, so applying this at construction and
+  again at any later crossing is safe; the canonical form is a fixed point.
+
+  A non-map passes through untouched: `invoke!` owns the diagnosis of a domain
+  that did not return a map, and this must not pre-empt it."
+  [result]
+  (cond-> result
+    (and (map? result) (string? (:error result)))
+    (assoc :error (or (encode-caller-text (:error result)) ""))
+    ;; The remedy is the other sentence both faces quote. It is canonicalized
+    ;; the same way and for the same reason, but NOT length-capped: a remedy
+    ;; is the instruction that unblocks the caller, and the renderers that
+    ;; carry it already hold their own, larger ceilings.
+    (and (map? result) (string? (:remedy result)))
+    (assoc :remedy (or (sanitize-caller-text (:remedy result)) ""))))
+
+;; @spec MCP-OP-RESULT-003
 (defn- finalize-result
+  "Add the authoritative `elapsed_ms` and change NOTHING else.
+
+  Every other domain field is republished byte-identically. Caller-text
+  canonicalization belongs to `canonicalize-receipt-text`, at construction."
   [domain-result started-ns finished-ns]
   (when-not (map? domain-result)
     (throw (ex-info "MCP domain execution must return a map"
@@ -156,25 +190,7 @@
                        :started-ns started-ns
                        :finished-ns finished-ns
                        :elapsed-ms elapsed-ms})))
-    ;; @spec MCP-OP-EDIT-037
-    ;; @spec MCP-OP-EDIT-038
-    ;; ONE canonical safe representation, computed here — at receipt
-    ;; construction, before either the summary or the serialized body is
-    ;; built — so the structured `error` and the sentence a caller reads are
-    ;; the same string by construction rather than by two renderers agreeing.
-    ;; Sol fence r5 (2026-09-06) killed the previous design, which encoded at
-    ;; render time only: structured carried the raw caller value, text carried
-    ;; the encoded one, and `text ⊇ structured` was false for exactly the
-    ;; hostile input the encoding existed to defeat.
-    (cond-> (assoc domain-result :elapsed_ms elapsed-ms)
-      (string? (:error domain-result))
-      (assoc :error (or (encode-caller-text (:error domain-result)) ""))
-      ;; The remedy is the other sentence both faces quote. It is canonicalized
-      ;; the same way and for the same reason, but NOT length-capped: a remedy
-      ;; is the instruction that unblocks the caller, and the renderers that
-      ;; carry it already hold their own, larger ceilings.
-      (string? (:remedy domain-result))
-      (assoc :remedy (or (sanitize-caller-text (:remedy domain-result)) "")))))
+    (assoc domain-result :elapsed_ms elapsed-ms)))
 
 ;; @spec MCP-OP-RESULT-001
 ;; @spec MCP-OP-RESULT-002
@@ -189,15 +205,26 @@
 
   The request clock surrounds domain execution only. Summary rendering and
   serialization both complete before callback publication, so failures cannot
-  expose a partial public result."
-  [{:keys [clock-nanos execute summarize serialize callback]
+  expose a partial public result.
+
+  The optional `guard` runs at the FINALIZATION POINT, on the exact result and
+  summary publication would hand to the callback -- timing fields already
+  finalized, summary already rendered. It returns nil to publish that
+  candidate, or a replacement result to publish instead; the replacement is
+  re-summarized and nothing after the guard can grow the envelope. A guard
+  that will not accept its own replacement is a defect in the guard, so the
+  replacement is published once and not re-guarded."
+  [{:keys [clock-nanos execute summarize serialize callback guard]
     :or {clock-nanos #(System/nanoTime)
          serialize json/generate-string}}]
   (let [started-ns (clock-nanos)
         domain-result (execute)
         finished-ns (clock-nanos)
-        result (finalize-result domain-result started-ns finished-ns)
-        summary (summarize result)
+        finalized (finalize-result domain-result started-ns finished-ns)
+        finalized-summary (summarize finalized)
+        replacement (when guard (guard finalized finalized-summary))
+        result (or replacement finalized)
+        summary (if replacement (summarize result) finalized-summary)
         body (serialize result)]
     (callback [summary] (not (:ok result)) result)
     body))

@@ -12,6 +12,34 @@
 (def managed-begin "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->")
 (def managed-end "<!-- END CLJ-SURGEON ROUTING v:1 -->")
 
+;; The doctrine-agreement ratchet. A plate change that agents must READ is not
+;; landed because a file changed; it is landed when the text is present, byte
+;; for byte, in every managed block that takes effect. These lines are checked
+;; both in the canonical source (so a generator that drops one cannot install)
+;; and in every installed target (so a seat whose block was hand-edited or left
+;; on an older plate is a LOUD refusal, not a silent disagreement).
+;;
+;; Every entry must be a SINGLE line of the plate; a wrapped paragraph is not a
+;; byte-exact needle. Update this vector and the plate in the same commit.
+(def required-sections
+  ["## Fan-out route (experimental default, 2026-09-06)"
+   "1. Discover owners FIRST using native reads or one inspect_clojure match batch"
+   "2. THEN patch helper and `require`/alias natively with `apply_patch`. A helper"
+   "3. ONE `apply_clojure_changes` call, edits"
+   "4. Clear argument error: repair once from the refusal. Route unavailable,"
+   "**Evidence and boundary.** Cohort I measured the INFORMED BATCHED EDIT route"
+   "*Derived from doctrine commit 7a682b9e on clj-surgeon MCP/main, whose receipts"
+   ;; The strictly-better rule and its kill switch. A plate that routes a class
+   ;; without stating WHEN the route is withdrawn is an unbounded default, so the
+   ;; rule line and the retirement line are pinned together.
+   "**Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control."
+   "**Kill switch.** A correctness failure SUSPENDS a routed class immediately. A wall"])
+
+(defn missing-sections
+  "Required plate sections absent from `source`, in declaration order."
+  [source]
+  (vec (remove #(str/includes? source %) required-sections)))
+
 (defn- indexes-of [source needle]
   (loop [from 0
          indexes []]
@@ -99,17 +127,25 @@
 
 (defn- prepare-install [block-file target-paths]
   (let [block (slurp block-file)
+        missing (missing-sections block)
         targets (mapv #(prepare-target % block) target-paths)]
-    (if-let [failure (first (remove :ok targets))]
-      (assoc failure
-             :ok false
-             :operation :install-agent-routing
-             :target (:path failure))
-      {:ok true
+    (if (seq missing)
+      {:ok false
        :operation :install-agent-routing
-       :block block
-       :block-hash (sha256 block)
-       :targets targets})))
+       :error-type :missing-required-routing-section
+       :scope :canonical
+       :block-file block-file
+       :missing missing}
+      (if-let [failure (first (remove :ok targets))]
+        (assoc failure
+               :ok false
+               :operation :install-agent-routing
+               :target (:path failure))
+        {:ok true
+         :operation :install-agent-routing
+         :block block
+         :block-hash (sha256 block)
+         :targets targets}))))
 
 (defn install-routing!
   "Install the canonical block after every target passes preflight."
@@ -133,9 +169,25 @@
 (defn check-routing!
   "Check that every target contains the exact canonical block. Does not write."
   [block-file target-paths]
-  (let [prepared (prepare-install block-file target-paths)]
+  (let [prepared (prepare-install block-file target-paths)
+        drifted-target (when (:ok prepared)
+                         (first (keep (fn [{:keys [path]}]
+                                        (let [missing (missing-sections
+                                                        (read-target path))]
+                                          (when (seq missing)
+                                            {:path path :missing missing})))
+                                      (:targets prepared))))]
     (cond
       (not (:ok prepared)) prepared
+
+      drifted-target
+      {:ok false
+       :operation :check-agent-routing
+       :error-type :missing-required-routing-section
+       :scope :installed
+       :target (:path drifted-target)
+       :missing (:missing drifted-target)}
+
       (every? (complement :changed) (:targets prepared))
       {:ok true
        :operation :check-agent-routing

@@ -195,3 +195,84 @@ Source audit confirms mission classes are rate labels over one existing-definiti
 ### Astra single Spark coding result, 2026-09-06 11:28Z
 
 The sole paid attempt verified on the original three-owner Maven task: generation 4.152 s, complete parent 13.020 s, proofs 2/5 and 4/24, scope preserved. Input 7089, output 804 including reasoning 256; subscription dollar cost unknown. New unpaid preflight independently GO; old failed preflight retained. No retry or production route change. Timing window explicitly released to Fable after terminal cleanup. [Full boundaries](2026-09-06-astra-spark-utility.md). Collector fence sole hold fixed separately in99d5d5fc by removing a root-only study’s live fleet-cutoff marker.
+
+### Astra 12:00Z checkpoint, recorded 2026-09-06T11:42:12.863714+00:00
+
+[Full Gene report](2026-09-06-astra-checkpoint-1200z.md) records the prepared wins, the new assigned-route loss, the independently verified single Spark candidate, the known witness defect and next small fresh-caller pilot. Meter observed11:37: 50% weekly remaining, reset September12 15:48:08UTC; no token-budget estimate. Next scheduled checkpoint15:00, extended end16:20.
+
+### Astra fresh-caller usability result, 2026-09-06T12:31:10.559486+00:00
+
+Both new callers verified (N67.262s, D87.680s), but ordinary-batch adoption failed: D authored a native patch, tried admit_clojure_patch(commit,verify=none), got the correct verification-incomplete refusal, then applied the same patch natively. Zero tool-committed sites. Both reused and ran supplied proofs, then parent repeated them. Preparation/review/overlapping wait was38.2minutes, separately visible. [Full result, fairness limits and accounting](2026-09-06-astra-recovery-pilot-result.md). Collector/docs landed b912f714 after the recorded freshness refusal and fresh battery; no policy waiver.
+
+### Astra 12:47Z — preserve mixed native routes; make proof integration explicit
+
+The fresh two-caller pilot exposed a real collector omission: one exec that
+reads and applies a native patch kept its patch counter but lost its patch route.
+Fixed the route classification without changing outer-action counts or clocks.
+Paved self-test passes; identical-bounds recollection reports native-read5,
+native-patch1, skill-load1. D's opaque stored-patch action remains language-unknown
+to the collector. Exact source trace remains the authority for native completion.
+Service refusal event has no timing field: missing samples remain missing.
+
+Added development MCP guidance for commit/focused verification and existing
+profile configuration. Independent design review caught that candidate snapshots
+are partial and the runner starts at the live project root; candidate-first
+loading is now explicit. No production API/code change or new provider run.
+Details: docs/observations/2026-09-06-astra-recovery-pilot-result.md and
+ docs/plans/2026-09-06-astra-patch-proof-usage.md. These are usability corrections,
+not speedup claims. Fable retains the quiet window for the corrected fence.
+
+### Astra 12:55Z — receipt volume is a concrete next hypothesis
+
+Read-only analysis of the same D1 refusal: canonical compact UTF-8 JSON result
+43,264 bytes, structured portion 15,054 bytes, text content 28,013 bytes.
+Recorded operation elapsed 577.461 ms; the next model input grew from 42,348
+to 58,520 tokens. Canonical representation size is not observed transport bytes,
+and the input delta includes all intervening context. This does not attribute
+latency to receipt size or establish a speedup. Owners/hashes/files account for
+much of the structured detail; this was not simply an echoed giant patch.
+Keep detailed evidence, but investigate reducing what a caller must ingest to
+decide the next action. No new API or run admitted from this observation.
+
+The reserved non-rename diagnostic contract now has an explicit behavior matrix
+at /var/tmp/forge/astra-two-form-refusal-design-review.md. No accepted syntax
+changes; parsed cardinality only, detached comments and malformed input distinct.
+The repo-required linked-intent-dev skill is absent from searched local roots;
+Fable has been asked for its canonical location before scoped implementation.
+His actual r5 fence ended HOLD with matching end SHA; later work stays his lane.
+
+Receipt-size evidence: /var/tmp/forge/astra-recovery-pilot-usage-fx/receipt-size-analysis.json.
+
+### Astra 13:21Z — real diagnostic fixed through installed CLI
+
+Fable supplied the canonical linked-intent skill and approved design/test phases.
+Recovered the actual 08:18 two-vector request rather than the mismatching saved
+draft. RED 2/72: 21 diagnostic failures, zero errors. Installed CLI preview left source
+unchanged; stdin change! committed one change in one file with guarded receipt 69ed8beb.
+GREEN: same 2/72 all pass; paved lint zero warnings/errors. Independent result review GO:
+exact approved replacement, unrelated bytes and acceptance predicate unchanged,
+no timeout or process-group survivors. Full normal gates and landing remain pending.
+This is useful CLI dogfood, not a paid typist attempt or speed claim.
+Report: docs/observations/2026-09-06-astra-cardinality-dogfood.md.
+
+Admission-prose reconciliation also prepared: old unverified-commit/whole-map
+precedence statements corrected, historical receipts preserved and labeled.
+A restricted real Maven profile adapter is static GO but UNEXECUTED; its 5m26s
+preparation is separate from any future proof/usage time. No public admission win
+claimed. Quiet window explicitly released after focused diagnostic run.
+
+### Astra 2026-09-06T14:25:10.000524+00:00 — real proof binding passes; first public integration refuses
+
+Cardinality keeper landed ee911577 after exact-tip LAND YES and merged gates. Real Maven profile polarity cases each2.006s: good candidate over broken live passes; broken candidate over good live fails3 actual timestamp assertions, zeroerrors. The first actual public clarity-refactor call refused before tests/write because my adapter rejected the gate-created .clj-surgeon/.gitignore and write.lock. Source/test/dependency bytes unchanged, lintclean, first-call complete0/1, toolcommits0. Exacttwo-path repair staticGO; runtime retry pending. Full report: 2026-09-06-astra-real-profile-utility.md. No speed/adoption claim; preparation and queueing remain visible.
+
+### Astra 2026-09-06T14:33:19.384566+00:00 — verified public keeper after one retained refusal
+
+All five exact bookkeeping-boundary preflights refused as expected. The same native patch then committed through admit_clojure_patch with verify=focused in 2144.939 ms: one file, one owner, clean lint, actual recording-query suite 2 tests / 0 failures/errors, complete verification, zero outside-hunk drift, next_call null. Receipt post-image hash matches the prepared candidate; no source reread or repeated suite needed. Independent saved-evidence review GO. First-call success remains 0/1, total successful calls 1/2. Preparation and shared-box waits prevent treating the 2.145-second successful call as complete-task speedup. Current-source audit confirms producer timing is still missing; both usage windows retain caller clocks separately. See 2026-09-06-astra-real-profile-utility.md.
+
+### Astra 2026-09-06T14:49:38.734851+00:00 — second keeper and description dogfood
+
+Second task reused the unchanged v3 profile and passed on its first public call in 2068.714 ms: private timing-points helper added, two consumers updated, one file, actual suite2tests0fail0errors, cleanlint, complete verification, zero outside-hunk drift. This is behavior-preserving duplicate conversion extraction; Fable’s earlier clamping-policy experiment was declined and remains unapplied. Aggregate first-call-complete tasks1/2, successful public calls2/3; no free-choice or native-speedup claim.
+
+The existing usage plan’s description guidance was applied through installed CLI stdin :change! after preview: exactly one owner/file, guarded receipt5849276f, post-image19f43825. Only the description string changes, not schema/validation/verification. Paved lint before/after:0errors, same2existingwarnings+1info (rows shift by10); no introduced findings. Focused registration and normalgate results pending at this entry. Public catalog remains old until deliberate refresh; no exposure claim. Artifacts astra-description-dogfood-fx and astra-admission-use-2-fx.
+
+Astra 2026-09-06T14:52:34.263681+00:00: description validation update — one-Var attempt hit three whole-suite refusal-census fixture failures (retained; not a green partial suite). A separate direct public catalog probe passed3checks: one entry, description carried unchanged from its source Var, expected outcome classes. No live catalog refresh. Normal gate follows on the committed tip.

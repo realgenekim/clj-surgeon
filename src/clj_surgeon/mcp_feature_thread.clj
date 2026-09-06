@@ -4293,7 +4293,15 @@
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(try
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(try
                  (execute-request @runtime-config params)
                  (catch Exception error
                    (refuse "feature-thread-failure"
@@ -4302,7 +4310,7 @@
                  (catch Throwable error
                    (refuse "feature-thread-error"
                            (or (.getMessage error) (.getName (class error)))
-                           {:remedy "Report this receipt; no source was read past the failure."})))
+                           {:remedy "Report this receipt; no source was read past the failure."}))))
      :summarize summary
      ;; @spec MCP-OP-THREAD-046
      ;; The text is rendered from the FULL result, which is why `summarize`

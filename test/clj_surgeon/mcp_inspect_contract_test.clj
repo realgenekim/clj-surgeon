@@ -257,8 +257,12 @@
     (let [summary (inspect/concise-summary (assoc result :elapsed_ms 1.0))]
       (is (str/includes? summary
                          "outline: 5 lines · 2 forms · first settings · last dispatch"))
+      ;; @spec MCP-OP-FIELD-007 -- the file and the per-owner tallies replaced
+      ;; the per-site inside/source echo on this line; the structured
+      ;; per-site vector asserted above is unchanged.
       (is (str/includes? summary
-                         "match: 1 match · [{\"inside\":\"dispatch\",\"source\":\"(send! :real)\"}]"))
+                         (str "match src/example.clj: 1 match · owners "
+                              "[{\"inside\":\"dispatch\",\"matches\":1}]")))
       (is (str/includes? summary "xray: value 2")))))
 
 (deftest refuses-the-complete-batch-on-form-or-match-failure
@@ -661,3 +665,168 @@
       (is (= ["hash"] (:missing evidence)))
       (is (= ["file" "hash"] (:required evidence)))
       (is (not (contains? evidence :minimal_request))))))
+
+;; ---------------------------------------------------------------------------
+;; Per-owner tallies on the match receipt. Cohort J ethnography, 2026-09-06
+;; (docs/observations/2026-09-06-fanout-J-ethnography.md): a caller building an
+;; apply_clojure_changes `edits` list of {file, within{form}, from, to, matches}
+;; had to re-tally matches per (file, inside) BY HAND from the per-site vector,
+;; and map result ids back to file paths from its own request ordering. Both
+;; facts are already in the receipt; only the projection withheld them.
+;; ---------------------------------------------------------------------------
+
+(deftest match-results-carry-per-owner-tallies-and-their-file
+  ;; @spec MCP-OP-FIELD-007
+  (let [alpha (str "(ns alpha)\n"
+                   "(defn rows! []\n"
+                   "  (send! :a)\n"
+                   "  (send! :b))\n"
+                   "(defn cols! []\n"
+                   "  (send! :c))\n"
+                   "(send! :top)\n")
+        beta (str "(ns beta)\n"
+                  "(defn rows! []\n"
+                  "  (send! :d))\n")
+        raw {"requests"
+             [{"id" "m00" "operation" "match"
+               "file" "src/alpha.clj" "match" "(send! _)"}
+              {"id" "m01" "operation" "match"
+               "file" "src/beta.clj" "match" "(send! _)"}]
+             "expect" {"requests" 2 "files" 2}}
+        params (:params (inspect/validate-inspect-params raw))
+        result (inspect/evaluate-snapshots
+                 params
+                 {"src/alpha.clj" (snapshot "src/alpha.clj" alpha)
+                  "src/beta.clj" (snapshot "src/beta.clj" beta)})
+        m00 (get-in result [:results 0])
+        m01 (get-in result [:results 1])]
+    (is (:ok result))
+    (testing "duplicates merge in first-occurrence order; top level is null"
+      (is (= [{:inside "rows!" :matches 2}
+              {:inside "cols!" :matches 1}
+              {:inside nil :matches 1}]
+             (:owner_counts m00)))
+      (is (= [{:inside "rows!" :matches 1}] (:owner_counts m01))))
+    (testing "the tallies sum to the request's own match count"
+      (is (= 4 (:match_count m00)))
+      (is (= (:match_count m00)
+             (reduce + 0 (map :matches (:owner_counts m00)))))
+      (is (= (:match_count m01)
+             (reduce + 0 (map :matches (:owner_counts m01))))))
+    (testing "every request result names its own file"
+      (is (= "src/alpha.clj" (:file m00)))
+      (is (= "src/beta.clj" (:file m01))))
+    (testing "the per-site vector is unchanged"
+      (is (= 4 (count (:matches m00))))
+      (is (= "(send! :a)" (get-in m00 [:matches 0 :source])))
+      (is (= "rows!" (get-in m00 [:matches 0 :inside]))))))
+
+(deftest the-match-text-line-carries-the-file-and-the-owner-tallies
+  ;; @spec MCP-OP-FIELD-007
+  (let [alpha (str "(ns alpha)\n"
+                   "(defn rows! []\n"
+                   "  (send! :a)\n"
+                   "  (send! :b))\n"
+                   "(send! :top)\n")
+        raw {"requests" [{"id" "m00" "operation" "match"
+                          "file" "src/alpha.clj" "match" "(send! _)"}]
+             "expect" {"requests" 1 "files" 1}}
+        params (:params (inspect/validate-inspect-params raw))
+        result (inspect/evaluate-snapshots
+                 params
+                 {"src/alpha.clj" (snapshot "src/alpha.clj" alpha)})
+        summary (inspect/concise-summary (assoc result :elapsed_ms 1.0))]
+    (testing "file path and owner tallies are on the line the model reads"
+      (is (str/includes?
+            summary
+            (str "m00 src/alpha.clj: 3 matches · owners "
+                 "[{\"inside\":\"rows!\",\"matches\":2},"
+                 "{\"inside\":null,\"matches\":1}]"))))
+    (testing "the per-site source echo is gone from the text projection"
+      (is (not (str/includes? summary "\"source\"")))
+      (is (not (str/includes? summary "(send! :a)"))))))
+
+;; ---------------------------------------------------------------------------
+;; The per-site `source` echo. Round 2, 2026-09-06: for a LITERAL pattern every
+;; site's `source` is byte-for-byte the request's own `match` string -- one
+;; constant repeated once per match, for nothing. Omitting exactly that case
+;; makes absent source mean `source = result.match`, which is a CHANGE to the
+;; structured output contract, not an addition. The test is byte equality of the
+;; exact source STRING and nothing weaker: parsed equality, normalized printing,
+;; and "the pattern has no wildcard" all admit sites whose spelling differs.
+;; ---------------------------------------------------------------------------
+
+(defn- match-once
+  [source pattern]
+  (let [raw {"requests" [{"id" "m00" "operation" "match"
+                          "file" "src/demo.clj" "match" pattern}]
+             "expect" {"requests" 1 "files" 1}}
+        params (:params (inspect/validate-inspect-params raw))]
+    (get-in (inspect/evaluate-snapshots
+              params {"src/demo.clj" (snapshot "src/demo.clj" source)})
+            [:results 0])))
+
+(deftest a-site-echoing-the-request-match-byte-for-byte-omits-its-source
+  ;; @spec MCP-OP-FIELD-008
+  (let [result (match-once (str "(ns demo)\n"
+                                "(defn rows! []\n"
+                                "  (send! :ping)\n"
+                                "  (send! :ping))\n")
+                           "(send! :ping)")]
+    (is (= 2 (:match_count result)))
+    (is (true? (:source_omitted_when_equal_to_match result)))
+    (testing "every derivable site drops source and keeps everything else"
+      (doseq [site (:matches result)]
+        (is (not (contains? site :source)))
+        (is (string? (:hash site)))
+        (is (string? (:file_hash site)))
+        (is (contains? site :address))
+        (is (contains? site :line))))
+    (testing "the request-level match is the reconstruction basis and survives"
+      (is (= "(send! :ping)" (:match result))))
+    (testing "no site is lost to the omission"
+      (is (= 2 (count (:matches result))))
+      (is (= [{:inside "rows!" :matches 2}] (:owner_counts result))))))
+
+(deftest a-literal-whose-site-spelling-differs-keeps-its-source
+  ;; @spec MCP-OP-FIELD-008
+  ;; A pattern with no wildcard is NOT enough to prove the bytes match: the
+  ;; site can carry different internal whitespace, a comment, or a different
+  ;; reader spelling of the same value. Every such byte has to survive.
+  (testing "extra internal whitespace"
+    (let [result (match-once (str "(ns demo)\n"
+                                  "(defn rows! []\n"
+                                  "  (send!  :ping))\n")
+                             "(send! :ping)")]
+      (is (= 1 (:match_count result)))
+      (is (= "(send!  :ping)" (get-in result [:matches 0 :source])))))
+  (testing "a comment inside the matched form"
+    (let [result (match-once (str "(ns demo)\n"
+                                  "(defn rows! []\n"
+                                  "  (send! ; why\n"
+                                  "   :ping))\n")
+                             "(send! :ping)")]
+      (is (= 1 (:match_count result)))
+      (is (str/includes? (get-in result [:matches 0 :source]) "; why"))))
+  (testing "a different reader spelling of the same value"
+    (let [result (match-once (str "(ns demo)\n"
+                                  "(defn rows! []\n"
+                                  "  (send! 1000))\n")
+                             "(send! 1000)")
+          spelled (match-once (str "(ns demo)\n"
+                                   "(defn rows! []\n"
+                                   "  (send! 1000N))\n")
+                              "(send! 1000)")]
+      (is (not (contains? (get-in result [:matches 0]) :source)))
+      (is (= "(send! 1000N)" (get-in spelled [:matches 0 :source]))))))
+
+(deftest wildcard-matches-keep-every-captured-site-source
+  ;; @spec MCP-OP-FIELD-008
+  (let [result (match-once (str "(ns demo)\n"
+                                "(defn rows! []\n"
+                                "  (send! :a)\n"
+                                "  (send! :b))\n")
+                           "(send! _)")]
+    (is (= 2 (:match_count result)))
+    (is (= ["(send! :a)" "(send! :b)"] (mapv :source (:matches result))))
+    (is (true? (:source_omitted_when_equal_to_match result)))))

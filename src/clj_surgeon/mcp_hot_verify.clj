@@ -5,7 +5,10 @@
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str]
-   [nrepl.core :as nrepl]))
+   [nrepl.core :as nrepl]
+   [nrepl.transport :as transport])
+  (:import
+   (java.net SocketException)))
 
 (def ^:private qualified-name-pattern
   #"^[A-Za-z0-9._!?*+<>=%$-]+(?:/[A-Za-z0-9._!?*+<>=%$-]+)?$")
@@ -49,6 +52,65 @@
     ":pid (.pid (java.lang.ProcessHandle/current)) "
     ":summary summary}))"))
 
+(def ^:private failure-statuses
+  "Statuses that mean this evaluation did not verify anything. `interrupted` is
+   terminal AND a failure: an interrupted evaluation can have already emitted a
+   value with a matching cwd and zero counters, and that must never read as a
+   pass."
+  #{"eval-error" "error" "timeout" "interrupted"})
+
+(defn- bounded-output
+  [responses limit]
+  (let [text (str/join "" (keep #(or (:err %) (:out %)) responses))]
+    (when (seq text)
+      (subs text 0 (min limit (count text))))))
+
+(def ^:private terminal-statuses
+  "nREPL statuses that end one message's response stream. A reader that waits
+   only for \"done\" hangs to its ceiling when the server ends the stream with
+   an error status instead."
+  #{"done" "error" "eval-error" "interrupted"})
+
+(defn- response-statuses
+  [response]
+  (let [status (:status response)]
+    (set (map name (if (string? status) [status] status)))))
+
+;; @spec MCP-OP-HOTVER-001
+;; @spec MCP-OP-HOTVER-002
+(defn- read-until-terminal
+  "Consume responses for one message id until a terminal status arrives, the
+   transport closes, or the deadline passes. The deadline is a true ceiling:
+   every blocking read is bounded by the time remaining against ONE deadline
+   taken when the read starts, so a stream of non-terminal responses cannot
+   push it out. Responses read before a closure are kept, because they are the
+   only diagnostic a caller gets for a read that never terminated."
+  [connection id timeout-ms]
+  (let [deadline (+ (System/nanoTime) (* 1000000 (long timeout-ms)))
+        ;; rounded UP: truncating the remaining nanos to whole milliseconds
+        ;; lets the last blocking read expire just BEFORE the deadline, and a
+        ;; ceiling that can be undershot is not a ceiling. Measured: a 300 ms
+        ;; profile returned at 299.67 ms.
+        remaining #(long (Math/ceil (/ (- deadline (System/nanoTime)) 1000000.0)))
+        collected (volatile! [])]
+    (try
+      (loop []
+        (let [left (remaining)]
+          (if-not (pos? left)
+            {:responses @collected :outcome :timeout}
+            (if-let [response (transport/recv connection left)]
+              (if (= id (:id response))
+                (do
+                  (vswap! collected conj response)
+                  (if (seq (set/intersection (response-statuses response)
+                                             terminal-statuses))
+                    {:responses @collected :outcome :terminal}
+                    (recur)))
+                (recur))
+              {:responses @collected :outcome :timeout}))))
+      (catch SocketException error
+        {:responses @collected :outcome :closed :error (.getMessage error)}))))
+
 (defn verify!
   "Run one closed hot profile against the configured application nREPL."
   [project-root profile]
@@ -71,40 +133,61 @@
                 (throw (ex-info "Invalid application nREPL port"
                                 {:error-type :invalid-hot-verification-port})))
               (with-open [connection (nrepl/connect :host "127.0.0.1" :port port)]
-                (let [client (nrepl/client connection timeout)
-                      responses (doall (client {:op "eval"
-                                                :code (eval-code profile)}))
-                      statuses (set (mapcat :status responses))
-                      value-source (last (keep :value responses))
-                      value (when value-source (edn/read-string value-source))
-                      summary (:summary value)
-                      cwd (some-> (:cwd value) io/file .getCanonicalPath)
-                      ok (and value
-                              (= (.getPath root) cwd)
-                              (empty? (set/intersection
-                                        statuses
-                                        #{"eval-error" "error" "timeout"}))
-                              (zero? (long (or (:fail summary) 0)))
-                              (zero? (long (or (:error summary) 0))))]
-                  {:ok ok
-                   :status (if ok :complete :failed)
-                   :jvm "application"
-                   :pid (:pid value)
-                   :cwd cwd
-                   :reload-count (count (:reload profile))
-                   :law-count (count (:tests profile))
-                   :summary summary
-                   :elapsed_ms (/ (double (- (System/nanoTime) started))
-                                  1000000.0)
-                   :error-type (when-not ok :hot-verification-failed)
-                   :output (when-not ok
-                             (subs (str/join "" (keep #(or (:err %) (:out %))
-                                                      responses))
-                                   0
-                                   (min 4000
-                                        (count (str/join ""
-                                                         (keep #(or (:err %) (:out %))
-                                                               responses))))))})))
+                (let [id (str (random-uuid))
+                      _ (transport/send connection {:op "eval"
+                                                    :id id
+                                                    :code (eval-code profile)})
+                      {:keys [responses outcome] :as read-result}
+                      (read-until-terminal connection id timeout)
+                      ;; hoisted rather than spelled inside the `:error-type`
+                      ;; value: the entrance's refusal enumeration READS that
+                      ;; value structurally, and a comparison operand sitting
+                      ;; inside it is minted as a refusal kind that does not
+                      ;; exist (the alias-migration enumeration read `closed`).
+                      closed? (= :closed outcome)]
+                  (if (not= :terminal outcome)
+                    {:ok false
+                     :status :failed
+                     :jvm "application"
+                     :reload-count (count (:reload profile))
+                     :law-count (count (:tests profile))
+                     :error-type (if closed?
+                                   :hot-verification-transport-closed
+                                   :hot-verification-timeout)
+                     :error (if closed?
+                              (str "Application nREPL transport closed before "
+                                   "any terminal status: " (:error read-result))
+                              (str "Application nREPL sent no terminal status "
+                                   "within " timeout "ms"))
+                     :output (bounded-output responses 2000)
+                     :elapsed_ms (/ (double (- (System/nanoTime) started))
+                                    1000000.0)}
+                    (let [statuses (into #{} (mapcat response-statuses) responses)
+                          value-source (last (keep :value responses))
+                          value (when value-source (edn/read-string value-source))
+                          summary (:summary value)
+                          cwd (some-> (:cwd value) io/file .getCanonicalPath)
+                          ok (boolean
+                               (and value
+                                    (= (.getPath root) cwd)
+                                    (contains? statuses "done")
+                                    (empty? (set/intersection
+                                              statuses failure-statuses))
+                                    (zero? (long (or (:fail summary) 0)))
+                                    (zero? (long (or (:error summary) 0)))))]
+                      {:ok ok
+                       :status (if ok :complete :failed)
+                       :jvm "application"
+                       :pid (:pid value)
+                       :cwd cwd
+                       :reload-count (count (:reload profile))
+                       :law-count (count (:tests profile))
+                       :summary summary
+                       :elapsed_ms (/ (double (- (System/nanoTime) started))
+                                      1000000.0)
+                       :error-type (when-not ok :hot-verification-failed)
+                       :output (when-not ok
+                                 (bounded-output responses 4000))})))))
             (catch Exception error
               {:ok false
                :status :failed

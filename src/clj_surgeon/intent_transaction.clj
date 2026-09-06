@@ -59,12 +59,18 @@
           forms (->> (node/children root)
                      (remove node/whitespace?)
                      vec)]
+      ;; @spec OP-ALG-FORM-COUNT-001
       (when-not (and (= 1 (count forms))
                      (not (node/comment? (first forms))))
-        (refuse! :invalid-intent-form
-                 (str label
-                      " must contain exactly one complete form with no detached comments")
-                 {:field label :form-count (count forms)}))
+        (let [form-count (count forms)
+              cardinality-only? (not-any? node/comment? forms)]
+          (refuse! :invalid-intent-form
+                   (if cardinality-only?
+                     (str label ": one complete form expected; " form-count " supplied.")
+                     (str label
+                          " must contain exactly one complete form with no detached comments"))
+                   (cond-> {:field label :form-count form-count}
+                     cardinality-only? (assoc :expected 1 :actual form-count)))))
       (let [form-node (first forms)]
         {:node form-node
          :source (node/string form-node)

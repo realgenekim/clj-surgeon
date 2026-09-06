@@ -59,15 +59,25 @@
     "#_ discards were disturbed; and typed hazards a line patcher cannot see "
     "(unreadable post image, duplicate top-level definition however it is "
     "wrapped, a lost ns require, an edit inside an opaque code-shaped string). "
-    "mode=preview is the default and never writes. verify=focused runs the "
-    "clj-kondo finding delta and the focused tests against that snapshot "
-    "BEFORE any write; blocking findings or failing tests write nothing. "
-    "mode=commit then writes every changed file in one atomic compare-and-swap "
-    "transaction. Copy expect_pre_sha256 from a preview's next_call to bind the "
-    "commit to the bytes the preview inspected; a commit whose files moved "
-    "since refuses. verification_complete is true only when the analyzer ran "
-    "clean and the focused runner produced attributable test evidence. "
-    "One call replaces the re-read, the git diff, and the focused test run."))
+    "mode=preview is the default and never writes. mode=commit requires "
+    "verify=focused; verify=none is for unverified preview only. For complete "
+    "verification, supply a working focused-test profile: repository "
+    ".clj-surgeon/focused-test.edn overrides server :focused-test configuration "
+    "per key for command, timeout-ms and namespaces mapping. Command argv must "
+    "contain literal {snapshot} and {report} placeholders; {namespaces} expands "
+    "to suite names. It must test the candidate and write attributable "
+    "per-namespace results to {report}. The snapshot contains changed "
+    "post-images, not a checkout; load them before unchanged dependencies "
+    "and suites. An external passing command is not automatically a profile. "
+    "Blocking findings or failing tests refuse before writing. Incomplete "
+    "verification refuses commit except the documented narrow "
+    "absent-profile waiver. Do not use allow_partial to "
+    "work around a failed configured profile. No separate preview is required "
+    "when the exact patch and sufficient authority are already held. If using "
+    "a preview, copy expect_pre_sha256 from its next_call to bind the commit; "
+    "changed pre-images then refuse. An admitted commit writes through the "
+    "guarded transaction. verification_complete is true only with clean "
+    "analyzer results and attributable focused-test evidence."))
 
 (def admit-tool-schema
   {:type "object"
@@ -2962,7 +2972,15 @@
   [_exchange params callback]
   (mcp-operation/invoke!
     ;; @spec MCP-OP-ADMIT-133
-    {:execute #(checked-refusal-kind!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(checked-refusal-kind!
                  (try
                  (if-let [config @runtime-config]
                    (execute-request! config params)
@@ -2995,7 +3013,7 @@
                  ;; @spec MCP-OP-ADMIT-129
                  ;; @spec MCP-OP-ADMIT-146
                  (catch Throwable error
-                   (bound-receipt (edge-throwable-refusal error)))))
+                   (bound-receipt (edge-throwable-refusal error))))))
      :summarize summary
      :callback callback}))
 

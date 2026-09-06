@@ -1,0 +1,79 @@
+{
+  "generated_utc": "2026-09-06T17:16:48.826614+00:00",
+  "schedule": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "N1",
+    "D1",
+    "D2",
+    "N2",
+    "N3",
+    "D3",
+    "D4",
+    "N4"
+  ],
+  "arms_completed": [
+    "J1",
+    "J2",
+    "J3",
+    "J4"
+  ],
+  "incomplete_disclosed": [
+    "J1",
+    "J2",
+    "J3",
+    "J4"
+  ],
+  "controls": {
+    "n": 0,
+    "median_wall_s": null,
+    "sd_wall_s": null,
+    "two_sd_floor_s": null,
+    "correct": []
+  },
+  "native": {
+    "n": 0,
+    "median_wall_s": null,
+    "median_actor_wall_s": null,
+    "correct": []
+  },
+  "deterministic": {
+    "n": 0,
+    "median_wall_s": null,
+    "median_actor_wall_s": null,
+    "correct": []
+  },
+  "informed": {
+    "n": 0,
+    "median_wall_s": null,
+    "median_actor_wall_s": null,
+    "correct": []
+  },
+  "served": {
+    "n": 4,
+    "median_wall_s": 55.162817432312295,
+    "median_actor_wall_s": 55.15732167405076,
+    "correct": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "pairs": [],
+  "pairs_informed": [],
+  "pairs_served": [],
+  "median_paired_ratio_d_over_n": null,
+  "median_paired_ratio_i_over_n": null,
+  "median_paired_ratio_j_over_n": null,
+  "median_ratio_of_medians": null,
+  "median_ratio_of_medians_i_over_n": null,
+  "median_ratio_of_medians_j_over_n": null,
+  "wall_basis": "wall_s = per-arm seed copy through actor completion; actor_wall_s is the actor subprocess alone and never substitutes for it; total_with_proof_s adds the identical external proof and the independent scope audit",
+  "pooling_rule": "no retries, no replacements, no success-only pooling; incomplete rows are disclosed",
+  "preparation_s": 236.3228618740104
+}

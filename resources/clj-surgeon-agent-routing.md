@@ -10,8 +10,104 @@ quality meter clearing the noise floor, because it keeps its native read/patch
 loop and layers the tool on top. Given a free choice, agents decline it, and
 decline it correctly.
 
-**Call Surgeon only for these, and only when one applies** — each has no native
-equivalent or measured as a win:
+## Strictly better, or native (2026-09-06)
+
+**Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control.
+
+TWO classes are routed automatically, both mutations. Outside them native is the
+PERFORMANCE default; an explicit user request or a separately approved experiment
+may still use any other capability. Each example below is a SCHEMA EXAMPLE INSTANTIATED against a fixture repository
+and executed there, published byte-identical to the request that ran. Substitute the
+task inputs: `workspace_root`, lib, Var, file, form, path and every count. Ratios, fixtures, caveats and how the
+meter is operated live in
+`docs/observations/2026-09-06-strictly-better-evidence.md`.
+
+### Fan-out -- one call, many named owners
+
+Trigger: one known old/new form, a complete bounded set of NAMED owners already in
+hand, and a valid proof profile.
+
+```json
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "edits": [{"file": "src/maven/inbox.clj", "within": {"form": "add"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/inbox.clj", "within": {"form": "snooze"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/tweets.clj", "within": {"form": "search"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1}]}
+```
+
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, atomic commit, 3 edits / 2 files, 293.94 ms. -->
+
+### Alias migration -- one whole-repository call
+
+Trigger: known old/new alias intent (`from` lib+Var, `to` lib+Var, an alias policy)
+and an eligible path scope with its expected file count. No proof profile and no
+pre-enumerated match set: the measured run used neither. Afterwards run the
+repository's own required load and tests unless the receipt explicitly proves them.
+
+```json
+{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "from": {"lib": "maven.db", "var": "get-ds2"},
+ "to": {"lib": "maven.relaxed-search", "var": "tokenize",
+        "alias_policy": ["rsearch", "rs", "relaxed", "r-search"]},
+ "scope": {"paths": ["src"]}, "expect": {"files": 2}}
+```
+
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, atomic commit, 2 files / 3 sites, 628.12 ms. -->
+
+### Optional supporting read
+
+`inspect_clojure` is a SUPPORTING read, not an automatic route: use it when
+structural information is actually needed and native discovery has not already
+supplied it. Never insert an inspect pass after sufficient native discovery. The
+root-level `expect` is required. A wildcard `_` matches ONE subtree, so it does not
+enumerate calls of arbitrary arity -- write the exact arity you mean.
+
+```json
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "requests": [{"id": "r1", "operation": "outline", "file": "src/maven/db.clj"},
+              {"id": "r2", "operation": "match", "file": "src/maven/inbox.clj",
+               "match": "(mdb/get-ds)"},
+              {"id": "r3", "operation": "match", "file": "src/maven/tweets.clj",
+               "match": "(mdb/get-ds)"}],
+ "expect": {"requests": 3, "files": 3}}
+```
+
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, read_complete=true, 3 requests / 3 files / 12 matches,
+     74.6 ms. Note the topology: three DISTINCT files, so expect.files is 3. -->
+
+### Receipts: test values, not field names
+
+Proof is `verification_complete=true` TOGETHER WITH the named successful checks over
+the current snapshot; a false or pending field is not evidence. `atomic commit
+complete` and `written bytes read back and verified` prove the WRITE, not task
+semantics -- do not re-verify a proven write, and do not treat it as behavioural
+proof. Run the outstanding required checks and repair any failure before claiming
+completion. No receipt retires user-required review, independent acceptance, or a
+check that was never performed.
+
+### Escape rule
+
+Repair ONE clear, safely correctable argument error from the refusal text. A stale
+or conflicting snapshot needs fresh evidence, not a repair. An unavailable
+capability goes native immediately. Before any fallback, read the receipt's mutation
+and commit status: a refusal does not imply that nothing was written, and a
+completed change is never reapplied blindly.
+
+**Kill switch.** A correctness failure SUSPENDS a routed class immediately. A wall
+loss is assessed against that class's controls, never banned on one noisy pair.
+Unknown telemetry means unknown PERFORMANCE -- use native pending investigation, not
+a recorded loss. Required per routed class: first-attempt success, refusal rate,
+fallback rate, and complete request-to-verified wall; collector coverage of those is
+itself unproven, so unknowns are retained as unknown.
+
+**Other capabilities** — not automatically routed. The only exceptions to the
+performance default are an explicit user request and a separately approved
+experiment:
 
 - `:extract!` — move forms to a new namespace.
 - `:rename-ns!` — structural namespace rename.
@@ -22,11 +118,54 @@ equivalent or measured as a win:
   (measured: zero churn).
 - `:ls-deps` / `:topo` — dependency structure before a large refactor.
 
-**Do not use (measured losers):** per-form writes for a fan-out change (one
-native patch does 21 owners in one cell); `apply_clojure_changes` with
+**Do not use (measured losers):** per-form writes -- N separate calls -- for a
+fan-out change (one native patch does 21 owners in one cell; the batched
+single call is the Fan-out route below); `apply_clojure_changes` with
 `owner {:kind "namespace"}` or forms-scoped `find`+`replace` for insertion (it
 re-prints the whole owner — hundreds of untouched lines); the CLI wrapper as a
 substitute for MCP (a second layer, refuses 2.2x).
+
+## Fan-out route (experimental default, 2026-09-06)
+
+Experimental, development-only; it changes other seats' prompts, so announce
+before `make install-agent-routing`. For a Clojure edit changing the same call
+or symbol inside MANY named top-level forms across files -- a batched,
+known-intent fan-out -- this is the default route:
+
+1. Discover owners FIRST using native reads or one inspect_clojure match batch
+   when structural information is still needed. If native discovery already
+   supplies the complete owners and counts, skip inspect. Group requests by
+   bounded file sets, keeping every site and count.
+   Truncated output is never complete discovery: size follows source and path
+   lengths and the public 32 KB enforcement is defective (inb-b60d6e). "~100
+   owners" is a heuristic; splitting discovery never implies per-owner writes.
+2. THEN patch helper and `require`/alias natively with `apply_patch`. A helper
+   spelled like the target matches itself: exclude ONLY the new helper owner,
+   never a whole file, which holds legitimate original sites. If preparation
+   changes the discovery snapshot, get fresh guards and counts where required
+   -- old observations are not current write authority.
+3. ONE `apply_clojure_changes` call, edits
+   `[{file, within {form}, from, to, matches}]`, using the alias each file
+   binds. Counts convert to edits only for the same concrete from/to inside
+   each NAMED owner: wildcard totals need not equal literal replacement counts,
+   `inside` null is not a `within.form`, an omitted `source` means the result's
+   `match` only under the documented exact-equality rule.
+4. Clear argument error: repair once from the refusal. Route unavailable,
+   unsupported, or refusing again: one native patch, record the reason --
+   native fallback counts as zero tool-committed sites. Conflict or
+   stale-source refusal: refresh the relevant evidence first.
+
+**Evidence and boundary.** Cohort I measured the INFORMED BATCHED EDIT route
+(fresh actors discovering owners themselves) at 1.75x proof-inclusive median,
+101.2 s vs 57.8 s; frozen-witness outcomes tool 4/4, native 3/4 with a known
+layout false negative -- no quality-superiority claim. Served discovery in cohort J was wall-neutral. `owner_counts` is a later
+usability change with no measured additional wall gain; its 0/4 was that spelling-sensitive witness failing the
+self-match workaround, not four self-recursion defects. This witnessed class
+ONLY: not a general Clojure editing default; whole-feature work stays native.
+
+*Derived from doctrine commit 7a682b9e on clj-surgeon MCP/main, whose receipts
+are `docs/observations/2026-09-06-two-hour-trial-closeout.md`,
+`2026-09-06-fanout-I-result.md` and `2026-09-06-fanout-J-ethnography.md`.*
 
 **Every Surgeon MCP operation relays the same terminal-response contract.**
 If `terminal_response` is present and this mutation completes all remaining

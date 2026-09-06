@@ -1,0 +1,109 @@
+{
+  "generated_utc": "2026-09-06T16:57:30.889792+00:00",
+  "schedule": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "N1",
+    "D1",
+    "D2",
+    "N2",
+    "N3",
+    "D3",
+    "D4",
+    "N4"
+  ],
+  "arms_completed": [
+    "N1",
+    "I1",
+    "I2",
+    "N2",
+    "N3",
+    "I3",
+    "I4",
+    "N4"
+  ],
+  "incomplete_disclosed": [
+    "N3"
+  ],
+  "controls": {
+    "n": 0,
+    "median_wall_s": null,
+    "sd_wall_s": null,
+    "two_sd_floor_s": null,
+    "correct": []
+  },
+  "native": {
+    "n": 4,
+    "median_wall_s": 96.62875300156884,
+    "median_actor_wall_s": 96.62343418295495,
+    "correct": [
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "deterministic": {
+    "n": 0,
+    "median_wall_s": null,
+    "median_actor_wall_s": null,
+    "correct": []
+  },
+  "informed": {
+    "n": 4,
+    "median_wall_s": 53.3818700639531,
+    "median_actor_wall_s": 53.37790608173236,
+    "correct": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "pairs": [],
+  "pairs_informed": [
+    {
+      "pair": 1,
+      "n_arm": "N1",
+      "i_arm": "I1",
+      "n_wall_s": 103.24559140624478,
+      "i_wall_s": 69.2205028696917,
+      "ratio_i_over_n": 0.670445119514371
+    },
+    {
+      "pair": 2,
+      "n_arm": "N2",
+      "i_arm": "I2",
+      "n_wall_s": 90.0119145968929,
+      "i_wall_s": 48.17332878615707,
+      "ratio_i_over_n": 0.5351883581400896
+    },
+    {
+      "pair": 3,
+      "n_arm": "N3",
+      "i_arm": "I3",
+      "n_wall_s": 107.2428245311603,
+      "i_wall_s": 49.7747078249231,
+      "ratio_i_over_n": 0.46413089213685005
+    },
+    {
+      "pair": 4,
+      "n_arm": "N4",
+      "i_arm": "I4",
+      "n_wall_s": 66.21388938836753,
+      "i_wall_s": 56.989032302983105,
+      "ratio_i_over_n": 0.8606809361208578
+    }
+  ],
+  "median_paired_ratio_d_over_n": null,
+  "median_paired_ratio_i_over_n": 0.6028167388272303,
+  "median_ratio_of_medians": null,
+  "median_ratio_of_medians_i_over_n": 0.5524429158584547,
+  "wall_basis": "wall_s = per-arm seed copy through actor completion; actor_wall_s is the actor subprocess alone and never substitutes for it; total_with_proof_s adds the identical external proof and the independent scope audit",
+  "pooling_rule": "no retries, no replacements, no success-only pooling; incomplete rows are disclosed",
+  "preparation_s": 627.2535956357606
+}
