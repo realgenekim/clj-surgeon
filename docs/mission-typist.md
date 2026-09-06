@@ -13,7 +13,11 @@ bin/mission undo M-1 --workspace /absolute/project
 For a fully decided mission, `bin/mission run --spec-file owner-forms.edn`
 saves and immediately applies the plan in one JVM. This is an explicit write
 command, restricted to `owner_forms` and no existing mission id. Use `propose`
-then `apply` when an intervening review matters. A blocked run retains its
+then `apply` when an intervening authority review matters. Proposal is an
+**authority preview**, not a generated candidate diff: it freezes intent, owners,
+source and proof authority and saves the mission. It calls no provider. Candidate
+generation happens during apply, followed by proof and the guarded live write;
+there is currently no public candidate-diff approval pause between them. A blocked run retains its
 mission id and returns `:error_type "mission-not-ready"` with the decision,
 without applying; both that refusal and a failed apply exit nonzero. Application
 reads the persisted plan and proof authority rather than replanning. This avoids
@@ -36,12 +40,64 @@ The saved spec has `:verb "owner_forms"`, `:request`, and optionally a trusted
   differ. Distinct strings alone do not establish independence: the caller must
   supply a separately authored behavioral witness.
 - `:typist`: `:mission-class`, per-target `:source-policy`, `:budget`, `:provider`
-  and `:rate`, as described in [the plan](plans/mission-typist-executor.md).
+  and `:rate`, with the complete contract below and a
+  [parseable template](examples/owner-forms-template.edn).
   Source policy explicitly records `:generated?`, `:reader-conditionals?` and
   `:format-sensitive?`. Missing facts refuse. Rate counts are measured successes
   and attempts for this class/provider, with an evidence identifier; never invent
   counts to pass admission. The fake hand-drive uses synthetic facts only while
   transport is replaced and cannot support a live routing decision.
+
+## Complete request contract
+
+Start from [owner-forms-template.edn](examples/owner-forms-template.edn). It is a
+complete **shape**, deliberately inadmissible until its nil/empty facts are
+replaced. The local-rename intent is illustrative; it asserts no facts about
+your source. Do not change unknown flags to false or invent successful runs to
+make admission pass. No automatic calibration command is supplied here.
+
+The top-level map is `{:verb "owner_forms" :request {...} :profiles {...}}`.
+The request fields above supply source ownership and proof-file closure. Each
+owner needs relative `:file` and original `:owner` strings; `:new-owner` is only
+for renaming the definition itself, not a local binding. Both proof profile ids
+must exist in the trusted profiles map (or configured verification profiles).
+The user-supplied `:typist` map is:
+
+| Field | Contract and evidence to supply |
+|---|---|
+| `:mission-class` | One of `:rename`, `:thread-parameter`, `:move-helpers`, `:fanout`, `:witness`. Discovery and the exact intended transformation are already decided. |
+| `:source-policy` | Map keyed by every target's relative file. Each value explicitly has `:generated? false`, `:reader-conditionals? false`, `:format-sensitive? false`, based on inspection. Nil/missing/true refuses; do not guess. |
+| `:budget` | `{:max-files N :max-changed-chars N}` with positive integer limits you authorize. File limit must cover all target files. The character limit is a change budget, not a performance measurement. |
+| `:provider` | Exactly the supported identity triple: `{:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}` or `{:id :groq :model "openai/gpt-oss-120b" :upstream "Groq"}`. Spark execution refuses. Credentials belong to the configured transport, never this request. |
+| `:rate` | `{:verified V :attempted A :evidence "retained-receipt-id" :mission-class CLASS :provider ID :model MODEL :upstream UPSTREAM}`. V/A are integers, A>0, 0<=V<=A; identity fields must match the selected class/provider exactly. Use retained measured verified outcomes, not estimates. The validator checks shape/binding, not whether your claimed measurements are true or transferable to a different workload. |
+| `:candidate-format` | Optional `:owner-forms` (default JSON owner/form objects) or `:clojure-forms` (plain complete definitions, exactly one target file). |
+| `:max-tokens` | Optional positive integer 1..8192, default 8192, per candidate. Reasoning and answer consume the allocation. |
+| `:fallback` | Optional, only with OpenRouter primary: exactly `{:provider :groq :max-tokens N}`. Primary plus fallback allocations must total <=8192 per candidate. Only the documented typed primary responses trigger this provider fallback; it is separate from `mission fallback`. |
+
+Each of the two proof profiles contains `{:commands [["executable" "arg" ...]]
+:measured-ms N :evidence "retained-proof-receipt-id"}`. Supply nonempty argv
+vectors, an actual nonnegative measured duration <=4999 ms, and retained evidence.
+The gate and witness must have different ids, command vectors and evidence ids.
+They must also be independently meaningful: different strings or two no-op
+commands are not behavioral proof. Include required test/dependency/data files
+in `:proof-files`; execution uses the frozen file set in a scratch tree. Proof
+commands are trusted code, not an OS sandbox.
+
+Measured verified rates select candidate count: >=85% selects one, <=70%
+selects five, and the intervening range selects three. Do not edit counts to
+obtain a cheaper route. If you lack the required prior/proof evidence for a
+single known local rename, a native edit plus your real behavioral tests is the
+usable alternative; the typist setup is not free and this surface promises no
+speed advantage for that case.
+
+After supplying genuine facts and reviewing the template:
+
+```sh
+bin/mission propose --spec-file - < owner-forms.edn
+bin/mission show M-1 --workspace /absolute/project
+# M-1 is illustrative: use the id actually returned, and inspect refusals.
+bin/mission apply M-1 --workspace /absolute/project
+```
 
 A candidate is a JSON array of objects with exactly `file`, `owner`, and `form`
 string fields. The model emits a new definition, never old context, offsets or a
@@ -191,3 +247,30 @@ suppresses resume/undo recommendations while recovery is required. `--full`
 retains the saved ledger view, which can predate a failed metadata write. This
 protection applies to publications made through the corrected command; older
 publications made before it had no marker and require manual Git inspection.
+
+## Inspect uncertain Git publication safely
+
+Use the actual workspace and copy the full returned `:commit` or
+`:possible-commit` hex oid; do not invent an oid if neither was returned.
+The following commands only inspect Git. They disable optional index writes,
+fsmonitor, external diff and text conversion where applicable:
+
+```sh
+WS=/absolute/project
+OID=replace_with_full_returned_hex_oid
+git --no-optional-locks -C "$WS" -c core.fsmonitor=false symbolic-ref -q HEAD
+git --no-optional-locks -C "$WS" -c core.fsmonitor=false rev-parse --verify HEAD
+git --no-optional-locks -C "$WS" -c core.fsmonitor=false show --no-patch --format=fuller "$OID" --
+git --no-optional-locks -C "$WS" -c core.fsmonitor=false diff --no-ext-diff --no-textconv --ignore-submodules=none --name-status "$OID" --
+bin/mission show M-1 --workspace "$WS"
+```
+
+The first two commands identify the current branch/ref. With a known oid, the
+next two inspect its commit and differences from the current files; a missing
+object or changed branch is not evidence that publication never happened. If
+no oid is known, skip the oid-dependent commands and inspect the returned
+publication status. Keep the saved receipt and sidecar. Do not delete a marker,
+reset a ref or retry publication merely because these reads succeeded. This
+prototype supplies no automatic reconciliation command; recovery requires a
+review of Git and the saved records. `mission undo` deliberately cannot perform
+that Git recovery for you.

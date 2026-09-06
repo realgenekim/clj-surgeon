@@ -230,3 +230,16 @@ unchanged; the only shared writer change replaces unsupported EnumSet calls
 with filtering existing permission bits. An actual isolated command receipt
 and single unreplicated wall snapshot are retained at
 `/var/tmp/forge/mission-fallback-bb-dogfood-fx`; no comparative claim follows.
+
+### Caller-facing schema and help
+
+The inherited-context caller-surface review found missing nested typist fields,
+undiscoverable propose help, and incomplete publication inspection guidance.
+Publish the complete caller contract and a parseable template with unknown facts
+left nil (never fabricated calibration counts, source-policy facts or proof
+measurements). The template is intentionally not admissible until completed from
+retained evidence. Propose previews frozen intent/authority, not a generated
+candidate diff; generation/proof/write happen in apply. Dedicated propose and
+undo help link that user contract and disclose source-versus-ledger writes,
+publication refusals and read-only Git inspection. This is documentation/help
+repair, not a fresh blind adoption result, new capability or performance claim.

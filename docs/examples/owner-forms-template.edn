@@ -1,0 +1,26 @@
+;; Complete shape, NOT an admitted request. Replace nil/empty facts with measured
+;; or inspected evidence. Never invent counts or proof results to make it pass.
+{:verb "owner_forms"
+ :request
+ {:workspace_root "/absolute/project"
+  :intent "Rename local x to item-count inside summarize; preserve behavior and all unrelated owners."
+  :owners [{:file "src/app.clj" :owner "summarize"}]
+  ;; Include the real tests, dependencies and data required by BOTH proof commands.
+  :proof-files []
+  :verification {:profile "gate"}
+  :acceptance_profile "witness"
+  :typist
+  {:mission-class :rename
+   :source-policy {"src/app.clj" {:generated? nil
+                                :reader-conditionals? nil
+                                :format-sensitive? nil}}
+   :budget {:max-files 1 :max-changed-chars nil}
+   :provider {:id :groq :model "openai/gpt-oss-120b" :upstream "Groq"}
+   :rate {:verified nil :attempted nil :evidence nil
+          :mission-class :rename :provider :groq
+          :model "openai/gpt-oss-120b" :upstream "Groq"}
+   :candidate-format :owner-forms
+   :max-tokens 8192}}
+ :profiles
+ {"gate" {:commands [] :measured-ms nil :evidence nil}
+  "witness" {:commands [] :measured-ms nil :evidence nil}}}

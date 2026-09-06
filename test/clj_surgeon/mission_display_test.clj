@@ -197,3 +197,35 @@
     (is (= 0 (:exit r)))
     (is (not (str/includes? (:out r) "/bin/true")))
     (is (str/includes? (:out r) "behavioral proof"))))
+
+(deftest propose-help-is-discoverable-and-distinguishes-authority-from-diff
+  (let [r (shell/sh "bin/mission" "help" "propose")]
+    (is (= 0 (:exit r)))
+    (is (str/includes? (mission/help-text nil) "propose --spec-file"))
+    (doseq [term ["authority preview" "candidate diff" "docs/mission-typist.md"
+                  "docs/examples/owner-forms-template.edn" "source"]]
+      (is (str/includes? (:out r) term)))
+    (is (not (str/includes? (:out r) "THE SPEC")))))
+
+(deftest undo-help-explains-publication-refusal-and-read-only-inspection
+  (let [r (shell/sh "bin/mission" "help" "undo")]
+    (is (= 0 (:exit r)))
+    (doseq [term ["mission-undo-after-git-publication" "pending" "uncertain"
+                  "git --no-optional-locks" "symbolic-ref" "show --no-patch"
+                  "--no-ext-diff" "--no-textconv" "Do not delete"]]
+      (is (str/includes? (:out r) term)))
+    (is (not (str/includes? (:out r) "THE SPEC")))))
+
+(deftest caller-template-keeps-unmeasured-facts-unknown
+  (let [template (edn/read-string (slurp "docs/examples/owner-forms-template.edn"))
+        typist (get-in template [:request :typist])]
+    (is (= "owner_forms" (:verb template)))
+    (is (= :rename (:mission-class typist)))
+    (is (= #{:verified :attempted :evidence :mission-class :provider :model :upstream}
+           (set (keys (:rate typist)))))
+    (doseq [field [:verified :attempted :evidence]] (is (nil? (get-in typist [:rate field]))))
+    (is (every? nil? (vals (get-in typist [:source-policy "src/app.clj"]))))
+    (doseq [profile (vals (:profiles template))]
+      (is (empty? (:commands profile)))
+      (is (nil? (:measured-ms profile)))
+      (is (nil? (:evidence profile))))))
