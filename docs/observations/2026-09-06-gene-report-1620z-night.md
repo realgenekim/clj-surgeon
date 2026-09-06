@@ -11,7 +11,7 @@
 | Recovery pilot, free tool caller (2 rows) | 67.3 s | 87.7 s | not a ratio | the caller wrote its own patch and asked Surgeon only to GATE it; the verify=none waiver was refused, correctly |
 | Warm proof vs one-JVM cold (component) | 2.61 s | 0.87 s | 3.0x, contaminated | one observation; warm startup + transition (4.3 s) loses isolated use |
 | Spark, one paid generation | — | 4.2 s generate / 13.0 s parent, proofs pass | not an A/B | one prepared task |
-| Astra's first real admission use with a supplied profile | — | refused in 264 ms (bookkeeping paths) | loss, retained | fix scoped to two exact paths; retry after the window |
+| Astra's real admission use with a supplied profile | — | attempt 1 refused in 264 ms (gate bookkeeping paths); attempt 2 COMMITTED in 2.14 s with a candidate-bound proof (2 tests, lint, 1 file) | 1 of 2 public calls committed | the adoption number Gene asked for: first-attempt 0/1, after the scoped adapter fix 1/2 |
 
 No general problem-to-published-change win is established. The prepared typist wins its class; the assigned deterministic route loses at fan-out size; a fresh caller wants a commit gate around its own patch.
 
