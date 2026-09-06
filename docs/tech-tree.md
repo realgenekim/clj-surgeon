@@ -180,3 +180,20 @@ help, dispatch, EDN/nonzero refusal and unchanged source. See
 - Raw Clojure one-file definitions: optional frozenformat, exact ownercoverage, existing guardedcompiler. One live k3missionverified and3/3retainedcandidateproofs passed; concurrentreview/lowpriority makes elapsednoncomparative. Char literals, comments/meta and multfile remain unsupported. See [captain log](observations/2026-09-06-astra-live-dogfood.md).
 - Single-process mission run removes one process boundary; replicated JSONcohort above charges remainingcoldstart. Lazy helperplanner loading is a specific next startuphypothesis, notmeasured yet.
 - Next: rawformatreplication after freshnativevariancefloor, faithful commentattachment preservation prototype, complete observerhooks and combinedfence. Strongernativecontrolremainsmandatory; do not trade3/4reliability for a braggingratio.
+
+### Astra 2026-09-06T03:58:11.332837+00:00: receipt and comment cuts — BUILT, not measured wins
+
+- Strict comment source identity (98c3a1c3) replaces the false ordinal invariant.
+  Independent swap/reindent/string/insertion/nested-comment probes and combined
+  93 tests/529 assertions pass. Real commented-owner dogfood remains.
+- Saved-mission Git receipt and BB fallback (fd76badc): combined 80 tests/564
+  assertions pass; independent Git kernel review still open. BB event-only
+  bookkeeping removes a cold JVM, with no replicated wall claim yet.
+- Usage/history summaries distinguish actual known values from unknowns; no
+  repeated proof required for a saved view.
+- Routing r2 passes 14 tests/130 assertions and five-copy parity; synthetic
+  admission example must be removed before installation.
+
+Receipt and limitations: [Astra captain log](observations/2026-09-05-captains-log-astra-four-hour-comparison.md),
+[current completion audit](observations/2026-09-06-astra-typist-completion-audit.md).
+No cohort result is upgraded by these functional gates.
