@@ -69,39 +69,15 @@ refuses an existing mission id. `apply` exits non-zero on a refusal or a failed
 receipt. The spec schema — every required key, and why each one exists — is
 [docs/mission-typist.md](../../docs/mission-typist.md).
 
-The only spec shape shown here is one that has been PROVEN to plan, commit, and
-undo: the request built by `test/clj_surgeon/mission_typist_executor_test.clj`
-(`request`, line 32) out of `test/clj_surgeon/mission_typist_test.clj`
-(`eligible`, line 8), exercised by the `real-proof-commit-and-undo` test at line
-42. Written out, with the fixture's own profiles:
+No spec is written out here. `docs/mission-typist.md` is the schema of record;
+build the spec from it against the real workspace, and never copy profile ids,
+timings, or evidence strings out of a fixture.
 
-```edn
-{:verb "owner_forms"
- :profiles
- {"gate"   {:id "gate"   :measured-ms 10 :evidence "receipt:gate"
-            :commands [["clojure" "-M" "-e" "(require 'fixture.core)"]]}
-  "accept" {:id "accept" :measured-ms 10 :evidence "receipt:witness-receipt"
-            :commands [["clojure" "-M" "-e" "(require 'fixture.core) (assert (nil? (ns-resolve 'fixture.core 'old-name))) (assert (= 1 ((ns-resolve 'fixture.core 'new-name))))"]]}}
- :request
- {:workspace_root "/absolute/workspace"
-  :intent "Rename old-name to new-name preserving behavior"
-  :owners [{:file "src/fixture/core.clj" :owner "old-name" :new-owner "new-name"}]
-  :proof-files []
-  :verification {:profile "gate"}
-  :acceptance_profile "accept"
-  :typist {:enabled? true
-           :mission-class :rename
-           :discovery-complete? true
-           :source-policy {"src/fixture/core.clj" {:generated? false
-                                                   :reader-conditionals? false
-                                                   :format-sensitive? false}}
-           :budget {:max-files 1 :max-changed-chars 1000}
-           :commit {:atomic? true :rollback? true}
-           :provider {:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}
-           :rate {:mission-class :rename :provider :openrouter :upstream "Cerebras"
-                  :model "openai/gpt-oss-120b" :verified 9 :attempted 10
-                  :evidence "cohort:rename"}}}}
-```
+`test/clj_surgeon/mission_typist_executor_test.clj` (`real-proof-commit-and-undo`)
+is a synthetic integration witness — it redefines `request-candidates!`, so it
+proves deterministic fixture plan, commit, and undo only; it is not measured
+admission data, and neither its profiles nor its rate numbers describe live
+provider behavior.
 
 The gate and the acceptance profile must be independently authored and must run
 DIFFERENT commands with different retained evidence; the planner refuses

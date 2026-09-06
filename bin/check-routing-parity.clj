@@ -4,9 +4,17 @@
 ;; The decision table is COPIED BY HAND into every prompt surface. Nothing
 ;; generates it, so nothing but this check stops one copy from drifting into a
 ;; different rule than the seat next to it. It asserts:
-;;   1. every rendering's table is BYTE-IDENTICAL to the canonical section's;
+;;   1. every rendering's table is BYTE-IDENTICAL to the canonical section's ---
+;;      the FIVE table copies listed in `renderings`, and nothing else;
 ;;   2. the managed plate's pointer heading really exists in the canonical file;
 ;;   3. every document the plate cites exists on disk.
+;;
+;; SCOPE LIMIT. The compact plate (`resources/clj-surgeon-agent-routing.md`) is a
+;; REVIEWED SUMMARY that points at the canonical section --- it is deliberately
+;; not a byte-parity rendering of the table, and no byte comparison is made
+;; against it. Only its pointer heading and its citations are checked here; that
+;; its prose still says what the canonical section says is established by review,
+;; not by this gate.
 ;; Run: bb bin/check-routing-parity.clj   (exit 0 green, exit 2 on drift)
 
 (require '[clojure.string :as str]

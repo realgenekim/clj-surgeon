@@ -188,7 +188,7 @@ install-clj-kondo-admission:
 check-routing-parity:
 	bb "$(CLJ_SURGEON_HOME)bin/check-routing-parity.clj"
 
-install-agent-routing:
+install-agent-routing: check-routing-parity
 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
 
 check-agent-routing: check-routing-parity

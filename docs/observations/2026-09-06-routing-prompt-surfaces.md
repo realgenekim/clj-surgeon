@@ -46,11 +46,19 @@ installed skill mirrors follow it through `make install-claude-skill` and
 **The copies are made BY HAND. Nothing generates them.** No templating step, no include, no
 substitution: each surface below holds its own literal bytes of the table, typed in by whoever
 last edited it. The guard against drift is therefore a CHECK, not a generator ---
-`bb bin/check-routing-parity.clj` asserts that every rendering's table is byte-identical to
-the canonical section's, that the plate's pointer heading exists in the canonical file, and
-that every document the plate cites exists on disk. It exits 2 and names the first differing
-row. `make check-agent-routing` runs it before checking the managed blocks, so a drifted copy
-fails the same gate that catches a stale plate.
+`bb bin/check-routing-parity.clj` asserts that each of the FIVE hand-copied table renderings
+(`skill.md`, `skills/safe-refactor/SKILL.md`, `CLAUDE.md`, `AGENTS.md`, and this document) is
+byte-identical to the canonical section's table, that the plate's pointer heading exists in
+the canonical file, and that every document the plate cites exists on disk. It exits 2 and
+names the first differing row. `make check-agent-routing` AND `make install-agent-routing`
+both run it before touching the managed blocks, so the actual write entrance cannot bypass
+the guard.
+
+**The plate is not one of those five.** `resources/clj-surgeon-agent-routing.md` is a REVIEWED
+SUMMARY that points at the canonical section — compact prose bullets, deliberately not a
+byte-parity rendering of the table. No byte comparison is made against it; the check reaches
+only its pointer heading and its citations. That its summary still means what the canonical
+section says is established by human review, and nothing on this branch gates it.
 
 The table:
 
@@ -175,11 +183,15 @@ Delegation-brief paragraph, for every builder prompt:
 
 1. **No installer for `skills/safe-refactor`.** `SKILL_SOURCE` is `skills/clj-surgeon`
    alone. The safe-refactor text ships only to agents reading the working tree.
-2. ~~No checker binds the skill text to the plate.~~ **CLOSED.**
+2. ~~No checker binds the skill text to the plate.~~ **PARTLY CLOSED.**
    `bb bin/check-routing-parity.clj` fails if the canonical heading the plate names is
-   missing, if any rendering's table differs by a byte, or if a document the plate cites does
-   not exist. `make check-agent-routing` depends on it. It does NOT check rows 8-10 below, or
-   the prose around each table --- only the table bytes, the pointer, and the citations.
+   missing, if any of the five hand-copied table renderings differs by a byte, or if a
+   document the plate cites does not exist. `make check-agent-routing` and
+   `make install-agent-routing` both depend on it, so the write entrance is gated too. It
+   does NOT check rows 8-10 below, or the prose around each table --- only the table bytes,
+   the pointer, and the citations. **The plate's own wording remains unchecked:** it is a
+   reviewed summary, not a byte-parity rendering, so no gate can tell whether its bullets
+   still agree with the canonical section. Only review does.
 3. **Rows 6-10 have no checker at all.** Repo `CLAUDE.md`/`AGENTS.md`, the seat header,
    shared house rules, and delegation briefs are verified by reading, not by a gate.
 4. **The plate does not carry the doctrine commit it was derived from.** The generator is an
