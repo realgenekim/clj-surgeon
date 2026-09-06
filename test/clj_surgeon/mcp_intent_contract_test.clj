@@ -193,6 +193,7 @@
    "docs/intent/alias-migration/alias-migration-specs.md"
    "docs/intent/feature-thread/feature-thread-specs.md"
    "docs/intent/helper-extraction/helper-extraction-specs.md"
+   "docs/intent/hot-verification/hot-verification-specs.md"
    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
    "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
    "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
@@ -235,7 +236,8 @@
    "docs/intent/feature-thread/feature-thread-specs.md"
    "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
    "docs/intent/test-isolation/test-isolation-specs.md"
-   "docs/intent/helper-extraction/helper-extraction-specs.md"])
+   "docs/intent/helper-extraction/helper-extraction-specs.md"
+   "docs/intent/hot-verification/hot-verification-specs.md"])
 
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"
