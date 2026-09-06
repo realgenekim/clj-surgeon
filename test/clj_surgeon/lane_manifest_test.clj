@@ -378,8 +378,8 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 49 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 28 (count (lm/namespaces-for :battery))))
-    (is (= 82 (count lm/manifest))
+    (is (= 29 (count (lm/namespaces-for :battery))))
+    (is (= 83 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -421,6 +421,7 @@
     clj-surgeon.mission-git-ledger-test 3 ; Saved receipt authority.
     clj-surgeon.mission-commit-cli-test 4 ; Actual public command behavior.
     clj-surgeon.mission-usage-test 7 ; Observed legacy/attempt usage and unknowns.
+    clj-surgeon.mission-typist-executor-admission-test 2 ; Unsupported adapter refused before readiness.
     clj-surgeon.mission-usage-executor-test 2 ; Saved success/refusal usage snapshots.
     clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
@@ -499,10 +500,10 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; 921 original + 406 adopted = 1327, including verb-specific help.
-      (is (= 406 adopted) (str "adopted tests: " adopted)))
+      ;; 921 original + 408 adopted = 1329, including executor adapter admission.
+      (is (= 408 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1327 total) (str "manifest declares " total " tests"))
+      (is (= 1329 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

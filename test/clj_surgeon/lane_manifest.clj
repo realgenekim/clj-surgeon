@@ -150,7 +150,7 @@
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
 
-   ;; ---- :battery (28) ----
+   ;; ---- :battery (29) ----
    'clj-surgeon.mission-run-test                       :battery
    'clj-surgeon.mission-events-test :battery
    'clj-surgeon.mission-phase-events-test :battery
@@ -158,6 +158,7 @@
    'clj-surgeon.mission-display-test :battery
    'clj-surgeon.mission-fallback-test :battery
    'clj-surgeon.mission-usage-executor-test :battery
+   'clj-surgeon.mission-typist-executor-admission-test :battery
    'clj-surgeon.mission-git-boundary-test :battery
    'clj-surgeon.mission-git-fence-test :battery
    'clj-surgeon.mission-git-process-test :battery

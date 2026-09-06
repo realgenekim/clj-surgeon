@@ -84,7 +84,8 @@ fallback; direct Groq is an explicit selection. Wrong model/upstream and malform
 or incomplete output refuse. An explicitly frozen Groq fallback can follow a
 started OpenRouter request's typed 429 or 503 response. Both attempts and their
 observed usage/cost are retained; a fallback event requires actual dispatch,
-not merely a configured route. Spark execution is not implemented. The executor starts at most five separately bounded requests and consumes them in
+not merely a configured route. Spark execution is not implemented; executor planning refuses it with
+`:typist-executor-provider-unavailable` before marking the mission ready. The executor starts at most five separately bounded requests and consumes them in
 completion order. Before commit it cancels remaining work and checks both worker
 termination and tracked transport-process liveness. Completed replies are retained;
 cancelled requests have unknown billed usage. The three-process fake-client path passes real proof, guarded commit and undo;
