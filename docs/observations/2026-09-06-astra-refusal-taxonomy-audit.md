@@ -1,0 +1,16 @@
+# Astra refusal taxonomy reconciliation — 6c864e10
+Read-only; source forms inspected with Surgeon and confirmed byte-identical to requested tip. No tests/providers/mutations. Evidence: shared events.jsonl, retained real M1/M2 artifacts, raw-v2 usage events, coordination's 03:13Z contamination disclosure.
+
+The five `mission-refused` rows are five EVENTS, not evidence of five different live causes:
+- 03:03:37 / 03:04:34 / 03:06:14 / 03:10:43: mission-verify, null mission_id/provider/verb, 19/21/23/25ms. Fable's 03:13Z note explicitly identifies these bursts as witness runs, not adoption. Their rows do not retain enough authority to recover four exact causes; do not invent them or rank them as live friction.
+- 05:09:06: actual M2 stale proposal, mission-apply24ms. Saved `stale-M2.edn` names **mission-snapshot-stale**; saved outer record confirms CLI exit1 and unchanged source. This row predates f2c0fac8, which now explicitly allows that exact code. Existing historical rows correctly remain unrewritten.
+- Separately, the real 02:18:49 planning refusal already preserved **typist-incomplete-file-set** (M1/blocked/owner_forms), so it is not part of the collapsed five.
+- Productive M1 is verified; its internal **candidate-unparseable** loser is retained in the candidate receipt, followed by a passing winner. It is not a refused mission and should not become a mission failure count.
+- Raw-v2 has twelve successful pinned requests and four verified tool missions; no collapsed refusal to recover there.
+
+Current closed event error set includes **mission-snapshot-stale** and **typist-receipt-dir-required**, alongside existing typed mission/typist failures. The missing-artifact public boundary now returns the latter code before writing; no additional genuine post-fix live exercise of it was located in these retained events. Do not label tests as live proof of emission.
+`mission_events/event` extracts the public `:error_type` / `:error-type`, selected decision/receipt codes, then passes only finite allowed codes; unknowns remain mission-refused, exceptions mission-exception. It does not copy arbitrary kernel prose. Phase verification can be false without carrying a typed cause, so verbatim passthrough alone would not recover a nonexistent field.
+
+CLI exit code is NOT available at this event boundary: `apply!` observes the handler before returning to `-main`; only afterward does -main render recovery output and decide System/exit from raw/rendered result and failed-receipt status. API/internal verify events need not have a CLI caller at all. Assigning code1 to every negative event would fabricate a CLI result. Historical M2 code1 comes from the separately retained process record, not the mission event.
+
+Recommendation: **no new patch warranted by these five rows**. Report one historical real stale refusal already corrected, four disclosed witness events, and the existing preserved incomplete-file-set refusal. Keep closed normalization; do not pass arbitrary text into telemetry. On the next genuinely exercised currently collapsed public refusal, pair its exact saved typed result with the event and add only that finite code/projection with a faithful witness. If CLI outcome tracking is later needed, record actual process exit at the caller boundary rather than guessing it inside the service event.
