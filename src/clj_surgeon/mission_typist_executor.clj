@@ -134,7 +134,12 @@
                        {:enabled? true :discovery-complete? true :intent (:intent request)
                         :owners owners :sources target-sources :gate gate :acceptance acceptance
                         :commit {:atomic? true :rollback? true}})
-          dossier (typist/dossier facts)]
+          dossier (let [result (typist/dossier facts)]
+                    (when (and (:ok result)
+                               (not (contains? #{:openrouter :groq}
+                                               (get-in result [:dossier :route :provider :id]))))
+                      (reject! :typist-executor-provider-unavailable))
+                    result)]
       (if-not (:ok dossier)
         dossier
         {:ok true :sources (into (sorted-map) (map (fn [[rel abs]] [abs (get sources rel)])) absolute)

@@ -23,10 +23,23 @@ Candidate count: >=85% verified gives 1, <=70% gives 5, otherwise 3.
 
 Primary provider is OpenRouter openai/gpt-oss-120b pinned to Cerebras with upstream
 fallback disabled. An explicit bounded typed provider refusal may activate Groq;
-record both attempts and actual provider/model. Spark is a separately selected
-route for reliability. Runtime keys come from configured EDN files, never env,
+record both attempts and actual provider/model. Spark remains available to pure
+policy experiments, but this executor has no Spark transport. Executor planning
+must refuse it as `:typist-executor-provider-unavailable` before reporting a ready
+mission or freezing transport authority. Runtime keys come from configured EDN files, never env,
 prompts, receipts or model-authored settings. Secret errors are replaced with
 typed redacted diagnostics. No automatic unpinned provider selection.
+
+Executor capability regression (2026-09-06): a fully eligible Spark request
+previously produced `:ok true` and a saved `:ready` mission, then failed in
+`request-one!`. The executor planner now checks its implemented provider set after
+pure dossier admission and before transport capture. Pure policy still admits
+Spark for experiments; OpenRouter/Cerebras and direct Groq plans remain admitted.
+The named `spark-policy-does-not-admit-unimplemented-executor` witness reproduced
+five failed assertions before the fix, including the incorrect public ready state
+and two premature transport-authority calls. Afterward the combined policy,
+executor and admission suites pass 17 tests / 264 assertions, with no provider
+calls. New admission namespace: `:battery`, two deftests / nine assertions.
 
 ## Seven implementation checkpoints
 
