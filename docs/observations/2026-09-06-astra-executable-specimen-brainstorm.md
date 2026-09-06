@@ -94,8 +94,10 @@ validator, freshness check, proof of semantic correctness or permission to repla
 
 Scripts and raw clocks are preserved in
 [the specimen directory](2026-09-06-astra-executable-specimen/).
-Its manifest points to retained local fixture artifacts; it is not a portable
-benchmark distribution. The raw request and receipt hashes appear in generated
+The initial manifest pointed to retained local artifacts. The subsequent go90
+keeper task checked those exact fixture files into the specimen directory and
+made paths manifest-relative; see its README for offline reproduction. The
+historical clocks remain unchanged. The raw request and receipt hashes appear in generated
 `/var/tmp/forge/astra-brainstorm-fx/results/rendered.md`.
 
 ## Recommendation to Gene and Fable

@@ -1,0 +1,7 @@
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "edits": [{"file": "src/maven/inbox.clj", "within": {"form": "add"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/inbox.clj", "within": {"form": "snooze"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/tweets.clj", "within": {"form": "search"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1}]}

@@ -1,0 +1,569 @@
+{
+ "wall_ms": 71.5,
+ "request": {
+  "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+  "requests": [
+   {
+    "id": "r1",
+    "operation": "outline",
+    "file": "src/maven/db.clj"
+   },
+   {
+    "id": "r2",
+    "operation": "match",
+    "file": "src/maven/inbox.clj",
+    "match": "(mdb/get-ds)"
+   },
+   {
+    "id": "r3",
+    "operation": "match",
+    "file": "src/maven/tweets.clj",
+    "match": "(mdb/get-ds)"
+   }
+  ],
+  "expect": {
+   "requests": 3,
+   "files": 3
+  }
+ },
+ "response": {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+   "content": [
+    {
+     "type": "text",
+     "text": "inspect_clojure\n  3 requests \u00b7 3 files \u00b7 12 matches\n\n\u2713 all requests resolved\n\u2713 ordered snapshot\n\u2713 hashes attached\n\u2713 terminal evidence \u00b7 read_complete=true \u00b7 next action none\n\n  r1: 122 lines \u00b7 12 forms \u00b7 first instance \u00b7 last search\n  r2 src/maven/inbox.clj: 8 matches \u00b7 owners [{\"inside\":\"add\",\"matches\":1},{\"inside\":\"transition!\",\"matches\":1},{\"inside\":\"snooze\",\"matches\":1},{\"inside\":\"unsnooze\",\"matches\":1},{\"inside\":\"list-items\",\"matches\":1},{\"inside\":\"show\",\"matches\":1},{\"inside\":\"stale\",\"matches\":1},{\"inside\":\"standup\",\"matches\":1}]\n  r3 src/maven/tweets.clj: 4 matches \u00b7 owners [{\"inside\":\"tweet-total\",\"matches\":1},{\"inside\":\"search\",\"matches\":1},{\"inside\":\"show\",\"matches\":1},{\"inside\":\"research-detail\",\"matches\":1}]\n  144 source characters \u00b7 67.42 ms"
+    }
+   ],
+   "isError": false,
+   "structuredContent": {
+    "file_count": 3,
+    "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+    "inspection_elapsed_ms": 66.133289,
+    "source_character_count": 144,
+    "request_count": 3,
+    "file_read_count": 3,
+    "read_complete": true,
+    "result_character_count": 6305,
+    "elapsed_ms": 67.419958,
+    "file_hashes": {
+     "src/maven/db.clj": "8a579d7f6da3009971f93cb49a877fa4c71e0d464e5790d119d99e30737507f6",
+     "src/maven/inbox.clj": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105",
+     "src/maven/tweets.clj": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+    },
+    "next_action": "none",
+    "ok": true,
+    "operation": "inspect_clojure",
+    "results": [
+     {
+      "id": "r1",
+      "operation": "outline",
+      "file": "src/maven/db.clj",
+      "file_hash": "8a579d7f6da3009971f93cb49a877fa4c71e0d464e5790d119d99e30737507f6",
+      "source_character_count": 0,
+      "outline": {
+       "ns": "maven.db",
+       "file": "src/maven/db.clj",
+       "lines": 122,
+       "form_count": 12,
+       "forms": [
+        {
+         "type": "def",
+         "platforms": [
+          "clj"
+         ],
+         "line": 19,
+         "end_line": 19,
+         "name": "instance"
+        },
+        {
+         "type": "def",
+         "platforms": [
+          "clj"
+         ],
+         "line": 20,
+         "end_line": 20,
+         "name": "database"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 22,
+         "end_line": 28,
+         "name": "iam-jdbc-url",
+         "args": "[db iam-user]"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 30,
+         "end_line": 33,
+         "name": "get-ds"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 35,
+         "end_line": 39,
+         "name": "deep-merge",
+         "args": "[a b]"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 41,
+         "end_line": 49,
+         "name": "emit-event!",
+         "args": "[ds {:keys [uuid event-type data model source created-at]}]"
+        },
+        {
+         "type": "defn-",
+         "platforms": [
+          "clj"
+         ],
+         "line": 51,
+         "end_line": 51,
+         "name": "pg->map",
+         "args": "[pgobj]"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 53,
+         "end_line": 84,
+         "name": "rebuild-projection!"
+        },
+        {
+         "type": "defonce",
+         "platforms": [
+          "clj"
+         ],
+         "line": 86,
+         "end_line": 86,
+         "name": "default-ds"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 88,
+         "end_line": 100,
+         "name": "dual-write!",
+         "args": "[{:keys [uuid] :as event}]"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 102,
+         "end_line": 111,
+         "name": "apply-schema!"
+        },
+        {
+         "type": "defn",
+         "platforms": [
+          "clj"
+         ],
+         "line": 113,
+         "end_line": 122,
+         "name": "search",
+         "args": "[ds q & {:keys [limit] :or {limit 20}}]"
+        }
+       ],
+       "requires": [
+        "[next.jdbc :as jdbc]",
+        "[next.jdbc.result-set :as rs]",
+        "[clojure.data.json :as json]",
+        "[clojure.string :as str]",
+        "[clojure.java.io :as io]"
+       ],
+       "forward_refs": []
+      }
+     },
+     {
+      "source_character_count": 96,
+      "inside": null,
+      "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105",
+      "file": "src/maven/inbox.clj",
+      "operation": "match",
+      "matches": [
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 400
+        },
+        "line": 113,
+        "end_line": 113,
+        "inside": "add",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn-"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 496
+        },
+        "line": 131,
+        "end_line": 131,
+        "inside": "transition!",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 732
+        },
+        "line": 172,
+        "end_line": 172,
+        "inside": "snooze",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 838
+        },
+        "line": 192,
+        "end_line": 192,
+        "inside": "unsnooze",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 908
+        },
+        "line": 204,
+        "end_line": 204,
+        "inside": "list-items",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 976
+        },
+        "line": 221,
+        "end_line": 221,
+        "inside": "show",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 1231
+        },
+        "line": 253,
+        "end_line": 253,
+        "inside": "stale",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 1513
+        },
+        "line": 336,
+        "end_line": 336,
+        "inside": "standup",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+       }
+      ],
+      "match_count": 8,
+      "id": "r2",
+      "owner_counts": [
+       {
+        "inside": "add",
+        "matches": 1
+       },
+       {
+        "inside": "transition!",
+        "matches": 1
+       },
+       {
+        "inside": "snooze",
+        "matches": 1
+       },
+       {
+        "inside": "unsnooze",
+        "matches": 1
+       },
+       {
+        "inside": "list-items",
+        "matches": 1
+       },
+       {
+        "inside": "show",
+        "matches": 1
+       },
+       {
+        "inside": "stale",
+        "matches": 1
+       },
+       {
+        "inside": "standup",
+        "matches": 1
+       }
+      ],
+      "source_omitted_when_equal_to_match": true,
+      "match": "(mdb/get-ds)"
+     },
+     {
+      "source_character_count": 48,
+      "inside": null,
+      "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b",
+      "file": "src/maven/tweets.clj",
+      "operation": "match",
+      "matches": [
+       {
+        "path": [
+         {
+          "call": "defn-"
+         },
+         {
+          "call": "try"
+         },
+         {
+          "call": "->"
+         },
+         {
+          "call": "jdbc/execute-one!"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 588
+        },
+        "line": 136,
+        "end_line": 136,
+        "inside": "tweet-total",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 1511
+        },
+        "line": 312,
+        "end_line": 312,
+        "inside": "search",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 1895
+        },
+        "line": 375,
+        "end_line": 375,
+        "inside": "show",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+       },
+       {
+        "path": [
+         {
+          "call": "defn"
+         },
+         {
+          "call": "let"
+         },
+         {
+          "binding": "ds"
+         },
+         {
+          "call": "mdb/get-ds"
+         }
+        ],
+        "address": {
+         "preorder": 2000
+        },
+        "line": 394,
+        "end_line": 394,
+        "inside": "research-detail",
+        "hash": "c511d7c14d79227b3ee6ca48bb54c6bf2e8d5a289031da40370d857e61409cf1",
+        "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+       }
+      ],
+      "match_count": 4,
+      "id": "r3",
+      "owner_counts": [
+       {
+        "inside": "tweet-total",
+        "matches": 1
+       },
+       {
+        "inside": "search",
+        "matches": 1
+       },
+       {
+        "inside": "show",
+        "matches": 1
+       },
+       {
+        "inside": "research-detail",
+        "matches": 1
+       }
+      ],
+      "source_omitted_when_equal_to_match": true,
+      "match": "(mdb/get-ds)"
+     }
+    ]
+   }
+  }
+ }
+}

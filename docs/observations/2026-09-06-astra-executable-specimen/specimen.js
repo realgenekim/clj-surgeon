@@ -1,5 +1,5 @@
 // Prototype: validated archived specimens -> documentation. No request execution.
-const fs = require('fs'), crypto = require('crypto'), util = require('util');
+const fs = require('fs'), crypto = require('crypto'), util = require('util'), path = require('path');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const need = (ok, reason) => { if (!ok) throw Error(reason); };
 function specimen(entry) {
@@ -28,7 +28,10 @@ function specimen(entry) {
     'This validates the retained specimen, not current source freshness, replay safety, or task semantics.\n';
 }
 try {
-  const entries = JSON.parse(fs.readFileSync(process.argv[2]));
+  const manifest = path.resolve(process.argv[2]);
+  const entries = JSON.parse(fs.readFileSync(manifest)).map(e => ({...e,
+    request:path.resolve(path.dirname(manifest),e.request),
+    receipt:path.resolve(path.dirname(manifest),e.receipt)}));
   // Validate all specimens before emitting any partial document.
   process.stdout.write(entries.map(specimen).join('\n'));
 } catch (e) { process.stderr.write('REFUSED '+e.message+'\n'); process.exitCode=2; }

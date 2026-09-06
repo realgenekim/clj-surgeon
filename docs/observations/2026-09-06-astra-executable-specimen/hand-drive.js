@@ -1,8 +1,12 @@
 // Bounded archived-data hand-drive; no provider/server/source mutation.
-const fs = require('fs'), cp = require('child_process'), assert = require('assert');
+const fs = require('fs'), cp = require('child_process'), assert = require('assert'), path = require('path');
 const {performance} = require('perf_hooks');
-const dir = __dirname, manifest = JSON.parse(fs.readFileSync(dir+'/specimens.json'));
-const output = dir+'/results'; fs.mkdirSync(output,{recursive:true});
+const dir = __dirname, manifest = JSON.parse(fs.readFileSync(dir+'/specimens.json')).map(e=>({...e,
+  request:path.resolve(dir,e.request),receipt:path.resolve(dir,e.receipt)}));
+// Explicit output location avoids rewriting the historical retained result.
+const output = process.argv[2];
+assert(output && path.isAbsolute(output),'supply a fresh absolute output directory');
+fs.mkdirSync(output,{recursive:false});
 const read = p => JSON.parse(fs.readFileSync(p));
 const save = (name, data) => {const p=output+'/'+name+'.json';fs.writeFileSync(p,JSON.stringify(data,null,2)+'\n');return p;};
 const arms = {native:['node',dir+'/specimen.js'],bb:['bb',dir+'/specimen.clj']};

@@ -1,0 +1,5 @@
+{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "from": {"lib": "maven.db", "var": "get-ds2"},
+ "to": {"lib": "maven.relaxed-search", "var": "tokenize",
+        "alias_policy": ["rsearch", "rs", "relaxed", "r-search"]},
+ "scope": {"paths": ["src"]}, "expect": {"files": 2}}

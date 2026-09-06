@@ -1,5 +1,5 @@
 ;; Same bounded prototype over Clojure data; no eval or request execution.
-(require '[cheshire.core :as json])
+(require '[cheshire.core :as json] '[babashka.fs :as fs])
 (import '[java.security MessageDigest])
 
 (defn sha [s]
@@ -40,7 +40,10 @@
          "; receipt SHA256 " (sha proof) ".\n"
          "This validates the retained specimen, not current source freshness, replay safety, or task semantics.\n")))
 (try
-  (let [entries (json/parse-string (slurp (first *command-line-args*)) true)
+  (let [manifest (fs/absolutize (first *command-line-args*))
+        resolve-path #(str (fs/path (fs/parent manifest) %))
+        entries (mapv #(-> % (update :request resolve-path) (update :receipt resolve-path))
+                      (json/parse-string (slurp (str manifest)) true))
         ;; Realize before printing: a refused batch emits no partial document.
         documents (mapv specimen entries)]
     (print (clojure.string/join "\n" documents)))

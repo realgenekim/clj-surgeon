@@ -1,0 +1,7 @@
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "requests": [{"id": "r1", "operation": "outline", "file": "src/maven/db.clj"},
+              {"id": "r2", "operation": "match", "file": "src/maven/inbox.clj",
+               "match": "(mdb/get-ds)"},
+              {"id": "r3", "operation": "match", "file": "src/maven/tweets.clj",
+               "match": "(mdb/get-ds)"}],
+ "expect": {"requests": 3, "files": 3}}

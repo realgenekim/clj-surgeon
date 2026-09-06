@@ -1,0 +1,72 @@
+{
+ "wall_ms": 632.1,
+ "request": {
+  "op": "alias_migration",
+  "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+  "from": {
+   "lib": "maven.db",
+   "var": "get-ds2"
+  },
+  "to": {
+   "lib": "maven.relaxed-search",
+   "var": "tokenize",
+   "alias_policy": [
+    "rsearch",
+    "rs",
+    "relaxed",
+    "r-search"
+   ]
+  },
+  "scope": {
+   "paths": [
+    "src"
+   ]
+  },
+  "expect": {
+   "files": 2
+  }
+ },
+ "response": {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+   "content": [
+    {
+     "type": "text",
+     "text": "alias_migration\n  2 files \u00b7 3 sites \u00b7 aliases {\"rsearch\" 2} \u00b7 0 collisions resolved \u00b7 628.12 ms\n\n\u2713 atomic commit complete\n\u2713 written bytes read back and verified\n\u2713 terminal evidence \u00b7 per-file detail at .clj-surgeon/alias-migration/detail-1f1f2dbc-f943-4b08-9e30-99ab2655f202.edn (best-effort retention)"
+    }
+   ],
+   "isError": false,
+   "structuredContent": {
+    "details_retained": 20,
+    "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+    "committed": true,
+    "kondo_delta": {
+     "status": "not-requested"
+    },
+    "alias_histogram": {
+     "rsearch": 2
+    },
+    "sites": 3,
+    "string_mention_sites_shown": 0,
+    "details_retention": "best-effort",
+    "focused_test": {
+     "status": "not-requested"
+    },
+    "string_mentions": 0,
+    "string_mention_sites": [],
+    "lib_renamed": null,
+    "elapsed_ms": 628.122293,
+    "next_action": "none",
+    "refer_sites": 0,
+    "files": 2,
+    "collisions_resolved": 0,
+    "receipt_hash": "742c7dc88bfd965e32e3ec1c176dd42a16533ee47d9804bff2817b154a6b82d0",
+    "ok": true,
+    "operation": "alias_migration",
+    "undo_receipt": "/home/forge/.local/state/clj-surgeon/workspaces/4e7a22c31b3b7091a882ed7fbaf2e1400011dba139e6a170400e363f570c2d4e/receipts/0f0f161b-bdda-4efe-b8ba-5702df673961.edn",
+    "details_path": ".clj-surgeon/alias-migration/detail-1f1f2dbc-f943-4b08-9e30-99ab2655f202.edn"
+   }
+  }
+ }
+}

@@ -1,0 +1,72 @@
+{
+ "wall_ms": 297.5,
+ "request": {
+  "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+  "edits": [
+   {
+    "file": "src/maven/inbox.clj",
+    "within": {
+     "form": "add"
+    },
+    "from": "(mdb/get-ds)",
+    "to": "(mdb/get-ds2)",
+    "matches": 1
+   },
+   {
+    "file": "src/maven/inbox.clj",
+    "within": {
+     "form": "snooze"
+    },
+    "from": "(mdb/get-ds)",
+    "to": "(mdb/get-ds2)",
+    "matches": 1
+   },
+   {
+    "file": "src/maven/tweets.clj",
+    "within": {
+     "form": "search"
+    },
+    "from": "(mdb/get-ds)",
+    "to": "(mdb/get-ds2)",
+    "matches": 1
+   }
+  ]
+ },
+ "response": {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+   "content": [
+    {
+     "type": "text",
+     "text": "apply_clojure_changes\n  3 edits \u00b7 2 files \u00b7 293.94 ms\n\n\u2713 atomic commit complete\n\u2713 written bytes read back and verified\n\u2713 terminal evidence \u00b7 verification_complete=true \u00b7 next action none"
+    }
+   ],
+   "isError": false,
+   "structuredContent": {
+    "canonical_effect_identity": {
+     "version": 1,
+     "sha256": "866a7a6adc482c2841d3301fa18928ac949ac08173da96ce319f80462b523656",
+     "files": 2,
+     "effects": 3
+    },
+    "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+    "committed": true,
+    "changes": 3,
+    "verification_complete": true,
+    "elapsed_ms": 293.944362,
+    "edits": 3,
+    "read_back_hashes": {
+     "src/maven/inbox.clj": "0ce491eb4a1da278468cb355084860c3de9e941246c92ad1b55059c98ff48ec4",
+     "src/maven/tweets.clj": "c0f74daad5d457eb086c1b47d69a289c65a47fc27b98506f7eadbad4b917ff27"
+    },
+    "next_action": "none",
+    "files": 2,
+    "receipt_hash": "2bc4ac8702f2182b85ebcef1aa4bd015e569db185e1321445a08fcff80af8d92",
+    "ok": true,
+    "operation": "apply_clojure_changes",
+    "undo_receipt": "/home/forge/.local/state/clj-surgeon/workspaces/4e7a22c31b3b7091a882ed7fbaf2e1400011dba139e6a170400e363f570c2d4e/receipts/0aeb7fc8-9339-4730-8a74-140a095237c6.edn"
+   }
+  }
+ }
+}
