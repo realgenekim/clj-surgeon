@@ -3,7 +3,8 @@
 `clj-surgeon.mcp-hot-verify/verify!` sends one `eval` to the application nREPL
 and reports the focused test summary it evaluates in that JVM.
 
-Measured 2026-09-06 (inb-adcc9e): every hot verification blocked for the whole
+Measured 2026-09-06 (inb-adcc9e), a HANG REPAIR on this one call -- not a suite
+timing and not a comparison against a native editing route: every hot verification blocked for the whole
 configured `:timeout-ms` — 61.1 s at 60000, 3.08 s at 3000, 0.79 s at 700 —
 while the evaluation itself took roughly 0.8 s. The cause was reading the
 response stream with `(doall (client msg))`. `nrepl.core/client` returns a lazy

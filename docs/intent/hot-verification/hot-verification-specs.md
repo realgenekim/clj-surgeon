@@ -20,7 +20,11 @@ required), `[x]` implemented (implementation and test witnesses required),
   server has already finished sending. A response stream ended by an error
   status that the server never follows with `done` shall produce the ordinary
   typed `hot-verification-failed` result, carrying the server's output, at the
-  moment that status arrives.
+  moment that status arrives. `interrupted` is terminal AND a failure: a
+  verification shall be reported successful only when a `done` status for that
+  message arrives with no `error`, `eval-error`, `timeout`, or `interrupted`
+  status among the responses read, so a value that arrived before an interrupt
+  can never be read as a pass.
 
 - [x] **MCP-OP-HOTVER-002**: `:timeout-ms` shall be a true ceiling on the whole
   read, not a per-response timeout that each arriving response resets. When no
@@ -28,4 +32,7 @@ required), `[x]` implemented (implementation and test witnesses required),
   `hot-verification-timeout` failure naming the ceiling. When the transport
   closes before any terminal status arrives, it shall return a typed
   `hot-verification-transport-closed` failure rather than blocking until the
-  ceiling. Neither refusal shall claim a verification result.
+  ceiling. Failing to CONNECT to the application nREPL is a distinct typed
+  `hot-verification-connection-failed`, never reported as a closure during an
+  established read. Neither refusal shall claim a verification result, and each
+  shall carry the bounded output read before it so a caller has a diagnostic.

@@ -52,6 +52,19 @@
     ":pid (.pid (java.lang.ProcessHandle/current)) "
     ":summary summary}))"))
 
+(def ^:private failure-statuses
+  "Statuses that mean this evaluation did not verify anything. `interrupted` is
+   terminal AND a failure: an interrupted evaluation can have already emitted a
+   value with a matching cwd and zero counters, and that must never read as a
+   pass."
+  #{"eval-error" "error" "timeout" "interrupted"})
+
+(defn- bounded-output
+  [responses limit]
+  (let [text (str/join "" (keep #(or (:err %) (:out %)) responses))]
+    (when (seq text)
+      (subs text 0 (min limit (count text))))))
+
 (def ^:private terminal-statuses
   "nREPL statuses that end one message's response stream. A reader that waits
    only for \"done\" hangs to its ceiling when the server ends the stream with
@@ -68,27 +81,31 @@
 (defn- read-until-terminal
   "Consume responses for one message id until a terminal status arrives, the
    transport closes, or the deadline passes. The deadline is a true ceiling:
-   every blocking read is bounded by the time remaining, not by a per-message
-   timeout that each response could reset."
+   every blocking read is bounded by the time remaining against ONE deadline
+   taken when the read starts, so a stream of non-terminal responses cannot
+   push it out. Responses read before a closure are kept, because they are the
+   only diagnostic a caller gets for a read that never terminated."
   [connection id timeout-ms]
   (let [deadline (+ (System/nanoTime) (* 1000000 (long timeout-ms)))
-        remaining #(quot (- deadline (System/nanoTime)) 1000000)]
+        remaining #(quot (- deadline (System/nanoTime)) 1000000)
+        collected (volatile! [])]
     (try
-      (loop [responses []]
+      (loop []
         (let [left (remaining)]
           (if-not (pos? left)
-            {:responses responses :outcome :timeout}
+            {:responses @collected :outcome :timeout}
             (if-let [response (transport/recv connection left)]
               (if (= id (:id response))
-                (let [responses (conj responses response)]
+                (do
+                  (vswap! collected conj response)
                   (if (seq (set/intersection (response-statuses response)
                                              terminal-statuses))
-                    {:responses responses :outcome :terminal}
-                    (recur responses)))
-                (recur responses))
-              {:responses responses :outcome :timeout}))))
+                    {:responses @collected :outcome :terminal}
+                    (recur)))
+                (recur))
+              {:responses @collected :outcome :timeout}))))
       (catch SocketException error
-        {:responses [] :outcome :closed :error (.getMessage error)}))))
+        {:responses @collected :outcome :closed :error (.getMessage error)}))))
 
 (defn verify!
   "Run one closed hot profile against the configured application nREPL."
@@ -132,6 +149,7 @@
                                    "any terminal status: " (:error read-result))
                               (str "Application nREPL sent no terminal status "
                                    "within " timeout "ms"))
+                     :output (bounded-output responses 2000)
                      :elapsed_ms (/ (double (- (System/nanoTime) started))
                                     1000000.0)}
                     (let [statuses (into #{} (mapcat response-statuses) responses)
@@ -139,14 +157,12 @@
                           value (when value-source (edn/read-string value-source))
                           summary (:summary value)
                           cwd (some-> (:cwd value) io/file .getCanonicalPath)
-                          output (str/join "" (keep #(or (:err %) (:out %))
-                                                    responses))
                           ok (boolean
                                (and value
                                     (= (.getPath root) cwd)
+                                    (contains? statuses "done")
                                     (empty? (set/intersection
-                                              statuses
-                                              #{"eval-error" "error" "timeout"}))
+                                              statuses failure-statuses))
                                     (zero? (long (or (:fail summary) 0)))
                                     (zero? (long (or (:error summary) 0)))))]
                       {:ok ok
@@ -161,7 +177,7 @@
                                       1000000.0)
                        :error-type (when-not ok :hot-verification-failed)
                        :output (when-not ok
-                                 (subs output 0 (min 4000 (count output))))})))))
+                                 (bounded-output responses 4000))})))))
             (catch Exception error
               {:ok false
                :status :failed
