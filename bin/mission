@@ -38,7 +38,7 @@ case "${1:-}" in
     exec bb --classpath src bin/mission-read.clj "$@" ;;
   "")
     exec bb --classpath src bin/mission-read.clj help ;;
-  open|plan|propose|run|apply|resume|undo|link)
+  open|plan|propose|run|apply|resume|undo|link|fallback)
     : ;;                      # a real write verb: fall through to the JVM
   *)
     # unknown verb: the same help, the same exit 2, without a JVM

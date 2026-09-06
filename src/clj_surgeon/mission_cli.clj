@@ -29,6 +29,7 @@
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-display :as display]
    [clj-surgeon.mission-events :as mission-events]
+   [clj-surgeon.telemetry-events :as telemetry-events]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pp]
@@ -346,6 +347,37 @@
             :config_sources (mission/config-sources (or workspace (:root m))
                                                     (:config opts))) opts)))))
 
+(defn fallback!
+  "Record an explicit caller report, never a native edit or proof of adoption."
+  [{:keys [workspace state-home id reason]}]
+  (let [started (System/nanoTime)]
+    (cond
+      (not (and (string? workspace) (seq workspace))) display/workspace-required
+      (not (contains? #{"refusal" "unsupported" "slower-than-native" "user-choice"} reason))
+      {:ok false :recorded false :error-type :mission-fallback-reason
+       :error "Use --reason refusal|unsupported|slower-than-native|user-choice."}
+      (not (and (string? id) (re-matches #"M-[0-9]{1,12}" id)))
+      {:ok false :recorded false :error-type :mission-fallback-id
+       :error "Supply the saved mission id, for example M-1."}
+      :else
+      (let [m (mission/read-mission (state-dir-for workspace state-home) id)]
+        (if (mission/refused? m)
+          (assoc m :recorded false)
+          (let [event {:kind "mission-fallback" :tool "mission" :ok true
+                       :mission_id id :mission_state (when (or (keyword? (:state m)) (string? (:state m)))
+                                                       (name (:state m)))
+                       :mission_verb "fallback" :fallback_kind "native-tool"
+                       :report_basis "user-reported" :fallback_reason reason
+                       :wall_ms (/ (- (System/nanoTime) started) 1000000.0)}
+                recorded (try (telemetry-events/record! event) (catch Throwable _ nil))]
+            (if (map? recorded)
+              {:ok true :recorded true :id id :event recorded
+               :native_edit_verified false
+               :message "User-reported native-tool fallback only; no edit performed or verified. Saved mission state and proof unchanged."}
+              {:ok false :recorded false :id id :native_edit_verified false
+               :error-type :mission-fallback-record-failed
+               :error "Fallback report was not recorded. Saved mission state and proof unchanged."})))))))
+
 (defn link!
   "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.
 
@@ -590,7 +622,7 @@
                      :spec spec
                      :receipt-dir (:receipt-dir flags)
                      :id (second positional)}
-                    (select-keys flags [:depends-on :supersedes :full])
+                    (select-keys flags [:depends-on :supersedes :full :reason])
                     (select-keys spec [:verb :question :request :profiles]))]
     (cond
       ;; explicit help is a SUCCESS, and it is the only path that prints usage
@@ -598,7 +630,7 @@
       (do (println (help-text (second positional))) (System/exit 0))
 
       (not (contains? #{"open" "plan" "propose" "run" "show" "apply" "resume" "undo"
-                        "link" "ready" "blocked" "list"} verb))
+                        "link" "ready" "blocked" "list" "fallback"} verb))
       (do (binding [*out* *err*]
             (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
           (println (help-text nil))
@@ -619,6 +651,7 @@
                      "run" (run! opts)
                      "resume" (resume opts)
                      "undo" (undo! opts)
+                     "fallback" (fallback! opts)
                      "link" (link! opts)
                      ("ready" "blocked") (ready opts)
                      "list" (list-missions opts))]

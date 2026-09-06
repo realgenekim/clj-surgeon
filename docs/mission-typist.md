@@ -118,3 +118,19 @@ examples concern the mission entrance, not every Surgeon core operation.
 not the workspace identity. Omitting the workspace returns
 `:mission-workspace-required` with `bin/mission help show` as an executable
 recovery example; it does not guess a workspace from the launcher's directory.
+
+Record an explicit decision to use native tools:
+
+```sh
+bin/mission fallback M-1 --workspace /absolute/workspace --reason refusal
+```
+
+Reasons are `refusal`, `unsupported`, `slower-than-native`, and `user-choice`.
+This appends a `mission-fallback` event to the shared events ledger (or
+`CLJ_SURGEON_EVENTS_FILE` override). The event is explicitly **user-reported**:
+it does not perform or verify a native edit, prove adoption, or record provider
+fallback. Saved mission state, proof, and source remain unchanged. The receipt
+contains the actual appended event and `:recorded true`; a failed append
+returns `:recorded false` and exits 1. Missing missions and unsupported reasons
+append no fallback event. For auditing, inspect the returned `:event` rather
+than inferring native activity from a failed mission.

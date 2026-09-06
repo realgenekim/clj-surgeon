@@ -170,3 +170,15 @@ Missing-workspace field regression: `show M-1 --state-home H` must return
 workspace stacktrace. Shared BB/JVM show projection owns the same refusal;
 read-only BB list/ready/blocked use this guard too. Storage home never implies
 a workspace. Preserve the exact field invocation as a subprocess witness.
+### Explicit native fallback report
+
+`bin/mission fallback M-ID --reason TYPE --workspace R` records the caller's
+report that they selected native tools. Admitted reasons are `refusal`,
+`unsupported`, `slower-than-native`, and `user-choice`. This command neither
+performs nor verifies a native edit, and cannot change saved mission state,
+proof, history, or source. It is not provider fallback or verified adoption.
+A successful append returns `:recorded true` and the actual bounded event;
+a failed append returns `:recorded false`, `:ok false`, and exit 1. Missing
+missions and unsupported reasons append nothing. JSONL admits only fixed
+fallback enums. Tests cover both writer failure modes, all reasons, schema
+rejection, unchanged saved bytes, and the real CLI with an isolated ledger.

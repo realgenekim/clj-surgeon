@@ -183,7 +183,10 @@
 
 (def mission-enums
   {:mission_state #{"proposed" "ready" "blocked" "applied" "verified" "failed" "undone"}
-   :mission_verb #{"owner_forms" "helper_extraction"}
+   :mission_verb #{"owner_forms" "helper_extraction" "fallback"}
+   :fallback_kind #{"native-tool"}
+   :report_basis #{"user-reported"}
+   :fallback_reason #{"refusal" "unsupported" "slower-than-native" "user-choice"}
    :executor #{"native" "typist"}
    :cost_source #{"provider-reported"}
    :provider #{"openrouter" "groq" "spark"}
