@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """typist-run-test — the OFFLINE fence tests for bin/typist-run (2026-09-06).
 
-Every test here is monkeypatched or pure. NOTHING in this file makes a network
-call, and nothing reads a real key: the provider key files come from a
---keys-dir under /var/tmp/forge with dummy contents.
+Every test here is monkeypatched, pure, or a subprocess run under
+TYPIST_OFFLINE=1 -- the runner's hard offline mode, which refuses any
+codex/claude spawn and any network open with exit 6 before it happens. That
+env var is set at the TOP of this module, and the suite ends by asserting that
+~/.codex/sessions gained nothing. Nothing here reads a real key either: the
+provider key files come from a --keys-dir under /var/tmp/forge with dummies.
 
   bin/typist-run-test
 
@@ -14,7 +17,11 @@ Covers the three Sol fence findings:
   (4) the WRITE fence: TYPIST_FX, --fixture and every rmtree target resolve
       under /var/tmp/forge or the worktree, and arm NW refuses outright unless
       its warm workspace is under /var/tmp/forge (it runs codex unsandboxed,
-      so that directory is its ONLY containment)
+      so that directory is its ONLY containment), and NW performs that refusal
+      before mission selection, fixture materialization or any other write
+  (5) cost accounting: an aggregate is the SUM of its priceable members and
+      `unknown` when it has none -- never a table rate applied to summed-to-
+      zero tokens, never a provider's own figure discarded for a re-derivation
 """
 
 import importlib.machinery
@@ -22,15 +29,37 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUNNER = os.path.join(HERE, "typist-run")
 FENCE = "/var/tmp/forge"
+CODEX_SESSIONS = os.path.expanduser("~/.codex/sessions")
+
+# HARD OFFLINE, NOT HOPEFUL OFFLINE (Astra, 2026-09-06). This file's docstring
+# claimed every test is "monkeypatched or pure"; the NW check below pointed at
+# the WORKTREE, and the write fence ADMITS the worktree, so on a checkout that
+# lives under /var/tmp/forge the NW refusal never fired and this "offline"
+# suite made a real codex warm-up call -- 12.2 s and a created session. Every
+# subprocess this file starts now carries TYPIST_OFFLINE=1, which makes the
+# runner refuse any codex/claude spawn and any network open BEFORE it happens.
+# The suite's offline-ness is therefore a property it ENFORCES, not one it
+# inherits from where the repo happens to sit.
+os.environ["TYPIST_OFFLINE"] = "1"
+
+
+def newest_codex_session():
+    """Identity set, not mtime: other active seats append existing rollouts."""
+    return frozenset(os.path.join(root, name)
+                     for root, _dirs, names in os.walk(CODEX_SESSIONS)
+                     for name in names)
+
 
 FAILURES = []
 
@@ -54,7 +83,7 @@ spec = importlib.util.spec_from_loader("offline_typist_runner", loader)
 module = importlib.util.module_from_spec(spec)
 loader.exec_module(module)
 if os.environ.get("TYPIST_TEST_GUARD_PROBE"):
-    module.subprocess.run(["codex", "--version"])
+    os.system("true")
 if os.environ.get("TYPIST_TEST_NW_SCRATCH"):
     module.TEST_KEYS_FENCE = os.environ["TYPIST_TEST_NW_SCRATCH"]
     module.resolve_gate_commands = lambda: [["offline-proof-never-executed"]]
@@ -288,11 +317,137 @@ def test_write_fence():
           "codex" not in r.stdout)
     guarded = run(["--arm", "NW"], {"TYPIST_TEST_GUARD_PROBE": "1"})
     check("offline subprocess guard prevents real codex execution",
-          guarded.returncode != 0 and "offline test blocked subprocess.Popen" in guarded.stderr)
+          guarded.returncode != 0 and "offline test blocked os.system" in guarded.stderr)
 
+
+
+def test_offline_guard(m):
+    """THE GUARD ITSELF. A test that only proves the fence refuses proves
+    nothing about a checkout the fence admits; TYPIST_OFFLINE is the second,
+    geography-independent stop."""
+    check("TYPIST_OFFLINE=1 is read once, at import", m.OFFLINE is True)
+    for exe in ("codex", "claude", "/usr/local/bin/codex"):
+        try:
+            m.guard_spawn([exe, "exec"])
+            ok, detail = False, "no refusal"
+        except SystemExit as e:
+            ok, detail = e.code == 6, "exit=%s" % e.code
+        check("offline refuses a %s spawn (exit 6)" % exe, ok, detail)
+    try:
+        m.guard_spawn(["clojure", "-M:x"])
+        ok = True
+    except SystemExit:
+        ok = False
+    check("offline leaves ordinary tools (clojure) alone", ok)
+    try:
+        m.subprocess.run(["codex", "exec", "-m", "x"], capture_output=True)
+        ok, detail = False, "no refusal"
+    except SystemExit as e:
+        ok, detail = e.code == 6, "exit=%s" % e.code
+    check("the guard sits at the subprocess CHOKEPOINT, not at call sites",
+          ok, detail)
+    try:
+        m.urllib.request.urlopen("https://example.invalid")
+        ok, detail = False, "no refusal"
+    except SystemExit as e:
+        ok, detail = e.code == 6, "exit=%s" % e.code
+    check("offline refuses a network open (exit 6)", ok, detail)
+
+
+# --------------------------------------------------------------------------
+# (e) cost accounting -- an aggregate never outranks its members
+
+def test_cost(m):
+    """SOL FENCE R2, finding 5. The old report priced a group's SUMMED tokens,
+    so one call with NO usage summed to zero tokens, met the table rate, and
+    printed $0.0000 for a call nobody can price. Zero is a number a reader
+    acts on; unknown is not."""
+    check("a candidate with missing usage is (None, None), never zero",
+          m.cost_for("groq", None, None, None, None) == (None, None))
+    check("a missing completion count is unknown, not zero",
+          m.cost_for("groq", None, 100, None, None) == (None, None))
+    priced, src = m.cost_for("groq", None, 1000, 1000, None)
+    check("a complete usage pair prices from the dated table",
+          priced is not None and src == "table:%s:groq" % m.PRICES_DATE,
+          "%s %s" % (priced, src))
+    check("a provider-reported cost wins over the table",
+          m.cost_for("openrouter", "Cerebras", 10, 10, 0.12345678)
+          == (0.12345678, "provider"))
+
+    check("run_cost of one priced + one unpriced is the priced one",
+          m.run_cost([{"cost_usd": 0.000521}, {"cost_usd": None}]) == 0.000521)
+    check("run_cost of all-unpriced is None, never 0.0",
+          m.run_cost([{"cost_usd": None}, {"cost_usd": None}]) is None)
+    check("run_cost sums every priced candidate",
+          m.run_cost([{"cost_usd": 0.1}, {"cost_usd": 0.02},
+                      {"cost_usd": None}]) == 0.12)
+
+    check("candidate_cost keeps the provider's own figure verbatim",
+          m.candidate_cost("groq", {"cost_usd": 0.12345678,
+                                    "cost_source": "provider",
+                                    "prompt_tokens": 1, "tokens": 1})
+          == (0.12345678, "provider"))
+    check("candidate_cost refuses to price a call with no usage",
+          m.candidate_cost("groq", {"prompt_tokens": None, "tokens": None})
+          == (None, None))
+
+    # THE REPORT, driven as a real CLI over a tree of unpriceable receipts.
+    fx = os.path.join(FENCE, "typist-real-fx", "cost-%s" % uuid.uuid4().hex[:8])
+    os.makedirs(fx, exist_ok=True)
+    try:
+        with open(os.path.join(fx, "receipt.edn"), "w") as fh:
+            fh.write('{:candidates [{:cand "groq-1" :prompt_tokens nil '
+                     ':tokens nil :cost_usd nil :cost_source nil}]}\n')
+        r = subprocess.run([sys.executable, RUNNER, "--cost-report",
+                            "--fx", fx],
+                           env=dict(os.environ, TYPIST_OFFLINE="1",
+                                    TYPIST_FX=fx),
+                           capture_output=True, text=True, timeout=180)
+        row = [ln for ln in r.stdout.splitlines() if ln.startswith("groq")]
+        tot = [ln for ln in r.stdout.splitlines() if ln.startswith("TOTAL")]
+        check("--cost-report: an unpriceable groq row prints unknown",
+              bool(row) and row[0].rstrip().endswith("unknown"),
+              (row or [""])[0].strip())
+        check("--cost-report: the TOTAL of only-unpriced rows is unknown",
+              bool(tot) and tot[0].rstrip().endswith("unknown"),
+              (tot or [""])[0].strip())
+        check("--cost-report: no $0.0000 anywhere in the table",
+              "$0.0000" not in r.stdout)
+        written = [f for f in os.listdir(fx) if f.startswith("cost-report-")]
+        body = open(os.path.join(fx, written[0])).read() if written else ""
+        check("--cost-report: the receipt's :total_usd is nil, not 0",
+              ":total_usd nil" in body,
+              "; ".join(ln.strip() for ln in body.splitlines()
+                        if "total_usd" in ln))
+    finally:
+        shutil.rmtree(fx, ignore_errors=True)
+
+    # A MIXED GROUP: one provider-priced candidate and one unpriceable one.
+    fx2 = os.path.join(FENCE, "typist-real-fx", "cost-%s" % uuid.uuid4().hex[:8])
+    os.makedirs(fx2, exist_ok=True)
+    try:
+        with open(os.path.join(fx2, "receipt.edn"), "w") as fh:
+            fh.write('{:candidates ['
+                     '{:cand "groq-1" :prompt_tokens 10 :tokens 10 '
+                     ':cost_usd 0.12345678 :cost_source "provider"} '
+                     '{:cand "groq-2" :prompt_tokens nil :tokens nil '
+                     ':cost_usd nil :cost_source nil}]}\n')
+        r = subprocess.run([sys.executable, RUNNER, "--cost-report",
+                            "--fx", fx2],
+                           env=dict(os.environ, TYPIST_OFFLINE="1",
+                                    TYPIST_FX=fx2),
+                           capture_output=True, text=True, timeout=180)
+        row = [ln for ln in r.stdout.splitlines() if ln.startswith("groq")]
+        check("--cost-report: a mixed group keeps the provider's figure",
+              bool(row) and "$0.1235" in row[0], (row or [""])[0].strip())
+        check("--cost-report: the unpriced member is still counted UNKNOWN",
+              "1 call(s) have no rate and are UNKNOWN, not zero." in r.stdout)
+    finally:
+        shutil.rmtree(fx2, ignore_errors=True)
 
 
 def main():
+    before = newest_codex_session()
     m = load_runner()
     print("== scrubber ==");        test_scrub(m)
     print("== typed errors ==");    test_classify(m)
@@ -300,6 +455,13 @@ def main():
     print("== key fence ==");       test_keys(m)
     print("== --keys-dir fence =="); test_keys_dir_fence()
     print("== write fence ==");     test_write_fence()
+    print("== offline guard ==");   test_offline_guard(m)
+    print("== cost accounting =="); test_cost(m)
+    after = newest_codex_session()
+    print("")
+    check("no codex session was created by this suite",
+          after == before,
+          "before=%s after=%s" % (len(before), len(after)))
     print("")
     if FAILURES:
         print("FAILED %d: %s" % (len(FAILURES), ", ".join(FAILURES)))

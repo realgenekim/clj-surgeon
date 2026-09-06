@@ -46,3 +46,7 @@ It still invokes actual main() in a subprocess and verifies exit 4 before any
 child launch. No production runner behavior was added for this test repair.
 
 Independent Fable fence review remains external to this merge receipt.
+
+## Astra third-round integration — 2026-09-06T03:09:07.463888+00:00
+
+Merged f0c180da runner hardening and unknown-cost accounting. Retained our closed telemetry field schema and its stricter numeric bounds: incoming extra-name normalization and pass-through are superseded by rejecting unknown fields altogether, as agreed with Fable. Did not add an open extras surface or claim a dropped-fields counter. Existing mission and lane witnesses retained. Both offline guards remain: production typed refusal and test bootstrap audit guard. The bootstrap witness now probes os.system directly because the production wrapper correctly refuses Codex first. Incoming session witness compared most-recent mtime and failed on active seats appending older rollouts; changed to the set of session file identities. Before this correction the suite failed, after it all offline checks pass; no new provider calls. Receipt: /var/tmp/forge/astra-telemetry-fx/r3-runner-merge.log.
