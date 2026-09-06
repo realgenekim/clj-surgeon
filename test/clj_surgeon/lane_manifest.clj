@@ -136,7 +136,6 @@
    'clj-surgeon.mcp-workspace-test                      :fast
    'clj-surgeon.mcp-write-refusal-test                  :fast
    'clj-surgeon.ns-isolation-test                       :fast
-   'clj-surgeon.outline-corpus-integration-test          :integration
    'clj-surgeon.outline-differential-test               :fast
    'clj-surgeon.outline-memory-test                     :fast
    'clj-surgeon.quoted-var-refs-test                    :fast
@@ -144,7 +143,8 @@
    'clj-surgeon.telemetry-events-test                   :fast
    'clj-surgeon.workspace-onboarding-test               :fast
 
-   ;; ---- :integration (5) ----
+   ;; ---- :integration (6) ----
+   'clj-surgeon.outline-corpus-integration-test          :integration
    'clj-surgeon.mcp-feature-thread-test                 :integration
    'clj-surgeon.mcp-hot-verify-test                     :integration
    'clj-surgeon.mcp-server-test                         :integration
