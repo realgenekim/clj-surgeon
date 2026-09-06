@@ -23,10 +23,12 @@
 ;; byte-exact needle. Update this vector and the plate in the same commit.
 (def required-sections
   ["## Fan-out route (experimental default, 2026-09-06)"
-   "top-level forms across files -- a batched, known-intent fan-out -- this is the"
-   "3. Make ONE `apply_clojure_changes` call with edits"
-   "**Class boundary:** the witnessed batched known-intent fan-out class only --"
-   "*Derived from doctrine commit 7a682b9e (clj-surgeon MCP/main,"])
+   "1. Discover owners FIRST: `rg -l`, then one `inspect_clojure` `match` batch,"
+   "2. THEN patch helper and `require`/alias natively with `apply_patch`. A helper"
+   "3. ONE `apply_clojure_changes` call, edits"
+   "4. Clear argument error: repair once from the refusal. Route unavailable,"
+   "**Evidence and boundary.** Cohort I measured the INFORMED BATCHED EDIT route"
+   "*Derived from doctrine commit 7a682b9e on clj-surgeon MCP/main, whose receipts"])
 
 (defn missing-sections
   "Required plate sections absent from `source`, in declaration order."
