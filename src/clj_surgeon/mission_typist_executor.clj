@@ -152,9 +152,10 @@
         result (formatter/format-candidates! root formatter/default-command files)]
     (if-not (:ok result)
       (refuse :typist-formatter-failed)
-      {:ok true :replacements (mapv (fn [i r]
-                                      (assoc r :form (get-in result [:future-sources (str "owner-" i ".clj")])))
-                                (range) replacements)})))
+      {:ok true :format (select-keys result [:status :elapsed_ms :file-count :changed-file-count])
+       :replacements (mapv (fn [i r]
+                             (assoc r :form (get-in result [:future-sources (str "owner-" i ".clj")])))
+                       (range) replacements)})))
 
 (defn compile-formatted!
   "Validate before invoking a formatter; then validate its owned-fragment output."
@@ -164,7 +165,10 @@
       initial
       (let [formatted (format-replacements! (:root authority) replacements)]
         (if (:ok formatted)
-          (forms/compile-forms (:basis authority) (:replacements formatted))
+          (let [compiled (forms/compile-forms (:basis authority) (:replacements formatted))]
+            (if (:ok compiled)
+              (assoc compiled :form-count (count replacements) :format (:format formatted))
+              compiled))
           formatted)))))
 
 (defn unchanged? [authority]
@@ -300,7 +304,7 @@
                                                [(get-in authority [:absolute rel]) source])) sources))
           compiled (assoc compiled :original-sources (absolute (:original-sources compiled))
                           :future-sources (absolute (:future-sources compiled))
-                          :form-count 0 :caller-edit-count 0
+                          :caller-edit-count 0
                           :created-files [] :created-directories [])
           raw-inverse (assoc (extraction/build-receipt compiled)
                              :file-modes (into {} (map (fn [[rel modes]]

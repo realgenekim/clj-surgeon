@@ -49,6 +49,9 @@
         (with-redefs [executor/request-candidates! (fn [_] [{:usable true :content (json/generate-string replacements)}])]
           (let [result (executor/execute! request {:plan plan :receipt-dir (str (io/file root "receipts"))})]
             (is (:committed result) (pr-str result))
+            (is (= 1 (:match-count result)))
+            (is (= :complete (get-in result [:format :status])))
+            (is (number? (get-in result [:format :elapsed_ms])))
             (is (re-find #"new-name" (slurp file)))
             (is (= :typist-invalid-undo-hash (:error-type (executor/undo! (:undo_receipt result) "wrong-hash"))))
             (is (:ok (executor/undo! (:undo_receipt result) (:receipt_hash result))))

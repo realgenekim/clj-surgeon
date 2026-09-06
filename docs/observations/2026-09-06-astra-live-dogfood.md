@@ -64,3 +64,11 @@ and gate hashes, both phase clocks, full mission output and retained proof.
 The candidate, close receipt and inverse live under
 `receipts/mission-11935165992443803525`. The full mission receipt is also in the
 source commit body. No credentials were placed in the dossier or receipts.
+
+## Astra 01:56Z — second mission refused; telemetry repaired
+
+The next real edit targeted three executor owners to preserve actual form count and formatter metadata. Its frozen proposal at `/var/tmp/forge/astra-telemetry-fx/spec.edn` blocked before provider call or write with `:forms-protected-syntax`: the commit owner contains protected comments. Comments remained intact; the authorized native fallback changed the three small receipt handoffs. This is a recorded coverage loss, with no timing or speedup claim.
+
+Three assertions in the existing real-proof/commit/undo witness failed on the pre-fix code (zero count and missing formatter status/time). After the fix, the executor plus lane-accounting suite passes **31 tests, 121 assertions**; formatting and diff checks pass. Raw logs: `astra-telemetry-fx/red.log` and `green-corrected.log`. An intervening test command used nonexistent alias `:mcp` and failed before loading tests; it is retained in `green.log`, not counted as a test result. The actual gate uses `-M:clj-surgeon/test-deps`.
+
+Receipt `:format` now preserves the kernel formatter subprocess time, status and owned-fragment counts. It is not the complete staging/formatting phase wall. `:match-count` reflects submitted, successfully compiled owner replacements instead of a hardcoded zero. The prior live keeper receipt is historical evidence and was not rewritten.
