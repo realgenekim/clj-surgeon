@@ -624,3 +624,123 @@
           (is (= 1 (count (re-seq #"BEGIN CLJ-SURGEON ROUTING" after))))
           (is (str/includes? after "OLD-BODY"))))
       (finally (fs/delete-tree dir)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r4, BLOCKING finding: `confine-targets` canonicalized BOTH the
+;; allowed path and the requested target. When `$HOME/.codex` is a symlink to a
+;; directory outside the home, the two canonicalize to the SAME outside path,
+;; the membership test passes, and the installer writes outside the home --
+;; Sol's reproduction wrote `<outside>/AGENTS.md` with exit 0. Confinement by
+;; canonical path alone is not confinement; it is a comparison of two escapes.
+;;
+;; The authorized targets are LEXICAL paths under the canonical home, and every
+;; component from the home down to the target must be a real directory.
+
+(defn- with-home
+  "Run `f` with `user.home` pointed at `home`, restoring the real value after.
+   The installer derives its entire authority from this property, so a witness
+   that cannot move it cannot see the escape."
+  [home f]
+  (let [previous (System/getProperty "user.home")]
+    (try
+      (System/setProperty "user.home" (str home))
+      (f)
+      (finally (System/setProperty "user.home" previous)))))
+
+(defn- redteam-home
+  "A scratch home under /var/tmp/forge plus an `outside` directory next to it.
+   Returns [home outside]."
+  [label]
+  (let [root (fs/create-temp-dir {:dir "/var/tmp/forge" :prefix (str "routing-" label "-")})
+        home (fs/create-dirs (fs/path root "home"))
+        outside (fs/create-dirs (fs/path root "outside"))]
+    [home outside]))
+
+(deftest a-symlinked-dot-codex-pointing-outside-the-home-is-refused
+  (let [[home outside] (redteam-home "symlink-escape")]
+    (try
+      (fs/create-sym-link (fs/path home ".codex") outside)
+      (with-home home
+        (fn []
+          (let [target (str (fs/path home ".codex" "AGENTS.md"))
+                r (routing/confine-targets [target] false)]
+            (is (false? (:ok r))
+                "canonicalizing both sides made this escape look authorized")
+            (is (= :agent-routing-target-refused (:error-type r)))
+            (is (= [:symlinked-component] (mapv :reason (:refused r))))
+            (is (= [(str (fs/path home ".codex"))]
+                   (mapv :component (:refused r)))
+                "the refusal names the offending component")
+            (is (str/includes? (:diagnosis r) "must be a real directory")))))
+      (is (empty? (fs/list-dir outside))
+          "nothing was written outside the home")
+      (finally (fs/delete-tree (fs/parent home))))))
+
+(deftest a-symlinked-agents-md-inside-a-real-dot-codex-is-refused
+  (let [[home outside] (redteam-home "final-symlink")
+        escape (fs/path outside "AGENTS.md")]
+    (try
+      (fs/create-dirs (fs/path home ".codex"))
+      (spit (fs/file escape) "untouched\n")
+      (fs/create-sym-link (fs/path home ".codex" "AGENTS.md") escape)
+      (with-home home
+        (fn []
+          (let [r (routing/confine-targets [(str (fs/path home ".codex" "AGENTS.md"))] false)]
+            (is (false? (:ok r)))
+            (is (= [:symlinked-component] (mapv :reason (:refused r)))))))
+      (is (= "untouched\n" (slurp (fs/file escape))))
+      (finally (fs/delete-tree (fs/parent home))))))
+
+(deftest a-symlinked-component-is-refused-even-when-it-points-inside-the-home
+  ;; The rule is "no symlinked component", stated plainly -- not "no component
+  ;; that points somewhere we dislike". A rule about where a link POINTS has to
+  ;; be re-derived at every call and gets one case wrong; a rule about what a
+  ;; component IS does not.
+  (let [[home _outside] (redteam-home "inside-symlink")]
+    (try
+      (fs/create-dirs (fs/path home ".codex.real"))
+      (fs/create-sym-link (fs/path home ".codex") (fs/path home ".codex.real"))
+      (with-home home
+        (fn []
+          (let [r (routing/confine-targets [(str (fs/path home ".codex" "AGENTS.md"))] false)]
+            (is (false? (:ok r)))
+            (is (= [:symlinked-component] (mapv :reason (:refused r)))))))
+      (finally (fs/delete-tree (fs/parent home))))))
+
+(deftest plain-real-directories-under-the-home-are-still-installable
+  (let [[home _outside] (redteam-home "real-dirs")]
+    (try
+      (fs/create-dirs (fs/path home ".codex"))
+      (fs/create-dirs (fs/path home ".claude"))
+      (with-home home
+        (fn []
+          (is (:ok (routing/confine-targets
+                    [(str (fs/path home ".codex" "AGENTS.md"))
+                     (str (fs/path home ".claude" "CLAUDE.md"))]
+                    false))
+              "a missing final file is an install that creates it")))
+      (finally (fs/delete-tree (fs/parent home))))))
+
+(deftest a-missing-parent-directory-is-not-an-authorized-place-to-create-a-file
+  (let [[home _outside] (redteam-home "missing-parent")]
+    (try
+      (with-home home
+        (fn []
+          (let [r (routing/confine-targets [(str (fs/path home ".codex" "AGENTS.md"))] false)]
+            (is (false? (:ok r)))
+            (is (= [:missing-parent] (mapv :reason (:refused r)))))))
+      (finally (fs/delete-tree (fs/parent home))))))
+
+(deftest scratch-targets-refuse-symlinked-components-too
+  (let [root (fs/create-temp-dir {:dir "/var/tmp/forge" :prefix "routing-scratch-link-"})
+        outside (fs/create-dirs (fs/path root "outside"))
+        nest (fs/create-dirs (fs/path root "nest"))]
+    (try
+      (fs/create-sym-link (fs/path nest "link") outside)
+      (let [r (routing/confine-targets [(str (fs/path nest "link" "AGENTS.md"))] true)]
+        (is (false? (:ok r))
+            "--scratch keeps the /var/tmp/forge rule AND refuses symlinked components")
+        (is (= :agent-routing-target-refused (:error-type r)))
+        (is (= [:symlinked-component] (mapv :reason (:refused r)))))
+      (is (empty? (fs/list-dir outside)))
+      (finally (fs/delete-tree root)))))

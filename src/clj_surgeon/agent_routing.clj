@@ -289,10 +289,66 @@
   [path]
   (.getCanonicalPath (io/file (str path))))
 
-(defn- allowed-global-targets []
-  (let [home (System/getProperty "user.home")]
-    #{(canonical (io/file home ".codex" "AGENTS.md"))
-      (canonical (io/file home ".claude" "CLAUDE.md"))}))
+(defn- lexical
+  "The path with `.` and `..` removed and symlinks LEFT ALONE.
+
+   Sol fence r4, blocking finding: `canonical` resolves the very symlink the
+   confinement needs to see. When `$HOME/.codex` is a symlink pointing outside
+   the home, the allowed path and the requested target canonicalize to the SAME
+   outside path, and the installer authorizes a write it was built to refuse.
+   The authorized targets are therefore defined LEXICALLY under the real home,
+   and every component between the two is checked for being a link."
+  ^java.nio.file.Path [path]
+  (.normalize (.toAbsolutePath (java.nio.file.Paths/get (str path)
+                                                        (into-array String [])))))
+
+(defn- real-home
+  "The home directory itself, canonicalized ONCE. Everything below it is then
+   required to be a real directory, so canonical and lexical agree from here
+   down or the target is refused."
+  []
+  (canonical (System/getProperty "user.home")))
+
+(defn- unreal-component
+  "The first component strictly below `root` on `path` that is not a real
+   directory owned by the filesystem tree we authorized: a symbolic link, or a
+   missing/non-directory parent. The FINAL component may be absent -- that is
+   an install that creates the file -- but a missing or symlinked parent is not
+   an authorized place to create it. Returns nil when `path` is not under
+   `root` (a different check refuses that) or when every component is real."
+  [root path]
+  (let [root-path (lexical root)
+        target (lexical path)]
+    (when (and (.startsWith target root-path) (not= target root-path))
+      (let [rel (.relativize root-path target)
+            n (.getNameCount rel)]
+        (first
+         (for [i (range n)
+               :let [component (.resolve root-path (.subpath rel 0 (inc i)))
+                     final? (= i (dec n))
+                     link? (java.nio.file.Files/isSymbolicLink component)
+                     exists? (java.nio.file.Files/exists
+                              component
+                              (into-array java.nio.file.LinkOption
+                                          [java.nio.file.LinkOption/NOFOLLOW_LINKS]))
+                     dir? (java.nio.file.Files/isDirectory
+                           component
+                           (into-array java.nio.file.LinkOption
+                                       [java.nio.file.LinkOption/NOFOLLOW_LINKS]))]
+               :when (cond
+                       link? true
+                       final? false
+                       :else (not (and exists? dir?)))]
+           {:component (str component)
+            :reason (if link? :symlinked-component :missing-parent)}))))))
+
+(defn- allowed-global-targets
+  "The two authorized files, named LEXICALLY under the canonical home. Never
+   canonicalized: canonicalizing them is exactly the defect this replaces."
+  []
+  (let [home (real-home)]
+    #{(str (lexical (io/file home ".codex" "AGENTS.md")))
+      (str (lexical (io/file home ".claude" "CLAUDE.md")))}))
 
 (defn confine-targets
   "Fail closed on any target that is not one of the two global instruction
@@ -302,26 +358,51 @@
    global files, but both the Make overrides and this CLI accepted ARBITRARY
    destinations, and a scratch installation outside those paths succeeded. A
    target list is authority, and authority a caller supplies is not authority
-   the tool has checked."
+   the tool has checked.
+
+   Sol fence r4, blocking finding: confinement by canonical path alone is not
+   confinement, because a symlinked `.codex` or `.claude` makes the authorized
+   path and the escape the same canonical string. Authorization is now lexical
+   under the canonical home, plus a walk that refuses any symlinked or missing
+   parent component between the root and the target, plus the canonical target
+   still having to live under the root."
   [target-paths scratch?]
-  (let [allowed (allowed-global-targets)
-        scratch-prefix (str (canonical scratch-root) java.io.File/separator)
+  (let [home (real-home)
+        allowed (allowed-global-targets)
+        root (if scratch? (canonical scratch-root) home)
+        root-prefix (str root java.io.File/separator)
         refused (for [path target-paths
-                      :let [real (canonical path)]
-                      :when (if scratch?
-                              (not (str/starts-with? real scratch-prefix))
-                              (not (contains? allowed real)))]
-                  {:path path :canonical-path real})]
+                      :let [real (canonical path)
+                            lex (str (lexical path))
+                            bad-component (unreal-component root path)
+                            outside? (if scratch?
+                                       (not (str/starts-with? lex root-prefix))
+                                       (not (contains? allowed lex)))
+                            escapes? (not (str/starts-with? real root-prefix))]
+                      :when (or outside? escapes? bad-component)]
+                  (merge {:path path :canonical-path real}
+                         (cond
+                           outside? {:reason (if scratch?
+                                               :outside-scratch-root
+                                               :not-an-allowed-target)}
+                           bad-component bad-component
+                           :else {:reason :escapes-root})))]
     (if (seq refused)
       {:ok false
        :error-type :agent-routing-target-refused
        :scratch scratch?
        :refused (vec refused)
        :allowed (if scratch?
-                  [(str scratch-prefix "...")]
+                  [(str root-prefix "...")]
                   (vec (sort allowed)))
        :diagnosis (str "refused " (count refused) " target path(s): "
                        (pr-str (mapv :canonical-path refused))
+                       (when-let [linked (seq (filter #(= :symlinked-component (:reason %))
+                                                      refused))]
+                         (str ". Symlinked path component(s) "
+                              (pr-str (mapv :component linked))
+                              " -- every component from " root
+                              " down to the target must be a real directory"))
                        (if scratch?
                          (str ". Under --scratch every target must resolve under "
                               scratch-root ".")
