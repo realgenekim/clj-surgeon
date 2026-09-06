@@ -21,6 +21,7 @@
   entry to `verbs` below. Nothing in `clj-surgeon.mission` changes: the object
   carries `:verb` and an opaque `:intent`, the dossier projection is the only
   verb-aware function, and it takes a plan map rather than a plan function."
+  (:refer-clojure :exclude [run!])
   (:require
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-helper-extraction :as helper]
@@ -456,6 +457,27 @@
                 terminal
                 (save! state-dir terminal)))))))))
 
+(defn run!
+  "Explicit owner_forms propose-and-apply in one process. Planning persists
+   first; application reads that saved plan and proof authority by id."
+  [{:keys [verb id] :as opts}]
+  (if (or (not= "owner_forms" verb) (some? id))
+    (mission/refusal "run-request"
+                     "run requires a new owner_forms spec and accepts no mission id."
+                     {:mutation-attempted false
+                      :decision "use propose for another verb, or apply for an existing id"})
+    (let [proposed (propose! opts)]
+      (cond
+        (false? (:ok proposed)) proposed
+        (not= :ready (:state proposed))
+        (mission/refusal "not-ready"
+                         "The saved mission is not ready; no application was attempted."
+                         (merge (select-keys proposed [:id :state :decision :next-action])
+                                {:mutation-attempted false}))
+        :else
+        (apply! (assoc (select-keys opts [:state-home :receipt-dir])
+                       :id (:id proposed) :workspace (:root proposed)))))))
+
 (defn undo!
   "Invert one verified mission through the receipt its own apply published."
   [{:keys [id workspace state-home]}]
@@ -561,7 +583,7 @@
       (or (:help flags) (= "help" verb) (nil? verb))
       (do (println (help-text (second positional))) (System/exit 0))
 
-      (not (contains? #{"open" "plan" "propose" "show" "apply" "resume" "undo"
+      (not (contains? #{"open" "plan" "propose" "run" "show" "apply" "resume" "undo"
                         "link" "ready" "blocked" "list"} verb))
       (do (binding [*out* *err*]
             (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
@@ -580,6 +602,7 @@
                      ("open" "propose") (propose! opts)
                      "show" (show opts)
                      "apply" (apply! opts)
+                     "run" (run! opts)
                      "resume" (resume opts)
                      "undo" (undo! opts)
                      "link" (link! opts)

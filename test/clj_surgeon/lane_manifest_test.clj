@@ -378,8 +378,8 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 45 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 16 (count (lm/namespaces-for :battery))))
-    (is (= 66 (count lm/manifest))
+    (is (= 17 (count (lm/namespaces-for :battery))))
+    (is (= 67 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -407,6 +407,7 @@
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
+    clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
     clj-surgeon.mission-typist-test 5 ; Pure routing/dossier boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
@@ -426,7 +427,7 @@
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; ASTRA 2026-09-06: add 27 ledger + 14 pure typist + 6 executor + 5 race = 52 tests.
-  ;; Current arithmetic: 921 original + 273 adopted = 1194. Counts below retain history.
+  ;; ASTRA run entrance adds 8 boundary tests; current arithmetic: 921 + 281 = 1202. Counts below retain history.
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
   ;;
   ;; Round one MEASURED 865 tests / 13,023 assertions across the 49 namespaces
@@ -481,10 +482,10 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; Fable events ledger adds nine tests to the Astra typist corpus.
-      (is (= 282 adopted) (str "adopted tests: " adopted)))
+      ;; Fable events adds nine; the one-shot mission entrance adds eight tests.
+      (is (= 290 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1203 total) (str "manifest declares " total " tests"))
+      (is (= 1211 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

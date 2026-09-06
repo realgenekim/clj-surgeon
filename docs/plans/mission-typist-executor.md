@@ -96,3 +96,26 @@ comments, metadata and reader-discard syntax refuse until preservation is proven
 Literal anchors remain a private lowering seam, never a demand made of the model.
 Astra owns forms; Fable owns the whole-file comparator. Neither has established
 a gain. Formatting, independent proof and guarded commit are still charged.
+
+## Optional one-process run entrance
+
+`bin/mission run --spec-file owner-forms.edn --state-home H` explicitly authorizes
+planning and immediate application of an `owner_forms` mission in one JVM.
+The same request may still use `propose` for review followed by `apply`.
+`run` never accepts an existing mission id or another mission verb. It calls
+`propose!` once, lets that public path persist its frozen plan, then calls
+`apply!` once by the new id and recorded root only when the saved proposal is
+ready. No fresh request, profiles or spec are forwarded to apply. A blocked
+proposal stays recorded; run returns a typed nonzero refusal with that mission
+id and decision. Other admission or apply failures retain their existing shape.
+
+This removes one cold process start, not proof or stale-source checks. It is a
+mechanism prediction with no speedup claim. A caller must choose `propose` when
+it needs an intervening review; run does not imply a preview-only action.
+
+Witness matrix: accepted owner_forms; unsupported/missing verb; existing id;
+blocked/error proposal with zero applies; terminal apply refusal unchanged;
+one saved plan/one execution; persisted authority rather than supplied profiles;
+CLI parsing, global/per-verb help, launcher dispatch, EDN and nonzero refusal;
+filesystem refusal preserves source. Fake executor tests must make no network
+calls. Existing mission/helper behavior remains covered by its legacy suite.

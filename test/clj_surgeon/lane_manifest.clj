@@ -147,6 +147,7 @@
    'clj-surgeon.mcp-tool-test                           :integration
 
    ;; ---- :battery (16) ----
+   'clj-surgeon.mission-run-test                       :battery
    'clj-surgeon.mission-test                           :battery
    'clj-surgeon.mission-typist-executor-test            :battery
    'clj-surgeon.admit-patch-test                        :battery

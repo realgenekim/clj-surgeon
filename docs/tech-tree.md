@@ -162,3 +162,14 @@ committed through saved mission M-1. Gate/witness/protected bytes and cleanup
 passed. Cold propose+apply15.062s; executor internal2.850s; no comparative claim.
 Review pending. Receipt counter/formatter timing need repair. Evidence:
 [the live dogfood log](observations/2026-09-06-astra-live-dogfood.md).
+
+
+### Astra: optional one-process owner-form mission entrance
+
+`bin/mission run` saves a ready owner_forms plan and applies it by id in the same
+JVM. It preserves the existing propose/apply boundaries and refuses other verbs
+or an existing id. This targets the two-cold-start cost observed in the first
+real-1 keeper; it is not a speedup measurement. New fake-executor and public CLI
+witnesses cover saved authority, zero apply on blocked planning, one plan/apply,
+help, dispatch, EDN/nonzero refusal and unchanged source. See
+[the executor plan](plans/mission-typist-executor.md#optional-one-process-run-entrance).

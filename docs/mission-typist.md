@@ -10,6 +10,15 @@ bin/mission apply M-1 --workspace /absolute/project
 bin/mission undo M-1 --workspace /absolute/project
 ```
 
+For a fully decided mission, `bin/mission run --spec-file owner-forms.edn`
+saves and immediately applies the plan in one JVM. This is an explicit write
+command, restricted to `owner_forms` and no existing mission id. Use `propose`
+then `apply` when an intervening review matters. A blocked run retains its
+mission id and returns `:error_type "mission-not-ready"` with the decision,
+without applying; both that refusal and a failed apply exit nonzero. Application
+reads the persisted plan and proof authority rather than replanning. This avoids
+one cold process start; a comparative wall gain still requires measurement.
+
 The saved spec has `:verb "owner_forms"`, `:request`, and optionally a trusted
 `:profiles` map. The request contains:
 
