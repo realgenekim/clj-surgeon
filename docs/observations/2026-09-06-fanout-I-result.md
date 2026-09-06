@@ -16,3 +16,10 @@ Tokens (last cumulative total_token_usage per actor): I 278,505 / 187,310 / 185,
 Compared with cohort B (same seed, witness, runner; the ONLY change is the route the actor is told): B's deterministic route 232.7 s median, 1/4 correct → I's informed batched route 53.4 s, 4/4. The capability was the same server build both times; the difference is wiring.
 Limitations: no new controls (B's six retained as the floor; drift unmeasured); n = 4 pairs; route MANDATED (no adoption claim); pairs are positional (N_k, I_k), not adjacency; the 38 execute-one! sites out of scope; no real DB behaviour proven.
 Retained losses cited: cohort B D-route 2.8x loss (docs/observations/2026-09-06-fanout-B-cohort-result.md).
+
+## CORRECTIONS (Astra's audit 17:11Z, accepted; recomputed by this seat from results.jsonl at 17:1xZ)
+- The 1.81x is the ACTOR-wall median ratio (96.6 / 53.4). With the external proof included (total_with_proof_s) the medians are N 101.2 s / I 57.8 s = **1.75x**. Report the proof-inclusive figure as the headline; the actor-only figure is a component.
+- Correct-only: N 90.0 s (n = 3) vs I 53.4 s = 1.69x by medians (Astra's pair-based reading: 1.64x). Both are descriptive; n is tiny.
+- Tokens: the tool arm used fewer tokens in 3 of 4 pairs, not 4 (I4 229,832 > N4 224,562). The 17:0xZ note "every pair" was wrong.
+- N3's failure is the witness's textual require-layout check (a seed line no longer present after the require insertion), the SAME layout-sensitive class seen earlier in the day — not a demonstrated semantic defect. The preregistered correctness is the witness, so N3 stays incorrect under the preregistration; the language "native wrong, tool right" overstated what was shown.
+- Astra's 16:54Z prediction required four correct per arm including native; unmet (N3). The preregistered hypothesis in preregistration-I.md is met.
