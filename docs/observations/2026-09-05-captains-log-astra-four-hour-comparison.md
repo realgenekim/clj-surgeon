@@ -187,3 +187,7 @@ The18require workaround did not establish missing editing capability. Source rev
 Frozen fanout actor route loses: complete Nmedian84.682s vsD237.575s (D2.81times aslong), N4/4 vsD1/4 under a witness with a disclosed require-layout assumption. Rootowns admissionmiss; no semanticfailureclaim from those3checks, no rerun. Separate rootexistingroute capabilityprobe succeeded59/54/20 withoriginalproofs,23.012sattempt/2.413stool, excludesprep/notABratio. [Complete report](2026-09-06-astra-fanout-final-and-existing-route.md).
 
 Sparkunpaidpreflight: actual reference kernel+proofs pass2/5and4/24, outerreceipt refuses descriptive-scope field overwritten by auditmap.9.858s retained; no paidgeneration. Successor fixes field identity withactualretainedreceipt regression; originalfailure stays. Rootwindowreleased10:55Z, Fablelandingnext.
+
+### Astra class contract clarification, 2026-09-06T11:23:03.190063+00:00
+
+Source audit confirms mission classes are rate labels over one existing-definition replacement compiler. General extraction, file creation and top-level insertion/deletion are not supported by owner_forms; ready confirms frozen authority, not prose feasibility. JSON may replace a subset; raw Clojure requires exact coverage in one file. Updated request documentation and current plan without changing admission or code. [Source audit](2026-09-06-astra-class-capability-audit.md). No runtime during Fable's fence.
