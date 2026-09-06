@@ -140,3 +140,64 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | alias_migration (landed) | N=21 fan-out, Sol and a second caller | native same harness | 5.7–7.2× fewer write chars, byte-identical; second caller 13/16/9 s vs 51/23/41 s | wall secondary by pre-registration |
 | suite spike 2ecce8c4 | clj-surgeon's own suite | round one 717 s | merge gate 150 s, fast 30 s, N=4 12/12 | r2 NO-GO: orphan formatter test; r3 building |
 | GHA bridge/gha 5ce8aaea | CI | seat serial | gate 205 s green, battery 11-wide | lands with the spike; nightly dormant until default branch = MCP/main |
+
+| 2026-09-06 | BUILDING astra/typist-route: pure typist admission + frozen dossier projection, 141 assertions; no integrated executor or performance claim yet. Existing scratch applier duplicate-file-block loss and provider identity/redaction hazards reproduced independently. | docs/plans/mission-typist-executor.md |
+
+## Astra 2026-09-06 00:57Z: edit representation and retained losses
+
+Fable real-1: diff candidates 0/20 applied; whole-file candidates 16/20 verified,
+4/4 rounds, reported first-verified median 1.89 s. Cold Sol 3/4, median 29.68 s.
+These are Fable receipts on fable/typist-real-repo, not fresh Astra measurements
+or an established equal-boundary full-task ratio. Warm native controls requested.
+Astra owner-forms seam has 250 assertions across 14 pure tests; candidate schema
+is file/original-owner/replacement-form, with rename authority held by the planner.
+Outside-owner bytes survive the splice; inside-owner semantic drift still needs
+independent proof. Nested reader evaluation, attribute metadata and docstring
+loss now have audit regressions. Runtime transport and ledger remain incomplete.
+
+## Astra 2026-09-06 01:41Z: first live owner-forms keeper
+
+`981372ee`: actual diagnostic rename emitted by one Cerebras candidate and
+committed through saved mission M-1. Gate/witness/protected bytes and cleanup
+passed. Cold propose+apply15.062s; executor internal2.850s; no comparative claim.
+Review pending. Receipt counter/formatter timing need repair. Evidence:
+[the live dogfood log](observations/2026-09-06-astra-live-dogfood.md).
+
+
+### Astra: optional one-process owner-form mission entrance
+
+`bin/mission run` saves a ready owner_forms plan and applies it by id in the same
+JVM. It preserves the existing propose/apply boundaries and refuses other verbs
+or an existing id. This targets the two-cold-start cost observed in the first
+real-1 keeper; it is not a speedup measurement. New fake-executor and public CLI
+witnesses cover saved authority, zero apply on blocked planning, one plan/apply,
+help, dispatch, EDN/nonzero refusal and unchanged source. See
+[the executor plan](plans/mission-typist-executor.md#optional-one-process-run-entrance).
+
+## Astra 2026-09-06 02:35Z — typist representation and complete CLI cost
+
+- JSON owner forms: fourpaired completecommand measurements, native4/4 median22.588s vs tool3/4 median7.405s.3.05x latency-only; reliability prediction FAILED. T4doubleescaping lost parsed docstrings, correctly refused beforewrite; all5names matched in exactJVM replay. See [retained result](observations/2026-09-06-astra-forms-cohort-result.md).
+- Raw Clojure one-file definitions: optional frozenformat, exact ownercoverage, existing guardedcompiler. One live k3missionverified and3/3retainedcandidateproofs passed; concurrentreview/lowpriority makes elapsednoncomparative. Char literals, comments/meta and multfile remain unsupported. See [captain log](observations/2026-09-06-astra-live-dogfood.md).
+- Single-process mission run removes one process boundary; replicated JSONcohort above charges remainingcoldstart. Lazy helperplanner loading is a specific next startuphypothesis, notmeasured yet.
+- Next: rawformatreplication after freshnativevariancefloor, faithful commentattachment preservation prototype, complete observerhooks and combinedfence. Strongernativecontrolremainsmandatory; do not trade3/4reliability for a braggingratio.
+
+### Astra 2026-09-06T03:58:11.332837+00:00: receipt and comment cuts — BUILT, not measured wins
+
+- Strict comment source identity (98c3a1c3) replaces the false ordinal invariant.
+  Independent swap/reindent/string/insertion/nested-comment probes and combined
+  93 tests/529 assertions pass. Real commented-owner dogfood remains.
+- Saved-mission Git receipt and BB fallback (fd76badc): combined 80 tests/564
+  assertions pass; independent Git kernel review still open. BB event-only
+  bookkeeping removes a cold JVM, with no replicated wall claim yet.
+- Usage/history summaries distinguish actual known values from unknowns; no
+  repeated proof required for a saved view.
+- Routing r2 passes 14 tests/130 assertions and five-copy parity; synthetic
+  admission example must be removed before installation.
+
+Receipt and limitations: [Astra captain log](observations/2026-09-05-captains-log-astra-four-hour-comparison.md),
+[current completion audit](observations/2026-09-06-astra-typist-completion-audit.md).
+No cohort result is upgraded by these functional gates.
+
+- Astra 04:40Z: Git publication safety ratchets (189e0086, e50c4403): force visibility of staged submodules despite Git config; durable publication intent and conservative undo refusal on uncertain outcomes. Combined root gate 101/827 green; independent re-review pending. Deterministic Surgeon literal-edit dogfood receipt retained at /var/tmp/forge/astra-git-submodule-fx/receipt.edn, not a speed comparison. This is proof-cost evidence, not a newly won latency square.
+
+- Astra 05:30Z: raw-v2 completed real-derived five-owner rename loop, independent outcome audit GO: paired N4/4median25.193s,T4/4median7.655s=3.2909x; sixcontrolSD1.7856, gap clears2SD. Fourteen final sources byte-identical,28/28 independent scratch gate/witness replays pass. Prepared task only; excludes orientation and intent/proof preparation, no free-choice adoption or general/Astra superiority. Earlier JSON reliability loss retained. Report: docs/observations/2026-09-06-astra-raw-cohort-v2-result.md. Actual keeper6022ad35 separately demonstrates productive use in7.08s, with malformed candidate refused.

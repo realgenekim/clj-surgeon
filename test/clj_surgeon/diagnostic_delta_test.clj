@@ -96,5 +96,5 @@
            (select-keys right [:ok :baseline-count :future-count
                                :introduced-count :removed-count
                                :unchanged-count :blocking-introduced-count])))
-    (is (= (frequencies (map delta/finding-identity (:introduced left)))
-           (frequencies (map delta/finding-identity (:introduced right)))))))
+    (is (= (frequencies (map delta/finding-fingerprint (:introduced left)))
+           (frequencies (map delta/finding-fingerprint (:introduced right)))))))

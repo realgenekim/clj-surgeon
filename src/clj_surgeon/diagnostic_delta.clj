@@ -6,7 +6,7 @@
 (def blocking-levels
   #{:warning :error})
 
-(defn- field
+(defn- finding-field
   [finding key]
   (or (get finding key)
       (get finding (name key))))
@@ -19,24 +19,24 @@
           (str/replace "\\" "/")
           (str/replace #"^\./+" "")))
 
-(defn finding-identity
+(defn finding-fingerprint
   "Return the location-independent identity used for diagnostic multiset deltas.
 
   Row and column are deliberately excluded: an unrelated edit can move an
   existing finding without introducing it. Multiplicity remains significant."
   [finding]
-  {:filename (normalize-filename (field finding :filename))
-   :type (some-> (field finding :type) keyword)
-   :level (some-> (field finding :level) keyword)
-   :message (field finding :message)})
+  {:filename (normalize-filename (finding-field finding :filename))
+   :type (some-> (finding-field finding :type) keyword)
+   :level (some-> (finding-field finding :level) keyword)
+   :message (finding-field finding :message)})
 
 (defn- valid-finding?
   [finding]
   (and (map? finding)
-       (string? (:filename (finding-identity finding)))
-       (keyword? (:type (finding-identity finding)))
-       (keyword? (:level (finding-identity finding)))
-       (string? (:message (finding-identity finding)))))
+       (string? (:filename (finding-fingerprint finding)))
+       (keyword? (:type (finding-fingerprint finding)))
+       (keyword? (:level (finding-fingerprint finding)))
+       (string? (:message (finding-fingerprint finding)))))
 
 (defn- findings
   [snapshot]
@@ -52,13 +52,13 @@
 
 (defn- representative-difference
   [left right]
-  (let [right-counts (frequencies (map finding-identity right))]
+  (let [right-counts (frequencies (map finding-fingerprint right))]
     (:selected
       (reduce
         (fn [{:keys [remaining] :as state} finding]
-          (let [identity (finding-identity finding)
-                count-left (get remaining identity 0)]
-            (if (pos? count-left)
+          (let [identity (finding-fingerprint finding)
+                remaining-right-count (get remaining identity 0)]
+            (if (pos? remaining-right-count)
               (assoc state :remaining (update remaining identity dec))
               (update state :selected conj finding))))
         {:remaining right-counts :selected []}
@@ -80,7 +80,7 @@
       (let [introduced (representative-difference future-findings baseline-findings)
             removed (representative-difference baseline-findings future-findings)
             blocking (filterv #(contains? blocking-levels
-                                          (:level (finding-identity %)))
+                                          (:level (finding-fingerprint %)))
                               introduced)]
         {:ok (empty? blocking)
          :baseline-count (count baseline-findings)

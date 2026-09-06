@@ -21,11 +21,16 @@
   entry to `verbs` below. Nothing in `clj-surgeon.mission` changes: the object
   carries `:verb` and an opaque `:intent`, the dossier projection is the only
   verb-aware function, and it takes a plan map rather than a plan function."
+  (:refer-clojure :exclude [run!])
   (:require
-   [clj-surgeon.mission :as mission]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-helper-extraction :as helper]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.mission :as mission]
+   [clj-surgeon.mission-display :as display]
+   [clj-surgeon.mission-events :as mission-events]
+   [clj-surgeon.mission-fallback :as mission-fallback]
+   [clj-surgeon.mission-git-ledger :as mission-git-ledger]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pp]
@@ -43,7 +48,17 @@
 ;; receipt; `:undo` inverts a committed one from its own receipt file.
 
 (def verbs
-  {"helper_extraction"
+  {"owner_forms"
+   {:plan (fn [request profiles]
+            ((requiring-resolve 'clj-surgeon.mission-typist-executor/plan)
+             request profiles))
+    :execute! (fn [request config]
+                ((requiring-resolve 'clj-surgeon.mission-typist-executor/execute!)
+                 request config))
+    :undo (fn [undo-receipt expected-hash]
+            ((requiring-resolve 'clj-surgeon.mission-typist-executor/undo!)
+             undo-receipt expected-hash))}
+   "helper_extraction"
    {:plan     (fn [request profiles] (helper/plan request profiles))
     :execute! (fn [request config] (helper/execute! config request))
     :undo     (fn [undo-receipt]
@@ -60,6 +75,70 @@
 (def example-config mission/example-config)
 (def verb-help mission/verb-help)
 (def help-text mission/help-text)
+
+(defn plan-dossier
+  "Project the selected verb without inventing helper-extraction counts."
+  [verb plan request]
+  (if (= verb "owner_forms")
+    (if (:ok plan)
+      {:dossier {:planned true
+                 :owners (:owners request)
+                 :typist (select-keys (:typist plan) [:dossier :route])
+                 :sources_read (count (:sources plan))}
+       :decision nil
+       :state :ready}
+      (let [code (or (:error_type plan) (:error-type plan) "typist-plan-refused")
+            code (if (keyword? code) (name code) (str code))
+            protected? (= code "forms-protected-syntax")
+            comment-lost? (= code "forms-comment-lost")
+            comment-moved? (= code "forms-comment-moved")
+            lost (or (:lost plan) [])
+            moved (or (:moved plan) [])
+            normalized (assoc plan
+                              :error_type code
+                              :error (cond
+                                       protected?
+                                       (str "The selected owner contains protected syntax -- metadata, a reader "
+                                            "macro, or a discarded form -- that owner_forms cannot safely "
+                                            "replace. Comments themselves are supported. No mutation was attempted.")
+
+                                       comment-lost?
+                                       (str "The replacement dropped " (count lost)
+                                            " comment(s) the owner carried: " (pr-str lost)
+                                            ". Nothing was written; the comments are intact on disk.")
+
+                                       comment-moved?
+                                       (str "The replacement re-attached " (count moved)
+                                            " comment(s) to a different expression: " (pr-str moved)
+                                            ". :from and :to name the expression each comment was and "
+                                            "is attached to, not a position. Nothing was written; the "
+                                            "comments are intact on disk.")
+
+                                       :else
+                                       (or (:error plan) (str "owner_forms refused this plan: " code ".")))
+                              :decision (cond
+                                          protected?
+                                          "Choose a smaller supported owner while preserving the protected syntax, or use a native edit. Do not retry the identical request."
+
+                                          (or comment-lost? comment-moved?)
+                                          (or (:next_call plan)
+                                              (str "Re-emit the form with its comments verbatim and against "
+                                                   "the same expressions they guard. If this mission "
+                                                   "intends to rewrite a guarded expression, owner_forms "
+                                                   "cannot accept it and has no flag that will: make a "
+                                                   "reviewed native edit by hand instead, changing the "
+                                                   "comment and the expression it guards together."))
+
+                                          :else
+                                          (or (:decision plan)
+                                              "Inspect the refusal evidence and choose a supported owner scope or a native edit before trying again.")))]
+        (assoc-in (mission/dossier normalized request) [:decision :example]
+                  {:verb "owner_forms"
+                   :request (select-keys request [:workspace_root :owners :proof-files :intent
+                                                  :typist :verification :acceptance_profile])
+                   :requires-decision true
+                   :note "Request shape only; resolve the refusal before submitting."})))
+    (mission/dossier plan request)))
 
 (defn parse-flags
   "@caller-probe. Global options are accepted BEFORE or AFTER the verb, and a
@@ -146,61 +225,67 @@
   "One bounded intent in, one mission id and its dossier out. NO BYTES WRITTEN
    to the workspace: the only file this touches is the mission's own EDN."
   [{:keys [verb request state-home question] :as opts}]
-  (if-not (contains? verbs verb)
-    (mission/refusal "unknown-verb"
-                     (str "No mission verb named " (pr-str verb) ".")
-                     {:verbs (vec (sort (keys verbs)))
-                      :decision "which bounded intent this mission states"})
-    (let [state-dir (state-dir-for (:workspace_root request) state-home)
-          profiles (admitted-profiles (:workspace_root request) opts)
-          id (mission/next-id state-dir)
-          ;; @carry-the-proof: resolve the proof authority BEFORE planning. An
-          ;; unadmitted profile is a decision the caller can be told about now,
-          ;; and planning a write that could never be proved is wasted work.
-          verification (mission/resolve-verification request profiles)
-          proof-decision (mission/verification-decision verification)
-          plan (if proof-decision
-                 {:ok false :error_type (:error_type proof-decision)
-                  :error (:because proof-decision)
-                  :decision (:decision proof-decision)
-                  :admitted_profiles (get-in proof-decision [:evidence :admitted_profiles])}
-                 ((get-in verbs [verb :plan]) request profiles))
-          {:keys [dossier decision state recommendation]} (mission/dossier plan request)
-          ;; @caller-probe: EVERY blocked mission carries the closed shape that
-          ;; would have been accepted, and the size of any file it names.
-          decision (when decision
-                     (-> decision
-                         (assoc :example example-request)
-                         (update :evidence merge
-                                 (let [occ (occupant-sizes (:evidence decision)
-                                                           (:workspace_root request))]
-                                   (when (seq occ) {:occupant occ})))))
-          created (mission/advance nil :proposed "open"
-                                   {:at (now) :id id :verb verb
-                                    :created_at (now)
-                                    ;; the bounded intent as the caller said it,
-                                    ;; and the three facts that bound it
-                                    :question question
-                                    :root (:workspace_root request)
-                                    :scope (:scope request)
-                                    :verification verification
-                                    :intent request})]
-      (if (mission/refused? created)
-        created
-        (let [classified (mission/advance created state "plan"
-                                          (cond-> {:at (now) :updated_at (now)
-                                                   :dossier dossier}
-                                            recommendation (merge recommendation)
-                                            ;; @stale-resume: the snapshot is
-                                            ;; taken from the plan's OWN frozen
-                                            ;; bytes, never a second read
-                                            (:ok plan)
-                                            (assoc :snapshot
-                                                   (mission/snapshot (:sources plan)))
-                                            decision (assoc :decision decision)))]
-          (if (mission/refused? classified)
-            classified
-            (save! state-dir classified)))))))
+  (mission-events/observe! "propose" {:verb verb}
+    (fn []
+      (if-not (contains? verbs verb)
+        (mission/refusal "unknown-verb"
+                         (str "No mission verb named " (pr-str verb) ".")
+                         {:verbs (vec (sort (keys verbs)))
+                          :decision "which bounded intent this mission states"})
+        (let [state-dir (state-dir-for (:workspace_root request) state-home)
+              profiles (admitted-profiles (:workspace_root request) opts)
+              id (mission/next-id state-dir)
+              _ (mission-events/remember! {:id id :verb verb})
+              ;; @carry-the-proof: resolve the proof authority BEFORE planning. An
+              ;; unadmitted profile is a decision the caller can be told about now,
+              ;; and planning a write that could never be proved is wasted work.
+              verification (mission/resolve-verification request profiles)
+              proof-decision (mission/verification-decision verification)
+              plan (if proof-decision
+                     {:ok false :error_type (:error_type proof-decision)
+                      :error (:because proof-decision)
+                      :decision (:decision proof-decision)
+                      :admitted_profiles (get-in proof-decision [:evidence :admitted_profiles])}
+                     ((get-in verbs [verb :plan]) request profiles))
+              {:keys [dossier decision state recommendation]} (plan-dossier verb plan request)
+              ;; @caller-probe: EVERY blocked mission carries the closed shape that
+              ;; would have been accepted, and the size of any file it names.
+              decision (when decision
+                         (-> decision
+                             (assoc :example (if (= verb "owner_forms")
+                                               (:example decision)
+                                               example-request))
+                             (update :evidence merge
+                                     (let [occ (occupant-sizes (:evidence decision)
+                                                               (:workspace_root request))]
+                                       (when (seq occ) {:occupant occ})))))
+              created (mission/advance nil :proposed "open"
+                                       {:at (now) :id id :verb verb
+                                        :created_at (now)
+                                        ;; the bounded intent as the caller said it,
+                                        ;; and the three facts that bound it
+                                        :question question
+                                        :root (:workspace_root request)
+                                        :scope (:scope request)
+                                        :verification verification
+                                        :intent request})]
+          (if (mission/refused? created)
+            created
+            (let [classified (mission/advance created state "plan"
+                                              (cond-> {:at (now) :updated_at (now)
+                                                       :dossier dossier}
+                                                (= verb "owner_forms") (assoc :plan plan)
+                                                recommendation (merge recommendation)
+                                                ;; @stale-resume: the snapshot is
+                                                ;; taken from the plan's OWN frozen
+                                                ;; bytes, never a second read
+                                                (:ok plan)
+                                                (assoc :snapshot
+                                                       (mission/snapshot (:sources plan)))
+                                                decision (assoc :decision decision)))]
+              (if (mission/refused? classified)
+                classified
+                (save! state-dir classified)))))))))
 
 (defn replan!
   "@replan-after-dependency. Recompute one mission's dossier and snapshot
@@ -213,19 +298,24 @@
       m
       (let [request (:intent m)
             profiles (or profiles
-                         (mission/verification-profiles m)
+                         (when-not (= "owner_forms" (:verb m))
+                           (mission/verification-profiles m))
                          (not-empty (admitted-profiles (:root m) opts)))
             plan ((get-in verbs [(:verb m) :plan]) request profiles)
-            projection (assoc (mission/dossier plan request)
+            projection (assoc (plan-dossier (:verb m) plan request)
                               :snapshot (when (:ok plan)
                                           (mission/snapshot (:sources plan))))
-            replanned (mission/replan m projection (now))]
+            refreshed (mission/replan m projection (now))
+            replanned (if (and (= "owner_forms" (:verb m))
+                               (not (mission/refused? refreshed)))
+                        (assoc refreshed :plan plan)
+                        refreshed)]
         (if (mission/refused? replanned)
           replanned
           (do (save! state-dir replanned)
               (assoc (mission/show-view (mission/read-all state-dir) id)
-             :config_sources (mission/config-sources (or workspace (:root m))
-                                                     (:config opts)))))))))
+                :config_sources (mission/config-sources (or workspace (:root m))
+                                                        (:config opts)))))))))
 
 (defn repair!
   "@caller-probe. Answer a dead mission with a NARROWER one, and say so.
@@ -276,17 +366,24 @@
                                     "chain is visible from either end"))))))))))
 
 (defn show
-  "The mission, plus the graph around it. @migration-plan: `show` is where a
-   caller learns that M-2 is held by M-1, so the DAG is rendered here rather
-   than behind a second verb nobody would call."
+  "Read saved state and bounded publication recovery metadata without reading Git."
   [{:keys [id workspace state-home] :as opts}]
-  (let [state-dir (state-dir-for workspace state-home)
-        m (mission/read-mission state-dir id)]
-    (if (mission/refused? m)
-      m
-      (assoc (mission/show-view (mission/read-all state-dir) id)
-             :config_sources (mission/config-sources (or workspace (:root m))
-                                                     (:config opts))))))
+  (if-not (and (string? workspace) (seq workspace))
+    display/workspace-required
+    (let [state-dir (state-dir-for workspace state-home)
+          m (mission/read-mission state-dir id)]
+      (if (mission/refused? m)
+        (display/show-result m opts)
+        (display/show-result
+          (display/publication-view
+            (assoc (mission/show-view (mission/read-all state-dir) id)
+                   :config_sources (mission/config-sources (or workspace (:root m)) (:config opts)))
+            (when-not (:full opts) (mission-git-ledger/publication-status opts))) opts)))))
+
+(defn fallback!
+  "Shared event-only handler; public launcher uses the same function under BB."
+  [opts]
+  (mission-fallback/report! opts))
 
 (defn link!
   "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.
@@ -315,8 +412,8 @@
               linked
               (do (save! state-dir linked)
                   (assoc (mission/show-view (mission/read-all state-dir) id)
-             :config_sources (mission/config-sources (or workspace (:root m))
-                                                     (:config opts)))))))))))
+                    :config_sources (mission/config-sources (or workspace (:root m))
+                                                            (:config opts)))))))))))
 
 (defn list-missions
   [{:keys [workspace state-home]}]
@@ -359,80 +456,133 @@
    is what a crashed apply leaves behind — the one state that means 'a write
    was attempted and nobody recorded the outcome'."
   [{:keys [id workspace state-home profiles receipt-dir] :as opts}]
-  (let [state-dir (state-dir-for workspace state-home)
-        m (mission/read-mission state-dir id)]
-    (if (mission/refused? m)
-      m
-      (or
-       ;; @migration-plan: an unverified dependency refuses FIRST — before the
-       ;; snapshot is even checked, because a stale-plan refusal would send the
-       ;; caller to re-plan against a tree its dependency has not touched yet.
-       (mission/dependency-refusal m (mission/by-id (mission/read-all state-dir)))
-       ;; @stale-resume: nothing is staged, nothing is written, and the refusal
-       ;; names the files that moved.
-       (stale? m)
-       (let [staged (mission/advance m :applied "apply" {:at (now) :updated_at (now)})]
-        (if (mission/refused? staged)
-          staged
-          (let [_ (save! state-dir staged)
-                ;; @carry-the-proof: the mission's OWN authority, so apply and
-                ;; resume need only an id and a workspace. An explicitly passed
-                ;; profiles map still wins, for a caller deliberately re-proving
-                ;; under a different profile.
-                profiles (or profiles
-                             (mission/verification-profiles m)
-                             (not-empty (admitted-profiles (:root m) opts)))
-                config (cond-> {:verification-profiles profiles}
-                         receipt-dir (assoc :receipt-dir receipt-dir))
-                receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
-                committed? (true? (:committed receipt))
-                terminal (mission/advance staged
-                                          (if committed? :verified :failed)
-                                          "apply"
-                                          (cond-> {:at (now) :updated_at (now)
-                                                   :receipt receipt}
-                                            committed?
-                                            (assoc :undo
-                                                   {:receipt (:undo_receipt receipt)
-                                                    :receipt_hash (:receipt_hash receipt)})))]
-            (if (mission/refused? terminal)
-              terminal
-              (save! state-dir terminal)))))))))
+  (mission-events/observe! "apply" {:id id}
+    (fn []
+      (let [state-dir (state-dir-for workspace state-home)
+            m (mission/read-mission state-dir id)
+            _ (mission-events/remember! m)]
+        (if (mission/refused? m)
+          m
+          (or
+            ;; @migration-plan: an unverified dependency refuses FIRST — before the
+            ;; snapshot is even checked, because a stale-plan refusal would send the
+            ;; caller to re-plan against a tree its dependency has not touched yet.
+            (mission/dependency-refusal m (mission/by-id (mission/read-all state-dir)))
+            (when (and (= "owner_forms" (:verb m))
+                       (not (and (string? receipt-dir) (not (str/blank? receipt-dir)))))
+              {:ok false :id id :error_type "typist-receipt-dir-required"
+               :error "Choose where to retain source-bearing artifacts with --receipt-dir; no destination is created by this refusal."
+               :mutation-attempted false
+               :next_call
+               (display/command
+                 (into (cond-> ["bin/mission" "apply" id "--workspace" workspace]
+                         state-home (conj "--state-home" state-home))
+                       ["--receipt-dir" (str (io/file workspace ".clj-surgeon/typist"))]))})
+            ;; @stale-resume: nothing is staged, nothing is written, and the refusal
+            ;; names the files that moved.
+            (stale? m)
+            (let [staged (mission/advance m :applied "apply" {:at (now) :updated_at (now)})]
+              (if (mission/refused? staged)
+                staged
+                (let [_ (save! state-dir staged)
+                      ;; @carry-the-proof: the mission's OWN authority, so apply and
+                      ;; resume need only an id and a workspace. An explicitly passed
+                      ;; profiles map still wins, for a caller deliberately re-proving
+                      ;; under a different profile.
+                      profiles (or profiles
+                                   (mission/verification-profiles m)
+                                   (not-empty (admitted-profiles (:root m) opts)))
+                      config (cond-> {:verification-profiles profiles}
+                               (= "owner_forms" (:verb m))
+                               (assoc :plan (:plan m)
+                                      :persist-recovery!
+                                      (fn [recovery]
+                                        (save! state-dir
+                                               (assoc staged
+                                                      :undo (select-keys recovery [:receipt :receipt_hash])
+                                                      :proof {:typist-recovery recovery}))))
+                               receipt-dir (assoc :receipt-dir receipt-dir))
+                      receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
+                      committed? (true? (:committed receipt))
+                      terminal (mission/advance staged
+                                                (if committed? :verified :failed)
+                                                "apply"
+                                                (cond-> {:at (now) :updated_at (now)
+                                                         :receipt receipt}
+                                                  committed?
+                                                  (assoc :undo
+                                                         {:receipt (:undo_receipt receipt)
+                                                          :receipt_hash (:receipt_hash receipt)})))]
+                  (if (mission/refused? terminal)
+                    terminal
+                    (save! state-dir terminal)))))))))))
+
+(defn run!
+  "Explicit owner_forms propose-and-apply in one process. Planning persists
+   first; application reads that saved plan and proof authority by id."
+  [{:keys [verb id] :as opts}]
+  (if (or (not= "owner_forms" verb) (some? id))
+    (mission/refusal "run-request"
+                     "run requires a new owner_forms spec and accepts no mission id."
+                     {:mutation-attempted false
+                      :decision "use propose for another verb, or apply for an existing id"})
+    (let [proposed (propose! opts)]
+      (cond
+        (false? (:ok proposed)) proposed
+        (not= :ready (:state proposed))
+        (mission/refusal "not-ready"
+                         "The saved mission is not ready; no application was attempted."
+                         (merge (select-keys proposed [:id :state :decision :next-action])
+                                {:mutation-attempted false}))
+        :else
+        (apply! (assoc (select-keys opts [:state-home :receipt-dir])
+                       :id (:id proposed) :workspace (:root proposed)))))))
 
 (defn undo!
   "Invert one verified mission through the receipt its own apply published."
   [{:keys [id workspace state-home]}]
-  (let [state-dir (state-dir-for workspace state-home)
-        m (mission/read-mission state-dir id)]
-    (if (mission/refused? m)
-      m
-      (let [receipt-file (get-in m [:undo :receipt])]
-        (cond
-          (not= :verified (:state m))
-          (mission/advance m :undone "undo" {:at (now)})   ; refuses, typed
+  (mission-events/observe! "undo" {:id id}
+    (fn []
+      (let [opts {:id id :workspace workspace :state-home state-home}]
+        (mission-git-ledger/with-publication-lock opts
+          (fn []
+            (if-let [refused (mission-git-ledger/undo-publication-refusal opts)]
+              refused
+              (let [state-dir (state-dir-for workspace state-home)
+                    m (mission/read-mission state-dir id)
+                    _ (mission-events/remember! m)]
+                (if (mission/refused? m)
+                  m
+                  (let [receipt-file (get-in m [:undo :receipt])]
+                    (cond
+                      (not= :verified (:state m))
+                      (mission/advance m :undone "undo" {:at (now)})   ; refuses, typed
 
-          (not (and (string? receipt-file) (.isFile (io/file receipt-file))))
-          (mission/refusal "undo-receipt-missing"
-                           (str "The mission's undo receipt is not on disk: "
-                                (pr-str receipt-file))
-                           {:id id :undo_receipt receipt-file
-                            :decision "how this write is to be inverted"})
+                      (not (and (string? receipt-file) (.isFile (io/file receipt-file))))
+                      (mission/refusal "undo-receipt-missing"
+                                       (str "The mission's undo receipt is not on disk: "
+                                            (pr-str receipt-file))
+                                       {:id id :undo_receipt receipt-file
+                                        :decision "how this write is to be inverted"})
 
-          :else
-          (let [result ((get-in verbs [(:verb m) :undo]) receipt-file)]
-            (if-not (:ok result)
-              (mission/refusal "undo-failed"
-                               (str "The inverse did not verify: "
-                                    (or (:error result) (:error-type result)))
-                               {:id id :evidence result
-                                :decision "which files the failed inverse left standing"})
-              (let [undone (mission/advance m :undone "undo"
-                                            {:at (now) :updated_at (now)
-                                             :undo (assoc (:undo m)
-                                                          :verified (:verified result))})]
-                (if (mission/refused? undone)
-                  undone
-                  (save! state-dir undone))))))))))
+                      :else
+                      (let [undo (get-in verbs [(:verb m) :undo])
+                            result (if (= "owner_forms" (:verb m))
+                                     (undo receipt-file (get-in m [:undo :receipt_hash]))
+                                     (undo receipt-file))]
+                        (if-not (:ok result)
+                          (mission/refusal "undo-failed"
+                                           (str "The inverse did not verify: "
+                                                (or (:error result) (:error-type result)))
+                                           {:id id :evidence result
+                                            :decision "which files the failed inverse left standing"})
+                          (let [undone (mission/advance m :undone "undo"
+                                                        {:at (now) :updated_at (now)
+                                                         :undo (assoc (:undo m)
+                                                                      :verified (:verified result))})]
+                            (if (mission/refused? undone)
+                              undone
+                              (save! state-dir undone))))))))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; entrance
@@ -483,10 +633,35 @@
                 (or (= :failed (:state result))
                     (false? (get-in result [:receipt :committed]))))))
 
+(defn commit-options
+  "Pure closed CLI request: proof authority can only come from the saved mission."
+  [{:keys [positional workspace state-home] :as flags}]
+  (if (and (every? #{:positional :workspace :state-home} (keys flags))
+           (= 2 (count positional)) (= "commit" (first positional))
+           (string? (second positional)) (re-matches #"M-[0-9]{1,12}" (second positional))
+           (string? workspace) (not (str/blank? workspace))
+           (or (not (contains? flags :state-home))
+               (and (string? state-home) (not (str/blank? state-home)))))
+    {:ok true :options (cond-> {:id (second positional) :workspace workspace}
+                         (contains? flags :state-home) (assoc :state-home state-home))}
+    {:ok false :error-type :mission-commit-options
+     :error "Use commit M-ID --workspace R [--state-home H]; no spec, proof or config overrides."
+     :git-ref-updated false :source-mutation-attempted false :index-staging false}))
+
+(defn commit!
+  "CLI boundary for Git ref publication, distinct from the source kernel commit."
+  [flags]
+  (let [request (commit-options flags)
+        result (if (:ok request) (mission-git-ledger/commit! (:options request)) request)]
+    (cond-> (assoc result :operation "mission-git-commit" :push-requested false
+              :contract "Git ref publication from saved verified proof; stages nothing, changes no source, skips Git hooks and signing, never pushes.")
+      (= :unknown (:git-ref-updated result))
+      (assoc :next-action "Inspect the Git branch and possible-commit before retrying; ref update outcome is unknown."))))
+
 (defn -main [& args]
   (let [{:keys [positional] :as flags} (parse-flags args)
         verb (first positional)
-        spec (read-spec (:spec-file flags))
+        spec (when-not (= "commit" verb) (read-spec (:spec-file flags)))
         opts (merge {:workspace (:workspace flags)
                      :state-home (:state-home flags)
                      :config (:config flags)
@@ -494,15 +669,15 @@
                      :spec spec
                      :receipt-dir (:receipt-dir flags)
                      :id (second positional)}
-                    (select-keys flags [:depends-on :supersedes])
+                    (select-keys flags [:depends-on :supersedes :full :reason])
                     (select-keys spec [:verb :question :request :profiles]))]
     (cond
       ;; explicit help is a SUCCESS, and it is the only path that prints usage
       (or (:help flags) (= "help" verb) (nil? verb))
       (do (println (help-text (second positional))) (System/exit 0))
 
-      (not (contains? #{"open" "plan" "propose" "show" "apply" "resume" "undo"
-                        "link" "ready" "blocked" "list"} verb))
+      (not (contains? #{"open" "plan" "propose" "run" "show" "apply" "resume" "undo"
+                        "link" "ready" "blocked" "list" "fallback" "commit"} verb))
       (do (binding [*out* *err*]
             (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
           (println (help-text nil))
@@ -520,12 +695,21 @@
                      ("open" "propose") (propose! opts)
                      "show" (show opts)
                      "apply" (apply! opts)
+                     "run" (run! opts)
                      "resume" (resume opts)
                      "undo" (undo! opts)
+                     "commit" (commit! flags)
+                     "fallback" (fallback! opts)
                      "link" (link! opts)
                      ("ready" "blocked") (ready opts)
-                     "list" (list-missions opts))]
-        (when (map? result) (pp/pprint result))
-        (System/exit (cond (false? (:ok result)) 1
-                           (failed-receipt? result) 1
+                     "list" (list-missions opts))
+            rendered (when (map? result)
+                       (cond
+                         (= "show" verb) result
+                         (and (= "propose" verb) (:id result) (not (:full opts)))
+                         (show (assoc opts :id (:id result) :workspace (:root result)))
+                         :else (display/with-recovery result opts)))]
+        (when rendered (pp/pprint rendered))
+        (System/exit (cond (or (false? (:ok result)) (false? (:ok rendered))) 1
+                           (and (not= "show" verb) (failed-receipt? result)) 1
                            :else 0))))))

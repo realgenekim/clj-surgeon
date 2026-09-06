@@ -51,7 +51,8 @@
    or integration lane MUST NOT touch the network: those lanes run N-wide
    from N clones, and a lane whose wall depends on a remote host is not a
    merge gate."
-  (:require [clojure.string :as str]))
+  (:require
+   [clojure.string :as str]))
 
 (def lanes
   "Declaration order is execution order across lanes."
@@ -91,9 +92,15 @@
 (def manifest
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
-  {
-
-   ;; ---- :fast (41) ----
+  {;; ---- :fast (49) ----
+   'clj-surgeon.mission-usage-test :fast
+   'clj-surgeon.mission-git-test :fast
+   'clj-surgeon.mission-typist-test                    :fast
+   'clj-surgeon.mission-candidate-race-test :fast
+   'clj-surgeon.mission-candidate-test                 :fast
+   'clj-surgeon.mission-forms-test                     :fast
+   'clj-surgeon.mission-forms-source-test :fast
+   'clj-surgeon.mission-plain-forms-test :fast
    'clj-surgeon.battery-ledger-test                     :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
@@ -136,14 +143,33 @@
    'clj-surgeon.telemetry-events-test                   :fast
    'clj-surgeon.workspace-onboarding-test               :fast
 
-   ;; ---- :integration (5) ----
+   ;; ---- :integration (6) ----
+   'clj-surgeon.outline-corpus-integration-test          :integration
    'clj-surgeon.mcp-feature-thread-test                 :integration
    'clj-surgeon.mcp-hot-verify-test                     :integration
    'clj-surgeon.mcp-server-test                         :integration
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
 
-   ;; ---- :battery (15) ----
+   ;; ---- :battery (32) ----
+   'clj-surgeon.mission-run-test                       :battery
+   'clj-surgeon.mission-events-test :battery
+   'clj-surgeon.mission-phase-events-test :battery
+   'clj-surgeon.mission-provider-fallback-events-test :battery
+   'clj-surgeon.mission-display-test :battery
+   'clj-surgeon.mission-fallback-test :battery
+   'clj-surgeon.mission-usage-executor-test :battery
+   'clj-surgeon.mission-typist-executor-admission-test :battery
+   'clj-surgeon.mission-git-boundary-test :battery
+   'clj-surgeon.mission-git-identity-test :battery
+   'clj-surgeon.mission-git-submodule-test :battery
+   'clj-surgeon.mission-publication-test :battery
+   'clj-surgeon.mission-git-fence-test :battery
+   'clj-surgeon.mission-git-process-test :battery
+   'clj-surgeon.mission-git-ledger-test :battery
+   'clj-surgeon.mission-commit-cli-test :battery
+   'clj-surgeon.mission-test                           :battery
+   'clj-surgeon.mission-typist-executor-test            :battery
    'clj-surgeon.admit-patch-test                        :battery
    'clj-surgeon.core-discovery-test                     :battery
    'clj-surgeon.mcp-alias-migration-test                :battery
@@ -151,15 +177,13 @@
    'clj-surgeon.mcp-feature-thread-sed-test             :battery
    'clj-surgeon.mcp-helper-extraction-test              :battery
    'clj-surgeon.mcp-inspect-cold-job-test               :battery
-   'clj-surgeon.mission-test                            :battery
    'clj-surgeon.mcp-prepared-wire-test                  :battery
    'clj-surgeon.mcp-process-test                        :battery
    'clj-surgeon.mcp-relation-census-launcher-test       :battery
    'clj-surgeon.mcp-relation-census-test                :battery
    'clj-surgeon.reader-eval-fence-test                  :battery
    'clj-surgeon.repository-hygiene-test                 :battery
-   'clj-surgeon.txn-journal-test                        :battery
-   })
+   'clj-surgeon.txn-journal-test                        :battery})
 
 (def excluded
   "Test namespaces that are on disk and in NO JVM lane, each with the reason
@@ -194,8 +218,7 @@
    "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"
 
    'clj-surgeon.worktree-lifecycle-recovery-test
-   "own Make target -- `make worktree-lifecycle-recovery-test` (Makefile:834)"
-})
+   "own Make target -- `make worktree-lifecycle-recovery-test` (Makefile:834)"})
 
 (defn cadence-of-lane
   "The declared cadence for `lane`, or nil when the lane declares none."

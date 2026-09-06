@@ -68,18 +68,11 @@ Sol fence r4 is right and this is the corrected claim. TYPIST_OFFLINE
     absolute path, reset PATH, `env -i`, re-exec, or open a socket. Python
     monkeypatching plus a mutable PATH cannot make that impossible; only an
     OS-enforced process/network boundary or a strictly confined broker can.
-  * IS UNAVAILABLE TO UPGRADE ON THIS BOX AS THIS USER: `unshare -rn` fails
-    (write to uid_map not permitted), there is no bwrap and no firejail, and
-    there is no sudo. So the guarantee the test suite actually offers is a
-    WITNESSED one, not a confinement one -- see bin/typist-run-test:
-      (a) NO REAL KEY IS REACHABLE -- the suite always runs the runner with
-          --keys-dir pointed at a dummy-key directory under /var/tmp/forge,
-          and proves it with `--print-key-paths` (paths only, never contents).
-      (b) NOTHING WAS SPENT -- the ~/.codex/sessions PATH SET is identical
-          before and after, and an egress canary shows no receipt written by
-          the suite carries :cost_source "provider" or a real :upstream.
-    A child COULD have spawned or connected; what is proven is that it DID
-    NOT, and that it COULD NOT have spent.
+  * HAS LIMITED TEST WITNESSES: dummy key-path resolution, an unchanged Codex
+    session path set, and no matching priced receipt in the suite fixture.
+    These observations do not establish arbitrary child confinement, a complete
+    network census, or proof that no spending was possible. The test harness
+    adds cooperative Python audit guards and permits only reviewed children.
 
 Receipts written while TYPIST_OFFLINE=1 carry
 :offline_contract "chokepoint-not-sandbox" so a later reader is never invited
@@ -120,11 +113,10 @@ T0 = time.time()
 # user (`unshare -rn` -> write to uid_map not permitted; no bwrap, no
 # firejail, no sudo). Do not read the refusals below as containment.
 #
-# The guarantee the SUITE offers instead is witnessed, not enforced: no real
-# key is reachable (--keys-dir dummies under /var/tmp/forge, proved with
-# --print-key-paths) and nothing was spent (~/.codex/sessions path set
-# unchanged; no provider-priced receipt written by the suite). See
-# bin/typist-run-test. `bin/typist-run-test` calls itself an
+# The suite witnesses configured dummy paths and absence of new artifacts in
+# the observed stores; these are not a complete egress or spending census.
+# Additional cooperative audit guards protect its reviewed Python children.
+# `bin/typist-run-test` calls itself an
 # OFFLINE self-test, and it was one only by accident of geography: its NW
 # "refused before any codex call" check pointed at the WORKTREE, and the write
 # fence admits the worktree. On a checkout that lives inside /var/tmp/forge
@@ -145,7 +137,7 @@ T0 = time.time()
 # boundary. `subprocess.run(cmd, shell=True)`, a `bash -c` trampoline and
 # `os.system` all walked straight past it, because each of those hands the
 # command to a SHELL and the shell -- not this process -- does the exec. Two
-# independent stops now close that, and each is listed here rather than
+# independent guards cover the reviewed paths, and each is listed here rather than
 # remembered at a call site:
 #
 #   (a) THE CHOKEPOINT TABLE below -- every spawn and every network entry
@@ -168,9 +160,8 @@ T0 = time.time()
 #       the real binary. (a) fails loud in-process and (b) covers name lookups
 #       (a) structurally cannot see -- NEITHER catches everything, and the
 #       pair is not confinement. That is why the contract is named
-#       chokepoint-not-sandbox and why the suite proves a WITNESSED guarantee
-#       (no real key reachable; no session created; ledger did not grow)
-#       instead of an impossibility claim.
+#       chokepoint-not-sandbox. Configured dummy paths, unchanged session paths
+#       and ledger size are limited observations, not an impossibility claim.
 #
 # THE CHOKEPOINT TABLE (wrapped at import when OFFLINE):
 #   os.system, os.popen
@@ -238,8 +229,8 @@ def guard_network(what="network open"):
 
 def _install_offline_path_shim():
     """Prepend a PATH dir whose `codex` and `claude` print the typed refusal
-    and exit 6. This is the stop for every route the in-process wrappers
-    cannot see: a shell trampoline, an alias, a grandchild process."""
+    and exit 6. This covers ordinary PATH-based shell/grandchild dispatch;
+    it cannot govern an arbitrary child program using an absolute executable."""
     import tempfile
     base = "/var/tmp/forge"
     d = tempfile.mkdtemp(prefix="typist-offline-shim-",
@@ -321,12 +312,13 @@ def _guarded_create_connection(*args, **kwargs):
 
 
 def _guard_os_exec_family():
-    """os.exec*/os.spawn* take the program as their FIRST argument in every
-    spelling, so one wrapper shape covers the whole family."""
+    """exec/posix_spawn use path first; spawn* put mode before the path."""
     def wrap(name, fn):
-        def guarded(path, *args, **kwargs):
+        def guarded(*args, **kwargs):
+            index = 1 if name.startswith("spawn") else 0
+            path = args[index] if len(args) > index else kwargs.get("path", kwargs.get("file"))
             guard_spawn([path], shell=False)
-            return fn(path, *args, **kwargs)
+            return fn(*args, **kwargs)
         guarded.__name__ = name
         return guarded
     for name in _OS_EXEC_SPAWN:
@@ -1208,7 +1200,9 @@ def exact_cost(v):
 def usd_str(v):
     """USD for a HUMAN table, at least 6 decimals and never fewer digits than
     the provider gave us: 0.12345678 -> $0.12345678, 0.123 -> $0.123000."""
-    head, _, frac = ("%.8f" % v).rstrip("0").partition(".")
+    from decimal import Decimal
+    head, _, frac = format(Decimal(repr(float(v))), "f").partition(".")
+    frac = frac.rstrip("0")
     return "$" + head + "." + frac.ljust(6, "0")
 
 

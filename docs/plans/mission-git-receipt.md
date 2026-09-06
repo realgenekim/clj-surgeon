@@ -1,0 +1,167 @@
+# Verified mission to Git: restricted explicit-stage seam
+
+The kernel's verified source mutation and a Git commit are separate events.
+This first seam commits an already-staged, exact verified mission change. It
+does not stage files, rewrite source, push, or run Git hooks. **`commit-tree`
+deliberately skips ordinary `git commit` hooks and signing defaults.** An
+independent successful mission proof is mandatory; this seam cannot claim those
+ordinary commit semantics. The CLI must disclose this contract before invocation.
+
+The pure planner receives a normalized trusted mission receipt plus observations
+obtained independently by the integration boundary. Mission provenance contains
+id, canonical workspace root, ledger digest, proof digest, and per-file before
+and verified-after SHA-256 hashes. Observations contain canonical root, symbolic
+branch, full HEAD oid, exact index tree oid, staged path set, and regular-file
+HEAD/index/live hashes and modes. The boundary must reject symlinks and special
+files before reading them, disable Git pathspec magic and environment overrides,
+and resolve the actual Git top level rather than trusting a command-line root.
+
+Admission requires a verified receipt with distinct successful gate and acceptance
+evidence, exact current ledger digest, matching canonical root, a supported local
+branch, and nonempty bounded changed paths. Both `main` and `MCP/main` refuse.
+Every mission HEAD hash must equal its preimage; index and live hashes must equal
+the verified postimage; staged paths must equal mission changed paths exactly.
+Only modifications of regular existing files with unchanged mode are supported.
+Creation, deletion, rename, submodules, executable-bit change, and detached HEAD
+refuse. Unrelated unstaged files are permitted; unrelated staged paths refuse.
+
+The generated commit body contains only bounded allowlisted provenance, never
+source, prompts, intent text, provider output, or arbitrary receipt metadata.
+The executor reobserves immediately before creation. It passes the generated
+message on stdin to `git commit-tree TREE -p HEAD -F -`, then advances the named
+branch using `git update-ref REF NEW OLD`. The old oid is a compare-and-swap
+guard. Failure after object creation can leave an unreachable object, never a
+success claim. The real adapter serializes cooperating calls with a lock in the
+worktree Git directory, and repeats all observations before object creation and
+ref advancement. External source/index/ledger/Git writers may ignore this lock.
+The return explicitly distinguishes Git ref mutation from
+kernel source mutation and declares skipped hooks.
+
+This lane provides the pure planner, injected executor, and actual bounded argv,
+Git/index/live observation and repository locking adapters. Root owns normalized
+saved-ledger extraction, its reread/hash callback, CLI help and wiring. The seam
+is exposed by the experimental `bin/mission commit` command. Git `write-tree` may refresh internal
+index cache metadata; no staging or staged-content mutation occurs. Source blobs
+must be UTF-8 and at most 1 MiB; every subprocess has a 10-second wall limit and
+1 MiB output cap enforced while reading. Environment Git overrides are removed,
+except the explicit seat identity variables `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
+`GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`, and
+`GIT_COMMITTER_DATE`. Git resolves these before repository identity configuration;
+the same inherited values reach identity preflight and commit creation. No identity
+is supplied by model/request fields. Arbitrary config, workspace, index and other
+Git environment controls remain removed. With the six variables absent, ordinary
+explicit local configuration behavior remains; the tool cannot infer the intended
+human/agent author from a name. Fleet seats must continue exporting their own
+identity, as required by the Anvil resume/house rule. In either mode,
+fsmonitor, hooks and automatic signing are disabled for these subprocesses.
+
+An update-ref failure or timeout returns `:git-ref-updated :unknown` with a
+`:possible-commit` oid. It does not claim the branch stayed unchanged: a process
+could finish updating the ref before a timeout/error is observed. The caller
+must inspect the named branch before retrying. Earlier refusals report false.
+
+Root wiring calls `(commit! normalized-provenance ledger-current?)`. The callback
+must reread the exact saved ledger and compare its digest to the normalized
+`:ledger-sha256` on every invocation. Normalized provenance is:
+
+```clojure
+{:id "M-0001" :state :verified :workspace-root "/canonical/repository"
+ :ledger-sha256 "<64 lowercase hex>" :receipt-sha256 "<64 lowercase hex>"
+ :gate {:ok true :sha256 "<gate evidence digest>"}
+ :acceptance {:ok true :sha256 "<distinct independent evidence digest>"}
+ :files {"src/a.clj" {:before-sha256 "<HEAD/preimage digest>"
+                      :after-sha256 "<verified live/index digest>"}}}
+```
+
+The adapter rejects paths containing whitespace, control characters, colon,
+backslash, or dot traversal components. It also refuses non-regular blobs, file
+creation/deletion, executable-mode changes and unsupported branch names. These
+are deliberately narrow initial constraints, not claims that Git lacks them.
+
+Validation matrix: happy plan and exact argv/stdin; missing/unverified receipt;
+wrong root/ledger/hash; extra or missing staged files; invalid path/ref/oid;
+creation/deletion/mode changes; both frozen branches; distinct proof evidence;
+reobservation drift; commit-tree failure/invalid output; update-ref CAS failure;
+success provenance and no source/staging operations. Scratch fixture commits are
+authorized tests; root reviews before any user's mission is committed through
+the feature.
+
+Validation at implementation: 13 BB tests / 80 assertions green, including exact
+real scratch Git commit/tree/body/source checks; unrelated staged path, stale
+ledger/live source, missing source, symlink and frozen-branch refusals; output
+cap; hooks skipped; uncertain ref result and metadata omission. Fixtures derive
+from the mission-forms protected-comment/adjacent-owner shape and are removed
+in finally. These are synthetic boundary tests, not live mission dogfood. A first
+scratch run exposed BB's unsupported FileLockImpl.release method after a successful
+ref update; releasing through FileChannel.close fixed that erroneous failure
+report, and the real invocation regression now exercises the whole lifecycle.
+
+Review hardening: stdin delivery now occurs asynchronously under the same
+monotonic deadline as process exit/output capture. A nonreading Python child
+with 2 MiB stdin times out at a 150 ms budget and is killed/reaped. Git author and
+committer identity are preflighted; absence yields `:git-identity-unavailable`
+with an explicit repository-local configuration next action, never guessed or
+silently installed identity. Full seam: 15 tests / 85 assertions. Test lanes:
+mission-git-test :fast (4); boundary :battery (4); fence :battery (5); process
+:battery (2). Source and staged-content preservation remain unchanged.
+
+Independent Opus identity finding (review of b3dbd9e4): stripping every Git
+environment variable silently replaced the exported seat identity with repository
+configuration. The faithful new witness reproduced that failure before the fix:
+the committed author/committer came from the conflicting repository, and all six
+explicit identity variables disappeared. After the exact allowlist repair, a real
+scratch commit records distinct seat author and committer names/emails plus the
+two requested Git timestamps. A separate child with identity variables omitted
+retains explicit local configuration behavior. Another witness confirms that
+GIT_CONFIG_*, GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_SSH_COMMAND and
+GIT_AUTHOR_IDENT do not survive; GIT_TERMINAL_PROMPT is forced to zero.
+
+Verification: new `mission-git-identity-test` is :battery, three tests / five
+assertions (two RED assertions before implementation). Combined identity,
+process, boundary and fence JVM suites pass 14 tests / 63 assertions, even with
+an explicit outer seat identity inherited by the suite itself. The old absent
+identity preflight test now explicitly scrubs identity in its child so its
+precondition remains true in fleet seats. Formatter/lint pass. No actual user
+commit, provider, shared service or shared telemetry writes occurred. This fixes
+identity only; publication/undo consistency is tracked separately by its owner.
+
+## Astra: staged submodule scope correction (2026-09-06)
+
+An independently executed Opus probe showed that both diff.ignoreSubmodules=all
+and a working-tree .gitmodules ignore=all setting can hide a staged gitlink from
+the default cached diff while write-tree retains it. Scope discovery must request
+--ignore-submodules=none explicitly. A staged gitlink outside the declared owner
+set refuses :git-staged-scope; HEAD, index tree and source remain unchanged.
+Two real repository witnesses retain both settings as provenance. This repairs
+the observed omission; it does not claim that a full recursive tree comparison
+or every possible Git configuration interaction has been proved.
+
+
+## Git subprocess namespace-isolation accounting
+
+Every successful ProcessBuilder start in mission-git-process must append its
+actual PID and trusted argv to clj-surgeon.spawn-ledger exactly once. This is the
+repository's in-memory namespace-isolation ledger, separate from public usage
+events. Record inside the existing cleanup-protected try, before waiting; a
+recorder exception must still pass through the existing kill/reap finally.
+No stdin or environment values enter the ledger. A failed start has no PID and
+must not fabricate a launch. The six allowed Git identity variables and timeout,
+output-limit and cleanup behavior remain unchanged.
+
+The existing nonreading-child deadline witness also snapshots the spawn ledger
+and checks one recorded PID/command after timeout. No new deftest or lane count is
+needed. The src-spawn-site enumeration is an independent structural guard;
+behavioral process tests remain necessary because that enumeration cannot prove
+that recording occurs on the actual runtime path. After the lead released the timed window, the focused enumeration and timeout
+witness ran RED: four failed assertions (missing source recording and missing
+recorded launch/PID/argv). Adding the ledger require and record call made the same
+two tests pass all six assertions. Full process+identity focused suites pass five
+tests / thirteen assertions. Formatter and diff checks pass. The existing process
+namespace still has two deftests; no lane-count adjustment is needed.
+
+Evidence is retained under /var/tmp/forge/git-spawn-ledger-fix: red.txt,
+focused-green.txt, process-identity-green.txt and red-command.txt. Tests ran at
+nice10 through suite-run, with their own CLJ_SURGEON_EVENTS_FILE and Node compile
+cache disabled. No provider, root checkout, shared service or real user Git commit
+was touched. Existing owners/protocol were read with Surgeon; the two known
+literal source additions used the working-tree skill's native edit route.

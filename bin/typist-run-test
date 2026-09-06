@@ -12,24 +12,13 @@ OS-enforced process/network boundary or a strictly confined broker can, and
 NEITHER IS AVAILABLE on this box to this user (`unshare -rn` -> write to
 uid_map not permitted; no bwrap, no firejail, no sudo).
 
-SO THIS SUITE PROVES A WITNESSED GUARANTEE INSTEAD, in two parts:
-
-  (a) NO REAL KEY IS REACHABLE. Every runner subprocess this file starts
-      carries --keys-dir pointed at a fenced dummy-key directory under
-      /var/tmp/forge (values syntactically valid, not real), and
-      `--print-key-paths` -- a dry run that prints resolved paths and NEVER
-      opens them -- witnesses that both provider key paths resolve under that
-      fence and that neither touches /home/forge/secrets.
-  (b) NOTHING WAS SPENT. The ~/.codex/sessions PATH SET is compared before and
-      after (a set, not a newest-mtime: a rewritten file is not a new session
-      and a deleted one is not the absence of a new one), and an EGRESS CANARY
-      re-reads ~/.clj-surgeon/events.jsonl's size and scans the suite's own fx
-      tree for any receipt carrying :cost_source "provider" or a real
-      :upstream.
-
-A general-purpose child COULD still have spawned or connected; what this suite
-proves is that it DID NOT (session set unchanged) and that it COULD NOT HAVE
-SPENT (no real key reachable).
+THIS SUITE RETAINS LIMITED WITNESSES: runner key paths resolve to dummy files;
+the Codex session path set is unchanged; the observed ledger does not grow;
+no matching provider-priced receipt remains in the suite fixture tree.
+These checks are not a complete process/network census or proof that arbitrary
+children could not spend. The parent Python audit guard and bootstrapped runner
+children retain the stronger cooperative guard from the root branch. They are
+not an OS sandbox. The default-key-path check prints paths without opening keys.
 
   bin/typist-run-test
 
@@ -47,6 +36,7 @@ Covers the three Sol fence findings:
       zero tokens, never a provider's own figure discarded for a re-derivation
 """
 
+import atexit
 import importlib.machinery
 import importlib.util
 import io
@@ -99,8 +89,7 @@ def codex_session_paths():
 
 def events_ledger_size():
     """(exists, size) of ~/.clj-surgeon/events.jsonl. Part of the egress
-    canary: a provider call anywhere in this process tree would land a priced
-    line there."""
+    canary only: uninstrumented calls need not write this file."""
     p = os.path.expanduser("~/.clj-surgeon/events.jsonl")
     try:
         return (True, os.path.getsize(p))
@@ -112,9 +101,7 @@ PROVIDER_SPEND_RE = re.compile(r':cost_source\s+"provider"|:upstream\s+"(?!\s*ni
 
 
 def provider_priced_receipts(root):
-    """Every .edn under `root` that records a real provider call. The egress
-    canary's positive half: a suite that never reached a provider cannot have
-    written one."""
+    """List EDN files matching the priced-receipt canary; not an RPC census."""
     hits = []
     for dirpath, _dirs, names in os.walk(root):
         for f in names:
@@ -136,22 +123,91 @@ SUITE_FX = os.path.join(FENCE, "typist-real-fx", "suite-%s" % uuid.uuid4().hex[:
 
 FAILURES = []
 
+# Every runner subprocess is hard offline, even if the refusal under test
+# regresses. A scratch worktree made the old NW witness accidentally live.
+OFFLINE_BOOTSTRAP = r"""
+import importlib.machinery, importlib.util, os, sys
+
+def deny_external(event, args):
+    if event.startswith("socket.") or event in {
+        "subprocess.Popen", "os.system", "os.exec", "os.posix_spawn"}:
+        raise RuntimeError("offline test blocked " + event)
+    if event == "open" and isinstance(args[0], str) and args[0].startswith("/home/forge/secrets/"):
+        raise RuntimeError("offline test blocked real key access")
+
+sys.addaudithook(deny_external)
+path = sys.argv.pop(1)
+sys.argv[0] = path
+loader = importlib.machinery.SourceFileLoader("offline_typist_runner", path)
+spec = importlib.util.spec_from_loader("offline_typist_runner", loader)
+module = importlib.util.module_from_spec(spec)
+loader.exec_module(module)
+if os.environ.get("TYPIST_TEST_GUARD_PROBE"):
+    os.system("true")
+if os.environ.get("TYPIST_TEST_NW_SCRATCH"):
+    module.TEST_KEYS_FENCE = os.environ["TYPIST_TEST_NW_SCRATCH"]
+    module.resolve_gate_commands = lambda: [["offline-proof-never-executed"]]
+module.main()
+"""
+
+def offline_run(args, **kwargs):
+    return subprocess.run([sys.executable, "-c", OFFLINE_BOOTSTRAP, RUNNER] + args,
+                          **kwargs)
+
+
+
+def allowed_test_child(executable, command, environment):
+    if not isinstance(command, (list, tuple)):
+        return False
+    bootstrap = (list(command[:4]) == [sys.executable, "-c", OFFLINE_BOOTSTRAP, RUNNER]
+                 and os.path.realpath(executable) == os.path.realpath(sys.executable))
+    echo = list(command) == ["/bin/echo", "ordinary"] and executable == "/bin/echo"
+    shim = (list(command) == ["/bin/bash", "--noprofile", "--norc", "-c", "codex exec -m gpt-5.6-sol"]
+            and executable == "/bin/bash" and isinstance(environment, dict)
+            and environment.get("BASH_ENV") == "/dev/null"
+            and environment.get("ENV") == "/dev/null"
+            and os.path.realpath(environment.get("PATH", "")).startswith(FENCE + "/typist-offline-shim-")
+            and os.pathsep not in environment.get("PATH", ""))
+    trace = (executable == "/usr/bin/strace"
+             and list(command) == ["/usr/bin/strace", "-f", "-e", "trace=openat", "-o",
+                                   os.path.join(SUITE_FX, "strace-openat.log"),
+                                   sys.executable, os.path.abspath(__file__)]
+             and isinstance(environment, dict)
+             and environment.get("TYPIST_OFFLINE") == "1"
+             and environment.get("TYPIST_TEST_INNER") == "1")
+    return bootstrap or echo or shim or trace
+
+
+def harness_audit(event, args):
+    if event.startswith("socket.") or event in {"os.system", "os.exec", "os.fork"}:
+        raise RuntimeError("offline test blocked " + event)
+    if event == "open" and isinstance(args[0], (str, bytes)):
+        path = os.path.realpath(os.fsdecode(args[0]))
+        if path.startswith("/home/forge/secrets/"):
+            raise RuntimeError("offline test blocked real key access")
+    if event == "subprocess.Popen":
+        executable, command, _cwd, environment = args
+        if not allowed_test_child(executable, command, environment):
+            raise RuntimeError("offline test blocked unreviewed subprocess")
+    if event == "os.posix_spawn":
+        executable, command, environment = args
+        if not allowed_test_child(executable, command, environment):
+            raise RuntimeError("offline test blocked unreviewed posix_spawn")
+
+
+sys.addaudithook(harness_audit)
+
 
 def run_runner(args, env=None, timeout=180):
-    """Start the runner as a subprocess, ALWAYS under the offline contract and
-    ALWAYS with --keys-dir pointed at the fenced dummy keys. Sol fence r4: the
-    contract cannot confine a child, so what the suite guarantees instead is
-    that no real key is reachable from one -- and a guarantee that depends on
-    each call site remembering a flag is a guarantee missing from the next call
-    site. A caller that passes its own --keys-dir (the fence tests do, with bad
-    values on purpose) keeps it."""
+    """Use the root audit bootstrap, offline flag and explicit dummy key paths.
+    Explicit --keys-dir values are retained for refusal tests."""
     a = list(args)
     if "--keys-dir" not in a:
         a += ["--keys-dir", keys_dir()]
     e = dict(os.environ, TYPIST_OFFLINE="1")
     if env:
         e.update(env)
-    return subprocess.run([sys.executable, RUNNER] + a, env=e,
+    return offline_run(a, env=e,
                           capture_output=True, text=True, timeout=timeout)
 
 
@@ -198,8 +254,8 @@ def pin_keys_dir(m):
 
 
 def keys_dir():
-    d = os.path.join(FENCE, "typist-real-fx", "keys-test")
-    os.makedirs(d, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="typist-keys-test-", dir=FENCE)
+    atexit.register(shutil.rmtree, d, True)
     for name, body in (("groq.edn", '{:key "gsk_DUMMY123"}\n'),
                        ("openrouter.edn", '{:openrouter-api-key "sk-or-DUMMY456"}\n')):
         p = os.path.join(d, name)
@@ -385,41 +441,22 @@ def test_write_fence():
     os.unlink(link)
     os.rmdir(link_dir)
 
-    # ARM NW, OUT OF FENCE, BEFORE ANY BYTE IS WRITTEN. The path is
-    # $HOME/does-not-exist-<uuid>: outside BOTH fences no matter where this
-    # worktree lives, which is the bug Astra found -- the old probe used the
-    # worktree, and a checkout under /var/tmp/forge makes the worktree part of
-    # the scratch fence, so the refusal silently stopped firing and the "check"
-    # went on to make a real codex call.
-    fx_outside = os.path.join(os.path.expanduser("~"),
-                              "does-not-exist-%s" % uuid.uuid4().hex[:12])
-    r = run(["--arm", "NW"], {"TYPIST_FX": fx_outside})
-    check("NW with an out-of-fence workspace exits 4",
-          r.returncode == 4, "rc=%d %s" % (r.returncode,
-                                           (r.stderr.strip().splitlines() or [""])[0]))
-    check("...and NOTHING was created under TYPIST_FX",
-          not os.path.exists(fx_outside), fx_outside)
-
-    # ARM NW with a workspace inside the WRITE fence but outside the SCRATCH
-    # fence: allowed to be written, not allowed to host an unsandboxed codex
-    # child. This case only EXISTS when the worktree is not itself under the
-    # scratch fence; when it is, the two fences coincide and there is no such
-    # path -- so the check is skipped LOUDLY rather than passing vacuously.
+    # A test-local scratch root makes this independent of where the worktree
+    # lives. ARM NW has a workspace inside the WRITE fence but outside
+    # this SCRATCH fence: allowed to be written, not allowed to host an
+    # unsandboxed codex child. Refused before any codex process is started.
     fx_in_repo = os.path.join(repo_root, "target", "fence-probe-fx")
-    if os.path.realpath(repo_root).startswith(os.path.realpath(FENCE) + os.sep):
-        print("%-58s %s" % ("NW scratch-fence case (worktree is under the fence)",
-                            "n/a"))
-    else:
-        if os.path.exists(fx_in_repo):
-            shutil.rmtree(fx_in_repo)
-        r = run(["--arm", "NW"], {"TYPIST_FX": fx_in_repo})
-        check("NW with a workspace outside the scratch fence is refused",
-              r.returncode == 4 and "NW: sandbox unavailable" in r.stderr,
-              (r.stderr.strip().splitlines() or [""])[0])
-        check("...and it refused BEFORE materializing anything",
-              not os.path.exists(fx_in_repo), fx_in_repo)
+    r = run(["--arm", "NW"], {"TYPIST_FX": fx_in_repo,
+                              "TYPIST_TEST_NW_SCRATCH": os.path.join(FENCE, "isolated-offline-nw-root")})
+    check("NW with a workspace outside the scratch fence is refused",
+          r.returncode == 4 and "NW: sandbox unavailable" in r.stderr,
+          (r.stderr.strip().splitlines() or [""])[0])
     check("...and it refused before any codex call",
           "codex" not in r.stdout)
+    guarded = run(["--arm", "NW"], {"TYPIST_TEST_GUARD_PROBE": "1"})
+    check("offline subprocess guard prevents real codex execution",
+          guarded.returncode != 0 and "offline test blocked os.system" in guarded.stderr)
+
 
 
 def test_offline_guard(m):
@@ -472,17 +509,28 @@ def test_offline_guard(m):
     except SystemExit as e:
         ok, detail = e.code == 6, "exit=%s" % e.code
     check("offline refuses a shell string (shell=True) (exit 6)", ok, detail)
-    r = m.subprocess.run(["bash", "-c", "codex exec -m gpt-5.6-sol"],
+    # Even a broken runner shim cannot fall through to the live PATH.
+    r = m.subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", "codex exec -m gpt-5.6-sol"],
+                         env=dict(os.environ, PATH=m.OFFLINE_SHIM_DIR, BASH_ENV="/dev/null", ENV="/dev/null"),
                          capture_output=True, text=True)
     check("a bash -c trampoline hits the PATH shim (exit 6)",
           r.returncode == 6 and "offline: spawn of codex refused" in r.stderr,
           "exit=%s %r" % (r.returncode, r.stderr.strip()))
+    for name, arguments in [("spawnv", (os.P_WAIT, "/usr/local/bin/codex", ["codex", "--version"])),
+                            ("posix_spawn", ("/usr/local/bin/codex", ["codex", "--version"], {}))]:
+        if hasattr(m.os, name):
+            try:
+                getattr(m.os, name)(*arguments)
+                refused = False
+            except SystemExit as e:
+                refused = e.code == 6
+            check("offline refuses %s with its actual argument order" % name, refused)
     check("the offline PATH shim is installed under /var/tmp/forge",
           bool(m.OFFLINE_SHIM_DIR)
           and m.OFFLINE_SHIM_DIR.startswith(FENCE + os.sep)
           and os.access(os.path.join(m.OFFLINE_SHIM_DIR, "claude"), os.X_OK),
           str(m.OFFLINE_SHIM_DIR))
-    r = m.subprocess.run(["echo", "ordinary"], capture_output=True, text=True)
+    r = m.subprocess.run(["/bin/echo", "ordinary"], capture_output=True, text=True)
     check("offline still RUNS an ordinary tool (echo)",
           r.returncode == 0 and r.stdout.strip() == "ordinary",
           "exit=%s %r" % (r.returncode, r.stdout.strip()))
@@ -496,6 +544,10 @@ def test_cost(m):
     so one call with NO usage summed to zero tokens, met the table rate, and
     printed $0.0000 for a call nobody can price. Zero is a number a reader
     acts on; unknown is not."""
+    for value, spelling in [(0.123456789123, "0.123456789123"), (1e-9, "0.000000001")]:
+        check("human cost preserves %s" % spelling, m.usd_str(value) == "$" + spelling)
+        check("cost-field EDN preserves float repr %r" % value,
+              ":cost_usd " + repr(value) in m.edn({"cost_usd": value}))
     check("a candidate with missing usage is (None, None), never zero",
           m.cost_for("groq", None, None, None, None) == (None, None))
     check("a missing completion count is unknown, not zero",
@@ -596,20 +648,12 @@ def test_cost(m):
 
 
 # --------------------------------------------------------------------------
-# (f) NO REAL KEY IS REACHABLE -- the half of the guarantee the contract can
-#     actually keep, witnessed through the runner's own path resolution.
+# (f) Runner key-path resolution, without reading real credentials.
 
 def test_no_real_key_reachable(m):
-    """SOL FENCE R4. The offline contract cannot confine a child, so it cannot
-    promise that nothing spawns. What it CAN promise -- and what this witnesses
-    -- is that nothing reachable from this suite can spend: every runner
-    subprocess resolves its provider key paths inside the /var/tmp/forge dummy
-    fence, so even a child that escaped the chokepoint would find no real key.
-
-    `--print-key-paths` prints PATHS ONLY and never opens the files: a witness
-    that reads a key in order to prove the key is safe has defeated itself."""
-    d = keys_dir()
-    r = run_runner(["--print-key-paths"], timeout=120)
+    """Configured paths and pure registry strings, not child confinement."""
+    d = m.KEYS_DIR
+    r = run_runner(["--print-key-paths", "--keys-dir", d], timeout=120)
     check("--print-key-paths exits 0 and prints the contract",
           r.returncode == 0 and "offline_contract=chokepoint-not-sandbox" in r.stdout,
           "exit=%s %r" % (r.returncode, r.stdout.strip().splitlines()[:1]))
@@ -677,15 +721,15 @@ def test_strace_no_secret_open():
     if tp:
         check("no openat under strace names /home/forge/secrets",
               True, "n/a: this pass is ALREADY traced (TracerPid=%d) -- the "
-                    "outer tracer's log is the witness" % tp)
+                    "outer trace is not verified by this pass" % tp)
         return
-    if not shutil.which("strace"):
+    if not os.path.isfile("/usr/bin/strace"):
         check("no openat under strace names /home/forge/secrets",
               True, "n/a: strace absent -- SKIPPED LOUDLY, this run proves nothing")
         return
     log = os.path.join(SUITE_FX, "strace-openat.log")
     r = subprocess.run(
-        ["strace", "-f", "-e", "trace=openat", "-o", log,
+        ["/usr/bin/strace", "-f", "-e", "trace=openat", "-o", log,
          sys.executable, os.path.abspath(__file__)],
         env=dict(os.environ, TYPIST_OFFLINE="1", TYPIST_TEST_INNER="1"),
         capture_output=True, text=True, timeout=600)
@@ -712,11 +756,8 @@ def main():
           "is available to this user on")
     print("  this box (unshare -rn: uid_map not permitted; no bwrap/firejail; "
           "no sudo). A general-purpose child")
-    print("  could still spawn or connect; what this suite proves is that it "
-          "DID NOT (the ~/.codex/sessions")
-    print("  path set is unchanged) and that it COULD NOT HAVE SPENT (no real "
-          "key is reachable: every runner")
-    print("  subprocess runs --keys-dir %s)." % keys_dir())
+    print("  Witnesses cover configured dummy paths and observed artifacts only;")
+    print("  they do not prove arbitrary child containment or a full spending census.")
     print("")
     before = codex_session_paths()
     before_ledger = events_ledger_size()
@@ -729,16 +770,16 @@ def main():
     print("== write fence ==");     test_write_fence()
     print("== offline guard ==");   test_offline_guard(m)
     print("== cost accounting =="); test_cost(m)
-    print("== no real key reachable =="); test_no_real_key_reachable(m)
+    print("== configured dummy key paths =="); test_no_real_key_reachable(m)
     if INNER:
         print("== syscall witness ==  (inner pass: strace witness not re-run)")
     else:
         print("== syscall witness =="); test_strace_no_secret_open()
 
-    # ---- THE NO-SPEND WITNESS (Sol fence r4). Two independent facts, both
+    # ---- OBSERVED ARTIFACT CANARIES. Independent checks, both
     # bound to stores this file never writes.
     print("")
-    print("== no-spend witness ==")
+    print("== observed artifact canaries ==")
     after = codex_session_paths()
     check("the ~/.codex/sessions PATH SET is identical before and after",
           after == before,
@@ -749,7 +790,7 @@ def main():
           after_ledger == before_ledger,
           "before=%s after=%s" % (before_ledger, after_ledger))
     priced = provider_priced_receipts(SUITE_FX)
-    check("no receipt under the suite fx tree records a provider call",
+    check("no suite receipt matches the provider-priced canary",
           not priced, "%s (fx=%s)" % (priced[:3], SUITE_FX))
     shutil.rmtree(SUITE_FX, ignore_errors=True)
     print("")

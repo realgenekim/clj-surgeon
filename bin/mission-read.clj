@@ -8,9 +8,11 @@
 ;; overhead the ledger does not need: reading a mission touches ONLY
 ;; `clj-surgeon.mission`, which is why that namespace was kept babashka-safe.
 ;;
-;; Writes are NOT here. open/plan/apply/resume/undo reach a planner and a
+;; Source writes are NOT here. The fallback verb only appends an explicit report.
+;; open/plan/apply/resume/undo reach a planner and a
 ;; guarded transaction kernel and stay on the JVM.
 (require '[clj-surgeon.mission :as mission]
+         '[clj-surgeon.mission-display :as display]
          '[clojure.pprint :as pp]
          '[clojure.string :as str])
 
@@ -35,16 +37,32 @@
       state-dir (delay (mission/workspace-state-dir (:workspace flags)
                                                     (:state-home flags)))
       missions (delay (mission/read-all @state-dir))]
+  (when (and (contains? #{"show" "list" "ready" "blocked"} verb)
+             (not (and (string? (:workspace flags)) (seq (:workspace flags)))))
+    (pp/pprint display/workspace-required)
+    (System/exit 1))
   (case verb
     ("help" nil) (print (mission/help-text (first args)))
 
-    "show" (let [m (mission/read-mission @state-dir (first args))]
-             (pp/pprint (if (mission/refused? m)
-                          m
-                          (assoc (mission/show-view @missions (first args))
-                                 :config_sources
-                                 (mission/config-sources (:workspace flags)
-                                                         (:config flags))))))
+    "fallback" (let [opts (assoc flags :id (first args))
+                     result ((requiring-resolve 'clj-surgeon.mission-fallback/report!) opts)]
+                 (pp/pprint (display/with-recovery result opts))
+                 (when (false? (:ok result)) (System/exit 1)))
+
+    "show" (let [m (mission/read-mission @state-dir (first args))
+                 result (display/show-result
+                          (if (mission/refused? m)
+                            m
+                            (display/publication-view
+                              (assoc (mission/show-view @missions (first args))
+                                     :config_sources
+                                     (mission/config-sources (:workspace flags) (:config flags)))
+                              (when-not (:full flags)
+                                ((requiring-resolve 'clj-surgeon.mission-git-ledger/publication-status)
+                                 (assoc flags :id (first args))))))
+                          (assoc flags :id (first args)))]
+             (pp/pprint result)
+             (when (false? (:ok result)) (System/exit 1)))
 
     "list" (pp/pprint {:ok true :operation "mission"
                        :ledger (mission/missions-dir @state-dir)

@@ -1,4 +1,4 @@
-(ns ^{:lane :fast} clj-surgeon.lane-manifest-test
+(ns clj-surgeon.lane-manifest-test
   "TEST-ISO-001's witness. Asserts SET EQUALITY IN BOTH DIRECTIONS between
    three independent descriptions of the JVM test lanes -- the manifest, each
    namespace's own ns metadata, and the `*_test.clj` files on disk -- and that
@@ -11,9 +11,10 @@
    Make target, and nothing noticed; round three adopted it into :fast and
    made exclusion-into-orphanhood unrepresentable). Set equality in both
    directions is the refusal-kind pattern: absence is as loud as presence."
+  {:lane :fast}
   (:require
-   [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.battery-ledger :as ledger]
+   [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
    [clj-surgeon.runner-membership :as rm]
    [clojure.java.io :as io]
@@ -255,7 +256,7 @@
                (str/join "; " (map (fn [[s want got]]
                                      (format "%s want %s got %s" s want (pr-str got)))
                                    (take 10 wrong)))
-               (when (> (count wrong) 10) " ...")))))) 
+               (when (> (count wrong) 10) " ..."))))))
 
 (deftest loaded-namespaces-carry-their-lane-at-runtime
   (testing "the metadata survives loading -- a source scan alone is a spelling"
@@ -316,57 +317,55 @@
    (round one: 865 tests, 13 023 assertions, 0 failures). Pinned so that
    PARTITIONING cannot become DROPPING: a namespace that leaves every lane
    fails here by name, and a green suite with less in it is impossible."
-  '#{
-   clj-surgeon.admit-patch-test
-   clj-surgeon.census-pool-test
-   clj-surgeon.core-discovery-test
-   clj-surgeon.mcp-alias-migration-test
-   clj-surgeon.mcp-change-buffer-test
-   clj-surgeon.mcp-cold-verify-test
-   clj-surgeon.mcp-combinable-transaction-test
-   clj-surgeon.mcp-compact-edit-fields-test
-   clj-surgeon.mcp-compact-edit-test
-   clj-surgeon.mcp-compact-location-test
-   clj-surgeon.mcp-compact-relations-test
-   clj-surgeon.mcp-contract-test
-   clj-surgeon.mcp-create-files-test
-   clj-surgeon.mcp-extraction-plan-test
-   clj-surgeon.mcp-extraction-test
-   clj-surgeon.mcp-hot-verify-test
-   clj-surgeon.mcp-http-server-test
-   clj-surgeon.mcp-inspect-contract-test
-   clj-surgeon.mcp-inspect-tool-test
-   clj-surgeon.mcp-intent-contract-test
-   clj-surgeon.mcp-operation-async-test
-   clj-surgeon.mcp-operation-registry-test
-   clj-surgeon.mcp-operation-test
-   clj-surgeon.mcp-paths-test
-   clj-surgeon.mcp-prepared-confirmation-test
-   clj-surgeon.mcp-prepared-request-test
-   clj-surgeon.mcp-prepared-wire-test
-   clj-surgeon.mcp-process-test
-   clj-surgeon.mcp-program-tool-test
-   clj-surgeon.mcp-read-request-normalization-test
-   clj-surgeon.mcp-recovery-test
-   clj-surgeon.mcp-relation-census-launcher-test
-   clj-surgeon.mcp-relation-census-round20-test
-   clj-surgeon.mcp-relation-census-test
-   clj-surgeon.mcp-schema-test
-   clj-surgeon.mcp-semantic-client-test
-   clj-surgeon.mcp-server-test
-   clj-surgeon.mcp-telemetry-test
-   clj-surgeon.mcp-tool-test
-   clj-surgeon.mcp-workspace-test
-   clj-surgeon.mcp-write-refusal-test
-   clj-surgeon.outline-differential-test
-   clj-surgeon.outline-memory-test
-   clj-surgeon.quoted-var-refs-test
-   clj-surgeon.reader-eval-fence-test
-   clj-surgeon.repository-hygiene-test
-   clj-surgeon.scope-stream-test
-   clj-surgeon.txn-journal-test
-   clj-surgeon.workspace-onboarding-test
-   })
+  '#{clj-surgeon.admit-patch-test
+     clj-surgeon.census-pool-test
+     clj-surgeon.core-discovery-test
+     clj-surgeon.mcp-alias-migration-test
+     clj-surgeon.mcp-change-buffer-test
+     clj-surgeon.mcp-cold-verify-test
+     clj-surgeon.mcp-combinable-transaction-test
+     clj-surgeon.mcp-compact-edit-fields-test
+     clj-surgeon.mcp-compact-edit-test
+     clj-surgeon.mcp-compact-location-test
+     clj-surgeon.mcp-compact-relations-test
+     clj-surgeon.mcp-contract-test
+     clj-surgeon.mcp-create-files-test
+     clj-surgeon.mcp-extraction-plan-test
+     clj-surgeon.mcp-extraction-test
+     clj-surgeon.mcp-hot-verify-test
+     clj-surgeon.mcp-http-server-test
+     clj-surgeon.mcp-inspect-contract-test
+     clj-surgeon.mcp-inspect-tool-test
+     clj-surgeon.mcp-intent-contract-test
+     clj-surgeon.mcp-operation-async-test
+     clj-surgeon.mcp-operation-registry-test
+     clj-surgeon.mcp-operation-test
+     clj-surgeon.mcp-paths-test
+     clj-surgeon.mcp-prepared-confirmation-test
+     clj-surgeon.mcp-prepared-request-test
+     clj-surgeon.mcp-prepared-wire-test
+     clj-surgeon.mcp-process-test
+     clj-surgeon.mcp-program-tool-test
+     clj-surgeon.mcp-read-request-normalization-test
+     clj-surgeon.mcp-recovery-test
+     clj-surgeon.mcp-relation-census-launcher-test
+     clj-surgeon.mcp-relation-census-round20-test
+     clj-surgeon.mcp-relation-census-test
+     clj-surgeon.mcp-schema-test
+     clj-surgeon.mcp-semantic-client-test
+     clj-surgeon.mcp-server-test
+     clj-surgeon.mcp-telemetry-test
+     clj-surgeon.mcp-tool-test
+     clj-surgeon.mcp-workspace-test
+     clj-surgeon.mcp-write-refusal-test
+     clj-surgeon.outline-differential-test
+     clj-surgeon.outline-memory-test
+     clj-surgeon.quoted-var-refs-test
+     clj-surgeon.reader-eval-fence-test
+     clj-surgeon.repository-hygiene-test
+     clj-surgeon.scope-stream-test
+     clj-surgeon.txn-journal-test
+     clj-surgeon.workspace-onboarding-test})
 
 (deftest the-partition-drops-nothing-round-one-measured
   (let [dropped (sort (remove lm/manifest round-one-jvm-namespaces))]
@@ -377,10 +376,10 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 41 (count (lm/namespaces-for :fast))))
-    (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 15 (count (lm/namespaces-for :battery))))
-    (is (= 61 (count lm/manifest))
+    (is (= 49 (count (lm/namespaces-for :fast))))
+    (is (= 6 (count (lm/namespaces-for :integration))))
+    (is (= 32 (count (lm/namespaces-for :battery))))
+    (is (= 87 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -390,7 +389,9 @@
              "spawns a child, moved out of a :fast namespace into :battery; "
              "and the trunk's mcp-feature-thread-test, adopted at this merge "
              "with its own `sed` cross-check split into "
-             "mcp-feature-thread-sed-test (:battery) for the same reason"))))
+             "mcp-feature-thread-sed-test (:battery) for the same reason; "
+             "and mission-forms-source-test, the comment-preserving source "
+             "lowering that replaced the blanket comment refusal"))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -407,7 +408,34 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
+  '{clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
+    clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
+    clj-surgeon.mission-events-test 8 ; Public completion events and isolated logging failure.
+    clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
+    clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
+    clj-surgeon.mission-display-test 14 ; Add historical nested refusal and incompatible-example witnesses.
+    clj-surgeon.mission-fallback-test 8 ; Explicit report, actual event write and unchanged proof.
+    clj-surgeon.mission-git-identity-test 3 ; Explicit seat author/committer survive subprocess sanitization.
+    clj-surgeon.mission-git-submodule-test 2 ; Git config cannot hide staged gitlinks from scope guard.
+    clj-surgeon.mission-publication-test 7 ; Durable publication intent blocks silent source undo.
+    clj-surgeon.mission-git-test 4 ; Pure Git provenance contract.
+    clj-surgeon.mission-git-boundary-test 4 ; Git tree and staged path boundaries.
+    clj-surgeon.mission-git-fence-test 5 ; Identity and refusal witnesses.
+    clj-surgeon.mission-git-process-test 2 ; Bounded subprocess lifecycle.
+    clj-surgeon.mission-git-ledger-test 3 ; Saved receipt authority.
+    clj-surgeon.mission-commit-cli-test 4 ; Actual public command behavior.
+    clj-surgeon.mission-usage-test 7 ; Observed legacy/attempt usage and unknowns.
+    clj-surgeon.mission-typist-executor-admission-test 2 ; Unsupported adapter refused before readiness.
+    clj-surgeon.mission-usage-executor-test 2 ; Saved success/refusal usage snapshots.
+    clj-surgeon.mission-run-test 11 ; One-process saved plan, refusal and CLI boundaries.
+    clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
+    clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
+    clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
+    clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
+    clj-surgeon.mission-forms-test 5 ; Owner identity, protected syntax and lost-comment refusal.
+    clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
+    clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
+    clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
     clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
@@ -416,11 +444,12 @@
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
     clj-surgeon.ns-isolation-test          24  ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
     clj-surgeon.helper-extraction-test     34  ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
-    clj-surgeon.telemetry-events-test      18  ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read). 16 -> 17 on Sol fence r2: `an-extra-field-name-can-neither-shadow-nor-smuggle` pins the two defects he found in the pass-through rule -- a string key "ok" beside the keyword :ok serialized to ONE JSON name and the caller's copy won, and an extra's NAME reached the file unscrubbed (`gsk_FIELDNAMECANARY`). Extra names are now normalized, shape-checked, collision-rejected and counted in `dropped_fields`. 17 -> 18 on Sol fence r4: `the-env-override-wins-for-the-writer` pins the split of `default-events-file` (PURE, the home dotdir) from `events-file` (the CLJ_SURGEON_EVENTS_FILE override, else the default). One fn stating both facts made `the-default-path-is-the-home-dotdir` red under `~/bin/suite-run`, which exports that variable -- the test that pins the default was failing in exactly the harness the landing gates run under.
-    clj-surgeon.mission-test               20  ; the MISSION LEDGER prototype's witnesses, adopted 2026-09-06 with the real-repo typist merge. :battery, not :fast, for the same reason mcp-inspect-cold-job-test is: its end-to-end half launches a shell child process (via clojure's java-shell namespace, spelled out here only in prose because the fast-lane scanner reads THIS file too) and materializes a fixture tree under /var/tmp/forge, and the fast lane's rule is that spawning is unrepresentable there, not merely discouraged. It arrived on this branch with NO lane at all -- the disk->manifest witness caught it, which is the witness working.
-    clj-surgeon.mcp-helper-extraction-test 51}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions. 48 -> 51 on 2026-09-05 (trunk, merged here): the three request-shape-refusal witnesses (a runnable :example, the named :field, and the enriched refusal still validating against exactly the refusal face) added after a real caller needed seven refused plan calls to reverse-engineer the closed shape
+    clj-surgeon.telemetry-events-test       17  ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
+    clj-surgeon.mcp-helper-extraction-test 51}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
+  ;; ASTRA 2026-09-06: add 27 ledger + 14 pure typist + 6 executor + 5 race = 52 tests.
+  ;; ASTRA run entrance adds 8 boundary tests; current arithmetic: 921 + 281 = 1202. Counts below retain history.
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
   ;;
   ;; Round one MEASURED 865 tests / 13,023 assertions across the 49 namespaces
@@ -429,9 +458,9 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 262 deftests  (12+4+25+3+69+1+1+24+34+51+18+20)
+  ;;   adopted since round one .................... 230 deftests  (12+4+25+3+69+1+1+24+34+48+9)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1183 deftests
+  ;;   total declared by the manifest ............. 1151 deftests
   ;;
   ;; ROUND SIX ADOPTED THE HELPER-EXTRACTION PAIR, 68 deftests, on the day the
   ;; planner and the boundary both went green. They had been `excluded` with
@@ -475,9 +504,13 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 262 adopted) (str "adopted tests: " adopted)))
+      ;; One outline corpus test MOVED from its original namespace to adopted integration.
+      ;; 920 original + 433 adopted = 1353: retain Astra identity/receipt witnesses and add trunk
+      ;; helper request-shape refusals (48 -> 51); closed telemetry remains 17, not trunk
+      ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
+      (is (= 433 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1183 total) (str "manifest declares " total " tests"))
+      (is (= 1353 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

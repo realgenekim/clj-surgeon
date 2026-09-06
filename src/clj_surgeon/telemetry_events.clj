@@ -177,7 +177,7 @@
    readable name. Sol's canary was `gsk_LEDGER_CANARY|FILE-CONTENT-CANARY`,
    which BOTH rules reject; the point of the narrow one is the canary nobody
    has thought of yet."
-  #"^M-[0-9]+$")
+  #"^M-[0-9]{1,12}$")
 
 (defn- sha256-prefix
   "First 16 hex characters of the SHA-256 of `s`. Enough to correlate one
@@ -201,104 +201,33 @@
         s
         (str "sha256:" (sha256-prefix s))))))
 
-(def known-keys
-  "The keys `line-map` names itself. Everything else in an event is an EXTRA."
-  #{:ts :seat :pid :kind :tool :ok :error_type :wall_ms :mission_id :dropped
-    :prompt_tokens :completion_tokens :reasoning_tokens :cost_usd
-    :provider :upstream})
+(def mission-enums
+  {:mission_state #{"proposed" "ready" "blocked" "applied" "verified" "failed" "undone"}
+   :mission_verb #{"owner_forms" "helper_extraction" "fallback"}
+   :fallback_kind #{"native-tool"}
+   :report_basis #{"user-reported"}
+   :fallback_reason #{"refusal" "unsupported" "slower-than-native" "user-choice"}
+   :executor #{"native" "typist"}
+   :cost_source #{"provider-reported"}
+   :provider #{"openrouter" "groq" "spark"}
+   :model #{"openai/gpt-oss-120b" "gpt-5.3-codex-spark"}
+   :upstream #{"Cerebras" "Groq" "OpenAI"}
+   :refused_rung #{"mechanical-class" "complete-dossier" "source-policy"
+                   "cheap-gate" "independent-acceptance" "guarded-commit"
+                   "bounded-scope" "pinned-provider" "verified-rate"}})
 
-(def reserved-field-names
-  "Every JSON name the writer itself can emit. An extra whose normalized name
-   lands on one of these is REJECTED, never merged.
-
-   Sol fence r2 proved why the old \"merge extras UNDER the named fields\"
-   comment was not the property it claimed: `merge` de-duplicates by KEY, and
-   the string key \"ok\" is a different key from the keyword `:ok` while both
-   serialize to the same JSON name. The line carried BOTH, cheshire wrote
-   both, and every JSON parser in the world keeps the LAST one -- so the
-   caller's `\"ok\": \"<redacted>\"` shadowed the writer's `\"ok\": true`. A
-   collision is therefore settled on the JSON NAME, before the merge, not on
-   the Clojure key after it."
-  (into #{"error_type_truncated" "telemetry_dropped" "over_limit"
-          "dropped_fields"}
-        (map name known-keys)))
-
-(def extra-name-shape
-  "The ONLY shape an extra field name may take: lowercase ASCII, digits and
-   underscores, 1-64 characters, starting with a letter. An allowlist, for the
-   same reason `mission-id-shape` is one -- a name is written to the ledger
-   VERBATIM and is never redacted on the way out, so any name that could carry
-   a payload is a smuggling channel with the scrubber pointed the other way."
-  #"[a-z][a-z0-9_]{0,63}")
-
-(defn normalize-extra-name
-  "The JSON name an extra key is allowed to take, or nil if it may take none.
-
-   Keyword, symbol or string -> its name, lowercased, hyphens folded to
-   underscores. nil for: a key of any other type; a normalized name that
-   misses `extra-name-shape` (too long, uppercase-only alphabet exhausted,
-   punctuation, empty); a normalized name that collides with a field the
-   writer emits; and a name that is key-shaped either before or after
-   normalization -- `gsk_FIELDNAMECANARY` is a live credential spelled as a
-   field name, and Sol found it verbatim in the file."
-  [k]
-  (let [raw (cond (keyword? k) (name k)
-                  (symbol? k) (name k)
-                  (string? k) k
-                  :else nil)]
-    (when (some? raw)
-      (let [normalized (-> raw str/lower-case (str/replace "-" "_"))]
-        (when (and (re-matches extra-name-shape normalized)
-                   (not (contains? reserved-field-names normalized))
-                   (= raw (scrub raw))
-                   (= normalized (scrub normalized)))
-          normalized)))))
-
-(defn extra-fields
-  "THE PASS-THROUGH RULE, as {:fields <name->value> :dropped-fields <n>}.
-
-   Any key an event carries beyond `known-keys` is kept IF AND ONLY IF its
-   NAME survives `normalize-extra-name` and its VALUE is a SCALAR -- a string,
-   a number, or a boolean -- and it is kept scrubbed and byte-bounded like
-   every other field. Everything else is DROPPED and COUNTED, and the count
-   lands on the line as `dropped_fields`: a refusal nobody can see is
-   indistinguishable from silent data loss.
-
-   Open on purpose (Astra, 2026-09-06): the mission boundary emits
-   `mission_state`, `mission_verb`, `executor`, `candidate_count`, `provider`,
-   `model`, `route` and their kin, and a ledger whose writer must be edited
-   before a caller may count a new dimension is a ledger that stops being
-   written to. So the writer does not hold a list of allowed NAMES.
-
-   It holds a rule about SHAPES -- one for the value, and, since Sol fence r2,
-   one for the name as well. A scalar is a value someone chose to report; a
-   collection is a structure someone forgot to summarize, and the two ledger
-   defects this file exists to answer -- a smuggled key and a 5185-byte line
-   -- are both what happens when an unbounded caller value is copied verbatim.
-   The name rule closes the same hole one level up: an unbounded caller NAME
-   is copied verbatim too, and it is copied WITHOUT the scrubber, because
-   nothing downstream scrubs a JSON key.
-
-   Two distinct keys that normalize to one name (`:some-extra` and
-   `\"some_extra\"`) are a collision as surely as one with a named field: the
-   FIRST claim wins and the rest are dropped and counted, so the line is never
-   a coin flip on map ordering."
+(defn mission-fields
+  "Only fixed mission enums and bounded candidate counts enter shared JSONL."
   [event]
-  (let [result
-        (reduce-kv
-         (fn [acc k v]
-           (if (contains? known-keys k)
-             acc
-             (let [nm (normalize-extra-name k)]
-               (cond
-                 (nil? nm) (update acc :dropped-fields inc)
-                 (contains? (:fields acc) nm) (update acc :dropped-fields inc)
-                 (string? v) (assoc-in acc [:fields nm] (first (truncate v)))
-                 (or (number? v) (boolean? v)) (assoc-in acc [:fields nm] v)
-                 :else (update acc :dropped-fields inc)))))
-         {:fields {} :dropped-fields 0}
-         (into {} event))]
-    result))
+  (cond-> (reduce-kv (fn [out key admitted]
+                       (let [value (get event key)]
+                         (cond-> out (contains? admitted value) (assoc key value))))
+            {} mission-enums)
+    (and (integer? (:candidate_count event)) (<= 1 (:candidate_count event) 5))
+    (assoc :candidate_count (:candidate_count event))
+    (and (string? (:mission_id event))
+         (re-matches #"M-[0-9]{1,12}" (:mission_id event)))
+    (assoc :mission_id (:mission_id event))))
 
 (defn line-map
   "Build one ledger line. PURE -- no clock, no I/O, no filesystem. Every field
@@ -306,57 +235,53 @@
    `wall_ms` is rounded to a long; a nil stays nil rather than becoming 0,
    because \"not measured\" and \"instant\" are different facts.
 
-   Extra scalar fields a caller names pass through untouched except for the
-   scrubber and the byte bound -- see `extra-fields`. No extra can shadow
-   `ok`, `ts`, or `mission_id`, and that is now enforced on the JSON NAME
-   before the merge rather than hoped for from key ordering after it: an
-   extra whose normalized name collides with a field this function emits is
-   dropped and counted in `dropped_fields`."
+   Only the admitted mission-field enums/count pass through. Unknown scalar
+   and nested fields are dropped; retained values still pass the shared
+   scrubber and byte bound. Named fields own their validation."
   [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped
            prompt_tokens completion_tokens reasoning_tokens cost_usd
            provider upstream]
     :as event}]
   (let [[error truncated?] (truncate error_type)
-        tok (fn [v] (when (number? v) (long v)))
-        bounded (fn [v] (first (truncate v)))
-        {extras :fields dropped-fields :dropped-fields} (extra-fields event)]
-    (cond-> (merge extras
+        tok (fn [v] (when (and (integer? v) (<= 0 v Long/MAX_VALUE)) (long v)))
+        bounded (fn [v] (first (truncate v)))]
+    (cond-> (merge (into {} (map (fn [[k v]] [k (if (string? v) (bounded v) v)]))
+                          (dissoc (mission-fields event) :mission_id))
                    {:ts ts
-             ;; EVERY string field goes through scrub+byte-truncate, including
-             ;; the ones that come from the environment. $SURGEON_SEAT is
-             ;; attacker-adjacent in exactly the way a tool argument is: Sol's
-             ;; 5185-byte line was a long seat, copied without a bound.
-             :seat (bounded seat)
-             :pid pid
-             :kind (bounded kind)
-             :tool (bounded tool)
-             :ok (boolean ok)
-             :error_type error
-             :wall_ms (when (number? wall_ms) (long (Math/round (double wall_ms))))
-             ;; NEVER the caller's raw id: validated-or-hashed (see
-             ;; `safe-mission-id`), so a ledger line cannot be used as a
-             ;; smuggling channel for key material or file content.
-             :mission_id (safe-mission-id mission_id)
-             ;; COST FIELDS -- optional, and ALWAYS PRESENT AS KEYS so a reader
-             ;; never has to distinguish "absent" from "the writer forgot".
-             ;; null is the honest value for a caller that has no such number:
-             ;; the MCP tools have none, the typist runner and the ledger do.
-             ;; A token count that is not a number stays nil rather than
-             ;; becoming 0 -- "not reported" and "zero tokens" are different
-             ;; facts, the same rule `wall_ms` already follows.
-             :prompt_tokens (tok prompt_tokens)
-             :completion_tokens (tok completion_tokens)
-             :reasoning_tokens (tok reasoning_tokens)
-             :cost_usd (when (number? cost_usd) (double cost_usd))
-             ;; free text, bounded like every other free-text field
-             :provider (first (truncate provider))
-             :upstream (first (truncate upstream))})
+                    ;; EVERY string field goes through scrub+byte-truncate, including
+                    ;; the ones that come from the environment. $SURGEON_SEAT is
+                    ;; attacker-adjacent in exactly the way a tool argument is: Sol's
+                    ;; 5185-byte line was a long seat, copied without a bound.
+                    :seat (bounded seat)
+                    :pid pid
+                    :kind (bounded kind)
+                    :tool (bounded tool)
+                    :ok (boolean ok)
+                    :error_type error
+                    :wall_ms (when (number? wall_ms) (long (Math/round (double wall_ms))))
+                    ;; NEVER the caller's raw id: validated-or-hashed (see
+                    ;; `safe-mission-id`), so a ledger line cannot be used as a
+                    ;; smuggling channel for key material or file content.
+                    :mission_id (safe-mission-id mission_id)
+                    ;; COST FIELDS -- optional, and ALWAYS PRESENT AS KEYS so a reader
+                    ;; never has to distinguish "absent" from "the writer forgot".
+                    ;; null is the honest value for a caller that has no such number:
+                    ;; the MCP tools have none, the typist runner and the ledger do.
+                    ;; A token count that is not a number stays nil rather than
+                    ;; becoming 0 -- "not reported" and "zero tokens" are different
+                    ;; facts, the same rule `wall_ms` already follows.
+                    :prompt_tokens (tok prompt_tokens)
+                    :completion_tokens (tok completion_tokens)
+                    :reasoning_tokens (tok reasoning_tokens)
+                    :cost_usd (when (and (number? cost_usd)
+                                         (Double/isFinite (double cost_usd))
+                                         (<= 0 (double cost_usd)))
+                                (double cost_usd))
+                    ;; free text, bounded like every other free-text field
+                    :provider (some-> (:provider (mission-fields event)) bounded)
+                    :upstream (some-> (:upstream (mission-fields event)) bounded)})
       truncated? (assoc :error_type_truncated true)
-      (pos? (or dropped 0)) (assoc :telemetry_dropped dropped)
-      ;; A REFUSAL NOBODY CAN SEE IS SILENT DATA LOSS. Every extra the name or
-      ;; shape rule rejected is counted here, so a caller whose dimension
-      ;; never lands finds out from the ledger instead of from its absence.
-      (pos? (long dropped-fields)) (assoc :dropped_fields dropped-fields))))
+      (pos? (or dropped 0)) (assoc :telemetry_dropped dropped))))
 
 (def free-text-drop-order
   "The order free-text fields are surrendered in when a line will not fit.
@@ -431,12 +356,10 @@
                    opts (into-array java.nio.file.LinkOption [])]
                (when (Files/isDirectory path opts)
                  (let [current (Files/getPosixFilePermissions path opts)
-                       owner-only (java.util.EnumSet/copyOf ^java.util.Collection current)]
-                   (.retainAll owner-only
-                               (java.util.EnumSet/of
-                                 java.nio.file.attribute.PosixFilePermission/OWNER_READ
-                                 java.nio.file.attribute.PosixFilePermission/OWNER_WRITE
-                                 java.nio.file.attribute.PosixFilePermission/OWNER_EXECUTE))
+                       owner-only (set (filter #{java.nio.file.attribute.PosixFilePermission/OWNER_READ
+                                                 java.nio.file.attribute.PosixFilePermission/OWNER_WRITE
+                                                 java.nio.file.attribute.PosixFilePermission/OWNER_EXECUTE}
+                                         current))]
                    (when (not= current owner-only)
                      (Files/setPosixFilePermissions path owner-only)))))
              (catch Exception _ nil)))

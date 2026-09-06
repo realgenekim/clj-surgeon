@@ -1,8 +1,9 @@
-(ns ^{:lane :fast} clj-surgeon.telemetry-events-test
+(ns clj-surgeon.telemetry-events-test
   "Witnesses for TELEMETRY-EVENTS-001. Each pins a property the ledger is
    worthless without: one intact JSON line per call, the fields a reader
    counts by, atomicity under concurrent appends, a bounded line, and a
    ledger failure that costs the call nothing but is still reported."
+  {:lane :fast}
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -225,91 +226,39 @@
     (is (str/starts-with? (events/safe-mission-id "gsk_ABCdef123") "sha256:")
         "gsk_ABCdef123 matches ^[A-Za-z0-9._-]{1,64}$ and is still a key")))
 
-(deftest an-extra-scalar-field-passes-through-and-a-nested-value-does-not
-  ;; THE PASS-THROUGH RULE (Astra, 2026-09-06). The mission boundary emits its
-  ;; own dimensions -- mission_state, mission_verb, executor, candidate_count
-  ;; -- and a writer that must be edited before a caller may count a new
-  ;; dimension is a writer callers stop using. The rule is about SHAPES, not
-  ;; names: a scalar is a value someone chose to report, a collection is a
-  ;; structure someone forgot to summarize.
+(deftest admitted-mission-fields-survive-and-unknown-scalars-do-not
+  ;; Merge resolution: retain the mission schema's allowlist. Scalar shape
+  ;; alone does not prevent raw source or unrecognized credentials entering
+  ;; a shared log. Fable's scrubbing/byte bounds still apply after validation.
   (let [file (io/file (temp-dir "events-extras-") "events.jsonl")]
-    (events/record! file {:kind "mission-call" :tool "mission_apply" :ok true
-                          :mission_state "applied" :mission_verb "apply"
-                          :executor "sol" :candidate_count 3 :model "gpt-5.6-sol"
-                          :route "openrouter" :replayed false
+    (events/record! file {:kind "mission-apply" :tool "mission" :ok true
+                          :mission_state "applied" :mission_verb "owner_forms"
+                          :executor "typist" :candidate_count 3
+                          :model "openai/gpt-oss-120b" :provider "openrouter"
+                          :upstream "Cerebras" :cost_source "provider-reported"
+                          :route "RAW-SOURCE" :replayed false
                           :dossier {:files ["a.clj"] :body "..."}
-                          :candidates [1 2 3]
-                          :leaked "Authorization: Bearer sk-live.ABC-"})
+                          :candidates [1 2 3] :leaked "UNRECOGNIZED-CREDENTIAL"})
     (let [parsed (json/parse-string (first (lines file)) true)]
       (is (= "applied" (:mission_state parsed)))
-      (is (= "apply" (:mission_verb parsed)))
-      (is (= "sol" (:executor parsed)))
-      (is (= 3 (:candidate_count parsed)) "a number survives as a number")
-      (is (= "gpt-5.6-sol" (:model parsed)))
-      (is (= "openrouter" (:route parsed)))
-      (is (false? (:replayed parsed)) "a boolean survives as a boolean")
-      (is (not (contains? parsed :dossier)) "a map is dropped, never rendered")
-      (is (not (contains? parsed :candidates)) "so is a vector")
-      (is (= "Authorization: <redacted>" (:leaked parsed))
-          "an extra takes the scrubber like every other string field")))
-  (testing "an extra is bounded by the same byte ceiling"
-    (let [huge (apply str (repeat 10000 "e"))
-          line (events/line-map {:kind "mission-call" :some_extra huge})]
-      (is (= events/free-text-limit
-             (count (.getBytes ^String (get line "some_extra") "UTF-8"))))))
-  (testing "an extra can never shadow a named field"
-    (is (true? (:ok (events/line-map {:ok true :kind "k"}))))))
-
-(deftest an-extra-field-name-can-neither-shadow-nor-smuggle
-  ;; SOL FENCE R2. `merge` de-duplicates by KEY; JSON de-duplicates by NAME.
-  ;; The string key "ok" and the keyword :ok are different keys and one JSON
-  ;; name, so both were written and every parser kept the caller's. And an
-  ;; extra's NAME was copied to the file verbatim, with the scrubber pointed
-  ;; only at values -- `gsk_FIELDNAMECANARY` reached the ledger as a key.
-  (testing "every spelling that would collide with a named field is rejected"
-    (doseq [k [:Ok "ok" :OK "OK" :ts :Mission-Id "wall_ms" "telemetry_dropped"
-               "over_limit" "dropped_fields" "error_type_truncated"]]
-      (is (nil? (events/normalize-extra-name k))
-          (str (pr-str k) " normalizes onto a field the writer emits"))))
-  (testing "a colliding spelling never reaches the line, and is counted"
-    (let [line (events/line-map {:ok true :kind "k" :tool "t"
-                                 "ok" "<shadow>" "tool" "shadow-tool"
-                                 :Ok "<shadow>"})
-          parsed (json/parse-string (events/render-line line) true)]
-      (is (true? (:ok parsed)) "the writer's ok survives serialization")
-      (is (= "t" (:tool parsed)) "and so does the writer's tool")
-      (is (= 3 (:dropped_fields parsed)) "all three collisions are counted")
-      (is (not (str/includes? (events/render-line line) "shadow"))
-          "no shadow value is anywhere in the rendered bytes")))
-  (testing "a key-shaped field NAME is dropped, never redacted, never written"
-    (let [line (events/line-map {:kind "k" (keyword "gsk_FIELDNAMECANARY") 7
-                                 "sk-or-v1_NAMECANARY" 9})
-          rendered (events/render-line line)]
-      (is (not (str/includes? rendered "gsk_")))
-      (is (not (str/includes? rendered "sk-or-")))
-      (is (not (str/includes? (str/lower-case rendered) "namecanary")))
-      (is (= 2 (:dropped_fields (json/parse-string rendered true))))))
-  (testing "a name that misses the shape is dropped and counted"
-    (let [long-name (apply str (repeat 200 "n"))
-          line (events/line-map {:kind "k" (keyword long-name) 1
-                                 (keyword "has.a.dot") 2 "" 3
-                                 (keyword "_leading") 4 (keyword "9leading") 5})]
-      (is (not (contains? line long-name)) "a 200-char name is dropped")
-      (is (= 5 (:dropped_fields line)) "each rejected name is counted once")))
-  (testing "a valid extra still survives, normalized"
-    (let [line (events/line-map {:kind "k" :ok true :Mission-State "applied"
-                                 :o-k "not-ok" :candidate_count 3})
-          parsed (json/parse-string (events/render-line line) true)]
-      (is (= "applied" (:mission_state parsed)) "case and hyphens fold")
-      (is (= "not-ok" (:o_k parsed)) ":o-k is o_k and shadows nothing")
-      (is (true? (:ok parsed)) "and ok is still the writer's boolean")
+      (is (= "owner_forms" (:mission_verb parsed)))
+      (is (= "typist" (:executor parsed)))
       (is (= 3 (:candidate_count parsed)))
-      (is (not (contains? parsed :dropped_fields))
-          "nothing was dropped, so the count is absent")))
-  (testing "two keys that normalize to one name do not race"
-    (let [line (events/line-map {:kind "k" :some-extra "a" "some_extra" "b"})]
-      (is (= 1 (:dropped_fields line)) "the second claim is dropped")
-      (is (contains? #{"a" "b"} (get line "some_extra"))))))
+      (is (= "openai/gpt-oss-120b" (:model parsed)))
+      (is (= "provider-reported" (:cost_source parsed)))
+      (doseq [field [:route :replayed :dossier :candidates :leaked]]
+        (is (not (contains? parsed field))))))
+  (doseq [field [:mission_state :mission_verb :executor :model :provider
+                 :upstream :refused_rung :cost_source]]
+    (is (nil? (get (events/line-map {field (apply str (repeat 10000 "秘密"))}) field))))
+  (doseq [field [:prompt_tokens :completion_tokens :reasoning_tokens]
+          value [-1 1.5 ##Inf ##NaN 9223372036854775808N "SECRET"]]
+    (is (nil? (get (events/line-map {field value}) field))))
+  (doseq [value [-1 ##Inf ##NaN "SECRET"]]
+    (is (nil? (:cost_usd (events/line-map {:cost_usd value})))))
+  (is (str/starts-with? (:mission_id (events/line-map
+                                       {:mission_id (str "M-" (apply str (repeat 1000 "1")))}))
+        "sha256:")))
 
 (deftest every-string-field-is-scrubbed-of-key-shaped-values
   (let [file (io/file (temp-dir "events-scrub-") "events.jsonl")]
@@ -325,8 +274,8 @@
       (is (not (str/includes? raw "Bearer sk-live.ABC-")))
       (is (str/includes? (:error_type parsed) "<redacted>")
           "the redaction is visible, so a reader knows something was removed")
-      (is (= "router <redacted>" (:provider parsed)))
-      (is (= "<redacted>" (:upstream parsed))))))
+      (is (nil? (:provider parsed)) "unadmitted provider is omitted, not repaired")
+      (is (nil? (:upstream parsed)) "unadmitted upstream is omitted, not repaired"))))
 
 (deftest no-input-can-push-a-line-past-the-atomic-append-budget
   ;; `huge-line-bytes=5185 limit=4096` -- the old fallback rebuilt the line

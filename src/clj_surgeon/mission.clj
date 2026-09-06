@@ -195,7 +195,7 @@
                          :depends-on :supersedes
                          :recommendation :because
                          :snapshot :dossier :decision :plan :proof :receipt
-                         :undo :next-action :history])
+                         :undo :git-publication :next-action :history])
         body (str "{"
                   (str/join "\n "
                             (for [k ordered :when (contains? mission k)]
@@ -837,20 +837,24 @@
              :verification {:profile "mission-proof"}}})
 
 (def example-config
-  "What `<workspace_root>/.clj-surgeon.edn` must contain for that profile to be
-   ADMITTED. `plan` and `apply` read this file themselves."
-  {:verification-profiles {"mission-proof" {:commands [["/bin/true"]]}}})
+  "Profile shape only: empty commands deliberately refuse admission.
+   Replace with real behavioral proof before plan or apply."
+  {:verification-profiles {"mission-proof" {:commands []}}})
 
 (def verb-help
-  {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Writes no bytes."
+  {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Saves ledger bytes; writes no source bytes."
+   "propose" "propose --spec-file <file|-> [--state-home H] [--full]\n    Save frozen intent/source/proof authority and a mission id; no provider call or source write.\n    This is an authority preview, not a generated candidate diff.\n    Apply generates candidates, proves them, and may write source; there is no intervening candidate-diff approval command."
    "plan"   "plan  [--spec-file <file|->] | plan <id> [--spec-file <file|->]\n    With no id: open-and-plan (same as `open`).\n    With an id: RE-plan that mission against the tree as it now is.\n    With an id AND --spec-file on a :blocked/:failed mission: open a NEW\n    mission carrying the repaired intent, linked :supersedes to the old one."
-   "show"   "show <id> --workspace R\n    The mission, its dependency DAG, its supersession chain, and the\n    config files this ledger read (:config_sources)."
-   "apply"  "apply <id> --workspace R\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
-   "resume" "resume <id> --workspace R\n    Move it from wherever it is: :ready -> apply, :verified -> undo."
-   "undo"   "undo <id> --workspace R\n    The explicit inverse, from the receipt apply published."
+   "show"   "show <id> --workspace R [--full]\n    Bounded saved state, receipt, route and candidate refusals (no proof rerun).\n    --full prints the previous complete ledger view, including frozen source.\n    Readable failed missions exit 0; missing/corrupt missions exit 1 with a runnable recovery example."
+   "run"    "run --spec-file <file|-> --receipt-dir D [--state-home H]\n    owner_forms only: save a frozen plan and immediately apply it in one JVM.\n    --receipt-dir explicitly chooses where source-bearing artifacts are retained.\n    WRITES source after proof. For authority review before write, use propose then apply.\n    No existing id. A blocked plan is saved; exits nonzero with its decision."
+   "apply"  "apply <id> --workspace R [--receipt-dir D]\n    owner_forms requires --receipt-dir; its suggested path is not created on refusal.\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
+   "resume" "resume <id> --workspace R [--receipt-dir D]\n    A ready owner_forms mission requires --receipt-dir for its apply.\n    Move it from wherever it is: :ready -> apply, :verified -> undo.\n    Publication/recovery records block verified -> undo; see help undo."
+   "undo"   "undo <id> --workspace R\n    The explicit source inverse, from the receipt apply published.\n    Refuses mission-undo-after-git-publication for published, pending or uncertain Git publication.\n    Git is not undone automatically."
    "link"   "link <id> --depends-on <id> | --supersedes <id> --workspace R\n    Order two missions. A cycle is refused before it is written."
    "ready"  "ready --workspace R\n    :ready — what a machine can start now.\n    :waiting — real work held by a dependency or owed a re-plan."
    "list"   "list --workspace R\n    The human index, one fixed-column line per mission."
+   "commit" "commit <id> --workspace R [--state-home H]\n    Publish a Git commit from saved verified owner_forms proof; stages nothing.\n    Stage exactly the verified changed files first. No spec/proof/config overrides.\n    Skips Git hooks and signing; no source write or push. Source kernel commit and Git ref commit are separate.\n    An unknown ref-update result requires inspecting Git before retrying."
+   "fallback" "fallback <id> --reason TYPE --workspace R\n    Record user-reported native-tool fallback, never perform or verify an edit.\n    TYPE: refusal | unsupported | slower-than-native | user-choice.\n    Saved mission state and proof stay unchanged. Failed append exits 1 with :recorded false."
    "help"   "help [verb]\n    This text, or one verb's. Runs on babashka: ~0.05 s, not ~5 s."})
 
 (def write-verbs
@@ -863,24 +867,60 @@
 
 (defn help-text
   [verb]
-  (str "bin/mission — the mission ledger. Global options may come BEFORE or\n"
-       "AFTER the verb: --workspace <root> --state-home <dir> --config <file>\n\n"
-       (if-let [one (get verb-help verb)]
-         (str "  " one "\n")
-         (str/join "\n" (for [[_ text] (sort verb-help)]
-                          (str "  " text "\n"))))
-       "\nTHE SPEC (copy-paste, closed shape — every field below is required\n"
-       "unless marked optional; nothing else is accepted):\n\n"
-       (with-out-str (pp/pprint example-request))
-       "\nTHE PROFILE CONFIG — write this to <workspace_root>/"
-       config-file-name
-       ", which\n`plan` and `apply` read themselves (`show` reports :config_sources):\n\n"
-       (with-out-str (pp/pprint example-config))
-       "\nRunnable end to end:\n"
-       "  bin/mission open  --spec-file spec.edn --state-home $H\n"
-       "  bin/mission ready --workspace $WS --state-home $H\n"
-       "  bin/mission apply M-1 --workspace $WS --state-home $H\n"
-       "  bin/mission show  M-1 --workspace $WS --state-home $H\n"))
+  (cond
+    (= "propose" verb)
+    (str "bin/mission — propose.\n\n" (get verb-help "propose")
+         "\n\nDefault stdout is the bounded saved mission-show view, including the full-details command.\n--full prints the complete proposal result; saved authority is retained in either mode.\nComplete user contract: docs/mission-typist.md (Complete request contract).\n"
+         "Template: docs/examples/owner-forms-template.edn; unknown facts must come from retained evidence.\n"
+         "  bin/mission propose --spec-file - < owner-forms.edn\n"
+         "Use the returned id: bin/mission show M-ID --workspace /absolute/project\n")
+    (contains? #{"undo" "resume"} verb)
+    (str "bin/mission — " verb ".\n\n" (get verb-help verb)
+         "\n\nInspect publication uncertainty before recovery. WS is the actual workspace;\n"
+         "OID is the full returned commit/possible-commit hex oid, when known.\n"
+         "  git --no-optional-locks -C \"$WS\" -c core.fsmonitor=false symbolic-ref -q HEAD\n"
+         "  git --no-optional-locks -C \"$WS\" -c core.fsmonitor=false rev-parse --verify HEAD\n"
+         "  git --no-optional-locks -C \"$WS\" -c core.fsmonitor=false show --no-patch --format=fuller \"$OID\" --\n"
+         "  git --no-optional-locks -C \"$WS\" -c core.fsmonitor=false diff --no-ext-diff --no-textconv --ignore-submodules=none --name-status \"$OID\" --\n"
+         "  bin/mission show M-ID --workspace \"$WS\"\n"
+         "Skip oid-dependent commands if no oid is known. Do not delete publication markers or retry blindly.\n"
+         "These reads do not reconcile Git; see docs/mission-typist.md for recovery limits.\n")
+    (= "run" verb)
+    (str "bin/mission — explicit owner_forms write in one process.\n\n"
+         (get verb-help "run")
+         "\n\nUse the owner_forms spec documented in docs/mission-typist.md.\n"
+         "The helper_extraction example in global help is not a run spec.\n"
+         "  bin/mission run --spec-file owner-forms.edn --state-home H --receipt-dir /absolute/project/.clj-surgeon/typist\n"
+         "Structured stdin: bin/mission run --spec-file - --receipt-dir /absolute/project/.clj-surgeon/typist < owner-forms.edn\n"
+         "A blocked run returns :error_type \"mission-not-ready\" and its id.\n"
+         "Use show <id> --workspace R to inspect it; apply failures exit nonzero.\n")
+    (contains? #{"commit" "fallback"} verb)
+    (str "bin/mission — " verb ".\n\n"
+         (get verb-help verb)
+         "\n\nGlobal options --workspace R and --state-home H may come before or after the verb.\n"
+         (if (= "commit" verb)
+           "  bin/mission commit M-1 --workspace /absolute/workspace --state-home H\n"
+           "  bin/mission fallback M-1 --reason refusal --workspace /absolute/workspace --state-home H\n"))
+    :else
+    (str "bin/mission — the mission ledger. Global options may come BEFORE or\n"
+      "AFTER the verb: --workspace <root> --state-home <dir> --config <file>\n\n"
+      (if-let [one (get verb-help verb)]
+        (str "  " one "\n")
+        (str/join "\n" (for [[_ text] (sort verb-help)]
+                         (str "  " text "\n"))))
+      "\nFor owner_forms use docs/examples/owner-forms-template.edn and docs/mission-typist.md.\nHELPER EXTRACTION SPEC (copy-paste, closed shape — every field below is required\n"
+      "unless marked optional; nothing else is accepted):\n\n"
+      (with-out-str (pp/pprint example-request))
+      "\nTHE PROFILE TEMPLATE — after adding real behavioral proof, write it to <workspace_root>/"
+      config-file-name
+      ", which\n`plan` and `apply` read themselves (`show` reports :config_sources):\n\n"
+      "Empty :commands are not runnable and refuse admission. Replace them with commands that check the intended behavior.\n"
+      (with-out-str (pp/pprint example-config))
+      "\nWorkflow after configuring real behavioral proof:\n"
+      "  bin/mission open  --spec-file spec.edn --state-home $H\n"
+      "  bin/mission ready --workspace $WS --state-home $H\n"
+      "  bin/mission apply M-1 --workspace $WS --state-home $H --receipt-dir $WS/.clj-surgeon/typist\n"
+      "  bin/mission show  M-1 --workspace $WS --state-home $H\n")))
 
 ;; ---------------------------------------------------------------------------
 ;; the human index
@@ -940,26 +980,27 @@
   from the state. `nil` where nothing can move — a blocked mission's next action
   belongs to a human, and inventing `[:apply id]` for it would be a prescription
   the ledger cannot honour."
-  [{:keys [id state]}]
-  (case state
-    :proposed [:plan id]
-    :ready [:apply id]
-    :applied [:resume id]
-    :verified [:resume id]
-    ;; @caller-probe: a dead mission USED to return nil here, on the reasoning
-    ;; that its next move belonged to a human. A caller reported the cost of
-    ;; that honesty: the ledger "accumulated blocked/failed missions but
-    ;; offered no resolution transition". The human move now has a verb —
-    ;; `plan <id> --spec-file <narrower intent>` opens the superseding mission
-    ;; — so the ledger names it instead of going quiet.
-    (:blocked :failed) [:plan id]
-    nil))
+  [{:keys [id state] :as mission}]
+  (when-not (contains? mission :git-publication)
+    (case state
+      :proposed [:plan id]
+      :ready [:apply id]
+      :applied [:resume id]
+      :verified [:resume id]
+      ;; @caller-probe: a dead mission USED to return nil here, on the reasoning
+      ;; that its next move belonged to a human. A caller reported the cost of
+      ;; that honesty: the ledger "accumulated blocked/failed missions but
+      ;; offered no resolution transition". The human move now has a verb —
+      ;; `plan <id> --spec-file <narrower intent>` opens the superseding mission
+      ;; — so the ledger names it instead of going quiet.
+      (:blocked :failed) [:plan id]
+      nil)))
 
 (defn effective-next-action
   "The next move for the state a READER sees, not the stored one. A mission
    whose dependency moved the tree under it is told to re-plan, not to apply."
   [mission index]
-  (next-action {:id (:id mission) :state (effective-state mission index)}))
+  (next-action (assoc mission :state (effective-state mission index))))
 
 (defn ready-missions
   "Missions that can move RIGHT NOW, and who has to move them.
